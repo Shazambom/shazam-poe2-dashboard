@@ -76,7 +76,12 @@ export default function App() {
   return (
     <div className="app">
       <header className="topbar">
-        <h1>ShazamDash</h1>
+        <h1>
+          <img className="brand-logo"
+            src="https://web.poecdn.com/gen/image/WzI1LDE0LHsiZiI6IjJESXRlbXMvQ3VycmVuY3kvQW5udWxsT3JiIiwic2NhbGUiOjEsInJlYWxtIjoicG9lMiJ9XQ/2daba8ccca/AnnullOrb.png"
+            alt="" width="24" height="24" onError={e => { e.currentTarget.style.display = 'none' }} />
+          ShazamDash
+        </h1>
         <select className="league-select" value={league} title="League — saves on select"
           onChange={e => setLeague(e.target.value)} disabled={!status}>
           {league && !leagues.some(l => l.id === league) && <option value={league}>{league}</option>}
