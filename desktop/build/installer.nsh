@@ -12,7 +12,7 @@
 ; double-quote (wraps the -Command argument).
 
 !macro preInit
-  nsExec::Exec "powershell -NoProfile -ExecutionPolicy Bypass -Command $\"$$ErrorActionPreference='SilentlyContinue'; $$dir=Join-Path $$env:LOCALAPPDATA 'Programs\poe2-dashboard-desktop'; Get-Process | Where-Object { $$_.ProcessName -eq 'PoE2 Dashboard' -or ($$_.Path -and $$_.Path -like (Join-Path $$dir '*')) } | Stop-Process -Force; Start-Sleep -Milliseconds 600; if (Test-Path $$dir) { Remove-Item -LiteralPath $$dir -Recurse -Force }; Get-ChildItem 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall' | Where-Object { (Get-ItemProperty $$_.PSPath).DisplayName -match 'PoE2 Dashboard' } | Remove-Item -Recurse -Force$\""
+  nsExec::Exec "powershell -NoProfile -ExecutionPolicy Bypass -Command $\"$$ErrorActionPreference='SilentlyContinue'; $$dir=Join-Path $$env:LOCALAPPDATA 'Programs\poe2-dashboard-desktop'; Get-Process | Where-Object { $$_.ProcessName -match '^(PoE2 Dashboard|ShazamDash)$' -or ($$_.Path -and $$_.Path -like (Join-Path $$dir '*')) } | Stop-Process -Force; Start-Sleep -Milliseconds 600; if (Test-Path $$dir) { Remove-Item -LiteralPath $$dir -Recurse -Force }; Get-ChildItem 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall' | Where-Object { (Get-ItemProperty $$_.PSPath).DisplayName -match 'PoE2 Dashboard|ShazamDash' } | Remove-Item -Recurse -Force; foreach ($$n in 'PoE2 Dashboard','ShazamDash') { Remove-Item (Join-Path ([Environment]::GetFolderPath('Desktop')) ($$n+'.lnk')) -Force; Remove-Item (Join-Path ([Environment]::GetFolderPath('StartMenu')) ('Programs\'+$$n+'.lnk')) -Force }$\""
   Pop $0
 !macroend
 

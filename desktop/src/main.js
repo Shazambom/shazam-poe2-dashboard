@@ -260,7 +260,7 @@ app.whenReady().then(async () => {
   buildMenu()
   win = new BrowserWindow({
     width: 1500, height: 950, minWidth: 900, minHeight: 600,
-    title: 'PoE2 Dashboard',
+    title: 'ShazamDash',
     backgroundColor: '#191b22',
     webPreferences: {
       contextIsolation: true, sandbox: true, preload: path.join(__dirname, 'preload.js'),
