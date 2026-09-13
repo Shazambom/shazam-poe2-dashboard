@@ -196,6 +196,15 @@ details.adv[open] summary { color: var(--ink-2); margin-bottom: 8px; }
 .pt-spread { display: inline-flex; align-items: center; gap: 5px; margin-left: auto; }
 .spread-bar { display: inline-block; height: 5px; background: var(--gold); border-radius: 1px; }
 
+/* ---------- inflation ---------- */
+.infl-stats { display: flex; gap: 14px; flex-wrap: wrap; margin: 4px 0 18px; }
+.infl-stats .stat { border: 1px solid var(--line); border-radius: 6px; background: var(--panel); padding: 10px 16px; min-width: 190px; }
+.stat-label { color: var(--muted); font-size: 12px; }
+.stat-val { font-size: 26px; font-weight: 600; margin: 2px 0; }
+.stat-sub { color: var(--muted); font-size: 11px; }
+.infl-table { margin-top: 16px; max-width: 560px; }
+.dot-key { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 7px; vertical-align: middle; }
+
 /* ---------- embedded trade browser ---------- */
 .trade-wrap { height: 100%; min-height: 0; display: flex; flex-direction: column; }
 .trade-bar { display: flex; align-items: center; gap: 6px; padding: 6px 10px; border-bottom: 1px solid var(--line); background: var(--panel); }

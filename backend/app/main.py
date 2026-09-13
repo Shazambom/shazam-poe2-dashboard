@@ -11,7 +11,7 @@ from pydantic import BaseModel
 
 from fastapi.responses import RedirectResponse
 
-from . import arbitrage, db, digest, gamedata, gateway, oauth, orderbook, recipes, session
+from . import arbitrage, db, digest, gamedata, gateway, inflation, oauth, orderbook, recipes, session
 from .currencies import registry
 from .settings import get_settings, save_settings
 
@@ -263,6 +263,11 @@ def get_watches():
 def put_watches(body: WatchesBody):
     db.kv_set("watches", body.folders)
     return {"folders": body.folders}
+
+
+@app.get("/api/inflation")
+def inflation_view(anchor: str = "hinekora", hours: int = 336):
+    return inflation.compute(anchor, hours)
 
 
 @app.get("/api/board")

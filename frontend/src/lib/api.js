@@ -44,6 +44,7 @@ export const api = {
   refreshRoute: (id, pairs, filters) => post('/api/routes/refresh', { id, pairs, filters, start: filters.start || null }),
   leagues: () => fetch('/api/leagues').then(j),
   rateLimits: () => fetch('/api/ratelimits').then(j),
+  inflation: (anchor, hours) => fetch('/api/inflation' + qs({ anchor, hours })).then(j),
   watches: () => fetch('/api/watches').then(j),
   putWatches: (folders) => put('/api/watches', { folders }),
   board: () => fetch('/api/board').then(j),
