@@ -245,6 +245,22 @@ async def gold_fees_refresh():
 
 
 # ----------------------------------------------------------------- market
+@app.get("/api/board")
+def board():
+    return arbitrage.board()
+
+
+@app.post("/api/board/refresh")
+async def board_refresh(wait_s: float = 30):
+    """Live-refresh both directions of every watched pair, then return the board."""
+    if not session.get_cookie():
+        raise HTTPException(400, "no trade session connected")
+    s = get_settings()
+    futs = orderbook.request_pairs(arbitrage.board_pairs(), priority=1, max_age_s=s["live_min_age_s"])
+    waited = await orderbook.wait_for(futs, wait_s)
+    return {**arbitrage.board(), "refresh": {**waited, "queue": orderbook.state["queue"]}}
+
+
 @app.get("/api/market/edges")
 def market_edges():
     return arbitrage.edge_table()

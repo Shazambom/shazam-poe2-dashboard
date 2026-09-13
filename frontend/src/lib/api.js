@@ -44,6 +44,8 @@ export const api = {
   refreshRoute: (id, pairs, filters) => post('/api/routes/refresh', { id, pairs, filters, start: filters.start || null }),
   leagues: () => fetch('/api/leagues').then(j),
   rateLimits: () => fetch('/api/ratelimits').then(j),
+  board: () => fetch('/api/board').then(j),
+  boardRefresh: () => post('/api/board/refresh'),
   edges: () => fetch('/api/market/edges').then(j),
   topMarkets: () => fetch('/api/market/top').then(j),
   history: (a, b, hours = 168) => fetch(`/api/market/history${qs({ a, b, hours })}`).then(j),

@@ -1,11 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { api, fmt, bus, surface } from './lib/api.js'
 import { connectBridge, connectSessionWithToast } from './lib/session.js'
+import BoardView from './components/BoardView.jsx'
 import RoutesView from './components/RoutesView.jsx'
 import MarketView from './components/MarketView.jsx'
 import SettingsView from './components/SettingsView.jsx'
 
-const TABS = ['Routes', 'Market', 'Settings']
+const TABS = ['Board', 'Routes', 'Market', 'Settings']
 
 function feedState(ts, staleAfter, enabled = true) {
   if (!enabled) return 'off'
@@ -15,7 +16,7 @@ function feedState(ts, staleAfter, enabled = true) {
 }
 
 export default function App() {
-  const [tab, setTab] = useState('Routes')
+  const [tab, setTab] = useState('Board')
   const [status, setStatus] = useState(null)
   const [capital, setCapital] = useState(null)
   const [currencies, setCurrencies] = useState(null)
@@ -109,6 +110,7 @@ export default function App() {
         </div>
       </header>
 
+      {tab === 'Board' && <BoardView key={league} status={status} />}
       {tab === 'Routes' && <RoutesView key={league} capital={capital} status={status} currencies={currencies} onCapitalSaved={refreshHeader} />}
       {tab === 'Market' && <MarketView key={league} currencies={currencies} />}
       {tab === 'Settings' && <SettingsView currencies={currencies} status={status} onSaved={refreshHeader} />}

@@ -549,6 +549,60 @@ def _composite_score(routes: list[dict], weights: dict) -> None:
                             "value": round(val[r["id"]], 3), "volume": round(vol[r["id"]], 3)}
 
 
+def board() -> dict:
+    """Live price board: each watched currency priced in the reference, with the
+    buy/sell rates that make up the spread, depth, freshness, and a trend series.
+
+    Prices are R-per-unit (reference currency per 1 of the currency), so bigger = more
+    valuable — the natural way to read a price. buy = what it costs you to acquire one
+    (from the R->c ladder), sell = what you get for one (from the c->R ladder)."""
+    from . import session
+
+    g = cached_graph()
+    s = g.s
+    R = s["reference"]
+    league = s["league"]
+    rv = g.ref_values()
+    rows = []
+    for c in [x for x in s["watchlist"] if x != R]:
+        buy_edge = g.edges.get((R, c))     # c per R  -> price to BUY c = 1/rate
+        sell_edge = g.edges.get((c, R))    # R per c  -> price to SELL c = rate
+        buy = (1.0 / buy_edge.rate) if buy_edge and buy_edge.rate > 0 else None
+        sell = sell_edge.rate if sell_edge else None
+        mid = rv.get(c)
+        edges = [e for e in (buy_edge, sell_edge) if e]
+        kinds = {e.kind for e in edges}
+        source = "live" if "live" in kinds else "digest" if "digest" in kinds else ("derived" if mid is not None else None)
+        age = min((e.age_s for e in edges), default=None)
+        depth = next((len(e.ladder) for e in (sell_edge, buy_edge) if e and e.kind == "live"), None)
+        spread = (buy - sell) if (buy is not None and sell is not None) else None
+        spread_pct = (spread / mid * 100) if (spread is not None and mid) else None
+        hist = digest.pair_history(league, c, R, 72)   # rate = R per c = price of c in R
+        trend = [{"t": h["hour"], "v": h["rate"]} for h in hist][-48:]
+        change_pct = None
+        if len(trend) >= 2 and trend[0]["v"]:
+            change_pct = (trend[-1]["v"] - trend[0]["v"]) / trend[0]["v"] * 100
+        rows.append({
+            "id": c, "name": registry.name(c), "mid": mid, "buy": buy, "sell": sell,
+            "spread": spread, "spread_pct": spread_pct, "source": source, "age_s": age,
+            "depth": depth, "trend": trend, "change_pct": change_pct,
+        })
+    rows.sort(key=lambda r: (r["mid"] is None, -(r["mid"] or 0)))   # most valuable first
+    return {"reference": R, "league": league, "rows": rows,
+            "session": session.status().get("connected", False)}
+
+
+def board_pairs() -> list[tuple[str, str]]:
+    s = get_settings()
+    R = s["reference"]
+    pairs = []
+    for c in s["watchlist"]:
+        if c != R:
+            pairs.append((R, c))
+            pairs.append((c, R))
+    return pairs
+
+
 def edge_table() -> list[dict]:
     g = cached_graph()
     ref = g.ref_values()
