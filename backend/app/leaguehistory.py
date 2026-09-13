@@ -37,6 +37,15 @@ BASE = "https://api.poe2scout.com/poe2"
 ITEMS = {291: "Divine Orb", 295: "Mirror of Kalandra", 4287: "Hinekora's Lock", 287: "Chaos Orb"}
 DEFAULT_ITEM = 291
 MIRROR_ITEM = 295   # numeraire for the economy market cap
+
+# Hold leaderboard tracks EVERY currency category poe2scout exposes (discovered live
+# from /Items/Categories). Items below the price floor are dust and skipped so the
+# commodity tails (e.g. 140+ cheap runes) don't drown the board. This fallback list
+# is only used if the category-discovery call fails.
+CATEGORIES = ["currency", "ritual", "essences", "fragments", "delirium", "breach",
+              "uncutgems", "abyss", "ultimatum", "expedition", "verisium", "runes",
+              "lineagesupportgems", "idol", "vaultkeys", "incursion", "vaal"]
+PRICE_FLOOR_EX = 5.0
 # Softcore challenge/event leagues worth comparing (skip HC variants, Standard, Hardcore).
 SKIP = ("HC ", "Hardcore", "Standard")
 REFRESH_S = 12 * 3600   # re-pull current leagues at most twice a day; past leagues are final
@@ -71,6 +80,44 @@ async def _currency_item_ids(league: str) -> list[int]:
     return [x["ItemId"] for x in data.get("Items", []) if x.get("ItemId")]
 
 
+async def _category_apiids(league: str) -> list[str]:
+    """Every currency category poe2scout exposes for a league (live discovery);
+    falls back to the static CATEGORIES list if the call fails."""
+    try:
+        data = await _get(f"/Leagues/{urllib.parse.quote(league)}/Items/Categories")
+        cats = [c.get("ApiId") for c in data.get("CurrencyCategories", []) if c.get("ApiId")]
+        return cats or CATEGORIES
+    except Exception as exc:
+        log.warning("poe2scout categories %s failed: %s", league, exc)
+        return CATEGORIES
+
+
+async def _universe(league: str) -> set[int]:
+    """Item ids to track for a league: the named anchors plus everything in EVERY
+    currency category above the price floor. Also upserts item_meta (name, category)
+    — global ids, so any league's crawl fills the map."""
+    ids = set(ITEMS)
+    meta = []
+    enc = urllib.parse.quote(league)
+    for cat in await _category_apiids(league):
+        try:
+            data = await _get(f"/Leagues/{enc}/Currencies/ByCategory?category={cat}&perPage=250")
+        except Exception as exc:
+            log.warning("poe2scout category %s/%s failed: %s", league, cat, exc)
+            continue
+        for x in data.get("Items", []):
+            iid = x.get("ItemId")
+            if not iid:
+                continue
+            meta.append((iid, x.get("Text") or str(iid), cat))
+            if iid in ITEMS or (x.get("CurrentPrice") or 0) >= PRICE_FLOOR_EX:
+                ids.add(iid)
+    if meta:
+        with db.tx() as c:
+            c.executemany("INSERT OR REPLACE INTO item_meta(item_id, name, category) VALUES (?,?,?)", meta)
+    return ids
+
+
 async def backfill(force: bool = False, full: bool = True) -> dict:
     """Pull daily history for the target leagues × items into league_daily. Past
     leagues are fetched once; current leagues refresh on a 12h cadence.
@@ -98,9 +145,9 @@ async def backfill(force: bool = False, full: bool = True) -> dict:
             item_ids = set(ITEMS)
             if full:
                 try:
-                    item_ids |= set(await _currency_item_ids(name))
+                    item_ids = await _universe(name)
                 except Exception as exc:
-                    log.warning("poe2scout currency list %s failed: %s", name, exc)
+                    log.warning("poe2scout universe %s failed: %s", name, exc)
             for item_id in item_ids:
                 complete = db.kv_get(f"lh_complete:{name}:{item_id}", False)
                 # A past league marked complete (full history captured) is final → skip.

@@ -12,7 +12,7 @@ from pydantic import BaseModel
 
 from fastapi.responses import RedirectResponse
 
-from . import arbitrage, db, digest, gamedata, gateway, inflation, leaguehistory, oauth, orderbook, recipes, session
+from . import arbitrage, db, digest, gamedata, gateway, holdscore, inflation, leaguehistory, oauth, orderbook, recipes, session
 from .currencies import registry
 from .settings import get_settings, save_settings
 
@@ -301,6 +301,17 @@ async def inflation_cross(item: int = leaguehistory.DEFAULT_ITEM):
     if not res["leagues"]:                       # cold cache — quick anchors-only pull then serve
         await leaguehistory.backfill(full=False)
         res = await run_in_threadpool(leaguehistory.cross, item)
+    return res
+
+
+@app.get("/api/hold")
+async def hold(horizon: str = "long", category: str = "all"):
+    """Store-of-value leaderboard. Served from the stored full-currency backfill;
+    kicks the background crawl if nothing's stored yet."""
+    res = await run_in_threadpool(holdscore.leaderboard, horizon, category)
+    if not res["assets"]:
+        _spawn(leaguehistory.backfill(full=True))
+        return {**res, "building": True}
     return res
 
 

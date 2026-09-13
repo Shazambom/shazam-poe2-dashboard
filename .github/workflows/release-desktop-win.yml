@@ -1,0 +1,46 @@
+name: Build Windows desktop app
+
+# Mac cross-builds of the NSIS installer are broken on real Windows, and Wine-in-Docker
+# can't run on Apple Silicon (16KB pages). So the Windows installer is built here on a
+# real windows-latest runner and attached to a GitHub Release, from which it's published
+# to the dashboard's /downloads channel.
+on:
+  push:
+    tags: ['desktop-v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-win:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install deps
+        run: |
+          cd frontend && npm ci
+          cd ../desktop && npm ci
+      - name: Build frontend + Windows installer (x64)
+        run: |
+          cd desktop
+          npm run build:frontend
+          npx electron-builder --win --x64 --publish never
+      - name: Upload installer to a Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          files: |
+            desktop/release/*.exe
+            desktop/release/*.exe.blockmap
+            desktop/release/latest.yml
+      - name: Also upload as workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer
+          path: |
+            desktop/release/*.exe
+            desktop/release/latest.yml

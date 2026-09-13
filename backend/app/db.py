@@ -68,6 +68,12 @@ CREATE TABLE IF NOT EXISTS league_daily (
 );
 -- cross() filters by item_id (not the leading PK column), so it needs its own index.
 CREATE INDEX IF NOT EXISTS idx_league_daily_item ON league_daily(item_id, day);
+
+CREATE TABLE IF NOT EXISTS item_meta (
+    item_id INTEGER PRIMARY KEY,
+    name TEXT,
+    category TEXT
+);
 """
 
 
