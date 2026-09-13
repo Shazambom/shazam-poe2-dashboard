@@ -1,0 +1,35 @@
+{
+  "_note": "meta_to_trade links GGG metadata ids (used by the hourly digest) to trade-site ids (used by the exchange API). Anything missing is auto-matched from the icon filename or can be mapped in the Settings tab.",
+  "meta_to_trade": {
+    "Metadata/Items/Currency/CurrencyRerollRare": "chaos",
+    "Metadata/Items/Currency/CurrencyAddModToRare": "exalted",
+    "Metadata/Items/Currency/CurrencyModValues": "divine",
+    "Metadata/Items/Currency/CurrencyUpgradeToRare": "regal",
+    "Metadata/Items/Currency/CurrencyUpgradeToMagic": "transmute",
+    "Metadata/Items/Currency/CurrencyAddModToMagic": "aug",
+    "Metadata/Items/Currency/CurrencyUpgradeRandomly": "chance",
+    "Metadata/Items/Currency/CurrencyDuplicate": "mirror",
+    "Metadata/Items/Currency/CurrencyCorrupt": "vaal",
+    "Metadata/Items/Currency/CurrencyGemQuality": "gcp",
+    "Metadata/Items/Currency/CurrencyWeaponQuality": "whetstone",
+    "Metadata/Items/Currency/CurrencyArmourQuality": "scrap",
+    "Metadata/Items/Currency/CurrencyFlaskQuality": "bauble",
+    "Metadata/Items/Currency/CurrencyRemoveMod": "annul"
+  },
+  "currencies": {
+    "chaos": {"name": "Chaos Orb", "category": "Currency"},
+    "exalted": {"name": "Exalted Orb", "category": "Currency"},
+    "divine": {"name": "Divine Orb", "category": "Currency"},
+    "regal": {"name": "Regal Orb", "category": "Currency"},
+    "transmute": {"name": "Orb of Transmutation", "category": "Currency"},
+    "aug": {"name": "Orb of Augmentation", "category": "Currency"},
+    "chance": {"name": "Orb of Chance", "category": "Currency"},
+    "mirror": {"name": "Mirror of Kalandra", "category": "Currency"},
+    "vaal": {"name": "Vaal Orb", "category": "Currency"},
+    "annul": {"name": "Orb of Annulment", "category": "Currency"},
+    "gcp": {"name": "Gemcutter's Prism", "category": "Currency"},
+    "whetstone": {"name": "Blacksmith's Whetstone", "category": "Currency"},
+    "scrap": {"name": "Armourer's Scrap", "category": "Currency"},
+    "bauble": {"name": "Glassblower's Bauble", "category": "Currency"}
+  }
+}

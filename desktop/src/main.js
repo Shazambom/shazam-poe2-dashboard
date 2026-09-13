@@ -234,6 +234,12 @@ app.whenReady().then(async () => {
   })
   win.loadURL(uiUrl)
   win.webContents.setWindowOpenHandler(({ url }) => { shell.openExternal(url); return { action: 'deny' } })
+  win.webContents.on('did-finish-load', async () => {
+    try {
+      const ok = await win.webContents.executeJavaScript('typeof window.poe2desktop?.connectSession')
+      console.log(`[diag] poe2desktop bridge: ${ok}`)   // 'function' when the native connect is live
+    } catch (e) { console.log('[diag] bridge check failed:', String(e)) }
+  })
   setupUpdates()
 })
 

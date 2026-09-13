@@ -1,0 +1,38 @@
+[
+  {
+    "id": "shard-transmute",
+    "name": "10 Transmutation Shards -> Orb of Transmutation",
+    "kind": "combine",
+    "inputs": {"transmutation-shard": 10},
+    "outputs": {"transmute": 1},
+    "enabled": false,
+    "note": "Shards stack into a whole orb automatically. Enable if the shard is tradeable in your league and the trade id matches the currency list."
+  },
+  {
+    "id": "shard-regal",
+    "name": "10 Regal Shards -> Regal Orb",
+    "kind": "combine",
+    "inputs": {"regal-shard": 10},
+    "outputs": {"regal": 1},
+    "enabled": false,
+    "note": "Verify trade id in the Currencies list before enabling."
+  },
+  {
+    "id": "example-reforge-tier",
+    "name": "Reforging bench: 3x lower tier -> 1x next tier (template)",
+    "kind": "combine",
+    "inputs": {"REPLACE_lower_tier_id": 3},
+    "outputs": {"REPLACE_next_tier_id": 1},
+    "enabled": false,
+    "note": "Template for tiered items (distilled emotions, essences, etc.). Copy it per tier pair, fill in trade ids from the Currencies list, then enable."
+  },
+  {
+    "id": "example-disenchant",
+    "name": "Disenchant: 1x higher tier -> Nx lower tier (template)",
+    "kind": "disenchant",
+    "inputs": {"REPLACE_higher_id": 1},
+    "outputs": {"REPLACE_lower_id": 3},
+    "enabled": false,
+    "note": "Template. Set the real output quantity and ids, then enable."
+  }
+]

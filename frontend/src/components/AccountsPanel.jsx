@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { api, fmt } from '../lib/api.js'
+import { connectBridge, connectSession } from '../lib/session.js'
 
 const ago = (t) => t ? fmt.age(Date.now() / 1000 - t) + ' ago' : '–'
 
@@ -9,7 +10,6 @@ export default function AccountsPanel({ onChange }) {
   const [cookie, setCookie] = useState('')
   const [msg, setMsg] = useState(null)
   const [busy, setBusy] = useState(false)
-  const [ext, setExt] = useState(false)   // browser extension bridge detected
   const host = window.location.origin
 
   const load = () => Promise.all([api.session(), api.oauthStatus()]).then(([s, o]) => { setSess(s); setOa(o) })
@@ -18,36 +18,16 @@ export default function AccountsPanel({ onChange }) {
     const q = new URLSearchParams(window.location.search)
     if (q.get('oauth') === 'ok') setMsg({ ok: true, text: 'Logged in with Path of Exile.' })
     if (q.get('oauth') === 'error') setMsg({ ok: false, text: `Login failed: ${q.get('msg')}` })
-    const onExt = (event) => {
-      if (event.source !== window || event.origin !== window.location.origin) return
-      const m = event.data
-      if (!m || m.source !== 'poe2arb-ext') return
-      if (m.cmd === 'hello') setExt(true)
-      if (m.cmd === 'connect-result') {
-        setBusy(false)
-        setMsg({ ok: !!m.ok, text: m.message })
-        if (m.ok) { load(); onChange?.() }
-      }
-    }
-    window.addEventListener('message', onExt)
-    window.postMessage({ source: 'poe2arb', cmd: 'ping' }, window.location.origin)
-    const t = setInterval(load, 15000)   // pick up extension connects without a reload
-    return () => { clearInterval(t); window.removeEventListener('message', onExt) }
+    const t = setInterval(load, 15000)   // pick up connects (incl. from the top-bar button) without a reload
+    return () => clearInterval(t)
   }, [])
 
-  const extConnect = () => {
+  const bridge = connectBridge()   // 'desktop' | 'extension' | null
+  const bridgeConnect = async () => {
     setBusy(true); setMsg(null)
-    window.postMessage({ source: 'poe2arb', cmd: 'connect' }, window.location.origin)
-    setTimeout(() => setBusy(b => { if (b) setMsg({ ok: false, text: 'No answer from the extension — reload it on chrome://extensions and refresh this page.' }); return false }), 8000)
-  }
-  const desktop = typeof window !== 'undefined' && window.poe2desktop
-  const desktopConnect = async () => {
-    setBusy(true); setMsg(null)
-    try {
-      const r = await window.poe2desktop.connectSession()
-      setMsg({ ok: !!r.ok, text: r.message })
-      if (r.ok) { await load(); onChange?.() }
-    } catch (e) { setMsg({ ok: false, text: String(e.message || e) }) }
+    const r = await connectSession()
+    setMsg({ ok: r.ok !== false, text: r.message })
+    if (r.ok) { await load(); onChange?.() }
     setBusy(false)
   }
 
@@ -72,24 +52,17 @@ export default function AccountsPanel({ onChange }) {
         </p>
       ) : (
         <>
-          {desktop ? (
+          {bridge ? (
             <div className="row" style={{ margin: '10px 0' }}>
-              <button className="btn primary" disabled={busy} onClick={desktopConnect}>
+              <button className="btn primary" disabled={busy} onClick={bridgeConnect}>
                 {busy ? 'Connecting…' : 'Connect trade session'}</button>
-              <span className="hint">One click. If you're not signed in to pathofexile.com yet, a login window opens and
-                the session connects itself the moment you finish.</span>
-            </div>
-          ) : ext ? (
-            <div className="row" style={{ margin: '10px 0' }}>
-              <button className="btn primary" disabled={busy} onClick={extConnect}>
-                {busy ? 'Connecting…' : 'Connect trade session'}</button>
-              <span className="hint">One click. If you're not logged in to pathofexile.com yet, the login page opens and the
-                session connects itself right after you log in.</span>
+              <span className="hint">Same as the <b>Connect live data</b> button in the top bar. If you're not signed in to
+                pathofexile.com yet, a login window opens and the session connects itself the moment you finish.</span>
             </div>
           ) : (
-            <p className="hint"><b>One-click setup (once):</b> open <code>chrome://extensions</code>, turn on Developer mode,
-              click <b>Load unpacked</b> and pick <code>tools/chrome-extension/</code> from the repo, then refresh this page —
-              a Connect button appears here.</p>
+            <p className="hint">The <b>Connect live data</b> button is in the top-right of the window. It uses the desktop app's
+              built-in login (or the browser extension). No button there? You're in a plain browser — use one of the manual
+              options below.</p>
           )}
           <details className="adv">
             <summary>Other ways to connect</summary>

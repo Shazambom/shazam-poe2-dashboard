@@ -86,14 +86,23 @@ export default function App() {
             {backfilling ? `syncing history · ${fmt.n(status.digest.behind_h, 0)}h behind`
               : status?.digest?.last_fetch ? `market data ${fmt.age(Date.now() / 1000 - status.digest.last_fetch)} ago` : 'waiting for market data'}
           </span>
-          <button className="feed as-btn" title={status?.orderbook?.last_error || 'Live order book — click to manage the trade session'}
-            onClick={() => setTab('Settings')}>
-            <i className={`dot ${bookOk}`} />
-            {!status?.session?.connected ? 'live book: connect'
-              : status.orderbook.in_flight ? `fetching ${status.orderbook.in_flight}`
-              : status.orderbook.queue ? `${status.orderbook.queue} queued`
-              : status.orderbook.last_fetch ? `live ${fmt.age(Date.now() / 1000 - status.orderbook.last_fetch)} ago` : 'live: idle'}
-          </button>
+          {connected ? (
+            <span className="feed" title={status?.orderbook?.last_error || 'Live order book'}>
+              <i className={`dot ${bookOk}`} />
+              {status.orderbook.in_flight ? `fetching ${status.orderbook.in_flight}`
+                : status.orderbook.queue ? `${status.orderbook.queue} queued`
+                : status.orderbook.last_fetch ? `live ${fmt.age(Date.now() / 1000 - status.orderbook.last_fetch)} ago` : 'live: idle'}
+            </span>
+          ) : bridge ? (
+            <button className="btn primary connect-live" disabled={connecting} onClick={doConnect}
+              title={bridge === 'desktop' ? 'Sign in to pathofexile.com and stream live order books' : 'Connect via the browser extension'}>
+              {connecting ? 'Connecting…' : 'Connect live data'}
+            </button>
+          ) : (
+            <button className="feed as-btn" title="Connect a trade session for live order books" onClick={() => setTab('Settings')}>
+              <i className={`dot ${bookOk}`} /> live book: connect
+            </button>
+          )}
           <span className="capital-pill" title="Total value of what you hold, in the reference currency">
             capital <b>{fmt.n(capital?.total_ref, 1)}</b> {ref}</span>
           {status?.oauth?.logged_in && <span className="muted">{status.oauth.username}</span>}

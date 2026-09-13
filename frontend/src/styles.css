@@ -144,6 +144,7 @@ td.mpg { white-space: nowrap; }
 }
 .feed.as-btn { background: none; border: 0; padding: 0; cursor: pointer; color: inherit; font: inherit; }
 .feed.as-btn:hover { color: var(--ink-2); }
+.connect-live { padding: 5px 12px; font-size: 13px; white-space: nowrap; }
 
 /* ---------- collapsibles ---------- */
 details.adv { margin: 6px 0 14px; }
