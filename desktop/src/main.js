@@ -216,7 +216,7 @@ function buildMenu() {
   const template = [
     ...(process.platform === 'darwin' ? [{ role: 'appMenu' }] : []),
     {
-      label: 'Dashboard',
+      label: 'ShazamDash',
       submenu: [
         { label: 'Connect PoE trade session…', click: connectPoeSession },
         { label: 'Log out of pathofexile.com', click: async () => {
@@ -262,6 +262,7 @@ app.whenReady().then(async () => {
     width: 1500, height: 950, minWidth: 900, minHeight: 600,
     title: 'ShazamDash',
     backgroundColor: '#191b22',
+    autoHideMenuBar: true,   // hide the Dashboard/Edit/View/Window bar by default (Win/Linux); tap Alt to reveal
     webPreferences: {
       contextIsolation: true, sandbox: true, preload: path.join(__dirname, 'preload.js'),
       webviewTag: true,   // the Trade tab embeds pathofexile.com/trade2 in a <webview>
