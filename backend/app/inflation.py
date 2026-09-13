@@ -45,16 +45,16 @@ def _metas(tid: str) -> list[str]:
     return list(cur.metadata_ids) if cur else []
 
 
-def _hourly_soft_per_hard(c, league, soft_metas, hard_metas) -> dict[int, tuple[float, float]]:
+def _hourly_soft_per_hard(c, league, soft_metas, hard_metas, since=0) -> dict[int, tuple[float, float]]:
     """{hour: (soft_units_per_hard_unit, hard_volume)} from executed volume ratios."""
     if not soft_metas or not hard_metas:
         return {}
     sp, hp = ",".join("?" * len(soft_metas)), ",".join("?" * len(hard_metas))
     rows = c.execute(
         f"""SELECT hour, cur_a, cur_b, vol_a, vol_b FROM digest_markets
-            WHERE league=? AND ((cur_a IN ({sp}) AND cur_b IN ({hp}))
+            WHERE league=? AND hour>=? AND ((cur_a IN ({sp}) AND cur_b IN ({hp}))
                               OR (cur_a IN ({hp}) AND cur_b IN ({sp})))""",
-        (league, *soft_metas, *hard_metas, *hard_metas, *soft_metas)).fetchall()
+        (league, since, *soft_metas, *hard_metas, *hard_metas, *soft_metas)).fetchall()
     soft_set = set(soft_metas)
     agg: dict[int, list[float]] = {}
     for r in rows:
@@ -92,7 +92,9 @@ def compute(anchor_key: str, hours: int = 336) -> dict:
         anchor_key = "hinekora"
     s = get_settings()
     league = s["league"]
-    ck = f"{league}|{anchor_key}|{hours}"
+    # Watchlist is in the key — it determines the soft set/basket (was omitted, so a
+    # watchlist change served a stale basket for up to TTL_S).
+    ck = f"{league}|{anchor_key}|{hours}|{','.join(s['watchlist'])}"
     hit = _cache.get(ck)
     if hit and time.time() - hit[0] < TTL_S:
         return hit[1]
@@ -107,18 +109,15 @@ def compute(anchor_key: str, hours: int = 336) -> dict:
     currencies = []
     with db.q() as c:
         # divine→hard per hour (the pivot leg), skipped when the anchor IS divine.
-        divine_per_hard = {} if pivot_is_hard else _hourly_soft_per_hard(c, league, [PIVOT_META], [hard_meta])
+        divine_per_hard = {} if pivot_is_hard else _hourly_soft_per_hard(c, league, [PIVOT_META], [hard_meta], since)
         for tid in softs:
             metas = _metas(tid)
             raw: dict[int, tuple[float, float]] = {}
             if metas == [PIVOT_META]:                      # the pivot currency itself (Divine)
-                src = {} if pivot_is_hard else divine_per_hard
-                raw = {h: v for h, v in src.items() if h >= since}
+                raw = {} if pivot_is_hard else dict(divine_per_hard)
             else:
-                soft_per_divine = _hourly_soft_per_hard(c, league, metas, [PIVOT_META])
+                soft_per_divine = _hourly_soft_per_hard(c, league, metas, [PIVOT_META], since)
                 for h, (sp, w) in soft_per_divine.items():
-                    if h < since:
-                        continue
                     if pivot_is_hard:
                         raw[h] = (sp, w)                   # soft→divine already IS soft→hard
                     elif h in divine_per_hard:

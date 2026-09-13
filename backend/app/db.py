@@ -66,6 +66,8 @@ CREATE TABLE IF NOT EXISTS league_daily (
     close REAL, average REAL, volume INTEGER,
     PRIMARY KEY (league, item_id, day)
 );
+-- cross() filters by item_id (not the leading PK column), so it needs its own index.
+CREATE INDEX IF NOT EXISTS idx_league_daily_item ON league_daily(item_id, day);
 """
 
 

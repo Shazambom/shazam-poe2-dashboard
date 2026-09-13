@@ -1,43 +1,35 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { api, fmt, surface } from '../lib/api.js'
+import { useAutosave } from '../lib/hooks.js'
 
 const PRIMARY = ['chaos', 'exalted', 'divine']
 
 // What-you-hold editor that lives in the Routes rail. Quantities auto-save
-// (debounced) — no Save button, no separate page.
+// (debounced via the shared useAutosave hook) — no Save button, no separate page.
 export default function CapitalCard({ currencies, status, onSaved }) {
   const [qty, setQty] = useState(null)          // { currency: "string qty" } as typed
   const [data, setData] = useState(null)        // last server valuation
   const [add, setAdd] = useState('')
-  const [state, setState] = useState('')        // '', 'saving', 'saved'
-  const timer = useRef(null)
   const names = Object.fromEntries((currencies?.currencies ?? []).map(c => [c.id, c.name]))
+
+  const { state, save, arm } = useAutosave(async (rows) => {
+    const entries = {}
+    Object.entries(rows).forEach(([c, v]) => { const n = Number(v); if (Number.isFinite(n) && n > 0) entries[c] = n })
+    const d = await surface(api.putCapital(entries))
+    setData(d); onSaved?.()
+  })
 
   useEffect(() => {
     api.capital().then(d => {
       setData(d)
       const r = Object.fromEntries(PRIMARY.map(p => [p, 0]))
       d.rows.forEach(x => { r[x.currency] = x.qty })
-      setQty(r)
-    }).catch(() => setQty(Object.fromEntries(PRIMARY.map(p => [p, 0]))))
-    return () => clearTimeout(timer.current)
-  }, [])
+      setQty(r); arm()
+    }).catch(() => { setQty(Object.fromEntries(PRIMARY.map(p => [p, 0]))); arm() })
+  }, []) // eslint-disable-line
 
-  const persist = (rows) => {
-    clearTimeout(timer.current)
-    setState('saving')
-    timer.current = setTimeout(async () => {
-      const entries = {}
-      Object.entries(rows).forEach(([c, v]) => { const n = Number(v); if (Number.isFinite(n) && n > 0) entries[c] = n })
-      try {
-        const d = await surface(api.putCapital(entries))
-        setData(d); setState('saved'); onSaved?.()
-        setTimeout(() => setState(s => s === 'saved' ? '' : s), 1500)
-      } catch { setState('') }
-    }, 700)
-  }
-  const setOne = (c, v) => setQty(r => { const n = { ...r, [c]: v }; persist(n); return n })
-  const remove = (c) => setQty(r => { const n = { ...r }; delete n[c]; persist(n); return n })
+  const setOne = (c, v) => setQty(r => { const n = { ...r, [c]: v }; save(n); return n })
+  const remove = (c) => setQty(r => { const n = { ...r }; delete n[c]; save(n); return n })
   const valueOf = (c) => data?.rows.find(r => r.currency === c)
   const backfilling = status?.digest?.backfilling
   const ref = data?.reference ?? 'exalted'

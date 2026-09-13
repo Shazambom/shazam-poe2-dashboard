@@ -541,7 +541,9 @@ def _composite_score(routes: list[dict], weights: dict) -> None:
 
     eff = ranks(lambda r: INF if r["gold_free"] and r["margin_ref"] > 0 else (r["margin_per_1k_gold"] or -INF))
     val = ranks(lambda r: r["margin_ref"])
-    vol = ranks(lambda r: r["volume_ref_per_h"] if r["volume_ref_per_h"] is not None else INF)
+    # Unknown volume ranks worst (−INF), consistent with the min_volume filter which
+    # treats None as 0 — previously None ranked best (INF), contradicting the filter.
+    vol = ranks(lambda r: r["volume_ref_per_h"] if r["volume_ref_per_h"] is not None else -INF)
     vel = ranks(lambda r: INF if r["velocity_inf"] else (r["velocity"] if r["velocity"] is not None else -INF))
     for r in routes:
         r["score"] = round((w_vel * vel[r["id"]] + w_eff * eff[r["id"]] + w_val * val[r["id"]] + w_vol * vol[r["id"]]) / total, 4)

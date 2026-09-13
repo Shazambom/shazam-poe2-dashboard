@@ -7,6 +7,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.concurrency import run_in_threadpool
 from pydantic import BaseModel
 
 from fastapi.responses import RedirectResponse
@@ -17,6 +18,17 @@ from .settings import get_settings, save_settings
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("poe2arb")
+
+_bg_tasks: set = set()   # keep strong refs so fire-and-forget tasks aren't GC'd mid-flight
+
+
+def _spawn(coro) -> None:
+    """Run a coroutine in the background, retaining a reference and logging failures
+    (a bare create_task can be GC'd early and swallows exceptions)."""
+    t = asyncio.create_task(coro)
+    _bg_tasks.add(t)
+    t.add_done_callback(lambda tt: (_bg_tasks.discard(tt),
+                                    tt.cancelled() or tt.exception() and log.error("bg task failed: %s", tt.exception())))
 
 
 @asynccontextmanager
@@ -113,6 +125,7 @@ class CapitalBody(BaseModel):
 @app.put("/api/capital")
 def put_capital(body: CapitalBody):
     db.set_capital(body.entries)
+    arbitrage.invalidate_caches()   # routes are sized from capital, so drop the route cache
     return capital()
 
 
@@ -284,10 +297,10 @@ def inflation_view(anchor: str = "hinekora", hours: int = 336):
 async def inflation_cross(item: int = leaguehistory.DEFAULT_ITEM):
     """Age-aligned cross-league inflation (Divine-in-Exalted). Backfills from
     poe2scout on first call / when current-league data is stale, then serves."""
-    res = leaguehistory.cross(item)
+    res = await run_in_threadpool(leaguehistory.cross, item)   # sync DB scan off the event loop
     if not res["leagues"]:                       # cold cache — quick anchors-only pull then serve
         await leaguehistory.backfill(full=False)
-        res = leaguehistory.cross(item)
+        res = await run_in_threadpool(leaguehistory.cross, item)
     return res
 
 
@@ -295,9 +308,9 @@ async def inflation_cross(item: int = leaguehistory.DEFAULT_ITEM):
 async def inflation_marketcap():
     """Economy size per league in Mirrors (total value traded/day). Served from the
     stored full-currency backfill; if that hasn't run yet, kick it in the background."""
-    res = leaguehistory.marketcap()
+    res = await run_in_threadpool(leaguehistory.marketcap)
     if not res["leagues"]:
-        asyncio.create_task(leaguehistory.backfill(full=True))
+        _spawn(leaguehistory.backfill(full=True))
         return {**res, "building": True}
     return res
 
@@ -306,7 +319,7 @@ async def inflation_marketcap():
 async def inflation_cross_refresh(force: bool = False):
     # Fire-and-forget: the full backfill takes minutes (rate-limited), longer than any
     # proxy/client timeout, and a disconnected request would be cancelled mid-way.
-    asyncio.create_task(leaguehistory.backfill(force=force, full=True))
+    _spawn(leaguehistory.backfill(force=force, full=True))
     return {"started": True}
 
 

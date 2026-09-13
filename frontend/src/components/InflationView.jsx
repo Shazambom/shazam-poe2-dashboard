@@ -5,7 +5,49 @@ import { api, fmt } from '../lib/api.js'
 // Fixed categorical hues (assigned in order, never cycled) — distinct in the app's
 // dark theme. Identity is carried by the legend, never colour alone.
 const SERIES = ['#7fb4d9', '#6fb98f', '#c9a24a', '#b39ddb', '#d2705f', '#5fc8c0', '#e0b866', '#9aa0b5']
+const AXIS = { fill: '#8f95a5', fontSize: 11 }
+const TOOLTIP = { background: '#20232c', border: '1px solid #464b5c', fontSize: 12 }
 const day = (h) => new Date(h * 1000).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit' })
+
+// Fold a list of series (each {points:[...]}) into row-per-x objects for Recharts.
+// meta(series) -> {id, ...} identifies the line; optional filter(point) drops points.
+function mergeSeries(list, { x, val, meta, filter }) {
+  const byX = new Map()
+  const keys = []
+  for (const s of list) {
+    const m = meta(s)
+    keys.push(m)
+    for (const p of s.points) {
+      if (filter && !filter(p)) continue
+      const row = byX.get(p[x]) || { [x]: p[x] }
+      row[m.id] = p[val]
+      byX.set(p[x], row)
+    }
+  }
+  return { rows: [...byX.values()].sort((a, b) => a[x] - b[x]), keys }
+}
+
+// The two age-aligned multi-league charts (cross-league inflation + economy size)
+// are the same chart bar the y-scale and reference line; one component serves both.
+function LeagueAgeChart({ rows, keys, scale, refLine, valueFmt }) {
+  return (
+    <ResponsiveContainer>
+      <LineChart data={rows} margin={{ top: 8, right: 16, bottom: 4, left: 8 }}>
+        <XAxis dataKey="age" type="number" domain={['dataMin', 'dataMax']} tick={AXIS}
+          tickFormatter={d => `d${d}`} label={{ value: 'day of league', position: 'insideBottom', offset: -2, ...AXIS }} />
+        <YAxis scale={scale || 'auto'} domain={['auto', 'auto']} tick={AXIS} width={54} tickFormatter={v => fmt.n(v, 0)} />
+        <Tooltip contentStyle={TOOLTIP} labelFormatter={d => `day ${d}`} formatter={valueFmt} />
+        {refLine != null && <ReferenceLine y={refLine} stroke="#464b5c" strokeDasharray="3 3" />}
+        <Legend wrapperStyle={{ fontSize: 12 }} />
+        {keys.map((k, i) => (
+          <Line key={k.id} type="monotone" dataKey={k.id} name={k.id + (k.current ? ' (current)' : '')}
+            stroke={SERIES[i % SERIES.length]} strokeWidth={k.current ? 2.8 : 1.4}
+            dot={false} isAnimationActive={false} connectNulls />
+        ))}
+      </LineChart>
+    </ResponsiveContainer>
+  )
+}
 
 export default function InflationView({ league }) {
   const [anchor, setAnchor] = useState('hinekora')
@@ -18,20 +60,9 @@ export default function InflationView({ league }) {
     api.inflation(anchor).then(d => { setData(d); setErr(null) }).catch(e => setErr(String(e.message || e))).finally(() => setBusy(false))
   }, [anchor, league])
 
-  // Merge per-currency point arrays into one row-per-hour dataset for the chart.
-  const { rows, keys } = useMemo(() => {
-    const byHour = new Map()
-    const ks = []
-    for (const cur of data?.currencies ?? []) {
-      ks.push({ id: cur.id, name: cur.name })
-      for (const p of cur.points) {
-        const row = byHour.get(p.t) || { t: p.t }
-        row[cur.id] = p.v
-        byHour.set(p.t, row)
-      }
-    }
-    return { rows: [...byHour.values()].sort((a, b) => a.t - b.t), keys: ks }
-  }, [data])
+  const { rows, keys } = useMemo(() =>
+    mergeSeries(data?.currencies ?? [], { x: 't', val: 'v', meta: c => ({ id: c.id, name: c.name }) }), [data])
+  const nameOf = (id) => keys.find(k => k.id === id)?.name || id
 
   const b = data?.basket
   const vel = b?.velocity_pct_per_day
@@ -77,12 +108,11 @@ export default function InflationView({ league }) {
           : (
             <ResponsiveContainer>
               <LineChart data={rows} margin={{ top: 8, right: 16, bottom: 0, left: 0 }}>
-                <XAxis dataKey="t" tickFormatter={day} tick={{ fill: '#8f95a5', fontSize: 11 }} minTickGap={48} />
-                <YAxis domain={['auto', 'auto']} tick={{ fill: '#8f95a5', fontSize: 11 }} width={44} tickFormatter={v => v.toFixed(0)} />
-                <Tooltip contentStyle={{ background: '#20232c', border: '1px solid #464b5c', fontSize: 12 }}
-                  labelFormatter={day} formatter={(v, id) => [v?.toFixed?.(1), keys.find(k => k.id === id)?.name || id]} />
+                <XAxis dataKey="t" tickFormatter={day} tick={AXIS} minTickGap={48} />
+                <YAxis domain={['auto', 'auto']} tick={AXIS} width={44} tickFormatter={v => v.toFixed(0)} />
+                <Tooltip contentStyle={TOOLTIP} labelFormatter={day} formatter={(v, id) => [v?.toFixed?.(1), nameOf(id)]} />
                 <ReferenceLine y={100} stroke="#464b5c" strokeDasharray="3 3" />
-                <Legend wrapperStyle={{ fontSize: 12 }} formatter={(id) => keys.find(k => k.id === id)?.name || id} />
+                <Legend wrapperStyle={{ fontSize: 12 }} formatter={nameOf} />
                 {keys.map((k, i) => (
                   <Line key={k.id} type="monotone" dataKey={k.id} stroke={SERIES[i % SERIES.length]}
                     dot={false} strokeWidth={1.8} isAnimationActive={false} connectNulls />
@@ -131,20 +161,8 @@ function MarketCap() {
     api.inflationMarketcap().then(setData).catch(e => setErr(String(e.message || e))).finally(() => setBusy(false))
   }, [])
 
-  const { rows, keys } = useMemo(() => {
-    const byAge = new Map()
-    const ks = []
-    for (const lg of data?.leagues ?? []) {
-      ks.push({ id: lg.league, current: lg.current })
-      for (const p of lg.points) {
-        if (!(p.mirrors > 0)) continue          // log scale needs positive values
-        const row = byAge.get(p.age) || { age: p.age }
-        row[lg.league] = p.mirrors
-        byAge.set(p.age, row)
-      }
-    }
-    return { rows: [...byAge.values()].sort((a, b) => a.age - b.age), keys: ks }
-  }, [data])
+  const { rows, keys } = useMemo(() =>   // log scale needs positive values
+    mergeSeries(data?.leagues ?? [], { x: 'age', val: 'mirrors', meta: lg => ({ id: lg.league, current: lg.current }), filter: p => p.mirrors > 0 }), [data])
   const cur = (data?.leagues ?? []).find(l => l.current)
 
   return (
@@ -169,24 +187,7 @@ function MarketCap() {
       <div className="chart-box" style={{ height: 320, marginTop: 12 }}>
         {busy && !data ? <div className="empty">Loading…</div>
           : rows.length < 2 ? <div className="empty">Economy history is still building — check back shortly.</div>
-          : (
-            <ResponsiveContainer>
-              <LineChart data={rows} margin={{ top: 8, right: 16, bottom: 4, left: 8 }}>
-                <XAxis dataKey="age" type="number" domain={['dataMin', 'dataMax']} tick={{ fill: '#8f95a5', fontSize: 11 }}
-                  tickFormatter={d => `d${d}`} />
-                <YAxis scale="log" domain={['auto', 'auto']} tick={{ fill: '#8f95a5', fontSize: 11 }} width={54}
-                  tickFormatter={v => fmt.n(v, 0)} />
-                <Tooltip contentStyle={{ background: '#20232c', border: '1px solid #464b5c', fontSize: 12 }}
-                  labelFormatter={d => `day ${d}`} formatter={(v) => [`${fmt.n(v, 0)} mir/day`]} />
-                <Legend wrapperStyle={{ fontSize: 12 }} />
-                {keys.map((k, i) => (
-                  <Line key={k.id} type="monotone" dataKey={k.id} name={k.id + (k.current ? ' (current)' : '')}
-                    stroke={SERIES[i % SERIES.length]} strokeWidth={k.current ? 2.8 : 1.4}
-                    dot={false} isAnimationActive={false} connectNulls />
-                ))}
-              </LineChart>
-            </ResponsiveContainer>
-          )}
+          : <LeagueAgeChart rows={rows} keys={keys} scale="log" valueFmt={(v) => [`${fmt.n(v, 0)} mir/day`]} />}
       </div>
       <p className="hint" style={{ marginTop: 10 }}>
         This is traded throughput — the value that changes hands per day, summed across every currency and priced in Mirrors.
@@ -211,19 +212,8 @@ function CrossLeague() {
   }, [item])
   const items = data?.items ?? [{ id: 291, name: 'Divine Orb' }]
 
-  const { rows, keys } = useMemo(() => {
-    const byAge = new Map()
-    const ks = []
-    for (const lg of data?.leagues ?? []) {
-      ks.push({ id: lg.league, current: lg.current })
-      for (const p of lg.points) {
-        const row = byAge.get(p.age) || { age: p.age }
-        row[lg.league] = p.index
-        byAge.set(p.age, row)
-      }
-    }
-    return { rows: [...byAge.values()].sort((a, b) => a.age - b.age), keys: ks }
-  }, [data])
+  const { rows, keys } = useMemo(() =>
+    mergeSeries(data?.leagues ?? [], { x: 'age', val: 'index', meta: lg => ({ id: lg.league, current: lg.current }) }), [data])
 
   return (
     <div style={{ marginTop: 28 }}>
@@ -240,24 +230,7 @@ function CrossLeague() {
       <div className="chart-box" style={{ height: 340 }}>
         {busy && !data ? <div className="empty">Loading past-league history…</div>
           : rows.length < 2 ? <div className="empty">No cross-league history yet.</div>
-          : (
-            <ResponsiveContainer>
-              <LineChart data={rows} margin={{ top: 8, right: 16, bottom: 4, left: 0 }}>
-                <XAxis dataKey="age" type="number" domain={['dataMin', 'dataMax']} tick={{ fill: '#8f95a5', fontSize: 11 }}
-                  tickFormatter={d => `d${d}`} label={{ value: 'day of league', position: 'insideBottom', offset: -2, fill: '#8f95a5', fontSize: 11 }} />
-                <YAxis domain={['auto', 'auto']} tick={{ fill: '#8f95a5', fontSize: 11 }} width={44} tickFormatter={v => v.toFixed(0)} />
-                <Tooltip contentStyle={{ background: '#20232c', border: '1px solid #464b5c', fontSize: 12 }}
-                  labelFormatter={d => `day ${d}`} />
-                <ReferenceLine y={100} stroke="#464b5c" strokeDasharray="3 3" />
-                <Legend wrapperStyle={{ fontSize: 12 }} />
-                {keys.map((k, i) => (
-                  <Line key={k.id} type="monotone" dataKey={k.id} name={k.id + (k.current ? ' (current)' : '')}
-                    stroke={SERIES[i % SERIES.length]} strokeWidth={k.current ? 2.8 : 1.4}
-                    dot={false} isAnimationActive={false} connectNulls />
-                ))}
-              </LineChart>
-            </ResponsiveContainer>
-          )}
+          : <LeagueAgeChart rows={rows} keys={keys} refLine={100} />}
       </div>
       <p className="hint" style={{ marginTop: 10 }}>
         Higher/steeper = faster Exalted inflation at that point in the league. The current league (bold) can be compared

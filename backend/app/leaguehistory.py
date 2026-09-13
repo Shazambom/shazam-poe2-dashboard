@@ -13,6 +13,8 @@ rebased to its own day-0 = 100 and plotted by day-of-league, so you can read
 """
 from __future__ import annotations
 
+import asyncio
+import datetime as _dt
 import logging
 import time
 import urllib.parse
@@ -20,6 +22,13 @@ import urllib.parse
 from . import db, gateway
 
 log = logging.getLogger(__name__)
+
+_backfill_lock = asyncio.Lock()   # only one backfill crawl at a time (shared rate limit)
+
+
+def _age(day: str, day0: str) -> int:
+    """Whole days between two YYYY-MM-DD strings — real day-of-league, gap-proof."""
+    return (_dt.date.fromisoformat(day) - _dt.date.fromisoformat(day0)).days
 
 BASE = "https://api.poe2scout.com/poe2"
 # Item ids are global across leagues (poe2scout), priced in the league base (Exalted).
@@ -46,11 +55,12 @@ async def _leagues() -> list[dict]:
     return [l for l in rows if not any(l.get("Value", "").startswith(s) or l.get("Value") == s for s in SKIP)]
 
 
-def _stored_days(league: str, item_id: int) -> tuple[int, int | None]:
+def _stored_counts() -> dict[tuple[str, int], int]:
+    """One grouped read of stored day-counts per (league, item) — avoids a COUNT(*)
+    probe per item during backfill."""
     with db.q() as c:
-        r = c.execute("SELECT COUNT(*) n, MAX(day) mx FROM league_daily WHERE league=? AND item_id=?",
-                      (league, item_id)).fetchone()
-    return r["n"], r["mx"]
+        rows = c.execute("SELECT league, item_id, COUNT(*) n FROM league_daily GROUP BY league, item_id").fetchall()
+    return {(r["league"], r["item_id"]): r["n"] for r in rows}
 
 
 async def _currency_item_ids(league: str) -> list[int]:
@@ -66,75 +76,110 @@ async def backfill(force: bool = False, full: bool = True) -> dict:
     leagues are fetched once; current leagues refresh on a 12h cadence.
 
     full=True fetches every currency item (needed for the economy market cap);
-    full=False fetches only the named anchors (fast — used on a cold cross() call)."""
-    fetched = {}
-    try:
-        leagues = await _leagues()
-    except Exception as exc:
-        log.warning("poe2scout leagues fetch failed: %s", exc)
-        return {"error": str(exc)}
-    db.kv_set("lh_current", [l["Value"] for l in leagues if l.get("IsCurrent") and l.get("Value")])
-    for lg in leagues:
-        name, current = lg.get("Value"), bool(lg.get("IsCurrent"))
-        if not name:
-            continue
-        item_ids = set(ITEMS)
-        if full:
-            try:
-                item_ids |= set(await _currency_item_ids(name))
-            except Exception as exc:
-                log.warning("poe2scout currency list %s failed: %s", name, exc)
-        for item_id in item_ids:
-            n, _mx = _stored_days(name, item_id)
-            # past league already stored, or current league fetched recently → skip
-            if n and not force and not current:
+    full=False fetches only the named anchors (fast — used on a cold cross() call).
+
+    Only one crawl runs at a time (they share the poe2scout rate limit); overlapping
+    callers return immediately rather than queueing for minutes."""
+    if _backfill_lock.locked() and not force:
+        return {"skipped": "backfill already running"}
+    async with _backfill_lock:
+        fetched = {}
+        try:
+            leagues = await _leagues()
+        except Exception as exc:
+            log.warning("poe2scout leagues fetch failed: %s", exc)
+            return {"error": str(exc)}
+        db.kv_set("lh_current", [l["Value"] for l in leagues if l.get("IsCurrent") and l.get("Value")])
+        stored = _stored_counts()
+        for lg in leagues:
+            name, current = lg.get("Value"), bool(lg.get("IsCurrent"))
+            if not name:
                 continue
-            if n and not force and current:
-                last = db.kv_get(f"lh_fetch:{name}:{item_id}", 0)
-                if time.time() - last < REFRESH_S:
+            item_ids = set(ITEMS)
+            if full:
+                try:
+                    item_ids |= set(await _currency_item_ids(name))
+                except Exception as exc:
+                    log.warning("poe2scout currency list %s failed: %s", name, exc)
+            for item_id in item_ids:
+                complete = db.kv_get(f"lh_complete:{name}:{item_id}", False)
+                # A past league marked complete (full history captured) is final → skip.
+                # Partial stores (never marked complete) and current→past transitions
+                # are re-fetched. Current leagues refresh on the 12h cadence.
+                if complete and not force:
                     continue
-            try:
-                enc = urllib.parse.quote(name)
-                data = await _get(f"/Leagues/{enc}/Items/{item_id}/DailyStatsHistory?dayCount=500")
-            except Exception as exc:
-                log.warning("poe2scout history %s/%s failed: %s", name, item_id, exc)
-                continue
-            rows = [(name, item_id, s["Time"], s.get("Close"), s.get("Average"), s.get("Volume"))
-                    for s in data.get("DailyStats", []) if s.get("Time")]
-            if rows:
-                with db.tx() as c:
-                    c.executemany("INSERT OR REPLACE INTO league_daily VALUES (?,?,?,?,?,?)", rows)
-                db.kv_set(f"lh_fetch:{name}:{item_id}", time.time())
-                fetched[f"{name}/{item_id}"] = len(rows)
-    return {"fetched": fetched, "leagues": len(leagues)}
+                if current and stored.get((name, item_id)) and not force:
+                    if time.time() - db.kv_get(f"lh_fetch:{name}:{item_id}", 0) < REFRESH_S:
+                        continue
+                try:
+                    enc = urllib.parse.quote(name)
+                    data = await _get(f"/Leagues/{enc}/Items/{item_id}/DailyStatsHistory?dayCount=500")
+                except Exception as exc:
+                    log.warning("poe2scout history %s/%s failed: %s", name, item_id, exc)
+                    continue
+                rows = [(name, item_id, s["Time"], s.get("Close"), s.get("Average"), s.get("Volume"))
+                        for s in data.get("DailyStats", []) if s.get("Time")]
+                if rows:
+                    with db.tx() as c:
+                        c.executemany("INSERT OR REPLACE INTO league_daily VALUES (?,?,?,?,?,?)", rows)
+                    db.kv_set(f"lh_fetch:{name}:{item_id}", time.time())
+                    # A past league with no more pages is fully captured — mark it final.
+                    if not current and not data.get("HasMore"):
+                        db.kv_set(f"lh_complete:{name}:{item_id}", True)
+                    fetched[f"{name}/{item_id}"] = len(rows)
+        _cache.clear()   # fresh data → drop cross()/marketcap() caches
+        return {"fetched": fetched, "leagues": len(leagues)}
+
+
+# cross()/marketcap() only change on the 12h backfill; cache their aggregation
+# (cleared by backfill on new data).
+_cache: dict[str, dict] = {}
+_CACHE_TTL_S = 600
+
+
+def _cached(key: str, build):
+    hit = _cache.get(key)
+    if hit and time.time() - hit[0] < _CACHE_TTL_S:
+        return hit[1]
+    val = build()
+    _cache[key] = (time.time(), val)
+    return val
+
+
+def _finalize(leagues: list[dict]) -> list[dict]:
+    leagues.sort(key=lambda x: (not x["current"], -x["days"]))
+    return leagues
 
 
 def cross(item_id: int = DEFAULT_ITEM) -> dict:
-    """Age-aligned, rebased indices per league for one item (default Divine).
-    day 0 = each league's first captured day; index = 100 × close / day0_close."""
+    """Age-aligned, rebased indices per league for one item (default Divine). age =
+    real days since each league's first captured day; index = 100 × close / day0_close."""
     if item_id not in ITEMS:
         item_id = DEFAULT_ITEM
-    with db.q() as c:
-        rows = c.execute("SELECT league, day, close FROM league_daily WHERE item_id=? AND close>0 ORDER BY league, day",
-                         (item_id,)).fetchall()
-    by_league: dict[str, list] = {}
-    for r in rows:
-        by_league.setdefault(r["league"], []).append((r["day"], r["close"]))
-    current = set(db.kv_get("lh_current", []))
-    leagues = []
-    for name, series in by_league.items():
-        series.sort()
-        base = series[0][1]
-        if not base:
-            continue
-        pts = [{"age": i, "day": d, "index": round(100.0 * cl / base, 2)} for i, (d, cl) in enumerate(series)]
-        leagues.append({
-            "league": name, "days": len(pts), "points": pts,
-            "final_index": pts[-1]["index"], "current": name in current,
-        })
-    leagues.sort(key=lambda x: (not x["current"], -x["days"]))
-    return {"item_id": item_id, "item_name": ITEMS[item_id],
-            "leagues": leagues, "items": [{"id": k, "name": v} for k, v in ITEMS.items()]}
+
+    def build():
+        with db.q() as c:
+            rows = c.execute("SELECT league, day, close FROM league_daily WHERE item_id=? AND close>0 ORDER BY league, day",
+                             (item_id,)).fetchall()
+        by_league: dict[str, list] = {}
+        for r in rows:
+            by_league.setdefault(r["league"], []).append((r["day"], r["close"]))
+        current = set(db.kv_get("lh_current", []))
+        leagues = []
+        for name, series in by_league.items():
+            series.sort()
+            day0, base = series[0][0], series[0][1]
+            if not base:
+                continue
+            pts = [{"age": _age(d, day0), "day": d, "index": round(100.0 * cl / base, 2)} for d, cl in series]
+            leagues.append({
+                "league": name, "days": pts[-1]["age"] + 1, "points": pts,
+                "final_index": pts[-1]["index"], "current": name in current,
+            })
+        return {"item_id": item_id, "item_name": ITEMS[item_id],
+                "leagues": _finalize(leagues), "items": [{"id": k, "name": v} for k, v in ITEMS.items()]}
+
+    return _cached(f"cross:{item_id}", build)
 
 
 def marketcap() -> dict:
@@ -142,38 +187,39 @@ def marketcap() -> dict:
     currencies (Σ volume × price, in Exalted) converted to Mirrors via that day's
     Mirror price. This is traded throughput (GDP-like), not a supply-based cap — total
     minted supply isn't observable. Age-aligned per league, plus a cumulative total."""
-    with db.q() as c:
-        rows = c.execute("""SELECT league, item_id, day, close, volume FROM league_daily
-                            WHERE close>0 AND volume>0 ORDER BY league, day""").fetchall()
-    # per league: {day: total_exalted_traded}, and {day: mirror_price}
-    traded: dict[str, dict[str, float]] = {}
-    mirror: dict[str, dict[str, float]] = {}
-    for r in rows:
-        traded.setdefault(r["league"], {}).setdefault(r["day"], 0.0)
-        traded[r["league"]][r["day"]] += r["close"] * r["volume"]
-        if r["item_id"] == MIRROR_ITEM:
-            mirror.setdefault(r["league"], {})[r["day"]] = r["close"]
-    current = set(db.kv_get("lh_current", []))
-    leagues = []
-    for name, by_day in traded.items():
-        days = sorted(by_day)
-        mp = mirror.get(name, {})
-        last_price = None
-        pts, cum = [], 0.0
-        for i, d in enumerate(days):
-            price = mp.get(d) or last_price          # carry the last Mirror price over gaps
-            last_price = price or last_price
-            if not price:
-                continue                              # no Mirror price yet → skip early days
-            val = by_day[d] / price                   # traded value that day, in Mirrors
-            cum += val
-            pts.append({"age": i, "day": d, "mirrors": round(val, 2), "cum": round(cum, 2)})
-        if not pts:
-            continue
-        leagues.append({
-            "league": name, "days": len(pts), "points": pts,
-            "total_mirrors": round(cum, 2), "latest_mirrors": pts[-1]["mirrors"],
-            "current": name in current,
-        })
-    leagues.sort(key=lambda x: (not x["current"], -x["days"]))
-    return {"unit": "Mirror of Kalandra", "leagues": leagues}
+    def build():
+        with db.q() as c:
+            rows = c.execute("""SELECT league, item_id, day, close, volume FROM league_daily
+                                WHERE close>0 AND volume>0 ORDER BY league, day""").fetchall()
+        # per league: {day: total_exalted_traded}, and {day: mirror_price}
+        traded: dict[str, dict[str, float]] = {}
+        mirror: dict[str, dict[str, float]] = {}
+        for r in rows:
+            traded.setdefault(r["league"], {}).setdefault(r["day"], 0.0)
+            traded[r["league"]][r["day"]] += r["close"] * r["volume"]
+            if r["item_id"] == MIRROR_ITEM:
+                mirror.setdefault(r["league"], {})[r["day"]] = r["close"]
+        current = set(db.kv_get("lh_current", []))
+        leagues = []
+        for name, by_day in traded.items():
+            days = sorted(by_day)
+            day0, mp, last_price = days[0], mirror.get(name, {}), None
+            pts, cum = [], 0.0
+            for d in days:
+                price = mp.get(d) or last_price          # carry the last Mirror price over gaps
+                last_price = price or last_price
+                if not price:
+                    continue                              # no Mirror price yet → skip early days
+                val = by_day[d] / price                   # traded value that day, in Mirrors
+                cum += val
+                pts.append({"age": _age(d, day0), "day": d, "mirrors": round(val, 2), "cum": round(cum, 2)})
+            if not pts:
+                continue
+            leagues.append({
+                "league": name, "days": pts[-1]["age"] + 1, "points": pts,
+                "total_mirrors": round(cum, 2), "latest_mirrors": pts[-1]["mirrors"],
+                "current": name in current,
+            })
+        return {"unit": "Mirror of Kalandra", "leagues": _finalize(leagues)}
+
+    return _cached("marketcap", build)
