@@ -131,6 +131,8 @@ POLICIES: dict[str, Policy] = {p.name: p for p in [
     Policy("digest", [Rate(1, Duration.SECOND), Rate(30, Duration.MINUTE)], ("web.poecdn.com",)),
     # Static/community mirrors.
     Policy("static", [Rate(1, Duration.SECOND), Rate(30, Duration.MINUTE)], ("ggpk.exposed", "github.com", "objects.githubusercontent.com")),
+    # poe2scout economy history — no auth, Cloudflare-fronted; be polite.
+    Policy("poe2scout", [Rate(1, Duration.SECOND), Rate(20, Duration.MINUTE)], ("api.poe2scout.com",)),
 ]}
 
 

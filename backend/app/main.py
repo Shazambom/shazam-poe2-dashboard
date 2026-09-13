@@ -11,7 +11,7 @@ from pydantic import BaseModel
 
 from fastapi.responses import RedirectResponse
 
-from . import arbitrage, db, digest, gamedata, gateway, inflation, oauth, orderbook, recipes, session
+from . import arbitrage, db, digest, gamedata, gateway, inflation, leaguehistory, oauth, orderbook, recipes, session
 from .currencies import registry
 from .settings import get_settings, save_settings
 
@@ -23,7 +23,8 @@ log = logging.getLogger("poe2arb")
 async def lifespan(app: FastAPI):
     await registry.load_static()
     tasks = [asyncio.create_task(digest.run_forever()), asyncio.create_task(_gold_fee_loop()),
-             asyncio.create_task(orderbook.worker()), asyncio.create_task(orderbook.sweeper())]
+             asyncio.create_task(orderbook.worker()), asyncio.create_task(orderbook.sweeper()),
+             asyncio.create_task(_league_history_loop())]
     if not session.get_cookie():
         log.info("no trade session yet: connect one in Settings to enable the live order book")
     yield
@@ -38,6 +39,15 @@ async def _gold_fee_loop():
         except Exception as exc:
             log.exception("gold fee refresh error: %s", exc)
         await asyncio.sleep(86400)
+
+
+async def _league_history_loop():
+    while True:
+        try:
+            await leaguehistory.backfill()
+        except Exception as exc:
+            log.exception("league history backfill error: %s", exc)
+        await asyncio.sleep(12 * 3600)
 
 
 app = FastAPI(title="PoE2 currency arbitrage", lifespan=lifespan)
@@ -268,6 +278,23 @@ def put_watches(body: WatchesBody):
 @app.get("/api/inflation")
 def inflation_view(anchor: str = "hinekora", hours: int = 336):
     return inflation.compute(anchor, hours)
+
+
+@app.get("/api/inflation/cross")
+async def inflation_cross(item: int = leaguehistory.DEFAULT_ITEM):
+    """Age-aligned cross-league inflation (Divine-in-Exalted). Backfills from
+    poe2scout on first call / when current-league data is stale, then serves."""
+    res = leaguehistory.cross(item)
+    if not res["leagues"]:                       # cold cache — pull then serve
+        await leaguehistory.backfill()
+        res = leaguehistory.cross(item)
+    return res
+
+
+@app.post("/api/inflation/cross/refresh")
+async def inflation_cross_refresh(force: bool = False):
+    out = await leaguehistory.backfill(force=force)
+    return {**out, **leaguehistory.cross()}
 
 
 @app.get("/api/board")

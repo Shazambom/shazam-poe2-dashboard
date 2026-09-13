@@ -45,6 +45,7 @@ export const api = {
   leagues: () => fetch('/api/leagues').then(j),
   rateLimits: () => fetch('/api/ratelimits').then(j),
   inflation: (anchor, hours) => fetch('/api/inflation' + qs({ anchor, hours })).then(j),
+  inflationCross: (item) => fetch('/api/inflation/cross' + qs({ item })).then(j),
   watches: () => fetch('/api/watches').then(j),
   putWatches: (folders) => put('/api/watches', { folders }),
   board: () => fetch('/api/board').then(j),

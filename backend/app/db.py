@@ -58,6 +58,14 @@ CREATE TABLE IF NOT EXISTS kv (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS league_daily (
+    league TEXT NOT NULL,
+    item_id INTEGER NOT NULL,
+    day TEXT NOT NULL,          -- YYYY-MM-DD
+    close REAL, average REAL, volume INTEGER,
+    PRIMARY KEY (league, item_id, day)
+);
 """
 
 

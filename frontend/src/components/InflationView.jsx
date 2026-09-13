@@ -112,7 +112,68 @@ export default function InflationView({ league }) {
         Rising index = the currency buys less {data?.anchor_name} than at the start of captured data — i.e. it's inflating.
         {data?.base_note ? ` ${data.base_note[0].toUpperCase()}${data.base_note.slice(1)}.` : ''}
         {' '}Mirror and Hinekora trade thinly, so their lines have gaps; Divine is the densest anchor.
-        {' '}Cross-league age-aligned comparison needs historical backfill from an economy archive — not built yet.
+      </p>
+
+      <CrossLeague />
+    </div>
+  )
+}
+
+// Cross-league inflation: Divine-in-Exalted per league, each rebased to its own
+// day-0 = 100 and plotted by day-of-league, so the current league's inflation can
+// be read against past leagues at the same age. Data via poe2scout history.
+function CrossLeague() {
+  const [data, setData] = useState(null)
+  const [err, setErr] = useState(null)
+  const [busy, setBusy] = useState(true)
+
+  useEffect(() => {
+    api.inflationCross().then(setData).catch(e => setErr(String(e.message || e))).finally(() => setBusy(false))
+  }, [])
+
+  const { rows, keys } = useMemo(() => {
+    const byAge = new Map()
+    const ks = []
+    for (const lg of data?.leagues ?? []) {
+      ks.push({ id: lg.league, current: lg.current })
+      for (const p of lg.points) {
+        const row = byAge.get(p.age) || { age: p.age }
+        row[lg.league] = p.index
+        byAge.set(p.age, row)
+      }
+    }
+    return { rows: [...byAge.values()].sort((a, b) => a.age - b.age), keys: ks }
+  }, [data])
+
+  return (
+    <div style={{ marginTop: 28 }}>
+      <h2>Across leagues <span className="muted" style={{ fontWeight: 400 }}>· {data?.item_name || 'Divine'} priced in Exalted, each league rebased to day-0 = 100 and aligned by day-of-league</span></h2>
+      {err && <div className="notice error">{err}</div>}
+      <div className="chart-box" style={{ height: 340 }}>
+        {busy && !data ? <div className="empty">Loading past-league history…</div>
+          : rows.length < 2 ? <div className="empty">No cross-league history yet.</div>
+          : (
+            <ResponsiveContainer>
+              <LineChart data={rows} margin={{ top: 8, right: 16, bottom: 4, left: 0 }}>
+                <XAxis dataKey="age" type="number" domain={['dataMin', 'dataMax']} tick={{ fill: '#8f95a5', fontSize: 11 }}
+                  tickFormatter={d => `d${d}`} label={{ value: 'day of league', position: 'insideBottom', offset: -2, fill: '#8f95a5', fontSize: 11 }} />
+                <YAxis domain={['auto', 'auto']} tick={{ fill: '#8f95a5', fontSize: 11 }} width={44} tickFormatter={v => v.toFixed(0)} />
+                <Tooltip contentStyle={{ background: '#20232c', border: '1px solid #464b5c', fontSize: 12 }}
+                  labelFormatter={d => `day ${d}`} />
+                <ReferenceLine y={100} stroke="#464b5c" strokeDasharray="3 3" />
+                <Legend wrapperStyle={{ fontSize: 12 }} />
+                {keys.map((k, i) => (
+                  <Line key={k.id} type="monotone" dataKey={k.id} name={k.id + (k.current ? ' (current)' : '')}
+                    stroke={SERIES[i % SERIES.length]} strokeWidth={k.current ? 2.8 : 1.4}
+                    dot={false} isAnimationActive={false} connectNulls />
+                ))}
+              </LineChart>
+            </ResponsiveContainer>
+          )}
+      </div>
+      <p className="hint" style={{ marginTop: 10 }}>
+        Higher/steeper = faster Exalted inflation at that point in the league. The current league (bold) can be compared
+        against where past leagues sat at the same age. History from poe2scout; day 0 = each league's first recorded day.
       </p>
     </div>
   )
