@@ -245,6 +245,26 @@ async def gold_fees_refresh():
 
 
 # ----------------------------------------------------------------- market
+# ---------------------------------------------------------------- watches
+# Saved trade searches (Better-Trading style): folders -> searches, each search
+# storing only {type, slug} + title. The league is NOT stored — it's injected at
+# open time so a watch survives league resets. Pure organiser; opening a search
+# just navigates the trade site (GGG runs the live search, whispering is manual).
+class WatchesBody(BaseModel):
+    folders: list[dict]
+
+
+@app.get("/api/watches")
+def get_watches():
+    return {"folders": db.kv_get("watches", [])}
+
+
+@app.put("/api/watches")
+def put_watches(body: WatchesBody):
+    db.kv_set("watches", body.folders)
+    return {"folders": body.folders}
+
+
 @app.get("/api/board")
 def board():
     return arbitrage.board()

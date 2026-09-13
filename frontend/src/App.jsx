@@ -2,11 +2,12 @@ import React, { useEffect, useRef, useState } from 'react'
 import { api, fmt, bus, surface } from './lib/api.js'
 import { connectBridge, connectSessionWithToast } from './lib/session.js'
 import BoardView from './components/BoardView.jsx'
+import WatchesView from './components/WatchesView.jsx'
 import RoutesView from './components/RoutesView.jsx'
 import MarketView from './components/MarketView.jsx'
 import SettingsView from './components/SettingsView.jsx'
 
-const TABS = ['Board', 'Routes', 'Market', 'Settings']
+const TABS = ['Board', 'Watches', 'Routes', 'Market', 'Settings']
 
 function feedState(ts, staleAfter, enabled = true) {
   if (!enabled) return 'off'
@@ -111,6 +112,7 @@ export default function App() {
       </header>
 
       {tab === 'Board' && <BoardView key={league} status={status} />}
+      {tab === 'Watches' && <WatchesView key={league} league={league} status={status} />}
       {tab === 'Routes' && <RoutesView key={league} capital={capital} status={status} currencies={currencies} onCapitalSaved={refreshHeader} />}
       {tab === 'Market' && <MarketView key={league} currencies={currencies} />}
       {tab === 'Settings' && <SettingsView currencies={currencies} status={status} onSaved={refreshHeader} />}

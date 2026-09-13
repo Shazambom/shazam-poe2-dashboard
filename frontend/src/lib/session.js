@@ -53,6 +53,30 @@ export function connectSession() {
   return Promise.resolve({ ok: false, message: 'no bridge' })
 }
 
+// --- trade searches -------------------------------------------------------
+const TRADE_BASE = 'https://www.pathofexile.com/trade2'
+
+// Reconstruct a trade-search URL from a stored {type, slug}, injecting the league
+// at open time (never stored). live=true → GGG's native live search.
+export function tradeUrl({ type, slug }, league, live) {
+  const u = `${TRADE_BASE}/${type || 'search'}/${encodeURIComponent(league)}/${slug}`
+  return live ? `${u}/live` : u
+}
+
+// Parse a pasted trade URL into { type, slug, live } (league is read but dropped).
+export function parseTradeUrl(url) {
+  const m = String(url).match(/\/trade2?\/([a-z]+)\/[^/]+\/([^/?#\s]+)(\/live)?/i)
+  if (!m) return null
+  return { type: m[1], slug: m[2], live: !!m[3] }
+}
+
+// Open a trade search — a real logged-in window in the desktop app, a new tab in a
+// browser. Human then reads results and whispers manually.
+export function openTrade(url) {
+  if (typeof window !== 'undefined' && window.poe2desktop?.openTrade) window.poe2desktop.openTrade(url)
+  else window.open(url, '_blank', 'noopener')
+}
+
 // Convenience for the top bar: connect, toast the result, run onDone on success.
 export async function connectSessionWithToast(onDone) {
   const r = await connectSession()

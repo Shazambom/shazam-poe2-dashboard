@@ -197,6 +197,22 @@ details.adv[open] summary { color: var(--ink-2); margin-bottom: 8px; }
 .spread-bar { display: inline-block; height: 5px; background: var(--gold); border-radius: 1px; }
 .pt-meta { display: flex; gap: 10px; font-size: 11px; }
 
+/* ---------- watches ---------- */
+.watch-folder { border: 1px solid var(--line); border-radius: 6px; margin-bottom: 12px; background: var(--panel); overflow: hidden; }
+.wf-head { display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: var(--panel-2); }
+.disclosure { background: none; border: 0; color: var(--muted); cursor: pointer; font-size: 13px; padding: 0 2px; }
+.wf-title { background: none; border: 0; color: var(--ink); font-weight: 600; font-size: 14px; flex: 0 1 auto; min-width: 80px; }
+.wf-title:focus { outline: 1px solid var(--line-strong); border-radius: 3px; }
+.wf-body { padding: 6px 10px 10px; display: flex; flex-direction: column; gap: 4px; }
+.watch-row { display: flex; align-items: center; gap: 8px; padding: 4px 2px; border-bottom: 1px solid var(--line); }
+.watch-row:last-of-type { border-bottom: 0; }
+.watch-row.done .ws-title { text-decoration: line-through; color: var(--muted); }
+.ws-title { background: none; border: 0; color: var(--ink); flex: 1; min-width: 60px; }
+.ws-title:focus { outline: 1px solid var(--line-strong); border-radius: 3px; }
+.ws-slug { font-size: 11px; font-family: ui-monospace, monospace; }
+.wf-add { display: flex; gap: 6px; margin-top: 6px; }
+.wf-add input { flex: 1; }
+
 .recipe-glyph { color: var(--recipe); font-weight: 700; font-style: normal; margin-right: 1px; }
 .streaming { color: var(--gold); }
 .streaming::after { content: ''; display: inline-block; width: 8px; height: 8px; margin-left: 6px; border: 2px solid var(--gold); border-top-color: transparent; border-radius: 50%; animation: spin 0.8s linear infinite; vertical-align: -1px; }

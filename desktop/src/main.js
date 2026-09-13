@@ -162,6 +162,16 @@ async function connectPoeSession() {   // menu entry point: adds dialogs
 
 ipcMain.handle('poe-connect', () => connectPoeFlow())
 
+// Open a trade-site search in its own window, sharing the app's PoE session so
+// you're already logged in and GGG's live search just works. Human-driven only.
+ipcMain.handle('open-trade', (_e, url) => {
+  if (typeof url !== 'string' || !url.startsWith('https://www.pathofexile.com/')) return false
+  const w = new BrowserWindow({ width: 1280, height: 900, title: 'Path of Exile — Trade',
+    backgroundColor: '#0c0d10', webPreferences: { sandbox: true } })
+  w.loadURL(url)
+  return true
+})
+
 // ---------------------------------------------------------------- updates
 function setupUpdates() {
   if (!app.isPackaged) return
@@ -236,8 +246,9 @@ app.whenReady().then(async () => {
   win.webContents.setWindowOpenHandler(({ url }) => { shell.openExternal(url); return { action: 'deny' } })
   win.webContents.on('did-finish-load', async () => {
     try {
-      const ok = await win.webContents.executeJavaScript('typeof window.poe2desktop?.connectSession')
-      console.log(`[diag] poe2desktop bridge: ${ok}`)   // 'function' when the native connect is live
+      const ok = await win.webContents.executeJavaScript(
+        '[typeof window.poe2desktop?.connectSession, typeof window.poe2desktop?.openTrade].join(",")')
+      console.log(`[diag] poe2desktop bridge: connect+openTrade = ${ok}`)   // 'function,function' when live
     } catch (e) { console.log('[diag] bridge check failed:', String(e)) }
   })
   setupUpdates()
