@@ -1,0 +1,371 @@
+from __future__ import annotations
+
+import asyncio
+import logging
+import time
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI, HTTPException, Query
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+
+from fastapi.responses import RedirectResponse
+
+from . import arbitrage, db, digest, gamedata, gateway, oauth, orderbook, recipes, session
+from .currencies import registry
+from .settings import get_settings, save_settings
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+log = logging.getLogger("poe2arb")
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    await registry.load_static()
+    tasks = [asyncio.create_task(digest.run_forever()), asyncio.create_task(_gold_fee_loop()),
+             asyncio.create_task(orderbook.worker()), asyncio.create_task(orderbook.sweeper())]
+    if not session.get_cookie():
+        log.info("no trade session yet: connect one in Settings to enable the live order book")
+    yield
+    for t in tasks:
+        t.cancel()
+
+
+async def _gold_fee_loop():
+    while True:
+        try:
+            await gamedata.refresh()
+        except Exception as exc:
+            log.exception("gold fee refresh error: %s", exc)
+        await asyncio.sleep(86400)
+
+
+app = FastAPI(title="PoE2 currency arbitrage", lifespan=lifespan)
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+
+
+# ------------------------------------------------------------------ status
+@app.get("/api/status")
+def status():
+    s = get_settings()
+    return {
+        "time": time.time(),
+        "league": s["league"],
+        "reference": s["reference"],
+        "digest": digest.state,
+        "orderbook": orderbook.state,
+        "rate_limits": gateway.status(),
+        "session": session.status(),
+        "oauth": oauth.status(),
+        "registry_loaded_at": registry.loaded_at,
+        "unmapped_metadata_ids": len(registry.unmapped_meta),
+        "gold_fees": gamedata.state,
+    }
+
+
+# ------------------------------------------------------------- currencies
+@app.get("/api/currencies")
+def currencies():
+    return registry.to_json()
+
+
+class MetaOverride(BaseModel):
+    metadata_id: str
+    trade_id: str
+
+
+@app.post("/api/currencies/map")
+def map_currency(body: MetaOverride):
+    registry.set_override(body.metadata_id, body.trade_id)
+    return {"ok": True}
+
+
+# ---------------------------------------------------------------- capital
+@app.get("/api/capital")
+def capital():
+    caps = db.get_capital()
+    g = arbitrage.Graph.build()
+    ref = g.ref_values()
+    rows = [{"currency": c, "name": registry.name(c), "qty": q, "ref_value": ref.get(c),
+             "value_ref": (q * ref[c]) if c in ref else None} for c, q in caps.items()]
+    total = sum(r["value_ref"] for r in rows if r["value_ref"] is not None)
+    return {"rows": rows, "total_ref": total, "reference": g.s["reference"]}
+
+
+class CapitalBody(BaseModel):
+    entries: dict[str, float]
+
+
+@app.put("/api/capital")
+def put_capital(body: CapitalBody):
+    db.set_capital(body.entries)
+    return capital()
+
+
+# --------------------------------------------------------------- settings
+@app.get("/api/settings")
+def settings():
+    return get_settings()
+
+
+class SettingsPatch(BaseModel):
+    patch: dict
+
+
+@app.put("/api/settings")
+def put_settings(body: SettingsPatch):
+    return save_settings(body.patch)
+
+
+# ---------------------------------------------------------------- recipes
+@app.get("/api/recipes")
+def get_recipes():
+    return recipes.load()
+
+
+class RecipesBody(BaseModel):
+    recipes: list[dict]
+
+
+@app.put("/api/recipes")
+def put_recipes(body: RecipesBody):
+    return recipes.save(body.recipes)
+
+
+# ---------------------------------------------------------- trade session
+class SessionBody(BaseModel):
+    cookie: str
+    label: str | None = None
+
+
+@app.get("/api/session")
+def session_status():
+    return session.status()
+
+
+@app.post("/api/session")
+async def session_connect(body: SessionBody):
+    try:
+        result = await session.connect(body.cookie, body.label)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+    orderbook.request_refresh()
+    return result
+
+
+@app.delete("/api/session")
+def session_disconnect():
+    return session.disconnect()
+
+
+# ------------------------------------------------------------------ oauth
+class OAuthStart(BaseModel):
+    redirect_uri: str | None = None
+
+
+class OAuthComplete(BaseModel):
+    code: str
+    state: str
+
+
+@app.get("/api/oauth/status")
+def oauth_status():
+    return oauth.status()
+
+
+@app.post("/api/oauth/start")
+def oauth_start(body: OAuthStart | None = None):
+    try:
+        return oauth.start(body.redirect_uri if body else None)
+    except RuntimeError as exc:
+        raise HTTPException(400, str(exc))
+
+
+@app.post("/api/oauth/complete")
+async def oauth_complete(body: OAuthComplete):
+    try:
+        return await oauth.complete(body.code, body.state)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+
+
+@app.get("/callback")
+@app.get("/api/oauth/callback")
+async def oauth_callback(code: str | None = None, state: str | None = None,
+                         error: str | None = None, error_description: str | None = None):
+    if error:
+        return RedirectResponse(f"/?oauth=error&msg={error_description or error}")
+    if not code or not state:
+        raise HTTPException(400, "missing code or state")
+    try:
+        await oauth.complete(code, state)
+    except ValueError as exc:
+        return RedirectResponse(f"/?oauth=error&msg={exc}")
+    return RedirectResponse("/?oauth=ok")
+
+
+@app.post("/api/oauth/logout")
+def oauth_logout():
+    return oauth.logout()
+
+
+@app.get("/api/account/profile")
+async def account_profile():
+    try:
+        return await oauth.get("/profile")
+    except PermissionError as exc:
+        raise HTTPException(401, str(exc))
+
+
+@app.get("/api/account/characters")
+async def account_characters():
+    try:
+        return await oauth.get("/character/poe2")
+    except PermissionError as exc:
+        raise HTTPException(401, str(exc))
+
+
+# -------------------------------------------------------------- gold fees
+@app.get("/api/goldfees")
+def gold_fees():
+    return gamedata.fees()
+
+
+@app.post("/api/goldfees/refresh")
+async def gold_fees_refresh():
+    return await gamedata.refresh(force=True)
+
+
+# ----------------------------------------------------------------- market
+@app.get("/api/market/edges")
+def market_edges():
+    return arbitrage.edge_table()
+
+
+@app.get("/api/market/top")
+def market_top(hours: int = 24, limit: int = 40):
+    return digest.top_markets(get_settings()["league"], hours, limit)
+
+
+@app.get("/api/market/history")
+def market_history(a: str, b: str, hours: int = 168):
+    league = get_settings()["league"]
+    return {"digest": digest.pair_history(league, a, b, hours),
+            "live": orderbook.pair_history(league, a, b, min(hours, 72))}
+
+
+@app.post("/api/market/refresh")
+def market_refresh():
+    """Queue the whole watchlist at low priority (respects min_refetch_s)."""
+    if not session.get_cookie():
+        raise HTTPException(400, "no trade session connected")
+    orderbook.request_refresh()
+    return {"queued": orderbook.state["queue"]}
+
+
+@app.get("/api/leagues")
+async def leagues(force: bool = False):
+    try:
+        return await orderbook.leagues(force)
+    except Exception as exc:
+        raise HTTPException(502, f"could not load league list: {exc}")
+
+
+@app.get("/api/ratelimits")
+def rate_limits():
+    from . import pairscore
+    return {"policies": gateway.status(), "queue": orderbook.state, "pair_scores": pairscore.top(12)}
+
+
+@app.post("/api/digest/sync")
+async def digest_sync():
+    await digest.sync_once()
+    return digest.state
+
+
+# ----------------------------------------------------------------- routes
+@app.get("/api/routes")
+def routes(
+    min_margin_pct: float | None = None,
+    min_margin_ref: float | None = None,
+    max_gold: float | None = None,
+    min_margin_per_1k_gold: float | None = None,
+    min_liquidity_ref: float | None = None,
+    live_only: bool | None = None,
+    exclude_recipes: bool | None = None,
+    min_volume_ref_per_h: float | None = None,
+    max_fill_hours: float | None = None,
+    min_velocity: float | None = None,
+    sort: str | None = Query(None, pattern="^(score|velocity|margin_per_1k_gold|margin_ref|margin_pct|margin|value_ref|gold|liquidity_ref|volume_ref_per_h|fill_hours)$"),
+    limit: int | None = None,
+    start: str | None = None,
+):
+    f = {k: v for k, v in {
+        "min_margin_pct": min_margin_pct, "min_margin_ref": min_margin_ref, "max_gold": max_gold,
+        "min_margin_per_1k_gold": min_margin_per_1k_gold, "min_liquidity_ref": min_liquidity_ref,
+        "live_only": live_only, "exclude_recipes": exclude_recipes, "sort": sort, "limit": limit,
+        "min_volume_ref_per_h": min_volume_ref_per_h, "max_fill_hours": max_fill_hours, "min_velocity": min_velocity,
+    }.items() if v is not None}
+    starts = [s for s in start.split(",") if s] if start else None
+    return arbitrage.find_routes(f, starts)
+
+
+def _filters_from(body: dict) -> tuple[dict, list[str] | None]:
+    f = {k: v for k, v in (body.get("filters") or {}).items() if v not in (None, "")}
+    start = body.get("start")
+    starts = [x for x in start.split(",") if x] if isinstance(start, str) and start else None
+    return f, starts
+
+
+class RefreshTopBody(BaseModel):
+    filters: dict = {}
+    start: str | None = None
+    n: int | None = None
+    wait_s: float = 45
+
+
+@app.post("/api/routes/refresh-top")
+async def routes_refresh_top(body: RefreshTopBody):
+    """Live-refresh only the exchange pairs behind the top-N loops currently displayed.
+
+    Pairs newer than live_min_age_s are skipped; the rest go into the queue at
+    priority 1 and we wait (bounded) before recomputing.
+    """
+    if not session.get_cookie():
+        raise HTTPException(400, "no trade session connected")
+    s = get_settings()
+    f, starts = _filters_from(body.dict())
+    n = body.n if body.n is not None else s["live_top_n"]
+    before = arbitrage.find_routes(f, starts)
+    pairs = [tuple(p) for r in before["routes"][:max(0, n)] for p in r["pairs"]]
+    futs = orderbook.request_pairs(pairs, priority=1, max_age_s=s["live_min_age_s"])
+    waited = await orderbook.wait_for(futs, body.wait_s)
+    after = arbitrage.find_routes(f, starts, use_cache=False) if waited["done"] else before
+    return {**after, "refresh": {**waited, "pairs_considered": len(set(pairs)), "top_n": n,
+                                 "queue": orderbook.state["queue"], "in_flight": orderbook.state["in_flight"]}}
+
+
+class RefreshRouteBody(BaseModel):
+    id: str
+    pairs: list[list[str]] | None = None   # exchange pairs only (the UI sends route.pairs)
+    filters: dict = {}
+    start: str | None = None
+    wait_s: float = 45
+
+
+@app.post("/api/routes/refresh")
+async def routes_refresh_one(body: RefreshRouteBody):
+    """Force-refresh every exchange pair in one loop (top priority), then return it."""
+    if not session.get_cookie():
+        raise HTTPException(400, "no trade session connected")
+    pairs = [tuple(p) for p in body.pairs] if body.pairs else arbitrage.route_pairs(body.id)
+    futs = orderbook.request_pairs(pairs, priority=0, force=True)
+    waited = await orderbook.wait_for(futs, body.wait_s)
+    f, starts = _filters_from(body.dict())
+    res = arbitrage.find_routes(f, starts, use_cache=False)
+    route = next((r for r in res["routes"] if r["id"] == body.id), None)
+    if route is None:  # it may no longer pass the filters; recompute unfiltered so the user sees why
+        loose = arbitrage.find_routes({"min_margin_pct": -1e9, "min_margin_ref": -1e9, "limit": 100000}, starts, use_cache=False)
+        route = next((r for r in loose["routes"] if r["id"] == body.id), None)
+    return {"route": route, "routes": res["routes"], "refresh": {**waited, "pairs": len(pairs),
+            "queue": orderbook.state["queue"]}, "still_passes": route is not None and any(r["id"] == body.id for r in res["routes"])}

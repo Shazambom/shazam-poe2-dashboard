@@ -1,0 +1,214 @@
+"""Ingest GGG's public hourly Currency Exchange digest.
+
+GET https://web.poecdn.com/api/currency-exchange/poe2/<unix_hour>
+
+Each response holds every market pair that traded in that hour, across all leagues.
+We store rows per (hour, league, market) and derive an executed-volume-weighted rate:
+    rate(A->B) ≈ volume_traded[B] / volume_traded[A]
+i.e. how many B were exchanged per A over the hour. That is the most honest "what
+actually cleared" number available; lowest/highest_ratio are kept raw for reference.
+"""
+from __future__ import annotations
+
+import asyncio
+import logging
+import time
+
+import httpx
+
+from . import db, gateway
+from .config import DIGEST_BACKFILL_HOURS, DIGEST_POLL_SECONDS, GGG_DIGEST_URL
+from .currencies import registry
+
+log = logging.getLogger(__name__)
+
+state = {"last_hour": None, "last_fetch": None, "last_error": None, "rows": 0}
+
+
+def _hour(ts: float) -> int:
+    return int(ts) - int(ts) % 3600
+
+
+async def _fetch(hour_id: int | None) -> dict:
+    url = GGG_DIGEST_URL + (f"/{hour_id}" if hour_id else "")
+    r = await gateway.request("GET", url, policy="digest")
+    r.raise_for_status()
+    return r.json()
+
+
+def _store(hour: int, markets: list[dict]) -> int:
+    rows = []
+    for m in markets:
+        pair = m.get("market_pair") or []
+        if len(pair) != 2:
+            continue
+        a, b = pair
+        vt, ls, hs, lr, hr = (m.get(k, {}) for k in
+                              ("volume_traded", "lowest_stock", "highest_stock", "lowest_ratio", "highest_ratio"))
+        registry.resolve_meta(a)
+        registry.resolve_meta(b)
+        rows.append((
+            hour, m.get("league", ""), m.get("market_id", f"{a}|{b}"), a, b,
+            vt.get(a), vt.get(b), ls.get(a), ls.get(b), hs.get(a), hs.get(b),
+            lr.get(a), lr.get(b), hr.get(a), hr.get(b),
+        ))
+    with db.tx() as c:
+        c.executemany(
+            "INSERT OR REPLACE INTO digest_markets VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", rows
+        )
+    return len(rows)
+
+
+async def sync_once() -> None:
+    cursor = db.kv_get("digest_cursor")
+    if cursor is None:
+        cursor = _hour(time.time() - DIGEST_BACKFILL_HOURS * 3600)
+    for _ in range(500):  # safety cap per sync pass
+        try:
+            data = await _fetch(cursor)
+        except (httpx.HTTPError, gateway.RateLimited) as exc:
+            state["last_error"] = str(exc)
+            log.warning("digest fetch failed: %s", exc)
+            return
+        markets = data.get("markets", [])
+        nxt = data.get("next_change_id")
+        n = _store(cursor, markets)
+        state.update(last_hour=cursor, last_fetch=time.time(), last_error=None, rows=n)
+        if nxt is None or nxt == cursor:
+            break
+        cursor = nxt
+        db.kv_set("digest_cursor", cursor)
+    db.kv_set("digest_cursor", cursor)
+
+
+async def run_forever() -> None:
+    while True:
+        try:
+            await sync_once()
+        except Exception as exc:  # never let the loop die
+            log.exception("digest loop error: %s", exc)
+        await asyncio.sleep(DIGEST_POLL_SECONDS)
+
+
+# ------------------------------------------------------------------ queries
+def latest_rates(league: str, max_age_hours: int = 6) -> dict[tuple[str, str], dict]:
+    """Directed rate map {(from, to): {...}} from the most recent hour(s) with data."""
+    since = _hour(time.time()) - max_age_hours * 3600
+    with db.tx() as c:
+        rows = c.execute(
+            """SELECT * FROM digest_markets WHERE league=? AND hour>=? ORDER BY hour DESC""",
+            (league, since),
+        ).fetchall()
+    out: dict[tuple[str, str], dict] = {}
+    for r in rows:
+        a = registry.resolve_meta(r["cur_a"])
+        b = registry.resolve_meta(r["cur_b"])
+        if not a or not b or not r["vol_a"] or not r["vol_b"]:
+            continue
+        if (a, b) in out:  # newest hour already recorded
+            continue
+        age = time.time() - (r["hour"] + 3600)
+        out[(a, b)] = {"rate": r["vol_b"] / r["vol_a"], "stock": r["hi_stock_b"] or r["vol_b"],
+                       "volume_from": r["vol_a"], "volume_to": r["vol_b"], "hour": r["hour"], "age_s": age}
+        out[(b, a)] = {"rate": r["vol_a"] / r["vol_b"], "stock": r["hi_stock_a"] or r["vol_a"],
+                       "volume_from": r["vol_b"], "volume_to": r["vol_a"], "hour": r["hour"], "age_s": age}
+    return out
+
+
+def pair_history(league: str, a: str, b: str, hours: int = 168) -> list[dict]:
+    """Hourly series for the a<->b market, expressed as b per a."""
+    metas_a = [m for m, t in registry.meta_to_trade.items() if t == a]
+    metas_b = [m for m, t in registry.meta_to_trade.items() if t == b]
+    if not metas_a or not metas_b:
+        return []
+    since = _hour(time.time()) - hours * 3600
+    with db.tx() as c:
+        rows = c.execute(
+            """SELECT * FROM digest_markets WHERE league=? AND hour>=?
+               AND ((cur_a IN ({a}) AND cur_b IN ({b})) OR (cur_a IN ({b}) AND cur_b IN ({a})))
+               ORDER BY hour""".format(a=",".join("?" * len(metas_a)), b=",".join("?" * len(metas_b))),
+            (league, since, *metas_a, *metas_b, *metas_b, *metas_a),
+        ).fetchall()
+    series = []
+    for r in rows:
+        flipped = r["cur_a"] in metas_b
+        va, vb = (r["vol_b"], r["vol_a"]) if flipped else (r["vol_a"], r["vol_b"])
+        if not va or not vb:
+            continue
+        series.append({"hour": r["hour"], "rate": vb / va, "volume_a": va, "volume_b": vb})
+    return series
+
+
+_volume_cache: dict[tuple[str, int], tuple[float, dict]] = {}
+
+
+def pair_volume(league: str, hours: int = 24) -> dict[tuple[str, str], float]:
+    """Executed volume per hour of the *source* currency for each directed pair,
+    averaged over the whole window (quiet hours count as zero — that's the point)."""
+    key = (league, hours)
+    hit = _volume_cache.get(key)
+    if hit and time.time() - hit[0] < 600:
+        return hit[1]
+    since = _hour(time.time()) - hours * 3600
+    with db.tx() as c:
+        rows = c.execute("""SELECT cur_a, cur_b, SUM(vol_a) va, SUM(vol_b) vb FROM digest_markets
+                            WHERE league=? AND hour>=? GROUP BY cur_a, cur_b""", (league, since)).fetchall()
+    out: dict[tuple[str, str], float] = {}
+    for r in rows:
+        a, b = registry.resolve_meta(r["cur_a"]), registry.resolve_meta(r["cur_b"])
+        if not a or not b:
+            continue
+        out[(a, b)] = out.get((a, b), 0) + (r["va"] or 0) / hours
+        out[(b, a)] = out.get((b, a), 0) + (r["vb"] or 0) / hours
+    _volume_cache[key] = (time.time(), out)
+    return out
+
+
+_partners_cache: dict[tuple[str, str, int], tuple[float, list[tuple[str, float]]]] = {}
+
+
+def partners(league: str, want: str, hours: int = 168) -> list[tuple[str, float]]:
+    """Haves that actually trade into `want`, ranked by executed volume of `want` over
+    the window. Drives batch padding: the pairs the market uses most get the free slots."""
+    key = (league, want, hours)
+    hit = _partners_cache.get(key)
+    if hit and time.time() - hit[0] < 600:
+        return hit[1]
+    metas = [m for m, t in registry.meta_to_trade.items() if t == want]
+    out: list[tuple[str, float]] = []
+    if metas:
+        since = _hour(time.time()) - hours * 3600
+        ph = ",".join("?" * len(metas))
+        with db.tx() as c:
+            rows = c.execute(
+                f"""SELECT cur_a, cur_b, SUM(vol_a) va, SUM(vol_b) vb FROM digest_markets
+                    WHERE league=? AND hour>=? AND (cur_a IN ({ph}) OR cur_b IN ({ph}))
+                    GROUP BY cur_a, cur_b""", (league, since, *metas, *metas)).fetchall()
+        agg: dict[str, float] = {}
+        for r in rows:
+            if r["cur_a"] in metas:
+                other, vol = r["cur_b"], r["va"] or 0
+            else:
+                other, vol = r["cur_a"], r["vb"] or 0
+            tid = registry.resolve_meta(other)
+            if tid and tid != want:
+                agg[tid] = agg.get(tid, 0) + vol
+        out = sorted(agg.items(), key=lambda kv: kv[1], reverse=True)
+    _partners_cache[key] = (time.time(), out)
+    return out
+
+
+def top_markets(league: str, hours: int = 24, limit: int = 40) -> list[dict]:
+    since = _hour(time.time()) - hours * 3600
+    with db.tx() as c:
+        rows = c.execute(
+            """SELECT cur_a, cur_b, SUM(vol_a) va, SUM(vol_b) vb, COUNT(*) n
+               FROM digest_markets WHERE league=? AND hour>=? GROUP BY cur_a, cur_b
+               ORDER BY n DESC, va DESC LIMIT ?""",
+            (league, since, limit),
+        ).fetchall()
+    return [
+        {"a": registry.resolve_meta(r["cur_a"]) or r["cur_a"], "b": registry.resolve_meta(r["cur_b"]) or r["cur_b"],
+         "meta_a": r["cur_a"], "meta_b": r["cur_b"], "volume_a": r["va"], "volume_b": r["vb"], "hours_active": r["n"]}
+        for r in rows
+    ]

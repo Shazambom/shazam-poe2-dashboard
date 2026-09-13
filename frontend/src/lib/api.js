@@ -1,0 +1,39 @@
+const j = async (r) => { if (!r.ok) throw new Error(`${r.status} ${await r.text()}`); return r.json() }
+const qs = (o) => { const p = new URLSearchParams(); Object.entries(o).forEach(([k, v]) => { if (v !== undefined && v !== null && v !== '') p.set(k, v) }); const s = p.toString(); return s ? `?${s}` : '' }
+const post = (url, body) => fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: body && JSON.stringify(body) }).then(j)
+const put = (url, body) => fetch(url, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then(j)
+export const api = {
+  status: () => fetch('/api/status').then(j),
+  currencies: () => fetch('/api/currencies').then(j),
+  mapCurrency: (metadata_id, trade_id) => post('/api/currencies/map', { metadata_id, trade_id }),
+  capital: () => fetch('/api/capital').then(j),
+  putCapital: (entries) => put('/api/capital', { entries }),
+  settings: () => fetch('/api/settings').then(j),
+  putSettings: (patch) => put('/api/settings', { patch }),
+  recipes: () => fetch('/api/recipes').then(j),
+  putRecipes: (recipes) => put('/api/recipes', { recipes }),
+  routes: (f) => fetch('/api/routes' + qs(f)).then(j),
+  refreshTop: (filters, n) => post('/api/routes/refresh-top', { filters, start: filters.start || null, n }),
+  refreshRoute: (id, pairs, filters) => post('/api/routes/refresh', { id, pairs, filters, start: filters.start || null }),
+  leagues: () => fetch('/api/leagues').then(j),
+  rateLimits: () => fetch('/api/ratelimits').then(j),
+  edges: () => fetch('/api/market/edges').then(j),
+  topMarkets: () => fetch('/api/market/top').then(j),
+  history: (a, b, hours = 168) => fetch(`/api/market/history${qs({ a, b, hours })}`).then(j),
+  refreshBook: () => post('/api/market/refresh'),
+  session: () => fetch('/api/session').then(j),
+  connectSession: (cookie) => post('/api/session', { cookie, label: 'pasted in dashboard' }),
+  disconnectSession: () => fetch('/api/session', { method: 'DELETE' }).then(j),
+  oauthStatus: () => fetch('/api/oauth/status').then(j),
+  oauthStart: () => post('/api/oauth/start', {}),
+  oauthLogout: () => post('/api/oauth/logout'),
+  goldFees: () => fetch('/api/goldfees').then(j),
+  refreshGoldFees: () => post('/api/goldfees/refresh'),
+  syncDigest: () => post('/api/digest/sync'),
+}
+export const fmt = {
+  n: (v, d = 0) => v == null ? '–' : Number(v).toLocaleString(undefined, { maximumFractionDigits: d }),
+  pct: (v) => v == null ? '–' : `${v >= 0 ? '+' : ''}${Number(v).toFixed(2)}%`,
+  rate: (v) => v == null ? '–' : v >= 100 ? v.toFixed(0) : v >= 1 ? v.toFixed(2) : v.toPrecision(3),
+  age: (s) => s == null ? '–' : s < 90 ? `${Math.round(s)}s` : s < 5400 ? `${Math.round(s / 60)}m` : `${(s / 3600).toFixed(1)}h`,
+}
