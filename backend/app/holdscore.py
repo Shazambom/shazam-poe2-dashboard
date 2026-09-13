@@ -68,10 +68,10 @@ def _metrics(series: dict[int, tuple[float, float]], hz_days: int | None):
     if hz_days is None:
         base = prices[0]
     else:
+        # base = price hz_days ago; if the league is younger than the horizon, fall
+        # back to the earliest price (so a 9-day league still shows on the 30d board).
         cand = [a for a in ages if a <= ages[-1] - hz_days]
-        if not cand:
-            return None
-        base = series[cand[-1]][0]
+        base = series[cand[-1]][0] if cand else prices[0]
     if not base:
         return None
     peak, mdd = prices[0], 0.0

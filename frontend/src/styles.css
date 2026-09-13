@@ -229,6 +229,16 @@ details.adv[open] summary { color: var(--ink-2); margin-bottom: 8px; }
 .pt-spread { display: inline-flex; align-items: center; gap: 5px; margin-left: auto; }
 .spread-bar { display: inline-block; height: 5px; background: var(--gold); border-radius: 1px; }
 
+/* ---------- hold leaderboard ---------- */
+.seg { display: inline-flex; border: 1px solid var(--line-strong); border-radius: var(--radius); overflow: hidden; }
+.seg-btn { background: var(--bg); border: 0; border-right: 1px solid var(--line-strong); color: var(--muted); padding: 5px 11px; cursor: pointer; font-size: 12.5px; }
+.seg-btn:last-child { border-right: 0; }
+.seg-btn.on { background: var(--gold); color: #1b1608; font-weight: 600; }
+.conf { display: inline-block; min-width: 26px; text-align: center; padding: 1px 5px; border-radius: 3px; font-size: 11px; font-weight: 600; }
+.conf-hi { background: rgba(111,185,143,.18); color: var(--gain); }
+.conf-mid { background: rgba(201,162,74,.18); color: var(--gold); }
+.conf-lo { background: rgba(210,112,95,.16); color: var(--loss); }
+
 /* ---------- inflation ---------- */
 .infl-stats { display: flex; gap: 14px; flex-wrap: wrap; margin: 4px 0 18px; }
 .infl-stats .stat { border: 1px solid var(--line); border-radius: 6px; background: var(--panel); padding: 10px 16px; min-width: 190px; }
