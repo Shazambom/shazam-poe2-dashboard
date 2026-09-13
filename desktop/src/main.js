@@ -163,7 +163,35 @@ async function connectPoeSession() {   // menu entry point: adds dialogs
   if (r.ok) win?.webContents.reload()
 }
 
-ipcMain.handle('poe-connect', () => connectPoeFlow())
+ipcMain.handle('poe-connect', async () => {
+  const r = await connectPoeFlow()
+  if (r.ok) reloadTradeWebviews()   // native login lands in defaultSession; refresh an open Trade tab
+  return r
+})
+
+// Reload every embedded Trade <webview> so it picks up a freshly-connected session.
+function reloadTradeWebviews() {
+  try {
+    require('electron').webContents.getAllWebContents()
+      .filter(c => c.getType() === 'webview')
+      .forEach(c => { try { c.reload() } catch {} })
+  } catch {}
+}
+
+// A pasted POESESSID reaches only the backend; mirror it into the Electron session
+// so the embedded Trade site (which uses defaultSession) is logged in too.
+ipcMain.handle('poe-set-cookie', async (_e, cookie) => {
+  if (!cookie) return { ok: false, message: 'empty cookie' }
+  try {
+    await session.defaultSession.cookies.set({
+      url: POE, name: 'POESESSID', value: String(cookie).trim(),
+      domain: '.pathofexile.com', path: '/', secure: true, httpOnly: true,
+      sameSite: 'lax', expirationDate: Math.floor(Date.now() / 1000) + 30 * 24 * 3600,
+    })
+    reloadTradeWebviews()
+    return { ok: true }
+  } catch (e) { return { ok: false, message: String(e.message || e) } }
+})
 
 // Open a trade-site search in its own window, sharing the app's PoE session so
 // you're already logged in and GGG's live search just works. Human-driven only.

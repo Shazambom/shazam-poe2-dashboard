@@ -33,7 +33,14 @@ export default function AccountsPanel({ onChange }) {
 
   const connect = async () => {
     setBusy(true); setMsg(null)
-    try { const r = await api.connectSession(cookie.trim()); setMsg({ ok: true, text: r.message }); setCookie(''); await load(); onChange?.() }
+    const raw = cookie.trim()
+    try {
+      const r = await api.connectSession(raw)
+      // Desktop: also mirror the cookie into the Electron session so the embedded
+      // Trade site is logged in (paste otherwise only reaches the backend).
+      if (window.poe2desktop?.setCookie) { try { await window.poe2desktop.setCookie(raw) } catch {} }
+      setMsg({ ok: true, text: r.message }); setCookie(''); await load(); onChange?.()
+    }
     catch (e) { setMsg({ ok: false, text: String(e.message || e) }) }
     setBusy(false)
   }

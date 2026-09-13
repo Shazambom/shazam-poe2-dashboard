@@ -4,6 +4,9 @@ const { contextBridge, ipcRenderer } = require('electron')
 // one-click connect (see AccountsPanel.jsx).
 contextBridge.exposeInMainWorld('poe2desktop', {
   connectSession: () => ipcRenderer.invoke('poe-connect'),
+  // Write a pasted POESESSID into the app's Electron session so the embedded
+  // Trade webview is logged in too (paste otherwise only reaches the backend).
+  setCookie: (cookie) => ipcRenderer.invoke('poe-set-cookie', cookie),
   // Open a trade-site search in a real logged-in window (shares our PoE session,
   // so live search + whispering work). Several can be open at once.
   openTrade: (url) => ipcRenderer.invoke('open-trade', url),
