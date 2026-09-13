@@ -1,0 +1,14 @@
+{
+  "manifest_version": 3,
+  "name": "PoE2 Dashboard — Session Connect",
+  "version": "1.0",
+  "description": "Sends your pathofexile.com session cookie to your self-hosted PoE2 dashboard in one click.",
+  "permissions": ["cookies", "storage"],
+  "host_permissions": [
+    "https://www.pathofexile.com/*",
+    "http://192.168.1.250:8080/*",
+    "http://localhost:8080/*",
+    "http://127.0.0.1:8080/*"
+  ],
+  "action": { "default_popup": "popup.html" }
+}

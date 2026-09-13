@@ -126,8 +126,9 @@ POLICIES: dict[str, Policy] = {p.name: p for p in [
     Policy("trade", [Rate(1, Duration.SECOND * 6), Rate(8, Duration.MINUTE)], ("www.pathofexile.com",)),
     # OAuth'd account API and token endpoint.
     Policy("ggg-api", [Rate(1, Duration.SECOND * 2), Rate(20, Duration.MINUTE)], ("api.pathofexile.com",)),
-    # Public hourly digest CDN: no headers, be polite.
-    Policy("digest", [Rate(1, Duration.SECOND * 2), Rate(20, Duration.MINUTE)], ("web.poecdn.com",)),
+    # Public hourly digest CDN: no headers. Quick enough that a week's backfill
+    # lands in a few minutes, still far below anything a CDN would notice.
+    Policy("digest", [Rate(1, Duration.SECOND), Rate(30, Duration.MINUTE)], ("web.poecdn.com",)),
     # Static/community mirrors.
     Policy("static", [Rate(1, Duration.SECOND), Rate(30, Duration.MINUTE)], ("ggpk.exposed", "github.com", "objects.githubusercontent.com")),
 ]}

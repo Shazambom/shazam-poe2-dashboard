@@ -102,18 +102,31 @@ class Registry:
     # ------------------------------------------------------------ mapping
     _icon_stem = re.compile(r"/([A-Za-z0-9_]+)\.png")
 
+    def _stem_index(self) -> dict[str, str]:
+        """icon filename stem -> trade id, rebuilt when the registry grows.
+        Keeps resolve_meta O(1); the old per-call scan burned whole seconds per
+        graph build once the registry held hundreds of currencies."""
+        if getattr(self, "_stems_n", -1) != len(self.by_id):
+            stems: dict[str, str] = {}
+            for tid, cur in self.by_id.items():
+                if cur.icon:
+                    m = self._icon_stem.search(cur.icon)
+                    if m:
+                        stems.setdefault(m.group(1).lower(), tid)
+            self._stems = stems
+            self._stems_n = len(self.by_id)
+        return self._stems
+
     def resolve_meta(self, meta: str) -> str | None:
         """Return the trade id for a metadata id, learning heuristically if needed."""
         if meta in self.meta_to_trade:
             return self.meta_to_trade[meta]
-        tail = meta.rsplit("/", 1)[-1].lower()
-        for tid, cur in self.by_id.items():
-            if not cur.icon:
-                continue
-            m = self._icon_stem.search(cur.icon)
-            if m and m.group(1).lower() == tail:
-                self._link(meta, tid)
-                return tid
+        if meta in self.unmapped_meta:      # negative cache: don't re-scan every call
+            return None
+        tid = self._stem_index().get(meta.rsplit("/", 1)[-1].lower())
+        if tid:
+            self._link(meta, tid)
+            return tid
         self.unmapped_meta.add(meta)
         return None
 

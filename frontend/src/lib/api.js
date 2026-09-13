@@ -1,4 +1,30 @@
-const j = async (r) => { if (!r.ok) throw new Error(`${r.status} ${await r.text()}`); return r.json() }
+// Tiny pub/sub for toasts. Anything can emit { text, ok }; App renders them.
+const listeners = new Set()
+export const bus = {
+  on(fn) { listeners.add(fn); return () => listeners.delete(fn) },
+  emit(t) { listeners.forEach(fn => fn(t)) },
+}
+export const toast = (text, ok = true) => bus.emit({ text, ok })
+
+const cleanErr = (e) => String(e?.message || e).replace(/^\d+ /, '')
+
+const j = async (r) => {
+  if (!r.ok) {
+    let text = await r.text()
+    try {
+      const d = JSON.parse(text)
+      text = typeof d.detail === 'string' ? d.detail : JSON.stringify(d.detail ?? d)
+    } catch {}
+    const err = new Error(text || `HTTP ${r.status}`)
+    err.status = r.status
+    throw err
+  }
+  return r.json()
+}
+// Wrap a promise so failures always surface as a toast instead of dying silently.
+export const surface = (p, okText) => p
+  .then(r => { if (okText) toast(okText); return r })
+  .catch(e => { toast(cleanErr(e), false); throw e })
 const qs = (o) => { const p = new URLSearchParams(); Object.entries(o).forEach(([k, v]) => { if (v !== undefined && v !== null && v !== '') p.set(k, v) }); const s = p.toString(); return s ? `?${s}` : '' }
 const post = (url, body) => fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: body && JSON.stringify(body) }).then(j)
 const put = (url, body) => fetch(url, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then(j)
@@ -13,6 +39,7 @@ export const api = {
   recipes: () => fetch('/api/recipes').then(j),
   putRecipes: (recipes) => put('/api/recipes', { recipes }),
   routes: (f) => fetch('/api/routes' + qs(f)).then(j),
+  routesStreamUrl: (f) => '/api/routes/stream' + qs(f),
   refreshTop: (filters, n) => post('/api/routes/refresh-top', { filters, start: filters.start || null, n }),
   refreshRoute: (id, pairs, filters) => post('/api/routes/refresh', { id, pairs, filters, start: filters.start || null }),
   leagues: () => fetch('/api/leagues').then(j),

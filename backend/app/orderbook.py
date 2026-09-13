@@ -73,7 +73,7 @@ def _parse_offers(payload: dict, haves: list[str], want: str) -> dict[str, list[
 
 # ------------------------------------------------------------------ cache
 def cached_at(league: str, have: str, want: str) -> int | None:
-    with db.tx() as c:
+    with db.q() as c:
         r = c.execute("SELECT fetched_at FROM orderbook WHERE league=? AND have=? AND want=?",
                       (league, have, want)).fetchone()
     return r["fetched_at"] if r else None
@@ -81,7 +81,7 @@ def cached_at(league: str, have: str, want: str) -> int | None:
 
 def latest_books(league: str, max_age_s: int) -> dict[tuple[str, str], dict]:
     since = int(time.time()) - max_age_s
-    with db.tx() as c:
+    with db.q() as c:
         rows = c.execute("SELECT have, want, fetched_at, offers FROM orderbook WHERE league=? AND fetched_at>=?",
                          (league, since)).fetchall()
     out = {}
@@ -97,7 +97,7 @@ def latest_books(league: str, max_age_s: int) -> dict[tuple[str, str], dict]:
 
 def pair_history(league: str, have: str, want: str, hours: int = 48) -> list[dict]:
     since = int(time.time()) - hours * 3600
-    with db.tx() as c:
+    with db.q() as c:
         rows = c.execute("""SELECT fetched_at, best_rate, best_stock, depth FROM orderbook_history
                             WHERE league=? AND have=? AND want=? AND fetched_at>=? ORDER BY fetched_at""",
                          (league, have, want, since)).fetchall()

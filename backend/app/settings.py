@@ -42,6 +42,11 @@ DEFAULTS: dict = {
     "digest_max_age_h": 6,          # digest rate older than this is ignored
     "allow_digest_edges": True,     # fill missing live pairs with digest VWAP
     "allow_recipe_edges": True,
+    # Edge culling: markets thinner than this never enter the graph, so junk
+    # loops aren't even searched. Volume is the edge's executed value per hour
+    # in the reference currency; depth is listings on a live ladder.
+    "min_edge_volume_ref_per_h": 1.0,
+    "min_edge_depth": 2,
     # Composite ranking weights (rank-normalised, so scales don't matter). Gold
     # efficiency leads, value second, volume (fill speed) a real but smaller vote.
     # Lead term: velocity = margin_ref / (fill_hours × gold) — profit per hour per gold.

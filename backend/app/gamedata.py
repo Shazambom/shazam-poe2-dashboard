@@ -24,6 +24,9 @@ from .config import DATA_DIR
 log = logging.getLogger(__name__)
 
 GGPK = "https://ggpk.exposed"
+# ggpk.exposed became a VueFinder SPA and the tables moved to data/balance/;
+# the old /poe2/data/<file> paths 302 to an HTML viewer page.
+GGPK_FILE = GGPK + "/files?q=download&adapter=poe2&path=poe2://data/balance/{name}"
 SCHEMA_URL = "https://github.com/poe-tool-dev/dat-schema/releases/download/latest/schema.min.json"
 MAGIC = b"\xbb" * 8
 NULL_ROW = 0xFEFEFEFEFEFEFEFE
@@ -98,6 +101,8 @@ async def _get(url: str, name: str, max_age_s: int) -> bytes:
         return path.read_bytes()
     r = await gateway.request("GET", url, policy="static")
     r.raise_for_status()
+    if r.content[:1] == b"<":   # HTML error/viewer page — never cache it as data
+        raise ValueError(f"{name}: got HTML instead of a data file (URL layout changed?)")
     path.write_bytes(r.content)
     return r.content
 
@@ -115,9 +120,9 @@ async def refresh(force: bool = False) -> dict:
         if version and version != state.get("version"):
             max_age = 0
         schema = json.loads(await _get(SCHEMA_URL, "schema.min.json", 7 * 86400))
-        ce_raw = await _get(f"{GGPK}/poe2/data/currencyexchange.datc64", "currencyexchange.datc64", max_age)
-        bit_raw = await _get(f"{GGPK}/poe2/data/baseitemtypes.datc64", "baseitemtypes.datc64", max_age)
-        cat_raw = await _get(f"{GGPK}/poe2/data/currencyexchangecategories.datc64",
+        ce_raw = await _get(GGPK_FILE.format(name="currencyexchange.datc64"), "currencyexchange.datc64", max_age)
+        bit_raw = await _get(GGPK_FILE.format(name="baseitemtypes.datc64"), "baseitemtypes.datc64", max_age)
+        cat_raw = await _get(GGPK_FILE.format(name="currencyexchangecategories.datc64"),
                              "currencyexchangecategories.datc64", max_age)
     except Exception as exc:
         state["last_error"] = str(exc)

@@ -63,10 +63,16 @@ async def sync_once() -> None:
     cursor = db.kv_get("digest_cursor")
     if cursor is None:
         cursor = _hour(time.time() - DIGEST_BACKFILL_HOURS * 3600)
+    elif state["last_hour"] is None:
+        state["last_hour"] = cursor - 3600   # restart: reflect what's already stored
     for _ in range(500):  # safety cap per sync pass
         try:
             data = await _fetch(cursor)
         except (httpx.HTTPError, gateway.RateLimited) as exc:
+            if isinstance(exc, httpx.HTTPStatusError) and exc.response.status_code == 404:
+                # the tip hour isn't published yet — caught up, not an error
+                state.update(last_fetch=time.time(), last_error=None)
+                return
             state["last_error"] = str(exc)
             log.warning("digest fetch failed: %s", exc)
             return
@@ -94,7 +100,7 @@ async def run_forever() -> None:
 def latest_rates(league: str, max_age_hours: int = 6) -> dict[tuple[str, str], dict]:
     """Directed rate map {(from, to): {...}} from the most recent hour(s) with data."""
     since = _hour(time.time()) - max_age_hours * 3600
-    with db.tx() as c:
+    with db.q() as c:
         rows = c.execute(
             """SELECT * FROM digest_markets WHERE league=? AND hour>=? ORDER BY hour DESC""",
             (league, since),
@@ -122,7 +128,7 @@ def pair_history(league: str, a: str, b: str, hours: int = 168) -> list[dict]:
     if not metas_a or not metas_b:
         return []
     since = _hour(time.time()) - hours * 3600
-    with db.tx() as c:
+    with db.q() as c:
         rows = c.execute(
             """SELECT * FROM digest_markets WHERE league=? AND hour>=?
                AND ((cur_a IN ({a}) AND cur_b IN ({b})) OR (cur_a IN ({b}) AND cur_b IN ({a})))
@@ -150,7 +156,7 @@ def pair_volume(league: str, hours: int = 24) -> dict[tuple[str, str], float]:
     if hit and time.time() - hit[0] < 600:
         return hit[1]
     since = _hour(time.time()) - hours * 3600
-    with db.tx() as c:
+    with db.q() as c:
         rows = c.execute("""SELECT cur_a, cur_b, SUM(vol_a) va, SUM(vol_b) vb FROM digest_markets
                             WHERE league=? AND hour>=? GROUP BY cur_a, cur_b""", (league, since)).fetchall()
     out: dict[tuple[str, str], float] = {}
@@ -179,7 +185,7 @@ def partners(league: str, want: str, hours: int = 168) -> list[tuple[str, float]
     if metas:
         since = _hour(time.time()) - hours * 3600
         ph = ",".join("?" * len(metas))
-        with db.tx() as c:
+        with db.q() as c:
             rows = c.execute(
                 f"""SELECT cur_a, cur_b, SUM(vol_a) va, SUM(vol_b) vb FROM digest_markets
                     WHERE league=? AND hour>=? AND (cur_a IN ({ph}) OR cur_b IN ({ph}))
@@ -200,7 +206,7 @@ def partners(league: str, want: str, hours: int = 168) -> list[tuple[str, float]
 
 def top_markets(league: str, hours: int = 24, limit: int = 40) -> list[dict]:
     since = _hour(time.time()) - hours * 3600
-    with db.tx() as c:
+    with db.q() as c:
         rows = c.execute(
             """SELECT cur_a, cur_b, SUM(vol_a) va, SUM(vol_b) vb, COUNT(*) n
                FROM digest_markets WHERE league=? AND hour>=? GROUP BY cur_a, cur_b

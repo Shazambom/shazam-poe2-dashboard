@@ -6,7 +6,11 @@ from typing import Any, Iterator
 
 from .config import DB_PATH
 
-_lock = threading.Lock()
+# WAL lets any number of readers run alongside one writer. Writes serialise on
+# _write_lock; reads use a per-thread connection and never wait on writers, so a
+# digest backfill burst can't stall API requests.
+_write_lock = threading.Lock()
+_local = threading.local()
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS digest_markets (
@@ -61,28 +65,46 @@ def _connect() -> sqlite3.Connection:
     conn = sqlite3.connect(DB_PATH, check_same_thread=False, timeout=30)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA busy_timeout=15000")
+    conn.execute("PRAGMA synchronous=NORMAL")
     return conn
 
 
-_conn = _connect()
-with _lock:
-    _conn.executescript(SCHEMA)
-    _conn.commit()
+def _conn() -> sqlite3.Connection:
+    c = getattr(_local, "conn", None)
+    if c is None:
+        c = _local.conn = _connect()
+    return c
+
+
+_boot = _connect()
+_boot.executescript(SCHEMA)
+_boot.commit()
+_boot.close()
 
 
 @contextmanager
 def tx() -> Iterator[sqlite3.Connection]:
-    with _lock:
+    """Write transaction: serialised app-wide, committed on exit."""
+    with _write_lock:
+        c = _conn()
         try:
-            yield _conn
-            _conn.commit()
+            yield c
+            c.commit()
         except Exception:
-            _conn.rollback()
+            c.rollback()
             raise
 
 
+@contextmanager
+def q() -> Iterator[sqlite3.Connection]:
+    """Read-only access on this thread's connection. WAL readers see a consistent
+    snapshot and never block, so use this for every SELECT-only path."""
+    yield _conn()
+
+
 def kv_get(key: str, default: Any = None) -> Any:
-    with tx() as c:
+    with q() as c:
         row = c.execute("SELECT value FROM kv WHERE key=?", (key,)).fetchone()
     return json.loads(row["value"]) if row else default
 
@@ -96,7 +118,7 @@ def kv_set(key: str, value: Any) -> None:
 
 
 def get_capital() -> dict[str, float]:
-    with tx() as c:
+    with q() as c:
         rows = c.execute("SELECT currency, qty FROM capital").fetchall()
     return {r["currency"]: r["qty"] for r in rows}
 

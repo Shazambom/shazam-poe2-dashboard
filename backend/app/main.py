@@ -48,11 +48,15 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], all
 @app.get("/api/status")
 def status():
     s = get_settings()
+    d = dict(digest.state)
+    behind = max(0.0, time.time() - (d["last_hour"] + 3600)) if d.get("last_hour") else None
+    d["behind_h"] = round(behind / 3600, 1) if behind is not None else None
+    d["backfilling"] = behind is not None and behind > 2 * 3600
     return {
         "time": time.time(),
         "league": s["league"],
         "reference": s["reference"],
-        "digest": digest.state,
+        "digest": d,
         "orderbook": orderbook.state,
         "rate_limits": gateway.status(),
         "session": session.status(),
@@ -84,7 +88,7 @@ def map_currency(body: MetaOverride):
 @app.get("/api/capital")
 def capital():
     caps = db.get_capital()
-    g = arbitrage.Graph.build()
+    g = arbitrage.cached_graph()
     ref = g.ref_values()
     rows = [{"currency": c, "name": registry.name(c), "qty": q, "ref_value": ref.get(c),
              "value_ref": (q * ref[c]) if c in ref else None} for c, q in caps.items()]
@@ -114,7 +118,9 @@ class SettingsPatch(BaseModel):
 
 @app.put("/api/settings")
 def put_settings(body: SettingsPatch):
-    return save_settings(body.patch)
+    saved = save_settings(body.patch)
+    arbitrage.invalidate_caches()   # league/reference/etc. change what the graph means
+    return saved
 
 
 # ---------------------------------------------------------------- recipes
@@ -308,6 +314,70 @@ def routes(
     }.items() if v is not None}
     starts = [s for s in start.split(",") if s] if start else None
     return arbitrage.find_routes(f, starts)
+
+
+@app.get("/api/routes/stream")
+def routes_stream(
+    min_margin_pct: float | None = None,
+    min_margin_ref: float | None = None,
+    max_gold: float | None = None,
+    min_margin_per_1k_gold: float | None = None,
+    min_liquidity_ref: float | None = None,
+    live_only: bool | None = None,
+    exclude_recipes: bool | None = None,
+    min_volume_ref_per_h: float | None = None,
+    max_fill_hours: float | None = None,
+    min_velocity: float | None = None,
+    sort: str | None = Query(None, pattern="^(score|velocity|margin_per_1k_gold|margin_ref|margin_pct|margin|value_ref|gold|liquidity_ref|volume_ref_per_h|fill_hours)$"),
+    limit: int | None = None,
+    start: str | None = None,
+):
+    """SSE version of /api/routes: loops stream out as the search finds them.
+
+    Events: `meta` (once), `routes` (batches of passing loops), `done` (final
+    counts + authoritative score order). Runs in a worker thread; batches flush
+    every 25 loops or 150 ms so the UI fills in continuously.
+    """
+    import json as _json
+
+    from fastapi.responses import StreamingResponse
+
+    f = {k: v for k, v in {
+        "min_margin_pct": min_margin_pct, "min_margin_ref": min_margin_ref, "max_gold": max_gold,
+        "min_margin_per_1k_gold": min_margin_per_1k_gold, "min_liquidity_ref": min_liquidity_ref,
+        "live_only": live_only, "exclude_recipes": exclude_recipes, "sort": sort, "limit": limit,
+        "min_volume_ref_per_h": min_volume_ref_per_h, "max_fill_hours": max_fill_hours, "min_velocity": min_velocity,
+    }.items() if v is not None}
+    starts = [s for s in start.split(",") if s] if start else None
+
+    def gen():
+        buf: list[dict] = []
+        last = time.time()
+        def flush():
+            nonlocal buf, last
+            if buf:
+                out = f"event: routes\ndata: {_json.dumps(buf)}\n\n"
+                buf = []
+                last = time.time()
+                return out
+            return ""
+        try:
+            for kind, payload in arbitrage.stream_routes(f, starts):
+                if kind == "route":
+                    buf.append(payload)
+                    if len(buf) >= 25 or time.time() - last > 0.15:
+                        yield flush()
+                else:
+                    out = flush()
+                    if out:
+                        yield out
+                    yield f"event: {kind}\ndata: {_json.dumps(payload)}\n\n"
+        except Exception as exc:   # surface instead of a dead stream
+            log.exception("route stream failed: %s", exc)
+            yield f"event: error\ndata: {_json.dumps({'error': str(exc)})}\n\n"
+
+    return StreamingResponse(gen(), media_type="text/event-stream",
+                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
 
 def _filters_from(body: dict) -> tuple[dict, list[str] | None]:

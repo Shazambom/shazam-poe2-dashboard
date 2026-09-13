@@ -1,23 +1,44 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { api, fmt } from '../lib/api.js'
+import CapitalCard from './CapitalCard.jsx'
 
-const SORTS = [
-  ['score', 'Overall (velocity-led blend)'],
-  ['velocity', 'Velocity: margin ÷ (fill time × gold)'],
-  ['margin_per_1k_gold', 'Margin per 1k gold'],
-  ['margin_ref', 'Margin (value)'],
-  ['margin_pct', 'Margin %'],
-  ['value_ref', 'Value traded'],
-  ['gold', 'Gold cost'],
-  ['liquidity_ref', 'Liquidity'],
-  ['volume_ref_per_h', 'Traded volume per hour'],
-  ['fill_hours', 'Fastest fill estimate'],
-]
+const INF = Infinity
 const hrs = (h) => h == null ? '–' : h < 1 / 60 ? '<1m' : h < 1 ? `${Math.round(h * 60)}m` : h < 48 ? `${h.toFixed(1)}h` : `${(h / 24).toFixed(1)}d`
 
 const DEFAULT_FILTERS = {
   min_margin_pct: 0.5, min_margin_ref: 0, max_gold: '', min_margin_per_1k_gold: '',
-  min_liquidity_ref: '', min_volume_ref_per_h: '', max_fill_hours: '', min_velocity: '', live_only: false, exclude_recipes: false, sort: 'score', limit: 100, start: '',
+  min_liquidity_ref: '', min_volume_ref_per_h: '', max_fill_hours: '', min_velocity: '', live_only: false, exclude_recipes: false, limit: 100, start: '',
+}
+
+// Column definitions: [key, label, accessor, defaultDir, title]
+const COLS = [
+  ['score', 'Score', r => r.score ?? -INF, 'desc', 'Overall rank: velocity-led blend of the weighted metrics'],
+  ['commit', 'Commit', r => r.start_amount ?? 0, 'desc'],
+  ['margin', 'Margin', r => r.margin ?? -INF, 'desc'],
+  ['margin_pct', 'Margin %', r => r.margin_pct ?? -INF, 'desc'],
+  ['margin_ref', 'Margin (ref)', r => r.margin_ref ?? -INF, 'desc'],
+  ['gold', 'Gold', r => r.gold_free ? -1 : (r.gold ?? INF), 'asc'],
+  ['velocity', 'Velocity', r => r.velocity_inf ? INF : (r.velocity ?? -INF), 'desc', 'margin ÷ (fill hours × gold) × 1000 — profit per hour per 1k gold'],
+  ['liquidity_ref', 'Liquidity', r => r.liquidity_ref ?? INF, 'desc'],
+  ['volume_ref_per_h', 'Volume / h', r => r.volume_ref_per_h ?? -INF, 'desc', "Slowest step's executed value per hour"],
+  ['fill_hours', 'Fill est.', r => r.fill_hours ?? INF, 'asc', 'Sum over steps of commit ÷ hourly turnover'],
+  ['max_age_s', 'Age', r => r.max_age_s ?? INF, 'asc'],
+]
+
+function scoreAll(routes, w) {
+  const n = routes.length
+  if (!n) return
+  const wv = w?.velocity ?? 0.5, we = w?.margin_per_1k_gold ?? 0.2, wl = w?.margin_ref ?? 0.2, wo = w?.volume ?? 0.1
+  const tot = (wv + we + wl + wo) || 1
+  const rank = (key) => {
+    const order = [...routes].sort((a, b) => { const ka = key(a), kb = key(b); return ka === kb ? 0 : kb > ka ? 1 : -1 })
+    const m = {}; order.forEach((r, i) => { m[r.id] = 1 - i / n }); return m
+  }
+  const eff = rank(r => r.gold_free && r.margin_ref > 0 ? INF : (r.margin_per_1k_gold ?? -INF))
+  const val = rank(r => r.margin_ref)
+  const vol = rank(r => r.volume_ref_per_h == null ? INF : r.volume_ref_per_h)
+  const vel = rank(r => r.velocity_inf ? INF : (r.velocity ?? -INF))
+  routes.forEach(r => { r.score = Math.round(((wv * vel[r.id] + we * eff[r.id] + wl * val[r.id] + wo * vol[r.id]) / tot) * 1e4) / 1e4 })
 }
 
 function Loop({ r }) {
@@ -50,7 +71,7 @@ function Detail({ r, refCur, onRefresh, refreshing, canLive }) {
         <span>· value through loop {fmt.n(r.value_ref, 1)} {refCur}</span>
         <span>· oldest quote {fmt.age(r.max_age_s)}</span>
         {r.profit_per_hour != null && <span>· earns {fmt.n(r.profit_per_hour, 2)} {refCur}/h</span>}
-        {r.score != null && <span>· score {r.score} (velocity {r.score_parts.velocity}, efficiency {r.score_parts.efficiency}, value {r.score_parts.value}, volume {r.score_parts.volume})</span>}
+        {r.score != null && r.score_parts && <span>· score {r.score} (velocity {r.score_parts.velocity}, efficiency {r.score_parts.efficiency}, value {r.score_parts.value}, volume {r.score_parts.volume})</span>}
         <span className="spacer" />
         {canLive && r.pairs.length > 0 && (
           <button className="btn small" disabled={refreshing} onClick={(e) => { e.stopPropagation(); onRefresh(r) }}>
@@ -97,38 +118,81 @@ function Detail({ r, refCur, onRefresh, refreshing, canLive }) {
   )
 }
 
-export default function RoutesView({ capital, status }) {
+export default function RoutesView({ capital, status, currencies, onCapitalSaved }) {
   const [f, setF] = useState(DEFAULT_FILTERS)
-  const [data, setData] = useState(null)
+  const [routes, setRoutes] = useState([])
+  const [meta, setMeta] = useState(null)
+  const [counts, setCounts] = useState(null)
+  const [streaming, setStreaming] = useState(false)
+  const [sort, setSort] = useState({ key: 'score', dir: 'desc' })
   const [err, setErr] = useState(null)
-  const [busy, setBusy] = useState(false)
   const [open, setOpen] = useState(null)
-  const [auto, setAuto] = useState(true)
-  const [liveN, setLiveN] = useState(5)
-  const [autoLive, setAutoLive] = useState(false)
   const [liveBusy, setLiveBusy] = useState(false)
+  const [autoLive, setAutoLive] = useState(false)
   const [refreshingId, setRefreshingId] = useState(null)
   const [note, setNote] = useState(null)
   const [rl, setRl] = useState(null)
+  const [liveN, setLiveN] = useState(5)
+  const esRef = useRef(null)
+  const accRef = useRef([])
+  const weightsRef = useRef(null)
   const canLive = !!status?.session?.connected
+  const filterKey = JSON.stringify([f.min_margin_pct, f.min_margin_ref, f.max_gold, f.min_margin_per_1k_gold,
+    f.min_liquidity_ref, f.min_volume_ref_per_h, f.max_fill_hours, f.min_velocity, f.live_only, f.exclude_recipes, f.start])
 
-  const load = async () => {
-    setBusy(true)
-    try { setData(await api.routes(f)); setErr(null) } catch (e) { setErr(String(e.message || e)) }
-    setBusy(false)
+  const load = () => {
+    esRef.current?.close()
+    accRef.current = []
+    setRoutes([]); setCounts(null); setErr(null); setStreaming(true)
+    const es = new EventSource(api.routesStreamUrl({ ...f, sort: undefined, limit: undefined }))
+    esRef.current = es
+    es.addEventListener('meta', e => {
+      const m = JSON.parse(e.data)
+      weightsRef.current = m.rank_weights
+      setMeta(m)
+    })
+    es.addEventListener('routes', e => {
+      accRef.current = accRef.current.concat(JSON.parse(e.data))
+      scoreAll(accRef.current, weightsRef.current)
+      setRoutes([...accRef.current])
+    })
+    es.addEventListener('done', e => {
+      const d = JSON.parse(e.data)
+      if (d.scores) accRef.current.forEach(r => { if (d.scores[r.id] != null) r.score = d.scores[r.id] })
+      setRoutes([...accRef.current])
+      setCounts(d)
+      setStreaming(false)
+      es.close()
+    })
+    es.addEventListener('error', e => {
+      if (e.data) { try { setErr(JSON.parse(e.data).error) } catch { setErr('stream error') } }
+      setStreaming(false)
+      es.close()
+    })
   }
-  useEffect(() => { api.settings().then(s => { const f = { ...s.filters }; ['max_gold','min_margin_per_1k_gold','min_liquidity_ref','min_volume_ref_per_h','max_fill_hours','min_velocity'].forEach(k => { if (!f[k]) f[k] = '' }); setF(x => ({ ...x, ...f })); setLiveN(s.live_top_n ?? 5) }).catch(() => {}) }, [])
+
+  useEffect(() => { api.settings().then(s => { const g = { ...s.filters }; delete g.sort; ['max_gold','min_margin_per_1k_gold','min_liquidity_ref','min_volume_ref_per_h','max_fill_hours','min_velocity'].forEach(k => { if (!g[k]) g[k] = '' }); setF(x => ({ ...x, ...g })); setLiveN(s.live_top_n ?? 5) }).catch(() => {}) }, [])
+  useEffect(() => { load(); return () => esRef.current?.close() }, [filterKey]) // eslint-disable-line
+  useEffect(() => {
+    const t = setInterval(() => { if (document.visibilityState === 'visible' && !streaming) load() }, 120000)
+    return () => clearInterval(t)
+  }, [filterKey, streaming]) // eslint-disable-line
   useEffect(() => {
     const tick = () => api.rateLimits().then(setRl).catch(() => {})
     tick(); const t = setInterval(tick, 5000); return () => clearInterval(t)
   }, [])
 
+  const applyResult = (d) => {
+    accRef.current = d.routes
+    setRoutes(d.routes)
+    setCounts({ total_candidates: d.total_candidates, total_after_filters: d.total_after_filters })
+  }
   const refreshTop = async () => {
     if (!canLive || liveBusy) return
     setLiveBusy(true); setNote(null)
     try {
       const d = await api.refreshTop(f, Number(liveN))
-      setData(d)
+      applyResult(d)
       const r = d.refresh
       setNote(r.waited === 0 ? `Top ${r.top_n}: all ${r.pairs_considered} pairs already fresh, nothing fetched.`
         : `Top ${r.top_n}: fetched ${r.done} of ${r.waited} stale pairs${r.timed_out ? ' (rest still queued)' : ''}.`)
@@ -139,7 +203,7 @@ export default function RoutesView({ capital, status }) {
     setRefreshingId(r.id); setNote(null)
     try {
       const d = await api.refreshRoute(r.id, r.pairs, f)
-      setData(x => ({ ...x, routes: d.routes }))
+      accRef.current = d.routes; setRoutes(d.routes)
       if (!d.still_passes) setNote(d.route ? `After refresh that loop no longer clears your thresholds (margin now ${fmt.pct(d.route.margin_pct)}).` : 'After refresh that loop no longer exists.')
       else setNote(`Loop refreshed: ${d.refresh.done} of ${d.refresh.waited} pairs fetched.`)
     } catch (e) { setNote(String(e.message || e)) }
@@ -150,121 +214,124 @@ export default function RoutesView({ capital, status }) {
     refreshTop()
     const t = setInterval(refreshTop, 120000)
     return () => clearInterval(t)
-  }, [autoLive, canLive, f, liveN]) // eslint-disable-line
-  useEffect(() => { load() }, [f]) // eslint-disable-line
-  useEffect(() => {
-    if (!auto) return
-    const t = setInterval(load, 60000)
-    return () => clearInterval(t)
-  }, [auto, f]) // eslint-disable-line
+  }, [autoLive, canLive, filterKey, liveN]) // eslint-disable-line
 
   const set = (k) => (e) => setF(x => ({ ...x, [k]: e.target.type === 'checkbox' ? e.target.checked : e.target.value }))
-  const ref = data?.reference ?? capital?.reference ?? 'ref'
-  const maxVel = useMemo(() => Math.max(1e-9, ...(data?.routes ?? []).map(r => r.velocity_inf ? 0 : (r.velocity || 0))), [data])
-  const held = Object.keys(data?.capital ?? {})
+  const clickSort = (key, defDir) => setSort(s => s.key === key ? { key, dir: s.dir === 'desc' ? 'asc' : 'desc' } : { key, dir: defDir })
+  const ref = meta?.reference ?? capital?.reference ?? 'ref'
+  const shown = useMemo(() => {
+    const col = COLS.find(c => c[0] === sort.key) ?? COLS[0]
+    const acc = col[2]
+    const arr = [...routes].sort((a, b) => { const ka = acc(a), kb = acc(b); return ka === kb ? 0 : kb > ka ? 1 : -1 })
+    if (sort.dir === 'asc') arr.reverse()
+    return arr.slice(0, Number(f.limit) || 100)
+  }, [routes, sort, f.limit])
+  const maxVel = useMemo(() => Math.max(1e-9, ...shown.map(r => r.velocity_inf ? 0 : (r.velocity || 0))), [shown])
+  const held = Object.keys(meta?.capital ?? {})
+  const backfilling = status?.digest?.backfilling
 
   return (
     <div className="workspace">
       <aside className="rail">
-        <h2>Thresholds</h2>
-        <div className="field"><label>Minimum margin %</label><input type="number" step="0.1" value={f.min_margin_pct} onChange={set('min_margin_pct')} /></div>
-        <div className="field"><label>Minimum margin, in {ref}</label><input type="number" step="0.1" value={f.min_margin_ref} onChange={set('min_margin_ref')} /></div>
-        <div className="field"><label>Maximum gold per loop</label><input type="number" step="100" placeholder="no limit" value={f.max_gold} onChange={set('max_gold')} /></div>
-        <div className="field"><label>Minimum margin per 1k gold</label><input type="number" step="0.01" placeholder="no limit" value={f.min_margin_per_1k_gold} onChange={set('min_margin_per_1k_gold')} /></div>
-        <div className="field"><label>Minimum liquidity, in {ref}</label><input type="number" step="1" placeholder="no limit" value={f.min_liquidity_ref} onChange={set('min_liquidity_ref')} /></div>
-        <div className="field"><label>Minimum velocity, {ref}/h per 1k gold</label><input type="number" step="0.01" placeholder="no limit" value={f.min_velocity} onChange={set('min_velocity')} /></div>
-        <div className="field"><label>Minimum traded volume, {ref} per hour</label><input type="number" step="1" placeholder="no limit" value={f.min_volume_ref_per_h} onChange={set('min_volume_ref_per_h')} /></div>
-        <div className="field"><label>Maximum estimated fill time, hours</label><input type="number" step="0.5" placeholder="no limit" value={f.max_fill_hours} onChange={set('max_fill_hours')} /></div>
-        <label className="check"><input type="checkbox" checked={!!f.live_only} onChange={set('live_only')} /> Live quotes only</label>
-        <label className="check"><input type="checkbox" checked={!!f.exclude_recipes} onChange={set('exclude_recipes')} /> Exchange steps only</label>
+        <CapitalCard currencies={currencies} status={status} onSaved={() => { onCapitalSaved?.(); load() }} />
 
-        <h2>Ranking</h2>
-        <div className="field"><label>Sort by</label>
-          <select value={f.sort} onChange={set('sort')}>{SORTS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>
-        </div>
+        <h2>Filters</h2>
+        <div className="field"><label>Minimum margin %</label><input type="number" step="0.1" value={f.min_margin_pct} onChange={set('min_margin_pct')} /></div>
         <div className="field"><label>Start from</label>
           <select value={f.start} onChange={set('start')}>
             <option value="">Everything I hold</option>
             {held.map(c => <option key={c} value={c}>{c}</option>)}
           </select>
         </div>
-        <div className="field"><label>Show at most</label><input type="number" value={f.limit} onChange={set('limit')} /></div>
-        <label className="check"><input type="checkbox" checked={auto} onChange={e => setAuto(e.target.checked)} /> Recalculate from cache every minute</label>
-        <button className="btn" onClick={load} disabled={busy}>{busy ? 'Working' : 'Recalculate'}</button>
+        <label className="check"><input type="checkbox" checked={!!f.live_only} onChange={set('live_only')} /> Live quotes only</label>
+
+        <details className="adv">
+          <summary>More filters</summary>
+          <div className="field"><label>Minimum margin, in {ref}</label><input type="number" step="0.1" value={f.min_margin_ref} onChange={set('min_margin_ref')} /></div>
+          <div className="field"><label>Maximum gold per loop</label><input type="number" step="100" placeholder="no limit" value={f.max_gold} onChange={set('max_gold')} /></div>
+          <div className="field"><label>Minimum margin per 1k gold</label><input type="number" step="0.01" placeholder="no limit" value={f.min_margin_per_1k_gold} onChange={set('min_margin_per_1k_gold')} /></div>
+          <div className="field"><label>Minimum liquidity, in {ref}</label><input type="number" step="1" placeholder="no limit" value={f.min_liquidity_ref} onChange={set('min_liquidity_ref')} /></div>
+          <div className="field"><label>Minimum velocity, {ref}/h per 1k gold</label><input type="number" step="0.01" placeholder="no limit" value={f.min_velocity} onChange={set('min_velocity')} /></div>
+          <div className="field"><label>Minimum traded volume, {ref} per hour</label><input type="number" step="1" placeholder="no limit" value={f.min_volume_ref_per_h} onChange={set('min_volume_ref_per_h')} /></div>
+          <div className="field"><label>Maximum estimated fill time, hours</label><input type="number" step="0.5" placeholder="no limit" value={f.max_fill_hours} onChange={set('max_fill_hours')} /></div>
+          <label className="check"><input type="checkbox" checked={!!f.exclude_recipes} onChange={set('exclude_recipes')} /> Exchange steps only</label>
+          <div className="field"><label>Show at most</label><input type="number" value={f.limit} onChange={set('limit')} /></div>
+        </details>
 
         <h2>Live quotes</h2>
-        {!canLive ? <p className="hint">Connect a trade session in Settings to fetch live books. Until then loops use the hourly digest and cached quotes.</p> : (
+        {!canLive ? (
+          <p className="hint">Not connected — loops use hourly market data. Connect a trade session in Settings for real-time order books.</p>
+        ) : (
           <>
-            <p className="hint">Only the pairs behind the top loops are fetched, and only when older than the threshold in Settings. Pairs that want the same currency share one request.</p>
-            <div className="field"><label>Refresh pairs behind the top</label><input type="number" min="1" max="50" value={liveN} onChange={e => setLiveN(e.target.value)} /></div>
-            <label className="check"><input type="checkbox" checked={autoLive} onChange={e => setAutoLive(e.target.checked)} /> Do this every 2 minutes</label>
-            <button className="btn primary" onClick={refreshTop} disabled={liveBusy}>{liveBusy ? 'Fetching…' : `Refresh top ${liveN} now`}</button>
+            <button className="btn primary" onClick={refreshTop} disabled={liveBusy} style={{ width: '100%' }}>
+              {liveBusy ? 'Fetching…' : `Refresh top ${liveN} loops now`}</button>
+            <label className="check" style={{ marginTop: 8 }}><input type="checkbox" checked={autoLive} onChange={e => setAutoLive(e.target.checked)} /> Keep fresh (every 2 min)</label>
           </>
         )}
         {rl && (
-          <p className="hint" style={{ marginTop: 12 }}>
-            Exchange budget: {rl.policies.trade.rates.map(r => `${r.limit}/${r.window_s}s`).join(', ')}
-            {rl.policies.trade.advertised.length ? ' (from GGG headers, halved)' : ' (default until GGG reports)'}
-            {rl.policies.trade.penalty_remaining_s > 0 && <span className="loss"> · holding {Math.ceil(rl.policies.trade.penalty_remaining_s)}s</span>}
-            <br />queue {rl.queue.queue}{rl.queue.in_flight ? ` · fetching ${rl.queue.in_flight}` : ''} · {rl.policies.trade.requests} requests, {rl.policies.trade.throttled} holds this run
-            {rl.queue.padded > 0 && <> · {rl.queue.padded} pairs came free via padding</>}
-            {rl.pair_scores?.length > 0 && <><br />priority pairs: {rl.pair_scores.slice(0, 4).map(p => `${p.have}→${p.want}`).join(', ')}</>}
-          </p>
+          <details className="adv">
+            <summary>Fetch status</summary>
+            <p className="hint">
+              Exchange budget: {rl.policies.trade.rates.map(r => `${r.limit}/${r.window_s}s`).join(', ')}
+              {rl.policies.trade.penalty_remaining_s > 0 && <span className="loss"> · holding {Math.ceil(rl.policies.trade.penalty_remaining_s)}s</span>}
+              <br />queue {rl.queue.queue}{rl.queue.in_flight ? ` · fetching ${rl.queue.in_flight}` : ''} · {rl.policies.trade.requests} requests this run
+            </p>
+          </details>
         )}
       </aside>
 
       <section className="main">
         {err && <div className="notice error">Couldn't load routes: {err}</div>}
         {note && <div className="notice">{note}</div>}
-        {data?.notional && (
-          <div className="notice">No capital entered yet, so routes are sized to a notional 10 {ref} from every currency.
-            Enter what you hold in the Capital tab to size loops to your stash.</div>
+        {backfilling && (
+          <div className="notice">Market history is still syncing ({fmt.n(status.digest.behind_h, 0)}h behind). Loops fill in as rates land — no action needed.</div>
+        )}
+        {meta?.notional && (
+          <div className="notice">No capital entered yet, so loops are sized to a notional 10 {ref} from every currency.
+            Enter what you hold on the left to size them to your stash.</div>
         )}
         <div className="legend">
           <span><i className="k live" /> live order book</span>
-          <span><i className="k digest" /> hourly digest (executed VWAP)</span>
+          <span><i className="k digest" /> hourly market data</span>
           <span><i className="k recipe" /> disenchant / combine, no gold</span>
-          {data && <span className="spacer" />}
-          {data && <span>{data.total_after_filters} of {data.total_candidates} loops pass · graph {data.graph.nodes} currencies,
-            {' '}{data.graph.edges.live} live / {data.graph.edges.digest} digest / {data.graph.edges.recipe} recipe edges</span>}
+          <span className="spacer" />
+          {streaming && <span className="streaming">searching… {routes.length} found</span>}
+          {!streaming && counts && <span>{counts.total_after_filters ?? routes.length} of {counts.total_candidates} loops pass{counts.truncated ? ' (search capped)' : ''}</span>}
+          {meta && <span>· {meta.graph.edges.live} live / {meta.graph.edges.digest} digest / {meta.graph.edges.recipe} recipe edges</span>}
         </div>
 
-        {data && data.routes.length === 0 ? (
+        {!streaming && routes.length === 0 ? (
           <div className="empty">
-            <b>No loop clears your thresholds.</b><br />
-            {data.total_candidates === 0
-              ? 'The graph has no cycles yet. Wait for the first digest sync or order-book sweep, or add currencies to the watchlist in Settings.'
-              : 'Loosen a threshold on the left, or allow digest quotes and recipe steps.'}
+            <b>{(counts?.total_candidates ?? 0) === 0 ? 'No loops yet.' : 'No loop clears your thresholds.'}</b><br />
+            {(counts?.total_candidates ?? 0) === 0
+              ? (backfilling
+                ? 'Market history is still syncing — this page fills in by itself within a few minutes.'
+                : 'The market graph is empty for this league. Check the league in the top bar, or wait for the next hourly market update.')
+              : 'Loosen a filter on the left — the margin threshold is usually the one.'}
           </div>
         ) : (
           <table>
             <thead>
               <tr>
                 <th>Loop</th>
-                <th className="num">Commit</th>
-                <th className="num">Margin</th>
-                <th className="num">Margin %</th>
-                <th className="num">Margin in {ref}</th>
-                <th className="num">Value in {ref}</th>
-                <th className="num">Gold</th>
-                <th className="num" title="margin ÷ (fill hours × gold) × 1000 — profit per hour per 1k gold">Velocity</th>
-                <th className="num">Margin / 1k gold</th>
-                <th className="num">Liquidity in {ref}</th>
-                <th className="num" title="Slowest step's executed value per hour, from the hourly digest">Volume / h</th>
-                <th className="num" title="Sum over steps of commit ÷ hourly turnover">Fill est.</th>
-                <th className="num">Age</th>
+                {COLS.map(([key, label, , defDir, title]) => (
+                  <th key={key} className={`num sortable ${sort.key === key ? 'sorted' : ''}`} title={title || `Sort by ${label}`}
+                    onClick={() => clickSort(key, defDir)}>
+                    {label}{sort.key === key ? (sort.dir === 'desc' ? ' ▾' : ' ▴') : ''}
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody>
-              {(data?.routes ?? []).map(r => (
+              {shown.map(r => (
                 <React.Fragment key={r.id}>
                   <tr className="route" aria-expanded={open === r.id} onClick={() => setOpen(open === r.id ? null : r.id)}>
                     <td className="loop-cell"><Loop r={r} /></td>
+                    <td className="num">{r.score == null ? <span className="muted">–</span> : r.score.toFixed(3)}</td>
                     <td className="num">{fmt.n(r.start_amount)} {r.start}</td>
                     <td className={`num ${r.margin >= 0 ? 'gain' : 'loss'}`}>{r.margin >= 0 ? '+' : ''}{fmt.n(r.margin)}</td>
                     <td className={`num ${r.margin >= 0 ? 'gain' : 'loss'}`}>{fmt.pct(r.margin_pct)}</td>
                     <td className="num">{fmt.n(r.margin_ref, 2)}</td>
-                    <td className="num">{fmt.n(r.value_ref, 1)}</td>
                     <td className="num">{r.gold_free ? <span className="muted">free</span> : fmt.n(r.gold)}</td>
                     <td className="num mpg">
                       {r.velocity_inf ? <span className="gain">∞</span> : r.velocity == null ? <span className="muted">–</span> : (
@@ -274,17 +341,12 @@ export default function RoutesView({ capital, status }) {
                         </>
                       )}
                     </td>
-                    <td className="num mpg">
-                      {r.gold_free ? <span className="gain">∞</span> : (
-                        fmt.n(r.margin_per_1k_gold, 3)
-                      )}
-                    </td>
                     <td className="num">{r.liquidity_ref == null ? <span className="muted">∞</span> : fmt.n(r.liquidity_ref, 0)}</td>
                     <td className="num">{r.volume_ref_per_h == null ? <span className="muted">–</span> : fmt.n(r.volume_ref_per_h, 0)}</td>
                     <td className={`num ${r.fill_hours != null && r.fill_hours > 4 ? 'muted' : ''}`}>{hrs(r.fill_hours)}</td>
                     <td className="num muted">{fmt.age(r.max_age_s)}</td>
                   </tr>
-                  {open === r.id && <tr><td colSpan={13} style={{ padding: 0 }}><Detail r={r} refCur={ref} onRefresh={refreshOne} refreshing={refreshingId === r.id} canLive={canLive} /></td></tr>}
+                  {open === r.id && <tr><td colSpan={12} style={{ padding: 0 }}><Detail r={r} refCur={ref} onRefresh={refreshOne} refreshing={refreshingId === r.id} canLive={canLive} /></td></tr>}
                 </React.Fragment>
               ))}
             </tbody>
