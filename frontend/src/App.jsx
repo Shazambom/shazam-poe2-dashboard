@@ -8,6 +8,8 @@ import TradeView from './components/TradeView.jsx'
 import RoutesView from './components/RoutesView.jsx'
 import MarketView from './components/MarketView.jsx'
 import SettingsView from './components/SettingsView.jsx'
+import DownloadApp from './components/DownloadApp.jsx'
+import UpdateStatus from './components/UpdateStatus.jsx'
 
 const TABS = ['Board', 'Inflation', 'Trade', 'Watches', 'Routes', 'Market', 'Settings']
 
@@ -97,19 +99,23 @@ export default function App() {
                 : status.orderbook.queue ? `${status.orderbook.queue} queued`
                 : status.orderbook.last_fetch ? `live ${fmt.age(Date.now() / 1000 - status.orderbook.last_fetch)} ago` : 'live: idle'}
             </span>
-          ) : bridge ? (
+          ) : bridge === 'desktop' ? (
             <button className="btn primary connect-live" disabled={connecting} onClick={doConnect}
-              title={bridge === 'desktop' ? 'Sign in to pathofexile.com and stream live order books' : 'Connect via the browser extension'}>
+              title="Sign in to pathofexile.com and stream live order books">
               {connecting ? 'Connecting…' : 'Connect live data'}
             </button>
           ) : (
-            <button className="feed as-btn" title="Connect a trade session for live order books" onClick={() => setTab('Settings')}>
-              <i className={`dot ${bookOk}`} /> live book: connect
-            </button>
+            // Web build: live order book needs the desktop app — steer there, don't
+            // advertise the extension flow. (The download button is right here.)
+            <span className="feed muted" title="Live order books run in the desktop app">
+              <i className="dot" /> live: desktop app
+            </span>
           )}
           <span className="capital-pill" title="Total value of what you hold, in the reference currency">
             capital <b>{fmt.n(capital?.total_ref, 1)}</b> {ref}</span>
           {status?.oauth?.logged_in && <span className="muted">{status.oauth.username}</span>}
+          <UpdateStatus />
+          <DownloadApp />
         </div>
       </header>
 

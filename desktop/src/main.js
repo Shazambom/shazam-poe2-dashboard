@@ -176,32 +176,40 @@ ipcMain.handle('open-trade', (_e, url) => {
 })
 
 // ---------------------------------------------------------------- updates
+// Renderer-driven, seamless: auto-download in the background with progress, then the
+// in-app Update button installs in place (quitAndInstall) — no download page, no
+// manual binary. Fully in-place on Windows; unsigned macOS can't hot-swap (Squirrel
+// requires a signed+notarized app), so mac reports the state but the swap needs a
+// Developer ID cert — drop `identity: null` in package.json once one exists.
+let _autoUpdater = null
+
+function _emitUpdate(state) {
+  try { win?.webContents.send('update:status', state) } catch {}
+}
+
 function setupUpdates() {
   if (!app.isPackaged) return
   try {
     const { autoUpdater } = require('electron-updater')
-    autoUpdater.autoDownload = process.platform === 'win32'
-    autoUpdater.on('update-downloaded', async (info) => {
-      const { response } = await dialog.showMessageBox(win, {
-        message: `Update ${info.version} ready`, detail: 'Restart to apply?',
-        buttons: ['Restart now', 'Later'],
-      })
-      if (response === 0) autoUpdater.quitAndInstall()
-    })
-    autoUpdater.on('update-available', async (info) => {
-      if (process.platform === 'win32') return   // it downloads itself
-      // Unsigned mac builds can't hot-swap; point at the download instead.
-      const { response } = await dialog.showMessageBox(win, {
-        message: `Update ${info.version} available`, detail: 'Download the new build?',
-        buttons: ['Download', 'Later'],
-      })
-      if (response === 0) shell.openExternal(`${settings.remoteUrl}/downloads/`)
-    })
-    autoUpdater.on('error', e => console.log('[updater]', String(e)))
+    _autoUpdater = autoUpdater
+    autoUpdater.autoDownload = true            // pull it in the background as soon as found
+    autoUpdater.autoInstallOnAppQuit = true
+    autoUpdater.on('checking-for-update', () => _emitUpdate({ phase: 'checking' }))
+    autoUpdater.on('update-not-available', () => _emitUpdate({ phase: 'none' }))
+    autoUpdater.on('update-available', (info) => _emitUpdate({ phase: 'downloading', version: info.version, percent: 0 }))
+    autoUpdater.on('download-progress', (p) => _emitUpdate({ phase: 'downloading', percent: Math.round(p.percent) }))
+    autoUpdater.on('update-downloaded', (info) => _emitUpdate({ phase: 'ready', version: info.version }))
+    autoUpdater.on('error', (e) => { console.log('[updater]', String(e)); _emitUpdate({ phase: 'error', message: String(e.message || e) }) })
     autoUpdater.checkForUpdates().catch(() => {})
     setInterval(() => autoUpdater.checkForUpdates().catch(() => {}), 30 * 60 * 1000)
   } catch (e) { console.log('[updater] disabled:', String(e)) }
 }
+
+ipcMain.handle('update:check', () => { try { _autoUpdater?.checkForUpdates() } catch {} })
+ipcMain.handle('update:install', () => {
+  // Quit and install the downloaded update, then relaunch into the new version.
+  try { _autoUpdater?.quitAndInstall(false, true) } catch (e) { _emitUpdate({ phase: 'error', message: String(e) }) }
+})
 
 // ------------------------------------------------------------------- menu
 function buildMenu() {

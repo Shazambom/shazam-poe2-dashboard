@@ -22,7 +22,7 @@ export default function AccountsPanel({ onChange }) {
     return () => clearInterval(t)
   }, [])
 
-  const bridge = connectBridge()   // 'desktop' | 'extension' | null
+  const desktop = connectBridge() === 'desktop'   // live order book is a desktop-app feature
   const bridgeConnect = async () => {
     setBusy(true); setMsg(null)
     const r = await connectSession()
@@ -50,20 +50,14 @@ export default function AccountsPanel({ onChange }) {
         <p className="notice">Connected{sess.label ? ` · ${sess.label}` : ''} · set {ago(sess.set_at)} · last successful fetch {ago(sess.last_ok)}.
           {' '}{sess.source !== 'env' && <button className="btn small" onClick={async () => { await api.disconnectSession(); await load(); onChange?.() }}>Disconnect</button>}
         </p>
-      ) : (
+      ) : desktop ? (
         <>
-          {bridge ? (
-            <div className="row" style={{ margin: '10px 0' }}>
-              <button className="btn primary" disabled={busy} onClick={bridgeConnect}>
-                {busy ? 'Connecting…' : 'Connect trade session'}</button>
-              <span className="hint">Same as the <b>Connect live data</b> button in the top bar. If you're not signed in to
-                pathofexile.com yet, a login window opens and the session connects itself the moment you finish.</span>
-            </div>
-          ) : (
-            <p className="hint">The <b>Connect live data</b> button is in the top-right of the window. It uses the desktop app's
-              built-in login (or the browser extension). No button there? You're in a plain browser — use one of the manual
-              options below.</p>
-          )}
+          <div className="row" style={{ margin: '10px 0' }}>
+            <button className="btn primary" disabled={busy} onClick={bridgeConnect}>
+              {busy ? 'Connecting…' : 'Connect trade session'}</button>
+            <span className="hint">Same as the <b>Connect live data</b> button in the top bar. If you're not signed in to
+              pathofexile.com yet, a login window opens and the session connects itself the moment you finish.</span>
+          </div>
           <details className="adv">
             <summary>Other ways to connect</summary>
             <p className="hint">Paste it yourself: on pathofexile.com press F12 → Application → Cookies → <code>POESESSID</code>:</p>
@@ -74,10 +68,15 @@ export default function AccountsPanel({ onChange }) {
             <p className="hint">Or from the PC where you're logged in: <code>pip install browser-cookie3</code> then
               {' '}<code>python tools/connect.py --server {host} session</code>.</p>
           </details>
+          <p className="hint">The cookie is verified with one exchange query, stored encrypted under <code>data/</code>, and only ever sent to pathofexile.com.
+            Logging out of the website invalidates it — reconnect afterwards.</p>
         </>
+      ) : (
+        // Web build: the live order book needs the desktop app's native login — don't
+        // advertise the browser-extension flow here. Point at the download instead.
+        <p className="hint">The live order book runs in the <b>desktop app</b>, which signs in to pathofexile.com for you —
+          grab it from the <b>Download</b> button in the top bar. This website is a preview that uses hourly market data.</p>
       )}
-      <p className="hint">The cookie is verified with one exchange query, stored encrypted under <code>data/</code>, and only ever sent to pathofexile.com.
-        Logging out of the website invalidates it — reconnect afterwards.</p>
 
       <h2 style={{ marginTop: 24 }}>Path of Exile account (OAuth, optional)</h2>
       {!oa?.configured ? (
