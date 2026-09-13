@@ -549,14 +549,30 @@ def _composite_score(routes: list[dict], weights: dict) -> None:
                             "value": round(val[r["id"]], 3), "volume": round(vol[r["id"]], 3)}
 
 
+_board_cache: tuple[float, int, tuple, dict] | None = None
+BOARD_TTL_S = 30.0
+
+
 def board() -> dict:
     """Live price board: each watched currency priced in the reference, with the
     buy/sell rates that make up the spread, depth, freshness, and a trend series.
 
     Prices are R-per-unit (reference currency per 1 of the currency), so bigger = more
     valuable — the natural way to read a price. buy = what it costs you to acquire one
-    (from the R->c ladder), sell = what you get for one (from the c->R ladder)."""
+    (from the R->c ladder), sell = what you get for one (from the c->R ladder).
+
+    Result is TTL-cached: it runs one history query per watched currency, but the
+    underlying digest only changes hourly, so repeated polls are served from memory
+    (invalidated when a new live book lands, via orderbook.state["version"])."""
     from . import session
+
+    global _board_cache
+    s0 = get_settings()
+    key = (s0["league"], s0["reference"], tuple(s0["watchlist"]))
+    now = time.time()
+    if _board_cache and _board_cache[2] == key and _board_cache[1] == orderbook.state["version"] \
+            and now - _board_cache[0] < BOARD_TTL_S:
+        return _board_cache[3]
 
     g = cached_graph()
     s = g.s
@@ -588,8 +604,10 @@ def board() -> dict:
             "depth": depth, "trend": trend, "change_pct": change_pct,
         })
     rows.sort(key=lambda r: (r["mid"] is None, -(r["mid"] or 0)))   # most valuable first
-    return {"reference": R, "league": league, "rows": rows,
-            "session": session.status().get("connected", False)}
+    result = {"reference": R, "league": league, "rows": rows,
+              "session": session.status().get("connected", False)}
+    _board_cache = (now, orderbook.state["version"], key, result)
+    return result
 
 
 def board_pairs() -> list[tuple[str, str]]:

@@ -56,6 +56,16 @@ export function connectSession() {
 // --- trade searches -------------------------------------------------------
 const TRADE_BASE = 'https://www.pathofexile.com/trade2'
 
+export const uid = () => Math.random().toString(36).slice(2, 9)
+
+// The trade search page for a league (the Trade tab's home).
+export const tradeHome = (league) => `${TRADE_BASE}/search/${encodeURIComponent(league || 'Standard')}`
+
+// One owner of the stored watch-search shape, built from a parsed trade URL.
+export const searchFromParsed = (p) => ({
+  id: uid(), title: `Search ${p.slug.slice(0, 6)}`, type: p.type, slug: p.slug, live: p.live, done: false,
+})
+
 // Reconstruct a trade-search URL from a stored {type, slug}, injecting the league
 // at open time (never stored). live=true → GGG's native live search.
 export function tradeUrl({ type, slug }, league, live) {

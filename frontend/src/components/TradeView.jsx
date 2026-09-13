@@ -1,13 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { api, toast } from '../lib/api.js'
-import { parseTradeUrl } from '../lib/session.js'
+import { api, toast, cleanErr } from '../lib/api.js'
+import { parseTradeUrl, searchFromParsed, tradeHome } from '../lib/session.js'
 
 // Full pathofexile.com trade site embedded in the app via an Electron <webview>.
 // It shares the app's logged-in session, so search, live search, results and
 // whisper-copy all work in-window. Desktop-only (a browser can't frame another
 // origin). Everything is human-driven — we only host the site, we don't touch it.
-const uid = () => Math.random().toString(36).slice(2, 9)
-const home = (league) => `https://www.pathofexile.com/trade2/search/${encodeURIComponent(league || 'Standard')}`
 
 export default function TradeView({ league }) {
   const wv = useRef(null)
@@ -44,17 +42,17 @@ export default function TradeView({ league }) {
     )
   }
 
+  const parsed = parseTradeUrl(url)
   const saveCurrent = async () => {
-    const p = parseTradeUrl(url)
-    if (!p) { toast('Open a trade search first, then save it', false); return }
+    if (!parsed) { toast('Open a trade search first, then save it', false); return }
     try {
       const d = await api.watches(); const folders = d.folders || []
       let f = folders.find(x => x.title === 'Captured')
-      if (!f) { f = { id: uid(), title: 'Captured', open: true, searches: [] }; folders.push(f) }
-      f.searches.push({ id: uid(), title: `Search ${p.slug.slice(0, 6)}`, type: p.type, slug: p.slug, live: p.live, done: false })
+      if (!f) { f = { id: searchFromParsed(parsed).id, title: 'Captured', open: true, searches: [] }; folders.push(f) }
+      f.searches.push(searchFromParsed(parsed))
       await api.putWatches(folders)
       toast('Saved to Watches → Captured')
-    } catch (e) { toast(String(e.message || e), false) }
+    } catch (e) { toast(cleanErr(e), false) }
   }
 
   const el = () => wv.current
@@ -64,12 +62,12 @@ export default function TradeView({ league }) {
         <button className="btn small" disabled={!nav.back} onClick={() => el().goBack()} title="Back">◀</button>
         <button className="btn small" disabled={!nav.fwd} onClick={() => el().goForward()} title="Forward">▶</button>
         <button className="btn small" onClick={() => el().reload()} title="Reload">⟳</button>
-        <button className="btn small" onClick={() => el().loadURL(home(league))} title="Trade home for this league">Home</button>
+        <button className="btn small" onClick={() => el().loadURL(tradeHome(league))} title="Trade home for this league">Home</button>
         <span className="trade-url muted" title={url}>{nav.loading ? 'loading…' : url}</span>
         <span className="spacer" />
-        <button className="btn small primary" onClick={saveCurrent} disabled={!parseTradeUrl(url)}>Save to Watches</button>
+        <button className="btn small primary" onClick={saveCurrent} disabled={!parsed}>Save to Watches</button>
       </div>
-      <webview ref={wv} src={home(league)} className="trade-webview" allowpopups="true" />
+      <webview ref={wv} src={tradeHome(league)} className="trade-webview" allowpopups="true" />
     </div>
   )
 }

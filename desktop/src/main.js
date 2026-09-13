@@ -14,6 +14,9 @@ const http = require('http')
 const path = require('path')
 
 const POE = 'https://www.pathofexile.com'
+// One trust-boundary check for "is this a pathofexile.com URL", shared by the
+// open-trade handler and the webview navigation guards so they can't diverge.
+const isPoeUrl = (url) => /^https:\/\/([a-z0-9-]+\.)*pathofexile\.com\//i.test(String(url))
 const LOCAL_BACKEND_PORT = 8210
 const DEFAULTS = { mode: 'auto', remoteUrl: 'http://192.168.1.250:8080' }
 
@@ -165,7 +168,7 @@ ipcMain.handle('poe-connect', () => connectPoeFlow())
 // Open a trade-site search in its own window, sharing the app's PoE session so
 // you're already logged in and GGG's live search just works. Human-driven only.
 ipcMain.handle('open-trade', (_e, url) => {
-  if (typeof url !== 'string' || !url.startsWith('https://www.pathofexile.com/')) return false
+  if (!isPoeUrl(url)) return false
   const w = new BrowserWindow({ width: 1280, height: 900, title: 'Path of Exile — Trade',
     backgroundColor: '#0c0d10', webPreferences: { sandbox: true } })
   w.loadURL(url)
@@ -262,12 +265,12 @@ app.whenReady().then(async () => {
 app.on('web-contents-created', (_e, contents) => {
   if (contents.getType() !== 'webview') return
   contents.setWindowOpenHandler(({ url }) => {
-    if (/^https:\/\/([a-z0-9-]+\.)*pathofexile\.com\//i.test(url)) return { action: 'allow' }
+    if (isPoeUrl(url)) return { action: 'allow' }
     shell.openExternal(url)
     return { action: 'deny' }
   })
   contents.on('will-navigate', (ev, url) => {
-    if (!/^https:\/\/([a-z0-9-]+\.)*pathofexile\.com\//i.test(url)) { ev.preventDefault(); shell.openExternal(url) }
+    if (!isPoeUrl(url)) { ev.preventDefault(); shell.openExternal(url) }
   })
 })
 

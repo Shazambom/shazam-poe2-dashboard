@@ -72,7 +72,7 @@ export default function App() {
   return (
     <div className="app">
       <header className="topbar">
-        <h1>Exchange loops</h1>
+        <h1>PoE2 Dashboard</h1>
         <select className="league-select" value={league} title="League — saves on select"
           onChange={e => setLeague(e.target.value)} disabled={!status}>
           {league && !leagues.some(l => l.id === league) && <option value={league}>{league}</option>}
@@ -114,7 +114,7 @@ export default function App() {
 
       {tab === 'Board' && <BoardView key={league} status={status} />}
       {tab === 'Trade' && <TradeView key={league} league={league} />}
-      {tab === 'Watches' && <WatchesView key={league} league={league} status={status} />}
+      {tab === 'Watches' && <WatchesView key={league} league={league} />}
       {tab === 'Routes' && <RoutesView key={league} capital={capital} status={status} currencies={currencies} onCapitalSaved={refreshHeader} />}
       {tab === 'Market' && <MarketView key={league} currencies={currencies} />}
       {tab === 'Settings' && <SettingsView currencies={currencies} status={status} onSaved={refreshHeader} />}

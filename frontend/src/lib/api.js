@@ -6,7 +6,7 @@ export const bus = {
 }
 export const toast = (text, ok = true) => bus.emit({ text, ok })
 
-const cleanErr = (e) => String(e?.message || e).replace(/^\d+ /, '')
+export const cleanErr = (e) => String(e?.message || e).replace(/^\d+ /, '')
 
 const j = async (r) => {
   if (!r.ok) {

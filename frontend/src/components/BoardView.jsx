@@ -42,21 +42,22 @@ function Tile({ r, refCur }) {
         {change != null && <span className={`pt-chg ${change >= 0 ? 'gain' : 'loss'}`}>{fmt.pct(change)}</span>}
       </div>
       <Spark points={r.trend} />
-      <div className="pt-foot">
-        <span title="what it costs to buy one">buy <b>{r.buy == null ? '–' : fmt.rate(r.buy)}</b></span>
-        <span title="what you get selling one">sell <b>{r.sell == null ? '–' : fmt.rate(r.sell)}</b></span>
-        {r.spread_pct != null && (
-          <span className="pt-spread" title={`spread ${fmt.rate(r.spread)} ${refCur} (${r.spread_pct.toFixed(1)}%)`}>
-            <span className="spread-bar" style={{ width: `${Math.max(2, Math.min(46, r.spread_pct * 2))}px` }} />
-            {r.spread_pct.toFixed(1)}%
-          </span>
-        )}
-      </div>
-      {(r.age_s != null || r.depth != null) && (
-        <div className="pt-meta muted">
-          {r.depth != null && <span>{r.depth} live offers</span>}
-          {r.age_s != null && <span>{fmt.age(r.age_s)} old</span>}
+      {/* Real bid/ask only exists with a live order book; digest gives one mid both
+          ways, so showing buy/sell/spread there would be a fake spread. */}
+      {r.source === 'live' ? (
+        <div className="pt-foot">
+          <span title="what it costs to buy one">buy <b>{r.buy == null ? '–' : fmt.rate(r.buy)}</b></span>
+          <span title="what you get selling one">sell <b>{r.sell == null ? '–' : fmt.rate(r.sell)}</b></span>
+          {r.spread_pct != null && (
+            <span className="pt-spread" title={`spread ${fmt.rate(r.spread)} ${refCur} (${r.spread_pct.toFixed(1)}%)`}>
+              <span className="spread-bar" style={{ width: `${Math.max(2, Math.min(46, r.spread_pct * 2))}px` }} />
+              {r.spread_pct.toFixed(1)}%
+            </span>
+          )}
+          {r.depth != null && <span className="muted">{r.depth} offers</span>}
         </div>
+      ) : (
+        <div className="pt-foot muted">hourly mid{r.age_s != null && <> · {fmt.age(r.age_s)} old</>}</div>
       )}
     </div>
   )
