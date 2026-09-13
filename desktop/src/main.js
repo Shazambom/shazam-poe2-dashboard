@@ -240,7 +240,10 @@ app.whenReady().then(async () => {
     width: 1500, height: 950, minWidth: 900, minHeight: 600,
     title: 'PoE2 Dashboard',
     backgroundColor: '#191b22',
-    webPreferences: { contextIsolation: true, sandbox: true, preload: path.join(__dirname, 'preload.js') },
+    webPreferences: {
+      contextIsolation: true, sandbox: true, preload: path.join(__dirname, 'preload.js'),
+      webviewTag: true,   // the Trade tab embeds pathofexile.com/trade2 in a <webview>
+    },
   })
   win.loadURL(uiUrl)
   win.webContents.setWindowOpenHandler(({ url }) => { shell.openExternal(url); return { action: 'deny' } })
@@ -252,6 +255,20 @@ app.whenReady().then(async () => {
     } catch (e) { console.log('[diag] bridge check failed:', String(e)) }
   })
   setupUpdates()
+})
+
+// The embedded Trade <webview> shares the default session (so it's logged in). Keep
+// it on pathofexile.com; anything else (forum links, wiki, etc.) opens externally.
+app.on('web-contents-created', (_e, contents) => {
+  if (contents.getType() !== 'webview') return
+  contents.setWindowOpenHandler(({ url }) => {
+    if (/^https:\/\/([a-z0-9-]+\.)*pathofexile\.com\//i.test(url)) return { action: 'allow' }
+    shell.openExternal(url)
+    return { action: 'deny' }
+  })
+  contents.on('will-navigate', (ev, url) => {
+    if (!/^https:\/\/([a-z0-9-]+\.)*pathofexile\.com\//i.test(url)) { ev.preventDefault(); shell.openExternal(url) }
+  })
 })
 
 app.on('window-all-closed', () => { stopBackend(); app.quit() })

@@ -3,11 +3,12 @@ import { api, fmt, bus, surface } from './lib/api.js'
 import { connectBridge, connectSessionWithToast } from './lib/session.js'
 import BoardView from './components/BoardView.jsx'
 import WatchesView from './components/WatchesView.jsx'
+import TradeView from './components/TradeView.jsx'
 import RoutesView from './components/RoutesView.jsx'
 import MarketView from './components/MarketView.jsx'
 import SettingsView from './components/SettingsView.jsx'
 
-const TABS = ['Board', 'Watches', 'Routes', 'Market', 'Settings']
+const TABS = ['Board', 'Trade', 'Watches', 'Routes', 'Market', 'Settings']
 
 function feedState(ts, staleAfter, enabled = true) {
   if (!enabled) return 'off'
@@ -112,6 +113,7 @@ export default function App() {
       </header>
 
       {tab === 'Board' && <BoardView key={league} status={status} />}
+      {tab === 'Trade' && <TradeView key={league} league={league} />}
       {tab === 'Watches' && <WatchesView key={league} league={league} status={status} />}
       {tab === 'Routes' && <RoutesView key={league} capital={capital} status={status} currencies={currencies} onCapitalSaved={refreshHeader} />}
       {tab === 'Market' && <MarketView key={league} currencies={currencies} />}
