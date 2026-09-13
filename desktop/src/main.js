@@ -135,24 +135,46 @@ async function postSession(cookie) {
 // otherwise open a login window and finish as soon as the cookie appears.
 // Resolves with the backend's verdict so callers (menu OR the in-page button
 // via IPC) can show it however they like.
+// Best-effort login diagnostics -> the shazam server, so we can see WHY a login
+// (e.g. Steam SSO) fails on a machine we can't touch. Reuses /api/installlog.
+function reportLogin(lines) {
+  try {
+    fetch('http://192.168.1.250:8080/api/installlog?p=login', {
+      method: 'POST', headers: { 'Content-Type': 'text/plain' },
+      body: String(Array.isArray(lines) ? lines.join('\n') : lines).slice(0, 20000),
+    }).catch(() => {})
+  } catch {}
+}
+
 function connectPoeFlow() {
   return new Promise(async (resolve) => {
     const existing = await getPoeCookie()
     if (existing) return resolve(await postSession(existing))
     const login = new BrowserWindow({ width: 1100, height: 800, parent: win, title: 'Log in to Path of Exile' })
+    const buf = [`ua=${login.webContents.getUserAgent()}`]
+    const wc = login.webContents
+    const log = (m) => { const t = new Date().toISOString().slice(11, 19); buf.push(`${t} ${m}`) }
+    wc.on('did-start-navigation', (_e, u, inPage, isMain) => { if (isMain) log(`nav-start ${u}`) })
+    wc.on('did-redirect-navigation', (_e, u) => log(`redirect ${u}`))
+    wc.on('did-navigate', (_e, u) => log(`navigated ${u}`))
+    wc.on('did-navigate-in-page', (_e, u, isMain) => { if (isMain) log(`in-page ${u}`) })
+    wc.on('did-fail-load', (_e, code, desc, u) => log(`FAIL-LOAD ${code} ${desc} ${u}`))
+    wc.on('console-message', (_e, level, message) => log(`console[${level}] ${String(message).slice(0, 300)}`))
     login.loadURL(`${POE}/login`)
     let settled = false
+    const finish = (result) => { if (!settled) { settled = true; reportLogin(buf); resolve(result) } }
     const poll = setInterval(async () => {
       const cookie = await getPoeCookie()
       if (!cookie || settled) return
-      settled = true
       clearInterval(poll)
+      log('cookie acquired -> posting to backend')
       login.close()
-      resolve(await postSession(cookie))
+      finish(await postSession(cookie))
     }, 1200)
     login.on('closed', () => {
       clearInterval(poll)
-      if (!settled) { settled = true; resolve({ ok: false, message: 'Login window closed before signing in.' }) }
+      log('login window closed')
+      finish({ ok: false, message: 'Login window closed before signing in.' })
     })
   })
 }
@@ -281,8 +303,13 @@ if (!app.requestSingleInstanceLock()) {
   })
 }
 
+// Present a clean desktop-Chrome user-agent (not "…Electron/…"). Steam and other
+// SSO providers reject the Electron UA, which shows up as a bogus "wrong login".
+const CHROME_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36'
+
 app.whenReady().then(async () => {
   nativeTheme.themeSource = 'dark'
+  try { session.defaultSession.setUserAgent(CHROME_UA) } catch {}
   await startBackend()
   await startUiServer()
   buildMenu()
