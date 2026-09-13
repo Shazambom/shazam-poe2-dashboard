@@ -5,12 +5,12 @@ import logging
 import time
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.concurrency import run_in_threadpool
 from pydantic import BaseModel
 
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, PlainTextResponse
 
 from . import arbitrage, db, digest, gamedata, gateway, holdscore, inflation, leaguehistory, oauth, orderbook, recipes, session
 from .currencies import registry
@@ -87,6 +87,36 @@ def status():
         "unmapped_metadata_ids": len(registry.unmapped_meta),
         "gold_fees": gamedata.state,
     }
+
+
+# ------------------------------------------------------ installer telemetry
+# The Windows NSIS installer POSTs a diagnostic report here (process list, env,
+# existing-install listing) on every attempt, so we can see WHY it fails on a PC
+# we can't touch. Appended to /data/install-reports.log; readable back for triage.
+_INSTALL_LOG = "/data/install-reports.log"
+
+
+@app.post("/api/installlog")
+async def install_log(request: Request):
+    body = (await request.body()).decode("utf-8", "replace")[:20000]
+    stamp = time.strftime("%Y-%m-%d %H:%M:%S")
+    client = request.client.host if request.client else "?"
+    try:
+        with open(_INSTALL_LOG, "a", encoding="utf-8") as f:
+            f.write(f"\n===== {stamp} from {client} =====\n{body}\n")
+    except Exception as e:  # never let telemetry break the installer
+        log.warning("install_log write failed: %s", e)
+    log.info("install report from %s (%d bytes)", client, len(body))
+    return {"ok": True}
+
+
+@app.get("/api/installlog")
+def install_log_read():
+    try:
+        with open(_INSTALL_LOG, encoding="utf-8") as f:
+            return PlainTextResponse(f.read()[-60000:])
+    except FileNotFoundError:
+        return PlainTextResponse("(no install reports yet)")
 
 
 # ------------------------------------------------------------- currencies
