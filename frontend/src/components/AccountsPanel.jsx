@@ -9,6 +9,7 @@ export default function AccountsPanel({ onChange }) {
   const [cookie, setCookie] = useState('')
   const [msg, setMsg] = useState(null)
   const [busy, setBusy] = useState(false)
+  const [ext, setExt] = useState(false)   // browser extension bridge detected
   const host = window.location.origin
 
   const load = () => Promise.all([api.session(), api.oauthStatus()]).then(([s, o]) => { setSess(s); setOa(o) })
@@ -17,9 +18,28 @@ export default function AccountsPanel({ onChange }) {
     const q = new URLSearchParams(window.location.search)
     if (q.get('oauth') === 'ok') setMsg({ ok: true, text: 'Logged in with Path of Exile.' })
     if (q.get('oauth') === 'error') setMsg({ ok: false, text: `Login failed: ${q.get('msg')}` })
+    const onExt = (event) => {
+      if (event.source !== window || event.origin !== window.location.origin) return
+      const m = event.data
+      if (!m || m.source !== 'poe2arb-ext') return
+      if (m.cmd === 'hello') setExt(true)
+      if (m.cmd === 'connect-result') {
+        setBusy(false)
+        setMsg({ ok: !!m.ok, text: m.message })
+        if (m.ok) { load(); onChange?.() }
+      }
+    }
+    window.addEventListener('message', onExt)
+    window.postMessage({ source: 'poe2arb', cmd: 'ping' }, window.location.origin)
     const t = setInterval(load, 15000)   // pick up extension connects without a reload
-    return () => clearInterval(t)
+    return () => { clearInterval(t); window.removeEventListener('message', onExt) }
   }, [])
+
+  const extConnect = () => {
+    setBusy(true); setMsg(null)
+    window.postMessage({ source: 'poe2arb', cmd: 'connect' }, window.location.origin)
+    setTimeout(() => setBusy(b => { if (b) setMsg({ ok: false, text: 'No answer from the extension — reload it on chrome://extensions and refresh this page.' }); return false }), 8000)
+  }
 
   const connect = async () => {
     setBusy(true); setMsg(null)
@@ -42,17 +62,28 @@ export default function AccountsPanel({ onChange }) {
         </p>
       ) : (
         <>
-          <p className="hint">The exchange API only accepts the website's own login cookie (<code>POESESSID</code>), and browsers
-            hide it from page scripts — so it has to be handed over once. Pick whichever is easiest:</p>
-          <p className="hint"><b>1. One-click browser extension</b> (recommended, reconnects in one click forever):
-            load <code>tools/chrome-extension/</code> from the repo via <code>chrome://extensions</code> → Developer mode → Load unpacked,
-            log in to pathofexile.com normally, then click the extension → Connect. Done.</p>
-          <p className="hint"><b>2. Paste it</b>: on pathofexile.com press F12 → Application → Cookies → <code>POESESSID</code>, copy the value:</p>
-          <div className="row">
-            <input className="btn" type="password" placeholder="POESESSID" value={cookie} onChange={e => setCookie(e.target.value)} style={{ width: 300 }} autoComplete="off" />
-            <button className="btn primary" disabled={!cookie || busy} onClick={connect}>{busy ? 'Verifying…' : 'Connect'}</button>
-          </div>
-          <p className="hint"><b>3. Helper script</b>: <code>pip install browser-cookie3</code> then <code>python tools/connect.py --server {host} session</code> on the PC where you're logged in.</p>
+          {ext ? (
+            <div className="row" style={{ margin: '10px 0' }}>
+              <button className="btn primary" disabled={busy} onClick={extConnect}>
+                {busy ? 'Connecting…' : 'Connect trade session'}</button>
+              <span className="hint">One click. If you're not logged in to pathofexile.com yet, the login page opens and the
+                session connects itself right after you log in.</span>
+            </div>
+          ) : (
+            <p className="hint"><b>One-click setup (once):</b> open <code>chrome://extensions</code>, turn on Developer mode,
+              click <b>Load unpacked</b> and pick <code>tools/chrome-extension/</code> from the repo, then refresh this page —
+              a Connect button appears here.</p>
+          )}
+          <details className="adv">
+            <summary>Other ways to connect</summary>
+            <p className="hint">Paste it yourself: on pathofexile.com press F12 → Application → Cookies → <code>POESESSID</code>:</p>
+            <div className="row">
+              <input className="btn" type="password" placeholder="POESESSID" value={cookie} onChange={e => setCookie(e.target.value)} style={{ width: 300 }} autoComplete="off" />
+              <button className="btn primary" disabled={!cookie || busy} onClick={connect}>{busy ? 'Verifying…' : 'Connect'}</button>
+            </div>
+            <p className="hint">Or from the PC where you're logged in: <code>pip install browser-cookie3</code> then
+              {' '}<code>python tools/connect.py --server {host} session</code>.</p>
+          </details>
         </>
       )}
       <p className="hint">The cookie is verified with one exchange query, stored encrypted under <code>data/</code>, and only ever sent to pathofexile.com.

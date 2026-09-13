@@ -116,7 +116,16 @@ class Graph:
         min_vol = float(s.get("min_edge_volume_ref_per_h") or 0)
         if min_depth or min_vol:
             rv = g.ref_values()
+            # Markets adjacent to an enabled recipe stay: they're how a recipe hop is
+            # entered/exited, and the route-level liquidity filter still applies.
+            recipe_ends: set[str] = set()
+            if s["allow_recipe_edges"]:
+                for r in recipes.edges():
+                    recipe_ends.add(r["from"])
+                    recipe_ends.add(r["to"])
             def _thin(e: Edge) -> bool:
+                if e.src in recipe_ends or e.dst in recipe_ends:
+                    return False
                 if min_depth and e.kind == "live" and len(e.ladder) < min_depth:
                     return True
                 if min_vol and (e.vol_in_per_h or 0.0) * rv.get(e.src, 0.0) < min_vol:

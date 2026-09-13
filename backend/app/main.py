@@ -135,7 +135,9 @@ class RecipesBody(BaseModel):
 
 @app.put("/api/recipes")
 def put_recipes(body: RecipesBody):
-    return recipes.save(body.recipes)
+    saved = recipes.save(body.recipes)
+    arbitrage.invalidate_caches()   # recipe edges are part of the graph
+    return saved
 
 
 # ---------------------------------------------------------- trade session

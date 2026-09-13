@@ -41,16 +41,26 @@ function scoreAll(routes, w) {
   routes.forEach(r => { r.score = Math.round(((wv * vel[r.id] + we * eff[r.id] + wl * val[r.id] + wo * vol[r.id]) / tot) * 1e4) / 1e4 })
 }
 
+const RECIPE_GLYPH = { disenchant: '⊖', combine: '⊕', reforge: '⟳', vendor: '⇄' }
+
 function Loop({ r }) {
   return (
     <span className="loop">
       {r.path_names.map((n, i) => (
         <React.Fragment key={i}>
-          {i > 0 && (
-            <span className="hop" title={`${r.kinds[i - 1]} · ${fmt.rate(r.steps[i - 1].rate)} per unit`}>
-              <i className={`k ${r.kinds[i - 1]}`} />{fmt.rate(r.steps[i - 1].rate)}
-            </span>
-          )}
+          {i > 0 && (() => {
+            const step = r.steps[i - 1]
+            const kind = r.kinds[i - 1]
+            const glyph = kind === 'recipe' ? (RECIPE_GLYPH[step.meta?.kind] ?? '⊕') : null
+            const title = kind === 'recipe'
+              ? `${step.meta?.kind ?? 'recipe'}: ${step.meta?.name ?? ''} · ${fmt.rate(step.rate)} per unit · no gold`
+              : `${kind} · ${fmt.rate(step.rate)} per unit`
+            return (
+              <span className="hop" title={title}>
+                <i className={`k ${kind}`} />{glyph && <b className="recipe-glyph">{glyph}</b>}{fmt.rate(step.rate)}
+              </span>
+            )
+          })()}
           <span className="node">{n}</span>
         </React.Fragment>
       ))}
@@ -293,7 +303,7 @@ export default function RoutesView({ capital, status, currencies, onCapitalSaved
         <div className="legend">
           <span><i className="k live" /> live order book</span>
           <span><i className="k digest" /> hourly market data</span>
-          <span><i className="k recipe" /> disenchant / combine, no gold</span>
+          <span><i className="k recipe" /> recipe hop: <b className="recipe-glyph">⊖</b> disenchant · <b className="recipe-glyph">⊕</b> combine — no gold</span>
           <span className="spacer" />
           {streaming && <span className="streaming">searching… {routes.length} found</span>}
           {!streaming && counts && <span>{counts.total_after_filters ?? routes.length} of {counts.total_candidates} loops pass{counts.truncated ? ' (search capped)' : ''}</span>}

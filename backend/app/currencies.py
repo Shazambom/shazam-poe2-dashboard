@@ -127,6 +127,17 @@ class Registry:
         if tid:
             self._link(meta, tid)
             return tid
+        # Tiered currencies: GGG appends 2/3 to the base metadata id for the
+        # Greater/Perfect tiers (CurrencyAddModToMagic2 -> Greater Orb of
+        # Augmentation). The trade site names them greater-/perfect- + base name.
+        if meta[-1:] in ("2", "3") and not meta[-2:-1].isdigit():
+            base_tid = self.resolve_meta(meta[:-1])
+            if base_tid:
+                slug = re.sub(r"[^a-z0-9]+", "-", self.by_id[base_tid].name.lower()).strip("-")
+                cand = ("greater-" if meta.endswith("2") else "perfect-") + slug
+                if cand in self.by_id:
+                    self._link(meta, cand)
+                    return cand
         self.unmapped_meta.add(meta)
         return None
 
