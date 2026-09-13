@@ -22,8 +22,10 @@ from . import db, gateway
 log = logging.getLogger(__name__)
 
 BASE = "https://api.poe2scout.com/poe2"
-# Item ids are global across leagues (poe2scout). Divine is the inflation proxy.
-ITEMS = {291: "Divine Orb", 287: "Chaos Orb"}
+# Item ids are global across leagues (poe2scout), priced in the league base (Exalted).
+# Mirror and Hinekora are the hardest inflation anchors; Divine is the densest and
+# the default. (Hinekora has no Dawn-of-the-Hunt data — it's a newer currency.)
+ITEMS = {291: "Divine Orb", 295: "Mirror of Kalandra", 4287: "Hinekora's Lock", 287: "Chaos Orb"}
 DEFAULT_ITEM = 291
 # Softcore challenge/event leagues worth comparing (skip HC variants, Standard, Hardcore).
 SKIP = ("HC ", "Hardcore", "Standard")

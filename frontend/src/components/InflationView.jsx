@@ -123,13 +123,16 @@ export default function InflationView({ league }) {
 // day-0 = 100 and plotted by day-of-league, so the current league's inflation can
 // be read against past leagues at the same age. Data via poe2scout history.
 function CrossLeague() {
+  const [item, setItem] = useState(291)   // Divine (densest, all leagues) by default
   const [data, setData] = useState(null)
   const [err, setErr] = useState(null)
   const [busy, setBusy] = useState(true)
 
   useEffect(() => {
-    api.inflationCross().then(setData).catch(e => setErr(String(e.message || e))).finally(() => setBusy(false))
-  }, [])
+    setBusy(true)
+    api.inflationCross(item).then(setData).catch(e => setErr(String(e.message || e))).finally(() => setBusy(false))
+  }, [item])
+  const items = data?.items ?? [{ id: 291, name: 'Divine Orb' }]
 
   const { rows, keys } = useMemo(() => {
     const byAge = new Map()
@@ -147,7 +150,15 @@ function CrossLeague() {
 
   return (
     <div style={{ marginTop: 28 }}>
-      <h2>Across leagues <span className="muted" style={{ fontWeight: 400 }}>· {data?.item_name || 'Divine'} priced in Exalted, each league rebased to day-0 = 100 and aligned by day-of-league</span></h2>
+      <div className="board-bar">
+        <h2 style={{ margin: 0 }}>Across leagues <span className="muted" style={{ fontWeight: 400 }}>· {data?.item_name || 'Divine'} priced in Exalted, each league rebased to day-0 = 100 and aligned by day-of-league</span></h2>
+        <span className="spacer" />
+        <label className="hint">Anchor&nbsp;
+          <select value={item} onChange={e => setItem(Number(e.target.value))}>
+            {items.map(it => <option key={it.id} value={it.id}>{it.name}</option>)}
+          </select>
+        </label>
+      </div>
       {err && <div className="notice error">{err}</div>}
       <div className="chart-box" style={{ height: 340 }}>
         {busy && !data ? <div className="empty">Loading past-league history…</div>
