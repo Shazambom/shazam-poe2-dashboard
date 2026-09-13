@@ -285,16 +285,29 @@ async def inflation_cross(item: int = leaguehistory.DEFAULT_ITEM):
     """Age-aligned cross-league inflation (Divine-in-Exalted). Backfills from
     poe2scout on first call / when current-league data is stale, then serves."""
     res = leaguehistory.cross(item)
-    if not res["leagues"]:                       # cold cache — pull then serve
-        await leaguehistory.backfill()
+    if not res["leagues"]:                       # cold cache — quick anchors-only pull then serve
+        await leaguehistory.backfill(full=False)
         res = leaguehistory.cross(item)
+    return res
+
+
+@app.get("/api/inflation/marketcap")
+async def inflation_marketcap():
+    """Economy size per league in Mirrors (total value traded/day). Served from the
+    stored full-currency backfill; if that hasn't run yet, kick it in the background."""
+    res = leaguehistory.marketcap()
+    if not res["leagues"]:
+        asyncio.create_task(leaguehistory.backfill(full=True))
+        return {**res, "building": True}
     return res
 
 
 @app.post("/api/inflation/cross/refresh")
 async def inflation_cross_refresh(force: bool = False):
-    out = await leaguehistory.backfill(force=force)
-    return {**out, **leaguehistory.cross()}
+    # Fire-and-forget: the full backfill takes minutes (rate-limited), longer than any
+    # proxy/client timeout, and a disconnected request would be cancelled mid-way.
+    asyncio.create_task(leaguehistory.backfill(force=force, full=True))
+    return {"started": True}
 
 
 @app.get("/api/board")

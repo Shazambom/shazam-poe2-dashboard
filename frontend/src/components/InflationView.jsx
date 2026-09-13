@@ -115,6 +115,83 @@ export default function InflationView({ league }) {
       </p>
 
       <CrossLeague />
+      <MarketCap />
+    </div>
+  )
+}
+
+// Economy market cap: total value TRADED per day across all currencies, in Mirrors
+// (Σ volume × price ÷ mirror price). Traded throughput, not supply — labelled as such.
+function MarketCap() {
+  const [data, setData] = useState(null)
+  const [err, setErr] = useState(null)
+  const [busy, setBusy] = useState(true)
+
+  useEffect(() => {
+    api.inflationMarketcap().then(setData).catch(e => setErr(String(e.message || e))).finally(() => setBusy(false))
+  }, [])
+
+  const { rows, keys } = useMemo(() => {
+    const byAge = new Map()
+    const ks = []
+    for (const lg of data?.leagues ?? []) {
+      ks.push({ id: lg.league, current: lg.current })
+      for (const p of lg.points) {
+        if (!(p.mirrors > 0)) continue          // log scale needs positive values
+        const row = byAge.get(p.age) || { age: p.age }
+        row[lg.league] = p.mirrors
+        byAge.set(p.age, row)
+      }
+    }
+    return { rows: [...byAge.values()].sort((a, b) => a.age - b.age), keys: ks }
+  }, [data])
+  const cur = (data?.leagues ?? []).find(l => l.current)
+
+  return (
+    <div style={{ marginTop: 28 }}>
+      <h2 style={{ margin: 0 }}>Economy size <span className="muted" style={{ fontWeight: 400 }}>· total value traded per day, in Mirrors (all currencies), aligned by day-of-league</span></h2>
+      {err && <div className="notice error">{err}</div>}
+      {data?.building && <div className="notice" style={{ marginTop: 10 }}>Building economy history from poe2scout — check back in a minute.</div>}
+      {cur && (
+        <div className="infl-stats" style={{ marginTop: 12 }}>
+          <div className="stat">
+            <div className="stat-label">{cur.league} — traded today</div>
+            <div className="stat-val">{fmt.n(cur.latest_mirrors, 0)}<span className="pt-unit"> mir/day</span></div>
+            <div className="stat-sub">value changing hands per day</div>
+          </div>
+          <div className="stat">
+            <div className="stat-label">{cur.league} — traded so far</div>
+            <div className="stat-val">{fmt.n(cur.total_mirrors, 0)}<span className="pt-unit"> mir</span></div>
+            <div className="stat-sub">cumulative over {cur.days} days</div>
+          </div>
+        </div>
+      )}
+      <div className="chart-box" style={{ height: 320, marginTop: 12 }}>
+        {busy && !data ? <div className="empty">Loading…</div>
+          : rows.length < 2 ? <div className="empty">Economy history is still building — check back shortly.</div>
+          : (
+            <ResponsiveContainer>
+              <LineChart data={rows} margin={{ top: 8, right: 16, bottom: 4, left: 8 }}>
+                <XAxis dataKey="age" type="number" domain={['dataMin', 'dataMax']} tick={{ fill: '#8f95a5', fontSize: 11 }}
+                  tickFormatter={d => `d${d}`} />
+                <YAxis scale="log" domain={['auto', 'auto']} tick={{ fill: '#8f95a5', fontSize: 11 }} width={54}
+                  tickFormatter={v => fmt.n(v, 0)} />
+                <Tooltip contentStyle={{ background: '#20232c', border: '1px solid #464b5c', fontSize: 12 }}
+                  labelFormatter={d => `day ${d}`} formatter={(v) => [`${fmt.n(v, 0)} mir/day`]} />
+                <Legend wrapperStyle={{ fontSize: 12 }} />
+                {keys.map((k, i) => (
+                  <Line key={k.id} type="monotone" dataKey={k.id} name={k.id + (k.current ? ' (current)' : '')}
+                    stroke={SERIES[i % SERIES.length]} strokeWidth={k.current ? 2.8 : 1.4}
+                    dot={false} isAnimationActive={false} connectNulls />
+                ))}
+              </LineChart>
+            </ResponsiveContainer>
+          )}
+      </div>
+      <p className="hint" style={{ marginTop: 10 }}>
+        This is traded throughput — the value that changes hands per day, summed across every currency and priced in Mirrors.
+        It is not a supply-based market cap (total minted supply isn't observable). Log scale. History from poe2scout.
+      </p>
     </div>
   )
 }

@@ -46,6 +46,7 @@ export const api = {
   rateLimits: () => fetch('/api/ratelimits').then(j),
   inflation: (anchor, hours) => fetch('/api/inflation' + qs({ anchor, hours })).then(j),
   inflationCross: (item) => fetch('/api/inflation/cross' + qs({ item })).then(j),
+  inflationMarketcap: () => fetch('/api/inflation/marketcap').then(j),
   watches: () => fetch('/api/watches').then(j),
   putWatches: (folders) => put('/api/watches', { folders }),
   board: () => fetch('/api/board').then(j),

@@ -27,6 +27,7 @@ BASE = "https://api.poe2scout.com/poe2"
 # the default. (Hinekora has no Dawn-of-the-Hunt data — it's a newer currency.)
 ITEMS = {291: "Divine Orb", 295: "Mirror of Kalandra", 4287: "Hinekora's Lock", 287: "Chaos Orb"}
 DEFAULT_ITEM = 291
+MIRROR_ITEM = 295   # numeraire for the economy market cap
 # Softcore challenge/event leagues worth comparing (skip HC variants, Standard, Hardcore).
 SKIP = ("HC ", "Hardcore", "Standard")
 REFRESH_S = 12 * 3600   # re-pull current leagues at most twice a day; past leagues are final
@@ -52,9 +53,20 @@ def _stored_days(league: str, item_id: int) -> tuple[int, int | None]:
     return r["n"], r["mx"]
 
 
-async def backfill(force: bool = False) -> dict:
+async def _currency_item_ids(league: str) -> list[int]:
+    """All item ids in the 'currency' category for a league — the set we sum over
+    for the economy market cap."""
+    enc = urllib.parse.quote(league)
+    data = await _get(f"/Leagues/{enc}/Currencies/ByCategory?category=currency&perPage=250")
+    return [x["ItemId"] for x in data.get("Items", []) if x.get("ItemId")]
+
+
+async def backfill(force: bool = False, full: bool = True) -> dict:
     """Pull daily history for the target leagues × items into league_daily. Past
-    leagues are fetched once; current leagues refresh on a 12h cadence."""
+    leagues are fetched once; current leagues refresh on a 12h cadence.
+
+    full=True fetches every currency item (needed for the economy market cap);
+    full=False fetches only the named anchors (fast — used on a cold cross() call)."""
     fetched = {}
     try:
         leagues = await _leagues()
@@ -66,7 +78,13 @@ async def backfill(force: bool = False) -> dict:
         name, current = lg.get("Value"), bool(lg.get("IsCurrent"))
         if not name:
             continue
-        for item_id in ITEMS:
+        item_ids = set(ITEMS)
+        if full:
+            try:
+                item_ids |= set(await _currency_item_ids(name))
+            except Exception as exc:
+                log.warning("poe2scout currency list %s failed: %s", name, exc)
+        for item_id in item_ids:
             n, _mx = _stored_days(name, item_id)
             # past league already stored, or current league fetched recently → skip
             if n and not force and not current:
@@ -117,3 +135,45 @@ def cross(item_id: int = DEFAULT_ITEM) -> dict:
     leagues.sort(key=lambda x: (not x["current"], -x["days"]))
     return {"item_id": item_id, "item_name": ITEMS[item_id],
             "leagues": leagues, "items": [{"id": k, "name": v} for k, v in ITEMS.items()]}
+
+
+def marketcap() -> dict:
+    """Economy size per league, in Mirrors: the total value TRADED per day across all
+    currencies (Σ volume × price, in Exalted) converted to Mirrors via that day's
+    Mirror price. This is traded throughput (GDP-like), not a supply-based cap — total
+    minted supply isn't observable. Age-aligned per league, plus a cumulative total."""
+    with db.q() as c:
+        rows = c.execute("""SELECT league, item_id, day, close, volume FROM league_daily
+                            WHERE close>0 AND volume>0 ORDER BY league, day""").fetchall()
+    # per league: {day: total_exalted_traded}, and {day: mirror_price}
+    traded: dict[str, dict[str, float]] = {}
+    mirror: dict[str, dict[str, float]] = {}
+    for r in rows:
+        traded.setdefault(r["league"], {}).setdefault(r["day"], 0.0)
+        traded[r["league"]][r["day"]] += r["close"] * r["volume"]
+        if r["item_id"] == MIRROR_ITEM:
+            mirror.setdefault(r["league"], {})[r["day"]] = r["close"]
+    current = set(db.kv_get("lh_current", []))
+    leagues = []
+    for name, by_day in traded.items():
+        days = sorted(by_day)
+        mp = mirror.get(name, {})
+        last_price = None
+        pts, cum = [], 0.0
+        for i, d in enumerate(days):
+            price = mp.get(d) or last_price          # carry the last Mirror price over gaps
+            last_price = price or last_price
+            if not price:
+                continue                              # no Mirror price yet → skip early days
+            val = by_day[d] / price                   # traded value that day, in Mirrors
+            cum += val
+            pts.append({"age": i, "day": d, "mirrors": round(val, 2), "cum": round(cum, 2)})
+        if not pts:
+            continue
+        leagues.append({
+            "league": name, "days": len(pts), "points": pts,
+            "total_mirrors": round(cum, 2), "latest_mirrors": pts[-1]["mirrors"],
+            "current": name in current,
+        })
+    leagues.sort(key=lambda x: (not x["current"], -x["days"]))
+    return {"unit": "Mirror of Kalandra", "leagues": leagues}
