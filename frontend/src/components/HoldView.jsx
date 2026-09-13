@@ -11,27 +11,37 @@ function ConfBadge({ c }) {
   return <span className={`conf conf-${level}`} title={`confidence ${c} (data depth × liquidity)`}>{Math.round(c * 100)}</span>
 }
 
+const NUMERAIRES = [['divine', 'vs Divine'], ['mirror', 'vs Mirror'], ['lock', 'vs Lock']]
+
 export default function HoldView() {
   const [horizon, setHorizon] = useState('long')
   const [category, setCategory] = useState('all')
+  const [numeraire, setNumeraire] = useState('divine')
   const [data, setData] = useState(null)
   const [err, setErr] = useState(null)
   const [busy, setBusy] = useState(true)
 
   useEffect(() => {
     setBusy(true)
-    api.hold(horizon, category).then(d => { setData(d); setErr(null) }).catch(e => setErr(String(e.message || e))).finally(() => setBusy(false))
-  }, [horizon, category])
+    api.hold(horizon, category, numeraire).then(d => { setData(d); setErr(null) }).catch(e => setErr(String(e.message || e))).finally(() => setBusy(false))
+  }, [horizon, category, numeraire])
 
   const cats = data?.categories ?? ['all']
   const rows = useMemo(() => data?.assets ?? [], [data])
   const delta = data?.delta_days ?? 30
+  const numName = data?.numeraire_name ?? 'Divine'
+  const unit = { divine: 'Div', mirror: 'Mir', lock: 'Lock' }[numeraire] || 'Div'
 
   return (
     <div className="single hold">
       <div className="board-bar">
-        <h2 style={{ margin: 0 }}>What to hold <span className="muted" style={{ fontWeight: 400 }}>· ranked by value retained/gained vs Divine{data?.league ? ` · ${data.league}` : ''}</span></h2>
+        <h2 style={{ margin: 0 }}>What to hold <span className="muted" style={{ fontWeight: 400 }}>· ranked by value retained/gained vs {numName}{data?.league ? ` · ${data.league}` : ''}</span></h2>
         <span className="spacer" />
+        <div className="seg" title="Hard-asset numeraire — what 'holds value' is measured against">
+          {NUMERAIRES.map(([k, label]) => (
+            <button key={k} className={`seg-btn ${numeraire === k ? 'on' : ''}`} onClick={() => setNumeraire(k)}>{label}</button>
+          ))}
+        </div>
         <div className="seg">
           {HORIZONS.map(([k, label]) => (
             <button key={k} className={`seg-btn ${horizon === k ? 'on' : ''}`} onClick={() => setHorizon(k)}>{label}</button>
@@ -54,7 +64,7 @@ export default function HoldView() {
           <thead>
             <tr>
               <th>#</th><th>Asset</th><th>Category</th>
-              <th className="num" title="Return in Divine over the selected horizon">Return (Div)</th>
+              <th className="num" title={`Return in ${numName} over the selected horizon`}>Return ({unit})</th>
               <th className="num" title="Worst peak-to-trough drop over the league (holding risk)">Max drawdown</th>
               <th className="num" title="Return × confidence — the ranking score">Hold score</th>
               <th className="num" title={`Predicted return over the next ${delta}d, from how this asset behaved at the same league-day in past leagues`}>Predicted +{delta}d</th>
@@ -84,7 +94,7 @@ export default function HoldView() {
       )}
 
       <p className="hint" style={{ marginTop: 12 }}>
-        Everything is priced in <b>Divine</b> (holding value = beating Divine, not the inflating Exalted). Hold score = return × confidence;
+        Everything is priced in <b>{numName}</b> (holding value = beating it, not the inflating Exalted). Mirror &amp; Lock trade thinly, so their coverage/confidence is lower than Divine. Hold score = return × confidence;
         max drawdown is the worst dip you'd have sat through. <b>Predicted</b> averages how each asset moved from this same league-day in past
         leagues (recency-weighted, ±dispersion) — needs ≥2 past leagues. Low-confidence rows are thin/obscure markets; weight them cautiously.
         Late-league note: supply-throttled crafting mats (omens, top essences, refined catalysts) tend to hold; bulk-farmed commodities drift down.

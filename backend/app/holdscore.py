@@ -23,6 +23,10 @@ from .leaguehistory import _age
 from .settings import get_settings
 
 DIVINE_ID = 291
+# Numeraires to price "held value" against. Divine = liquid default; Mirror & Lock
+# (Hinekora's Lock) are the hardest anchors but trade thinly, so coverage is lower.
+NUMERAIRES = {"divine": (291, "Divine Orb"), "mirror": (295, "Mirror of Kalandra"),
+              "lock": (4287, "Hinekora's Lock")}
 HORIZON_DAYS = {"short": 7, "med": 30, "long": None}   # None = whole league
 SHRINK_K = 8            # data-count shrinkage: confidence = n/(n+K)
 VOL_FLOOR = 200.0       # median daily units for full liquidity confidence
@@ -33,19 +37,20 @@ _cache: dict[str, tuple[float, dict]] = {}
 _TTL = 600
 
 
-def _build_league(rows) -> tuple[dict[int, dict[int, tuple[float, float]]], str | None]:
+def _build_league(rows, num_id) -> tuple[dict[int, dict[int, tuple[float, float]]], str | None]:
     """rows: (item_id, day, close_ex, volume) for ONE league. Returns
-    {item_id: {age: (price_in_divine, volume)}} and the league's day-0 date."""
-    div = {day: close for iid, day, close, _v in rows if iid == DIVINE_ID and close}
+    {item_id: {age: (price_in_numeraire, volume)}} and the league's day-0 date. Days on
+    which the numeraire didn't trade are dropped (thin anchors → sparser series)."""
+    num = {day: close for iid, day, close, _v in rows if iid == num_id and close}
     days = sorted({r[1] for r in rows})
     if not days:
         return {}, None
     day0 = days[0]
     per: dict[int, dict[int, tuple[float, float]]] = {}
     for iid, day, close, vol in rows:
-        d = div.get(day)
-        if d and close:
-            per.setdefault(iid, {})[_age(day, day0)] = (close / d, vol or 0)
+        n = num.get(day)
+        if n and close:
+            per.setdefault(iid, {})[_age(day, day0)] = (close / n, vol or 0)
     return per, day0
 
 
@@ -102,10 +107,13 @@ def _predict(item_id, N, delta, past):
             "n_leagues": len(fwd)}
 
 
-def leaderboard(horizon: str = "long", category: str = "all") -> dict:
+def leaderboard(horizon: str = "long", category: str = "all", numeraire: str = "divine") -> dict:
     if horizon not in HORIZON_DAYS:
         horizon = "long"
-    key = f"{horizon}|{category}"
+    if numeraire not in NUMERAIRES:
+        numeraire = "divine"
+    num_id, num_name = NUMERAIRES[numeraire]
+    key = f"{horizon}|{category}|{numeraire}"
     hit = _cache.get(key)
     if hit and time.time() - hit[0] < _TTL:
         return hit[1]
@@ -121,7 +129,7 @@ def leaderboard(horizon: str = "long", category: str = "all") -> dict:
 
     built, day0s = {}, {}
     for lg, rws in by_league.items():
-        built[lg], day0s[lg] = _build_league(rws)
+        built[lg], day0s[lg] = _build_league(rws, num_id)
     if cur_name not in built:   # viewing a league with no data yet → pick a current/newest one
         current = set(db.kv_get("lh_current", []))
         cur_name = next((l for l in built if l in current), None) or (max(built, key=lambda l: day0s[l] or "") if built else None)
@@ -132,7 +140,7 @@ def leaderboard(horizon: str = "long", category: str = "all") -> dict:
 
     assets = []
     for iid, series in cur.items():
-        if iid == DIVINE_ID:                    # the numeraire itself (return ≈ 0 by construction)
+        if iid == num_id:                       # the numeraire itself (return ≈ 0 by construction)
             continue
         name, cat = meta.get(iid, (str(iid), "?"))
         if category != "all" and cat != category:
@@ -153,6 +161,8 @@ def leaderboard(horizon: str = "long", category: str = "all") -> dict:
     assets.sort(key=lambda x: -x["hold"])
     cats = sorted({a["category"] for a in assets})
     res = {"league": cur_name, "horizon": horizon, "delta_days": delta,
+           "numeraire": numeraire, "numeraire_name": num_name,
+           "numeraires": [{"id": k, "name": v[1]} for k, v in NUMERAIRES.items()],
            "categories": ["all"] + cats, "count": len(assets), "assets": assets}
     _cache[key] = (time.time(), res)
     return res
