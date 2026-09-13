@@ -242,6 +242,17 @@ function buildMenu() {
 function relaunch() { app.relaunch(); app.exit(0) }
 
 // ------------------------------------------------------------------- boot
+// Single-instance lock: a second launch (or the installer relaunching us) hands
+// focus to the existing window instead of spawning a duplicate process. Without
+// this, a lingering copy can block the NSIS installer ("cannot be closed").
+if (!app.requestSingleInstanceLock()) {
+  app.quit()
+} else {
+  app.on('second-instance', () => {
+    if (win) { if (win.isMinimized()) win.restore(); win.focus() }
+  })
+}
+
 app.whenReady().then(async () => {
   nativeTheme.themeSource = 'dark'
   await startBackend()

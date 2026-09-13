@@ -1,7 +1,7 @@
 {
   "name": "poe2-dashboard-desktop",
   "productName": "PoE2 Dashboard",
-  "version": "0.2.4",
+  "version": "0.2.5",
   "description": "Exchange-loop dashboard for Path of Exile 2 — desktop app",
   "main": "src/main.js",
   "author": "Shazambom",
@@ -60,12 +60,19 @@
           "arch": [
             "x64"
           ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "x64"
+          ]
         }
       ]
     },
     "nsis": {
       "oneClick": true,
-      "perMachine": false
+      "perMachine": false,
+      "runAfterFinish": false
     }
   }
 }
