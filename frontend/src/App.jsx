@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { api, fmt, bus, surface } from './lib/api.js'
+import { connectBridge, connectSessionWithToast } from './lib/session.js'
 import RoutesView from './components/RoutesView.jsx'
 import MarketView from './components/MarketView.jsx'
 import SettingsView from './components/SettingsView.jsx'
@@ -20,6 +21,7 @@ export default function App() {
   const [currencies, setCurrencies] = useState(null)
   const [leagues, setLeagues] = useState([])
   const [toasts, setToasts] = useState([])
+  const [connecting, setConnecting] = useState(false)
   const toastId = useRef(0)
 
   const refreshHeader = async () => {
@@ -51,11 +53,18 @@ export default function App() {
     } catch {}
   }
 
+  const doConnect = async () => {
+    setConnecting(true)
+    try { await connectSessionWithToast(refreshHeader) } finally { setConnecting(false) }
+  }
+
   const digestOk = feedState(status?.digest?.last_fetch, 2 * 3600)
-  const bookOk = feedState(status?.orderbook?.last_fetch, 3600, status?.session?.connected)
+  const connected = !!status?.session?.connected
+  const bookOk = feedState(status?.orderbook?.last_fetch, 3600, connected)
   const ref = capital?.reference ?? 'ref'
   const backfilling = status?.digest?.backfilling
   const league = status?.league ?? ''
+  const bridge = connectBridge()   // 'desktop' | 'extension' | null
 
   return (
     <div className="app">

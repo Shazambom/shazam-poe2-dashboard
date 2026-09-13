@@ -3,3 +3,8 @@ data/
 node_modules/
 dist/
 __pycache__/
+desktop/node_modules/
+desktop/release/
+desktop/app-dist/
+desktop/backend-bin/
+desktop/.venv-build/

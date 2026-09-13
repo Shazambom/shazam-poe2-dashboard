@@ -17,3 +17,5 @@ services:
       - backend
     ports:
       - "${DASHBOARD_PORT:-8080}:80"
+    volumes:
+      - ./downloads:/downloads:ro

@@ -1,0 +1,36 @@
+{
+  "name": "poe2-dashboard-desktop",
+  "productName": "PoE2 Dashboard",
+  "version": "0.1.0",
+  "description": "Exchange-loop dashboard for Path of Exile 2 — desktop app",
+  "main": "src/main.js",
+  "author": "Shazambom",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "build:frontend": "cd ../frontend && npm run build && rm -rf ../desktop/app-dist && cp -R dist ../desktop/app-dist",
+    "dist:mac": "npm run build:frontend && electron-builder --mac",
+    "dist:win": "npm run build:frontend && electron-builder --win",
+    "publish": "./publish.sh"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.1.8"
+  },
+  "dependencies": {
+    "electron-updater": "^6.3.9"
+  },
+  "build": {
+    "appId": "com.shazambom.poe2dashboard",
+    "productName": "PoE2 Dashboard",
+    "directories": { "output": "release" },
+    "files": ["src/**/*", "app-dist/**/*"],
+    "extraResources": [
+      { "from": "backend-bin", "to": "backend-bin", "filter": ["**/*"] }
+    ],
+    "publish": [{ "provider": "generic", "url": "http://192.168.1.250:8080/downloads" }],
+    "mac": { "target": ["zip", "dmg"], "category": "public.app-category.games", "identity": null },
+    "win": { "target": ["nsis"] },
+    "nsis": { "oneClick": true, "perMachine": false }
+  }
+}

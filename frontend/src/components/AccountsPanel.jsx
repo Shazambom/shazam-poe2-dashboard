@@ -40,6 +40,16 @@ export default function AccountsPanel({ onChange }) {
     window.postMessage({ source: 'poe2arb', cmd: 'connect' }, window.location.origin)
     setTimeout(() => setBusy(b => { if (b) setMsg({ ok: false, text: 'No answer from the extension — reload it on chrome://extensions and refresh this page.' }); return false }), 8000)
   }
+  const desktop = typeof window !== 'undefined' && window.poe2desktop
+  const desktopConnect = async () => {
+    setBusy(true); setMsg(null)
+    try {
+      const r = await window.poe2desktop.connectSession()
+      setMsg({ ok: !!r.ok, text: r.message })
+      if (r.ok) { await load(); onChange?.() }
+    } catch (e) { setMsg({ ok: false, text: String(e.message || e) }) }
+    setBusy(false)
+  }
 
   const connect = async () => {
     setBusy(true); setMsg(null)
@@ -62,7 +72,14 @@ export default function AccountsPanel({ onChange }) {
         </p>
       ) : (
         <>
-          {ext ? (
+          {desktop ? (
+            <div className="row" style={{ margin: '10px 0' }}>
+              <button className="btn primary" disabled={busy} onClick={desktopConnect}>
+                {busy ? 'Connecting…' : 'Connect trade session'}</button>
+              <span className="hint">One click. If you're not signed in to pathofexile.com yet, a login window opens and
+                the session connects itself the moment you finish.</span>
+            </div>
+          ) : ext ? (
             <div className="row" style={{ margin: '10px 0' }}>
               <button className="btn primary" disabled={busy} onClick={extConnect}>
                 {busy ? 'Connecting…' : 'Connect trade session'}</button>
