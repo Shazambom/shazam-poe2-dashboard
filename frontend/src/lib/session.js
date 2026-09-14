@@ -58,8 +58,9 @@ const TRADE_BASE = 'https://www.pathofexile.com/trade2'
 
 export const uid = () => Math.random().toString(36).slice(2, 9)
 
-// The trade search page for a league (the Trade tab's home).
-export const tradeHome = (league) => `${TRADE_BASE}/search/${encodeURIComponent(league || 'Standard')}`
+// The trade search page for a league (the Trade tab's home). PoE2 URLs carry a `poe2`
+// realm segment: /trade2/search/poe2/{league}[/{slug}].
+export const tradeHome = (league) => `${TRADE_BASE}/search/poe2/${encodeURIComponent(league || 'Standard')}`
 
 // One owner of the stored watch-search shape, built from a parsed trade URL.
 export const searchFromParsed = (p) => ({
@@ -69,13 +70,15 @@ export const searchFromParsed = (p) => ({
 // Reconstruct a trade-search URL from a stored {type, slug}, injecting the league
 // at open time (never stored). live=true → GGG's native live search.
 export function tradeUrl({ type, slug }, league, live) {
-  const u = `${TRADE_BASE}/${type || 'search'}/${encodeURIComponent(league)}/${slug}`
+  const u = `${TRADE_BASE}/${type || 'search'}/poe2/${encodeURIComponent(league)}/${slug}`
   return live ? `${u}/live` : u
 }
 
 // Parse a pasted trade URL into { type, slug, live } (league is read but dropped).
+// Handles the PoE2 realm segment: /trade2/{type}/poe2/{league}/{slug}[/live] as well as
+// the older realm-less /trade2/{type}/{league}/{slug} shape.
 export function parseTradeUrl(url) {
-  const m = String(url).match(/\/trade2?\/([a-z]+)\/[^/]+\/([^/?#\s]+)(\/live)?/i)
+  const m = String(url).match(/\/trade2?\/([a-z]+)\/(?:poe2\/)?[^/]+\/([^/?#\s]+?)(\/live)?(?:[/?#]|$)/i)
   if (!m) return null
   return { type: m[1], slug: m[2], live: !!m[3] }
 }

@@ -420,6 +420,31 @@ if (!app.requestSingleInstanceLock()) {
   })
 }
 
+// DEV (UI_SMOKE=1): drive the renderer to Trading → Live, emit synthetic pings, and
+// screenshot the real Electron window so the alert UI can be verified. Never runs shipped.
+async function runUiSmoke() {
+  const sleep = (ms) => new Promise(r => setTimeout(r, ms))
+  const out = process.env.UI_SMOKE_OUT || path.join(app.getPath('temp'), 'arbiter-uismoke.png')
+  try { win.show(); win.focus(); win.webContents.focus() } catch {}
+  await sleep(4000)
+  await win.webContents.executeJavaScript(`(() => {
+    const t = [...document.querySelectorAll('.tabs button')].find(b => b.textContent.trim().startsWith('Trading')); if (t) t.click();
+    setTimeout(() => { const s = [...document.querySelectorAll('.subtabs button')].find(b => b.textContent.trim()==='Live'); if (s) s.click() }, 400);
+    return document.querySelectorAll('.tabs button').length })()`)
+  await sleep(1500)
+  try { require('./trade').engine.emitTestPing(); await sleep(250); require('./trade').engine.emitTestPing() } catch (e) { console.log('[uismoke] emit failed', String(e)) }
+  await sleep(2500)
+  for (let i = 0; i < 3; i++) {
+    try {
+      const img = await win.webContents.capturePage()
+      const png = img.toPNG()
+      if (png && png.length > 8000) { fs.writeFileSync(out, png); console.log('[uismoke] wrote', out, png.length); return }
+    } catch (e) { console.log('[uismoke] capture attempt failed', String(e)) }
+    await sleep(1200)
+  }
+  console.log('[uismoke] capture produced empty frames')
+}
+
 app.whenReady().then(async () => {
   nativeTheme.themeSource = 'dark'
   await startBackend()
@@ -443,9 +468,23 @@ app.whenReady().then(async () => {
         '[typeof window.poe2desktop?.connectSession, typeof window.poe2desktop?.openTrade].join(",")')
       console.log(`[diag] poe2desktop bridge: connect+openTrade = ${ok}`)   // 'function,function' when live
     } catch (e) { console.log('[diag] bridge check failed:', String(e)) }
+    if (process.env.UI_SMOKE) runUiSmoke().catch(e => console.log('[uismoke] failed:', String(e)))
   })
   setupUpdates()
   startEe2Integration()   // self-gates on EE2 presence; dormant if EE2 isn't installed
+  try { require('./trade').registerTrade(() => win) } catch (e) { console.log('[trade] register failed:', String(e)) }
+  try {
+    const { registerHotkey } = require('./trade/hotkey.js')
+    const combo = settings.focusHotkey || 'CommandOrControl+G'
+    const r = registerHotkey(() => win, combo)
+    if (!r.ok) console.log('[hotkey] combo unavailable:', combo)
+    ipcMain.handle('hotkey:get', () => ({ combo: settings.focusHotkey || 'CommandOrControl+G' }))
+    ipcMain.handle('hotkey:set', (_e, combo) => {
+      const res = registerHotkey(() => win, combo)
+      if (res.ok) { settings.focusHotkey = combo; saveSettings() }
+      return res
+    })
+  } catch (e) { console.log('[hotkey] register failed:', String(e)) }
 })
 
 // The embedded Trade <webview> shares the default session (so it's logged in). Keep
@@ -463,5 +502,6 @@ app.on('web-contents-created', (_e, contents) => {
   })
 })
 
-app.on('window-all-closed', () => { stopEe2Integration(); stopBackend(); app.quit() })
-app.on('before-quit', () => { stopEe2Integration(); stopBackend() })
+const stopTrade = () => { try { require('./trade').engine.stopAll() } catch {}; try { require('./trade/hotkey.js').unregisterAll() } catch {} }
+app.on('window-all-closed', () => { stopTrade(); stopEe2Integration(); stopBackend(); app.quit() })
+app.on('before-quit', () => { stopTrade(); stopEe2Integration(); stopBackend() })

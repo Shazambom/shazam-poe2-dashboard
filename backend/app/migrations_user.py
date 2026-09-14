@@ -24,7 +24,60 @@ log = logging.getLogger("poe2arb.migrate")
 
 # kv keys that belong to the user (mirrors _USER_KV in db.py). Kept local so this
 # module has no import cycle with db.py. `secret:` is handled by prefix below.
-_LEGACY_USER_KV = {"settings", "watches", "oauth_pending", "meta_overrides"}
+_LEGACY_USER_KV = {"settings", "watches", "oauth_pending", "meta_overrides", "trading_workspace"}
+
+
+def watches_to_workspace(folders: list) -> dict:
+    """Pure transform: flat `watches` folders[] -> the nested `trading_workspace` v2 doc.
+    Shared by migration #2 and the read-time coercion in main.py. Preserves every folder
+    and search (ids, titles, {type,slug,live,done}); the league is still injected at open
+    time (never stored)."""
+    tree = []
+    for f in folders or []:
+        if not isinstance(f, dict):
+            continue
+        children = []
+        for s in f.get("searches", []) or []:
+            if not isinstance(s, dict):
+                continue
+            children.append({
+                "id": "n_" + str(s.get("id", "")),
+                "kind": "search",
+                "name": s.get("title", "Search"),
+                "type": s.get("type", "search"),
+                "slug": s.get("slug", ""),
+                "live": bool(s.get("live", False)),
+                "done": bool(s.get("done", False)),
+                "notify": {"sound": True, "orb": True, "os": True},
+            })
+        tree.append({
+            "id": "n_" + str(f.get("id", "")),
+            "kind": "folder",
+            "name": f.get("title", "Folder"),
+            "open": f.get("open", True) is not False,
+            "children": children,
+        })
+    return {"version": 2, "tree": tree, "layout": None, "openTabs": []}
+
+
+def _m2_watches_to_workspace(conn: sqlite3.Connection) -> None:
+    """Forward-only, idempotent, data-preserving: derive `trading_workspace` (v2 nested
+    tree) from the legacy flat `watches` kv blob. Leaves `watches` untouched as a backup
+    (roll-forward posture: fix this transform and re-derive, never revert user data)."""
+    existing = conn.execute("SELECT value FROM kv WHERE key='trading_workspace'").fetchone()
+    if existing:
+        return  # idempotent
+    row = conn.execute("SELECT value FROM kv WHERE key='watches'").fetchone()
+    try:
+        folders = json.loads(row[0]) if row and row[0] else []
+        if not isinstance(folders, list):
+            folders = []
+    except (ValueError, TypeError):
+        log.warning("m2: watches blob unparseable; seeding empty workspace (legacy left intact)")
+        folders = []
+    ws = watches_to_workspace(folders)
+    conn.execute("INSERT INTO kv(key, value) VALUES('trading_workspace', ?)", (json.dumps(ws),))
+    log.info("m2: derived trading_workspace with %d folders (watches kept as backup)", len(ws["tree"]))
 
 
 def _is_user_kv(key: str) -> bool:
@@ -105,4 +158,5 @@ def _m1_split_from_legacy(conn: sqlite3.Connection) -> None:
 
 USER_MIGRATIONS: list[tuple[int, str, object]] = [
     (1, "initial split from legacy poe2arb.sqlite", _m1_split_from_legacy),
+    (2, "derive trading_workspace tree from flat watches", _m2_watches_to_workspace),
 ]

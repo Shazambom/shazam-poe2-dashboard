@@ -119,6 +119,112 @@ a { color: var(--live); }
   background: linear-gradient(90deg, var(--gold-2), var(--gold));
   box-shadow: 0 0 10px rgba(212,172,82,.55);
 }
+/* Consolidated tabs with an internal sub-nav (Trading / Strategy / Economy). */
+.trading, .section { display: flex; flex-direction: column; min-height: 0; }
+.subtabs { display: flex; gap: 2px; padding: 4px 0 10px; border-bottom: 1px solid var(--line); margin-bottom: 12px; }
+.subtabs button {
+  position: relative; background: none; border: 0; padding: 5px 12px 8px; color: var(--muted); cursor: pointer;
+  transition: color .15s var(--ease); font-weight: 500; font-size: 13px;
+}
+.subtabs button[aria-selected="true"] { color: var(--ink); }
+.subtabs button:hover { color: var(--ink-2); }
+.subtab-underline {
+  position: absolute; left: 10px; right: 10px; bottom: 0; height: 2px; border-radius: 2px;
+  background: linear-gradient(90deg, var(--gold-2), var(--gold));
+  box-shadow: 0 0 8px rgba(212,172,82,.5);
+}
+.live-empty { padding: 48px 24px; text-align: center; max-width: 520px; margin: 0 auto; }
+.live-empty-title { font-size: 15px; font-weight: 600; color: var(--ink); margin-bottom: 6px; }
+
+/* Workspace: filesystem tree (left) + dockview panels (right). */
+.workspace { display: flex; gap: 12px; height: calc(100vh - 190px); min-height: 380px; }
+.ws-rail { width: 300px; flex: 0 0 300px; display: flex; flex-direction: column;
+  background: var(--surface-1, #16181d); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.ws-rail-head { display: flex; align-items: center; gap: 6px; padding: 10px 10px 8px; border-bottom: 1px solid var(--line); }
+.ws-add { display: flex; gap: 6px; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+.ws-add input { flex: 1; min-width: 0; }
+.ws-tree { flex: 1; min-height: 0; overflow: hidden; padding: 4px; }
+.ws-node { display: flex; align-items: center; gap: 6px; height: 100%; padding: 0 6px; border-radius: 6px; font-size: 13px; cursor: default; }
+.ws-node:hover { background: var(--line); }
+.ws-node.done .ws-name { text-decoration: line-through; color: var(--muted); }
+.ws-caret { width: 14px; text-align: center; color: var(--muted); cursor: pointer; user-select: none; }
+.ws-icon { font-size: 12px; opacity: .85; }
+.ws-name { flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); }
+.ws-edit { flex: 1; min-width: 0; background: var(--bg); border: 1px solid var(--gold); border-radius: 4px; color: var(--ink); padding: 1px 4px; }
+.ws-mini { background: none; border: 0; color: var(--muted); cursor: pointer; padding: 2px 4px; font-size: 12px; opacity: 0; transition: opacity .12s; }
+.ws-node:hover .ws-mini { opacity: 1; }
+.ws-mini:hover { color: var(--ink); }
+.live-badge { font-size: 10px; font-weight: 700; color: #e8615f; border: 1px solid rgba(232,97,95,.5); border-radius: 4px; padding: 0 4px; letter-spacing: .04em; text-transform: uppercase; }
+.ws-panels { flex: 1; min-width: 0; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.wsp { padding: 16px; }
+.wsp-name { font-size: 15px; font-weight: 600; background: none; border: 0; border-bottom: 1px solid transparent; color: var(--ink); width: 100%; }
+.wsp-name:hover, .wsp-name:focus { border-bottom-color: var(--line-strong); outline: none; }
+.wsp-meta { font-size: 12px; margin: 6px 0 14px; }
+.wsp-actions { display: flex; gap: 8px; margin-bottom: 12px; }
+.wsp-empty { padding: 24px; color: var(--muted); }
+.empty.small { padding: 20px 8px; font-size: 12px; color: var(--muted); text-align: center; }
+
+/* VaalPingOrb — corrupted-red live-ping alert on the Trading tab. Intensity encodes
+   urgency (state-driven, not rAF). Reduced-motion swaps spin/pulse for a static glow. */
+.vaal-orb { position: absolute; top: -2px; right: -10px; width: 22px; height: 22px; padding: 0;
+  background: none; border: 0; cursor: pointer; line-height: 0; z-index: 2; }
+.vaal-orb-img, .vaal-orb-glyph { width: 20px; height: 20px; display: block; border-radius: 50%;
+  filter: drop-shadow(0 0 4px rgba(232,60,60,.9)); }
+.vaal-orb-glyph { color: #e83c3c; font-size: 18px; }
+.vaal-orb.hot .vaal-orb-img { animation: vaal-spin 1.5s linear infinite, vaal-pulse 1s var(--ease) infinite; }
+.vaal-orb.warm .vaal-orb-img { animation: vaal-spin 2.4s linear infinite, vaal-pulse 1.8s var(--ease) infinite; }
+.vaal-orb.cool .vaal-orb-img { animation: vaal-spin 3s linear infinite; opacity: .9; }
+.vaal-orb.cooling .vaal-orb-img { animation: vaal-spin 4s linear infinite; filter: drop-shadow(0 0 3px rgba(232,60,60,.5)) saturate(.6); opacity: .75; }
+.vaal-orb.cold .vaal-orb-img { filter: grayscale(.7) drop-shadow(0 0 2px rgba(160,60,60,.4)); opacity: .55; }
+.vaal-orb.shatter .vaal-orb-img { animation: vaal-shatter .5s var(--ease) forwards; }
+.vaal-orb-badge { position: absolute; top: -6px; right: -8px; min-width: 15px; height: 15px; padding: 0 3px;
+  background: #e83c3c; color: #fff; font-size: 10px; font-weight: 800; line-height: 15px; text-align: center;
+  border-radius: 8px; box-shadow: 0 0 6px rgba(232,60,60,.7); }
+@keyframes vaal-spin { to { transform: rotate(360deg); } }
+@keyframes vaal-pulse { 0%,100% { filter: drop-shadow(0 0 3px rgba(232,60,60,.7)); } 50% { filter: drop-shadow(0 0 9px rgba(232,60,60,1)); } }
+@keyframes vaal-shatter { 0% { transform: scale(1); opacity: 1; } 60% { transform: scale(1.3); opacity: .8; } 100% { transform: scale(0.2); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .vaal-orb .vaal-orb-img { animation: none !important; filter: drop-shadow(0 0 7px rgba(232,60,60,.95)) !important; }
+}
+
+/* Live view + ping cards */
+.live-view { padding: 4px 2px 40px; max-width: 760px; }
+.live-head { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+.live-newest { margin-bottom: 18px; }
+.live-recent-head { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; margin: 14px 0 6px; }
+.live-srow { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-bottom: 1px solid var(--line); font-size: 13px; }
+.ls-name { color: var(--ink); }
+.ping-card { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: 1px solid var(--line);
+  border-radius: 10px; background: var(--surface-1, #16181d); margin-bottom: 8px; }
+.ping-card.compact { padding: 8px 12px; }
+.ping-info { flex: 1; min-width: 0; }
+.ping-name { font-weight: 600; color: var(--ink); }
+.ping-sub { display: flex; align-items: center; gap: 10px; font-size: 12px; margin-top: 2px; }
+.ping-presence { font-weight: 600; }
+.btn.teleport { font-weight: 700; min-width: 130px; }
+.btn.teleport.hot { background: linear-gradient(180deg,#e8615f,#c8403e); color: #fff; border-color: #c8403e; box-shadow: 0 0 12px rgba(232,60,60,.4); }
+.btn.teleport.stale { background: #7a3a3a; color: #f0d0d0; }
+.btn.teleport.sending { opacity: .7; }
+.btn.teleport.pending { background: var(--gain); color: #08120c; border-color: var(--gain); }
+.btn.teleport.rate { background: #8a6a2a; color: #fff; }
+.btn.teleport.gone, .btn.teleport.expired { background: var(--line); color: var(--muted); }
+
+/* sonner most-recent-ping banner (custom DOM) */
+.ping-banner { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: #191b22;
+  border: 1px solid #c8403e; border-radius: 10px; box-shadow: 0 8px 30px rgba(0,0,0,.5), 0 0 14px rgba(232,60,60,.35); min-width: 300px; }
+.ping-banner .pb-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); }
+.ping-banner .pb-dot.online { background: #6fce9f; } .ping-banner .pb-dot.afk { background: #e0a83a; } .ping-banner .pb-dot.offline { background: #e8615f; }
+.ping-banner .pb-main { flex: 1; min-width: 0; }
+.ping-banner .pb-name { font-weight: 600; color: var(--ink); font-size: 13px; }
+.ping-banner .pb-sub { font-size: 12px; }
+
+.tos-note { display: flex; align-items: center; gap: 12px; padding: 8px 12px; margin-bottom: 12px;
+  background: rgba(232,97,95,.08); border: 1px solid rgba(232,97,95,.35); border-radius: 8px; font-size: 12px; color: var(--ink-2); }
+.tos-note button { flex: 0 0 auto; }
+.settings-section { margin-top: 28px; }
+.settings-section h3 { margin: 0 0 10px; }
+.set-row { display: flex; align-items: center; gap: 10px; margin: 8px 0; font-size: 13px; }
+
 .feeds { margin-left: auto; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; color: var(--muted); font-size: 13px; }
 .feed { display: inline-flex; align-items: center; gap: 6px; }
 .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--line-strong); }

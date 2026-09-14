@@ -6,7 +6,7 @@ import Cur from './Cur.jsx'
 // ⌘K command palette — the fast path. Fuzzy-search across the board's currencies
 // (open its detail), the views (jump there), and leagues (switch). Keyboard-first:
 // ↑↓ to move, ↵ to run, esc to close. Opened via ⌘K/Ctrl-K or the top-bar chip.
-export default function CommandPalette({ open, onClose, tabs, onGoTab, leagues, onSetLeague, onOpenCurrency }) {
+export default function CommandPalette({ open, onClose, tabs, onGoTab, subDests = [], onGoSub, leagues, onSetLeague, onOpenCurrency }) {
   const [q, setQ] = useState('')
   const [rows, setRows] = useState([])   // board currencies (id + name)
   const [sel, setSel] = useState(0)
@@ -24,6 +24,7 @@ export default function CommandPalette({ open, onClose, tabs, onGoTab, leagues, 
   const items = useMemo(() => {
     const list = []
     for (const t of tabs) list.push({ kind: 'view', id: t, label: t, hint: 'Go to view' })
+    for (const d of subDests) list.push({ kind: 'sub', id: `${d.section}:${d.sub}`, section: d.section, sub: d.sub, label: d.label, hint: `${d.section} view` })
     for (const r of rows) list.push({ kind: 'cur', id: r.id, label: r.name || r.id, hint: 'Open on board' })
     for (const l of leagues) list.push({ kind: 'league', id: l.id, label: l.text || l.id, hint: 'Switch league' })
     const term = q.trim().toLowerCase()
@@ -40,6 +41,7 @@ export default function CommandPalette({ open, onClose, tabs, onGoTab, leagues, 
   const run = (it) => {
     if (!it) return
     if (it.kind === 'view') onGoTab(it.id)
+    else if (it.kind === 'sub') onGoSub?.(it.section, it.sub)
     else if (it.kind === 'league') onSetLeague(it.id)
     else if (it.kind === 'cur') onOpenCurrency(it.id)
     onClose()
@@ -66,7 +68,7 @@ export default function CommandPalette({ open, onClose, tabs, onGoTab, leagues, 
               {items.slice(0, 60).map((it, i) => (
                 <div key={it.kind + it.id} className={`cmdk-item ${i === sel ? 'sel' : ''}`}
                   onMouseMove={() => setSel(i)} onClick={() => run(it)}>
-                  <span className="cmdk-ic">{it.kind === 'cur' ? <Cur id={it.id} size={16} /> : it.kind === 'league' ? '🏆' : '↗'}</span>
+                  <span className="cmdk-ic">{it.kind === 'cur' ? <Cur id={it.id} size={16} /> : it.kind === 'league' ? '🏆' : it.kind === 'sub' ? '→' : '↗'}</span>
                   <span className="cmdk-label">{it.label}</span>
                   <span className="cmdk-hint">{it.hint}</span>
                 </div>

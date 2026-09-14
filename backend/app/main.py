@@ -12,7 +12,7 @@ from pydantic import BaseModel
 
 from fastapi.responses import RedirectResponse, PlainTextResponse
 
-from . import arbitrage, db, digest, gamedata, gateway, holdscore, inflation, leaguehistory, oauth, orderbook, recipes, session
+from . import arbitrage, db, digest, gamedata, gateway, holdscore, inflation, leaguehistory, migrations_user, oauth, orderbook, recipes, session
 from .currencies import registry
 from .settings import get_settings, save_settings
 
@@ -379,6 +379,38 @@ def get_watches():
 def put_watches(body: WatchesBody):
     db.kv_set("watches", body.folders)
     return {"folders": body.folders}
+
+
+# Filesystem workspace (nested tree) — the successor to the flat watches organiser.
+# Stored under a NEW user-kv key `trading_workspace`; the legacy `watches` blob is kept
+# untouched as a backup (see migrations_user._m2). /api/watches stays alive so a lagging
+# desktop build during a batched rollout keeps working.
+def _empty_workspace() -> dict:
+    return {"version": 2, "tree": [], "layout": None, "openTabs": []}
+
+
+class WorkspaceBody(BaseModel):
+    workspace: dict
+
+
+@app.get("/api/trading/workspace")
+def get_workspace():
+    ws = db.kv_get("trading_workspace")
+    if isinstance(ws, dict) and ws.get("version") == 2:
+        return {"workspace": ws}
+    # Belt-and-suspenders: coerce a legacy watches blob on read if the migration hasn't run
+    # (e.g. a dev DB). Non-destructive — does not write.
+    legacy = db.kv_get("watches", [])
+    return {"workspace": migrations_user.watches_to_workspace(legacy) if legacy else _empty_workspace()}
+
+
+@app.put("/api/trading/workspace")
+def put_workspace(body: WorkspaceBody):
+    ws = body.workspace
+    if ws.get("version") != 2 or not isinstance(ws.get("tree"), list):
+        raise HTTPException(status_code=400, detail="workspace must be {version:2, tree:[...]}")
+    db.kv_set("trading_workspace", ws)
+    return {"workspace": ws}
 
 
 @app.get("/api/inflation")

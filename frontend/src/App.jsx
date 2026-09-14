@@ -1,23 +1,33 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'motion/react'
+import { Toaster } from 'sonner'
 import { api, fmt, bus, surface } from './lib/api.js'
 import { nav } from './lib/nav.js'
+import { useLiveWiring } from './lib/liveWiring.js'
+import VaalPingOrb from './components/VaalPingOrb.jsx'
 import CommandPalette from './components/CommandPalette.jsx'
 import { connectBridge, connectSessionWithToast } from './lib/session.js'
 import BoardView from './components/BoardView.jsx'
-import HoldView from './components/HoldView.jsx'
-import InflationView from './components/InflationView.jsx'
-import WatchesView from './components/WatchesView.jsx'
-import TradeView from './components/TradeView.jsx'
-import RoutesView from './components/RoutesView.jsx'
-import MarketView from './components/MarketView.jsx'
+import StrategyView from './components/StrategyView.jsx'
+import EconomyView from './components/EconomyView.jsx'
+import TradingView from './components/TradingView.jsx'
 import Cur from './components/Cur.jsx'
 import SettingsView from './components/SettingsView.jsx'
 import DownloadApp from './components/DownloadApp.jsx'
 import UpdateStatus from './components/UpdateStatus.jsx'
 import BrandOrb from './components/BrandOrb.jsx'
 
-const TABS = ['Board', 'Hold', 'Inflation', 'Trade', 'Watches', 'Routes', 'Market', 'Settings']
+const TABS = ['Board', 'Strategy', 'Economy', 'Trading', 'Settings']
+// Sub-views inside the consolidated tabs, surfaced in ⌘K so they stay one keystroke away.
+const SUB_DESTS = [
+  { section: 'Strategy', sub: 'hold', label: 'Hold' },
+  { section: 'Strategy', sub: 'arbitrage', label: 'Arbitrage' },
+  { section: 'Economy', sub: 'inflation', label: 'Inflation' },
+  { section: 'Economy', sub: 'market', label: 'Market' },
+  { section: 'Trading', sub: 'browse', label: 'Browse' },
+  { section: 'Trading', sub: 'watches', label: 'Workspace' },
+  { section: 'Trading', sub: 'live', label: 'Live' },
+]
 
 function feedState(ts, staleAfter, enabled = true) {
   if (!enabled) return 'off'
@@ -68,6 +78,15 @@ export default function App() {
     return () => window.removeEventListener('keydown', h)
   }, [])
 
+  // Jump to Trading → Live (used by the ping banner, the VaalPingOrb, and the hotkey).
+  const goLive = React.useCallback(() => { setTab('Trading'); setTimeout(() => nav.openTrading('live'), 0) }, [])
+  useLiveWiring(goLive)
+  // The global focus hotkey (desktop) raises the window here; jump to Live + focus newest.
+  useEffect(() => {
+    if (!window.poe2desktop?.trade?.onFocusLive) return
+    return window.poe2desktop.trade.onFocusLive(() => goLive())
+  }, [goLive])
+
   const setLeague = async (league) => {
     if (!league || league === status?.league) return
     try {
@@ -110,6 +129,7 @@ export default function App() {
           {TABS.map(t => (
             <button key={t} role="tab" aria-selected={tab === t} onClick={() => setTab(t)}>
               {t}
+              {t === 'Trading' && <VaalPingOrb onClick={goLive} />}
               {tab === t && <motion.span className="tab-underline" layoutId="tab-underline"
                 transition={{ type: 'spring', stiffness: 420, damping: 34 }} />}
             </button>
@@ -149,20 +169,21 @@ export default function App() {
       </header>
 
       {tab === 'Board' && <BoardView key={league} status={status} />}
-      {tab === 'Hold' && <HoldView key={league} />}
-      {tab === 'Inflation' && <InflationView key={league} league={league} />}
-      {tab === 'Trade' && <TradeView key={league} league={league} />}
-      {tab === 'Watches' && <WatchesView key={league} league={league} />}
-      {tab === 'Routes' && <RoutesView key={league} capital={capital} status={status} currencies={currencies} onCapitalSaved={refreshHeader} />}
-      {tab === 'Market' && <MarketView key={league} currencies={currencies} />}
+      {tab === 'Strategy' && <StrategyView key={league} league={league} capital={capital} status={status} currencies={currencies} onCapitalSaved={refreshHeader} />}
+      {tab === 'Economy' && <EconomyView key={league} league={league} currencies={currencies} />}
+      {tab === 'Trading' && <TradingView key={league} league={league} />}
       {tab === 'Settings' && <SettingsView currencies={currencies} status={status} onSaved={refreshHeader} />}
 
       <CommandPalette
         open={cmdOpen} onClose={() => setCmdOpen(false)}
         tabs={TABS} onGoTab={setTab}
+        subDests={SUB_DESTS}
+        onGoSub={(section, sub) => { setTab(section); setTimeout(() => (section === 'Trading' ? nav.openTrading(sub) : nav.openSub(section, sub)), 0) }}
         leagues={leagues} onSetLeague={setLeague}
         onOpenCurrency={(id) => { setTab('Board'); setTimeout(() => nav.openCurrency(id), 0) }}
       />
+
+      <Toaster position="top-right" theme="dark" offset={64} toastOptions={{ unstyled: false }} />
 
       <div className="toasts">
         <AnimatePresence>

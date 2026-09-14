@@ -110,7 +110,7 @@ CREATE TABLE IF NOT EXISTS market_meta (
 # kv keys owned by the user (persist + migrate). Everything else is operational and
 # lands in market.sqlite.kv_ops (ships in the snapshot, disposable). `secret:`-prefixed
 # keys (encrypted session/oauth) are always user. See docs/db-maintenance.md.
-_USER_KV = {"settings", "watches", "oauth_pending", "meta_overrides"}
+_USER_KV = {"settings", "watches", "oauth_pending", "meta_overrides", "trading_workspace"}
 
 
 def _is_user_kv(key: str) -> bool:

@@ -18,4 +18,24 @@ contextBridge.exposeInMainWorld('poe2desktop', {
   onUpdate: (cb) => { const h = (_e, s) => cb(s); ipcRenderer.on('update:status', h); return () => ipcRenderer.removeListener('update:status', h) },
   checkUpdate: () => ipcRenderer.invoke('update:check'),
   installUpdate: () => ipcRenderer.invoke('update:install'),
+
+  // Live-search engine (desktop-only). Renderer sends intents; main runs the WS + fetch
+  // + teleport against the user's own logged-in session and pushes pings/state back.
+  trade: {
+    startSearch: (itemId, league, slug, type) => ipcRenderer.invoke('trade:start-search', { itemId, league, slug, type }),
+    stopSearch: (itemId) => ipcRenderer.invoke('trade:stop-search', { itemId }),
+    engineState: () => ipcRenderer.invoke('trade:engine-state'),
+    teleport: (token) => ipcRenderer.invoke('trade:teleport', { token }),
+    onPing: (cb) => { const h = (_e, p) => cb(p); ipcRenderer.on('trade:ping', h); return () => ipcRenderer.removeListener('trade:ping', h) },
+    onEngineState: (cb) => { const h = (_e, s) => cb(s); ipcRenderer.on('trade:engine-state', h); return () => ipcRenderer.removeListener('trade:engine-state', h) },
+    onSearchState: (cb) => { const h = (_e, s) => cb(s); ipcRenderer.on('trade:search-state', h); return () => ipcRenderer.removeListener('trade:search-state', h) },
+    onEngineError: (cb) => { const h = (_e, s) => cb(s); ipcRenderer.on('trade:engine-error', h); return () => ipcRenderer.removeListener('trade:engine-error', h) },
+    onRateState: (cb) => { const h = (_e, s) => cb(s); ipcRenderer.on('trade:rate-state', h); return () => ipcRenderer.removeListener('trade:rate-state', h) },
+    onFocusLive: (cb) => { const h = () => cb(); ipcRenderer.on('hotkey:focus-live', h); return () => ipcRenderer.removeListener('hotkey:focus-live', h) },
+  },
+  // Global focus hotkey config (desktop-only).
+  hotkey: {
+    get: () => ipcRenderer.invoke('hotkey:get'),
+    set: (combo) => ipcRenderer.invoke('hotkey:set', combo),
+  },
 })

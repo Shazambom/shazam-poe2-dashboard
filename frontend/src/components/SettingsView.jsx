@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import { api, surface, toast } from '../lib/api.js'
 import AccountsPanel from './AccountsPanel.jsx'
 import RecipesView from './RecipesView.jsx'
+import TradingSettings from './TradingSettings.jsx'
 
 // Everything auto-saves (debounced) — there is no Save button. The league lives
 // in the top bar; essentials are visible; the rest sits behind "Advanced".
@@ -61,6 +62,8 @@ export default function SettingsView({ currencies, status, onSaved }) {
       <div className="two-col">
         <div>
           <AccountsPanel onChange={onSaved} />
+
+          <TradingSettings />
 
           <h2 style={{ marginTop: 28 }}>Market</h2>
           <p className="hint">The league is set from the dropdown in the top bar.</p>
