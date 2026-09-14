@@ -12,7 +12,16 @@
 ; double-quote (wraps the -Command argument).
 
 !macro preInit
-  nsExec::Exec "powershell -NoProfile -ExecutionPolicy Bypass -Command $\"$$ErrorActionPreference='SilentlyContinue'; $$dir=Join-Path $$env:LOCALAPPDATA 'Programs\poe2-dashboard-desktop'; Get-Process | Where-Object { $$_.ProcessName -match '^(PoE2 Dashboard|ShazamDash)$$' -or ($$_.Path -and $$_.Path -like (Join-Path $$dir '*')) } | Stop-Process -Force; Start-Sleep -Milliseconds 600; if (Test-Path $$dir) { Remove-Item -LiteralPath $$dir -Recurse -Force }; Get-ChildItem 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall' | Where-Object { (Get-ItemProperty $$_.PSPath).DisplayName -match 'PoE2 Dashboard|ShazamDash' } | Remove-Item -Recurse -Force; foreach ($$n in 'PoE2 Dashboard','ShazamDash') { Remove-Item (Join-Path ([Environment]::GetFolderPath('Desktop')) ($$n+'.lnk')) -Force; Remove-Item (Join-Path ([Environment]::GetFolderPath('StartMenu')) ('Programs\'+$$n+'.lnk')) -Force }$\""
+  ; Force-kill the app AND its bundled backend (whole process trees) so nothing holds
+  ; a lock on the install dir — the backend, poe2arb-backend.exe, is the process that
+  ; broke updates once the app became self-contained.
+  nsExec::Exec 'taskkill /F /T /IM "ShazamDash.exe"'
+  Pop $0
+  nsExec::Exec 'taskkill /F /T /IM "PoE2 Dashboard.exe"'
+  Pop $0
+  nsExec::Exec 'taskkill /F /T /IM "poe2arb-backend.exe"'
+  Pop $0
+  nsExec::Exec "powershell -NoProfile -ExecutionPolicy Bypass -Command $\"$$ErrorActionPreference='SilentlyContinue'; $$dir=Join-Path $$env:LOCALAPPDATA 'Programs\poe2-dashboard-desktop'; Get-Process | Where-Object { $$_.ProcessName -match '^(PoE2 Dashboard|ShazamDash|poe2arb-backend)$$' -or ($$_.Path -and $$_.Path -like (Join-Path $$dir '*')) } | Stop-Process -Force; Start-Sleep -Milliseconds 900; if (Test-Path $$dir) { Remove-Item -LiteralPath $$dir -Recurse -Force }; Get-ChildItem 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall' | Where-Object { (Get-ItemProperty $$_.PSPath).DisplayName -match 'PoE2 Dashboard|ShazamDash' } | Remove-Item -Recurse -Force; foreach ($$n in 'PoE2 Dashboard','ShazamDash') { Remove-Item (Join-Path ([Environment]::GetFolderPath('Desktop')) ($$n+'.lnk')) -Force; Remove-Item (Join-Path ([Environment]::GetFolderPath('StartMenu')) ('Programs\'+$$n+'.lnk')) -Force }$\""
   Pop $0
 !macroend
 

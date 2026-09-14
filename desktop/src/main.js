@@ -90,7 +90,19 @@ async function startBackend() {
 }
 
 function stopBackend() {
-  if (backendProc) { try { backendProc.kill() } catch {} backendProc = null }
+  if (!backendProc) return
+  const pid = backendProc.pid
+  // Kill the whole backend tree. On Windows a plain .kill() can leave the child
+  // running, which then locks the install dir and breaks the next update — so force
+  // the tree down with taskkill /T /F.
+  try {
+    if (process.platform === 'win32' && pid) {
+      spawn('taskkill', ['/pid', String(pid), '/T', '/F'], { stdio: 'ignore' })
+    } else {
+      backendProc.kill()
+    }
+  } catch {}
+  backendProc = null
 }
 
 // ------------------------------------------------------- local UI server
@@ -295,8 +307,12 @@ function setupUpdates() {
 
 ipcMain.handle('update:check', () => { try { _autoUpdater?.checkForUpdates() } catch {} })
 ipcMain.handle('update:install', () => {
-  // Quit and install the downloaded update, then relaunch into the new version.
-  try { _autoUpdater?.quitAndInstall(false, true) } catch (e) { _emitUpdate({ phase: 'error', message: String(e) }) }
+  // Kill the bundled backend FIRST so it doesn't lock the install dir during the
+  // update (that left users with a dead/removed app), then quit + install + relaunch.
+  try { stopBackend() } catch {}
+  setTimeout(() => {
+    try { _autoUpdater?.quitAndInstall(false, true) } catch (e) { _emitUpdate({ phase: 'error', message: String(e) }) }
+  }, 400)
 })
 
 // ------------------------------------------------------------------- menu
