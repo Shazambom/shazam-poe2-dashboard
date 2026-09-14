@@ -146,8 +146,10 @@ export default function BoardView({ status }) {
     .sort((a, b) => (prices[b] || 0) - (prices[a] || 0))
     .map(id => ({ id, name: nameById[id] || id })), [prices, nameById])
   // Effective numeraire for a card: user override → backend's highest-volume default → reference.
+  // Never price a currency against itself (a 1:1 is useless) — fall back to divine/ref.
   const numFor = (r) => {
-    const pick = numById[r.id] || r.pref_num || ref
+    let pick = numById[r.id] || r.pref_num || ref
+    if (pick === r.id) pick = (r.id !== 'divine' && prices.divine != null) ? 'divine' : ref
     return prices[pick] != null ? pick : ref
   }
 

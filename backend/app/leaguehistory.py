@@ -97,6 +97,14 @@ def scout_history(league: str, days: int = 60) -> dict[str, list]:
 
 _backfill_lock = asyncio.Lock()   # only one backfill crawl at a time (shared rate limit)
 
+# Live backfill progress, surfaced to the UI so a cold start streams in visibly
+# ("building your dashboard…") instead of showing a blank/stale board.
+progress: dict = {
+    "running": False, "phase": "idle", "league": None,
+    "league_done": 0, "league_total": 0, "leagues_done": 0, "leagues_total": 0,
+    "started": None, "updated": None, "last": None,
+}
+
 
 def _age(day: str, day0: str) -> int:
     """Whole days between two YYYY-MM-DD strings — real day-of-league, gap-proof."""
@@ -203,14 +211,19 @@ async def backfill(force: bool = False, full: bool = True) -> dict:
         return {"skipped": "backfill already running"}
     async with _backfill_lock:
         fetched = {}
+        progress.update({"running": True, "phase": "leagues", "started": time.time(),
+                         "updated": time.time(), "league": None, "last": None,
+                         "league_done": 0, "league_total": 0, "leagues_done": 0, "leagues_total": 0})
         try:
             leagues = await _leagues()
         except Exception as exc:
+            progress.update({"running": False, "phase": "error", "updated": time.time()})
             log.warning("poe2scout leagues fetch failed: %s", exc)
             return {"error": str(exc)}
+        progress["leagues_total"] = len(leagues)
         db.kv_set("lh_current", [l["Value"] for l in leagues if l.get("IsCurrent") and l.get("Value")])
         stored = _stored_counts()
-        for lg in leagues:
+        for li, lg in enumerate(leagues):
             name, current = lg.get("Value"), bool(lg.get("IsCurrent"))
             if not name:
                 continue
@@ -220,7 +233,11 @@ async def backfill(force: bool = False, full: bool = True) -> dict:
                     item_ids = await _universe(name)
                 except Exception as exc:
                     log.warning("poe2scout universe %s failed: %s", name, exc)
+            progress.update({"league": name, "league_total": len(item_ids), "league_done": 0,
+                             "leagues_done": li, "phase": "crawling", "updated": time.time()})
             for item_id in item_ids:
+                progress["league_done"] += 1
+                progress["updated"] = time.time()
                 complete = db.kv_get(f"lh_complete:{name}:{item_id}", False)
                 # A past league marked complete (full history captured) is final → skip.
                 # Partial stores (never marked complete) and current→past transitions
@@ -247,6 +264,8 @@ async def backfill(force: bool = False, full: bool = True) -> dict:
                         db.kv_set(f"lh_complete:{name}:{item_id}", True)
                     fetched[f"{name}/{item_id}"] = len(rows)
         _cache.clear()   # fresh data → drop cross()/marketcap() caches
+        progress.update({"running": False, "phase": "done", "updated": time.time(),
+                         "leagues_done": len(leagues)})
         return {"fetched": fetched, "leagues": len(leagues)}
 
 

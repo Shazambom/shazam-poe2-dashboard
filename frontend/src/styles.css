@@ -49,6 +49,9 @@ a { color: var(--live); }
 .ver-chip:hover { color: #cfd3da; border-color: rgba(255,255,255,.25); }
 .update-chip.ok { color: #6bd08a; }
 .update-chip.err { color: #e06b6b; cursor: help; }
+/* Cold-backfill indicator: the header orb spins and swaps orbs each rotation. */
+.brand-logo.orb-spin { animation: spin 1s linear infinite; filter: drop-shadow(0 0 4px rgba(120,180,240,.7)); }
+@media (prefers-reduced-motion: reduce) { .brand-logo.orb-spin { animation-duration: 3s; } }
 .topbar .league { color: var(--muted); font-weight: 400; margin-left: 8px; }
 .tabs { display: flex; gap: 2px; margin-left: 8px; }
 .tabs button {

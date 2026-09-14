@@ -12,6 +12,7 @@ import Cur from './components/Cur.jsx'
 import SettingsView from './components/SettingsView.jsx'
 import DownloadApp from './components/DownloadApp.jsx'
 import UpdateStatus from './components/UpdateStatus.jsx'
+import BrandOrb from './components/BrandOrb.jsx'
 
 const TABS = ['Board', 'Hold', 'Inflation', 'Trade', 'Watches', 'Routes', 'Market', 'Settings']
 
@@ -79,9 +80,7 @@ export default function App() {
   return (
     <div className="app">
       <header className="topbar">
-        <img className="brand-logo"
-          src="https://web.poecdn.com/gen/image/WzI1LDE0LHsiZiI6IjJESXRlbXMvQ3VycmVuY3kvQW5udWxsT3JiIiwic2NhbGUiOjEsInJlYWxtIjoicG9lMiJ9XQ/2daba8ccca/AnnullOrb.png"
-          alt="" width="24" height="24" onError={e => { e.currentTarget.style.display = 'none' }} />
+        <BrandOrb onDone={refreshHeader} />
         <h1>Arbiter</h1>
         {appVersion && (
           <button className="ver-chip" title="Click to check for updates"

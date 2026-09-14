@@ -110,6 +110,19 @@ async def install_log(request: Request):
     return {"ok": True}
 
 
+@app.get("/api/backfill")
+def backfill_status():
+    """Live cold-start progress so the UI can stream 'building your dashboard…' instead
+    of showing a blank/stale board on a fresh (self-contained) install."""
+    p = dict(leaguehistory.progress)
+    # A crawl that hasn't ticked in a while (rare mid-crawl error) is not 'running'.
+    if p.get("running") and p.get("updated") and time.time() - p["updated"] > 30:
+        p["running"], p["phase"] = False, "stalled"
+    tot = p.get("league_total") or 0
+    p["pct"] = round(100 * (p.get("league_done") or 0) / tot, 1) if tot else (100.0 if p.get("phase") == "done" else 0.0)
+    return p
+
+
 @app.get("/api/diag")
 async def diag():
     """Local self-diagnostics for the (self-contained) desktop app: settings, DB row

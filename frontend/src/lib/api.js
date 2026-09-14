@@ -31,6 +31,7 @@ const put = (url, body) => fetch(url, { method: 'PUT', headers: { 'Content-Type'
 export const api = {
   status: () => fetch('/api/status').then(j),
   diag: () => fetch('/api/diag').then(j),
+  backfill: () => fetch('/api/backfill').then(j),
   currencies: () => fetch('/api/currencies').then(j),
   mapCurrency: (metadata_id, trade_id) => post('/api/currencies/map', { metadata_id, trade_id }),
   capital: () => fetch('/api/capital').then(j),

@@ -628,18 +628,19 @@ def board() -> dict:
     R = s["reference"]
     league = s["league"]
     rv = g.ref_values()
-    # Per-currency default numeraire = the counterpart of its highest-volume market
-    # (value/hour = traded units × their reference value). So Divine defaults to
-    # Exalted, omens to Divine, etc. — whatever each actually trades against most.
-    best = {}
+    # Per-currency counterpart markets, ranked by traded value/hour (units × ref value)
+    # — a fair, direction-symmetric measure of each market's size. Used to pick the
+    # default numeraire: the highest-volume counterpart that still prints a readable
+    # price (see the readability walk below).
+    ranked: dict[str, list[tuple[float, str]]] = {}
     for (a, b), e in g.edges.items():
         if e.kind == "recipe" or not e.vol_in_per_h:
             continue
         volr = e.vol_in_per_h * (rv.get(a) or 0.0)
         for node, other in ((a, b), (b, a)):
-            cur = best.get(node)
-            if cur is None or volr > cur[0]:
-                best[node] = (volr, other)
+            ranked.setdefault(node, []).append((volr, other))
+    for lst in ranked.values():
+        lst.sort(reverse=True)
     from . import leaguehistory
     scout = leaguehistory.scout_prices(league)   # poe2scout fallback prices (Exalted), by name/slug
     scout_hist = leaguehistory.scout_history(league)   # poe2scout daily trend, by name/slug
@@ -672,14 +673,24 @@ def board() -> dict:
         change_pct = None
         if len(trend) >= 2 and trend[0]["v"]:
             change_pct = (trend[-1]["v"] - trend[0]["v"]) / trend[0]["v"] * 100
-        # Default numeraire: the currency's highest-volume counterpart when the GGG
-        # exchange digest has volume for it. Currencies without per-pair volume (poe2scout-
-        # only, or a thin/just-synced digest) can't have a "top market", so tier by value
-        # instead: mirror-class → Mirror, divine-class → Divine, else the reference.
-        top = best.get(c, (0.0, None))[1]
-        if top and top != c and rv.get(top):
-            pref = top
-        else:
+        # Default numeraire: the highest-VOLUME counterpart whose price stays readable.
+        # Cheap currencies' biggest market is often Divine (huge value moves even on
+        # modest flow), which would print a useless micro-price (Regal = 0.0034 div) — so
+        # walk down the volume ranking and take the first counterpart whose price is at
+        # least MIN_READABLE of it. Divine keeps its Chaos market, Annul keeps Divine
+        # (0.5 div is legible), but Regal/Chaos/Vaal drop to Exalted. Currencies with no
+        # liquid, readable market (poe2scout-only, or thin digest) tier by value instead.
+        MIN_READABLE = 0.5   # numeraire units per 1 of the currency; below this, step down
+        pref, seen = None, set()
+        for _volr, other in ranked.get(c, ()):
+            if other == c or other in seen:
+                continue
+            seen.add(other)
+            nv = rv.get(other)
+            if nv and mid and mid / nv >= MIN_READABLE:
+                pref = other
+                break
+        if pref is None:
             mv, dv = rv.get("mirror"), rv.get("divine")
             if mid and mv and mid >= mv:
                 pref = "mirror"
@@ -687,6 +698,9 @@ def board() -> dict:
                 pref = "divine"
             else:
                 pref = R
+        # Universal rule: NOTHING is ever priced against itself (a 1:1 is useless).
+        if pref == c:
+            pref = "divine" if (c != "divine" and rv.get("divine")) else R
         rows.append({
             "id": c, "name": registry.name(c), "mid": mid, "buy": buy, "sell": sell,
             "spread": spread, "spread_pct": spread_pct, "source": source, "age_s": age,
