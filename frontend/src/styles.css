@@ -316,9 +316,10 @@ details.adv[open] summary { color: var(--ink-2); margin-bottom: 8px; }
 
 /* ---------- hold leaderboard ---------- */
 .seg { display: inline-flex; border: 1px solid var(--line-strong); border-radius: var(--radius); overflow: hidden; }
-.seg-btn { background: var(--bg); border: 0; border-right: 1px solid var(--line-strong); color: var(--muted); padding: 5px 11px; cursor: pointer; font-size: 12.5px; }
+.seg-btn { background: var(--bg); border: 0; border-right: 1px solid var(--line-strong); color: var(--muted); padding: 5px 11px; cursor: pointer; font-size: 12.5px; transition: background .14s var(--ease), color .14s var(--ease); }
 .seg-btn:last-child { border-right: 0; }
-.seg-btn.on { background: var(--gold); color: #1b1608; font-weight: 600; }
+.seg-btn:hover:not(.on) { background: var(--panel-hi); color: var(--ink-2); }
+.seg-btn.on { background: linear-gradient(135deg, var(--gold-2), var(--gold) 65%); color: #1b1608; font-weight: 600; box-shadow: 0 1px 0 rgba(255,255,255,.25) inset; }
 .conf { display: inline-block; min-width: 26px; text-align: center; padding: 1px 5px; border-radius: 3px; font-size: 11px; font-weight: 600; }
 .conf-hi { background: rgba(111,185,143,.18); color: var(--gain); }
 .conf-mid { background: rgba(201,162,74,.18); color: var(--gold); }
