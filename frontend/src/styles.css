@@ -445,6 +445,13 @@ details.adv[open] summary { color: var(--ink-2); margin-bottom: 8px; }
 .streaming::after { content: ''; display: inline-block; width: 8px; height: 8px; margin-left: 6px; border: 2px solid var(--gold); border-top-color: transparent; border-radius: 50%; animation: spin 0.8s linear infinite; vertical-align: -1px; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .chart-box { height: 260px; border: 1px solid var(--line); border-radius: var(--radius-lg); padding: 10px; background: linear-gradient(165deg, var(--panel-hi) -30%, var(--panel) 40%); box-shadow: var(--shadow-1); }
+/* custom chart tooltip — matches the app's elevated dark surfaces */
+.chart-tip { background: rgba(20,23,30,.96); border: 1px solid var(--line-strong); border-radius: 8px; padding: 8px 10px; box-shadow: var(--shadow-2); font-size: 12px; min-width: 150px; }
+.chart-tip-label { color: var(--muted); font-size: 11px; margin-bottom: 5px; }
+.chart-tip-row { display: flex; align-items: center; gap: 7px; padding: 1px 0; }
+.chart-tip-dot { width: 8px; height: 8px; border-radius: 2px; flex: none; }
+.chart-tip-name { color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chart-tip-val { margin-left: auto; font-weight: 600; color: var(--ink); }
 .empty { padding: 40px 0; color: var(--muted); }
 .empty b { color: var(--ink-2); font-weight: 500; }
 code { background: var(--bg); padding: 1px 5px; border-radius: 3px; font-size: 12.5px; }

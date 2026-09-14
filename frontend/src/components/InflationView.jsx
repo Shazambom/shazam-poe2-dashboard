@@ -1,14 +1,35 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine, Legend } from 'recharts'
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine, Legend, CartesianGrid } from 'recharts'
 import { api, fmt } from '../lib/api.js'
 import Cur from './Cur.jsx'
 
-// Fixed categorical hues (assigned in order, never cycled) — distinct in the app's
-// dark theme. Identity is carried by the legend, never colour alone.
-const SERIES = ['#7fb4d9', '#6fb98f', '#c9a24a', '#b39ddb', '#d2705f', '#5fc8c0', '#e0b866', '#9aa0b5']
-const AXIS = { fill: '#8f95a5', fontSize: 11 }
-const TOOLTIP = { background: '#20232c', border: '1px solid #464b5c', fontSize: 12 }
+// Fixed categorical hues (assigned in order, never cycled) — validated colorblind-safe
+// against the dark surface (OKLCH lightness band + chroma floor + CVD/normal ΔE, via the
+// dataviz palette validator). Identity is carried by the legend, never colour alone.
+const SERIES = ['#4a90d9', '#b88a2f', '#3aa568', '#a878e0', '#e8615f', '#12a89a', '#cc7a2f', '#cf68a8']
+const AXIS = { fill: '#8b91a1', fontSize: 11 }
+const GRID = '#2b3040'
+const CURSOR = { stroke: '#d4ac52', strokeWidth: 1, strokeDasharray: '3 3', strokeOpacity: 0.5 }
 const day = (h) => new Date(h * 1000).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit' })
+
+// Dark, elevated tooltip: rows sorted by value, each with its series dot — reads like
+// the rest of the app instead of Recharts' default white box.
+function ChartTooltip({ active, payload, label, labelFmt, valueFmt, nameFmt }) {
+  if (!active || !payload || !payload.length) return null
+  const rows = payload.filter(p => p.value != null).sort((a, b) => b.value - a.value)
+  return (
+    <div className="chart-tip">
+      <div className="chart-tip-label">{labelFmt ? labelFmt(label) : label}</div>
+      {rows.map(p => (
+        <div key={p.dataKey} className="chart-tip-row">
+          <span className="chart-tip-dot" style={{ background: p.color }} />
+          <span className="chart-tip-name">{nameFmt ? nameFmt(p.dataKey) : p.name}</span>
+          <span className="chart-tip-val">{valueFmt ? valueFmt(p.value) : p.value}</span>
+        </div>
+      ))}
+    </div>
+  )
+}
 
 // Fold a list of series (each {points:[...]}) into row-per-x objects for Recharts.
 // meta(series) -> {id, ...} identifies the line; optional filter(point) drops points.
@@ -34,16 +55,17 @@ function LeagueAgeChart({ rows, keys, scale, refLine, valueFmt }) {
   return (
     <ResponsiveContainer>
       <LineChart data={rows} margin={{ top: 8, right: 16, bottom: 4, left: 8 }}>
-        <XAxis dataKey="age" type="number" domain={['dataMin', 'dataMax']} tick={AXIS}
+        <CartesianGrid stroke={GRID} strokeDasharray="2 4" vertical={false} />
+        <XAxis dataKey="age" type="number" domain={['dataMin', 'dataMax']} tick={AXIS} axisLine={{ stroke: GRID }} tickLine={false}
           tickFormatter={d => `d${d}`} label={{ value: 'day of league', position: 'insideBottom', offset: -2, ...AXIS }} />
-        <YAxis scale={scale || 'auto'} domain={['auto', 'auto']} tick={AXIS} width={54} tickFormatter={v => fmt.n(v, 0)} />
-        <Tooltip contentStyle={TOOLTIP} labelFormatter={d => `day ${d}`} formatter={valueFmt} />
+        <YAxis scale={scale || 'auto'} domain={['auto', 'auto']} tick={AXIS} width={54} axisLine={false} tickLine={false} tickFormatter={v => fmt.n(v, 0)} />
+        <Tooltip cursor={CURSOR} content={<ChartTooltip labelFmt={d => `day ${d}`} valueFmt={v => fmt.n(v, 0)} />} />
         {refLine != null && <ReferenceLine y={refLine} stroke="#464b5c" strokeDasharray="3 3" />}
         <Legend wrapperStyle={{ fontSize: 12 }} />
         {keys.map((k, i) => (
           <Line key={k.id} type="monotone" dataKey={k.id} name={k.id + (k.current ? ' (current)' : '')}
             stroke={SERIES[i % SERIES.length]} strokeWidth={k.current ? 2.8 : 1.4}
-            dot={false} isAnimationActive={false} connectNulls />
+            dot={false} activeDot={{ r: 4, strokeWidth: 2, stroke: 'var(--panel)' }} isAnimationActive={false} connectNulls />
         ))}
       </LineChart>
     </ResponsiveContainer>
@@ -109,14 +131,15 @@ export default function InflationView({ league }) {
           : (
             <ResponsiveContainer>
               <LineChart data={rows} margin={{ top: 8, right: 16, bottom: 0, left: 0 }}>
-                <XAxis dataKey="t" tickFormatter={day} tick={AXIS} minTickGap={48} />
-                <YAxis domain={['auto', 'auto']} tick={AXIS} width={44} tickFormatter={v => v.toFixed(0)} />
-                <Tooltip contentStyle={TOOLTIP} labelFormatter={day} formatter={(v, id) => [v?.toFixed?.(1), nameOf(id)]} />
-                <ReferenceLine y={100} stroke="#464b5c" strokeDasharray="3 3" />
+                <CartesianGrid stroke={GRID} strokeDasharray="2 4" vertical={false} />
+                <XAxis dataKey="t" tickFormatter={day} tick={AXIS} minTickGap={48} axisLine={{ stroke: GRID }} tickLine={false} />
+                <YAxis domain={['auto', 'auto']} tick={AXIS} width={44} axisLine={false} tickLine={false} tickFormatter={v => v.toFixed(0)} />
+                <Tooltip cursor={CURSOR} content={<ChartTooltip labelFmt={day} valueFmt={v => v.toFixed(1)} nameFmt={nameOf} />} />
+                <ReferenceLine y={100} stroke="#464b5c" strokeDasharray="3 3" label={{ value: 'league start', position: 'insideTopRight', fill: '#8b91a1', fontSize: 10 }} />
                 <Legend wrapperStyle={{ fontSize: 12 }} formatter={nameOf} />
                 {keys.map((k, i) => (
                   <Line key={k.id} type="monotone" dataKey={k.id} stroke={SERIES[i % SERIES.length]}
-                    dot={false} strokeWidth={1.8} isAnimationActive={false} connectNulls />
+                    dot={false} activeDot={{ r: 4, strokeWidth: 2, stroke: 'var(--panel)' }} strokeWidth={1.8} isAnimationActive={false} connectNulls />
                 ))}
               </LineChart>
             </ResponsiveContainer>
