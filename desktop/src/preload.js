@@ -5,6 +5,9 @@ const { contextBridge, ipcRenderer } = require('electron')
 contextBridge.exposeInMainWorld('poe2desktop', {
   connectSession: () => ipcRenderer.invoke('poe-connect'),
   getVersion: () => ipcRenderer.invoke('app-version'),
+  // Open the PoE login in the user's real browser (where Cloudflare + Steam work),
+  // then they paste POESESSID back. Avoids embedding auth in the app.
+  openLogin: () => ipcRenderer.invoke('open-login'),
   // Write a pasted POESESSID into the app's Electron session so the embedded
   // Trade webview is logged in too (paste otherwise only reaches the backend).
   setCookie: (cookie) => ipcRenderer.invoke('poe-set-cookie', cookie),

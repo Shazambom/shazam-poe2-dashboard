@@ -59,18 +59,23 @@ export default function AccountsPanel({ onChange }) {
         </p>
       ) : desktop ? (
         <>
-          <div className="row" style={{ margin: '10px 0' }}>
-            <button className="btn primary" disabled={busy} onClick={bridgeConnect}>
-              {busy ? 'Connecting…' : 'Connect trade session'}</button>
-            <span className="hint">Same as the <b>Connect live data</b> button in the top bar. If you're not signed in to
-              pathofexile.com yet, a login window opens and the session connects itself the moment you finish.</span>
-          </div>
+          <ol className="hint" style={{ margin: '10px 0', lineHeight: 1.7 }}>
+            <li><button className="btn primary small" onClick={() => window.poe2desktop?.openLogin?.()}>Open pathofexile.com login in your browser ↗</button>
+              {' '}— sign in there (Steam/Cloudflare work normally in a real browser).</li>
+            <li>Press <b>F12 → Application → Cookies → <code>POESESSID</code></b> and copy its value.</li>
+            <li>Paste it here:
+              <div className="row" style={{ marginTop: 6 }}>
+                <input className="btn" type="password" placeholder="POESESSID" value={cookie} onChange={e => setCookie(e.target.value)} style={{ width: 300 }} autoComplete="off" />
+                <button className="btn primary" disabled={!cookie || busy} onClick={connect}>{busy ? 'Verifying…' : 'Connect'}</button>
+              </div>
+            </li>
+          </ol>
           <details className="adv">
             <summary>Other ways to connect</summary>
-            <p className="hint">Paste it yourself: on pathofexile.com press F12 → Application → Cookies → <code>POESESSID</code>:</p>
-            <div className="row">
-              <input className="btn" type="password" placeholder="POESESSID" value={cookie} onChange={e => setCookie(e.target.value)} style={{ width: 300 }} autoComplete="off" />
-              <button className="btn primary" disabled={!cookie || busy} onClick={connect}>{busy ? 'Verifying…' : 'Connect'}</button>
+            <div className="row" style={{ margin: '6px 0' }}>
+              <button className="btn" disabled={busy} onClick={bridgeConnect}>
+                {busy ? 'Connecting…' : 'Connect via in-app login window'}</button>
+              <span className="hint">Opens an embedded login. May get stuck on Cloudflare or Steam SSO — prefer the browser steps above.</span>
             </div>
             <p className="hint">Or from the PC where you're logged in: <code>pip install browser-cookie3</code> then
               {' '}<code>python tools/connect.py --server {host} session</code>.</p>

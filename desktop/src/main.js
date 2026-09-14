@@ -187,6 +187,8 @@ async function connectPoeSession() {   // menu entry point: adds dialogs
 
 ipcMain.handle('app-version', () => app.getVersion())
 
+ipcMain.handle('open-login', () => shell.openExternal(`${POE}/login`))
+
 ipcMain.handle('poe-connect', async () => {
   const r = await connectPoeFlow()
   if (r.ok) reloadTradeWebviews()   // native login lands in defaultSession; refresh an open Trade tab
@@ -305,13 +307,8 @@ if (!app.requestSingleInstanceLock()) {
   })
 }
 
-// Present a clean desktop-Chrome user-agent (not "…Electron/…"). Steam and other
-// SSO providers reject the Electron UA, which shows up as a bogus "wrong login".
-const CHROME_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36'
-
 app.whenReady().then(async () => {
   nativeTheme.themeSource = 'dark'
-  try { session.defaultSession.setUserAgent(CHROME_UA) } catch {}
   await startBackend()
   await startUiServer()
   buildMenu()
