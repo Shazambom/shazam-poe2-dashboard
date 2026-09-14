@@ -95,29 +95,47 @@ _USER_KV = {"settings", "watches", "oauth_pending", "meta_overrides"}   # + pref
 ## Building / refreshing the market snapshot
 
 The snapshot is an **export of shazam's already-crawled market tables** — we do not re-crawl at
-build time.
+build time. It ships **gzipped** (`market-seed.sqlite.gz`, ~43 MB vs ~366 MB raw; the backend
+decompresses it once during `seed_market()`), with a plaintext `market-seed.sqlite.gz.version`
+sidecar so the client can compare `snapshot_version` without decompressing on every launch.
 
-- Script: `ops/export-market-snapshot.py` (runs on shazam). It:
-  1. Opens shazam's live DB read-only.
-  2. Copies market tables (`digest_markets` within a rolling window, `league_daily` full,
-     `item_meta` full, `orderbook*` optional) **and** the operational kv (`digest_cursor`,
-     `lh_*`, `gold_fees_meta`, `pair_scores`, `trade_leagues`) into a fresh `market-seed.sqlite`.
-  3. Writes `market_meta.snapshot_version` = build timestamp (or the code's MARKET_SCHEMA rev).
-  4. `VACUUM`s it (smaller bundle).
-  5. Publishes it to `/downloads/market-seed.sqlite` (LAN, for Mac local builds) AND uploads it
-     as a GitHub Release asset on a `market-seed-latest` tag (for Windows CI, which can't reach
-     the LAN).
-- Cadence: a shazam cron (e.g. daily) keeps the seed fresh so users start close to "now" and
-  have little to catch up. Also run it manually right before cutting a desktop release.
+- Script: `ops/export-market-snapshot.py`. It:
+  1. Opens the live DB read-only.
+  2. Copies market tables (`digest_markets` within a 14-day rolling window and **public leagues
+     only** by default — private "(PLxxxxx)" leagues are dropped; `league_daily` full,
+     `item_meta` full, `orderbook*` if present) **and** the operational kv (`digest_cursor`,
+     `lh_*`, `gold_fees_meta`, `pair_scores`, `trade_leagues`) into `kv_ops`.
+  3. Writes `market_meta.snapshot_version` = current epoch seconds (monotonic; a MARKET_SCHEMA
+     change ships a newer version for free since epoch grows).
+  4. `VACUUM`s, then gzips (`--no-gzip` to skip) and writes the `.version` sidecar.
+  Flags: `--all-leagues` (keep private leagues), `--no-gzip`, `--version N`.
+- **Publishing (release-time):** run `ops/publish-market-snapshot.sh` on shazam via the ssh
+  wrapper (it needs sudo for `docker exec` + writing `/downloads`; shazam is not in the docker
+  group and cron has no tty, so this is a **manual release-time step, not a cron**):
+  `sshshazambom sudo bash /home/shazam/bin/publish-market-snapshot.sh`.
+  It exports inside the backend container and copies the seed + sidecar to
+  `/downloads/market-seed.sqlite.gz`.
+- **GitHub Release asset (for Windows CI, which can't reach the LAN):** `publish-market-snapshot.sh`
+  auto-sources a token from `shazam:~/.poe2-gh-token` (fine-grained PAT, **Contents: Read and
+  write**; `GH_REPO` defaults to `Shazambom/shazam-poe2-dashboard`) and calls
+  `ops/upload-seed-github.sh`, which creates/updates the rolling `market-seed-latest` prerelease
+  with `market-seed.sqlite.gz` + `.version`. The CI step (`gh release download market-seed-latest`)
+  fails loudly if the asset is missing rather than shipping a seedless (cold-backfill) binary.
+  - **Place / rotate the token:** run `ops/refresh-gh-token.sh` from the Mac (paste a scoped PAT;
+    input is hidden and piped straight to the server — never printed). Rotating = create a new PAT,
+    re-run the script. Editing an existing fine-grained PAT's permissions keeps the same value, so
+    no re-run is needed for a permission fix.
 
 ### Consuming the snapshot in builds
 
-- **Mac** (`desktop/build-backend.sh` or a sibling step): fetch `market-seed.sqlite` from shazam
-  (LAN) → `desktop/market-seed/market-seed.sqlite`.
-- **Windows CI** (`.github/workflows/release-desktop-win.yml`): download the seed from the
-  GitHub Release asset → `desktop/market-seed/market-seed.sqlite`.
+- **Mac** (local, reaches the LAN): `desktop/fetch-seed.sh` pulls
+  `market-seed.sqlite.gz` (+ `.version`) from shazam `/downloads` → `desktop/market-seed/`.
+  Run it before `electron-builder --mac`.
+- **Windows CI** (`.github/workflows/release-desktop-win.yml`): a `gh release download
+  market-seed-latest` step pulls the seed asset → `desktop/market-seed/`.
 - `desktop/package.json` `build.extraResources` bundles `desktop/market-seed/` so the backend
-  finds it at `MARKET_SEED` at runtime.
+  finds it at `MARKET_SEED` at runtime (`desktop/src/main.js` prefers `market-seed.sqlite.gz`,
+  falls back to a plain `.sqlite`).
 - `desktop/market-seed/` is **git-ignored** (large, fetched per build) — never commit the seed.
 
 ## Quick reference

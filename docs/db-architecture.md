@@ -1,8 +1,13 @@
 # Database architecture — user data vs market data
 
-> Status: **DESIGN (not yet implemented).** Implementer picks this up per
-> [`db-split-handoff.md`](./db-split-handoff.md). Maintenance rules once built live in
-> [`db-maintenance.md`](./db-maintenance.md).
+> Status: **IMPLEMENTED** (2026-09-14). Backend split lives in `backend/app/db.py` +
+> `backend/app/migrations_user.py`; seed export in `ops/export-market-snapshot.py`; build
+> wiring in `desktop/`. Day-to-day rules: [`db-maintenance.md`](./db-maintenance.md). Historical
+> build plan: [`db-split-handoff.md`](./db-split-handoff.md).
+>
+> One implementation note vs the design below: the seed ships **gzipped** with a `.version`
+> sidecar (see maintenance doc), decompressed once by `seed_market()`. Everything else — two
+> files, ATTACH, kv routing, catch-up watermarks, wholesale replace — matches this design.
 
 ## Why
 

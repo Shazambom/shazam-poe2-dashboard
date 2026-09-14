@@ -1,9 +1,17 @@
 # Handoff: implement the user/market DB split
 
-> **For the implementer picking this up fresh.** Read [`db-architecture.md`](./db-architecture.md)
-> (design + rationale) and [`db-maintenance.md`](./db-maintenance.md) (the rules you're enabling)
-> first. This doc is the build plan: current state, ordered steps, acceptance, tests, risks.
-> Nothing below is implemented yet — the DB is still a single file.
+> **STATUS: DONE (2026-09-14).** Implemented + tested end-to-end on the Mac desktop app (fresh
+> seeded install, upgrade-in-place preserving login/settings, catch-up not re-crawl, wholesale
+> replace, market reset, no-seed dev/server). This doc is kept as the historical build plan;
+> the living docs are [`db-architecture.md`](./db-architecture.md) (design) and
+> [`db-maintenance.md`](./db-maintenance.md) (rules).
+>
+> Deviations from the plan below, all deliberate: (1) the seed ships **gzipped** + `.version`
+> sidecar (43 MB vs 366 MB), decompressed once in `seed_market()`; (2) export drops private
+> "(PLxxxxx)" leagues by default; (3) snapshot publishing is a **release-time manual step** via
+> the ssh wrapper, not a shazam cron (shazam isn't in the docker group / cron has no tty);
+> (4) the GitHub-asset upload for Windows CI needs a `GH_TOKEN` that isn't configured yet —
+> refresh the Windows seed manually until it is.
 
 ## Goal (one paragraph)
 

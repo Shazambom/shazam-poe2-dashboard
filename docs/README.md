@@ -2,7 +2,7 @@
 
 Architecture & maintenance docs for Arbiter (the PoE2 economy dashboard).
 
-## Database split (user vs market data) — designed, not yet built
+## Database split (user vs market data) — IMPLEMENTED (2026-09-14)
 
 - [`db-architecture.md`](./db-architecture.md) — the design: two SQLite files
   (`user.sqlite` persisted+migrated, `market.sqlite` disposable+snapshot-seeded+catch-up),

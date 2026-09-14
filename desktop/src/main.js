@@ -63,8 +63,21 @@ async function startBackend() {
   if (bin) {
     const dataDir = path.join(app.getPath('userData'), 'data')
     fs.mkdirSync(dataDir, { recursive: true })
+    // Bundled market snapshot (extraResources). The backend seeds market.sqlite from it
+    // on first run / when newer, so users skip the cold backfill. Build-time only — the
+    // desktop contract (server only for updates) is unaffected. Missing in dev = crawl live.
+    // Seed ships gzipped (~8x smaller); the backend decompresses it once. Fall back to a
+    // plain .sqlite if present (dev convenience).
+    const seedDirs = [path.join(process.resourcesPath || '', 'market-seed'),
+                      path.join(__dirname, '..', 'market-seed')]
+    const seedNames = ['market-seed.sqlite.gz', 'market-seed.sqlite']
+    let marketSeed = ''
+    for (const d of seedDirs) { for (const n of seedNames) {
+      const p = path.join(d, n); if (fs.existsSync(p)) { marketSeed = p; break }
+    } if (marketSeed) break }
+    if (marketSeed) console.log('[backend] market seed:', marketSeed)
     backendProc = spawn(bin, [], {
-      env: { ...process.env, DATA_DIR: dataDir, PORT: String(LOCAL_BACKEND_PORT) },
+      env: { ...process.env, DATA_DIR: dataDir, PORT: String(LOCAL_BACKEND_PORT), MARKET_SEED: marketSeed },
       stdio: ['ignore', 'pipe', 'pipe'],
     })
     backendProc.stdout.on('data', d => console.log('[backend]', String(d).trimEnd()))

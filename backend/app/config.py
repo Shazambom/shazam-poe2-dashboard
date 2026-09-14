@@ -12,7 +12,17 @@ def _int(name: str, default: int) -> int:
 DATA_DIR = Path(os.environ.get("DATA_DIR", "/data"))
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
+# Two-DB split: user data persists+migrates, market data is disposable/snapshot-seeded.
+USER_DB_PATH = DATA_DIR / "user.sqlite"
+MARKET_DB_PATH = DATA_DIR / "market.sqlite"
+# Legacy single-file DB (pre-split). Kept for the one-time migration that lifts the
+# user's rows out of it; renamed to *.premigration afterwards, never deleted.
 DB_PATH = DATA_DIR / "poe2arb.sqlite"
+# Bundled market snapshot (Electron sets MARKET_SEED to the extraResources path). Empty
+# in dev/server -> no seed, just crawl live.
+_seed = os.environ.get("MARKET_SEED", "").strip()
+MARKET_SEED_PATH = Path(_seed) if _seed else None
+
 RECIPES_PATH = DATA_DIR / "recipes.json"
 SEED_DIR = Path(__file__).resolve().parent.parent / "data"
 

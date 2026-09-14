@@ -40,6 +40,24 @@ jobs:
         run: |
           cd frontend && npm ci
           cd ../desktop && npm ci
+      - name: Fetch bundled market snapshot (seed)
+        # The seed is the disposable market/backfill data (docs/db-architecture.md) so a
+        # fresh install starts with a full history instead of a slow cold crawl. CI can't
+        # reach the LAN, so shazam publishes it as an asset on the `market-seed-latest`
+        # release; we download it here to bundle via extraResources.
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p desktop/market-seed
+          if gh release download market-seed-latest \
+               --pattern 'market-seed.sqlite.gz*' \
+               --dir desktop/market-seed --clobber; then
+            ls -la desktop/market-seed
+          else
+            echo "::error::market-seed-latest release/asset not found. Publish a seed first (ops/export-market-snapshot.py -> gh release)."
+            exit 1
+          fi
       - name: Build frontend + Windows installer (x64, backend bundled)
         # Code signing: set repo secrets WIN_CSC_LINK (base64 of your .pfx) and
         # WIN_CSC_KEY_PASSWORD to sign automatically. Without them electron-builder builds

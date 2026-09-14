@@ -78,10 +78,13 @@ OS permissions, install/update, EE2 hooks) can't be observed from this Mac, so:
 
 ## Database: user data vs market data
 
-The DB is being split into **`user.sqlite`** (persist forever, migrate carefully — settings,
-capital, session, watches) and **`market.sqlite`** (disposable financial/operational data,
-seeded from a snapshot bundled in the binary at build time, replaced wholesale on newer
-snapshots, and caught up to now by the watermark-driven crawl). Highest-level rules:
+The DB is split (IMPLEMENTED 2026-09-14) into **`user.sqlite`** (persist forever, migrate
+carefully — settings, capital, session, watches; `backend/app/migrations_user.py`) and
+**`market.sqlite`** (disposable financial/operational data, seeded from a gzipped snapshot
+bundled in the binary at build time, replaced wholesale on newer snapshots, and caught up to
+now by the watermark-driven crawl). The split is invisible to users: a seeded install shows a
+populated board instantly and only the loading orb (driven by `/api/backfill`) ever surfaces
+real work. Highest-level rules:
 
 - **Never lose user data; never blow away user data.** Market data is disposable and rebuildable.
 - Adding **user** schema → write a numbered migration. Adding/changing **market** schema → bump
