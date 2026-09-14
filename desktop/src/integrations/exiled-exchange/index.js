@@ -125,12 +125,17 @@ class ExiledExchangeIntegration extends EventEmitter {
     if (this._uiohookOk) {
       this._applyShortcuts()
       try { this._unwatchConfig = watchConfig(() => this._applyShortcuts()) } catch (e) { this._safeError(e) }
-      // macOS Accessibility guard: if no key event ever arrives, uiohook loaded
-      // but the OS is withholding events — degrade to the clipboard fallback.
-      this._healthTimer = setTimeout(() => {
-        if (!this._sawKey) this._degradeToClipboard('uiohook loaded but received no key events (grant Accessibility permission on macOS to enable hotkey alignment)')
-      }, HEALTH_MS)
-      if (this._healthTimer.unref) this._healthTimer.unref()
+      // macOS Accessibility guard (mac only): there, uiohook can load yet receive
+      // NO events until the user grants Accessibility permission, so if no key
+      // arrives we speed the clipboard as a precaution. On Windows/Linux a
+      // successful load is sufficient — no key in N seconds just means the user
+      // hasn't typed yet, so we don't false-alarm there.
+      if (process.platform === 'darwin') {
+        this._healthTimer = setTimeout(() => {
+          if (!this._sawKey) this._degradeToClipboard('uiohook received no key events — grant Accessibility permission (System Settings → Privacy & Security → Accessibility) for the deterministic hotkey hook')
+        }, HEALTH_MS)
+        if (this._healthTimer.unref) this._healthTimer.unref()
+      }
     } else {
       // Native hook unavailable — clipboard-only from the start.
       this._degradeToClipboard('uiohook-napi unavailable — using clipboard fallback')
