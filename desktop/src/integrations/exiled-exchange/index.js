@@ -42,10 +42,7 @@ const REDETECT_MS = 30000   // re-check presence so a later EE2 install activate
 const SLOW_MS = 600         // clipboard safety-net cadence while uiohook is healthy
 const FAST_MS = 90          // clipboard fallback cadence (uiohook unavailable/blocked)
 const HEALTH_MS = 10000     // if uiohook delivers no key in this long, assume blocked
-
-// Actions whose fire should trigger an item capture (a price check).
-const isPriceCheck = (h) =>
-  h && (h.target === 'price-check' || /price-check/i.test(String(h.action || '')))
+const HOTKEY_WINDOW_MS = 700 // an item captured within this long after an EE2 hotkey is attributed to EE2
 
 class ExiledExchangeIntegration extends EventEmitter {
   constructor(opts = {}) {
@@ -64,6 +61,7 @@ class ExiledExchangeIntegration extends EventEmitter {
     this._sawKey = false
     this._notifiedFallback = false
     this._lastEmit = null      // {hash, ts} — cross-source item dedupe
+    this._hotkeyAt = 0         // ts of the last EE2 hotkey, for origin attribution
   }
 
   isRunning() { return this._started }
@@ -160,10 +158,13 @@ class ExiledExchangeIntegration extends EventEmitter {
 
   _onHotkey(h) {
     this.emit('ee2-hotkey', h)
-    if (isPriceCheck(h)) {
-      // Deterministic capture aligned to the keypress.
-      try { captureItemBurst({ onItem: (item) => this._emitItem(item, 'ee2') }) } catch (e) { this._safeError(e) }
-    }
+    // An EE2 hotkey just fired — mark the moment and capture the item fast (beats
+    // EE2's ~120ms clipboard restore). We fire on ANY EE2 hotkey rather than trying
+    // to label which one is "price check" (EE2's binding often carries a generic
+    // label): non-item hotkeys simply produce no new clipboard item, so the burst
+    // is a harmless no-op, while the timestamp lets us attribute the capture to EE2.
+    this._hotkeyAt = Date.now()
+    try { captureItemBurst({ onItem: (item) => this._emitItem(item, 'ee2') }) } catch (e) { this._safeError(e) }
   }
 
   // uiohook is healthy (a key arrived) — no need to poll the clipboard fast.
@@ -184,7 +185,11 @@ class ExiledExchangeIntegration extends EventEmitter {
     const now = Date.now()
     if (this._lastEmit && this._lastEmit.hash === hash && now - this._lastEmit.ts < 1500) return
     this._lastEmit = { hash, ts: now }
-    item.origin = origin
+    // Attribute to EE2 if the burst produced it OR an EE2 hotkey fired just before
+    // this capture — so whichever watcher (burst or safety-net poll) grabbed the
+    // item, a keypress-correlated check is labeled origin:'ee2', not 'clipboard'.
+    const fromEe2 = origin === 'ee2' || (this._hotkeyAt && now - this._hotkeyAt < HOTKEY_WINDOW_MS)
+    item.origin = fromEe2 ? 'ee2' : 'clipboard'
     try { this.emit('item-checked', item) } catch (e) { this._safeError(e) }
   }
 
