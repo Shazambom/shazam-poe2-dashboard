@@ -1,9 +1,18 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { motion, AnimatePresence } from 'motion/react'
+import { motion, AnimatePresence, useSpring, useTransform } from 'motion/react'
 import { api, fmt, surface, toast } from '../lib/api.js'
 import Cur from './Cur.jsx'
 
 const isDesktop = typeof window !== 'undefined' && !!window.poe2desktop
+
+// A number that springs to its value — counts up on mount, rolls when it changes.
+// Keeps the price feeling live rather than snapping between polls.
+function AnimatedNumber({ value, format }) {
+  const sv = useSpring(0, { stiffness: 90, damping: 20, restDelta: 0.001 })
+  useEffect(() => { sv.set(value) }, [value, sv])
+  const text = useTransform(sv, v => format(v))
+  return <motion.span>{text}</motion.span>
+}
 
 // A trend sparkline: single series, so no legend. Thin 2px line, faint area fill,
 // emphasized endpoint, recessive baseline — per the dataviz mark specs. Colored by
@@ -77,7 +86,7 @@ function Tile({ r, num, factor, numOptions, onNum, onRemove, index = 0 }) {
       </div>
       <div className="pt-mid">
         {mid == null ? <span className="muted">no price</span>
-          : <span className={`pt-num ${flash}`}>{fmt.rate(mid)}<span className="pt-unit">{unit}</span></span>}
+          : <span className={`pt-num ${flash}`}><AnimatedNumber value={mid} format={fmt.rate} /><span className="pt-unit">{unit}</span></span>}
         {change != null && <span className={`pt-chg ${change >= 0 ? 'gain' : 'loss'}`}>{fmt.pct(change)}</span>}
       </div>
       <Spark points={trend} />
@@ -210,16 +219,27 @@ export default function BoardView({ status }) {
         </div>
       )}
       {err && <div className="notice error">{err}</div>}
-      {rows.length === 0 && !err && <div className="empty">No watched currencies yet — add some to the watchlist in Settings.</div>}
-      <motion.div className="price-grid" layout>
-        <AnimatePresence mode="popLayout">
-          {rows.map((r, i) => {
-            const num = numFor(r)
-            return <Tile key={r.id} index={i} r={r} num={num} factor={prices[num] ?? 1} numOptions={numOptions}
-              onNum={setNum} onRemove={isDesktop && watchlist ? removeCur : null} />
-          })}
-        </AnimatePresence>
-      </motion.div>
+      {data === null && !err && (
+        <div className="price-grid">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="price-tile skeleton" style={{ animationDelay: `${i * 0.08}s` }}>
+              <div className="sk sk-name" /><div className="sk sk-num" /><div className="sk sk-spark" /><div className="sk sk-foot" />
+            </div>
+          ))}
+        </div>
+      )}
+      {data && rows.length === 0 && !err && <div className="empty">No watched currencies yet — add some to the watchlist in Settings.</div>}
+      {data && rows.length > 0 && (
+        <motion.div className="price-grid" layout>
+          <AnimatePresence mode="popLayout">
+            {rows.map((r, i) => {
+              const num = numFor(r)
+              return <Tile key={r.id} index={i} r={r} num={num} factor={prices[num] ?? 1} numOptions={numOptions}
+                onNum={setNum} onRemove={isDesktop && watchlist ? removeCur : null} />
+            })}
+          </AnimatePresence>
+        </motion.div>
+      )}
     </div>
   )
 }

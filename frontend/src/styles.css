@@ -304,6 +304,16 @@ details.adv[open] summary { color: var(--ink-2); margin-bottom: 8px; }
 .pt-spread { display: inline-flex; align-items: center; gap: 5px; margin-left: auto; }
 .spread-bar { display: inline-block; height: 5px; background: var(--gold); border-radius: 1px; }
 
+/* loading skeleton — shimmer while the first board load is in flight */
+.price-tile.skeleton { pointer-events: none; }
+.sk { border-radius: 6px; background: linear-gradient(100deg, rgba(255,255,255,.04) 30%, rgba(255,255,255,.10) 50%, rgba(255,255,255,.04) 70%); background-size: 220% 100%; animation: shimmer 1.4s ease-in-out infinite; }
+.sk-name { height: 14px; width: 60%; }
+.sk-num { height: 26px; width: 45%; margin-top: 4px; }
+.sk-spark { height: 34px; width: 100%; margin-top: 4px; }
+.sk-foot { height: 12px; width: 50%; }
+@keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -20% 0; } }
+@media (prefers-reduced-motion: reduce) { .sk { animation: none; } }
+
 /* ---------- hold leaderboard ---------- */
 .seg { display: inline-flex; border: 1px solid var(--line-strong); border-radius: var(--radius); overflow: hidden; }
 .seg-btn { background: var(--bg); border: 0; border-right: 1px solid var(--line-strong); color: var(--muted); padding: 5px 11px; cursor: pointer; font-size: 12.5px; }
