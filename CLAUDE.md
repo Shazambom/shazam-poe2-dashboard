@@ -76,6 +76,24 @@ OS permissions, install/update, EE2 hooks) can't be observed from this Mac, so:
 - **Desktop** ships in deliberate batches; web-only features don't reach desktop until
   a desktop build bundles the updated frontend. Mac builds locally; Windows via CI.
 
+## Database: user data vs market data
+
+The DB is being split into **`user.sqlite`** (persist forever, migrate carefully — settings,
+capital, session, watches) and **`market.sqlite`** (disposable financial/operational data,
+seeded from a snapshot bundled in the binary at build time, replaced wholesale on newer
+snapshots, and caught up to now by the watermark-driven crawl). Highest-level rules:
+
+- **Never lose user data; never blow away user data.** Market data is disposable and rebuildable.
+- Adding **user** schema → write a numbered migration. Adding/changing **market** schema → bump
+  the snapshot version and ship a new snapshot (no migration).
+- New `kv` keys must be classified (user vs operational) in `db.py`.
+
+Full design + rules + implementation plan live in `docs/`:
+- [`docs/db-architecture.md`](docs/db-architecture.md) — design & data classification.
+- [`docs/db-maintenance.md`](docs/db-maintenance.md) — how to evolve each DB going forward.
+- [`docs/db-split-handoff.md`](docs/db-split-handoff.md) — **implementer start here** (the split
+  is designed but NOT yet built).
+
 ## Layout
 
 - `backend/` — FastAPI + SQLite (`run_desktop.py` is the local-mode entrypoint; reads
@@ -84,3 +102,4 @@ OS permissions, install/update, EE2 hooks) can't be observed from this Mac, so:
   `leaguehistory.scout_prices`).
 - `frontend/` — React/Vite/Recharts.
 - `desktop/` — Electron shell: local UI server + bundled backend manager + updater.
+- `docs/` — architecture & maintenance docs (see the Database section above).
