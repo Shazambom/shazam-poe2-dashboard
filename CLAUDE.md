@@ -50,6 +50,15 @@ Windows desktop builds run in CI (see the desktop contract above). They reach th
 Mac builds + publishes locally (PyInstaller can't cross-compile), so Mac is not part of
 this auto-publish path.
 
+## Cutting a desktop release
+
+Full step-by-step runbook: [`docs/release-runbook.md`](docs/release-runbook.md). TL;DR: bump
+`desktop/package.json`, commit on `main`, push a `desktop-v<version>` tag (fires the Windows
+CI), then `cd desktop && npm run dist:mac && ./publish.sh` for Mac. Verify BOTH manifests on
+shazam `/downloads` afterward — `latest-mac.yml` (immediate) and `latest.yml` (Windows, cron
+pulls within ≤5 min). Note: `publish.sh` briefly clobbers the Windows `latest.yml` with a
+stale local copy; the cron re-heals it — see the runbook's gotcha section.
+
 ## Verifying the Windows app — telemetry is mandatory
 
 **The user is NOT the tester. If you need to verify behavior in the Windows (or any
