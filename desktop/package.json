@@ -1,7 +1,7 @@
 {
   "name": "poe2-dashboard-desktop",
   "productName": "ShazamDash",
-  "version": "0.2.21",
+  "version": "0.2.22",
   "description": "Exchange-loop dashboard for Path of Exile 2 — desktop app",
   "main": "src/main.js",
   "author": "Shazambom",
@@ -18,7 +18,8 @@
     "electron-builder": "^25.1.8"
   },
   "dependencies": {
-    "electron-updater": "^6.3.9"
+    "electron-updater": "^6.3.9",
+    "uiohook-napi": "^1.5.4"
   },
   "build": {
     "appId": "com.shazambom.poe2dashboard",
@@ -29,6 +30,10 @@
     "files": [
       "src/**/*",
       "app-dist/**/*"
+    ],
+    "asarUnpack": [
+      "**/*.node",
+      "**/node_modules/uiohook-napi/**"
     ],
     "publish": [
       {
@@ -74,6 +79,7 @@
           "**/*"
         ]
       }
-    ]
+    ],
+    "npmRebuild": false
   }
 }

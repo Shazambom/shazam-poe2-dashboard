@@ -343,6 +343,29 @@ function buildMenu() {
 
 function relaunch() { app.relaunch(); app.exit(0) }
 
+// ------------------------------------------- EE2 integration (presence-driven)
+// Self-contained LISTENING layer for Exiled-Exchange-2. NO settings toggle:
+// presence IS the switch. The manager self-gates — if EE2 isn't installed it
+// stays dormant (and re-checks periodically); if EE2 is present it aligns to
+// EE2's own hotkeys via a passive uiohook hook, with a clipboard fallback.
+// Best-effort: any failure here is swallowed and the rest of the app is
+// unaffected. Local-only (no network) by construction.
+let _ee2 = null
+async function startEe2Integration() {
+  if (_ee2) return
+  try {
+    const { ExiledExchangeIntegration } = require('./integrations/exiled-exchange')
+    const { attachLogDemo } = require('./integrations/exiled-exchange/subscribers/log-demo')
+    _ee2 = new ExiledExchangeIntegration()
+    attachLogDemo(_ee2)                       // demo subscriber: logs each hook, no side effects
+    await _ee2.start()
+  } catch (e) { console.log('[ee2] integration disabled:', String(e)); _ee2 = null }
+}
+function stopEe2Integration() {
+  try { _ee2?.stop() } catch {}
+  _ee2 = null
+}
+
 // ------------------------------------------------------------------- boot
 // Single-instance lock: a second launch (or the installer relaunching us) hands
 // focus to the existing window instead of spawning a duplicate process. Without
@@ -380,6 +403,7 @@ app.whenReady().then(async () => {
     } catch (e) { console.log('[diag] bridge check failed:', String(e)) }
   })
   setupUpdates()
+  startEe2Integration()   // self-gates on EE2 presence; dormant if EE2 isn't installed
 })
 
 // The embedded Trade <webview> shares the default session (so it's logged in). Keep
@@ -397,5 +421,5 @@ app.on('web-contents-created', (_e, contents) => {
   })
 })
 
-app.on('window-all-closed', () => { stopBackend(); app.quit() })
-app.on('before-quit', stopBackend)
+app.on('window-all-closed', () => { stopEe2Integration(); stopBackend(); app.quit() })
+app.on('before-quit', () => { stopEe2Integration(); stopBackend() })
