@@ -273,45 +273,72 @@ ipcMain.handle('open-trade', (_e, url) => {
 // requires a signed+notarized app), so mac reports the state but the swap needs a
 // Developer ID cert — drop `identity: null` in package.json once one exists.
 let _autoUpdater = null
+let _latestVersion = null
+const IS_MAC = process.platform === 'darwin'
+const DOWNLOADS_BASE = 'http://192.168.1.250:8080/downloads'
 
 function _emitUpdate(state) {
   try { win?.webContents.send('update:status', state) } catch {}
 }
+
+function updLog(m) {   // updater telemetry -> server, so we can see why it's silent
+  try {
+    fetch('http://192.168.1.250:8080/api/installlog?p=update', {
+      method: 'POST', headers: { 'Content-Type': 'text/plain' },
+      body: `v${app.getVersion()} ${process.platform} ${m}`,
+    }).catch(() => {})
+  } catch {}
+}
+
+// Unsigned macOS builds can't hot-swap via Squirrel.Mac (it requires a signed+notarized
+// app), so quitAndInstall would just quit WITHOUT installing — which read as "the app
+// closed and nothing happened". On macOS we therefore skip the in-place flow entirely and
+// open the DMG for a manual drag-install; Windows (NSIS) installs in place fine.
+function macDmgUrl(v) { return `${DOWNLOADS_BASE}/Arbiter-${v}-arm64.dmg` }
 
 function setupUpdates() {
   if (!app.isPackaged) return
   try {
     const { autoUpdater } = require('electron-updater')
     _autoUpdater = autoUpdater
-    const rpt = (m) => {   // updater telemetry -> server, so we can see why it's silent
-      try {
-        fetch('http://192.168.1.250:8080/api/installlog?p=update', {
-          method: 'POST', headers: { 'Content-Type': 'text/plain' },
-          body: `v${app.getVersion()} ${m}`,
-        }).catch(() => {})
-      } catch {}
-    }
-    autoUpdater.autoDownload = true            // pull it in the background as soon as found
-    autoUpdater.autoInstallOnAppQuit = true
-    autoUpdater.on('checking-for-update', () => { rpt('checking'); _emitUpdate({ phase: 'checking' }) })
-    autoUpdater.on('update-not-available', (info) => { rpt(`not-available (latest=${info?.version})`); _emitUpdate({ phase: 'none' }) })
-    autoUpdater.on('update-available', (info) => { rpt(`available ${info?.version}`); _emitUpdate({ phase: 'downloading', version: info.version, percent: 0 }) })
+    autoUpdater.autoDownload = !IS_MAC          // Win: pull in background. Mac: no Squirrel apply, so skip.
+    autoUpdater.autoInstallOnAppQuit = !IS_MAC
+    autoUpdater.on('checking-for-update', () => { updLog('checking'); _emitUpdate({ phase: 'checking' }) })
+    autoUpdater.on('update-not-available', (info) => { updLog(`not-available (latest=${info?.version})`); _emitUpdate({ phase: 'none' }) })
+    autoUpdater.on('update-available', (info) => {
+      _latestVersion = info?.version
+      updLog(`available ${info?.version}`)
+      // Mac: offer a manual DMG install immediately (no background download). Win: downloading.
+      _emitUpdate(IS_MAC ? { phase: 'manual', version: info?.version } : { phase: 'downloading', version: info?.version, percent: 0 })
+    })
     autoUpdater.on('download-progress', (p) => _emitUpdate({ phase: 'downloading', percent: Math.round(p.percent) }))
-    autoUpdater.on('update-downloaded', (info) => { rpt(`downloaded ${info?.version}`); _emitUpdate({ phase: 'ready', version: info.version }) })
-    autoUpdater.on('error', (e) => { rpt(`ERROR ${String(e.message || e)}`); console.log('[updater]', String(e)); _emitUpdate({ phase: 'error', message: String(e.message || e) }) })
-    rpt('startup check')
-    autoUpdater.checkForUpdates().catch((e) => rpt(`check-threw ${String(e.message || e)}`))
+    autoUpdater.on('update-downloaded', (info) => { _latestVersion = info?.version; updLog(`downloaded ${info?.version}`); _emitUpdate({ phase: 'ready', version: info?.version }) })
+    autoUpdater.on('error', (e) => { updLog(`ERROR ${String(e.message || e)}`); console.log('[updater]', String(e)); _emitUpdate({ phase: 'error', message: String(e.message || e) }) })
+    updLog('startup check')
+    autoUpdater.checkForUpdates().catch((e) => updLog(`check-threw ${String(e.message || e)}`))
     setInterval(() => autoUpdater.checkForUpdates().catch(() => {}), 30 * 60 * 1000)
   } catch (e) { console.log('[updater] disabled:', String(e)) }
 }
 
 ipcMain.handle('update:check', () => { try { _autoUpdater?.checkForUpdates() } catch {} })
 ipcMain.handle('update:install', () => {
-  // Kill the bundled backend FIRST so it doesn't lock the install dir during the
-  // update (that left users with a dead/removed app), then quit + install + relaunch.
+  if (IS_MAC) {
+    // Can't hot-swap unsigned — open the DMG in the browser for a manual install; keep the
+    // app running so the user isn't left staring at a closed window.
+    const url = macDmgUrl(_latestVersion || app.getVersion())
+    try { require('electron').shell.openExternal(url) } catch (e) { _emitUpdate({ phase: 'error', message: String(e) }) }
+    updLog(`mac-manual-open ${url}`)
+    _emitUpdate({ phase: 'manual', version: _latestVersion })
+    return
+  }
+  // Windows: kill the bundled backend FIRST so it doesn't lock the install dir during the
+  // update (that left users with a dead/removed app), then SILENT install + relaunch.
+  // Silent (isSilent=true) matters: the NSIS self-heal skips its destructive cleanup when
+  // silent, so the auto-update no longer nukes the install dir it's upgrading.
+  updLog('install-clicked (win silent quitAndInstall)')
   try { stopBackend() } catch {}
   setTimeout(() => {
-    try { _autoUpdater?.quitAndInstall(false, true) } catch (e) { _emitUpdate({ phase: 'error', message: String(e) }) }
+    try { _autoUpdater?.quitAndInstall(true, true) } catch (e) { updLog(`quitAndInstall-threw ${String(e)}`); _emitUpdate({ phase: 'error', message: String(e) }) }
   }, 400)
 })
 

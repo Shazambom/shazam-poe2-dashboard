@@ -23,8 +23,15 @@
   Pop $0
   nsExec::Exec 'taskkill /F /T /IM "poe2arb-backend.exe"'
   Pop $0
+  ; DESTRUCTIVE self-heal (delete stale install dir + uninstall registry + shortcuts) is
+  ; only for repairing a broken INTERACTIVE fresh install. electron-updater runs the update
+  ; installer SILENTLY (/S); doing this deletion mid-update nukes the very install being
+  ; upgraded, so the update aborts and the app just closes without upgrading. Skip it when
+  ; silent — the process taskkills above already release any locks the update needs.
+  IfSilent skip_heal_preinit
   nsExec::Exec "powershell -NoProfile -ExecutionPolicy Bypass -Command $\"$$ErrorActionPreference='SilentlyContinue'; $$dir=Join-Path $$env:LOCALAPPDATA 'Programs\poe2-dashboard-desktop'; Get-Process | Where-Object { $$_.ProcessName -match '^(Arbiter|PoE2 Dashboard|ShazamDash|poe2arb-backend)$$' -or ($$_.Path -and $$_.Path -like (Join-Path $$dir '*')) } | Stop-Process -Force; Start-Sleep -Milliseconds 900; if (Test-Path $$dir) { Remove-Item -LiteralPath $$dir -Recurse -Force }; Get-ChildItem 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall' | Where-Object { (Get-ItemProperty $$_.PSPath).DisplayName -match 'Arbiter|PoE2 Dashboard|ShazamDash' } | Remove-Item -Recurse -Force; foreach ($$n in 'Arbiter','PoE2 Dashboard','ShazamDash') { Remove-Item (Join-Path ([Environment]::GetFolderPath('Desktop')) ($$n+'.lnk')) -Force; Remove-Item (Join-Path ([Environment]::GetFolderPath('StartMenu')) ('Programs\'+$$n+'.lnk')) -Force }$\""
   Pop $0
+  skip_heal_preinit:
 !macroend
 
 ; customInit runs after preInit — report the (now cleaned-up) state to the server so

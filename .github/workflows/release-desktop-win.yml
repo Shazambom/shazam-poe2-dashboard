@@ -41,6 +41,13 @@ jobs:
           cd frontend && npm ci
           cd ../desktop && npm ci
       - name: Build frontend + Windows installer (x64, backend bundled)
+        # Code signing: set repo secrets WIN_CSC_LINK (base64 of your .pfx) and
+        # WIN_CSC_KEY_PASSWORD to sign automatically. Without them electron-builder builds
+        # UNSIGNED (SmartScreen will warn, but auto-update still works after the installer
+        # self-heal fix). Signing removes the SmartScreen warning + improves update trust.
+        env:
+          CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
         run: |
           cd desktop
           npm run build:frontend

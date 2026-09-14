@@ -23,6 +23,11 @@ export default function UpdateStatus() {
     return <button className="update-chip ready" title={`Version ${st.version || ''} downloaded — click to install and restart`}
       onClick={() => bridge.installUpdate()}>↻ Install update{st.version ? ` ${st.version}` : ''}</button>
   }
+  if (st.phase === 'manual') {
+    // macOS (unsigned): can't hot-swap, so the button opens the DMG for a drag-install.
+    return <button className="update-chip ready" title={`Download Arbiter ${st.version || ''} — open the DMG and drag to Applications`}
+      onClick={() => bridge.installUpdate()}>↓ Update{st.version ? ` ${st.version}` : ''}</button>
+  }
   if (st.phase === 'checking') return <span className="update-chip" title="Checking for updates">checking…</span>
   if (st.phase === 'none') return <span className="update-chip ok" title="You're on the latest version">✓ up to date</span>
   if (st.phase === 'error') return <span className="update-chip err" title={st.message || 'update check failed'}>update error</span>
