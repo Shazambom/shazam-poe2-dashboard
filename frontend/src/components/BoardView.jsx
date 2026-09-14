@@ -28,8 +28,13 @@ function Spark({ points, w = 132, h = 34 }) {
   )
 }
 
-function Tile({ r, refCur, onRemove }) {
+function Tile({ r, num, factor, numOptions, onNum, onRemove }) {
   const change = r.change_pct
+  const f = factor || 1
+  const rp = (v) => (v == null ? null : v / f)               // reprice R-value into `num`
+  const mid = rp(r.mid), buy = rp(r.buy), sell = rp(r.sell), spread = rp(r.spread)
+  const trend = r.trend ? r.trend.map(p => ({ t: p.t, v: p.v / f })) : r.trend
+  const unit = <Cur id={num} size={14} />
   return (
     <div className={`price-tile src-${r.source || 'none'}`}>
       <div className="pt-head">
@@ -42,18 +47,18 @@ function Tile({ r, refCur, onRemove }) {
         </span>
       </div>
       <div className="pt-mid">
-        {r.mid == null ? <span className="muted">no price</span> : <>{fmt.rate(r.mid)}<span className="pt-unit"><Cur id={refCur} size={14} /></span></>}
+        {mid == null ? <span className="muted">no price</span> : <>{fmt.rate(mid)}<span className="pt-unit">{unit}</span></>}
         {change != null && <span className={`pt-chg ${change >= 0 ? 'gain' : 'loss'}`}>{fmt.pct(change)}</span>}
       </div>
-      <Spark points={r.trend} />
+      <Spark points={trend} />
       {/* Real bid/ask only exists with a live order book; digest gives one mid both
           ways, so showing buy/sell/spread there would be a fake spread. */}
       {r.source === 'live' ? (
         <div className="pt-foot">
-          <span title="what it costs to buy one">buy <b>{r.buy == null ? '–' : fmt.rate(r.buy)}</b></span>
-          <span title="what you get selling one">sell <b>{r.sell == null ? '–' : fmt.rate(r.sell)}</b></span>
+          <span title="what it costs to buy one">buy <b>{buy == null ? '–' : fmt.rate(buy)}</b></span>
+          <span title="what you get selling one">sell <b>{sell == null ? '–' : fmt.rate(sell)}</b></span>
           {r.spread_pct != null && (
-            <span className="pt-spread" title={`spread ${fmt.rate(r.spread)} ${refCur} (${r.spread_pct.toFixed(1)}%)`}>
+            <span className="pt-spread" title={`spread ${fmt.rate(spread)} (${r.spread_pct.toFixed(1)}%)`}>
               <span className="spread-bar" style={{ width: `${Math.max(2, Math.min(46, r.spread_pct * 2))}px` }} />
               {r.spread_pct.toFixed(1)}%
             </span>
@@ -62,6 +67,13 @@ function Tile({ r, refCur, onRemove }) {
         </div>
       ) : (
         <div className="pt-foot muted">hourly mid{r.age_s != null && <> · {fmt.age(r.age_s)} old</>}</div>
+      )}
+      {onNum && numOptions.length > 0 && (
+        <div className="pt-num-row">priced in{' '}
+          <select value={num} onChange={e => onNum(r.id, e.target.value)} title="Currency this card is priced in (defaults to its highest-volume market)">
+            {numOptions.filter(o => o.id !== r.id).map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
+          </select>
+        </div>
       )}
     </div>
   )
@@ -73,8 +85,16 @@ export default function BoardView({ status }) {
   const [busy, setBusy] = useState(false)
   const [auto, setAuto] = useState(false)
   const [watchlist, setWatchlist] = useState(null)   // desktop-only board customization
-  const [opts, setOpts] = useState([])               // all currencies for the add picker
+  const [opts, setOpts] = useState([])               // all currencies (names for pickers)
   const [q, setQ] = useState('')
+  const [numById, setNumById] = useState(() => {     // per-card numeraire overrides (persisted)
+    try { return JSON.parse(localStorage.getItem('board.num.v1') || '{}') } catch { return {} }
+  })
+  const setNum = (id, n) => {
+    const next = { ...numById, [id]: n }
+    setNumById(next)
+    try { localStorage.setItem('board.num.v1', JSON.stringify(next)) } catch {}
+  }
   const canLive = !!status?.session?.connected
   const timer = useRef(null)
 
@@ -104,10 +124,10 @@ export default function BoardView({ status }) {
     setBusy(false)
   }
   useEffect(() => { load(); const t = setInterval(load, 30000); return () => clearInterval(t) }, [])
+  useEffect(() => { api.currencies().then(d => setOpts(d?.currencies ?? [])).catch(() => {}) }, [])
   useEffect(() => {
     if (!isDesktop) return
     api.settings().then(s => setWatchlist(s.watchlist || [])).catch(() => {})
-    api.currencies().then(d => setOpts(d?.currencies ?? [])).catch(() => {})
   }, [])
   useEffect(() => {
     if (!auto || !canLive) return
@@ -118,12 +138,23 @@ export default function BoardView({ status }) {
 
   const ref = data?.reference ?? 'ref'
   const rows = data?.rows ?? []
+  const prices = data?.prices ?? {}
   const live = useMemo(() => rows.filter(r => r.source === 'live').length, [rows])
+  const nameById = useMemo(() => Object.fromEntries(opts.map(o => [o.id, o.name])), [opts])
+  // Currencies a card can be priced in = those with a known reference price, richest first.
+  const numOptions = useMemo(() => Object.keys(prices)
+    .sort((a, b) => (prices[b] || 0) - (prices[a] || 0))
+    .map(id => ({ id, name: nameById[id] || id })), [prices, nameById])
+  // Effective numeraire for a card: user override → backend's highest-volume default → reference.
+  const numFor = (r) => {
+    const pick = numById[r.id] || r.pref_num || ref
+    return prices[pick] != null ? pick : ref
+  }
 
   return (
     <div className="single board">
       <div className="board-bar">
-        <h2 style={{ margin: 0 }}>Price board <span className="muted" style={{ fontWeight: 400 }}>· {rows.length} currencies, priced in {ref}</span></h2>
+        <h2 style={{ margin: 0 }}>Price board <span className="muted" style={{ fontWeight: 400 }}>· {rows.length} currencies · each priced in its top market</span></h2>
         <span className="spacer" />
         <span className="hint">{live} live · {rows.length - live} from hourly data</span>
         {canLive ? (
@@ -149,7 +180,11 @@ export default function BoardView({ status }) {
       {err && <div className="notice error">{err}</div>}
       {rows.length === 0 && !err && <div className="empty">No watched currencies yet — add some to the watchlist in Settings.</div>}
       <div className="price-grid">
-        {rows.map(r => <Tile key={r.id} r={r} refCur={ref} onRemove={isDesktop && watchlist ? removeCur : null} />)}
+        {rows.map(r => {
+          const num = numFor(r)
+          return <Tile key={r.id} r={r} num={num} factor={prices[num] ?? 1} numOptions={numOptions}
+            onNum={setNum} onRemove={isDesktop && watchlist ? removeCur : null} />
+        })}
       </div>
     </div>
   )

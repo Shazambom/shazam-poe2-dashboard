@@ -581,6 +581,18 @@ def board() -> dict:
     R = s["reference"]
     league = s["league"]
     rv = g.ref_values()
+    # Per-currency default numeraire = the counterpart of its highest-volume market
+    # (value/hour = traded units × their reference value). So Divine defaults to
+    # Exalted, omens to Divine, etc. — whatever each actually trades against most.
+    best = {}
+    for (a, b), e in g.edges.items():
+        if e.kind == "recipe" or not e.vol_in_per_h:
+            continue
+        volr = e.vol_in_per_h * (rv.get(a) or 0.0)
+        for node, other in ((a, b), (b, a)):
+            cur = best.get(node)
+            if cur is None or volr > cur[0]:
+                best[node] = (volr, other)
     rows = []
     for c in [x for x in s["watchlist"] if x != R]:
         buy_edge = g.edges.get((R, c))     # c per R  -> price to BUY c = 1/rate
@@ -600,13 +612,20 @@ def board() -> dict:
         change_pct = None
         if len(trend) >= 2 and trend[0]["v"]:
             change_pct = (trend[-1]["v"] - trend[0]["v"]) / trend[0]["v"] * 100
+        pref = best.get(c, (0.0, R))[1]
+        if pref == c or not rv.get(pref):
+            pref = R                                    # fall back to the reference
         rows.append({
             "id": c, "name": registry.name(c), "mid": mid, "buy": buy, "sell": sell,
             "spread": spread, "spread_pct": spread_pct, "source": source, "age_s": age,
-            "depth": depth, "trend": trend, "change_pct": change_pct,
+            "depth": depth, "trend": trend, "change_pct": change_pct, "pref_num": pref,
         })
     rows.sort(key=lambda r: (r["mid"] is None, -(r["mid"] or 0)))   # most valuable first
-    result = {"reference": R, "league": league, "rows": rows,
+    # Reference-currency price (R per unit) for every currency usable as a numeraire,
+    # so the client can reprice any card into any of them. Reference itself is 1.
+    need = {R} | {r["id"] for r in rows} | {r["pref_num"] for r in rows}
+    prices = {i: (1.0 if i == R else rv.get(i)) for i in need if i == R or rv.get(i)}
+    result = {"reference": R, "league": league, "rows": rows, "prices": prices,
               "session": session.status().get("connected", False)}
     _board_cache = (now, orderbook.state["version"], key, result)
     return result

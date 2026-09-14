@@ -226,6 +226,8 @@ details.adv[open] summary { color: var(--ink-2); margin-bottom: 8px; }
 .pt-remove { margin-left: auto; border: 0; background: transparent; color: var(--muted, #8a8f9a); cursor: pointer; font-size: 15px; line-height: 1; padding: 0 4px; opacity: 0; transition: opacity .12s; }
 .price-tile:hover .pt-remove { opacity: 1; }
 .pt-remove:hover { color: var(--loss, #e06b6b); }
+.pt-num-row { margin-top: 6px; font-size: 11px; color: var(--muted, #8a8f9a); display: flex; align-items: center; gap: 5px; }
+.pt-num-row select { font-size: 11px; padding: 1px 4px; background: transparent; color: inherit; border: 1px solid rgba(255,255,255,.12); border-radius: 5px; max-width: 130px; }
 .pt-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pt-src { font-size: 10px; letter-spacing: .04em; color: var(--muted); border: 1px solid var(--line-strong); border-radius: 3px; padding: 0 4px; }
 .pt-src.live { color: var(--live); border-color: var(--live); }
