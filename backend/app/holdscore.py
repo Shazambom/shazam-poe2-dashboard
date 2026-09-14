@@ -29,7 +29,10 @@ NUMERAIRES = {"divine": (291, "Divine Orb"), "mirror": (295, "Mirror of Kalandra
               "lock": (4287, "Hinekora's Lock")}
 HORIZON_DAYS = {"1d": 1, "3d": 3, "7d": 7}   # fast-league day horizons (daily poe2scout data)
 SHRINK_K = 8            # data-count shrinkage: confidence = n/(n+K)
-VOL_FLOOR = 200.0       # median daily units for full liquidity confidence
+VALUE_FLOOR = 30_000_000.0   # median daily traded VALUE (exalted) for full liquidity confidence.
+# The board answers "what's a good place to park currency to beat inflation" — so a hold must
+# be liquid *in value* (you can park real wealth), which is why the floor is on exalted/day,
+# not raw units: a Mirror trades few units but enormous value; an essence the reverse.
 GAMMA = 0.65            # recency weight for past leagues (most recent = weight 1)
 MIN_PRED_LEAGUES = 2
 
@@ -50,7 +53,9 @@ def _build_league(rows, num_id) -> tuple[dict[int, dict[int, tuple[float, float]
     for iid, day, close, vol in rows:
         n = num.get(day)
         if n and close:
-            per.setdefault(iid, {})[_age(day, day0)] = (close / n, vol or 0)
+            # (price in numeraire, daily traded value in exalted). Value is numeraire-
+            # independent so the liquidity floor holds across the vs-Divine/Mirror/Lock toggles.
+            per.setdefault(iid, {})[_age(day, day0)] = (close / n, (vol or 0) * close)
     return per, day0
 
 
@@ -64,29 +69,44 @@ def _nearest(series: dict[int, tuple[float, float]], target: int, tol: int = 2):
     return best if bd <= tol else None
 
 
+def _smooth(series: dict[int, tuple[float, float]], target: int) -> float:
+    """Median price over the target day and its immediate neighbours — robust to the
+    single-day outliers that thin poe2scout daily closes are riddled with (a lone spike
+    otherwise turns a flat asset into a fake +3000% mover)."""
+    vals = [series[a][0] for a in (target - 1, target, target + 1) if a in series]
+    if not vals:
+        near = min(series, key=lambda a: abs(a - target))
+        vals = [series[near][0]]
+    return statistics.median(vals)
+
+
 def _metrics(series: dict[int, tuple[float, float]], hz_days: int | None):
     ages = sorted(series)
     if len(ages) < 2:
         return None
-    prices = [series[a][0] for a in ages]
-    last = prices[-1]
+    last_age = ages[-1]
+    last = _smooth(series, last_age)
     if hz_days is None:
-        base = prices[0]
+        base_age = ages[0]
     else:
-        # base = price hz_days ago; if the league is younger than the horizon, fall
-        # back to the earliest price (so a 9-day league still shows on the 30d board).
-        cand = [a for a in ages if a <= ages[-1] - hz_days]
-        base = series[cand[-1]][0] if cand else prices[0]
+        # base = price hz_days ago; if the league is younger than the horizon, fall back
+        # to the earliest price (so a young league still shows on the 7d board).
+        cand = [a for a in ages if a <= last_age - hz_days]
+        base_age = cand[-1] if cand else ages[0]
+    base = _smooth(series, base_age)
     if not base:
         return None
+    prices = [series[a][0] for a in ages]
     peak, mdd = prices[0], 0.0
     for p in prices:
         peak = max(peak, p)
         mdd = min(mdd, p / peak - 1)
-    medvol = statistics.median(series[a][1] for a in ages)
-    conf = (len(ages) / (len(ages) + SHRINK_K)) * min(1.0, medvol / VOL_FLOOR)
-    return {"ret": last / base - 1, "mdd": mdd, "n": len(ages), "medvol": medvol,
-            "conf": conf, "cur_age": ages[-1]}
+    valvol = statistics.median(series[a][1] for a in ages)   # daily traded value, exalted
+    depth = len(ages) / (len(ages) + SHRINK_K)               # enough data points?
+    liq = min(1.0, valvol / VALUE_FLOOR)                      # can you park real wealth here?
+    stab = max(0.15, 1 + mdd)                                 # a good park doesn't crash
+    return {"ret": last / base - 1, "mdd": mdd, "n": len(ages), "valvol": valvol,
+            "conf": depth * liq, "stab": stab, "cur_age": last_age}
 
 
 def _predict(item_id, N, delta, past):
@@ -152,7 +172,9 @@ def leaderboard(horizon: str = "3d", category: str = "all", numeraire: str = "di
         assets.append({
             "id": iid, "name": name, "category": cat,
             "ret_pct": round(m["ret"] * 100, 1), "mdd_pct": round(m["mdd"] * 100, 1),
-            "hold": round(m["ret"] * m["conf"], 4), "days": m["n"], "medvol": round(m["medvol"]),
+            # hold = appreciation × (how confident/liquid) × (how stable) — a store-of-value
+            # score, not a chase-the-biggest-mover score.
+            "hold": round(m["ret"] * m["conf"] * m["stab"], 4), "days": m["n"], "medvol": round(m["valvol"]),
             "confidence": round(m["conf"], 2),
             "pred_pct": round(pr["pred"] * 100, 1) if pr else None,
             "pred_band_pct": round(pr["band"] * 100, 1) if pr else None,
