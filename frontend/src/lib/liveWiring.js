@@ -1,10 +1,13 @@
 import React, { useEffect } from 'react'
 import { toast as sonner } from 'sonner'
 import { usePings } from './pingStore.js'
+import { useWorkspace, loadWorkspace } from './workspaceStore.js'
+import { toast } from './api.js'
 import { playPing, unlockSound } from './ping-sound.js'
 import { nav } from './nav.js'
 
 const isDesktop = typeof window !== 'undefined' && !!window.poe2desktop?.trade
+const PING_TTL = 10000   // top-right ping banner auto-dismisses after 10s (or when a newer ping replaces it)
 
 // Mounted once in App. Subscribes to the desktop live-search engine and turns each ping
 // into: (1) a store entry, (2) a sound, (3) an OS notification, (4) a sonner banner that
@@ -21,7 +24,7 @@ export function useLiveWiring(goLive) {
           indexedAt: Date.now(), receivedAt: Date.now(), token: null, tokenExp: Date.now() + 3e5,
           flags: { gone: false, inDemand: true } }
         usePings.getState().addPing(ping)
-        try { sonner.custom((id) => bannerEl(ping, () => { sonner.dismiss(id); goLive?.() }), { id: 'live-ping', duration: Infinity }) } catch {}
+        try { sonner.custom((id) => bannerEl(ping, () => { sonner.dismiss(id); goLive?.() }), { id: 'live-ping', duration: PING_TTL }) } catch {}
       }
     }
     // Unlock WebAudio on the first user gesture (browser autoplay policy).
@@ -50,11 +53,49 @@ export function useLiveWiring(goLive) {
         }
       } catch {}
       // In-app most-recent-ping banner (persistent, replaced by each newer ping).
-      sonner.custom((id) => bannerEl(p, () => { sonner.dismiss(id); goLive?.() }), { id: 'live-ping', duration: Infinity })
+      sonner.custom((id) => bannerEl(p, () => { sonner.dismiss(id); goLive?.() }), { id: 'live-ping', duration: PING_TTL })
     })
     const offEngine = window.poe2desktop.trade.onEngineState((e) => usePings.getState().setEngine(e))
     return () => { offPing?.(); offEngine?.(); window.removeEventListener('pointerdown', unlock); window.removeEventListener('keydown', unlock) }
   }, [goLive])
+}
+
+// Keep the live-search ENGINE reconciled to the DB: every search node with armed:true (and
+// a slug) should be running; everything else stopped. Runs on load (resume across restarts)
+// and whenever the armed set changes. The DB (trading_workspace) is the single source of
+// truth for go-live state; the engine is a slave to it.
+export function useLiveSync(league) {
+  useEffect(() => {
+    if (!isDesktop) return
+    if (!useWorkspace.getState().loaded) loadWorkspace()
+    let lastKey = ''
+    const armedNodes = () => {
+      const out = []
+      const walk = (ns) => (ns || []).forEach(n => { if (n.kind === 'search' && n.armed && n.slug) out.push(n); if (n.children) walk(n.children) })
+      walk(useWorkspace.getState().tree)
+      return out
+    }
+    const reconcile = () => {
+      const st = useWorkspace.getState()
+      if (!st.loaded || !league) return
+      const armed = armedNodes()
+      const desired = armed.map(n => n.id).sort()
+      const key = league + '|' + desired.join(',')
+      if (key === lastKey) return
+      lastKey = key
+      const current = new Set(usePings.getState().engine.activeIds || [])
+      armed.forEach(n => {
+        if (!current.has(n.id)) window.poe2desktop.trade.startSearch(n.id, league, n.slug, n.type)
+          .then(r => { if (r && !r.ok && r.reason === 'budget') { useWorkspace.getState().setField(n.id, { armed: false }); toast('Live-search cap reached — stop one first', false) } })
+          .catch(() => {})
+      })
+      current.forEach(id => { if (!desired.includes(id)) window.poe2desktop.trade.stopSearch(id).catch(() => {}) })
+    }
+    const unsubWs = useWorkspace.subscribe(reconcile)
+    const unsubEng = usePings.subscribe((s, p) => { if ((s.engine.activeIds || []).length !== (p.engine.activeIds || []).length) reconcile() })
+    reconcile()
+    return () => { unsubWs(); unsubEng() }
+  }, [league])
 }
 
 // sonner's toast.custom render fn must return a REACT node (not a DOM element — that

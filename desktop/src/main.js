@@ -420,31 +420,6 @@ if (!app.requestSingleInstanceLock()) {
   })
 }
 
-// DEV (UI_SMOKE=1): drive the renderer to Trading → Live, emit synthetic pings, and
-// screenshot the real Electron window so the alert UI can be verified. Never runs shipped.
-async function runUiSmoke() {
-  const sleep = (ms) => new Promise(r => setTimeout(r, ms))
-  const out = process.env.UI_SMOKE_OUT || path.join(app.getPath('temp'), 'arbiter-uismoke.png')
-  try { win.show(); win.focus(); win.webContents.focus() } catch {}
-  await sleep(4000)
-  await win.webContents.executeJavaScript(`(() => {
-    const t = [...document.querySelectorAll('.tabs button')].find(b => b.textContent.trim().startsWith('Trading')); if (t) t.click();
-    setTimeout(() => { const s = [...document.querySelectorAll('.subtabs button')].find(b => b.textContent.trim()==='Live'); if (s) s.click() }, 400);
-    return document.querySelectorAll('.tabs button').length })()`)
-  await sleep(1500)
-  try { require('./trade').engine.emitTestPing(); await sleep(250); require('./trade').engine.emitTestPing() } catch (e) { console.log('[uismoke] emit failed', String(e)) }
-  await sleep(2500)
-  for (let i = 0; i < 3; i++) {
-    try {
-      const img = await win.webContents.capturePage()
-      const png = img.toPNG()
-      if (png && png.length > 8000) { fs.writeFileSync(out, png); console.log('[uismoke] wrote', out, png.length); return }
-    } catch (e) { console.log('[uismoke] capture attempt failed', String(e)) }
-    await sleep(1200)
-  }
-  console.log('[uismoke] capture produced empty frames')
-}
-
 app.whenReady().then(async () => {
   nativeTheme.themeSource = 'dark'
   await startBackend()
@@ -462,14 +437,6 @@ app.whenReady().then(async () => {
   })
   win.loadURL(uiUrl)
   win.webContents.setWindowOpenHandler(({ url }) => { shell.openExternal(url); return { action: 'deny' } })
-  win.webContents.on('did-finish-load', async () => {
-    try {
-      const ok = await win.webContents.executeJavaScript(
-        '[typeof window.poe2desktop?.connectSession, typeof window.poe2desktop?.openTrade].join(",")')
-      console.log(`[diag] poe2desktop bridge: connect+openTrade = ${ok}`)   // 'function,function' when live
-    } catch (e) { console.log('[diag] bridge check failed:', String(e)) }
-    if (process.env.UI_SMOKE) runUiSmoke().catch(e => console.log('[uismoke] failed:', String(e)))
-  })
   setupUpdates()
   startEe2Integration()   // self-gates on EE2 presence; dormant if EE2 isn't installed
   try { require('./trade').registerTrade(() => win) } catch (e) { console.log('[trade] register failed:', String(e)) }
@@ -500,6 +467,12 @@ app.on('web-contents-created', (_e, contents) => {
   contents.on('will-navigate', (ev, url) => {
     if (!isAuthUrl(url)) { ev.preventDefault(); shell.openExternal(url) }
   })
+  // The trade SPA updates the URL without firing <webview> DOM events, but the guest
+  // webContents DOES fire did-navigate/did-navigate-in-page. Forward those to the renderer
+  // so the workspace can capture a run search into the active entry (event-driven, no poll).
+  const fwd = (url) => { if (isPoeUrl(url)) try { win?.webContents.send('trade:webview-nav', url) } catch {} }
+  contents.on('did-navigate', (_ev, url) => fwd(url))
+  contents.on('did-navigate-in-page', (_ev, url) => fwd(url))
 })
 
 const stopTrade = () => { try { require('./trade').engine.stopAll() } catch {}; try { require('./trade/hotkey.js').unregisterAll() } catch {} }

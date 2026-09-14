@@ -22,6 +22,9 @@ contextBridge.exposeInMainWorld('poe2desktop', {
   // Live-search engine (desktop-only). Renderer sends intents; main runs the WS + fetch
   // + teleport against the user's own logged-in session and pushes pings/state back.
   trade: {
+    newSearch: (league) => ipcRenderer.invoke('trade:new-search', { league }),
+    onWebviewNav: (cb) => { const h = (_e, url) => cb(url); ipcRenderer.on('trade:webview-nav', h); return () => ipcRenderer.removeListener('trade:webview-nav', h) },
+    describe: (league, slug) => ipcRenderer.invoke('trade:describe', { league, slug }),
     startSearch: (itemId, league, slug, type) => ipcRenderer.invoke('trade:start-search', { itemId, league, slug, type }),
     stopSearch: (itemId) => ipcRenderer.invoke('trade:stop-search', { itemId }),
     engineState: () => ipcRenderer.invoke('trade:engine-state'),

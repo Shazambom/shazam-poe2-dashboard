@@ -1,29 +1,21 @@
 import React, { useEffect, useState } from 'react'
 import { motion } from 'motion/react'
 import { nav } from '../lib/nav.js'
-import TradeView from './TradeView.jsx'
 import WorkspaceView from './WorkspaceView.jsx'
 import LiveView from './LiveView.jsx'
 
-// Merged "Trading" tab: one home for Browse (the embedded trade site), Watches (saved
-// searches / workspace), and Live (live-search pings). Declutters the top nav — the two
-// old tabs (Trade, Watches) collapse into this sub-nav. Pure shell in PR1; later PRs
-// swap Watches -> workspace tree and light up Live.
+// The Trading tab: Workspace (file tree of searches + the embedded trade site) and Live
+// (pings + one-click travel-to-hideout). The trade site lives INSIDE the workspace — no
+// separate Browse tab.
 const SUBS = [
-  { id: 'browse', label: 'Browse' },
-  { id: 'watches', label: 'Workspace' },
+  { id: 'workspace', label: 'Workspace' },
   { id: 'live', label: 'Live' },
 ]
 
-const isDesktop = typeof window !== 'undefined' && !!window.poe2desktop
-
 export default function TradingView({ league }) {
-  // Default to Watches on web (Browse is a desktop-only embedded site), Browse on desktop.
-  const [sub, setSub] = useState(isDesktop ? 'browse' : 'watches')
-
-  // Command palette / hotkey / orb-click can drive the sub-nav.
+  const [sub, setSub] = useState(() => nav.consumePendingTrading() || 'workspace')
   useEffect(() => nav.on(e => {
-    if (e.type === 'openTrading' && e.sub) setSub(e.sub)
+    if (e.type === 'openTrading' && e.sub) setSub(e.sub === 'browse' || e.sub === 'watches' ? 'workspace' : e.sub)
     if (e.type === 'focusLive') setSub('live')
   }), [])
 
@@ -38,9 +30,10 @@ export default function TradingView({ league }) {
           </button>
         ))}
       </nav>
-
-      {sub === 'browse' && <TradeView key={league} league={league} />}
-      {sub === 'watches' && <WorkspaceView league={league} />}
+      {/* Keep Workspace mounted (its <webview> is costly to recreate); just hide it. */}
+      <div style={{ display: sub === 'workspace' ? 'flex' : 'none', flex: 1, minHeight: 0 }}>
+        <WorkspaceView league={league} />
+      </div>
       {sub === 'live' && <LiveView league={league} />}
     </div>
   )

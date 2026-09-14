@@ -14,11 +14,16 @@ const BACKOFF_MAX = 60000
 const sockets = new Map()       // itemId -> { ws, slug, league, searchId, attempts, stopped }
 let _sink = () => {}            // set by index.js: (channel, payload) => webContents.send
 
+// Verbose per-event trace (startSearch / WS open / ping / stop / teleport). Off by default
+// so production is quiet; set TRADE_DEBUG=1 to re-enable while diagnosing. Failures still log.
+const DBG = !!process.env.TRADE_DEBUG
+const dlog = (...a) => { if (DBG) console.log(...a) }
+
 function setSink(fn) { _sink = fn }
 function activeCount() { return sockets.size }
 
 function emitState(extra = {}) {
-  _sink('trade:engine-state', { active: sockets.size, budgetMax: MAX_SOCKETS, rate: rateGate.snapshot(), ...extra })
+  _sink('trade:engine-state', { active: sockets.size, activeIds: [...sockets.keys()], budgetMax: MAX_SOCKETS, rate: rateGate.snapshot(), ...extra })
 }
 
 async function startSearch(itemId, league, slug, type = 'search') {
@@ -27,6 +32,7 @@ async function startSearch(itemId, league, slug, type = 'search') {
     _sink('trade:engine-error', { itemId, reason: 'budget', message: `Live-search cap reached (${MAX_SOCKETS}/${MAX_SOCKETS}). Stop one first.` })
     return { ok: false, reason: 'budget' }
   }
+  dlog(`[trade] startSearch item=${itemId} league="${league}" type=${type} slug=${String(slug).slice(0, 12)}…`)
   const rec = { ws: null, slug, league, type, searchId: slug, attempts: 0, stopped: false }
   sockets.set(itemId, rec)
   await _connect(itemId)
@@ -58,6 +64,7 @@ async function _connect(itemId) {
 
   ws.on('open', () => {
     rec.attempts = 0
+    dlog(`[trade] WS OPEN item=${itemId} (live, ${sockets.size}/${MAX_SOCKETS})`)
     _sink('trade:search-state', { itemId, state: 'live' })
     emitState()
   })
@@ -65,10 +72,11 @@ async function _connect(itemId) {
     let msg
     try { msg = JSON.parse(buf.toString()) } catch { return }
     const ids = Array.isArray(msg.new) ? msg.new : (msg.result ? [msg.result] : [])
-    if (ids.length) _onPingIds(itemId, ids).catch(e => console.log('[trade] fetch error:', String(e)))
+    if (ids.length) { dlog(`[trade] PING item=${itemId} ids=${ids.length}`); _onPingIds(itemId, ids).catch(e => console.log('[trade] fetch error:', String(e))) }
   })
   ws.on('unexpected-response', (_req, res) => {
     const code = res.statusCode
+    console.log(`[trade] WS unexpected-response item=${itemId} HTTP ${code}`)
     if (code === 401 || code === 403) _sink('trade:search-state', { itemId, state: 'auth', message: 'Reconnect your PoE session' })
     else _sink('trade:search-state', { itemId, state: 'error', message: `HTTP ${code}` })
     try { ws.terminate() } catch {}
@@ -76,10 +84,11 @@ async function _connect(itemId) {
   ws.on('close', (code) => {
     rec.ws = null
     if (rec.stopped) return
+    dlog(`[trade] WS close item=${itemId} code=${code}`)
     if (code === 1013) { _sink('trade:search-state', { itemId, state: 'error', message: 'Too many live searches' }); _scheduleReconnect(itemId, '1013', 30000); return }
     _scheduleReconnect(itemId, `closed ${code}`)
   })
-  ws.on('error', (e) => { _sink('trade:search-state', { itemId, state: 'error', message: String(e.message || e) }) })
+  ws.on('error', (e) => { console.log(`[trade] WS error item=${itemId}: ${String(e.message || e)}`); _sink('trade:search-state', { itemId, state: 'error', message: String(e.message || e) }) })
 }
 
 function _scheduleReconnect(itemId, why, minDelay = 0) {
@@ -102,9 +111,10 @@ async function _onPingIds(itemId, ids) {
     if (resp.status === 429) { rateGate.observe429('fetch', resp.headers); _sink('trade:engine-error', { itemId, reason: 'rate', message: 'fetch 429' }); return }
     rateGate.observe('fetch', resp.headers)
     const data = poeJson(resp)
+    let n = 0
     for (const r of (data?.result || [])) {
       const ping = _normalize(itemId, rec, r)
-      if (ping) _sink('trade:ping', ping)
+      if (ping) { _sink('trade:ping', ping); n++; if (n === 1) dlog(`[trade] fetched ${data.result.length}; ping="${ping.item?.name || ping.item?.typeLine}" ${ping.price ? ping.price.amount + ' ' + ping.price.currency : ''} ${ping.online} token=${ping.token ? 'yes' : 'NO'}`) }
     }
   }
 }
@@ -141,6 +151,7 @@ function stopSearch(itemId) {
   clearTimeout(rec.timer)
   try { rec.ws?.close() } catch {}
   sockets.delete(itemId)
+  dlog(`[trade] stopSearch item=${itemId} (live ${sockets.size}/${MAX_SOCKETS})`)
   emitState()
 }
 
@@ -157,6 +168,7 @@ async function teleport(token) {
   if (resp.status === 429) { rateGate.observe429('whisper', resp.headers); throw new rateGate.RateLimitError(30) }
   rateGate.observe('whisper', resp.headers)
   const data = poeJson(resp) || {}
+  dlog(`[trade] teleport -> HTTP ${resp.status} success=${!!data.success}`)
   _sink('trade:rate-state', rateGate.snapshot())
   return { success: !!data.success, status: resp.status }
 }

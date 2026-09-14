@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react'
 import { Toaster } from 'sonner'
 import { api, fmt, bus, surface } from './lib/api.js'
 import { nav } from './lib/nav.js'
-import { useLiveWiring } from './lib/liveWiring.js'
+import { useLiveWiring, useLiveSync } from './lib/liveWiring.js'
 import VaalPingOrb from './components/VaalPingOrb.jsx'
 import CommandPalette from './components/CommandPalette.jsx'
 import { connectBridge, connectSessionWithToast } from './lib/session.js'
@@ -24,8 +24,7 @@ const SUB_DESTS = [
   { section: 'Strategy', sub: 'arbitrage', label: 'Arbitrage' },
   { section: 'Economy', sub: 'inflation', label: 'Inflation' },
   { section: 'Economy', sub: 'market', label: 'Market' },
-  { section: 'Trading', sub: 'browse', label: 'Browse' },
-  { section: 'Trading', sub: 'watches', label: 'Workspace' },
+  { section: 'Trading', sub: 'workspace', label: 'Workspace' },
   { section: 'Trading', sub: 'live', label: 'Live' },
 ]
 
@@ -79,8 +78,9 @@ export default function App() {
   }, [])
 
   // Jump to Trading → Live (used by the ping banner, the VaalPingOrb, and the hotkey).
-  const goLive = React.useCallback(() => { setTab('Trading'); setTimeout(() => nav.openTrading('live'), 0) }, [])
+  const goLive = React.useCallback(() => { nav.openTrading('live'); setTab('Trading') }, [])
   useLiveWiring(goLive)
+  useLiveSync(status?.league ?? '')   // keep the live engine reconciled to the DB's armed searches
   // The global focus hotkey (desktop) raises the window here; jump to Live + focus newest.
   useEffect(() => {
     if (!window.poe2desktop?.trade?.onFocusLive) return

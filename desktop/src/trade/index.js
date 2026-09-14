@@ -66,6 +66,47 @@ function registerTrade(getWin) {
     engine.startSearch(itemId, league, slug, type))
   ipcMain.handle('trade:stop-search', (_e, { itemId }) => { engine.stopSearch(itemId); return { ok: true } })
   ipcMain.handle('trade:engine-state', () => { engine.emitState(); return { active: engine.activeCount() } })
+  // Create a fresh search defaulted to INSTANT BUYOUT (priced listings, cheapest first) and
+  // return its slug, so the embedded trade window opens in buyout mode — which is also what
+  // travel-to-hideout requires. Falls back (null) to a blank search page on any error.
+  ipcMain.handle('trade:new-search', async (_e, { league }) => {
+    try {
+      const { POE, poeRequest } = require('./proxy.js')
+      const resp = await poeRequest({
+        method: 'POST', path: `/api/trade2/search/poe2/${encodeURIComponent(league)}`,
+        body: { query: { status: { option: 'online' }, filters: { trade_filters: { filters: { sale_type: { option: 'priced' } } } } }, sort: { price: 'asc' } },
+        referer: `${POE}/trade2/search/poe2/${encodeURIComponent(league)}`,
+      })
+      let id = null; try { id = JSON.parse(resp.body)?.id } catch {}
+      return { slug: id }
+    } catch { return { slug: null } }
+  })
+
+  // Derive a friendly name for a captured search (item name, or base type + ilvl + rarity)
+  // by fetching the saved search's query. Returns null if it can't (caller keeps default).
+  ipcMain.handle('trade:describe', async (_e, { league, slug }) => {
+    try {
+      const { POE, poeRequest } = require('./proxy.js')
+      const resp = await poeRequest({
+        path: `/api/trade2/search/poe2/${encodeURIComponent(league)}/${slug}`,
+        referer: `${POE}/trade2/search/poe2/${encodeURIComponent(league)}/${slug}`,
+      })
+      let d = null; try { d = JSON.parse(resp.body) } catch {}
+      const q = d?.query?.query || d?.query || d?.search?.query || {}
+      const tf = q?.filters?.type_filters?.filters || {}
+      const name = q.name || q.type || q.term
+      const rarity = tf.rarity?.option
+      const ilvl = tf.ilvl?.min
+      const cat = tf.category?.option
+      let label = name || (cat ? cat[0].toUpperCase() + cat.slice(1) : null)
+      if (!label) return null
+      const bits = []
+      if (rarity && !q.name) bits.push(rarity)
+      if (ilvl) bits.push('i' + ilvl)
+      return bits.length ? `${label} · ${bits.join(' ')}` : label
+    } catch { return null }
+  })
+
   ipcMain.handle('trade:teleport', async (_e, { token }) => {
     try { return await engine.teleport(token) }
     catch (e) { return { success: false, error: e.code || 'error', message: String(e.message || e), retryAfter: e.retryAfter } }

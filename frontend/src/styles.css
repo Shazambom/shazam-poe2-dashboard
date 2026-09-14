@@ -136,32 +136,48 @@ a { color: var(--live); }
 .live-empty { padding: 48px 24px; text-align: center; max-width: 520px; margin: 0 auto; }
 .live-empty-title { font-size: 15px; font-weight: 600; color: var(--ink); margin-bottom: 6px; }
 
-/* Workspace: filesystem tree (left) + dockview panels (right). */
-.workspace { display: flex; gap: 12px; height: calc(100vh - 190px); min-height: 380px; }
-.ws-rail { width: 300px; flex: 0 0 300px; display: flex; flex-direction: column;
+/* Trade workspace: file tree of searches (left) + embedded trade site (right).
+   NOTE: named .trade-ws (NOT .workspace) — .workspace is RoutesView's grid layout. */
+.trade-ws { display: flex; gap: 12px; flex: 1; height: calc(100vh - 150px); min-height: 400px; align-items: stretch; }
+.ws-rail { width: 280px; flex: 0 0 280px; display: flex; flex-direction: column;
   background: var(--surface-1, #16181d); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
-.ws-rail-head { display: flex; align-items: center; gap: 6px; padding: 10px 10px 8px; border-bottom: 1px solid var(--line); }
-.ws-add { display: flex; gap: 6px; padding: 8px 10px; border-bottom: 1px solid var(--line); }
-.ws-add input { flex: 1; min-width: 0; }
+.ws-divider { width: 16px; flex: 0 0 16px; display: flex; align-items: center; justify-content: center;
+  background: none; border: 0; cursor: pointer; color: var(--muted); align-self: stretch; }
+.ws-divider:hover { color: var(--ink); background: var(--line); }
+.ws-divider span { font-size: 12px; }
+.ws-rail-head { display: flex; align-items: center; gap: 6px; padding: 9px 10px; border-bottom: 1px solid var(--line); font-size: 13px; }
+.ws-icon-btn { background: var(--line); border: 0; color: var(--ink-2); width: 26px; height: 24px; border-radius: 6px;
+  cursor: pointer; font-size: 14px; line-height: 1; display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; }
+.ws-icon-btn:hover { background: var(--line-strong); color: var(--ink); }
+.ws-icon-btn.primary { background: linear-gradient(180deg, var(--gold-2), var(--gold)); color: #1a1400; font-weight: 800; }
 .ws-tree { flex: 1; min-height: 0; overflow: hidden; padding: 4px; }
-.ws-node { display: flex; align-items: center; gap: 6px; height: 100%; padding: 0 6px; border-radius: 6px; font-size: 13px; cursor: default; }
+.ws-empty-add { margin: 8px; padding: 10px; width: calc(100% - 16px); background: none; border: 1px dashed var(--line-strong);
+  border-radius: 8px; color: var(--muted); cursor: pointer; }
+.ws-empty-add:hover { color: var(--ink); border-color: var(--gold); }
+.ws-node { display: flex; align-items: center; gap: 6px; height: 100%; padding: 0 6px; border-radius: 6px; font-size: 13px; cursor: pointer; }
 .ws-node:hover { background: var(--line); }
+.ws-node.active { background: rgba(212,172,82,.14); box-shadow: inset 2px 0 0 var(--gold); }
 .ws-node.done .ws-name { text-decoration: line-through; color: var(--muted); }
-.ws-caret { width: 14px; text-align: center; color: var(--muted); cursor: pointer; user-select: none; }
-.ws-icon { font-size: 12px; opacity: .85; }
+.ws-caret { width: 12px; text-align: center; color: var(--muted); user-select: none; flex: 0 0 12px; }
+.ws-icon { font-size: 12px; opacity: .85; flex: 0 0 auto; }
 .ws-name { flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); }
 .ws-edit { flex: 1; min-width: 0; background: var(--bg); border: 1px solid var(--gold); border-radius: 4px; color: var(--ink); padding: 1px 4px; }
-.ws-mini { background: none; border: 0; color: var(--muted); cursor: pointer; padding: 2px 4px; font-size: 12px; opacity: 0; transition: opacity .12s; }
-.ws-node:hover .ws-mini { opacity: 1; }
-.ws-mini:hover { color: var(--ink); }
+.ws-mini { background: none; border: 0; color: var(--muted); cursor: pointer; padding: 2px 4px; font-size: 12px; opacity: 0; transition: opacity .12s; flex: 0 0 auto; }
+.ws-node:hover .ws-mini, .ws-node.active .ws-mini { opacity: .8; }
+.ws-mini:hover { color: var(--ink); opacity: 1; }
 .live-badge { font-size: 10px; font-weight: 700; color: #e8615f; border: 1px solid rgba(232,97,95,.5); border-radius: 4px; padding: 0 4px; letter-spacing: .04em; text-transform: uppercase; }
-.ws-panels { flex: 1; min-width: 0; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
-.wsp { padding: 16px; }
-.wsp-name { font-size: 15px; font-weight: 600; background: none; border: 0; border-bottom: 1px solid transparent; color: var(--ink); width: 100%; }
-.wsp-name:hover, .wsp-name:focus { border-bottom-color: var(--line-strong); outline: none; }
-.wsp-meta { font-size: 12px; margin: 6px 0 14px; }
-.wsp-actions { display: flex; gap: 8px; margin-bottom: 12px; }
-.wsp-empty { padding: 24px; color: var(--muted); }
+/* Right side: the embedded trade window (or the empty-state overlay). */
+.ws-main { flex: 1 1 auto; min-width: 0; min-height: 0; position: relative; display: flex; flex-direction: column;
+  border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: #0e0f13; }
+.ws-webhint { display: flex; align-items: center; gap: 10px; padding: 6px 12px; border-bottom: 1px solid var(--line); font-size: 12px; min-height: 30px; flex: 0 0 auto; }
+.ws-webhint.hidden { visibility: hidden; }
+.ws-cap { color: var(--muted); }
+.ws-cap.ok { color: var(--gain); }
+.ws-webview { flex: 1 1 auto; width: 100%; min-height: 0; border: 0; display: flex; }
+.ws-overlay { position: absolute; inset: 30px 0 0 0; display: flex; align-items: center; justify-content: center; text-align: center; padding: 24px; color: var(--muted); pointer-events: none; }
+.ws-overlay p { pointer-events: auto; max-width: 420px; }
+.ws-inline-add, .ws-empty-add { font-weight: 800; }
+.ws-inline-add { background: linear-gradient(180deg, var(--gold-2), var(--gold)); color: #1a1400; border: 0; border-radius: 6px; width: 22px; height: 22px; cursor: pointer; vertical-align: middle; }
 .empty.small { padding: 20px 8px; font-size: 12px; color: var(--muted); text-align: center; }
 
 /* VaalPingOrb — corrupted-red live-ping alert on the Trading tab. Intensity encodes
@@ -194,6 +210,9 @@ a { color: var(--live); }
 .live-recent-head { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; margin: 14px 0 6px; }
 .live-srow { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-bottom: 1px solid var(--line); font-size: 13px; }
 .ls-name { color: var(--ink); }
+/* Live tab reuses the workspace SearchTree; give it a measured height so react-arborist
+   can virtualize (it needs a concrete pixel height, not auto). */
+.live-tree-wrap { display: flex; height: 52vh; min-height: 220px; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
 .ping-card { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: 1px solid var(--line);
   border-radius: 10px; background: var(--surface-1, #16181d); margin-bottom: 8px; }
 .ping-card.compact { padding: 8px 12px; }

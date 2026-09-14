@@ -19,8 +19,8 @@ function persist(get) {
   clearTimeout(saveTimer)
   saveTimer = setTimeout(async () => {
     try {
-      const { version, tree, layout, openTabs } = get()
-      await api.putWorkspace({ version, tree, layout, openTabs })
+      const { version, tree, layout, openTabs, activeId } = get()
+      await api.putWorkspace({ version, tree, layout, openTabs, activeId })
     } catch (e) { toast(cleanErr(e), false) }
   }, DEBOUNCE)
 }
@@ -50,8 +50,10 @@ export const newFolder = (name = 'New group') => ({
 })
 export const searchNode = (parsed, name) => ({
   id: 'n_' + uid(), kind: 'search',
-  name: name || `Search ${String(parsed.slug).slice(0, 6)}`,
+  name: name || `Search ${String(parsed.slug || '').slice(0, 6)}`,
+  auto: true,   // auto-named; cleared once the user renames so we stop overwriting it
   type: parsed.type || 'search', slug: parsed.slug, live: !!parsed.live, done: false,
+  armed: false,   // "go live" — PERSISTED in the DB; the engine is reconciled to match it
   notify: { sound: true, orb: true, os: true },
 })
 
@@ -61,6 +63,9 @@ export const useWorkspace = create((set, get) => ({
   layout: null,
   openTabs: [],
   loaded: false,
+  activeId: null,   // which search entry is open in the trade window (persisted → restores on relaunch)
+
+  setActive: (id) => { set({ activeId: id }); persist(get) },
 
   hydrate: (doc) => {
     armed = false
@@ -69,6 +74,7 @@ export const useWorkspace = create((set, get) => ({
       tree: Array.isArray(doc?.tree) ? doc.tree : [],
       layout: doc?.layout ?? null,
       openTabs: Array.isArray(doc?.openTabs) ? doc.openTabs : [],
+      activeId: doc?.activeId ?? null,   // reopen the last-open search on relaunch
       loaded: true,
     })
     // arm on the next tick so hydrate itself doesn't trigger a save
@@ -89,16 +95,29 @@ export const useWorkspace = create((set, get) => ({
       : { tree: [...s.tree, node] })
     persist(get); return node.id
   },
-  rename: (id, name) => { set(s => ({ tree: mapNode(s.tree, id, n => ({ ...n, name })) })); persist(get) },
+  rename: (id, name) => { set(s => ({ tree: mapNode(s.tree, id, n => ({ ...n, name, auto: false })) })); persist(get) },
+  autoName: (id, name) => { set(s => ({ tree: mapNode(s.tree, id, n => (n.auto === false ? n : { ...n, name })) })); persist(get) },
   setField: (id, patch) => { set(s => ({ tree: mapNode(s.tree, id, n => ({ ...n, ...patch })) })); persist(get) },
   toggleOpen: (id) => { set(s => ({ tree: mapNode(s.tree, id, n => ({ ...n, open: !n.open })) })); persist(get) },
-  remove: (id) => { set(s => ({ tree: removeNode(s.tree, id), openTabs: s.openTabs.filter(t => t !== id) })); persist(get) },
+  remove: (id) => {
+    set(s => {
+      const tree = removeNode(s.tree, id)
+      // If the removed subtree contained the open search, drop the selection so the trade
+      // window doesn't point at a node that no longer exists.
+      const activeId = findNode(tree, s.activeId) ? s.activeId : null
+      return { tree, openTabs: s.openTabs.filter(t => t !== id), activeId }
+    })
+    persist(get)
+  },
 
   // Move `id` into `parentId` (null = root) at `index`. Used by react-arborist onMove.
   move: (id, parentId, index) => {
     set(s => {
       const node = findNode(s.tree, id)
       if (!node) return {}
+      // Refuse to move a node into itself or its own descendant — that would remove the
+      // subtree and have nowhere to re-insert it (silent data loss).
+      if (parentId && (parentId === id || findNode(node.children || [], parentId))) return {}
       let tree = removeNode(s.tree, id)
       if (parentId) {
         tree = mapNode(tree, parentId, n => {
