@@ -356,8 +356,10 @@ async function startEe2Integration() {
   try {
     const { ExiledExchangeIntegration } = require('./integrations/exiled-exchange')
     const { attachLogDemo } = require('./integrations/exiled-exchange/subscribers/log-demo')
+    const { attachEe2Telemetry } = require('./dev-ee2-telemetry')   // DEV diagnostic (see CLAUDE.md)
     _ee2 = new ExiledExchangeIntegration()
     attachLogDemo(_ee2)                       // demo subscriber: logs each hook, no side effects
+    attachEe2Telemetry(_ee2, app.getVersion())  // TEMP: report hooks to dev server so we can verify remotely
     await _ee2.start()
   } catch (e) { console.log('[ee2] integration disabled:', String(e)); _ee2 = null }
 }

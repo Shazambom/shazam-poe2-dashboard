@@ -50,6 +50,25 @@ Windows desktop builds run in CI (see the desktop contract above). They reach th
 Mac builds + publishes locally (PyInstaller can't cross-compile), so Mac is not part of
 this auto-publish path.
 
+## Verifying the Windows app — telemetry is mandatory
+
+**The user is NOT the tester. If you need to verify behavior in the Windows (or any
+packaged) desktop app, you MUST build telemetry so YOU can see what's happening —
+never ask the user to be your eyes.** Cross-platform desktop behavior (native modules,
+OS permissions, install/update, EE2 hooks) can't be observed from this Mac, so:
+
+- Add server-reporting telemetry to the thing you're testing, cut a build, have the
+  user just *use* it, and read the results yourself from the shazam dev server
+  (`GET http://192.168.1.250:8080/api/installlog`, filtered by a `?p=<tag>` marker —
+  e.g. `p=login`, `p=update`, `p=ee2`).
+- This is the ONE sanctioned exception to the desktop contract above. Keep it clearly
+  marked as a TEMPORARY DEV DIAGNOSTIC, put it OUTSIDE contract-clean packages (e.g.
+  `desktop/src/dev-ee2-telemetry.js`, not inside `integrations/`), report only what you
+  need (never secrets/keystrokes/raw clipboard), and strip or gate it before a
+  contract-clean release.
+- Existing markers: `p=init` (installer self-heal), `p=login` (PoE/Steam login flow),
+  `p=update` (auto-updater events), `p=ee2` (EE2 integration hooks).
+
 ## Web vs desktop
 
 - **Web** (served from shazam via Docker) is the cheap iteration surface: rsync
