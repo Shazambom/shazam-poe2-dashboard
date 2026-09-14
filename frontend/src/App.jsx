@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
+import { motion } from 'motion/react'
 import { api, fmt, bus, surface } from './lib/api.js'
 import { connectBridge, connectSessionWithToast } from './lib/session.js'
 import BoardView from './components/BoardView.jsx'
@@ -93,7 +94,11 @@ export default function App() {
         </select>
         <nav className="tabs" role="tablist">
           {TABS.map(t => (
-            <button key={t} role="tab" aria-selected={tab === t} onClick={() => setTab(t)}>{t}</button>
+            <button key={t} role="tab" aria-selected={tab === t} onClick={() => setTab(t)}>
+              {t}
+              {tab === t && <motion.span className="tab-underline" layoutId="tab-underline"
+                transition={{ type: 'spring', stiffness: 420, damping: 34 }} />}
+            </button>
           ))}
         </nav>
         <div className="feeds">

@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
+import { motion, AnimatePresence } from 'motion/react'
 import { api, fmt, surface, toast } from '../lib/api.js'
 import Cur from './Cur.jsx'
 
@@ -19,24 +20,52 @@ function Spark({ points, w = 132, h = 34 }) {
   const up = ys[ys.length - 1] >= ys[0]
   const col = up ? 'var(--gain)' : 'var(--loss)'
   const ex = sx(x1), ey = sy(ys[ys.length - 1])
+  const gid = `sg-${up ? 'u' : 'd'}`
   return (
-    <svg className="spark" width={w} height={h} viewBox={`0 0 ${w} ${h}`} aria-hidden="true">
-      <path d={area} fill={col} opacity="0.12" />
+    <svg className="spark" width={w} height={h} viewBox={`0 0 ${w} ${h}`} aria-hidden="true" preserveAspectRatio="none" style={{ width: '100%' }}>
+      <defs>
+        <linearGradient id={gid} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={col} stopOpacity="0.28" />
+          <stop offset="100%" stopColor={col} stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <path d={area} fill={`url(#${gid})`} />
       <path d={line} fill="none" stroke={col} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
-      <circle cx={ex} cy={ey} r="2.6" fill={col} />
+      <circle cx={ex} cy={ey} r="3" fill={col} />
+      <circle cx={ex} cy={ey} r="5.5" fill={col} opacity="0.25" />
     </svg>
   )
 }
 
-function Tile({ r, num, factor, numOptions, onNum, onRemove }) {
+function Tile({ r, num, factor, numOptions, onNum, onRemove, index = 0 }) {
   const change = r.change_pct
   const f = factor || 1
   const rp = (v) => (v == null ? null : v / f)               // reprice R-value into `num`
   const mid = rp(r.mid), buy = rp(r.buy), sell = rp(r.sell), spread = rp(r.spread)
   const trend = r.trend ? r.trend.map(p => ({ t: p.t, v: p.v / f })) : r.trend
   const unit = <Cur id={num} size={14} />
+  // Flash the price green/red when its value actually changes (new data landing).
+  const prev = useRef(mid)
+  const [flash, setFlash] = useState('')
+  useEffect(() => {
+    if (prev.current != null && mid != null && mid !== prev.current) {
+      setFlash(mid > prev.current ? 'up' : 'down')
+      const t = setTimeout(() => setFlash(''), 1000)
+      prev.current = mid
+      return () => clearTimeout(t)
+    }
+    prev.current = mid
+  }, [mid])
   return (
-    <div className={`price-tile src-${r.source || 'none'}`}>
+    <motion.div
+      layout
+      initial={{ opacity: 0, y: 14 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, scale: 0.94 }}
+      whileHover={{ y: -3 }}
+      transition={{ type: 'spring', stiffness: 380, damping: 30, delay: Math.min(index * 0.035, 0.4) }}
+      className={`price-tile src-${r.source || 'none'}`}
+    >
       <div className="pt-head">
         <span className="pt-name"><Cur id={r.id} text /></span>
         {onRemove && <button className="pt-remove" title="Remove from board" onClick={() => onRemove(r.id)}>×</button>}
@@ -47,7 +76,8 @@ function Tile({ r, num, factor, numOptions, onNum, onRemove }) {
         </span>
       </div>
       <div className="pt-mid">
-        {mid == null ? <span className="muted">no price</span> : <>{fmt.rate(mid)}<span className="pt-unit">{unit}</span></>}
+        {mid == null ? <span className="muted">no price</span>
+          : <span className={`pt-num ${flash}`}>{fmt.rate(mid)}<span className="pt-unit">{unit}</span></span>}
         {change != null && <span className={`pt-chg ${change >= 0 ? 'gain' : 'loss'}`}>{fmt.pct(change)}</span>}
       </div>
       <Spark points={trend} />
@@ -75,7 +105,7 @@ function Tile({ r, num, factor, numOptions, onNum, onRemove }) {
           </select>
         </div>
       )}
-    </div>
+    </motion.div>
   )
 }
 
@@ -181,13 +211,15 @@ export default function BoardView({ status }) {
       )}
       {err && <div className="notice error">{err}</div>}
       {rows.length === 0 && !err && <div className="empty">No watched currencies yet — add some to the watchlist in Settings.</div>}
-      <div className="price-grid">
-        {rows.map(r => {
-          const num = numFor(r)
-          return <Tile key={r.id} r={r} num={num} factor={prices[num] ?? 1} numOptions={numOptions}
-            onNum={setNum} onRemove={isDesktop && watchlist ? removeCur : null} />
-        })}
-      </div>
+      <motion.div className="price-grid" layout>
+        <AnimatePresence mode="popLayout">
+          {rows.map((r, i) => {
+            const num = numFor(r)
+            return <Tile key={r.id} index={i} r={r} num={num} factor={prices[num] ?? 1} numOptions={numOptions}
+              onNum={setNum} onRemove={isDesktop && watchlist ? removeCur : null} />
+          })}
+        </AnimatePresence>
+      </motion.div>
     </div>
   )
 }
