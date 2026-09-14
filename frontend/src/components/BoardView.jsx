@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { api, fmt } from '../lib/api.js'
+import { api, fmt, surface, toast } from '../lib/api.js'
 import Cur from './Cur.jsx'
+
+const isDesktop = typeof window !== 'undefined' && !!window.poe2desktop
 
 // A trend sparkline: single series, so no legend. Thin 2px line, faint area fill,
 // emphasized endpoint, recessive baseline — per the dataviz mark specs. Colored by
@@ -26,12 +28,13 @@ function Spark({ points, w = 132, h = 34 }) {
   )
 }
 
-function Tile({ r, refCur }) {
+function Tile({ r, refCur, onRemove }) {
   const change = r.change_pct
   return (
     <div className={`price-tile src-${r.source || 'none'}`}>
       <div className="pt-head">
         <span className="pt-name"><Cur id={r.id} text /></span>
+        {onRemove && <button className="pt-remove" title="Remove from board" onClick={() => onRemove(r.id)}>×</button>}
         <span className={`pt-src ${r.source}`} title={
           r.source === 'live' ? 'live order book' : r.source === 'digest' ? 'hourly market data'
             : r.source === 'derived' ? 'derived via other markets' : 'no data'}>
@@ -69,12 +72,31 @@ export default function BoardView({ status }) {
   const [err, setErr] = useState(null)
   const [busy, setBusy] = useState(false)
   const [auto, setAuto] = useState(false)
+  const [watchlist, setWatchlist] = useState(null)   // desktop-only board customization
+  const [opts, setOpts] = useState([])               // all currencies for the add picker
+  const [q, setQ] = useState('')
   const canLive = !!status?.session?.connected
   const timer = useRef(null)
 
   const load = async () => {
     try { setData(await api.board()); setErr(null) } catch (e) { setErr(String(e.message || e)) }
   }
+
+  const saveWatchlist = async (next, note) => {
+    setWatchlist(next)
+    try { await surface(api.putSettings({ watchlist: next }), note) ; await load() }
+    catch { setWatchlist(watchlist) }   // revert on failure
+  }
+  const addCur = async () => {
+    const term = q.trim().toLowerCase()
+    if (!term) return
+    const m = opts.find(o => o.name.toLowerCase() === term || o.id.toLowerCase() === term)
+    if (!m) { toast('Pick a currency from the list', false); return }
+    if ((watchlist || []).includes(m.id)) { toast(`${m.name} is already on the board`, false); return }
+    setQ('')
+    await saveWatchlist([...(watchlist || []), m.id], `Added ${m.name}`)
+  }
+  const removeCur = (id) => saveWatchlist((watchlist || []).filter(x => x !== id), 'Removed from board')
   const refreshLive = async () => {
     if (!canLive || busy) return
     setBusy(true)
@@ -82,6 +104,11 @@ export default function BoardView({ status }) {
     setBusy(false)
   }
   useEffect(() => { load(); const t = setInterval(load, 30000); return () => clearInterval(t) }, [])
+  useEffect(() => {
+    if (!isDesktop) return
+    api.settings().then(s => setWatchlist(s.watchlist || [])).catch(() => {})
+    api.currencies().then(d => setOpts(d?.currencies ?? [])).catch(() => {})
+  }, [])
   useEffect(() => {
     if (!auto || !canLive) return
     refreshLive()
@@ -106,10 +133,23 @@ export default function BoardView({ status }) {
           </>
         ) : <span className="hint">Connect live data (top bar) for real-time rates.</span>}
       </div>
+      {isDesktop && watchlist && (
+        <div className="board-bar" style={{ marginTop: 4 }}>
+          <span className="hint">Customize your board:</span>
+          <input className="btn" list="board-add-cur" placeholder="Add a currency…" value={q}
+            onChange={e => setQ(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') addCur() }} style={{ width: 240 }} />
+          <datalist id="board-add-cur">
+            {opts.filter(o => !watchlist.includes(o.id)).map(o => <option key={o.id} value={o.name} />)}
+          </datalist>
+          <button className="btn" onClick={addCur} disabled={!q.trim()}>Add</button>
+          <span className="spacer" />
+          <span className="hint">{watchlist.length} on board · hover a tile’s × to remove</span>
+        </div>
+      )}
       {err && <div className="notice error">{err}</div>}
       {rows.length === 0 && !err && <div className="empty">No watched currencies yet — add some to the watchlist in Settings.</div>}
       <div className="price-grid">
-        {rows.map(r => <Tile key={r.id} r={r} refCur={ref} />)}
+        {rows.map(r => <Tile key={r.id} r={r} refCur={ref} onRemove={isDesktop && watchlist ? removeCur : null} />)}
       </div>
     </div>
   )
