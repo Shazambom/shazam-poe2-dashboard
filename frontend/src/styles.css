@@ -290,6 +290,16 @@ details.adv[open] summary { color: var(--ink-2); margin-bottom: 8px; }
 .toast-ic { color: var(--gain); font-weight: 700; }
 .toast.error .toast-ic { color: var(--loss); }
 /* ---------- price board ---------- */
+.pulse-strip { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+.pulse-chip {
+  display: inline-flex; align-items: center; gap: 7px; padding: 7px 13px; font-size: 13px;
+  border: 1px solid var(--line); border-radius: 10px;
+  background: linear-gradient(165deg, var(--panel-hi) -20%, var(--panel) 50%); box-shadow: var(--shadow-1);
+}
+.pulse-label { color: var(--muted); font-size: 10.5px; text-transform: uppercase; letter-spacing: .05em; }
+.pulse-v { font-weight: 700; }
+.pulse-v.gain { color: var(--gain); } .pulse-v.loss { color: var(--loss); }
+.pulse-chip .gain { font-weight: 600; } .pulse-chip .loss { font-weight: 600; margin-left: 2px; }
 .board-bar { display: flex; align-items: center; gap: 14px; margin-bottom: 16px; flex-wrap: wrap; }
 .price-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(212px, 1fr)); gap: 14px; }
 .price-tile {

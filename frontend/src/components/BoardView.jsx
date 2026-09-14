@@ -262,9 +262,34 @@ export default function BoardView({ status }) {
     if (pick === r.id) pick = (r.id !== 'divine' && prices.divine != null) ? 'divine' : ref
     return prices[pick] != null ? pick : ref
   }
+  // Market pulse: derived at-a-glance insights that aren't on any single card —
+  // the biggest mover and how broad the move is (up vs down).
+  const pulse = useMemo(() => {
+    const withChg = rows.filter(r => r.change_pct != null)
+    if (!withChg.length) return null
+    const top = withChg.reduce((a, b) => Math.abs(b.change_pct) > Math.abs(a.change_pct) ? b : a)
+    const up = withChg.filter(r => r.change_pct >= 0).length
+    return { top, up, down: withChg.length - up }
+  }, [rows])
 
   return (
     <div className="single board">
+      {data && rows.length > 0 && pulse && (
+        <div className="pulse-strip">
+          {prices.divine != null && ref !== 'divine' && (
+            <div className="pulse-chip"><Cur id="divine" size={16} /><span className="pulse-v">{fmt.rate(prices.divine)}</span><span className="pulse-u"><Cur id={ref} size={12} /></span></div>
+          )}
+          {prices.chaos != null && ref !== 'chaos' && (
+            <div className="pulse-chip"><Cur id="chaos" size={16} /><span className="pulse-v">{fmt.rate(prices.chaos)}</span><span className="pulse-u"><Cur id={ref} size={12} /></span></div>
+          )}
+          {pulse.top && (
+            <div className="pulse-chip"><span className="pulse-label">Top mover</span><Cur id={pulse.top.id} size={16} />
+              <span className={`pulse-v ${pulse.top.change_pct >= 0 ? 'gain' : 'loss'}`}>{fmt.pct(pulse.top.change_pct)}</span></div>
+          )}
+          <div className="pulse-chip"><span className="pulse-label">Breadth</span>
+            <span className="gain">{pulse.up}▲</span><span className="loss">{pulse.down}▼</span></div>
+        </div>
+      )}
       <div className="board-bar">
         <h2 style={{ margin: 0 }}>Price board <span className="muted" style={{ fontWeight: 400 }}>· {rows.length} currencies · each priced in its top market</span></h2>
         <span className="spacer" />
