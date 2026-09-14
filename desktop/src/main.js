@@ -17,6 +17,11 @@ const POE = 'https://www.pathofexile.com'
 // One trust-boundary check for "is this a pathofexile.com URL", shared by the
 // open-trade handler and the webview navigation guards so they can't diverge.
 const isPoeUrl = (url) => /^https:\/\/([a-z0-9-]+\.)*pathofexile\.com\//i.test(String(url))
+// Keep the whole login redirect chain in-app: pathofexile.com AND the Steam OpenID
+// hosts it bounces through (steamcommunity.com / steampowered.com). Modeled on how
+// ExiledExchange2 lets the Steam redirect complete in-window on the shared session.
+const isAuthUrl = (url) =>
+  isPoeUrl(url) || /^https:\/\/([a-z0-9-]+\.)*(steamcommunity|steampowered)\.com\//i.test(String(url))
 const LOCAL_BACKEND_PORT = 8210
 const DEFAULTS = { mode: 'auto', remoteUrl: 'http://192.168.1.250:8080' }
 
@@ -153,6 +158,14 @@ function connectPoeFlow() {
     const login = new BrowserWindow({ width: 1100, height: 800, parent: win, title: 'Log in to Path of Exile' })
     const buf = [`ua=${login.webContents.getUserAgent()}`]
     const wc = login.webContents
+    // Keep the GGG/Steam login redirect chain inside the app (child popups inherit
+    // this window's session, so cookies still land in defaultSession); only send
+    // genuinely-external links out. This is what stops Steam opening in Firefox.
+    wc.setWindowOpenHandler(({ url }) => {
+      log(`popup ${url}`)
+      if (isAuthUrl(url)) return { action: 'allow' }
+      shell.openExternal(url); return { action: 'deny' }
+    })
     const log = (m) => { const t = new Date().toISOString().slice(11, 19); buf.push(`${t} ${m}`) }
     wc.on('did-start-navigation', (_e, u, inPage, isMain) => { if (isMain) log(`nav-start ${u}`) })
     wc.on('did-redirect-navigation', (_e, u) => log(`redirect ${u}`))
@@ -344,16 +357,17 @@ app.whenReady().then(async () => {
 })
 
 // The embedded Trade <webview> shares the default session (so it's logged in). Keep
-// it on pathofexile.com; anything else (forum links, wiki, etc.) opens externally.
+// pathofexile.com AND the Steam login hosts in-app (so Steam sign-in works from the
+// Trade tab too); anything else (forum links, wiki, etc.) opens externally.
 app.on('web-contents-created', (_e, contents) => {
   if (contents.getType() !== 'webview') return
   contents.setWindowOpenHandler(({ url }) => {
-    if (isPoeUrl(url)) return { action: 'allow' }
+    if (isAuthUrl(url)) return { action: 'allow' }
     shell.openExternal(url)
     return { action: 'deny' }
   })
   contents.on('will-navigate', (ev, url) => {
-    if (!isPoeUrl(url)) { ev.preventDefault(); shell.openExternal(url) }
+    if (!isAuthUrl(url)) { ev.preventDefault(); shell.openExternal(url) }
   })
 })
 
