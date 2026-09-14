@@ -185,6 +185,8 @@ async function connectPoeSession() {   // menu entry point: adds dialogs
   if (r.ok) win?.webContents.reload()
 }
 
+ipcMain.handle('app-version', () => app.getVersion())
+
 ipcMain.handle('poe-connect', async () => {
   const r = await connectPoeFlow()
   if (r.ok) reloadTradeWebviews()   // native login lands in defaultSession; refresh an open Trade tab

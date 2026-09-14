@@ -45,6 +45,8 @@ a { color: var(--live); }
 .cur { display: inline-flex; align-items: center; gap: 4px; vertical-align: middle; }
 .cur-img { object-fit: contain; vertical-align: middle; }
 .cur-name { white-space: nowrap; }
+.ver-chip { font-size: 11px; color: var(--muted, #8a8f9a); background: transparent; border: 1px solid rgba(255,255,255,.12); border-radius: 999px; padding: 1px 7px; cursor: pointer; margin-left: 2px; }
+.ver-chip:hover { color: #cfd3da; border-color: rgba(255,255,255,.25); }
 .topbar .league { color: var(--muted); font-weight: 400; margin-left: 8px; }
 .tabs { display: flex; gap: 2px; margin-left: 8px; }
 .tabs button {

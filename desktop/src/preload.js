@@ -4,6 +4,7 @@ const { contextBridge, ipcRenderer } = require('electron')
 // one-click connect (see AccountsPanel.jsx).
 contextBridge.exposeInMainWorld('poe2desktop', {
   connectSession: () => ipcRenderer.invoke('poe-connect'),
+  getVersion: () => ipcRenderer.invoke('app-version'),
   // Write a pasted POESESSID into the app's Electron session so the embedded
   // Trade webview is logged in too (paste otherwise only reaches the backend).
   setCookie: (cookie) => ipcRenderer.invoke('poe-set-cookie', cookie),

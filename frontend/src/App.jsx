@@ -30,6 +30,7 @@ export default function App() {
   const [leagues, setLeagues] = useState([])
   const [toasts, setToasts] = useState([])
   const [connecting, setConnecting] = useState(false)
+  const [appVersion, setAppVersion] = useState(null)
   const toastId = useRef(0)
 
   const refreshHeader = async () => {
@@ -42,6 +43,7 @@ export default function App() {
     const q = new URLSearchParams(window.location.search)
     if (q.get('oauth')) { setTab('Settings'); window.history.replaceState({}, '', '/') }
     refreshHeader()
+    if (window.poe2desktop?.getVersion) window.poe2desktop.getVersion().then(setAppVersion).catch(() => {})
     api.currencies().then(setCurrencies).catch(console.error)
     api.leagues().then(setLeagues).catch(() => setLeagues([]))
     const t = setInterval(refreshHeader, 30000)
@@ -81,6 +83,10 @@ export default function App() {
           src="https://web.poecdn.com/gen/image/WzI1LDE0LHsiZiI6IjJESXRlbXMvQ3VycmVuY3kvQW5udWxsT3JiIiwic2NhbGUiOjEsInJlYWxtIjoicG9lMiJ9XQ/2daba8ccca/AnnullOrb.png"
           alt="" width="24" height="24" onError={e => { e.currentTarget.style.display = 'none' }} />
         <h1>ShazamDash</h1>
+        {appVersion && (
+          <button className="ver-chip" title="Click to check for updates"
+            onClick={() => window.poe2desktop?.checkUpdate?.()}>v{appVersion}</button>
+        )}
         <select className="league-select" value={league} title="League — saves on select"
           onChange={e => setLeague(e.target.value)} disabled={!status}>
           {league && !leagues.some(l => l.id === league) && <option value={league}>{league}</option>}
