@@ -1,7 +1,7 @@
 {
   "name": "poe2-dashboard-desktop",
   "productName": "ShazamDash",
-  "version": "0.2.18",
+  "version": "0.2.19",
   "description": "Exchange-loop dashboard for Path of Exile 2 — desktop app",
   "main": "src/main.js",
   "author": "Shazambom",
@@ -42,16 +42,7 @@
         "dmg"
       ],
       "category": "public.app-category.games",
-      "identity": null,
-      "extraResources": [
-        {
-          "from": "backend-bin",
-          "to": "backend-bin",
-          "filter": [
-            "**/*"
-          ]
-        }
-      ]
+      "identity": null
     },
     "win": {
       "target": [
@@ -74,6 +65,15 @@
       "perMachine": false,
       "runAfterFinish": true,
       "include": "build/installer.nsh"
-    }
+    },
+    "extraResources": [
+      {
+        "from": "backend-bin",
+        "to": "backend-bin",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ]
   }
 }

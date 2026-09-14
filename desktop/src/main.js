@@ -54,9 +54,13 @@ async function waitFor(url, tries = 60) {
   return false
 }
 
+// The desktop app is FULLY SELF-CONTAINED: it runs its own bundled backend + local
+// DB and NEVER calls the server for data. The ONLY permitted server call is the
+// auto-updater (electron-updater → /downloads). See DESKTOP_CONTRACT in the docs.
 async function startBackend() {
+  const localUrl = `http://127.0.0.1:${LOCAL_BACKEND_PORT}`
   const bin = backendBinary()
-  if (settings.mode !== 'remote' && bin) {
+  if (bin) {
     const dataDir = path.join(app.getPath('userData'), 'data')
     fs.mkdirSync(dataDir, { recursive: true })
     backendProc = spawn(bin, [], {
@@ -66,15 +70,23 @@ async function startBackend() {
     backendProc.stdout.on('data', d => console.log('[backend]', String(d).trimEnd()))
     backendProc.stderr.on('data', d => console.log('[backend]', String(d).trimEnd()))
     backendProc.on('exit', c => { console.log('[backend] exited', c); backendProc = null })
-    if (await waitFor(`http://127.0.0.1:${LOCAL_BACKEND_PORT}/api/status`)) {
-      backendUrl = `http://127.0.0.1:${LOCAL_BACKEND_PORT}`
+    if (await waitFor(`${localUrl}/api/status`)) {
+      backendUrl = localUrl
       backendKind = 'local'
       return
     }
-    console.log('[backend] local backend failed to come up, falling back to remote')
+    console.log('[backend] bundled backend failed to come up')
+  } else if (!app.isPackaged) {
+    // DEV ONLY (never a shipped build): no bundled binary present, so point at the
+    // dev server for convenience. Packaged apps must never reach here.
+    backendUrl = settings.remoteUrl
+    backendKind = 'remote-dev'
+    return
   }
-  backendUrl = settings.remoteUrl
-  backendKind = 'remote'
+  // Shipped app stays local even if the backend is down — we never fall back to the
+  // server. Requests will fail visibly rather than silently phone home.
+  backendUrl = localUrl
+  backendKind = 'local'
 }
 
 function stopBackend() {
@@ -300,9 +312,7 @@ function buildMenu() {
             dialog.showMessageBox(win, { message: 'Cleared the pathofexile.com login.' })
           } },
         { type: 'separator' },
-        { label: `Backend: ${backendKind === 'local' ? 'local (this machine)' : `remote (${settings.remoteUrl})`}`, enabled: false },
-        { label: 'Use local backend', type: 'radio', checked: settings.mode !== 'remote', click: () => { settings.mode = 'auto'; saveSettings(); relaunch() } },
-        { label: 'Use remote server', type: 'radio', checked: settings.mode === 'remote', click: () => { settings.mode = 'remote'; saveSettings(); relaunch() } },
+        { label: `Backend: ${backendKind === 'local' ? 'local (this machine)' : backendKind}`, enabled: false },
         { type: 'separator' },
         { label: 'Open data folder', click: () => shell.openPath(path.join(app.getPath('userData'), 'data')) },
         { label: 'Check for updates', click: () => { try { require('electron-updater').autoUpdater.checkForUpdates() } catch {} } },

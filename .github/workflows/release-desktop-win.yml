@@ -1,9 +1,9 @@
 name: Build Windows desktop app
 
-# Mac cross-builds of the NSIS installer are broken on real Windows, and Wine-in-Docker
-# can't run on Apple Silicon (16KB pages). So the Windows installer is built here on a
-# real windows-latest runner and attached to a GitHub Release, from which it's published
-# to the dashboard's /downloads channel.
+# The Windows desktop app is FULLY SELF-CONTAINED: it ships its own PyInstaller-built
+# backend + local DB and only ever calls the server for updates. PyInstaller cannot
+# cross-compile, so the Windows backend .exe MUST be built here on a real windows-latest
+# runner; the installer is then attached to a GitHub Release and published to /downloads.
 on:
   push:
     tags: ['desktop-v*']
@@ -20,11 +20,27 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-      - name: Install deps
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Build bundled backend (PyInstaller, Windows x64)
+        shell: bash
+        run: |
+          python -m pip install --quiet -r backend/requirements.txt pyinstaller
+          pyinstaller --noconfirm --clean --onefile \
+            --name poe2arb-backend \
+            --paths backend \
+            --add-data "backend/data;data" \
+            --collect-all pyrate_limiter \
+            backend/run_desktop.py
+          mkdir -p desktop/backend-bin
+          cp dist/poe2arb-backend.exe desktop/backend-bin/poe2arb-backend.exe
+          ls -la desktop/backend-bin
+      - name: Install node deps
         run: |
           cd frontend && npm ci
           cd ../desktop && npm ci
-      - name: Build frontend + Windows installer (x64)
+      - name: Build frontend + Windows installer (x64, backend bundled)
         run: |
           cd desktop
           npm run build:frontend
