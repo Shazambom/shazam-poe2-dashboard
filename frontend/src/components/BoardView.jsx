@@ -42,8 +42,8 @@ function Tile({ r, num, factor, numOptions, onNum, onRemove }) {
         {onRemove && <button className="pt-remove" title="Remove from board" onClick={() => onRemove(r.id)}>×</button>}
         <span className={`pt-src ${r.source}`} title={
           r.source === 'live' ? 'live order book' : r.source === 'digest' ? 'hourly market data'
-            : r.source === 'derived' ? 'derived via other markets' : 'no data'}>
-          {r.source === 'live' ? 'LIVE' : r.source === 'digest' ? 'HR' : r.source === 'derived' ? '~' : '–'}
+            : r.source === 'derived' ? 'derived via other markets' : r.source === 'scout' ? 'poe2scout price' : 'no data'}>
+          {r.source === 'live' ? 'LIVE' : r.source === 'digest' ? 'HR' : r.source === 'derived' ? '~' : r.source === 'scout' ? 'SC' : '–'}
         </span>
       </div>
       <div className="pt-mid">

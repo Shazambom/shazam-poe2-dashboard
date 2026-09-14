@@ -16,12 +16,45 @@ from __future__ import annotations
 import asyncio
 import datetime as _dt
 import logging
+import re
 import time
 import urllib.parse
 
 from . import db, gateway
 
 log = logging.getLogger(__name__)
+
+_slug = lambda s: re.sub(r"[^a-z0-9]+", "-", str(s).lower()).strip("-")
+_scout_cache: dict[str, tuple[float, dict]] = {}
+
+
+def scout_prices(league: str) -> dict[str, float]:
+    """Latest poe2scout close (in Exalted) per currency for `league`, keyed by BOTH
+    lowercased name and slug — so the board can price currencies the currency-exchange
+    graph doesn't cover (e.g. Hinekora's Lock, omens). 5-min TTL cached."""
+    hit = _scout_cache.get(league)
+    if hit and time.time() - hit[0] < 300:
+        return hit[1]
+    out: dict[str, float] = {}
+    try:
+        with db.q() as c:
+            rows = c.execute(
+                """SELECT im.name, ld.close FROM league_daily ld
+                   JOIN item_meta im ON im.item_id = ld.item_id
+                   JOIN (SELECT item_id, MAX(day) md FROM league_daily WHERE league = ? GROUP BY item_id) mx
+                     ON mx.item_id = ld.item_id AND mx.md = ld.day
+                   WHERE ld.league = ?""",
+                (league, league),
+            ).fetchall()
+        for name, close in rows:
+            if close is None or not name:
+                continue
+            out[name.lower()] = close
+            out[_slug(name)] = close
+    except Exception as e:  # never let a price lookup break the board
+        log.warning("scout_prices(%s) failed: %s", league, e)
+    _scout_cache[league] = (time.time(), out)
+    return out
 
 _backfill_lock = asyncio.Lock()   # only one backfill crawl at a time (shared rate limit)
 

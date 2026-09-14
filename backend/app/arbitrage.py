@@ -178,6 +178,22 @@ class Graph:
             if not level:
                 break
             vals.update(level)
+        # Fallback for currencies the exchange graph can't reach (e.g. Hinekora's Lock,
+        # omens): value them from poe2scout (priced in Exalted). This threads a price
+        # for EVERY traded currency through capital, routes, market and the board.
+        try:
+            from . import leaguehistory
+            scout = leaguehistory.scout_prices(self.s["league"])
+            ex = vals.get("exalted")                     # reference-per-exalted
+            if scout and ex:
+                for cid, cur in registry.by_id.items():
+                    if cid in vals:
+                        continue
+                    px = scout.get(str(cur.name).lower()) or scout.get(str(cid).lower())
+                    if px:
+                        vals[cid] = px * ex
+        except Exception:
+            pass                                         # never let valuation crash on this
         return vals
 
     # ------------------------------------------------------------ search
@@ -593,16 +609,24 @@ def board() -> dict:
             cur = best.get(node)
             if cur is None or volr > cur[0]:
                 best[node] = (volr, other)
+    from . import leaguehistory
+    scout = leaguehistory.scout_prices(league)   # poe2scout fallback prices (Exalted), by name/slug
     rows = []
     for c in [x for x in s["watchlist"] if x != R]:
         buy_edge = g.edges.get((R, c))     # c per R  -> price to BUY c = 1/rate
         sell_edge = g.edges.get((c, R))    # R per c  -> price to SELL c = rate
         buy = (1.0 / buy_edge.rate) if buy_edge and buy_edge.rate > 0 else None
         sell = sell_edge.rate if sell_edge else None
-        mid = rv.get(c)
+        mid = rv.get(c)     # includes the poe2scout fallback threaded through ref_values
         edges = [e for e in (buy_edge, sell_edge) if e]
         kinds = {e.kind for e in edges}
-        source = "live" if "live" in kinds else "digest" if "digest" in kinds else ("derived" if mid is not None else None)
+        # Source label: prefer live/digest exchange data; a currency the exchange graph
+        # doesn't cover is priced from poe2scout ("scout"); anything else valued only
+        # via multi-hop is "derived".
+        in_scout = bool(scout.get(str(registry.name(c)).lower()) or scout.get(str(c).lower()))
+        source = ("live" if "live" in kinds else "digest" if "digest" in kinds
+                  else "scout" if (not kinds and in_scout) else ("derived" if mid is not None else None))
+        from_scout = source == "scout"
         age = min((e.age_s for e in edges), default=None)
         depth = next((len(e.ladder) for e in (sell_edge, buy_edge) if e and e.kind == "live"), None)
         spread = (buy - sell) if (buy is not None and sell is not None) else None
@@ -613,7 +637,9 @@ def board() -> dict:
         if len(trend) >= 2 and trend[0]["v"]:
             change_pct = (trend[-1]["v"] - trend[0]["v"]) / trend[0]["v"] * 100
         pref = best.get(c, (0.0, R))[1]
-        if pref == c or not rv.get(pref):
+        if from_scout:
+            pref = "divine" if rv.get("divine") else R   # niche/high-value → default to Divine
+        elif pref == c or not rv.get(pref):
             pref = R                                    # fall back to the reference
         rows.append({
             "id": c, "name": registry.name(c), "mid": mid, "buy": buy, "sell": sell,
