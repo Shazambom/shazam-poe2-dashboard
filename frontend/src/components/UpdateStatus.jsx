@@ -23,5 +23,8 @@ export default function UpdateStatus() {
     return <button className="update-chip ready" title={`Version ${st.version || ''} downloaded — click to install and restart`}
       onClick={() => bridge.installUpdate()}>↻ Install update{st.version ? ` ${st.version}` : ''}</button>
   }
-  return null   // checking / none / error → stay quiet
+  if (st.phase === 'checking') return <span className="update-chip" title="Checking for updates">checking…</span>
+  if (st.phase === 'none') return <span className="update-chip ok" title="You're on the latest version">✓ up to date</span>
+  if (st.phase === 'error') return <span className="update-chip err" title={st.message || 'update check failed'}>update error</span>
+  return null
 }

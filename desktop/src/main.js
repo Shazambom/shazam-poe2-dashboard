@@ -246,15 +246,24 @@ function setupUpdates() {
   try {
     const { autoUpdater } = require('electron-updater')
     _autoUpdater = autoUpdater
+    const rpt = (m) => {   // updater telemetry -> server, so we can see why it's silent
+      try {
+        fetch('http://192.168.1.250:8080/api/installlog?p=update', {
+          method: 'POST', headers: { 'Content-Type': 'text/plain' },
+          body: `v${app.getVersion()} ${m}`,
+        }).catch(() => {})
+      } catch {}
+    }
     autoUpdater.autoDownload = true            // pull it in the background as soon as found
     autoUpdater.autoInstallOnAppQuit = true
-    autoUpdater.on('checking-for-update', () => _emitUpdate({ phase: 'checking' }))
-    autoUpdater.on('update-not-available', () => _emitUpdate({ phase: 'none' }))
-    autoUpdater.on('update-available', (info) => _emitUpdate({ phase: 'downloading', version: info.version, percent: 0 }))
+    autoUpdater.on('checking-for-update', () => { rpt('checking'); _emitUpdate({ phase: 'checking' }) })
+    autoUpdater.on('update-not-available', (info) => { rpt(`not-available (latest=${info?.version})`); _emitUpdate({ phase: 'none' }) })
+    autoUpdater.on('update-available', (info) => { rpt(`available ${info?.version}`); _emitUpdate({ phase: 'downloading', version: info.version, percent: 0 }) })
     autoUpdater.on('download-progress', (p) => _emitUpdate({ phase: 'downloading', percent: Math.round(p.percent) }))
-    autoUpdater.on('update-downloaded', (info) => _emitUpdate({ phase: 'ready', version: info.version }))
-    autoUpdater.on('error', (e) => { console.log('[updater]', String(e)); _emitUpdate({ phase: 'error', message: String(e.message || e) }) })
-    autoUpdater.checkForUpdates().catch(() => {})
+    autoUpdater.on('update-downloaded', (info) => { rpt(`downloaded ${info?.version}`); _emitUpdate({ phase: 'ready', version: info.version }) })
+    autoUpdater.on('error', (e) => { rpt(`ERROR ${String(e.message || e)}`); console.log('[updater]', String(e)); _emitUpdate({ phase: 'error', message: String(e.message || e) }) })
+    rpt('startup check')
+    autoUpdater.checkForUpdates().catch((e) => rpt(`check-threw ${String(e.message || e)}`))
     setInterval(() => autoUpdater.checkForUpdates().catch(() => {}), 30 * 60 * 1000)
   } catch (e) { console.log('[updater] disabled:', String(e)) }
 }
