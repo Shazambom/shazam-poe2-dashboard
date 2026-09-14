@@ -1,10 +1,10 @@
-# ShazamDash — project contract
+# Arbiter — project contract
 
 ## ⛔ HIGHEST-IMPORTANCE RULE — the desktop contract
 
 **DESKTOP APPS MAY ONLY CALL THE SERVER FOR UPDATES. NOTHING ELSE.**
 
-The desktop app (ShazamDash, `desktop/`) is **fully self-contained**: it ships its own
+The desktop app (Arbiter, `desktop/`) is **fully self-contained**: it ships its own
 backend (PyInstaller binary in `backend-bin/`, bundled via `build.extraResources`) and
 its own local SQLite DB (in the OS user-data dir). Every `/api` request is served by
 that **bundled local backend on 127.0.0.1** — never a remote server.

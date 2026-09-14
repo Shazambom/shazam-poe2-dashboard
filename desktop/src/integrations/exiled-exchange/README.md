@@ -3,7 +3,7 @@
 A self-contained, **local-only** package that LISTENS for
 [Exiled-Exchange-2](https://github.com/Kvan7/Exiled-Exchange-2) (EE2, a fork of
 [Awakened PoE Trade](https://github.com/SnosMe/awakened-poe-trade)) activity and
-re-exposes it as an internal event bus ("hooks"), so ShazamDash can react
+re-exposes it as an internal event bus ("hooks"), so Arbiter can react
 whenever EE2 is used.
 
 ## Presence is the only switch (no toggle)

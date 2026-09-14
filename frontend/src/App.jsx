@@ -82,7 +82,7 @@ export default function App() {
         <img className="brand-logo"
           src="https://web.poecdn.com/gen/image/WzI1LDE0LHsiZiI6IjJESXRlbXMvQ3VycmVuY3kvQW5udWxsT3JiIiwic2NhbGUiOjEsInJlYWxtIjoicG9lMiJ9XQ/2daba8ccca/AnnullOrb.png"
           alt="" width="24" height="24" onError={e => { e.currentTarget.style.display = 'none' }} />
-        <h1>ShazamDash</h1>
+        <h1>Arbiter</h1>
         {appVersion && (
           <button className="ver-chip" title="Click to check for updates"
             onClick={() => window.poe2desktop?.checkUpdate?.()}>v{appVersion}</button>

@@ -12,8 +12,14 @@ if [ ! -d "$VENV" ]; then "$PY" -m venv "$VENV"; fi
 source "$VENV/bin/activate"
 pip -q install -r ../backend/requirements.txt pyinstaller
 
+# IMPORTANT: override ONLY --workpath. PyInstaller's default workpath is ./build —
+# which is our RESOURCES dir (icons + installer.nsh); it once wrote there and the
+# cleanup deleted those files. dist/ and the .spec stay at the default (CWD) so the
+# relative --add-data path still resolves; we just never touch build/.
+WORK=.pyi-work
 pyinstaller --noconfirm --clean --onefile \
   --name poe2arb-backend \
+  --workpath "$WORK" \
   --paths ../backend \
   --add-data "../backend/data:data" \
   --collect-all pyrate_limiter \
@@ -21,6 +27,6 @@ pyinstaller --noconfirm --clean --onefile \
 
 mkdir -p backend-bin
 cp "dist/poe2arb-backend$( [ "$(uname -s)" = "Windows_NT" ] && echo .exe || true )" backend-bin/
-rm -rf build dist poe2arb-backend.spec
+rm -rf "$WORK" dist poe2arb-backend.spec
 echo "backend-bin/ ready:"
 ls -la backend-bin/

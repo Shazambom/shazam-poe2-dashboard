@@ -320,7 +320,7 @@ function buildMenu() {
   const template = [
     ...(process.platform === 'darwin' ? [{ role: 'appMenu' }] : []),
     {
-      label: 'ShazamDash',
+      label: 'Arbiter',
       submenu: [
         { label: 'Connect PoE trade session…', click: connectPoeSession },
         { label: 'Log out of pathofexile.com', click: async () => {
@@ -387,7 +387,7 @@ app.whenReady().then(async () => {
   buildMenu()
   win = new BrowserWindow({
     width: 1500, height: 950, minWidth: 900, minHeight: 600,
-    title: 'ShazamDash',
+    title: 'Arbiter',
     backgroundColor: '#191b22',
     autoHideMenuBar: true,   // hide the Dashboard/Edit/View/Window bar by default (Win/Linux); tap Alt to reveal
     webPreferences: {

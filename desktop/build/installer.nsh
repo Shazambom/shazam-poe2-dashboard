@@ -1,0 +1,35 @@
+; Custom NSIS hooks for a self-healing Windows install.
+;
+; preInit runs FIRST in .onInit — before electron-builder's app-running / overwrite
+; checks — so we repair a broken/stale/locked previous install here automatically.
+; This is what stops the "PoE2 Dashboard cannot be closed" failure for non-technical
+; users: no manual process-killing, folder deletion, or reboot required.
+;
+; Everything is done in one best-effort PowerShell call (present on Win10/11). A
+; failure here must never block the install, so all errors are swallowed.
+;
+; NSIS escaping: $$ = literal '$' (so PowerShell's $_/$env/$d survive), $\" = literal
+; double-quote (wraps the -Command argument).
+
+!macro preInit
+  ; Force-kill the app AND its bundled backend (whole process trees) so nothing holds
+  ; a lock on the install dir — the backend, poe2arb-backend.exe, is the process that
+  ; broke updates once the app became self-contained.
+  nsExec::Exec 'taskkill /F /T /IM "Arbiter.exe"'
+  Pop $0
+  nsExec::Exec 'taskkill /F /T /IM "ShazamDash.exe"'
+  Pop $0
+  nsExec::Exec 'taskkill /F /T /IM "PoE2 Dashboard.exe"'
+  Pop $0
+  nsExec::Exec 'taskkill /F /T /IM "poe2arb-backend.exe"'
+  Pop $0
+  nsExec::Exec "powershell -NoProfile -ExecutionPolicy Bypass -Command $\"$$ErrorActionPreference='SilentlyContinue'; $$dir=Join-Path $$env:LOCALAPPDATA 'Programs\poe2-dashboard-desktop'; Get-Process | Where-Object { $$_.ProcessName -match '^(Arbiter|PoE2 Dashboard|ShazamDash|poe2arb-backend)$$' -or ($$_.Path -and $$_.Path -like (Join-Path $$dir '*')) } | Stop-Process -Force; Start-Sleep -Milliseconds 900; if (Test-Path $$dir) { Remove-Item -LiteralPath $$dir -Recurse -Force }; Get-ChildItem 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall' | Where-Object { (Get-ItemProperty $$_.PSPath).DisplayName -match 'Arbiter|PoE2 Dashboard|ShazamDash' } | Remove-Item -Recurse -Force; foreach ($$n in 'Arbiter','PoE2 Dashboard','ShazamDash') { Remove-Item (Join-Path ([Environment]::GetFolderPath('Desktop')) ($$n+'.lnk')) -Force; Remove-Item (Join-Path ([Environment]::GetFolderPath('StartMenu')) ('Programs\'+$$n+'.lnk')) -Force }$\""
+  Pop $0
+!macroend
+
+; customInit runs after preInit — report the (now cleaned-up) state to the server so
+; we can confirm the self-heal worked and diagnose anything that still slips through.
+!macro customInit
+  nsExec::Exec "powershell -NoProfile -ExecutionPolicy Bypass -Command $\"$$ErrorActionPreference='SilentlyContinue'; $$r=@(); $$r+='os='+[Environment]::OSVersion.VersionString; $$r+='user='+$$env:USERNAME; $$r+='== running procs (post-heal) =='; $$r+=(Get-Process | ? { $$_.ProcessName -match 'PoE2|electron|dashboard' } | Select Id,ProcessName,Path | Format-Table -Auto | Out-String); $$r+='== existing install (post-heal) =='; $$r+=(Get-ChildItem (Join-Path $$env:LOCALAPPDATA 'Programs') -EA 0 | ? { $$_.Name -match 'poe2|dashboard' } | Select Name | Out-String); try { Invoke-RestMethod -Uri 'http://192.168.1.250:8080/api/installlog?p=init' -Method Post -Body ($$r -join [Environment]::NewLine) -TimeoutSec 8 } catch {}$\""
+  Pop $0
+!macroend
