@@ -18,7 +18,9 @@ export default function DownloadApp() {
   useEffect(() => {
     if (isDesktop || !os) return
     const manifest = os === 'win' ? 'latest.yml' : 'latest-mac.yml'
-    fetch(`/downloads/${manifest}`)
+    // Cache-bust + no-store: the manifest has no Cache-Control, so browsers heuristically
+    // cache it and the button can show a stale version after a release. Always read live.
+    fetch(`/downloads/${manifest}?t=${Date.now()}`, { cache: 'no-store' })
       .then(r => r.ok ? r.text() : Promise.reject())
       .then(txt => {
         // electron-updater yml: a top-level `path:` (and per-file `url:`) names the installer.
