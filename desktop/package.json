@@ -1,8 +1,8 @@
 {
   "name": "poe2-dashboard-desktop",
   "productName": "Arbiter",
-  "version": "0.2.27",
-  "description": "Exchange-loop dashboard for Path of Exile 2 — desktop app",
+  "version": "0.2.28",
+  "description": "Exchange-loop dashboard for Path of Exile 2 \u2014 desktop app",
   "main": "src/main.js",
   "author": "Shazambom",
   "license": "MIT",
