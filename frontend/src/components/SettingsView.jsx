@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { api, surface } from '../lib/api.js'
+import { api, surface, toast } from '../lib/api.js'
 import AccountsPanel from './AccountsPanel.jsx'
 import RecipesView from './RecipesView.jsx'
 
@@ -154,8 +154,45 @@ export default function SettingsView({ currencies, status, onSaved }) {
               <datalist id="cur-ids-2">{opts.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}</datalist>
             </details>
           )}
+
+          <details className="adv">
+            <summary>Diagnostics</summary>
+            <DiagPanel />
+          </details>
         </div>
       </div>
+    </div>
+  )
+}
+
+// Local self-diagnostics (no data leaves the machine): backend health, DB row counts,
+// backfill/digest state, and a live connectivity probe — to see why prices are/aren't
+// flowing on the self-contained desktop build.
+function DiagPanel() {
+  const [d, setD] = useState(null)
+  const [err, setErr] = useState(null)
+  const [busy, setBusy] = useState(false)
+  const run = async () => {
+    setBusy(true); setErr(null)
+    try { setD(await api.diag()) } catch (e) { setErr(String(e.message || e)) }
+    setBusy(false)
+  }
+  useEffect(() => { run() }, [])
+  const text = d ? JSON.stringify(d, null, 2) : ''
+  return (
+    <div>
+      <div className="row" style={{ gap: 8, marginBottom: 8 }}>
+        <button className="btn small" disabled={busy} onClick={run}>{busy ? 'Checking…' : 'Refresh'}</button>
+        <button className="btn small" disabled={!text} onClick={() => { navigator.clipboard?.writeText(text); toast('Diagnostics copied') }}>Copy</button>
+      </div>
+      {err && <div className="notice error">{err}</div>}
+      {d && (
+        <>
+          <p className="hint">league <b>{d.settings?.league}</b> · league_daily rows for it: <b>{d.db_counts?.['league_daily[current_league]'] ?? '–'}</b> · registry {d.registry?.count}.
+            Connectivity: {Object.entries(d.connectivity || {}).map(([k, v]) => <span key={k} style={{ marginRight: 10 }}>{k}=<b className={String(v).startsWith('ERR') ? 'loss' : 'gain'}>{String(v)}</b></span>)}</p>
+          <pre style={{ maxHeight: 260, overflow: 'auto', fontSize: 11, background: 'rgba(0,0,0,.25)', padding: 8, borderRadius: 6 }}>{text}</pre>
+        </>
+      )}
     </div>
   )
 }

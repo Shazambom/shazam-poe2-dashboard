@@ -636,11 +636,21 @@ def board() -> dict:
         change_pct = None
         if len(trend) >= 2 and trend[0]["v"]:
             change_pct = (trend[-1]["v"] - trend[0]["v"]) / trend[0]["v"] * 100
-        pref = best.get(c, (0.0, R))[1]
-        if from_scout:
-            pref = "divine" if rv.get("divine") else R   # niche/high-value → default to Divine
-        elif pref == c or not rv.get(pref):
-            pref = R                                    # fall back to the reference
+        # Default numeraire: the currency's highest-volume counterpart when the GGG
+        # exchange digest has volume for it. Currencies without per-pair volume (poe2scout-
+        # only, or a thin/just-synced digest) can't have a "top market", so tier by value
+        # instead: mirror-class → Mirror, divine-class → Divine, else the reference.
+        top = best.get(c, (0.0, None))[1]
+        if top and top != c and rv.get(top):
+            pref = top
+        else:
+            mv, dv = rv.get("mirror"), rv.get("divine")
+            if mid and mv and mid >= mv:
+                pref = "mirror"
+            elif mid and dv and mid >= dv:
+                pref = "divine"
+            else:
+                pref = R
         rows.append({
             "id": c, "name": registry.name(c), "mid": mid, "buy": buy, "sell": sell,
             "spread": spread, "spread_pct": spread_pct, "source": source, "age_s": age,

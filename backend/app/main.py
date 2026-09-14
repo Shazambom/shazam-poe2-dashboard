@@ -110,6 +110,56 @@ async def install_log(request: Request):
     return {"ok": True}
 
 
+@app.get("/api/diag")
+async def diag():
+    """Local self-diagnostics for the (self-contained) desktop app: settings, DB row
+    counts, backfill/digest state, and a live connectivity probe. Read in-app under
+    Settings → Diagnostics. No data leaves the machine."""
+    import httpx
+
+    from . import config
+    s = get_settings()
+    counts: dict = {}
+    with db.q() as c:
+        for t in ("league_daily", "item_meta", "digest_markets", "orderbook", "capital", "kv"):
+            try:
+                counts[t] = c.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0]
+            except Exception as e:
+                counts[t] = f"err:{e}"
+        try:
+            counts["league_daily[current_league]"] = c.execute(
+                "SELECT COUNT(*) FROM league_daily WHERE league=?", (s["league"],)).fetchone()[0]
+        except Exception:
+            pass
+    # Live reachability from THIS backend (catches PyInstaller SSL/cert failures that
+    # silently break every price fetch → "no prices").
+    net: dict = {}
+    probes = {
+        "poecdn(digest)": config.GGG_DIGEST_URL,
+        "poe2scout": "https://api.poe2scout.com/poe2/Leagues",
+        "pathofexile": config.TRADE_STATIC_URL,
+    }
+    async with httpx.AsyncClient(timeout=8, headers={"User-Agent": config.USER_AGENT}) as cx:
+        for name, url in probes.items():
+            try:
+                r = await cx.get(url)
+                net[name] = r.status_code
+            except Exception as e:
+                net[name] = f"ERR {type(e).__name__}: {str(e)[:140]}"
+    return {
+        "time": time.time(),
+        "data_dir": str(config.DATA_DIR),
+        "settings": {"league": s["league"], "reference": s["reference"], "watchlist": s["watchlist"]},
+        "db_counts": counts,
+        "registry": {"loaded_at": registry.loaded_at, "count": len(registry.by_id)},
+        "digest": dict(digest.state),
+        "orderbook": orderbook.state,
+        "leaguehistory_current": db.kv_get("lh_current", []),
+        "session_connected": session.status().get("connected", False),
+        "connectivity": net,
+    }
+
+
 @app.get("/api/installlog")
 def install_log_read():
     try:
