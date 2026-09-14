@@ -642,6 +642,7 @@ def board() -> dict:
                 best[node] = (volr, other)
     from . import leaguehistory
     scout = leaguehistory.scout_prices(league)   # poe2scout fallback prices (Exalted), by name/slug
+    scout_hist = leaguehistory.scout_history(league)   # poe2scout daily trend, by name/slug
     rows = []
     for c in [x for x in s["watchlist"] if x != R]:
         buy_edge = g.edges.get((R, c))     # c per R  -> price to BUY c = 1/rate
@@ -664,6 +665,10 @@ def board() -> dict:
         spread_pct = (spread / mid * 100) if (spread is not None and mid) else None
         hist = digest.pair_history(league, c, R, 72)   # rate = R per c = price of c in R
         trend = [{"t": h["hour"], "v": h["rate"]} for h in hist][-48:]
+        if len(trend) < 2:   # not on the exchange digest → draw from poe2scout dailies
+            sh = scout_hist.get(str(registry.name(c)).lower()) or scout_hist.get(str(c).lower())
+            if sh:
+                trend = sh[-14:]   # recent ~2 weeks of daily closes (keeps change% sane)
         change_pct = None
         if len(trend) >= 2 and trend[0]["v"]:
             change_pct = (trend[-1]["v"] - trend[0]["v"]) / trend[0]["v"] * 100

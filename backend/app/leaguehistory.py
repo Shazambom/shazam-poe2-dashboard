@@ -56,6 +56,45 @@ def scout_prices(league: str) -> dict[str, float]:
     _scout_cache[league] = (time.time(), out)
     return out
 
+
+_shist_cache: dict[str, tuple[float, dict]] = {}
+
+
+def scout_history(league: str, days: int = 60) -> dict[str, list]:
+    """Per-currency daily price trend (Close, in Exalted) for `league` from poe2scout,
+    keyed by lowercased name AND slug — so the board can draw a sparkline for currencies
+    the GGG exchange digest doesn't cover (Hinekora's Lock, omens, …). Each value is a
+    list of {t: epoch_seconds, v: close}, oldest→newest. 5-min TTL cached."""
+    hit = _shist_cache.get(league)
+    if hit and time.time() - hit[0] < 300:
+        return hit[1]
+    series: dict[str, list] = {}
+    try:
+        with db.q() as c:
+            rows = c.execute(
+                """SELECT im.name, ld.day, ld.close FROM league_daily ld
+                   JOIN item_meta im ON im.item_id = ld.item_id
+                   WHERE ld.league = ? AND ld.close IS NOT NULL
+                   ORDER BY ld.day""",
+                (league,),
+            ).fetchall()
+        for name, day, close in rows:
+            if not name:
+                continue
+            try:
+                t = int(_dt.datetime.strptime(day, "%Y-%m-%d").replace(tzinfo=_dt.timezone.utc).timestamp())
+            except Exception:
+                continue
+            pt = {"t": t, "v": close}
+            series.setdefault(name.lower(), []).append(pt)
+            series.setdefault(_slug(name), []).append(pt)
+    except Exception as e:
+        log.warning("scout_history(%s) failed: %s", league, e)
+    for k in series:
+        series[k] = series[k][-days:]
+    _shist_cache[league] = (time.time(), series)
+    return series
+
 _backfill_lock = asyncio.Lock()   # only one backfill crawl at a time (shared rate limit)
 
 
