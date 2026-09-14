@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts'
 import { api, fmt } from '../lib/api.js'
+import Cur from './Cur.jsx'
 
 const hourLabel = (h) => new Date(h * 1000).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit' })
 
@@ -74,7 +75,7 @@ export default function MarketView({ currencies }) {
               <tbody>
                 {top.slice(0, 15).map((m, i) => (
                   <tr key={i} style={{ cursor: 'pointer' }} onClick={() => setPair({ a: m.a, b: m.b })}>
-                    <td>{names[m.a] ?? m.a} / {names[m.b] ?? m.b}</td>
+                    <td><Cur id={m.a} name={names[m.a]} /> / <Cur id={m.b} name={names[m.b]} /></td>
                     <td className="num">{fmt.n(m.volume_a)} / {fmt.n(m.volume_b)}</td>
                     <td className="num">{m.hours_active}</td>
                   </tr>
@@ -95,7 +96,7 @@ export default function MarketView({ currencies }) {
         <tbody>
           {shown.map((e, i) => (
             <tr key={i}>
-              <td>{e.from_name}</td><td>{e.to_name}</td>
+              <td><Cur id={e.from} name={e.from_name} /></td><td><Cur id={e.to} name={e.to_name} /></td>
               <td><i className={`k ${e.kind}`} style={{ display: 'inline-block', marginRight: 6 }} />{e.kind}{e.kind === 'recipe' && <span className="muted"> {e.meta?.name}</span>}</td>
               <td className="num">{fmt.rate(e.rate)}</td>
               <td className="num">{e.depth}</td>

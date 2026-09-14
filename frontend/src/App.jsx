@@ -8,6 +8,7 @@ import WatchesView from './components/WatchesView.jsx'
 import TradeView from './components/TradeView.jsx'
 import RoutesView from './components/RoutesView.jsx'
 import MarketView from './components/MarketView.jsx'
+import Cur from './components/Cur.jsx'
 import SettingsView from './components/SettingsView.jsx'
 import DownloadApp from './components/DownloadApp.jsx'
 import UpdateStatus from './components/UpdateStatus.jsx'
@@ -116,7 +117,7 @@ export default function App() {
             </span>
           )}
           <span className="capital-pill" title="Total value of what you hold, in the reference currency">
-            capital <b>{fmt.n(capital?.total_ref, 1)}</b> {ref}</span>
+            capital <b>{fmt.n(capital?.total_ref, 1)}</b> <Cur id={ref} size={14} /></span>
           {status?.oauth?.logged_in && <span className="muted">{status.oauth.username}</span>}
           <UpdateStatus />
           <DownloadApp />

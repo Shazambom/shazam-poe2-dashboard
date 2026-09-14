@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { api, fmt, surface } from '../lib/api.js'
 import { useAutosave } from '../lib/hooks.js'
+import Cur from './Cur.jsx'
 
 const PRIMARY = ['chaos', 'exalted', 'divine']
 
@@ -44,11 +45,11 @@ export default function CapitalCard({ currencies, status, onSaved }) {
             const v = valueOf(c)
             return (
               <tr key={c}>
-                <td title={c}>{names[c] ?? c}</td>
+                <td><Cur id={c} text /></td>
                 <td className="num"><input type="number" min="0" step="1" value={qty[c]}
                   onChange={e => setOne(c, e.target.value)} /></td>
                 <td className="num muted" title={v?.ref_value != null ? `1 ${c} ≈ ${fmt.rate(v.ref_value)} ${ref}` : ''}>
-                  {v?.value_ref != null ? `${fmt.n(v.value_ref, 1)} ${ref}`
+                  {v?.value_ref != null ? <>{fmt.n(v.value_ref, 1)} <Cur id={ref} size={14} /></>
                     : Number(qty[c]) > 0 ? <span title={backfilling ? 'valued once market data finishes syncing' : 'no market rate yet'}>…</span> : ''}
                 </td>
                 <td>{!PRIMARY.includes(c) && <button className="btn small" title="Remove" onClick={() => remove(c)}>×</button>}</td>
@@ -68,7 +69,7 @@ export default function CapitalCard({ currencies, status, onSaved }) {
           {(currencies?.currencies ?? []).filter(c => !(c.id in qty)).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
         </datalist>
       </div>
-      <p className="hint" style={{ marginTop: 6 }}>Total <b>{fmt.n(data?.total_ref, 1)} {ref}</b> · loops are sized from these counts.</p>
+      <p className="hint" style={{ marginTop: 6 }}>Total <b>{fmt.n(data?.total_ref, 1)} <Cur id={ref} size={14} /></b> · loops are sized from these counts.</p>
     </div>
   )
 }

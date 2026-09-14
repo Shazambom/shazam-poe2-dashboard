@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine, Legend } from 'recharts'
 import { api, fmt } from '../lib/api.js'
+import Cur from './Cur.jsx'
 
 // Fixed categorical hues (assigned in order, never cycled) — distinct in the app's
 // dark theme. Identity is carried by the legend, never colour alone.
@@ -128,7 +129,7 @@ export default function InflationView({ league }) {
           <tbody>
             {(data?.currencies ?? []).map((cur, i) => (
               <tr key={cur.id}>
-                <td><span className="dot-key" style={{ background: SERIES[i % SERIES.length] }} /> {cur.name}</td>
+                <td><span className="dot-key" style={{ background: SERIES[i % SERIES.length] }} /> <Cur name={cur.name} text /></td>
                 <td className="num">{cur.current}</td>
                 <td className={`num ${cur.since_base_pct >= 0 ? 'loss' : 'gain'}`}>{fmt.pct(cur.since_base_pct)}</td>
                 <td className="num muted">{cur.coverage}</td>

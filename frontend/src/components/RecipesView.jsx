@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { api, surface } from '../lib/api.js'
+import Cur from './Cur.jsx'
 
 const blank = () => ({ id: Math.random().toString(36).slice(2, 10), name: '', kind: 'combine', inputs: { '': 3 }, outputs: { '': 1 }, enabled: true, note: '' })
 const one = (obj) => { const [k, v] = Object.entries(obj)[0] ?? ['', 1]; return { id: k, qty: v } }
@@ -59,9 +60,9 @@ export default function RecipesView({ currencies, embedded = false }) {
                     <option value="combine">combine</option><option value="disenchant">disenchant</option><option value="reforge">reforge</option><option value="vendor">vendor</option>
                   </select></td>
                   <td className="num"><input className="btn" type="number" min="1" value={inp.qty} style={{ width: 64, textAlign: 'right' }} onChange={e => setSide(i, 'inputs', 'qty', e.target.value)} /></td>
-                  <td><input className="btn" list="cur-ids" value={inp.id} placeholder="trade id" onChange={e => setSide(i, 'inputs', 'id', e.target.value)} style={{ width: 140, borderColor: inp.id && !known(inp.id) ? 'var(--loss)' : undefined }} /></td>
+                  <td><span className="row" style={{ gap: 6 }}>{inp.id && known(inp.id) && <Cur id={inp.id} size={18} />}<input className="btn" list="cur-ids" value={inp.id} placeholder="trade id" onChange={e => setSide(i, 'inputs', 'id', e.target.value)} style={{ width: 140, borderColor: inp.id && !known(inp.id) ? 'var(--loss)' : undefined }} /></span></td>
                   <td className="num"><input className="btn" type="number" min="1" value={out.qty} style={{ width: 64, textAlign: 'right' }} onChange={e => setSide(i, 'outputs', 'qty', e.target.value)} /></td>
-                  <td><input className="btn" list="cur-ids" value={out.id} placeholder="trade id" onChange={e => setSide(i, 'outputs', 'id', e.target.value)} style={{ width: 140, borderColor: out.id && !known(out.id) ? 'var(--loss)' : undefined }} /></td>
+                  <td><span className="row" style={{ gap: 6 }}>{out.id && known(out.id) && <Cur id={out.id} size={18} />}<input className="btn" list="cur-ids" value={out.id} placeholder="trade id" onChange={e => setSide(i, 'outputs', 'id', e.target.value)} style={{ width: 140, borderColor: out.id && !known(out.id) ? 'var(--loss)' : undefined }} /></span></td>
                   <td><button className="btn small" onClick={() => change(l => l.filter((_, j) => j !== i))}>×</button></td>
                 </tr>
               )

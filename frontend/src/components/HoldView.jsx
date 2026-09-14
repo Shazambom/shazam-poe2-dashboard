@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { api, fmt } from '../lib/api.js'
+import Cur from './Cur.jsx'
 
 // "What to hold" leaderboard: assets ranked by how well they retain/gain value in
 // Divine over a horizon, with a cross-league forward-return prediction. Surfaces the
@@ -75,7 +76,7 @@ export default function HoldView() {
             {rows.map((r, i) => (
               <tr key={r.id}>
                 <td className="muted">{i + 1}</td>
-                <td>{r.name}</td>
+                <td><Cur name={r.name} text /></td>
                 <td className="muted">{r.category}</td>
                 <td className={`num ${r.ret_pct >= 0 ? 'gain' : 'loss'}`}>{fmt.pct(r.ret_pct)}</td>
                 <td className="num loss">{r.mdd_pct == null ? '–' : `${r.mdd_pct}%`}</td>

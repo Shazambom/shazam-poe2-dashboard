@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { api, fmt } from '../lib/api.js'
+import Cur from './Cur.jsx'
 
 // A trend sparkline: single series, so no legend. Thin 2px line, faint area fill,
 // emphasized endpoint, recessive baseline — per the dataviz mark specs. Colored by
@@ -30,7 +31,7 @@ function Tile({ r, refCur }) {
   return (
     <div className={`price-tile src-${r.source || 'none'}`}>
       <div className="pt-head">
-        <span className="pt-name" title={r.id}>{r.name}</span>
+        <span className="pt-name"><Cur id={r.id} text /></span>
         <span className={`pt-src ${r.source}`} title={
           r.source === 'live' ? 'live order book' : r.source === 'digest' ? 'hourly market data'
             : r.source === 'derived' ? 'derived via other markets' : 'no data'}>
@@ -38,7 +39,7 @@ function Tile({ r, refCur }) {
         </span>
       </div>
       <div className="pt-mid">
-        {r.mid == null ? <span className="muted">no price</span> : <>{fmt.rate(r.mid)}<span className="pt-unit">{refCur}</span></>}
+        {r.mid == null ? <span className="muted">no price</span> : <>{fmt.rate(r.mid)}<span className="pt-unit"><Cur id={refCur} size={14} /></span></>}
         {change != null && <span className={`pt-chg ${change >= 0 ? 'gain' : 'loss'}`}>{fmt.pct(change)}</span>}
       </div>
       <Spark points={r.trend} />

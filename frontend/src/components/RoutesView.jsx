@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { api, fmt } from '../lib/api.js'
 import CapitalCard from './CapitalCard.jsx'
+import Cur from './Cur.jsx'
 
 const INF = Infinity
 const hrs = (h) => h == null ? '–' : h < 1 / 60 ? '<1m' : h < 1 ? `${Math.round(h * 60)}m` : h < 48 ? `${h.toFixed(1)}h` : `${(h / 24).toFixed(1)}d`
@@ -61,7 +62,7 @@ function Loop({ r }) {
               </span>
             )
           })()}
-          <span className="node">{n}</span>
+          <span className="node"><Cur id={r.path?.[i]} name={n} size={18} /></span>
         </React.Fragment>
       ))}
     </span>
@@ -76,11 +77,11 @@ function Detail({ r, refCur, onRefresh, refreshing, canLive }) {
   return (
     <div className="detail">
       <div className="row hint">
-        <span>Commit <b>{fmt.n(r.start_amount)}</b> {r.start_name}, hold {fmt.n(r.capital_held)}</span>
+        <span>Commit <b>{fmt.n(r.start_amount)}</b> <Cur id={r.start} name={r.start_name} size={16} />, hold {fmt.n(r.capital_held)}</span>
         <span>· ends with <b>{fmt.n(r.end_amount)}</b></span>
-        <span>· value through loop {fmt.n(r.value_ref, 1)} {refCur}</span>
+        <span>· value through loop {fmt.n(r.value_ref, 1)} <Cur id={refCur} size={14} /></span>
         <span>· oldest quote {fmt.age(r.max_age_s)}</span>
-        {r.profit_per_hour != null && <span>· earns {fmt.n(r.profit_per_hour, 2)} {refCur}/h</span>}
+        {r.profit_per_hour != null && <span>· earns {fmt.n(r.profit_per_hour, 2)} <Cur id={refCur} size={14} />/h</span>}
         {r.score != null && r.score_parts && <span>· score {r.score} (velocity {r.score_parts.velocity}, efficiency {r.score_parts.efficiency}, value {r.score_parts.value}, volume {r.score_parts.volume})</span>}
         <span className="spacer" />
         {canLive && r.pairs.length > 0 && (
@@ -101,7 +102,7 @@ function Detail({ r, refCur, onRefresh, refreshing, canLive }) {
             const f = s.fills?.[0]
             return (
               <tr key={i}>
-                <td>{s.from_name} to {s.to_name}</td>
+                <td><Cur id={s.from} name={s.from_name} size={16} /> to <Cur id={s.to} name={s.to_name} size={16} /></td>
                 <td><i className={`k ${s.kind}`} style={{ display: 'inline-block', marginRight: 6 }} />
                   {s.kind === 'recipe' ? (s.meta?.name || 'recipe') : s.kind}
                   {s.kind !== 'recipe' && <span className="muted"> {fmt.age(s.age_s)}</span>}
@@ -338,7 +339,7 @@ export default function RoutesView({ capital, status, currencies, onCapitalSaved
                   <tr className="route" aria-expanded={open === r.id} onClick={() => setOpen(open === r.id ? null : r.id)}>
                     <td className="loop-cell"><Loop r={r} /></td>
                     <td className="num">{r.score == null ? <span className="muted">–</span> : r.score.toFixed(3)}</td>
-                    <td className="num">{fmt.n(r.start_amount)} {r.start}</td>
+                    <td className="num">{fmt.n(r.start_amount)} <Cur id={r.start} size={16} /></td>
                     <td className={`num ${r.margin >= 0 ? 'gain' : 'loss'}`}>{r.margin >= 0 ? '+' : ''}{fmt.n(r.margin)}</td>
                     <td className={`num ${r.margin >= 0 ? 'gain' : 'loss'}`}>{fmt.pct(r.margin_pct)}</td>
                     <td className="num">{fmt.n(r.margin_ref, 2)}</td>
