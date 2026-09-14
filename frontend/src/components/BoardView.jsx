@@ -6,10 +6,10 @@ import Cur from './Cur.jsx'
 
 const isDesktop = typeof window !== 'undefined' && !!window.poe2desktop
 
-// A number that springs to its value — counts up on mount, rolls when it changes.
-// Keeps the price feeling live rather than snapping between polls.
+// A number that counts up on mount, then rolls when its value changes between polls.
+// Fast, stiff spring (~0.5s) so the count-up feels snappy, not a slow loading crawl.
 function AnimatedNumber({ value, format }) {
-  const sv = useSpring(0, { stiffness: 90, damping: 20, restDelta: 0.001 })
+  const sv = useSpring(0, { stiffness: 210, damping: 24, restDelta: 0.01 })
   useEffect(() => { sv.set(value) }, [value, sv])
   const text = useTransform(sv, v => format(v))
   return <motion.span>{text}</motion.span>
@@ -70,11 +70,11 @@ function Tile({ r, num, factor, numOptions, onNum, onRemove, onOpen, index = 0 }
     <motion.div
       layout
       layoutId={`tile-${r.id}`}
-      initial={{ opacity: 0, y: 14 }}
+      initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, scale: 0.94 }}
+      exit={{ opacity: 0, scale: 0.96 }}
       whileHover={{ y: -3 }}
-      transition={{ type: 'spring', stiffness: 380, damping: 30, delay: Math.min(index * 0.035, 0.4) }}
+      transition={{ duration: 0.18, ease: [0.22, 0.61, 0.36, 1], delay: Math.min(index * 0.012, 0.07) }}
       className={`price-tile clickable src-${r.source || 'none'}`}
       onClick={() => onOpen?.(r.id)}
       role="button" tabIndex={0}
@@ -142,7 +142,7 @@ function CardDetail({ r, num, factor, numOptions, onNum, prices, onClose }) {
   return (
     <motion.div className="detail-backdrop" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose}>
       <motion.div className={`card-detail src-${r.source || 'none'}`} layoutId={`tile-${r.id}`}
-        transition={{ type: 'spring', stiffness: 320, damping: 34 }} onClick={e => e.stopPropagation()}>
+        transition={{ duration: 0.2, ease: [0.22, 0.61, 0.36, 1] }} onClick={e => e.stopPropagation()}>
         <button className="cd-close" onClick={onClose} title="Close (Esc)">×</button>
         <div className="cd-head">
           <span className="cd-title"><Cur id={r.id} text size={24} /></span>

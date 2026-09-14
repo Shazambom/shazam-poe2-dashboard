@@ -5,7 +5,10 @@ import Cur from './Cur.jsx'
 // "What to hold" leaderboard: assets ranked by how well they retain/gain value in
 // Divine over a horizon, with a cross-league forward-return prediction. Surfaces the
 // obscure winners (omens, liquid emotions, essences…), not just Mirror/Divine.
-const HORIZONS = [['short', 'Short · 7d'], ['med', 'Medium · 30d'], ['long', 'Whole league']]
+// Fast-league horizons. The canonical app horizon set is 1h/6h/12h/1d/3d/7d; Hold ranks
+// non-currency items priced only by poe2scout DAILY data, so it uses the day-granularity
+// members (1d/3d/7d) — sub-day is impossible for these items (no hourly source).
+const HORIZONS = [['1d', '1d'], ['3d', '3d'], ['7d', '7d']]
 
 function ConfBadge({ c }) {
   const level = c >= 0.66 ? 'hi' : c >= 0.33 ? 'mid' : 'lo'
@@ -15,7 +18,7 @@ function ConfBadge({ c }) {
 const NUMERAIRES = [['divine', 'vs Divine'], ['mirror', 'vs Mirror'], ['lock', 'vs Lock']]
 
 export default function HoldView() {
-  const [horizon, setHorizon] = useState('long')
+  const [horizon, setHorizon] = useState('3d')
   const [category, setCategory] = useState('all')
   const [numeraire, setNumeraire] = useState('divine')
   const [data, setData] = useState(null)

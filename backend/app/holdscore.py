@@ -27,7 +27,7 @@ DIVINE_ID = 291
 # (Hinekora's Lock) are the hardest anchors but trade thinly, so coverage is lower.
 NUMERAIRES = {"divine": (291, "Divine Orb"), "mirror": (295, "Mirror of Kalandra"),
               "lock": (4287, "Hinekora's Lock")}
-HORIZON_DAYS = {"short": 7, "med": 30, "long": None}   # None = whole league
+HORIZON_DAYS = {"1d": 1, "3d": 3, "7d": 7}   # fast-league day horizons (daily poe2scout data)
 SHRINK_K = 8            # data-count shrinkage: confidence = n/(n+K)
 VOL_FLOOR = 200.0       # median daily units for full liquidity confidence
 GAMMA = 0.65            # recency weight for past leagues (most recent = weight 1)
@@ -107,9 +107,9 @@ def _predict(item_id, N, delta, past):
             "n_leagues": len(fwd)}
 
 
-def leaderboard(horizon: str = "long", category: str = "all", numeraire: str = "divine") -> dict:
+def leaderboard(horizon: str = "3d", category: str = "all", numeraire: str = "divine") -> dict:
     if horizon not in HORIZON_DAYS:
-        horizon = "long"
+        horizon = "3d"
     if numeraire not in NUMERAIRES:
         numeraire = "divine"
     num_id, num_name = NUMERAIRES[numeraire]

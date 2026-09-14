@@ -398,7 +398,7 @@ async def inflation_cross(item: int = leaguehistory.DEFAULT_ITEM):
 
 
 @app.get("/api/hold")
-async def hold(horizon: str = "long", category: str = "all", numeraire: str = "divine"):
+async def hold(horizon: str = "3d", category: str = "all", numeraire: str = "divine"):
     """Store-of-value leaderboard. Served from the stored full-currency backfill;
     kicks the background crawl if nothing's stored yet."""
     res = await run_in_threadpool(holdscore.leaderboard, horizon, category, numeraire)
