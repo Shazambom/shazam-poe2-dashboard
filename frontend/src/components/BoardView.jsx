@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { motion, AnimatePresence, useSpring, useTransform } from 'motion/react'
 import { api, fmt, surface, toast } from '../lib/api.js'
+import { nav } from '../lib/nav.js'
 import Cur from './Cur.jsx'
 
 const isDesktop = typeof window !== 'undefined' && !!window.poe2desktop
@@ -46,7 +47,7 @@ function Spark({ points, w = 132, h = 34 }) {
   )
 }
 
-function Tile({ r, num, factor, numOptions, onNum, onRemove, index = 0 }) {
+function Tile({ r, num, factor, numOptions, onNum, onRemove, onOpen, index = 0 }) {
   const change = r.change_pct
   const f = factor || 1
   const rp = (v) => (v == null ? null : v / f)               // reprice R-value into `num`
@@ -68,16 +69,20 @@ function Tile({ r, num, factor, numOptions, onNum, onRemove, index = 0 }) {
   return (
     <motion.div
       layout
+      layoutId={`tile-${r.id}`}
       initial={{ opacity: 0, y: 14 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.94 }}
       whileHover={{ y: -3 }}
       transition={{ type: 'spring', stiffness: 380, damping: 30, delay: Math.min(index * 0.035, 0.4) }}
-      className={`price-tile src-${r.source || 'none'}`}
+      className={`price-tile clickable src-${r.source || 'none'}`}
+      onClick={() => onOpen?.(r.id)}
+      role="button" tabIndex={0}
+      onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen?.(r.id) } }}
     >
       <div className="pt-head">
         <span className="pt-name"><Cur id={r.id} text /></span>
-        {onRemove && <button className="pt-remove" title="Remove from board" onClick={() => onRemove(r.id)}>×</button>}
+        {onRemove && <button className="pt-remove" title="Remove from board" onClick={e => { e.stopPropagation(); onRemove(r.id) }}>×</button>}
         <span className={`pt-src ${r.source}`} title={
           r.source === 'live' ? 'live order book' : r.source === 'digest' ? 'hourly market data'
             : r.source === 'derived' ? 'derived via other markets' : r.source === 'scout' ? 'poe2scout price' : 'no data'}>
@@ -108,12 +113,75 @@ function Tile({ r, num, factor, numOptions, onNum, onRemove, index = 0 }) {
         <div className="pt-foot muted">hourly mid{r.age_s != null && <> · {fmt.age(r.age_s)} old</>}</div>
       )}
       {onNum && numOptions.length > 0 && (
-        <div className="pt-num-row">priced in{' '}
+        <div className="pt-num-row" onClick={e => e.stopPropagation()}>priced in{' '}
           <select value={num} onChange={e => onNum(r.id, e.target.value)} title="Currency this card is priced in (defaults to its highest-volume market)">
             {numOptions.filter(o => o.id !== r.id).map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
           </select>
         </div>
       )}
+    </motion.div>
+  )
+}
+
+const SRC_LABEL = { live: 'live order book', digest: 'hourly market data', derived: 'derived via other markets', scout: 'poe2scout', none: 'no data' }
+
+// The expanded view a card morphs into (shared layoutId with its Tile). Shows the
+// bigger trend, the bid/ask breakdown, freshness, and the value expressed in every
+// other major currency — the "more detail" the hover-lift promises.
+function CardDetail({ r, num, factor, numOptions, onNum, prices, onClose }) {
+  const f = factor || 1
+  const rp = (v) => (v == null ? null : v / f)
+  const mid = rp(r.mid), buy = rp(r.buy), sell = rp(r.sell)
+  const trend = r.trend ? r.trend.map(p => ({ t: p.t, v: p.v / f })) : r.trend
+  const change = r.change_pct
+  const inCurs = Object.keys(prices).filter(c => c !== r.id && prices[c]).sort((a, b) => prices[b] - prices[a]).slice(0, 8)
+  useEffect(() => {
+    const h = (e) => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', h); return () => window.removeEventListener('keydown', h)
+  }, [onClose])
+  return (
+    <motion.div className="detail-backdrop" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose}>
+      <motion.div className={`card-detail src-${r.source || 'none'}`} layoutId={`tile-${r.id}`}
+        transition={{ type: 'spring', stiffness: 320, damping: 34 }} onClick={e => e.stopPropagation()}>
+        <button className="cd-close" onClick={onClose} title="Close (Esc)">×</button>
+        <div className="cd-head">
+          <span className="cd-title"><Cur id={r.id} text size={24} /></span>
+          <span className={`pt-src ${r.source}`} title={SRC_LABEL[r.source] || 'no data'}>
+            {r.source === 'live' ? 'LIVE' : r.source === 'digest' ? 'HR' : r.source === 'derived' ? '~' : r.source === 'scout' ? 'SC' : '–'}
+          </span>
+        </div>
+        <div className="cd-price">
+          {mid == null ? <span className="muted">no price</span>
+            : <><b>{fmt.rate(mid)}</b><Cur id={num} size={18} /></>}
+          {change != null && <span className={`pt-chg ${change >= 0 ? 'gain' : 'loss'}`}>{fmt.pct(change)}</span>}
+        </div>
+        <div className="cd-spark"><Spark points={trend} w={560} h={150} /></div>
+        <div className="cd-grid">
+          {r.source === 'live' && <>
+            <div className="cd-stat"><span>buy</span><b>{buy == null ? '–' : fmt.rate(buy)}</b></div>
+            <div className="cd-stat"><span>sell</span><b>{sell == null ? '–' : fmt.rate(sell)}</b></div>
+            {r.spread_pct != null && <div className="cd-stat"><span>spread</span><b>{r.spread_pct.toFixed(1)}%</b></div>}
+            {r.depth != null && <div className="cd-stat"><span>depth</span><b>{r.depth} offers</b></div>}
+          </>}
+          <div className="cd-stat"><span>source</span><b>{SRC_LABEL[r.source] || 'no data'}</b></div>
+          {r.age_s != null && <div className="cd-stat"><span>updated</span><b>{fmt.age(r.age_s)} ago</b></div>}
+        </div>
+        {inCurs.length > 0 && <>
+          <div className="cd-section">Value in other currencies</div>
+          <div className="cd-invalue">
+            {inCurs.map(c => (
+              <div key={c} className="cd-vrow"><Cur id={c} text size={16} /><span className="spacer" /><b>{fmt.rate(r.mid / prices[c])}</b></div>
+            ))}
+          </div>
+        </>}
+        {numOptions.length > 0 && (
+          <div className="pt-num-row cd-num">priced in{' '}
+            <select value={num} onChange={e => onNum(r.id, e.target.value)}>
+              {numOptions.filter(o => o.id !== r.id).map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
+            </select>
+          </div>
+        )}
+      </motion.div>
     </motion.div>
   )
 }
@@ -126,6 +194,7 @@ export default function BoardView({ status }) {
   const [watchlist, setWatchlist] = useState(null)   // desktop-only board customization
   const [opts, setOpts] = useState([])               // all currencies (names for pickers)
   const [q, setQ] = useState('')
+  const [openId, setOpenId] = useState(null)         // card expanded into detail view
   const [numById, setNumById] = useState(() => {     // per-card numeraire overrides (persisted)
     try { return JSON.parse(localStorage.getItem('board.num.v1') || '{}') } catch { return {} }
   })
@@ -163,6 +232,8 @@ export default function BoardView({ status }) {
     setBusy(false)
   }
   useEffect(() => { load(); const t = setInterval(load, 30000); return () => clearInterval(t) }, [])
+  // command palette → open a currency's detail here
+  useEffect(() => nav.on(e => { if (e.type === 'openCurrency') setOpenId(e.id) }), [])
   useEffect(() => { api.currencies().then(d => setOpts(d?.currencies ?? [])).catch(() => {}) }, [])
   useEffect(() => {
     if (!isDesktop) return
@@ -235,11 +306,20 @@ export default function BoardView({ status }) {
             {rows.map((r, i) => {
               const num = numFor(r)
               return <Tile key={r.id} index={i} r={r} num={num} factor={prices[num] ?? 1} numOptions={numOptions}
-                onNum={setNum} onRemove={isDesktop && watchlist ? removeCur : null} />
+                onNum={setNum} onRemove={isDesktop && watchlist ? removeCur : null} onOpen={setOpenId} />
             })}
           </AnimatePresence>
         </motion.div>
       )}
+      <AnimatePresence>
+        {(() => {
+          const openRow = rows.find(r => r.id === openId)
+          if (!openRow) return null
+          const num = numFor(openRow)
+          return <CardDetail key="detail" r={openRow} num={num} factor={prices[num] ?? 1}
+            numOptions={numOptions} onNum={setNum} prices={prices} onClose={() => setOpenId(null)} />
+        })()}
+      </AnimatePresence>
     </div>
   )
 }

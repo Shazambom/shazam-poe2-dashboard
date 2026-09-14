@@ -1,6 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { motion } from 'motion/react'
 import { api, fmt, bus, surface } from './lib/api.js'
+import { nav } from './lib/nav.js'
+import CommandPalette from './components/CommandPalette.jsx'
 import { connectBridge, connectSessionWithToast } from './lib/session.js'
 import BoardView from './components/BoardView.jsx'
 import HoldView from './components/HoldView.jsx'
@@ -33,6 +35,7 @@ export default function App() {
   const [toasts, setToasts] = useState([])
   const [connecting, setConnecting] = useState(false)
   const [appVersion, setAppVersion] = useState(null)
+  const [cmdOpen, setCmdOpen] = useState(false)
   const toastId = useRef(0)
 
   const refreshHeader = async () => {
@@ -56,6 +59,14 @@ export default function App() {
     setToasts(x => [...x.slice(-3), { id, ...t }])
     setTimeout(() => setToasts(x => x.filter(y => y.id !== id)), t.ok === false ? 6000 : 2200)
   }), [])
+  // Global ⌘K / Ctrl-K opens the command palette (the fast path to anything).
+  useEffect(() => {
+    const h = (e) => {
+      if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K')) { e.preventDefault(); setCmdOpen(o => !o) }
+    }
+    window.addEventListener('keydown', h)
+    return () => window.removeEventListener('keydown', h)
+  }, [])
 
   const setLeague = async (league) => {
     if (!league || league === status?.league) return
@@ -87,6 +98,9 @@ export default function App() {
           <button className="ver-chip" title="Click to check for updates"
             onClick={() => window.poe2desktop?.checkUpdate?.()}>v{appVersion}</button>
         )}
+        <button className="cmdk-chip" title="Command palette (⌘K)" onClick={() => setCmdOpen(true)}>
+          <span className="cmdk-k">⌘K</span> Search
+        </button>
         <select className="league-select" value={league} title="League — saves on select"
           onChange={e => setLeague(e.target.value)} disabled={!status}>
           {league && !leagues.some(l => l.id === league) && <option value={league}>{league}</option>}
@@ -142,6 +156,13 @@ export default function App() {
       {tab === 'Routes' && <RoutesView key={league} capital={capital} status={status} currencies={currencies} onCapitalSaved={refreshHeader} />}
       {tab === 'Market' && <MarketView key={league} currencies={currencies} />}
       {tab === 'Settings' && <SettingsView currencies={currencies} status={status} onSaved={refreshHeader} />}
+
+      <CommandPalette
+        open={cmdOpen} onClose={() => setCmdOpen(false)}
+        tabs={TABS} onGoTab={setTab}
+        leagues={leagues} onSetLeague={setLeague}
+        onOpenCurrency={(id) => { setTab('Board'); setTimeout(() => nav.openCurrency(id), 0) }}
+      />
 
       <div className="toasts">
         {toasts.map(t => <div key={t.id} className={`toast ${t.ok === false ? 'error' : ''}`}>{t.text}</div>)}
