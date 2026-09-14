@@ -274,8 +274,9 @@ def simulate(g: Graph, cycle: list[Edge], start_amount: float, ref_value: dict[s
     }
 
 
-def size_route(cycle: list[Edge], capital: float) -> float:
-    """Largest start amount the path's liquidity supports, capped by capital."""
+def route_cap(cycle: list[Edge], capital: float) -> float:
+    """Continuous max start amount the path's liquidity supports, capped by capital
+    (before rounding to whole tradable cycles)."""
     cap = capital
     scale = 1.0  # start units -> current node units
     for e in cycle:
@@ -283,7 +284,33 @@ def size_route(cycle: list[Edge], capital: float) -> float:
         if c != INF:
             cap = min(cap, c / scale)
         scale *= e.rate
-    return math.floor(cap)
+    return cap
+
+
+def cycle_unit(cycle: list[Edge], limit: int = 512) -> int:
+    """Smallest whole start amount that flows through the loop with NO granularity
+    waste — every hop consumes its full input, so the trade ratios line up (recipe
+    hops are lot-sized, e.g. 3 augs -> 1 greater). The committed amount is always a
+    multiple of this, so we never commit a partial lot.
+
+    Pure currency-exchange loops trade in single units (rates are continuous), so their
+    unit is 1. For recipe loops we search for the smallest start whose amount arrives at
+    each recipe hop as a whole number of lots. Falls back to 1 if nothing aligns within
+    `limit` (keeps sizing well-defined for odd ratios)."""
+    if not any(e.kind == "recipe" for e in cycle):
+        return 1
+    for a in range(1, limit + 1):
+        amt = a
+        ok = True
+        for e in cycle:
+            used, out, _ = e.fill(amt)
+            if out <= 0 or used + 1e-9 < amt:   # a whole lot didn't fit → waste at this hop
+                ok = False
+                break
+            amt = out
+        if ok:
+            return a
+    return 1
 
 
 _route_cache: dict[str, tuple[float, int, dict]] = {}
@@ -351,7 +378,11 @@ MAX_CANDIDATES = 20000   # hard ceiling on simulated cycles per search
 
 def _route_from(g: Graph, cyc: list[Edge], start: str, held: float, budget: float,
                 ref_value: dict[str, float]) -> dict | None:
-    amount = size_route(cyc, budget)
+    # Size in whole tradable cycles: commit = (cycles) × (one-cycle unit), so the amount
+    # always respects the trade ratios and never commits a partial lot.
+    unit = cycle_unit(cyc)
+    cycles = math.floor(route_cap(cyc, budget) / unit) if unit > 0 else 0
+    amount = cycles * unit
     if amount < 1:
         return None
     sim = simulate(g, cyc, amount, ref_value)
@@ -373,7 +404,7 @@ def _route_from(g: Graph, cyc: list[Edge], start: str, held: float, budget: floa
         "path_names": [registry.name(start)] + [registry.name(e.dst) for e in cyc],
         "kinds": [e.kind for e in cyc],
         "steps": sim["steps"],
-        "start_amount": amount, "end_amount": sim["end_amount"],
+        "start_amount": amount, "cycle_unit": unit, "cycles": cycles, "end_amount": sim["end_amount"],
         "margin": margin, "margin_pct": (margin / amount * 100) if amount else 0.0,
         "margin_ref": margin_ref,
         "value_ref": sim["value_ref"],

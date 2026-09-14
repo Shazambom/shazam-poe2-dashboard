@@ -77,7 +77,9 @@ function Detail({ r, refCur, onRefresh, refreshing, canLive }) {
   return (
     <div className="detail">
       <div className="row hint">
-        <span>Commit <b>{fmt.n(r.start_amount)}</b> <Cur id={r.start} name={r.start_name} size={16} />, hold {fmt.n(r.capital_held)}</span>
+        <span>Commit <b>{fmt.n(r.start_amount)}</b> <Cur id={r.start} name={r.start_name} size={16} />
+          {r.cycle_unit > 1 && <span className="muted"> ({fmt.n(r.cycles)} × {fmt.n(r.cycle_unit)}/cycle)</span>}
+          , hold {fmt.n(r.capital_held)}</span>
         <span>· ends with <b>{fmt.n(r.end_amount)}</b></span>
         <span>· value through loop {fmt.n(r.value_ref, 1)} <Cur id={refCur} size={14} /></span>
         <span>· oldest quote {fmt.age(r.max_age_s)}</span>
@@ -339,7 +341,10 @@ export default function RoutesView({ capital, status, currencies, onCapitalSaved
                   <tr className="route" aria-expanded={open === r.id} onClick={() => setOpen(open === r.id ? null : r.id)}>
                     <td className="loop-cell"><Loop r={r} /></td>
                     <td className="num">{r.score == null ? <span className="muted">–</span> : r.score.toFixed(3)}</td>
-                    <td className="num">{fmt.n(r.start_amount)} <Cur id={r.start} size={16} /></td>
+                    <td className="num" title={r.cycle_unit > 1 ? `${r.cycles} cycles × ${r.cycle_unit} per cycle` : `${r.cycles} single-unit cycles`}>
+                      {fmt.n(r.start_amount)} <Cur id={r.start} size={16} />
+                      {r.cycle_unit > 1 && <span className="muted" style={{ fontSize: 11 }}> ×{fmt.n(r.cycle_unit)}</span>}
+                    </td>
                     <td className={`num ${r.margin >= 0 ? 'gain' : 'loss'}`}>{r.margin >= 0 ? '+' : ''}{fmt.n(r.margin)}</td>
                     <td className={`num ${r.margin >= 0 ? 'gain' : 'loss'}`}>{fmt.pct(r.margin_pct)}</td>
                     <td className="num">{fmt.n(r.margin_ref, 2)}</td>
