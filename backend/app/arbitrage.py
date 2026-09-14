@@ -425,6 +425,13 @@ def _route_from(g: Graph, cyc: list[Edge], start: str, held: float, budget: floa
     }
 
 
+# Recommended per-step minimums, baked into the default filters (settings.py). These are
+# the MIN across a route's steps, so filtering the route enforces the bar at every step.
+# Users can lower them, but the UI warns them (routes below this are usually unfillable).
+RECOMMENDED_MIN_LIQUIDITY_REF = 50.0
+RECOMMENDED_MIN_VOLUME_REF_PER_H = 100.0
+
+
 def _keep(r: dict, f: dict) -> bool:
     if r["margin_pct"] < f.get("min_margin_pct", -INF):
         return False
@@ -602,9 +609,12 @@ _board_cache: tuple[float, int, tuple, dict] | None = None
 BOARD_TTL_S = 30.0
 
 
-def board() -> dict:
+def board(window_h: int = 24) -> dict:
     """Live price board: each watched currency priced in the reference, with the
     buy/sell rates that make up the spread, depth, freshness, and a trend series.
+
+    `window_h` is the trend/%-change horizon (24h, 3d, 7d, 14d from the UI): the sparkline
+    spans it and change_pct is measured over it.
 
     Prices are R-per-unit (reference currency per 1 of the currency), so bigger = more
     valuable — the natural way to read a price. buy = what it costs you to acquire one
@@ -617,7 +627,8 @@ def board() -> dict:
 
     global _board_cache
     s0 = get_settings()
-    key = (s0["league"], s0["reference"], tuple(s0["watchlist"]))
+    window_h = max(1, int(window_h or 24))
+    key = (s0["league"], s0["reference"], tuple(s0["watchlist"]), window_h)
     now = time.time()
     if _board_cache and _board_cache[2] == key and _board_cache[1] == orderbook.state["version"] \
             and now - _board_cache[0] < BOARD_TTL_S:
@@ -664,15 +675,23 @@ def board() -> dict:
         depth = next((len(e.ladder) for e in (sell_edge, buy_edge) if e and e.kind == "live"), None)
         spread = (buy - sell) if (buy is not None and sell is not None) else None
         spread_pct = (spread / mid * 100) if (spread is not None and mid) else None
-        hist = digest.pair_history(league, c, R, 72)   # rate = R per c = price of c in R
-        trend = [{"t": h["hour"], "v": h["rate"]} for h in hist][-48:]
+        # Trend + %-change over the selected window (24h/3d/7d/14d). Digest is hourly;
+        # poe2scout fallback is daily.
+        hist = digest.pair_history(league, c, R, window_h)   # rate = R per c = price of c in R
+        trend = [{"t": h["hour"], "v": h["rate"]} for h in hist]
         if len(trend) < 2:   # not on the exchange digest → draw from poe2scout dailies
             sh = scout_hist.get(str(registry.name(c)).lower()) or scout_hist.get(str(c).lower())
             if sh:
-                trend = sh[-14:]   # recent ~2 weeks of daily closes (keeps change% sane)
+                cutoff = sh[-1]["t"] - window_h * 3600
+                trend = [p for p in sh if p["t"] >= cutoff] or sh[-2:]
+        # change over the window = latest vs the point at (or nearest before) the window start.
         change_pct = None
-        if len(trend) >= 2 and trend[0]["v"]:
-            change_pct = (trend[-1]["v"] - trend[0]["v"]) / trend[0]["v"] * 100
+        if len(trend) >= 2:
+            start = trend[-1]["t"] - window_h * 3600
+            prior = [p for p in trend if p["t"] <= start]
+            base_pt = prior[-1] if prior else trend[0]
+            if base_pt["v"]:
+                change_pct = (trend[-1]["v"] - base_pt["v"]) / base_pt["v"] * 100
         # Default numeraire: the highest-VOLUME counterpart whose price stays readable.
         # Cheap currencies' biggest market is often Divine (huge value moves even on
         # modest flow), which would print a useless micro-price (Regal = 0.0034 div) — so

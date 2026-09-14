@@ -428,19 +428,19 @@ async def inflation_cross_refresh(force: bool = False):
 
 
 @app.get("/api/board")
-def board():
-    return arbitrage.board()
+def board(window_h: int = 24):
+    return arbitrage.board(window_h)
 
 
 @app.post("/api/board/refresh")
-async def board_refresh(wait_s: float = 30):
+async def board_refresh(wait_s: float = 30, window_h: int = 24):
     """Live-refresh both directions of every watched pair, then return the board."""
     if not session.get_cookie():
         raise HTTPException(400, "no trade session connected")
     s = get_settings()
     futs = orderbook.request_pairs(arbitrage.board_pairs(), priority=1, max_age_s=s["live_min_age_s"])
     waited = await orderbook.wait_for(futs, wait_s)
-    return {**arbitrage.board(), "refresh": {**waited, "queue": orderbook.state["queue"]}}
+    return {**arbitrage.board(window_h), "refresh": {**waited, "queue": orderbook.state["queue"]}}
 
 
 @app.get("/api/market/edges")

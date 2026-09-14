@@ -263,9 +263,11 @@ export default function RoutesView({ capital, status, currencies, onCapitalSaved
           <div className="field"><label>Minimum margin, in {ref}</label><input type="number" step="0.1" value={f.min_margin_ref} onChange={set('min_margin_ref')} /></div>
           <div className="field"><label>Maximum gold per loop</label><input type="number" step="100" placeholder="no limit" value={f.max_gold} onChange={set('max_gold')} /></div>
           <div className="field"><label>Minimum margin per 1k gold</label><input type="number" step="0.01" placeholder="no limit" value={f.min_margin_per_1k_gold} onChange={set('min_margin_per_1k_gold')} /></div>
-          <div className="field"><label>Minimum liquidity, in {ref}</label><input type="number" step="1" placeholder="no limit" value={f.min_liquidity_ref} onChange={set('min_liquidity_ref')} /></div>
+          <div className="field"><label>Minimum liquidity, in {ref}</label><input type="number" step="1" placeholder="no limit" value={f.min_liquidity_ref} onChange={set('min_liquidity_ref')} />
+            {f.min_liquidity_ref !== '' && Number(f.min_liquidity_ref) < 50 && <span className="warn-hint">⚠ Below 50 you'll see routes you can't actually fill — expect a bad time.</span>}</div>
           <div className="field"><label>Minimum velocity, {ref}/h per 1k gold</label><input type="number" step="0.01" placeholder="no limit" value={f.min_velocity} onChange={set('min_velocity')} /></div>
-          <div className="field"><label>Minimum traded volume, {ref} per hour</label><input type="number" step="1" placeholder="no limit" value={f.min_volume_ref_per_h} onChange={set('min_volume_ref_per_h')} /></div>
+          <div className="field"><label>Minimum traded volume, {ref} per hour</label><input type="number" step="1" placeholder="no limit" value={f.min_volume_ref_per_h} onChange={set('min_volume_ref_per_h')} />
+            {f.min_volume_ref_per_h !== '' && Number(f.min_volume_ref_per_h) < 100 && <span className="warn-hint">⚠ Below 100/h markets are too thin to trust — expect a bad time.</span>}</div>
           <div className="field"><label>Maximum estimated fill time, hours</label><input type="number" step="0.5" placeholder="no limit" value={f.max_fill_hours} onChange={set('max_fill_hours')} /></div>
           <label className="check"><input type="checkbox" checked={!!f.exclude_recipes} onChange={set('exclude_recipes')} /> Exchange steps only</label>
           <div className="field"><label>Show at most</label><input type="number" value={f.limit} onChange={set('limit')} /></div>

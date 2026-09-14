@@ -170,6 +170,7 @@ a { color: var(--live); }
 .rail h2, .main h2, .single h2 { font-size: 13px; font-weight: 600; color: var(--ink-2); margin: 18px 0 10px; }
 .rail h2:first-child, .main h2:first-child { margin-top: 0; }
 .hint { color: var(--muted); font-size: 12.5px; line-height: 1.5; }
+.warn-hint { display: block; margin-top: 4px; color: var(--loss); font-size: 12px; line-height: 1.4; }
 .notice { border-left: 3px solid var(--gold); border-radius: 10px; padding: 10px 14px; background: linear-gradient(165deg, var(--panel-hi) -30%, var(--panel) 45%); box-shadow: var(--shadow-1); margin-bottom: 14px; }
 .error { border-left-color: var(--loss); }
 

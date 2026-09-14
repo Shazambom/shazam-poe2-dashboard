@@ -194,6 +194,7 @@ export default function BoardView({ status }) {
   const [watchlist, setWatchlist] = useState(null)   // desktop-only board customization
   const [opts, setOpts] = useState([])               // all currencies (names for pickers)
   const [q, setQ] = useState('')
+  const [winH, setWinH] = useState(24)               // trend / %-change horizon (hours)
   const [openId, setOpenId] = useState(null)         // card expanded into detail view
   const [numById, setNumById] = useState(() => {     // per-card numeraire overrides (persisted)
     try { return JSON.parse(localStorage.getItem('board.num.v1') || '{}') } catch { return {} }
@@ -207,7 +208,7 @@ export default function BoardView({ status }) {
   const timer = useRef(null)
 
   const load = async () => {
-    try { setData(await api.board()); setErr(null) } catch (e) { setErr(String(e.message || e)) }
+    try { setData(await api.board(winH)); setErr(null) } catch (e) { setErr(String(e.message || e)) }
   }
 
   const saveWatchlist = async (next, note) => {
@@ -228,10 +229,10 @@ export default function BoardView({ status }) {
   const refreshLive = async () => {
     if (!canLive || busy) return
     setBusy(true)
-    try { setData(await api.boardRefresh()) } catch (e) { setErr(String(e.message || e)) }
+    try { setData(await api.boardRefresh(winH)) } catch (e) { setErr(String(e.message || e)) }
     setBusy(false)
   }
-  useEffect(() => { load(); const t = setInterval(load, 30000); return () => clearInterval(t) }, [])
+  useEffect(() => { load(); const t = setInterval(load, 30000); return () => clearInterval(t) }, [winH]) // eslint-disable-line
   // command palette → open a currency's detail here
   useEffect(() => nav.on(e => { if (e.type === 'openCurrency') setOpenId(e.id) }), [])
   useEffect(() => { api.currencies().then(d => setOpts(d?.currencies ?? [])).catch(() => {}) }, [])
@@ -292,6 +293,11 @@ export default function BoardView({ status }) {
       )}
       <div className="board-bar">
         <h2 style={{ margin: 0 }}>Price board <span className="muted" style={{ fontWeight: 400 }}>· {rows.length} currencies · each priced in its top market</span></h2>
+        <div className="seg" title="Trend & % change window">
+          {[['24h', 24], ['3d', 72], ['7d', 168], ['14d', 336]].map(([label, h]) => (
+            <button key={h} className={`seg-btn ${winH === h ? 'on' : ''}`} onClick={() => setWinH(h)}>{label}</button>
+          ))}
+        </div>
         <span className="spacer" />
         <span className="hint">{live} live · {rows.length - live} from hourly data</span>
         {canLive ? (

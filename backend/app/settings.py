@@ -55,13 +55,13 @@ DEFAULTS: dict = {
     "step_overhead_min": 2.0,       # minutes per exchange step to place and collect an order
     # Default filters (UI can override per request)
     "filters": {
-        "min_margin_pct": 0.5,
+        "min_margin_pct": 3.0,            # skip sub-3% flips — noise once you count effort/fees
         "min_margin_ref": 0.0,
         "max_gold": 0,
         "min_margin_per_1k_gold": 0.0,
-        "min_liquidity_ref": 0.0,
-        "min_volume_ref_per_h": 0.0,
-        "max_fill_hours": 0,
+        "min_liquidity_ref": 50.0,        # per-step min executable capacity (ref value)
+        "min_volume_ref_per_h": 100.0,    # per-step min executed value/hour
+        "max_fill_hours": 24,             # route should fill within a day of trading
         "min_velocity": 0.0,
         "live_only": False,
         "sort": "score",
@@ -74,6 +74,15 @@ def get_settings() -> dict:
     stored = db.kv_get("settings", {})
     merged = copy.deepcopy(DEFAULTS)
     _deep_update(merged, stored)
+    # One-time: bake the per-step liquidity/volume minimums into filters saved before they
+    # existed (they'd otherwise keep overriding the new defaults with 0). Runs once, then
+    # the user is free to lower them (the UI warns) and it sticks.
+    if not merged.get("_liq_floor_v1"):
+        f = merged["filters"]
+        f["min_liquidity_ref"] = max(f.get("min_liquidity_ref") or 0.0, 50.0)
+        f["min_volume_ref_per_h"] = max(f.get("min_volume_ref_per_h") or 0.0, 100.0)
+        merged["_liq_floor_v1"] = True
+        db.kv_set("settings", merged)
     return merged
 
 
