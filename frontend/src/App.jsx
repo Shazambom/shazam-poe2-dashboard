@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { motion } from 'motion/react'
+import { motion, AnimatePresence } from 'motion/react'
 import { api, fmt, bus, surface } from './lib/api.js'
 import { nav } from './lib/nav.js'
 import CommandPalette from './components/CommandPalette.jsx'
@@ -165,7 +165,15 @@ export default function App() {
       />
 
       <div className="toasts">
-        {toasts.map(t => <div key={t.id} className={`toast ${t.ok === false ? 'error' : ''}`}>{t.text}</div>)}
+        <AnimatePresence>
+          {toasts.map(t => (
+            <motion.div key={t.id} className={`toast ${t.ok === false ? 'error' : ''}`}
+              initial={{ opacity: 0, x: 40, scale: 0.96 }} animate={{ opacity: 1, x: 0, scale: 1 }}
+              exit={{ opacity: 0, x: 40, scale: 0.96 }} transition={{ type: 'spring', stiffness: 420, damping: 30 }}>
+              <span className="toast-ic">{t.ok === false ? '⚠' : '✓'}</span>{t.text}
+            </motion.div>
+          ))}
+        </AnimatePresence>
       </div>
     </div>
   )

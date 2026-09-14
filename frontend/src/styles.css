@@ -32,6 +32,7 @@ body {
   background:
     radial-gradient(1100px 460px at 78% -8%, rgba(212,172,82,.10), transparent 60%),
     radial-gradient(900px 520px at 8% 0%, rgba(90,120,180,.08), transparent 55%),
+    radial-gradient(135% 130% at 50% 28%, transparent 56%, rgba(0,0,0,.42)),
     var(--bg);
   background-attachment: fixed;
   color: var(--ink);
@@ -45,6 +46,20 @@ button, input, select, textarea { font: inherit; color: inherit; }
 a { color: var(--live); }
 :focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+
+/* craft touches: selection, themed scrollbars, crisper icons */
+::selection { background: rgba(212,172,82,.28); color: #fff; }
+* { scrollbar-width: thin; scrollbar-color: var(--line-strong) transparent; }
+::-webkit-scrollbar { width: 11px; height: 11px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--line-strong); border-radius: 10px; border: 3px solid transparent; background-clip: content-box; }
+::-webkit-scrollbar-thumb:hover { background: #4b5265; background-clip: content-box; }
+.cur-img { filter: drop-shadow(0 1px 2px rgba(0,0,0,.5)); }
+/* gold focus ring on inputs/selects for a cohesive, tactile feel */
+.field input, .field select, .field textarea, .league-select, .capital-table input[type="number"] { transition: border-color .12s var(--ease), box-shadow .12s var(--ease); }
+.field input:focus, .field select:focus, .field textarea:focus, .league-select:focus, .capital-table input:focus {
+  border-color: var(--gold-dim); box-shadow: 0 0 0 3px rgba(212,172,82,.12); outline: none;
+}
 
 .app { display: grid; grid-template-rows: auto 1fr; height: 100%; }
 
@@ -155,7 +170,7 @@ a { color: var(--live); }
 .rail h2, .main h2, .single h2 { font-size: 13px; font-weight: 600; color: var(--ink-2); margin: 18px 0 10px; }
 .rail h2:first-child, .main h2:first-child { margin-top: 0; }
 .hint { color: var(--muted); font-size: 12.5px; line-height: 1.5; }
-.notice { border-left: 3px solid var(--gold); padding: 8px 12px; background: var(--panel); margin-bottom: 14px; }
+.notice { border-left: 3px solid var(--gold); border-radius: 10px; padding: 10px 14px; background: linear-gradient(165deg, var(--panel-hi) -30%, var(--panel) 45%); box-shadow: var(--shadow-1); margin-bottom: 14px; }
 .error { border-left-color: var(--loss); }
 
 /* ---------- tables ---------- */
@@ -255,7 +270,7 @@ details.adv summary:hover { color: var(--ink-2); }
 details.adv[open] summary { color: var(--ink-2); margin-bottom: 8px; }
 
 /* ---------- capital card (Routes rail) ---------- */
-.capcard { border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel-2); padding: 10px 12px 12px; margin-bottom: 16px; }
+.capcard { border: 1px solid var(--line); border-radius: 10px; background: linear-gradient(165deg, var(--panel-hi) -20%, var(--panel) 45%); box-shadow: var(--shadow-1); padding: 11px 13px 13px; margin-bottom: 16px; }
 .capcard h2 { margin-top: 0; }
 .capital-table td { padding: 3px 4px; border-bottom: 0; }
 .capital-table input[type="number"] {
@@ -267,10 +282,13 @@ details.adv[open] summary { color: var(--ink-2); margin-bottom: 8px; }
 /* ---------- toasts ---------- */
 .toasts { position: fixed; right: 16px; bottom: 16px; display: flex; flex-direction: column; gap: 8px; z-index: 100; }
 .toast {
-  background: var(--panel-2); border: 1px solid var(--line-strong); border-left: 3px solid var(--gain);
-  padding: 8px 14px; border-radius: var(--radius); max-width: 380px; box-shadow: 0 4px 16px rgba(0,0,0,.4);
+  display: flex; align-items: center; gap: 9px;
+  background: linear-gradient(165deg, var(--panel-hi), var(--panel-2)); border: 1px solid var(--line-strong); border-left: 3px solid var(--gain);
+  padding: 10px 15px; border-radius: 10px; max-width: 380px; box-shadow: var(--shadow-2);
 }
 .toast.error { border-left-color: var(--loss); }
+.toast-ic { color: var(--gain); font-weight: 700; }
+.toast.error .toast-ic { color: var(--loss); }
 /* ---------- price board ---------- */
 .board-bar { display: flex; align-items: center; gap: 14px; margin-bottom: 16px; flex-wrap: wrap; }
 .price-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(212px, 1fr)); gap: 14px; }
@@ -396,7 +414,7 @@ details.adv[open] summary { color: var(--ink-2); margin-bottom: 8px; }
 .trade-webview { flex: 1 1 auto; width: 100%; min-height: 0; border: 0; background: #0c0d10; }
 
 /* ---------- watches ---------- */
-.watch-folder { border: 1px solid var(--line); border-radius: 6px; margin-bottom: 12px; background: var(--panel); overflow: hidden; }
+.watch-folder { border: 1px solid var(--line); border-radius: 10px; margin-bottom: 12px; background: var(--panel); box-shadow: var(--shadow-1); overflow: hidden; }
 .wf-head { display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: var(--panel-2); }
 .disclosure { background: none; border: 0; color: var(--muted); cursor: pointer; font-size: 13px; padding: 0 2px; }
 .wf-title { background: none; border: 0; color: var(--ink); font-weight: 600; font-size: 14px; flex: 0 1 auto; min-width: 80px; }
