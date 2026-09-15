@@ -485,7 +485,7 @@ details.adv[open] summary { color: var(--ink-2); margin-bottom: 8px; }
 .price-tile.src-digest { border-left: 2px solid var(--digest); }
 .price-tile.clickable { cursor: pointer; }
 
-/* card → detail morph (shared layoutId) */
+/* card detail modal (centered scale/fade zoom) */
 .detail-backdrop {
   position: fixed; inset: 0; z-index: 200; display: flex; align-items: center; justify-content: center;
   padding: 24px; background: rgba(8,9,12,.6); backdrop-filter: blur(4px);

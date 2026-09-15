@@ -42,14 +42,13 @@ export function Spark({ points, w = 132, h = 34 }) {
   )
 }
 
-// The expanded view a card morphs into (shared layoutId with its Tile). Shows the
-// bigger trend, the bid/ask breakdown, freshness, and the value expressed in every
-// other major currency — the "more detail" the hover-lift promises.
-// `layoutId` opts into the shared card→detail MORPH from an on-screen Tile that carries the
-// same layoutId (the Board). Omit it when there is no source tile (Hold/Movers/pulse zoom): a
-// bare scale/fade instead. Passing `tile-<id>` here when a Board tile of that id is also mounted
-// makes Framer Motion animate BETWEEN them across the viewport — the "sudden zoom" flash.
-export default function CardDetail({ r, num, factor, numOptions, onNum, prices, onClose, layoutId, range }) {
+// The expanded detail view: bigger trend, bid/ask breakdown, freshness, and the value in every
+// other major currency — the "more detail" the hover-lift promises. It enters as a centered
+// scale/fade zoom — deliberately NOT a Framer Motion shared-`layoutId` morph.
+// The old tile→card morph occasionally measured the origin tile at a near-zero/off rect and
+// overshot to fill the whole screen for a frame ("blowup"). A self-contained enter/exit has
+// no shared-layout math, so that class of glitch can't happen.
+export default function CardDetail({ r, num, factor, numOptions, onNum, prices, onClose, range }) {
   // Contract: a detail view must state the time range its graph + % cover. Callers pass a
   // label ("3d"/"24h"/…) or the literal "all" to opt into the whole-league view on purpose.
   // Missing range is a bug (an ambiguous, unlabeled graph) — fail loud rather than mislead.
@@ -60,18 +59,15 @@ export default function CardDetail({ r, num, factor, numOptions, onNum, prices, 
   const trend = r.trend ? r.trend.map(p => ({ t: p.t, v: p.v / f })) : r.trend
   const change = r.change_pct
   const inCurs = Object.keys(prices).filter(c => c !== r.id && prices[c]).sort((a, b) => prices[b] - prices[a]).slice(0, 8)
-  // Morph from the tile when we have one; otherwise a self-contained scale/fade zoom.
-  const anim = layoutId
-    ? { layoutId }
-    : { initial: { opacity: 0, scale: 0.96 }, animate: { opacity: 1, scale: 1 }, exit: { opacity: 0, scale: 0.98 } }
   useEffect(() => {
     const h = (e) => { if (e.key === 'Escape') onClose() }
     window.addEventListener('keydown', h); return () => window.removeEventListener('keydown', h)
   }, [onClose])
   return (
     <motion.div className="detail-backdrop" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose}>
-      <motion.div className={`card-detail src-${r.source || 'none'}`} {...anim}
-        transition={{ duration: 0.2, ease: [0.22, 0.61, 0.36, 1] }} onClick={e => e.stopPropagation()}>
+      <motion.div className={`card-detail src-${r.source || 'none'}`}
+        initial={{ opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.98 }}
+        transition={{ duration: 0.18, ease: [0.22, 0.61, 0.36, 1] }} onClick={e => e.stopPropagation()}>
         <button className="cd-close" onClick={onClose} title="Close (Esc)">×</button>
         <div className="cd-head">
           <span className="cd-title"><Cur id={r.id} name={r.name} text size={24} /></span>
