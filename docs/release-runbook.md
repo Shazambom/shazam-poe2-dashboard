@@ -1,24 +1,22 @@
 # Cutting a desktop release — runbook
 
 How to ship a new Arbiter desktop version to both platforms. Read alongside the desktop
-contract and the Windows auto-publish section in [`../CLAUDE.md`](../CLAUDE.md).
+contract and the deploy section in [`../CLAUDE.md`](../CLAUDE.md).
 
 ## The model
 
 The version lives **only** in `desktop/package.json` (`"version"`). Bumping it and pushing
-a `desktop-v<version>` tag is what drives everything. As of 0.2.39 both platforms update
-from **GitHub Releases** (electron-builder's `publish` target is `github`); the app reads
-its manifest off the `desktop-v<version>` release GitHub marks "Latest":
+a `desktop-v<version>` tag is what drives everything. Both platforms update from **GitHub
+Releases** (electron-builder's `publish` target is `github`); the app reads its manifest
+off the `desktop-v<version>` release GitHub marks "Latest":
 
 - **macOS** reads `latest-mac.yml`
 - **Windows** reads `latest.yml`
 
 Windows builds in **CI** and uploads its assets to the release directly. Mac builds + uploads
 **locally** (PyInstaller can't cross-compile) via `publish-github.sh`, into the same release.
-
-> **0.2.39 bridge only:** 0.2.39 is ALSO mirrored to shazam `/downloads` (run `./publish.sh`)
-> so users on ≤0.2.37 — whose updater still points at shazam — can pull it. Drop that step
-> from the next release; the shazam channel + cron poller retire after 0.2.39.
+Installer names are space-free (`nsis.artifactName`) so the yml url, the on-disk file, and
+the GitHub asset all match — otherwise GitHub rewrites spaces to dots and the updater 404s.
 
 ## Steps, in order
 
@@ -63,7 +61,6 @@ Windows builds in **CI** and uploads its assets to the release directly. Mac bui
    ```bash
    cd desktop && ./publish-github.sh   # builds Mac, WAITS on the Windows CI run (gh run watch),
                                        # then uploads Mac assets into the same desktop-v<v> release
-   ./publish.sh                        # 0.2.39 BRIDGE ONLY — mirror to shazam /downloads (drop next release)
    ```
    `publish-github.sh` does the whole local half: it runs `dist:mac`, finds this tag's Windows
    CI run, blocks on `gh run watch` until it finishes (no polling), then uploads. Pass
@@ -80,11 +77,3 @@ Windows builds in **CI** and uploads its assets to the release directly. Mac bui
    The release must be GitHub's "Latest" and carry both `latest-mac.yml` + `latest.yml` plus
    the installers — that is what the `github` updater provider resolves against. The curl must
    print `200` (a `404` means the installer name and the yml url disagree).
-
-## Gotcha — `publish.sh` clobbers the Windows `latest.yml` (bridge only)
-
-`publish.sh` (the retiring shazam mirror, used only for the 0.2.39 bridge) rsyncs `latest*.yml`
-from the local `release/`, which includes a **stale local `latest.yml`** left over from an old
-local `dist:win`. It overwrites shazam's Windows manifest until the next cron tick re-heals it
-from the GitHub release. Harmless (electron-updater never downgrades; self-corrects in ≤5 min),
-and moot once the shazam channel is gone. The GitHub release itself is never affected.

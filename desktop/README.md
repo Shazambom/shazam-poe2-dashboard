@@ -41,14 +41,16 @@ mode for platforms whose backend binary hasn't been built yet.
 npm run dist:mac          # release/: dmg + zip + latest-mac.yml
 npm run dist:win          # release/: NSIS installer + latest.yml (no Windows backend
                           #   binary unless built on Windows — remote mode by default)
-./publish.sh              # rsync artifacts to shazam:.../downloads/
+./publish-github.sh       # builds Mac, waits on the Windows CI run, uploads both platforms'
+                          #   assets to the desktop-v<ver> GitHub Release (see docs/release-runbook.md)
 ```
 
-Anyone running the app checks `/downloads/latest*.yml` on launch and every 30 min:
+Anyone running the app checks the latest **GitHub Release**'s `latest*.yml` on launch and
+every 30 min (electron-updater `github` provider):
 
 - **Windows**: downloads + installs in place (NSIS supports unsigned auto-update).
 - **macOS**: Squirrel refuses to swap unsigned apps, so the app pops "Update available →
-  Download" and opens the downloads page. Signing with an Apple Developer ID would make
+  Download" and opens the release's DMG. Signing with an Apple Developer ID would make
   it fully automatic — drop the `identity: null` from package.json when there's a cert.
 
 To ship the FULL local experience on Windows, run `build-backend.sh` (or the PyInstaller

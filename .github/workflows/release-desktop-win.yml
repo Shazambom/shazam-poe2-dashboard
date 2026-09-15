@@ -3,7 +3,8 @@ name: Build Windows desktop app
 # The Windows desktop app is FULLY SELF-CONTAINED: it ships its own PyInstaller-built
 # backend + local DB and only ever calls the server for updates. PyInstaller cannot
 # cross-compile, so the Windows backend .exe MUST be built here on a real windows-latest
-# runner; the installer is then attached to a GitHub Release and published to /downloads.
+# runner; the installer is then attached to the desktop-v<ver> GitHub Release, which is the
+# update channel electron-updater's `github` provider reads.
 on:
   push:
     tags: ['desktop-v*']

@@ -11,7 +11,7 @@
     "build:frontend": "cd ../frontend && npm run build && rm -rf ../desktop/app-dist && cp -R dist ../desktop/app-dist",
     "dist:mac": "npm run build:frontend && electron-builder --mac",
     "dist:win": "npm run build:frontend && electron-builder --win",
-    "publish": "./publish.sh"
+    "publish": "./publish-github.sh"
   },
   "devDependencies": {
     "electron": "^33.0.0",

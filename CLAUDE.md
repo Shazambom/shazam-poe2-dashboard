@@ -12,8 +12,7 @@ that **bundled local backend on 127.0.0.1** — never a remote server.
 The **only** permitted outbound calls are the **auto-updater** and **update telemetry**:
 - Auto-updater: electron-updater's `github` provider reads `latest*.yml` + installers from
   **GitHub Releases** (`Shazambom/shazam-poe2-dashboard`, the `desktop-v<ver>` tag GitHub
-  marks "Latest"). No token needed (public repo). Switched from the shazam `/downloads`
-  channel in 0.2.39 — see the deploy section below.
+  marks "Latest"). No token needed (public repo). See the deploy section below.
 - Update telemetry: `updLog()` still POSTs to `…/api/installlog?p=update` on shazam (the
   sanctioned diagnostic exception, "telemetry only" — never data/metrics).
 
@@ -30,63 +29,34 @@ Consequences to preserve in any change:
 - Any new feature that needs data must work against the local backend + local DB
   (which backfills poe2scout on first run), not the server.
 
-## Deploy: publish to GitHub Releases (as of 0.2.39)
+## Deploy: publish to GitHub Releases
 
 Apps update from **GitHub Releases** directly, and versions publish by pushing artifacts
-to GitHub — not to the shazam server. One release per version, tagged `desktop-v<ver>`,
-carrying BOTH platforms' assets:
+to GitHub — the shazam server is not in the update path. One release per version, tagged
+`desktop-v<ver>`, carrying BOTH platforms' assets:
 - **Windows**: CI (`release-desktop-win.yml`) builds on `windows-latest` and uploads the
-  `.exe`/`.zip`/`.blockmap` + `latest.yml` to the release. No change needed here — it
-  already pushed to GitHub.
-- **Mac**: built locally (`npm run dist:mac`), then `./publish-github.sh` uploads the
-  `arm64` dmg/zip/blockmap + `latest-mac.yml` into the same `desktop-v<ver>` release.
+  `.exe`/`.zip`/`.blockmap` + `latest.yml` to the release.
+- **Mac**: built + uploaded locally (PyInstaller can't cross-compile) by `desktop/publish-github.sh`,
+  which drops the `arm64` dmg/zip/blockmap + `latest-mac.yml` into the same `desktop-v<ver>` release.
 
 electron-updater's `github` provider resolves updates off GitHub's "Latest release"
 pointer, so the `desktop-v*` tag name is fine (the compared version comes from the yml's
 `version:` field). The `market-seed-latest` release is a **Pre-release**, so it is never
 picked as "Latest".
 
-**Legacy shazam `/downloads` channel — being retired.** 0.2.39 is dual-published (GitHub
-AND shazam) as a one-time bridge so users still on ≤0.2.37 — whose updater points at
-shazam — can pull 0.2.39, after which their updater points at GitHub. After 0.2.39, the
-shazam publish (`publish.sh`), the cron poller, and the dormant webhook are all
-unnecessary and can be removed.
-
-### (Legacy) Windows auto-publish to shazam — polling now, webhook at go-live
-
-Retained only for the 0.2.39 bridge. Windows desktop builds run in CI (see the desktop
-contract above). They reach the `/downloads` channel automatically:
-
-- **Now (LAN-only): cron poller.** `ops/publish-latest.sh` runs on shazam every 5 min
-  (`/home/shazam/bin/`, in the `shazam` user crontab), pulls the newest `desktop-v*`
-  release, renames the installer to the spaced filename `latest.yml` expects, and drops
-  it in `/downloads`. GitHub's cloud runners can't reach the LAN, so shazam PULLS.
-- **At go-live (public internet): switch to the webhook** for instant publish.
-  `ops/webhook-receiver.py` + `ops/poe2-webhook.service` are already built and deployed
-  to shazam (`/home/shazam/bin/webhook-receiver.py`), but DORMANT. To activate:
-  1. Create the secret: `openssl rand -hex 32 > /home/shazam/.poe2-webhook-secret && chmod 600 …`
-  2. Install + start the service: `sudo cp ops/poe2-webhook.service /etc/systemd/system/ &&
-     sudo systemctl daemon-reload && sudo systemctl enable --now poe2-webhook` (listens :9099).
-  3. Port-forward a public port → shazam:9099 (front it with TLS via the public reverse proxy).
-  4. In the GitHub repo → Settings → Webhooks: add the public URL, content-type
-     `application/json`, the same secret, event = **Releases** only.
-  5. Keep the cron poller enabled as a fallback (it no-ops when already up to date).
-  The receiver verifies GitHub's `X-Hub-Signature-256` HMAC and only acts on a published
-  `desktop-v*` release — never trust an unsigned call (it runs the publish script).
-
-Mac builds + publishes locally (PyInstaller can't cross-compile), so Mac is not part of
-this auto-publish path.
+Asset names must be **space-free** (`nsis.artifactName` → `Arbiter-Setup-<ver>.exe`):
+GitHub rewrites spaces to dots on upload, which would leave the yml url and the asset name
+disagreeing and the updater would 404. Keep it dash-form.
 
 ## Cutting a desktop release
 
-Full step-by-step runbook: [`docs/release-runbook.md`](docs/release-runbook.md). TL;DR (as of
-0.2.39): bump `desktop/package.json`, commit on `main`, push a `desktop-v<version>` tag (fires
-the Windows CI, which builds + uploads Windows assets to the GitHub release), then
+Full step-by-step runbook: [`docs/release-runbook.md`](docs/release-runbook.md). TL;DR: bump
+`desktop/package.json`, commit on `main`, push a `desktop-v<version>` tag (fires the Windows
+CI, which builds + uploads Windows assets to the GitHub release), then
 `cd desktop && ./publish-github.sh` — it builds the Mac app, waits on the Windows CI run
 (`gh run watch`, event-driven, no polling), and uploads the Mac assets into the same release.
-Verify the GitHub release shows both platforms' `latest*.yml` + installers and is GitHub's
-"Latest". (During the 0.2.39 bridge only, ALSO run `./publish.sh` to mirror to shazam
-`/downloads` for ≤0.2.37 users; drop that step in the next release.)
+Verify the GitHub release is GitHub's "Latest" and shows both platforms' `latest*.yml` +
+installers, and that the Windows installer URL resolves (not a 404 — the naming check above).
 
 ## Verifying the Windows app — telemetry is mandatory
 
