@@ -393,23 +393,23 @@ def find_routes(filters: dict | None = None, start_currencies: list[str] | None 
 MAX_CANDIDATES = 20000   # hard ceiling on simulated cycles per search
 
 
-# Velocity's gold penalty is priced by the user's gold-value slider. Gold enters as an ADDITIVE
-# cost (not a bare divisor) with a floor, so the slider genuinely REORDERS loops instead of
-# scaling every velocity uniformly (a rank-invariant no-op under the composite score). FLOOR is a
-# reference-value threshold: once a loop's priced gold cost exceeds it, gold is penalised; below
-# it (cheap gold / low slider) gold is effectively ignored and margin-per-hour leads.
-VELOCITY_GOLD_FLOOR = 1.0
+def _velocity(margin_ref: float, fill_hours: float | None, gold: float,
+              gold_price_ref: float) -> float | None:
+    """Velocity = margin NET of gold's value, per hour, per 1k gold.
 
-
-def _velocity(margin_ref: float, fill_hours: float | None, gold: float, gold_price_ref: float,
-              floor: float = VELOCITY_GOLD_FLOOR) -> float | None:
-    """margin per hour per unit of priced gold cost. `gold_price_ref` = reference value of 1 gold
-    (from the slider). Gold-free loops rank best (INF); no turnover data -> None."""
+    Gold is valued at the user's slider price (`gold_price_ref` = reference value of 1 gold) and
+    SUBTRACTED from the margin, then the result is still divided by gold (the per-1k-gold
+    efficiency weighting). The subtraction is what makes the gold-value slider actually move the
+    arbitrage ranking — a pure divisor was a rank-invariant scalar; the division keeps a
+    gold-thrifty loop weighted above a gold-heavy one at equal net margin. Gold-free loops rank
+    best (INF); no turnover data -> None; a loop whose gold value exceeds its margin goes negative
+    (net loss) and sinks."""
     if fill_hours is None or fill_hours <= 0:
         return None
+    net = margin_ref - gold * gold_price_ref
     if gold <= 0:
-        return INF if margin_ref > 0 else 0.0
-    return margin_ref / fill_hours / max(gold * gold_price_ref, floor)
+        return INF if net > 0 else 0.0
+    return net / fill_hours / gold * 1000
 
 
 def _route_from(g: Graph, cyc: list[Edge], start: str, held: float, budget: float,
@@ -467,8 +467,8 @@ RECOMMENDED_MIN_VOLUME_REF_PER_H = 100.0
 
 # Default price of gold for net-value ranking (Convert): Divine per 1000 gold. Gold's real
 # worth shifts across a league, so this is user-tunable via a slider (settings.gold_value_per_1k);
-# this constant is only the fallback. 1.0 divine/1k gold == a Divine is "worth" 1k gold.
-GOLD_VALUE_DIVINE_PER_1K = 1.0
+# this constant is only the fallback. 0.01 divine/1k gold == a Divine is "worth" ~100k gold.
+GOLD_VALUE_DIVINE_PER_1K = 0.01
 
 
 def _keep(r: dict, f: dict) -> bool:

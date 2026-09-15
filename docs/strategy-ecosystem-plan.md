@@ -87,16 +87,18 @@ Cheapest way to turn `have` into `want` across the exchange graph (open path, no
 ## Phase 1.5 — Gold-value slider (IN PROGRESS, task #59)
 - **Setting**: `gold_value_per_1k` (Divine per 1k gold), **user data** — add to `settings.py`
   defaults + classify user-kv in `db.py`; PUT via existing `/api/settings`.
-- **UI**: a slider on the **Arbitrage page** (sensible spot — near the ranking, e.g. above the
-  routes table or in the rail with filters, NOT slapped in). Owner specs: **thumb = the Divine
-  icon** (flair); left label = Divine icon + "/1k Gold"; **range gold-per-divine ~1k → 1M**
-  (log scale) → maps to `gold_value_per_1k ∈ [0.001, 1.0]` (gv = 1000 / gold_per_divine).
-- **Feeds**: Convert net-value (already wired via the setting) AND **Arbitrage velocity**. Owner
-  chose "scale the gold divisor" — implement as an ADDITIVE-cost divisor so it actually reorders:
-  `velocity = margin_ref / fill_hours / (floor + gold × price)` where `price = gold_value_per_1k ×
-  ref[divine] / 1000`. A pure uniform scale is a no-op under rank-normalized composite scoring —
-  the additive floor is required. TDD the reorder in `arbitrage.py`; keep default behavior ~intact
-  at the default gv. Match the app aesthetic; a style guide is future work.
+- **UI (DONE)**: slider in the Arbitrage rail (`GoldValueSlider.jsx`). Divine-icon thumb; label
+  leads with the whole-number metric **"1 ◈ = N gold"** (humans don't parse decimals); **range
+  gold-per-Divine 100k → 10M** (log) → `gold_value_per_1k ∈ [0.0001, 0.01]` (gv = 1000/gold_per_div);
+  default **0.01 (1 ◈ ≈ 100k gold)**; "gold precious / gold cheap" end labels; description text
+  omitted (self-explanatory). Debounced persist + route re-rank.
+- **Feeds (DONE)**: Convert net-value ranking AND **Arbitrage velocity**. Final velocity model
+  (`arbitrage._velocity`): **net of gold, then per-1k-gold** —
+  `net = margin_ref − gold × price; velocity = net / fill_hours / gold × 1000`, where
+  `price = gold_value_per_1k × ref[divine] / 1000`. Subtracting gold's value is what makes the
+  slider actually reorder (a pure divisor was a rank-invariant scalar); the ÷gold keeps
+  gold-efficiency weighting. Nuance: reorders routes with differing `fill_hours` (continuous, so
+  ~always) and sinks negative-net loops; identical-fh routes see price as a uniform offset. Match the app aesthetic; a style guide is future work.
 
 ## Phase 2 — Ghost Wealth / "can I cash out?" (TODO) — KEEP/DECIDE, NO sidecar
 Realizable-vs-paper value: price sites show a number, not whether the market absorbs your stack.
