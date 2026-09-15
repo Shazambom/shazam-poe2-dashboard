@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { api, fmt, surface } from '../lib/api.js'
 import { useAutosave } from '../lib/hooks.js'
 import Cur from './Cur.jsx'
+import CurrencyPicker from './CurrencyPicker.jsx'
 
 const PRIMARY = ['chaos', 'exalted', 'divine']
 
@@ -10,8 +11,6 @@ const PRIMARY = ['chaos', 'exalted', 'divine']
 export default function CapitalCard({ currencies, status, onSaved }) {
   const [qty, setQty] = useState(null)          // { currency: "string qty" } as typed
   const [data, setData] = useState(null)        // last server valuation
-  const [add, setAdd] = useState('')
-  const names = Object.fromEntries((currencies?.currencies ?? []).map(c => [c.id, c.name]))
 
   const { state, save, arm } = useAutosave(async (rows) => {
     const entries = {}
@@ -59,15 +58,9 @@ export default function CapitalCard({ currencies, status, onSaved }) {
         </tbody>
       </table>
       <div className="row" style={{ marginTop: 6 }}>
-        <input className="btn" list="cap-add" placeholder="Add currency…" value={add}
-          onChange={e => setAdd(e.target.value)}
-          onKeyDown={e => { if (e.key === 'Enter' && names[add] && !(add in qty)) { setQty(r => ({ ...r, [add]: 0 })); setAdd('') } }}
-          style={{ flex: 1, minWidth: 0 }} />
-        <button className="btn small" disabled={!names[add] || add in qty}
-          onClick={() => { setQty(r => ({ ...r, [add]: 0 })); setAdd('') }}>Add</button>
-        <datalist id="cap-add">
-          {(currencies?.currencies ?? []).filter(c => !(c.id in qty)).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-        </datalist>
+        <CurrencyPicker value="" placeholder="Add currency…"
+          options={(currencies?.currencies ?? []).filter(c => !(c.id in (qty || {})))}
+          onChange={id => { if (id && !(id in (qty || {}))) setQty(r => ({ ...r, [id]: 0 })) }} />
       </div>
       <p className="hint" style={{ marginTop: 6 }}>Total <b>{fmt.n(data?.total_ref, 1)} <Cur id={ref} size={14} /></b> · loops are sized from these counts.</p>
     </div>

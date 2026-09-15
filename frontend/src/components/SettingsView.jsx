@@ -3,6 +3,8 @@ import { api, surface, toast } from '../lib/api.js'
 import AccountsPanel from './AccountsPanel.jsx'
 import RecipesView from './RecipesView.jsx'
 import TradingSettings from './TradingSettings.jsx'
+import CurrencyPicker from './CurrencyPicker.jsx'
+import RefreshButton from './RefreshButton.jsx'
 
 // Everything auto-saves (debounced) — there is no Save button. The league lives
 // in the top bar; essentials are visible; the rest sits behind "Advanced".
@@ -68,7 +70,7 @@ export default function SettingsView({ currencies, status, onSaved }) {
           <h2 style={{ marginTop: 28 }}>Market</h2>
           <p className="hint">The league is set from the dropdown in the top bar.</p>
           <div className="field"><label>Reference currency for values</label>
-            <select value={s.reference} onChange={e => set('reference', e.target.value)}>{opts.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}</select>
+            <CurrencyPicker value={s.reference} onChange={id => set('reference', id)} options={opts} placeholder="reference currency…" />
           </div>
           <div className="field"><label>Live watchlist (every ordered pair is fetched each sweep)</label>
             <textarea rows={3} defaultValue={s.watchlist.join(', ')} onBlur={e => set('watchlist', e.target.value.split(/[\s,]+/).filter(Boolean))} />
@@ -116,7 +118,9 @@ export default function SettingsView({ currencies, status, onSaved }) {
                 : <> Not loaded yet{fees?.state?.last_error ? ` — ${fees.state.last_error}` : ''}.</>}
             </p>
             <div className="row" style={{ marginBottom: 12 }}>
-              <button className="btn" disabled={busy} onClick={async () => { setBusy(true); try { setFees(await surface(api.refreshGoldFees(), 'Gold fees refreshed')) } catch {} finally { setBusy(false) } }}>{busy ? 'Fetching' : 'Refresh from game data'}</button>
+              <RefreshButton busy={busy} onClick={async () => { setBusy(true); try { setFees(await surface(api.refreshGoldFees(), 'Gold fees refreshed')) } catch {} finally { setBusy(false) } }} title="Refresh gold fees from game data" />
+              <span className="hint">Gold fees from game data</span>
+              <span className="spacer" />
               <button className="btn" onClick={() => surface(api.syncDigest(), 'Market sync started').catch(() => {})}>Sync market data now</button>
             </div>
             <div className="field"><label>Fee applies to</label>
@@ -185,7 +189,7 @@ function DiagPanel() {
   return (
     <div>
       <div className="row" style={{ gap: 8, marginBottom: 8 }}>
-        <button className="btn small" disabled={busy} onClick={run}>{busy ? 'Checking…' : 'Refresh'}</button>
+        <RefreshButton className="small" busy={busy} onClick={run} title="Refresh diagnostics" />
         <button className="btn small" disabled={!text} onClick={() => { navigator.clipboard?.writeText(text); toast('Diagnostics copied') }}>Copy</button>
       </div>
       {err && <div className="notice error">{err}</div>}

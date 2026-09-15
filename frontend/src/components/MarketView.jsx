@@ -3,6 +3,7 @@ import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, 
 import { api, fmt } from '../lib/api.js'
 import { color, chart } from '../theme.js'
 import Cur from './Cur.jsx'
+import CurrencyPicker from './CurrencyPicker.jsx'
 
 const AXIS = { fill: chart.axis, fontSize: 11 }
 const TIP = { background: chart.tooltipBg, border: `1px solid ${chart.tooltipBorder}` }
@@ -22,7 +23,6 @@ export default function MarketView({ currencies }) {
   useEffect(() => { api.history(pair.a, pair.b).then(setHist).catch(console.error) }, [pair])
 
   const names = Object.fromEntries((currencies?.currencies ?? []).map(c => [c.id, c.name]))
-  const list = (currencies?.currencies ?? []).map(c => c.id)
   const shown = edges.filter(e => !q || `${e.from_name} ${e.to_name} ${e.from} ${e.to}`.toLowerCase().includes(q.toLowerCase()))
   const digestSeries = (hist?.digest ?? []).map(p => ({ t: hourLabel(p.hour), rate: p.rate, vol: p.volume_a }))
   const liveSeries = (hist?.live ?? []).map(p => ({ t: hourLabel(p.fetched_at), rate: p.best_rate, stock: p.best_stock }))
@@ -33,13 +33,9 @@ export default function MarketView({ currencies }) {
         <div>
           <h2>Pair history</h2>
           <div className="row" style={{ marginBottom: 10 }}>
-            <select value={pair.a} onChange={e => setPair(p => ({ ...p, a: e.target.value }))} className="btn">
-              {list.map(c => <option key={c} value={c}>{names[c]}</option>)}
-            </select>
+            <CurrencyPicker value={pair.a} onChange={id => setPair(p => ({ ...p, a: id }))} options={currencies?.currencies ?? []} placeholder="currency…" />
             <span className="muted">priced in</span>
-            <select value={pair.b} onChange={e => setPair(p => ({ ...p, b: e.target.value }))} className="btn">
-              {list.map(c => <option key={c} value={c}>{names[c]}</option>)}
-            </select>
+            <CurrencyPicker value={pair.b} onChange={id => setPair(p => ({ ...p, b: id }))} options={currencies?.currencies ?? []} placeholder="currency…" />
           </div>
           <div className="chart-box">
             {digestSeries.length === 0 && liveSeries.length === 0 ? (

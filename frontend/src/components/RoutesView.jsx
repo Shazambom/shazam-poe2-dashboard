@@ -4,6 +4,7 @@ import CapitalCard from './CapitalCard.jsx'
 import ConvertView from './ConvertView.jsx'
 import Cur from './Cur.jsx'
 import GoldValueSlider from './GoldValueSlider.jsx'
+import RefreshButton from './RefreshButton.jsx'
 import { Detail, Loop } from './RouteSteps.jsx'
 
 const INF = Infinity
@@ -195,8 +196,10 @@ export default function RoutesView({ capital, status, currencies, onCapitalSaved
           <p className="hint">Not connected — loops use hourly market data. Connect a trade session in Settings for real-time order books.</p>
         ) : (
           <>
-            <button className="btn primary" onClick={refreshTop} disabled={liveBusy} style={{ width: '100%' }}>
-              {liveBusy ? 'Fetching…' : `Refresh top ${liveN} loops now`}</button>
+            <div className="row">
+              <RefreshButton busy={liveBusy} onClick={refreshTop} title={`Refresh top ${liveN} loops now`} />
+              <span className="hint">Top {liveN} loops</span>
+            </div>
             <label className="check" style={{ marginTop: 8 }}><input type="checkbox" checked={autoLive} onChange={e => setAutoLive(e.target.checked)} /> Keep fresh (every 2 min)</label>
           </>
         )}

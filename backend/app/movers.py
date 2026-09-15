@@ -79,7 +79,11 @@ def _change_pct(pts, window_days):
     return (last_c - base[1]) / base[1] * 100
 
 
-def top_movers(window_h: int = 24, n: int = 3, min_value_ex: float = MIN_VALUE_EX) -> dict:
+def top_movers(window_h: int = 24, n: int = 3, min_value_ex: float = MIN_VALUE_EX,
+               direction: str = "both") -> dict:
+    """direction: 'both' (default) ranks by |% change| — spikes AND crashes; 'up' keeps only
+    gainers (biggest first); 'down' keeps only losers (biggest drop first). The Hold page's
+    'Positive movers' board uses 'up' to show only upward swings."""
     wd = _win_days(window_h)
     cur_name, series, meta = _current_series()
     out = []
@@ -87,14 +91,23 @@ def top_movers(window_h: int = 24, n: int = 3, min_value_ex: float = MIN_VALUE_E
         ch = _change_pct(pts, wd)
         if ch is None:
             continue
+        if direction == "up" and ch <= 0:
+            continue
+        if direction == "down" and ch >= 0:
+            continue
         medval = statistics.median(p[2] for p in pts)
         if medval < min_value_ex:
             continue
         name, cat = meta.get(iid, (str(iid), "?"))
         out.append({"id": _slug(name), "name": name, "category": cat,
                     "change_pct": round(ch, 1), "medvol": round(medval)})
-    out.sort(key=lambda x: -abs(x["change_pct"]))   # biggest absolute move first (spikes AND crashes)
-    return {"league": cur_name, "window_h": window_h, "delta_days": wd,
+    if direction == "up":
+        out.sort(key=lambda x: -x["change_pct"])     # biggest gain first
+    elif direction == "down":
+        out.sort(key=lambda x: x["change_pct"])       # biggest drop first
+    else:
+        out.sort(key=lambda x: -abs(x["change_pct"]))  # biggest absolute move first
+    return {"league": cur_name, "window_h": window_h, "delta_days": wd, "direction": direction,
             "count": len(out), "assets": out[:n]}
 
 

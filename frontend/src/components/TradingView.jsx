@@ -25,7 +25,7 @@ export default function TradingView({ league }) {
         {SUBS.map(s => (
           <button key={s.id} role="tab" aria-selected={sub === s.id} onClick={() => setSub(s.id)}>
             {s.label}
-            {sub === s.id && <motion.span className="subtab-underline" layoutId="subtab-underline"
+            {sub === s.id && <motion.span className="subtab-underline" layoutId="subtab-underline-trading"
               transition={{ type: 'spring', stiffness: 420, damping: 34 }} />}
           </button>
         ))}

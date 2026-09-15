@@ -277,6 +277,11 @@ a { color: var(--live); }
   padding: 6px 8px; width: 100%;
 }
 .field input[type="checkbox"] { width: auto; }
+/* Number inputs: hide the native up/down spinners — they don't fit the dark theme.
+   Values are typed (or driven by sliders); the stepper chrome just looked out of place. */
+input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 .check { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
 .check input { margin: 0; }
 .btn {
@@ -294,6 +299,20 @@ a { color: var(--live); }
 .btn.primary:hover { filter: brightness(1.06); box-shadow: 0 1px 0 rgba(255,255,255,.35) inset, 0 4px 16px rgba(201,162,74,.45); }
 .btn.small { padding: 3px 8px; font-size: 12.5px; }
 .btn:disabled { opacity: 0.5; cursor: default; }
+/* Icon-only refresh control (see RefreshButton.jsx). Square, themed like a secondary button;
+   the glyph spins a satisfying full turn on activation. */
+.refresh-btn { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px;
+  padding: 0; flex: 0 0 auto; border-radius: var(--radius); background: var(--panel-2);
+  border: 1px solid var(--line-strong); color: var(--ink-2); cursor: pointer;
+  transition: border-color .12s var(--ease), background .12s var(--ease), color .12s var(--ease), transform .12s var(--ease); }
+.refresh-btn:hover:not(:disabled) { border-color: var(--gold-dim); background: var(--panel-hi); color: var(--ink); }
+.refresh-btn:active:not(:disabled) { transform: translateY(1px); }
+.refresh-btn:disabled { opacity: .55; cursor: default; }
+.refresh-btn svg { width: 16px; height: 16px; display: block; }
+.refresh-btn.spinning svg { animation: spin .7s var(--ease) infinite; transform-origin: 50% 50%; }
+.refresh-btn.small { width: 26px; height: 26px; }
+.refresh-btn.small svg { width: 14px; height: 14px; }
+@media (prefers-reduced-motion: reduce) { .refresh-btn.spinning svg { animation-duration: 1.4s; } }
 .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .spacer { flex: 1; }
 .rail h2, .main h2, .single h2 { font-size: 13px; font-weight: 600; color: var(--ink-2); margin: 18px 0 10px; }

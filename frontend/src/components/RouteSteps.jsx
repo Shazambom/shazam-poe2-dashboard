@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { fmt } from '../lib/api.js'
 import Cur from './Cur.jsx'
+import RefreshButton from './RefreshButton.jsx'
 
 // Shared route-path renderers, extracted from RoutesView so the Convert tool renders a
 // conversion exactly like an arbitrage loop (same visual vocabulary). `Loop` works for any
@@ -50,9 +51,8 @@ export function Detail({ r, refCur, onRefresh, refreshing, canLive }) {
         {r.score != null && r.score_parts && <span>· score {r.score} (velocity {r.score_parts.velocity}, efficiency {r.score_parts.efficiency}, value {r.score_parts.value}, volume {r.score_parts.volume})</span>}
         <span className="spacer" />
         {canLive && r.pairs.length > 0 && (
-          <button className="btn small" disabled={refreshing} onClick={(e) => { e.stopPropagation(); onRefresh(r) }}>
-            {refreshing ? 'Fetching live…' : `Refresh this loop (${r.pairs.length} ${r.pairs.length === 1 ? 'pair' : 'pairs'})`}
-          </button>
+          <RefreshButton className="small" busy={refreshing} onClick={(e) => { e.stopPropagation(); onRefresh(r) }}
+            title={`Refresh this loop (${r.pairs.length} ${r.pairs.length === 1 ? 'pair' : 'pairs'})`} />
         )}
       </div>
       <table>

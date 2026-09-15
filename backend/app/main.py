@@ -441,10 +441,11 @@ async def hold(horizon: str = "3d", category: str = "all", numeraire: str = "div
 
 
 @app.get("/api/movers")
-async def movers_ep(window_h: int = 24, n: int = 3):
-    """Biggest movers across the full poe2scout universe, by |% change| over the window
-    (both gainers and crashers), in the league base. Distinct from /api/hold's ranking."""
-    return await run_in_threadpool(movers.top_movers, window_h, n)
+async def movers_ep(window_h: int = 24, n: int = 3, dir: str = "both"):
+    """Biggest movers across the full poe2scout universe, by % change over the window, in the
+    league base. dir='both' ranks by |change| (gainers AND crashers); 'up'/'down' keep only
+    that direction. Distinct from /api/hold's store-of-value ranking."""
+    return await run_in_threadpool(movers.top_movers, window_h, n, movers.MIN_VALUE_EX, dir)
 
 
 @app.get("/api/asset")
