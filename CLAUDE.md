@@ -13,7 +13,7 @@ The **only** permitted outbound calls are the **auto-updater** and **update tele
 - Auto-updater: electron-updater's `github` provider reads `latest*.yml` + installers from
   **GitHub Releases** (`Shazambom/shazam-poe2-dashboard`, the `desktop-v<ver>` tag GitHub
   marks "Latest"). No token needed (public repo). Switched from the shazam `/downloads`
-  channel in 0.2.38 — see the deploy section below.
+  channel in 0.2.39 — see the deploy section below.
 - Update telemetry: `updLog()` still POSTs to `…/api/installlog?p=update` on shazam (the
   sanctioned diagnostic exception, "telemetry only" — never data/metrics).
 
@@ -30,7 +30,7 @@ Consequences to preserve in any change:
 - Any new feature that needs data must work against the local backend + local DB
   (which backfills poe2scout on first run), not the server.
 
-## Deploy: publish to GitHub Releases (as of 0.2.38)
+## Deploy: publish to GitHub Releases (as of 0.2.39)
 
 Apps update from **GitHub Releases** directly, and versions publish by pushing artifacts
 to GitHub — not to the shazam server. One release per version, tagged `desktop-v<ver>`,
@@ -46,15 +46,15 @@ pointer, so the `desktop-v*` tag name is fine (the compared version comes from t
 `version:` field). The `market-seed-latest` release is a **Pre-release**, so it is never
 picked as "Latest".
 
-**Legacy shazam `/downloads` channel — being retired.** 0.2.38 is dual-published (GitHub
+**Legacy shazam `/downloads` channel — being retired.** 0.2.39 is dual-published (GitHub
 AND shazam) as a one-time bridge so users still on ≤0.2.37 — whose updater points at
-shazam — can pull 0.2.38, after which their updater points at GitHub. After 0.2.38, the
+shazam — can pull 0.2.39, after which their updater points at GitHub. After 0.2.39, the
 shazam publish (`publish.sh`), the cron poller, and the dormant webhook are all
 unnecessary and can be removed.
 
 ### (Legacy) Windows auto-publish to shazam — polling now, webhook at go-live
 
-Retained only for the 0.2.38 bridge. Windows desktop builds run in CI (see the desktop
+Retained only for the 0.2.39 bridge. Windows desktop builds run in CI (see the desktop
 contract above). They reach the `/downloads` channel automatically:
 
 - **Now (LAN-only): cron poller.** `ops/publish-latest.sh` runs on shazam every 5 min
@@ -80,11 +80,12 @@ this auto-publish path.
 ## Cutting a desktop release
 
 Full step-by-step runbook: [`docs/release-runbook.md`](docs/release-runbook.md). TL;DR (as of
-0.2.38): bump `desktop/package.json`, commit on `main`, push a `desktop-v<version>` tag (fires
+0.2.39): bump `desktop/package.json`, commit on `main`, push a `desktop-v<version>` tag (fires
 the Windows CI, which builds + uploads Windows assets to the GitHub release), then
-`cd desktop && npm run dist:mac && ./publish-github.sh` to upload the Mac assets to the same
-release. Verify the GitHub release shows both platforms' `latest*.yml` + installers and is
-GitHub's "Latest". (During the 0.2.38 bridge only, ALSO run `./publish.sh` to mirror to shazam
+`cd desktop && ./publish-github.sh` — it builds the Mac app, waits on the Windows CI run
+(`gh run watch`, event-driven, no polling), and uploads the Mac assets into the same release.
+Verify the GitHub release shows both platforms' `latest*.yml` + installers and is GitHub's
+"Latest". (During the 0.2.39 bridge only, ALSO run `./publish.sh` to mirror to shazam
 `/downloads` for ≤0.2.37 users; drop that step in the next release.)
 
 ## Verifying the Windows app — telemetry is mandatory
