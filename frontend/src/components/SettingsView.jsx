@@ -32,7 +32,7 @@ export default function SettingsView({ currencies, status, onSaved }) {
       const num = (v, fb) => { const n = Number(v); return Number.isFinite(n) ? n : fb }
       try {
         await surface(api.putSettings({
-          reference: next.reference, watchlist: next.watchlist,
+          reference: next.reference, watchlist: next.watchlist, hub_count: num(next.hub_count, 5),
           allow_digest_edges: next.allow_digest_edges, allow_recipe_edges: next.allow_recipe_edges,
           max_steps: num(next.max_steps, 3), max_start_fraction: num(next.max_start_fraction, 1),
           live_max_age_s: num(next.live_max_age_s, 1800), digest_max_age_h: num(next.digest_max_age_h, 6),
@@ -79,6 +79,10 @@ export default function SettingsView({ currencies, status, onSaved }) {
           </div>
           <div className="check"><Toggle checked={s.allow_digest_edges} onChange={v => set('allow_digest_edges', v)} label="Fill missing pairs from hourly market data" /></div>
           <div className="check"><Toggle checked={s.allow_recipe_edges} onChange={v => set('allow_recipe_edges', v)} label="Use recipe steps" /></div>
+          <div className="field"><label>Hub currencies to highlight (⬢)</label>
+            <input type="number" min="1" max="12" value={s.hub_count ?? 5} onChange={e => set('hub_count', e.target.value)} />
+            <span className="hint">The most-central markets (by trade volume) — shown as ⬢ on the board and in the Hubs strip.</span>
+          </div>
 
           <details className="adv" style={{ marginTop: 18 }}>
             <summary>Advanced — route search &amp; fetch policy</summary>

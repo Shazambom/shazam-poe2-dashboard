@@ -91,7 +91,9 @@ export default function CardDetail({ r, num, factor, numOptions, onNum, prices, 
           {r.medvol != null && <div className="cd-stat"><span>volume</span><b>{Math.round(r.medvol).toLocaleString()}<span className="muted"> ex/day</span></b></div>}
           <div className="cd-stat"><span>source</span><b>{SRC_LABEL[r.source] || 'no data'}</b></div>
           {r.age_s != null && <div className="cd-stat"><span>updated</span><b>{fmt.age(r.age_s)} ago</b></div>}
+          {r.hub && <div className="cd-stat" title="A central market — a lot of value routes through it"><span>market</span><b className="cd-hub">⬢ hub</b></div>}
         </div>
+        {r.hub && <div className="cd-hub-note"><span className="cd-hub">⬢</span> A hub is one of the market's most-traded currencies — most trades route through it, so it's easy to buy and sell.</div>}
         {inCurs.length > 0 && <>
           <div className="cd-section">Value in other currencies</div>
           <div className="cd-invalue">

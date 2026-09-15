@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react'
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { motion, AnimatePresence, useSpring, useTransform } from 'motion/react'
 import { api, fmt, surface, toast } from '../lib/api.js'
 import { nav } from '../lib/nav.js'
@@ -56,6 +56,7 @@ function Tile({ r, num, factor, numOptions, onNum, onRemove, onOpen, index = 0 }
     >
       <div className="pt-head">
         <span className="pt-name"><Cur id={r.id} text /></span>
+        {r.hub && <span className="pt-hub" title="Hub — a central market; a lot of value routes through it">⬢</span>}
         {onRemove && <button className="pt-remove" title="Remove from board" onClick={e => { e.stopPropagation(); onRemove(r.id) }}>×</button>}
         <span className={`pt-src ${r.source}`} title={
           r.source === 'live' ? 'live order book' : r.source === 'digest' ? 'hourly market data'
@@ -194,19 +195,57 @@ export default function BoardView({ status }) {
     if (!holds.length && !mvrs.length) return null
     return { holds, movers: mvrs }
   }, [hold, movers])
+  // Hubs: the market's most-central currencies (top PageRank, backend `hub` flag), richest first.
+  // Priced EXACTLY like the board cards — in the counterpart with the highest trade volume (the
+  // derived pref_num / numFor), never the raw reference — so Mirror shows in Divine, Divine in
+  // Chaos, etc. Count is user-tunable (settings hub_count → backend flags the top N).
+  const hubChips = useMemo(
+    () => rows.filter(r => r.hub).slice().sort((a, b) => (prices[b.id] || 0) - (prices[a.id] || 0)),
+    [rows, prices])
+  // Scale-to-fit the pulse strip: shrink the whole row (transform: scale) so all three groups
+  // stay on ONE line as the window narrows; only once scaling would drop below the floor
+  // ("squished a ton") do we let it wrap instead. Re-runs on resize and when content changes.
+  const fitRef = useRef(null), stripRef = useRef(null)
+  useLayoutEffect(() => {
+    const outer = fitRef.current, inner = stripRef.current
+    if (!outer || !inner) return
+    const FLOOR = 0.72
+    const fit = () => {
+      inner.classList.remove('wrap'); inner.style.transform = 'none'; outer.style.height = ''
+      const cw = outer.clientWidth, sw = inner.scrollWidth
+      if (!cw || !sw) return
+      const scale = cw / sw
+      if (scale >= 1) return                              // fits at full size
+      if (scale < FLOOR) { inner.classList.add('wrap'); return }  // too tight → wrap instead
+      inner.style.transform = `scale(${scale})`
+      outer.style.height = `${inner.offsetHeight * scale}px`
+    }
+    fit()
+    const ro = new ResizeObserver(fit)
+    ro.observe(outer)
+    return () => ro.disconnect()
+  }, [data, hubChips, pulse])
 
   return (
     <div className="single board">
       {data && rows.length > 0 && (
-        <div className="pulse-strip">
-          <div className="pulse-group prices">
-            {prices.divine != null && ref !== 'divine' && (
-              <div className="pulse-chip"><Cur id="divine" size={16} /><span className="pulse-v">{fmt.rate(prices.divine)}</span><span className="pulse-u"><Cur id={ref} size={12} /></span></div>
-            )}
-            {prices.chaos != null && ref !== 'chaos' && (
-              <div className="pulse-chip"><Cur id="chaos" size={16} /><span className="pulse-v">{fmt.rate(prices.chaos)}</span><span className="pulse-u"><Cur id={ref} size={12} /></span></div>
-            )}
-          </div>
+        <div className="pulse-fit" ref={fitRef}>
+        <div className="pulse-strip" ref={stripRef}>
+          {hubChips.length > 0 && (
+            <div className="pulse-group hubs">
+              <span className="pulse-group-label" title="Hubs — the market's most-traded currencies; most trades route through them, so they're easy to buy and sell. Click to expand.">Hubs <span className="pulse-hub">⬢</span></span>
+              {hubChips.map(r => {
+                const num = numFor(r)
+                const val = r.mid != null && prices[num] ? r.mid / prices[num] : null
+                return (
+                  <button key={r.id} className="pulse-chip clickable" title={`${r.name || nameById[r.id] || r.id} — central market · expand chart`}
+                    onClick={() => setOpenId(r.id)}>
+                    <Cur id={r.id} size={16} /><span className="pulse-v">{val == null ? '–' : fmt.rate(val)}</span><span className="pulse-u"><Cur id={num} size={12} /></span>
+                  </button>
+                )
+              })}
+            </div>
+          )}
           {pulse?.holds.length > 0 && (
             <div className="pulse-group holds">
               <span className="pulse-group-label" title="Top stores of value vs Divine (hold score). Click to expand its chart.">Hold</span>
@@ -229,6 +268,7 @@ export default function BoardView({ status }) {
               ))}
             </div>
           )}
+        </div>
         </div>
       )}
       <div className="board-bar">

@@ -21,7 +21,7 @@ Hold=KEEP. The big gap was **TIME** (when to act).
 | 2 | **Ghost Wealth** (can I cash out?) | KEEP/DECIDE | ⬜ TODO |
 | 3 | **Timing / league-arc** (when to buy/sell) | TIME | ⬜ TODO |
 | 4 | **What's about to move** | TIME | ⬜ TODO |
-| — | **Centrality** (connective tissue) | feeds 1/2/4, never a page | ⬜ TODO (partly needed by 1) |
+| — | **Centrality** (connective tissue) | feeds 1/2/4, never a page | ✅ DONE (Phase 5 below) |
 | — | **Sidecar runtime** | hosts heavy libs for 3 & 4 | ⬜ TODO |
 
 ## Cross-cutting decisions (locked)
@@ -142,12 +142,18 @@ Spot an item starting to pump/crash, or one that reliably follows another, early
   leader; cross-league gate drops unconfirmed; ack → user-kv round-trip; `/api/signals` serves
   cache with sidecar down.
 
-## Phase 5 — Centrality (TODO) — connective tissue, stdlib, NO page/sidecar
-`backend/app/centrality.py`: PageRank (power iteration, ~20 lines) + betweenness-lite piggybacked
-free on the route DFS, over the exchange graph weighted by executed value/hour
-(`e.vol_in_per_h * ref_value[src]` — the measure `board()` already uses). TTL/version-cached like
-`board()`. Feeds: Convert bridge tie-break, a Board "hub" chip, Phase-4 propagation priors. Not
-networkx (dep + process hop unjustified; must stay always-available). Build before/with Phase 4.
+## Phase 5 — Centrality (✅ DONE) — connective tissue, stdlib, NO page/sidecar
+`backend/app/centrality.py`: **PageRank** (power iteration) + **betweenness-lite** (reuses
+`Graph.iter_paths` — the route-search DFS — bounded to the top-K currencies), over the exchange
+graph weighted by executed value/hour (`e.vol_in_per_h * ref_value[src]` — the measure `board()`
+uses). `scores()` is version/TTL-cached like `board()`. Not networkx (must stay always-available).
+
+**Consumers wired:** Convert **bridge tie-break** (`_best_conversions(..., bridge=…)` — a final tie
+term = mean betweenness of intermediate nodes, only decides genuine ties); Board **hub chip**
+(`board()` rows gain `hub: bool` = top-N PageRank → a rare gold ⬢ glyph beside the name + a
+`hub` stat in `CardDetail`); Phase-4 priors read `centrality.scores()`. No new endpoint, DB,
+snapshot, or sidecar (computed live from the in-memory graph). Tests: `backend/tests/test_centrality.py`.
+Drive-validated on web + desktop: hubs resolve to divine/chaos/mirror (economically correct).
 
 ## Phase 6 — Sidecar runtime (TODO) — enables 3 & 4
 A second bundled-per-platform PyInstaller binary (`numpy/stumpy/dtaidistance/mlxtend`). Spawned by

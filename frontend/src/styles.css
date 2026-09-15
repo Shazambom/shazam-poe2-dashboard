@@ -453,10 +453,16 @@ details.adv[open] summary { color: var(--ink-2); margin-bottom: 8px; }
 .toast-ic { color: var(--gain); font-weight: 700; }
 .toast.error .toast-ic { color: var(--loss); }
 /* ---------- price board ---------- */
-.pulse-strip { display: flex; gap: 16px; flex-wrap: wrap; align-items: stretch; margin-bottom: 14px; }
+/* Scale-to-fit: JS (useFitScale in BoardView) measures the strip vs its container and applies a
+   transform: scale() so all three groups (Hubs/Hold/Movers) stay on ONE line as the window
+   shrinks; only once scaling would go below the floor ("squished a ton") does it add .wrap and
+   let the groups wrap instead. Hence nowrap + left origin here. */
+.pulse-fit { width: 100%; overflow: hidden; }
+.pulse-strip { display: flex; gap: 16px; flex-wrap: nowrap; align-items: stretch; margin-bottom: 14px; transform-origin: top left; }
+.pulse-strip.wrap { flex-wrap: wrap; }
 /* Grouped, labelled sections so Hold vs Movers read as distinct clusters, not one flat row. */
 .pulse-group { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border: 1px solid var(--line);
-  border-radius: 12px; background: rgba(255,255,255,.015); }
+  border-radius: 12px; background: rgba(255,255,255,.015); white-space: nowrap; }
 .pulse-group.prices { border-style: dashed; }
 .pulse-group.holds { border-left: 3px solid var(--gold); }
 .pulse-group.movers { border-left: 3px solid #7aa2d6; }
@@ -464,7 +470,7 @@ details.adv[open] summary { color: var(--ink-2); margin-bottom: 8px; }
 .pulse-group.holds .pulse-group-label { color: var(--gold-2); }
 .pulse-group.movers .pulse-group-label { color: #93b6e4; }
 .pulse-chip {
-  display: inline-flex; align-items: center; gap: 7px; padding: 7px 13px; font-size: 13px;
+  display: inline-flex; align-items: center; gap: clamp(4px, 0.5vw, 7px); padding: 7px clamp(8px, 0.9vw, 13px); font-size: clamp(11.5px, 0.85vw, 13px);
   border: 1px solid var(--line); border-radius: 10px;
   background: linear-gradient(165deg, var(--panel-hi) -20%, var(--panel) 50%); box-shadow: var(--shadow-1);
 }
@@ -538,6 +544,12 @@ details.adv[open] summary { color: var(--ink-2); margin-bottom: 8px; }
 .pt-num-row { margin-top: 6px; font-size: 11px; color: var(--muted); display: flex; align-items: center; gap: 5px; }
 .pt-num-row select { font-size: 11px; padding: 1px 4px; background: transparent; color: inherit; border: 1px solid rgba(255,255,255,.12); border-radius: 5px; max-width: 130px; }
 .pt-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Hub glyph: a rare gold accent on the handful of most-central markets (centrality). */
+.pt-hub { flex: none; font-size: 10px; line-height: 1; color: var(--gold); opacity: .85; cursor: help; }
+.cd-hub { color: var(--gold); }
+.cd-hub-note { margin-top: 10px; font-size: 12px; line-height: 1.4; color: var(--muted); }
+.cd-hub-note .cd-hub { margin-right: 4px; }
+.pulse-hub { color: var(--gold); font-size: 9px; }
 .pt-src { font-size: 9.5px; font-weight: 600; letter-spacing: .06em; color: var(--muted); border: 1px solid var(--line-strong); border-radius: 999px; padding: 1px 6px; background: rgba(255,255,255,.02); }
 .pt-src.live { color: var(--live); border-color: rgba(127,180,217,.5); background: rgba(127,180,217,.1); }
 .pt-src.digest { color: var(--digest); border-color: rgba(179,157,219,.5); background: rgba(179,157,219,.1); }

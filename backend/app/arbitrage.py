@@ -21,7 +21,7 @@ import math
 import time
 from dataclasses import dataclass, field
 
-from . import digest, gamedata, orderbook, recipes
+from . import centrality, digest, gamedata, orderbook, recipes
 from .currencies import registry
 from .settings import get_settings
 
@@ -349,10 +349,12 @@ def cached_graph() -> Graph:
 
 
 def invalidate_caches() -> None:
-    """Drop the graph + route caches (call after settings changes, e.g. league switch)."""
-    global _graph_cache
+    """Drop the graph + route + board caches (call after settings changes, e.g. league switch,
+    reference, watchlist, or hub_count — so a settings edit reflects immediately)."""
+    global _graph_cache, _board_cache
     _graph_cache = None
     _route_cache.clear()
+    _board_cache = None
 
 
 def _edge_list_id(edges: list[Edge]) -> str:
@@ -654,7 +656,8 @@ def _convert_path(g: Graph, path: list[Edge], amount: float, ref_value: dict[str
 def _best_conversions(g: Graph, ref_value: dict[str, float], have: str, want: str,
                       amount: float, max_steps: int | None = None, k: int = 3,
                       max_gain_pct: float = 2.0,
-                      gold_value_per_1k: float = GOLD_VALUE_DIVINE_PER_1K) -> dict:
+                      gold_value_per_1k: float = GOLD_VALUE_DIVINE_PER_1K,
+                      bridge: dict[str, float] | None = None) -> dict:
     """Rank open conversion paths have->want by NET value delivered: the value of the `want` you
     receive minus the gold spent, where gold is charged at `gold_value_per_1k` (Divine per 1k
     gold — a user-tunable price, since gold's worth shifts across a league). This makes gold a
@@ -679,7 +682,15 @@ def _best_conversions(g: Graph, ref_value: dict[str, float], have: str, want: st
             # net value delivered = value of `want` received - gold charged at the user's price.
             r["net_ref"] = r["out"] * ref_value.get(want, 0.0) - r["gold"] / 1000.0 * gold_ref_per_1k
             seen[r["id"]] = r
-    ranked = sorted(seen.values(), key=lambda r: (r["full_fill"], r["net_ref"], -r["hops"]), reverse=True)
+    # Final tie-break: among routes that tie on fill, net value AND hop count, prefer the one
+    # threading more central BRIDGE currencies (centrality.betweenness_lite) — it's likelier to
+    # actually fill. Only ever decides genuine ties; net_ref/hops dominate. 0.0 when no signal.
+    def _bridge_score(r: dict) -> float:
+        mids = r["path"][1:-1]   # intermediate nodes (exclude have + want)
+        return sum((bridge or {}).get(n, 0.0) for n in mids) / len(mids) if mids else 0.0
+    ranked = sorted(seen.values(),
+                    key=lambda r: (r["full_fill"], r["net_ref"], -r["hops"], _bridge_score(r)),
+                    reverse=True)
     best = ranked[0] if ranked else None
     direct_edge = g.edges.get((have, want))
     direct = _convert_path(g, [direct_edge], amount, ref_value, have, want) if direct_edge else None
@@ -697,7 +708,9 @@ def convert(have: str, want: str, amount: float | None = None, max_steps: int | 
     if amount is None:
         amount = db.get_capital().get(have, 0.0) or 1.0
     gv = float(g.s.get("gold_value_per_1k") or GOLD_VALUE_DIVINE_PER_1K)
-    return _best_conversions(g, ref_value, have, want, float(amount), max_steps, gold_value_per_1k=gv)
+    bridge = centrality.betweenness_lite(g, ref_value)
+    return _best_conversions(g, ref_value, have, want, float(amount), max_steps,
+                             gold_value_per_1k=gv, bridge=bridge)
 
 
 def _composite_score(routes: list[dict], weights: dict) -> None:
@@ -751,7 +764,7 @@ def board(window_h: int = 24) -> dict:
     global _board_cache
     s0 = get_settings()
     window_h = max(1, int(window_h or 24))
-    key = (s0["league"], s0["reference"], tuple(s0["watchlist"]), window_h)
+    key = (s0["league"], s0["reference"], tuple(s0["watchlist"]), window_h, s0.get("hub_count"))
     now = time.time()
     if _board_cache and _board_cache[2] == key and _board_cache[1] == orderbook.state["version"] \
             and now - _board_cache[0] < BOARD_TTL_S:
@@ -775,6 +788,15 @@ def board(window_h: int = 24) -> dict:
             ranked.setdefault(node, []).append((volr, other))
     for lst in ranked.values():
         lst.sort(reverse=True)
+    hub_ids = centrality.hubs(g, rv, max(1, int(s.get("hub_count") or centrality.HUB_N)))  # top PageRank → Board "hub" chip (count user-tunable)
+    # One-time: seed the board with the market's hub currencies so a fresh board always shows the
+    # central markets. Runs once, only once real hubs are known (skips the cold graph), then the
+    # user owns the board — later removals stick (mirrors the _liq_floor_v1 seed in settings.py).
+    if hub_ids and not s.get("_hub_seed_v1"):
+        from . import settings as _settings
+        missing = centrality.seed_missing(s["watchlist"], hub_ids, R)
+        _settings.save_settings({"watchlist": s["watchlist"] + missing, "_hub_seed_v1": True})
+        s["watchlist"] = s["watchlist"] + missing
     from . import leaguehistory
     scout = leaguehistory.scout_prices(league)   # poe2scout fallback prices (Exalted), by name/slug
     scout_hist = leaguehistory.scout_history(league)   # poe2scout daily trend, by name/slug
@@ -847,6 +869,7 @@ def board(window_h: int = 24) -> dict:
             "id": c, "name": registry.name(c), "mid": mid, "buy": buy, "sell": sell,
             "spread": spread, "spread_pct": spread_pct, "source": source, "age_s": age,
             "depth": depth, "trend": trend, "change_pct": change_pct, "pref_num": pref,
+            "hub": c in hub_ids,
         })
     rows.sort(key=lambda r: (r["mid"] is None, -(r["mid"] or 0)))   # most valuable first
     # Reference-currency price (R per unit) for every currency usable as a numeraire,

@@ -13,6 +13,9 @@ DEFAULTS: dict = {
     # exchange API is rate limited and the sweep is n*(n-1) requests.
     "watchlist": ["chaos", "exalted", "divine", "regal", "vaal", "annul"],
     "extra_pairs": [],
+    # How many of the most-central currencies (by volume-weighted PageRank) are flagged as
+    # "hubs" — the ⬢ chip on the board + the pulse-strip Hubs group. User-tunable in Settings.
+    "hub_count": 5,
     # Gold fee model. Per-unit fees come from the game's CurrencyExchange table
     # (GoldPurchaseFee), fetched automatically. `per_unit` is only for manual
     # overrides; `per_ref_unit` is the fallback for items missing from the table.

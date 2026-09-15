@@ -112,6 +112,15 @@ token or on colors pasted into JSX. New colors → add a semantic token to `:roo
   CDP drive-validation are all fine anytime — that's testing, not delivery. **Shipping is only
   the publish step**: pushing a `desktop-v*` tag (fires Windows CI → creates the GitHub release)
   and running `publish-github.sh`. Only that step is gated on authorization.
+- **⛔ A "USER CHECK" ON DESKTOP IS ALWAYS THE PACKAGED TEST BUILD (owner directive 2026-09-15).**
+  When the owner wants to check a change on the desktop app themselves, give them the real
+  **packaged** app — `cd desktop && npm run dist:mac`, then just **launch it in place on this Mac**:
+  `open desktop/release/mac-arm64/Arbiter.app`. No need to wrap or deliver a `.dmg` — it's the same
+  machine (and the DMG is too big to send anyway); only build/deliver a DMG if the owner needs it on
+  another machine. NEVER substitute the dev launch (`npx electron .`), the CDP drive-validation
+  harness, or the web env for a desktop user check — those aren't the packaged artifact users run.
+  This is a test build, NOT a release: building to test ≠ shipping (above), so it needs no ship
+  authorization. (My own CDP drive-validation stays how *I* verify; it is not a user check.)
 - **Web (TEST env)** — served from shazam via Docker: rsync `frontend/src` + `backend/app` to
   shazam and `docker compose up -d --build`. Fast; for validation, not delivery.
 - **Desktop release (only when told to ship)**: bump `desktop/package.json`, commit, push a
