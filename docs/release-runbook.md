@@ -6,15 +6,19 @@ contract and the Windows auto-publish section in [`../CLAUDE.md`](../CLAUDE.md).
 ## The model
 
 The version lives **only** in `desktop/package.json` (`"version"`). Bumping it and pushing
-a `desktop-v<version>` tag is what drives everything. Both platforms serve their update
-manifest from shazam `/downloads` (`http://192.168.1.250:8080/downloads`):
+a `desktop-v<version>` tag is what drives everything. As of 0.2.38 both platforms update
+from **GitHub Releases** (electron-builder's `publish` target is `github`); the app reads
+its manifest off the `desktop-v<version>` release GitHub marks "Latest":
 
 - **macOS** reads `latest-mac.yml`
 - **Windows** reads `latest.yml`
 
-electron-builder's `publish` target is `generic → …/downloads`. Mac builds + publishes
-**locally** (PyInstaller can't cross-compile); Windows builds in **CI** and reaches
-`/downloads` via shazam's cron poller (see CLAUDE.md → "Release auto-publish").
+Windows builds in **CI** and uploads its assets to the release directly. Mac builds + uploads
+**locally** (PyInstaller can't cross-compile) via `publish-github.sh`, into the same release.
+
+> **0.2.38 bridge only:** 0.2.38 is ALSO mirrored to shazam `/downloads` (run `./publish.sh`)
+> so users on ≤0.2.37 — whose updater still points at shazam — can pull it. Drop that step
+> from the next release; the shazam channel + cron poller retire after 0.2.38.
 
 ## Steps, in order
 
@@ -51,31 +55,30 @@ electron-builder's `publish` target is `generic → …/downloads`. Mac builds +
    ```
    The tag push triggers `.github/workflows/release-desktop-win.yml` — it builds the
    Windows installer + backend `.exe` and attaches `Arbiter.Setup.<v>.exe` + `latest.yml`
-   to a GitHub Release.
+   to the `desktop-v<version>` GitHub Release.
 
 6. **Build + publish Mac locally:**
    ```bash
    cd desktop && npm run dist:mac   # → release/Arbiter-<v>-arm64.dmg + .zip + latest-mac.yml
-   ./publish.sh                     # rsync to shazam /downloads (code-signing-free: identity=null)
+   ./publish-github.sh              # upload Mac assets into the same desktop-v<v> release
+   ./publish.sh                     # 0.2.38 BRIDGE ONLY — mirror to shazam /downloads (drop next release)
    ```
 
-7. **Verify both channels went live:**
+7. **Verify the release went live:**
    ```bash
-   curl -s http://192.168.1.250:8080/downloads/latest-mac.yml | head -3   # Mac: new version, immediate
-   gh run list --workflow=release-desktop-win.yml --limit 1               # Windows CI: success
-   curl -s http://192.168.1.250:8080/downloads/latest.yml | head -3       # Windows: new version (≤5 min)
+   gh release view desktop-v<version> --json isLatest,assets \
+     -q '{latest:.isLatest, files:[.assets[].name]}'   # isLatest:true + both latest*.yml + installers
+   gh run list --workflow=release-desktop-win.yml --limit 1   # Windows CI: success
+   # Bridge check (0.2.38 only): shazam still serves the old channel for ≤0.2.37 users
+   curl -s http://192.168.1.250:8080/downloads/latest-mac.yml | head -3
    ```
-   The shazam cron poller pulls the GH release into `/downloads` within ≤5 min — it is not
-   instant.
+   `gh release view` must show `isLatest: true` and both `latest-mac.yml` + `latest.yml`
+   among the assets — that is what the `github` updater provider resolves against.
 
-## Gotcha — `publish.sh` clobbers the Windows `latest.yml`
+## Gotcha — `publish.sh` clobbers the Windows `latest.yml` (bridge only)
 
-`publish.sh` rsyncs `latest*.yml` from the local `release/`, which includes a **stale local
-`latest.yml`** (left over from an old local `dist:win`). Running it overwrites shazam's
-Windows manifest with that stale version (e.g. 0.2.34 → 0.2.18) until the next cron tick
-re-heals it from the GitHub release.
-
-- **Impact:** harmless — electron-updater never downgrades, and it self-corrects in ≤5 min.
-- **But:** always verify `latest.yml` shows the new version (step 7) before declaring done.
-- **Latent fix:** make `publish.sh` rsync only Mac artifacts + `latest-mac.yml` (drop the
-  `latest*.yml` glob) and let the cron solely own the Windows manifest.
+`publish.sh` (the retiring shazam mirror, used only for the 0.2.38 bridge) rsyncs `latest*.yml`
+from the local `release/`, which includes a **stale local `latest.yml`** left over from an old
+local `dist:win`. It overwrites shazam's Windows manifest until the next cron tick re-heals it
+from the GitHub release. Harmless (electron-updater never downgrades; self-corrects in ≤5 min),
+and moot once the shazam channel is gone. The GitHub release itself is never affected.

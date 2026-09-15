@@ -55,8 +55,9 @@ async function waitFor(url, tries = 60) {
 }
 
 // The desktop app is FULLY SELF-CONTAINED: it runs its own bundled backend + local
-// DB and NEVER calls the server for data. The ONLY permitted server call is the
-// auto-updater (electron-updater → /downloads). See DESKTOP_CONTRACT in the docs.
+// DB and NEVER calls the server for data. The ONLY permitted outbound calls are the
+// auto-updater (electron-updater → GitHub Releases) and update telemetry (installlog).
+// See DESKTOP_CONTRACT in the docs.
 async function startBackend() {
   const localUrl = `http://127.0.0.1:${LOCAL_BACKEND_PORT}`
   const bin = backendBinary()
@@ -288,7 +289,6 @@ ipcMain.handle('open-trade', (_e, url) => {
 let _autoUpdater = null
 let _latestVersion = null
 const IS_MAC = process.platform === 'darwin'
-const DOWNLOADS_BASE = 'http://192.168.1.250:8080/downloads'
 
 function _emitUpdate(state) {
   try { win?.webContents.send('update:status', state) } catch {}
@@ -307,7 +307,10 @@ function updLog(m) {   // updater telemetry -> server, so we can see why it's si
 // app), so quitAndInstall would just quit WITHOUT installing — which read as "the app
 // closed and nothing happened". On macOS we therefore skip the in-place flow entirely and
 // open the DMG for a manual drag-install; Windows (NSIS) installs in place fine.
-function macDmgUrl(v) { return `${DOWNLOADS_BASE}/Arbiter-${v}-arm64.dmg` }
+// Updates now come from GitHub Releases (electron-updater `github` provider). The Mac
+// manual-install flow opens the DMG asset attached to that release's `desktop-v<v>` tag.
+const GH_RELEASES = 'https://github.com/Shazambom/shazam-poe2-dashboard/releases/download'
+function macDmgUrl(v) { return `${GH_RELEASES}/desktop-v${v}/Arbiter-${v}-arm64.dmg` }
 
 function setupUpdates() {
   if (!app.isPackaged) return

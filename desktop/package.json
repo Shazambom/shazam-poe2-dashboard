@@ -1,7 +1,7 @@
 {
   "name": "poe2-dashboard-desktop",
   "productName": "Arbiter",
-  "version": "0.2.37",
+  "version": "0.2.38",
   "description": "Exchange-loop dashboard for Path of Exile 2 — desktop app",
   "main": "src/main.js",
   "author": "Shazambom",
@@ -38,8 +38,9 @@
     ],
     "publish": [
       {
-        "provider": "generic",
-        "url": "http://192.168.1.250:8080/downloads"
+        "provider": "github",
+        "owner": "Shazambom",
+        "repo": "shazam-poe2-dashboard"
       }
     ],
     "mac": {
