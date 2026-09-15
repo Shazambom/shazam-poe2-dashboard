@@ -98,9 +98,11 @@ token or on colors pasted into JSX. New colors → add a semantic token to `:roo
 
 ## Web vs desktop
 
-- **⛔ SHIP EVERYTHING. When you ship a change, deploy the web AND cut a desktop release in
-  the same shipment — every time, not batched for later** (owner directive 2026-09-15). A
-  change isn't "shipped" until both are done.
+- **⛔ "SHIP" MEANS DESKTOP.** When the owner says *ship*, a **desktop release is required** —
+  a change is not shipped until the desktop build is cut and published (owner directive
+  2026-09-15). Pushing to the **web first is fine and often useful** to debug on the cheap
+  iteration surface, but web-only is never "shipped." Normally do both; the desktop build is
+  the non-negotiable part of shipping.
 - **Web** (served from shazam via Docker): rsync `frontend/src` + `backend/app` to shazam and
   `docker compose up -d --build`.
 - **Desktop**: bump `desktop/package.json`, commit, push a `desktop-v<ver>` tag (fires Windows
