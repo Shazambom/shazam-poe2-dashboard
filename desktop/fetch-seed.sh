@@ -1,19 +1,23 @@
 #!/bin/bash
 # Fetch the bundled market snapshot (seed) for a Mac local build. The seed is the
 # disposable market/backfill data (docs/db-architecture.md); bundling it lets a fresh
-# install start with a full history instead of a slow cold crawl. Mac builds locally and
-# CAN reach the LAN, so we pull straight from shazam's /downloads (Windows CI pulls the
-# GitHub release asset instead — see .github/workflows/release-desktop-win.yml).
+# install start with a full history instead of a slow cold crawl.
 #
-# Run before `electron-builder --mac`. Output: desktop/market-seed/market-seed.sqlite.gz
+# Source of truth is the `market-seed-latest` GitHub release (a rolling prerelease that
+# shazam's cron regenerates from the live DB and uploads). Windows CI pulls the SAME asset
+# — one seed channel for both platforms. (The old shazam /downloads path is deprecated.)
+#
+# Run before `electron-builder --mac` (publish-github.sh does this automatically). Needs the
+# `gh` CLI authenticated. Output: desktop/market-seed/market-seed.sqlite.gz (+ .version).
 set -euo pipefail
 cd "$(dirname "$0")"
 
-SRC="${SEED_URL:-http://192.168.1.250:8080/downloads/market-seed.sqlite.gz}"
+REPO="${GH_REPO:-Shazambom/shazam-poe2-dashboard}"
 mkdir -p market-seed
-echo "fetching seed from $SRC"
-curl -fsSL "$SRC" -o market-seed/market-seed.sqlite.gz
-curl -fsSL "$SRC.version" -o market-seed/market-seed.sqlite.gz.version
+echo "fetching seed from GitHub release market-seed-latest ($REPO)"
+gh release download market-seed-latest --repo "$REPO" \
+  --pattern 'market-seed.sqlite.gz*' --dir market-seed --clobber
+
 gzip -t market-seed/market-seed.sqlite.gz
 echo "seed ready ($(du -h market-seed/market-seed.sqlite.gz | cut -f1), v$(cat market-seed/market-seed.sqlite.gz.version)):"
 ls -la market-seed

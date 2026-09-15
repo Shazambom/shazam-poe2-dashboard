@@ -124,12 +124,23 @@ def main():
         _copy_table(src, dst, "orderbook")      # usually empty/transient
         _copy_table(src, dst, "orderbook_history")
 
-        # Operational kv -> kv_ops (drives catch-up). Skip user keys.
-        kv_rows = src.execute("SELECT key, value FROM kv").fetchall()
-        ops = [(k, v) for (k, v) in kv_rows if not _is_user_kv(k)]
+        # Operational kv -> kv_ops (drives catch-up). Split-aware: a post-split
+        # market.sqlite already holds ONLY operational keys in `kv_ops` (user keys live
+        # in user.sqlite.kv). A legacy single-file DB has everything in `kv`; there we
+        # filter out user keys. Detect which table exists rather than assume.
+        tables = {r[0] for r in src.execute(
+            "SELECT name FROM sqlite_master WHERE type='table'")}
+        if "kv_ops" in tables:                       # split market.sqlite
+            ops = src.execute("SELECT key, value FROM kv_ops").fetchall()
+            skipped = 0
+        elif "kv" in tables:                         # legacy single-file DB
+            kv_rows = src.execute("SELECT key, value FROM kv").fetchall()
+            ops = [(k, v) for (k, v) in kv_rows if not _is_user_kv(k)]
+            skipped = len(kv_rows) - len(ops)
+        else:
+            raise SystemExit(f"{args.src}: no kv/kv_ops table — is this a market DB?")
         dst.executemany("INSERT INTO kv_ops(key, value) VALUES(?, ?)", ops)
-        print(f"  kv_ops: copied {len(ops)} operational keys "
-              f"(skipped {len(kv_rows) - len(ops)} user keys)")
+        print(f"  kv_ops: copied {len(ops)} operational keys (skipped {skipped} user keys)")
 
         dst.execute("INSERT OR REPLACE INTO market_meta(key, value) VALUES('snapshot_version', ?)",
                     (str(version),))

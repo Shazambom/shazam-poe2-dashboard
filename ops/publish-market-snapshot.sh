@@ -19,7 +19,7 @@ echo "=== $(date -u +%FT%TZ) publish-market-snapshot ==="
 # Export inside the backend container (it has the live DB at /data + python). Piping the
 # script over stdin keeps it decoupled from the image.
 sudo docker exec -i "$CONTAINER" python - \
-  --src /data/poe2arb.sqlite --out /data/market-seed.sqlite.gz < "$EXPORT_PY"
+  --src /data/market.sqlite --out /data/market-seed.sqlite.gz < "$EXPORT_PY"
 
 # Move into the nginx-served /downloads (host path is mounted read-only into the frontend
 # container, but the files live on the host, so write them here).
@@ -31,9 +31,9 @@ echo "published to $DOWNLOADS (v$(cat "$DOWNLOADS/market-seed.sqlite.gz.version"
 # Publish to the GitHub release asset for Windows CI (which can't reach the LAN). Uses the
 # REST API directly (no gh CLI on shazam). The token lives in ~/.poe2-gh-token (placed by
 # ops/refresh-gh-token.sh, chmod 600, never committed); GH_REPO defaults to this repo.
-GH_REPO="${GH_REPO:-Shazambom/shazam-poe2-dashboard}"
-if [ -z "${GH_TOKEN:-}" ] && [ -r "$HOME/.poe2-gh-token" ]; then
-  GH_TOKEN="$(cat "$HOME/.poe2-gh-token")"; export GH_TOKEN
+export GH_REPO="${GH_REPO:-Shazambom/shazam-poe2-dashboard}"
+if [ -z "${GH_TOKEN:-}" ] && [ -r "/home/shazam/.poe2-gh-token" ]; then
+  GH_TOKEN="$(cat "/home/shazam/.poe2-gh-token")"; export GH_TOKEN
 fi
 if [ -n "${GH_TOKEN:-}" ] && [ -n "${GH_REPO:-}" ]; then
   "$(dirname "$0")/upload-seed-github.sh" "$DOWNLOADS/market-seed.sqlite.gz" "$DOWNLOADS/market-seed.sqlite.gz.version" \

@@ -28,9 +28,11 @@ fi
 
 for f in "$@"; do
   name=$(basename "$f")
-  # Delete an existing asset of the same name (assets are immutable otherwise).
+  # Delete an existing asset of the same name (assets are immutable otherwise). Parse the
+  # JSON with python — GitHub returns compact JSON (no space after ':'), which defeats a
+  # grep/sed match and would leave the old asset in place → 422 on re-upload.
   existing=$(curl -fsS "${AUTH[@]}" "$API/releases/$rid/assets" | \
-    tr '}' '\n' | grep -F "\"name\": \"$name\"" -A0 | sed -n 's/.*"id": *\([0-9]\+\).*/\1/p' | head -1 || true)
+    python3 -c "import sys,json; print(next((str(a['id']) for a in json.load(sys.stdin) if a['name']=='$name'),''))" || true)
   [ -n "$existing" ] && curl -fsS "${AUTH[@]}" -X DELETE "$API/releases/assets/$existing" >/dev/null || true
   echo "uploading $name ..."
   curl -fsS "${AUTH[@]}" -H "Content-Type: application/octet-stream" \

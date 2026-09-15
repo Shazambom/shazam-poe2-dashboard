@@ -17,8 +17,20 @@ VER=$(node -p "require('./package.json').version")
 TAG="desktop-v${VER}"
 
 if [ "${1:-}" != "--no-build" ]; then
+  # shazam is the seed build-server for the Mac half: pull the CURRENT market snapshot from
+  # its /downloads before packaging so every release bundles a fresh seed (Windows CI pulls
+  # the same snapshot from the market-seed-latest GitHub release). fetch-seed.sh fails hard
+  # if shazam is unreachable or the gz is corrupt — better a failed build than a seedless ship.
+  ./fetch-seed.sh
   npm run dist:mac
 fi
+
+# Preflight: never publish a seedless build. Confirm the seed the app will bundle exists and
+# is a valid gzip, with its version sidecar (the backend reads the sidecar to decide re-seeding).
+SEED="market-seed/market-seed.sqlite.gz"
+[ -f "$SEED" ] && gzip -t "$SEED" 2>/dev/null || { echo "FATAL: $SEED missing or corrupt — run ./fetch-seed.sh"; exit 1; }
+[ -f "$SEED.version" ] || { echo "FATAL: $SEED.version sidecar missing — re-run ./fetch-seed.sh"; exit 1; }
+echo "seed OK: v$(cat "$SEED.version") ($(du -h "$SEED" | cut -f1))"
 
 # Mac artifacts electron-builder wrote to release/. latest-mac.yml is what the updater reads.
 FILES=(
