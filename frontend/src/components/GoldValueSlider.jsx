@@ -7,8 +7,10 @@ import Cur from './Cur.jsx'
 // axis is gold-per-Divine on a log scale from 1k → 1M; the stored setting is its inverse,
 // gold_value_per_1k (Divine per 1000 gold), which feeds Convert's net-value ranking AND
 // Arbitrage velocity. The thumb is the Divine icon for a bit of flair.
-const LOG_MIN = 5   // 10^5  = 100,000 gold per Divine (gold precious)
-const LOG_MAX = 7   // 10^7  = 10,000,000 gold per Divine (gold cheap)
+const GPD_MIN = 20_000       // gold per Divine — gold precious end
+const GPD_MAX = 10_000_000   // gold per Divine — gold cheap end
+const LOG_MIN = Math.log10(GPD_MIN)
+const LOG_MAX = Math.log10(GPD_MAX)
 const fmtGpd = (g) => g >= 1e6 ? `${(g / 1e6).toFixed(g >= 1e7 ? 0 : 1)}M` : g >= 1e3 ? `${Math.round(g / 1e3)}k` : `${Math.round(g)}`
 
 export default function GoldValueSlider({ onCommit }) {
@@ -19,7 +21,7 @@ export default function GoldValueSlider({ onCommit }) {
   useEffect(() => {
     api.settings().then(s => {
       const gv = Number(s.gold_value_per_1k) || 0.01
-      setGpd(Math.min(1e7, Math.max(1e5, Math.round(1000 / gv))))
+      setGpd(Math.min(GPD_MAX, Math.max(GPD_MIN, Math.round(1000 / gv))))
     }).catch(() => {})
   }, [])
 

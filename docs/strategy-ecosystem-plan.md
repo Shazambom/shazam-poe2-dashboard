@@ -89,7 +89,7 @@ Cheapest way to turn `have` into `want` across the exchange graph (open path, no
   defaults + classify user-kv in `db.py`; PUT via existing `/api/settings`.
 - **UI (DONE)**: slider in the Arbitrage rail (`GoldValueSlider.jsx`). Divine-icon thumb; label
   leads with the whole-number metric **"1 ◈ = N gold"** (humans don't parse decimals); **range
-  gold-per-Divine 100k → 10M** (log) → `gold_value_per_1k ∈ [0.0001, 0.01]` (gv = 1000/gold_per_div);
+  gold-per-Divine 20k → 10M** (log) → `gold_value_per_1k ∈ [0.0001, 0.05]` (gv = 1000/gold_per_div);
   default **0.01 (1 ◈ ≈ 100k gold)**; "gold precious / gold cheap" end labels; description text
   omitted (self-explanatory). Debounced persist + route re-rank.
 - **Feeds (DONE)**: Convert net-value ranking AND **Arbitrage velocity**. Final velocity model
