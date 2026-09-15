@@ -98,10 +98,14 @@ token or on colors pasted into JSX. New colors → add a semantic token to `:roo
 
 ## Web vs desktop
 
-- **Web** (served from shazam via Docker) is the cheap iteration surface: rsync
-  `frontend/src` + `backend/app` to shazam and `docker compose up -d --build`.
-- **Desktop** ships in deliberate batches; web-only features don't reach desktop until
-  a desktop build bundles the updated frontend. Mac builds locally; Windows via CI.
+- **⛔ SHIP EVERYTHING. When you ship a change, deploy the web AND cut a desktop release in
+  the same shipment — every time, not batched for later** (owner directive 2026-09-15). A
+  change isn't "shipped" until both are done.
+- **Web** (served from shazam via Docker): rsync `frontend/src` + `backend/app` to shazam and
+  `docker compose up -d --build`.
+- **Desktop**: bump `desktop/package.json`, commit, push a `desktop-v<ver>` tag (fires Windows
+  CI), then `cd desktop && ./publish-github.sh` (builds Mac, waits on CI, uploads both platforms
+  to the GitHub release). Full steps: [`docs/release-runbook.md`](docs/release-runbook.md).
 
 ## Database: user data vs market data
 
