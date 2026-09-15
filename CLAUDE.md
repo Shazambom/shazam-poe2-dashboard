@@ -98,13 +98,13 @@ token or on colors pasted into JSX. New colors → add a semantic token to `:roo
 
 ## Web vs desktop
 
-- **⛔ "SHIP" MEANS DESKTOP.** When the owner says *ship*, a **desktop release is required** —
-  a change is not shipped until the desktop build is cut and published (owner directive
-  2026-09-15). Pushing to the **web first is fine and often useful** to debug on the cheap
-  iteration surface, but web-only is never "shipped." Normally do both; the desktop build is
-  the non-negotiable part of shipping.
-- **Web** (served from shazam via Docker): rsync `frontend/src` + `backend/app` to shazam and
-  `docker compose up -d --build`.
+- **⛔ THE WEB IS THE TEST ENVIRONMENT; DESKTOP IS PRODUCTION.** The shazam web app is a
+  **staging/test surface** for cheap iteration and debugging — deploying there is NOT shipping.
+  When the owner says *ship*, that means **cut a desktop release** (the product users run); a
+  change is not shipped until the desktop build is published (owner directive 2026-09-15). Use
+  web-first freely to debug, then always finish by shipping desktop.
+- **Web (TEST env)** — served from shazam via Docker: rsync `frontend/src` + `backend/app` to
+  shazam and `docker compose up -d --build`. Fast; for validation, not delivery.
 - **Desktop**: bump `desktop/package.json`, commit, push a `desktop-v<ver>` tag (fires Windows
   CI), then `cd desktop && ./publish-github.sh` (builds Mac, waits on CI, uploads both platforms
   to the GitHub release). Full steps: [`docs/release-runbook.md`](docs/release-runbook.md).
