@@ -100,14 +100,23 @@ token or on colors pasted into JSX. New colors → add a semantic token to `:roo
 
 - **⛔ THE WEB IS THE TEST ENVIRONMENT; DESKTOP IS PRODUCTION.** The shazam web app is a
   **staging/test surface** for cheap iteration and debugging — deploying there is NOT shipping.
-  When the owner says *ship*, that means **cut a desktop release** (the product users run); a
-  change is not shipped until the desktop build is published (owner directive 2026-09-15). Use
-  web-first freely to debug, then always finish by shipping desktop.
+  "Ship" means **publish a desktop release** (the product users auto-update to).
+- **⛔ SHIPPING NEEDS EXPLICIT PER-CHANGE AUTHORIZATION (owner directive 2026-09-15).** Never
+  publish a desktop release on your own. Making the changes the owner asked for, or a prior
+  "ship", or the "always build desktop when shipping" rule, is **NOT** permission to ship the
+  next change. Correct flow: implement → deploy to the **web test env** → **show the
+  verification/testing** → **wait for an explicit "ship"** → only then publish. Do not push a
+  `desktop-v*` tag or run `publish-github.sh` until the owner says ship. (Learned the hard way:
+  auto-shipped 0.2.41/0.2.42 unprompted; owner objected.)
+- **⛔ BUILDING THE DESKTOP APP TO TEST ≠ SHIPPING.** `dist:mac` / running the app locally / the
+  CDP drive-validation are all fine anytime — that's testing, not delivery. **Shipping is only
+  the publish step**: pushing a `desktop-v*` tag (fires Windows CI → creates the GitHub release)
+  and running `publish-github.sh`. Only that step is gated on authorization.
 - **Web (TEST env)** — served from shazam via Docker: rsync `frontend/src` + `backend/app` to
   shazam and `docker compose up -d --build`. Fast; for validation, not delivery.
-- **Desktop**: bump `desktop/package.json`, commit, push a `desktop-v<ver>` tag (fires Windows
-  CI), then `cd desktop && ./publish-github.sh` (builds Mac, waits on CI, uploads both platforms
-  to the GitHub release). Full steps: [`docs/release-runbook.md`](docs/release-runbook.md).
+- **Desktop release (only when told to ship)**: bump `desktop/package.json`, commit, push a
+  `desktop-v<ver>` tag (fires Windows CI), then `cd desktop && ./publish-github.sh` (builds Mac,
+  waits on CI, uploads both platforms). Full steps: [`docs/release-runbook.md`](docs/release-runbook.md).
 
 ## Database: user data vs market data
 
