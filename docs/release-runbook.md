@@ -18,6 +18,34 @@ Windows builds in **CI** and uploads its assets to the release directly. Mac bui
 Installer names are space-free (`nsis.artifactName`) so the yml url, the on-disk file, and
 the GitHub asset all match — otherwise GitHub rewrites spaces to dots and the updater 404s.
 
+## ⚠️ Step 0 — ALWAYS ASK: does this release need a fresh market snapshot?
+
+The desktop app bundles a **market snapshot** at build time (`desktop/market-seed/`, fetched
+from the `market-seed-latest` GitHub release). Clients seed their `market.sqlite` from it. If a
+release changes **what the snapshot should contain or how market data is derived/keyed**, the
+snapshot is STALE and must be rebuilt + republished FIRST, then bundled in this release (a
+matched pair) — otherwise clients ship with wrong/old market data until (if ever) their own
+crawl heals it.
+
+**Rebuild the snapshot before shipping when the change touches:**
+- currency mapping / how digest markets are keyed (e.g. the `meta_bridge`),
+- digest/market ingestion or parsing,
+- any market-side schema, or a new **operational kv** the client should have at boot,
+- anything where "wait for the client's crawl to self-heal" is not good enough.
+
+**Skip it only for** pure UI / user-side / backend-logic changes that don't change snapshot
+contents. **When in doubt, rebuild** — it's cheap and a stale snapshot ships wrong data.
+
+Order matters (avoid a Mac/Windows snapshot mismatch): **publish the new snapshot to
+`market-seed-latest` BEFORE pushing the `desktop-v*` tag**, so both the Windows CI and the local
+Mac build fetch the same fresh snapshot. Publish it only from a **caught-up** server (the
+exporter's mid-sync guard enforces this): `sshshazambom sudo bash /home/shazam/bin/publish-market-snapshot.sh`.
+
+> Lesson (2026-09-15): shipped desktop-v0.2.44 (the currency-mapping bridge fix) bundling the
+> pre-fix snapshot because this question wasn't asked. The fix lived in an operational kv
+> (`meta_bridge`) that rides the snapshot — so the snapshot needed rebuilding even though there
+> was no schema change. Patched via desktop-v0.2.45.
+
 ## Steps, in order
 
 1. **Pre-flight (before committing).** Confirm no leftover debug/test scaffolding in the
