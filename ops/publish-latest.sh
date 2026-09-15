@@ -27,8 +27,12 @@ for a in json.load(sys.stdin)['assets']: print(a['name']+'\t'+a['browser_downloa
 [ -f "$tmp/latest.yml" ] || { echo "$(date -Is) release has no latest.yml"; exit 1; }
 exe=$(grep -E '^path:' "$tmp/latest.yml" | sed 's/^path:[[:space:]]*//')      # spaced name
 dotted=$(printf '%s' "$exe" | tr ' ' '.')                                     # GitHub asset name
-[ -f "$tmp/$dotted" ] && mv -f "$tmp/$dotted" "$tmp/$exe"
-[ -f "$tmp/$dotted.blockmap" ] && mv -f "$tmp/$dotted.blockmap" "$tmp/$exe.blockmap"
+# Only rename when GitHub actually mangled the name (spaces -> dots). Newer builds use a
+# space-free artifactName, so dotted == exe and a self-`mv X X` would fail under `set -e`.
+if [ "$dotted" != "$exe" ]; then
+  [ -f "$tmp/$dotted" ] && mv -f "$tmp/$dotted" "$tmp/$exe"
+  [ -f "$tmp/$dotted.blockmap" ] && mv -f "$tmp/$dotted.blockmap" "$tmp/$exe.blockmap"
+fi
 
 sz=$(stat -c%s "$tmp/$exe" 2>/dev/null || echo 0)
 [ "$sz" -gt 5000000 ] || { echo "$(date -Is) installer missing/too small ($sz), abort"; exit 1; }
