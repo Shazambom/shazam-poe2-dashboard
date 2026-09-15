@@ -5,6 +5,11 @@ import Cur from './Cur.jsx'
 
 export const SRC_LABEL = { live: 'live order book', digest: 'hourly market data', derived: 'derived via other markets', scout: 'poe2scout', none: 'no data' }
 
+// Canonical hours → range label (matches the board/hold horizon pickers).
+export function rangeLabel(hours) {
+  return { 24: '24h', 72: '3d', 168: '7d', 336: '14d' }[hours] || `${Math.max(1, Math.round((hours || 24) / 24))}d`
+}
+
 // A trend sparkline: single series, so no legend. Thin 2px line, faint area fill,
 // emphasized endpoint, recessive baseline — per the dataviz mark specs. Colored by
 // direction of the window (up = gain, down = loss), which is state, not identity.
@@ -44,7 +49,11 @@ export function Spark({ points, w = 132, h = 34 }) {
 // same layoutId (the Board). Omit it when there is no source tile (Hold/Movers/pulse zoom): a
 // bare scale/fade instead. Passing `tile-<id>` here when a Board tile of that id is also mounted
 // makes Framer Motion animate BETWEEN them across the viewport — the "sudden zoom" flash.
-export default function CardDetail({ r, num, factor, numOptions, onNum, prices, onClose, layoutId }) {
+export default function CardDetail({ r, num, factor, numOptions, onNum, prices, onClose, layoutId, range }) {
+  // Contract: a detail view must state the time range its graph + % cover. Callers pass a
+  // label ("3d"/"24h"/…) or the literal "all" to opt into the whole-league view on purpose.
+  // Missing range is a bug (an ambiguous, unlabeled graph) — fail loud rather than mislead.
+  if (range == null) throw new Error('CardDetail requires a `range` prop — a time-range label (e.g. "3d") or "all"')
   const f = factor || 1
   const rp = (v) => (v == null ? null : v / f)
   const mid = rp(r.mid), buy = rp(r.buy), sell = rp(r.sell)
@@ -73,7 +82,7 @@ export default function CardDetail({ r, num, factor, numOptions, onNum, prices, 
         <div className="cd-price">
           {mid == null ? <span className="muted">no price</span>
             : <><b>{fmt.rate(mid)}</b><Cur id={num} size={18} /></>}
-          {change != null && <span className={`pt-chg ${change >= 0 ? 'gain' : 'loss'}`}>{fmt.pct(change)}</span>}
+          {change != null && <span className={`pt-chg ${change >= 0 ? 'gain' : 'loss'}`}>{fmt.pct(change)}<span className="muted" style={{ fontWeight: 400, marginLeft: 4 }}>· {range}</span></span>}
         </div>
         <div className="cd-spark"><Spark points={trend} w={560} h={150} /></div>
         <div className="cd-grid">
@@ -114,12 +123,13 @@ export default function CardDetail({ r, num, factor, numOptions, onNum, prices, 
 export function useAssetModal() {
   const [detail, setDetail] = useState(null)
   const [num, setNum] = useState(null)              // numeraire override inside the modal (not persisted)
+  const [winH, setWinH] = useState(24)              // the window this detail was opened for (for the range label)
   const [nameById, setNameById] = useState({})
   useEffect(() => {
     api.currencies().then(d => setNameById(Object.fromEntries((d?.currencies ?? []).map(o => [o.id, o.name])))).catch(() => {})
   }, [])
-  const open = async (name, winH = 24) => {
-    try { setDetail(await api.asset(name, winH)); setNum(null) }
+  const open = async (name, w = 24) => {
+    try { setWinH(w); setDetail(await api.asset(name, w)); setNum(null) }
     catch { toast('No price history for that item yet', false) }
   }
   const node = (
@@ -130,7 +140,7 @@ export function useAssetModal() {
         const n = (num && ap[num] != null) ? num : (ap.divine != null ? 'divine' : (detail.reference || 'exalted'))
         const numOpts = Object.keys(ap).filter(id => id !== r.id).sort((a, b) => (ap[b] || 0) - (ap[a] || 0)).map(id => ({ id, name: nameById[id] || id }))
         const close = () => { setDetail(null); setNum(null) }
-        return <CardDetail key="asset" r={r} num={n} factor={ap[n] ?? 1} numOptions={numOpts} onNum={(id, nn) => setNum(nn)} prices={ap} onClose={close} />
+        return <CardDetail key="asset" r={r} num={n} factor={ap[n] ?? 1} range={rangeLabel(winH)} numOptions={numOpts} onNum={(id, nn) => setNum(nn)} prices={ap} onClose={close} />
       })()}
     </AnimatePresence>
   )

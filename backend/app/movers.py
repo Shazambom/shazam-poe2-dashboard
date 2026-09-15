@@ -123,9 +123,18 @@ def asset_row(q: str, window_h: int = 24) -> dict | None:
     pts = series[iid]
     name, cat = meta[iid]
     last_t = pts[-1][0]
-    # The detail graph shows the whole current-league daily path (daily data → a 24h window
-    # is only ~2 points, useless as a line); change_pct stays scoped to the selected window.
-    trend = [{"t": p[0], "v": p[1]} for p in pts]
+    # Scope the detail graph to the SELECTED window so the line matches the headline % (a
+    # full-league graph made a 3-day +557% trough-bounce look flat). Start at the exact base
+    # point change_pct measures from — the newest point at/before the window start — so the
+    # first plotted value IS the % denominator and the graph rises by change_pct across the
+    # window. Falls back to the whole series if there's no point before the window start.
+    start = last_t - wd * _DAY
+    prior = [p for p in pts if p[0] <= start]
+    base = prior[-1] if prior else pts[0]
+    win_pts = [base] + [p for p in pts if p[0] > start]
+    if len(win_pts) < 2:                       # degenerate (e.g. brand-new item): show a bit more
+        win_pts = pts[-2:] if len(pts) >= 2 else pts
+    trend = [{"t": p[0], "v": p[1]} for p in win_pts]
     ch = _change_pct(pts, wd)
     row = {"id": _slug(name), "name": name, "category": cat,
            "mid": pts[-1][1], "buy": None, "sell": None, "spread": None, "spread_pct": None,

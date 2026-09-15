@@ -3,7 +3,7 @@ import { motion, AnimatePresence, useSpring, useTransform } from 'motion/react'
 import { api, fmt, surface, toast } from '../lib/api.js'
 import { nav } from '../lib/nav.js'
 import Cur from './Cur.jsx'
-import CardDetail, { Spark, SRC_LABEL, useAssetModal } from './CardDetail.jsx'
+import CardDetail, { Spark, SRC_LABEL, useAssetModal, rangeLabel } from './CardDetail.jsx'
 import CurrencyPicker from './CurrencyPicker.jsx'
 import RefreshButton from './RefreshButton.jsx'
 
@@ -283,7 +283,7 @@ export default function BoardView({ status }) {
           const openRow = rows.find(r => r.id === openId)
           if (!openRow) return null
           const num = numFor(openRow)
-          return <CardDetail key="detail" r={openRow} num={num} factor={prices[num] ?? 1} layoutId={`tile-${openRow.id}`}
+          return <CardDetail key="detail" r={openRow} num={num} factor={prices[num] ?? 1} layoutId={`tile-${openRow.id}`} range={rangeLabel(winH)}
             numOptions={numOptions} onNum={setNum} prices={prices} onClose={() => setOpenId(null)} />
         })()}
       </AnimatePresence>
