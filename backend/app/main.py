@@ -12,7 +12,7 @@ from pydantic import BaseModel
 
 from fastapi.responses import RedirectResponse, PlainTextResponse
 
-from . import arbitrage, db, digest, gamedata, gateway, holdscore, inflation, leaguehistory, migrations_user, oauth, orderbook, recipes, session
+from . import arbitrage, db, digest, gamedata, gateway, holdscore, inflation, leaguehistory, migrations_user, movers, oauth, orderbook, recipes, session
 from .currencies import registry
 from .settings import get_settings, save_settings
 
@@ -437,6 +437,23 @@ async def hold(horizon: str = "3d", category: str = "all", numeraire: str = "div
     if not res["assets"]:
         _spawn(leaguehistory.backfill(full=True))
         return {**res, "building": True}
+    return res
+
+
+@app.get("/api/movers")
+async def movers_ep(window_h: int = 24, n: int = 3):
+    """Biggest movers across the full poe2scout universe, by |% change| over the window
+    (both gainers and crashers), in the league base. Distinct from /api/hold's ranking."""
+    return await run_in_threadpool(movers.top_movers, window_h, n)
+
+
+@app.get("/api/asset")
+async def asset_ep(q: str, window_h: int = 24):
+    """One asset's price/volume/trend detail for the Board's expand modal (any pulse-strip
+    item, not just watchlist currencies). `q` is a currency name or slug."""
+    res = await run_in_threadpool(movers.asset_row, q, window_h)
+    if not res:
+        raise HTTPException(404, f"no daily data for {q!r}")
     return res
 
 

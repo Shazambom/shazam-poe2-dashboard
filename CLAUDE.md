@@ -78,6 +78,14 @@ OS permissions, install/update, EE2 hooks) can't be observed from this Mac, so:
 - Existing markers: `p=init` (installer self-heal), `p=login` (PoE/Steam login flow),
   `p=update` (auto-updater events), `p=ee2` (EE2 integration hooks).
 
+## Debugging
+
+This is how you debug stuff: [`docs/desktop-debugging.md`](docs/desktop-debugging.md)
+— build the local desktop app, launch it with `--remote-debugging-port=9222`, and
+drive the real renderer over CDP (`desktop/scripts/cdp.mjs` / `shot.mjs`) to validate
+UI changes against live backend data. A passing `vite build` proves compilation, not
+that the feature renders correctly — always drive the app before claiming a UI change works.
+
 ## Web vs desktop
 
 - **Web** (served from shazam via Docker) is the cheap iteration surface: rsync

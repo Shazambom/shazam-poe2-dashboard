@@ -416,12 +416,26 @@ details.adv[open] summary { color: var(--ink-2); margin-bottom: 8px; }
 .toast-ic { color: var(--gain); font-weight: 700; }
 .toast.error .toast-ic { color: var(--loss); }
 /* ---------- price board ---------- */
-.pulse-strip { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+.pulse-strip { display: flex; gap: 16px; flex-wrap: wrap; align-items: stretch; margin-bottom: 14px; }
+/* Grouped, labelled sections so Hold vs Movers read as distinct clusters, not one flat row. */
+.pulse-group { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border: 1px solid var(--line);
+  border-radius: 12px; background: rgba(255,255,255,.015); }
+.pulse-group.prices { border-style: dashed; }
+.pulse-group.holds { border-left: 3px solid var(--gold); }
+.pulse-group.movers { border-left: 3px solid #7aa2d6; }
+.pulse-group-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; padding-right: 2px; }
+.pulse-group.holds .pulse-group-label { color: var(--gold-2); }
+.pulse-group.movers .pulse-group-label { color: #93b6e4; }
 .pulse-chip {
   display: inline-flex; align-items: center; gap: 7px; padding: 7px 13px; font-size: 13px;
   border: 1px solid var(--line); border-radius: 10px;
   background: linear-gradient(165deg, var(--panel-hi) -20%, var(--panel) 50%); box-shadow: var(--shadow-1);
 }
+.pulse-chip.clickable { cursor: pointer; color: inherit; font: inherit; transition: border-color .12s var(--ease), transform .12s var(--ease); }
+.pulse-chip.clickable:hover { border-color: var(--line-strong); transform: translateY(-1px); }
+.pulse-chip.clickable:active { transform: translateY(0); }
+.pulse-rank { display: inline-flex; align-items: center; justify-content: center; min-width: 16px; height: 16px;
+  font-size: 10px; font-weight: 700; border-radius: 5px; color: var(--muted); background: rgba(255,255,255,.06); }
 .pulse-label { color: var(--muted); font-size: 10.5px; text-transform: uppercase; letter-spacing: .05em; }
 .pulse-v { font-weight: 700; }
 .pulse-v.gain { color: var(--gain); } .pulse-v.loss { color: var(--loss); }

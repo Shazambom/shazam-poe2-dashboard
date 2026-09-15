@@ -6,6 +6,9 @@ import Cur from './Cur.jsx'
 
 const isDesktop = typeof window !== 'undefined' && !!window.poe2desktop
 
+// The board's trend window (hours) → the nearest Hold day-horizon (Hold data is poe2scout DAILY).
+const holdHorizon = (winH) => (winH <= 24 ? '1d' : winH <= 72 ? '3d' : '7d')
+
 // A number that counts up on mount, then rolls when its value changes between polls.
 // Fast, stiff spring (~0.5s) so the count-up feels snappy, not a slow loading crawl.
 function AnimatedNumber({ value, format }) {
@@ -145,7 +148,7 @@ function CardDetail({ r, num, factor, numOptions, onNum, prices, onClose }) {
         transition={{ duration: 0.2, ease: [0.22, 0.61, 0.36, 1] }} onClick={e => e.stopPropagation()}>
         <button className="cd-close" onClick={onClose} title="Close (Esc)">×</button>
         <div className="cd-head">
-          <span className="cd-title"><Cur id={r.id} text size={24} /></span>
+          <span className="cd-title"><Cur id={r.id} name={r.name} text size={24} /></span>
           <span className={`pt-src ${r.source}`} title={SRC_LABEL[r.source] || 'no data'}>
             {r.source === 'live' ? 'LIVE' : r.source === 'digest' ? 'HR' : r.source === 'derived' ? '~' : r.source === 'scout' ? 'SC' : '–'}
           </span>
@@ -163,6 +166,7 @@ function CardDetail({ r, num, factor, numOptions, onNum, prices, onClose }) {
             {r.spread_pct != null && <div className="cd-stat"><span>spread</span><b>{r.spread_pct.toFixed(1)}%</b></div>}
             {r.depth != null && <div className="cd-stat"><span>depth</span><b>{r.depth} offers</b></div>}
           </>}
+          {r.medvol != null && <div className="cd-stat"><span>volume</span><b>{Math.round(r.medvol).toLocaleString()}<span className="muted"> ex/day</span></b></div>}
           <div className="cd-stat"><span>source</span><b>{SRC_LABEL[r.source] || 'no data'}</b></div>
           {r.age_s != null && <div className="cd-stat"><span>updated</span><b>{fmt.age(r.age_s)} ago</b></div>}
         </div>
@@ -188,6 +192,10 @@ function CardDetail({ r, num, factor, numOptions, onNum, prices, onClose }) {
 
 export default function BoardView({ status }) {
   const [data, setData] = useState(null)
+  const [hold, setHold] = useState(null)             // hold leaderboard (top-3 stores of value) — feeds the pulse strip
+  const [movers, setMovers] = useState(null)         // biggest movers by |% change| over the window (full universe)
+  const [assetDetail, setAssetDetail] = useState(null) // a pulse-strip item expanded into the board CardDetail modal
+  const [assetNum, setAssetNum] = useState(null)     // numeraire override inside the asset modal (not persisted to the board)
   const [err, setErr] = useState(null)
   const [busy, setBusy] = useState(false)
   const [auto, setAuto] = useState(false)
@@ -236,6 +244,20 @@ export default function BoardView({ status }) {
   // command palette → open a currency's detail here
   useEffect(() => nav.on(e => { if (e.type === 'openCurrency') setOpenId(e.id) }), [])
   useEffect(() => { api.currencies().then(d => setOpts(d?.currencies ?? [])).catch(() => {}) }, [])
+  // Hold leaderboard powers the pulse strip's top-3 holds + the full-universe top mover.
+  // Hold data is poe2scout DAILY, so map the board's window to the nearest day-horizon.
+  useEffect(() => {
+    // Holds = top stores of value (divine-denominated hold score). Movers = biggest |% change|
+    // over the SAME window as the board, full universe — a genuinely different ranking.
+    api.hold(holdHorizon(winH), 'all', 'divine').then(setHold).catch(() => setHold(null))
+    api.movers(winH, 3).then(setMovers).catch(() => setMovers(null))
+  }, [winH])
+  // Expand a pulse-strip item into the board's own detail modal (enlarged graph + volume +
+  // change over time), identical to clicking a board currency — via /api/asset (daily data).
+  const openAsset = async (name) => {
+    try { setAssetDetail(await api.asset(name, winH)) }
+    catch { toast('No price history for that item yet', false) }
+  }
   useEffect(() => {
     if (!isDesktop) return
     api.settings().then(s => setWatchlist(s.watchlist || [])).catch(() => {})
@@ -264,31 +286,50 @@ export default function BoardView({ status }) {
     return prices[pick] != null ? pick : ref
   }
   // Market pulse: derived at-a-glance insights that aren't on any single card —
-  // the biggest mover and how broad the move is (up vs down).
+  // the top-3 holds and the single biggest mover. Both come from the hold
+  // leaderboard (full poe2scout currency universe), NOT the board watchlist, so
+  // the top mover reflects the whole economy rather than just what's pinned here.
   const pulse = useMemo(() => {
-    const withChg = rows.filter(r => r.change_pct != null)
-    if (!withChg.length) return null
-    const top = withChg.reduce((a, b) => Math.abs(b.change_pct) > Math.abs(a.change_pct) ? b : a)
-    const up = withChg.filter(r => r.change_pct >= 0).length
-    return { top, up, down: withChg.length - up }
-  }, [rows])
+    const holds = (hold?.assets ?? []).slice(0, 3)      // pre-sorted by hold score (store of value, vs Divine)
+    const mvrs = (movers?.assets ?? []).slice(0, 3)     // pre-sorted by |% change| over the window (raw market move)
+    if (!holds.length && !mvrs.length) return null
+    return { holds, movers: mvrs }
+  }, [hold, movers])
 
   return (
     <div className="single board">
-      {data && rows.length > 0 && pulse && (
+      {data && rows.length > 0 && (
         <div className="pulse-strip">
-          {prices.divine != null && ref !== 'divine' && (
-            <div className="pulse-chip"><Cur id="divine" size={16} /><span className="pulse-v">{fmt.rate(prices.divine)}</span><span className="pulse-u"><Cur id={ref} size={12} /></span></div>
+          <div className="pulse-group prices">
+            {prices.divine != null && ref !== 'divine' && (
+              <div className="pulse-chip"><Cur id="divine" size={16} /><span className="pulse-v">{fmt.rate(prices.divine)}</span><span className="pulse-u"><Cur id={ref} size={12} /></span></div>
+            )}
+            {prices.chaos != null && ref !== 'chaos' && (
+              <div className="pulse-chip"><Cur id="chaos" size={16} /><span className="pulse-v">{fmt.rate(prices.chaos)}</span><span className="pulse-u"><Cur id={ref} size={12} /></span></div>
+            )}
+          </div>
+          {pulse?.holds.length > 0 && (
+            <div className="pulse-group holds">
+              <span className="pulse-group-label" title="Top stores of value vs Divine (hold score). Click to expand its chart.">Hold</span>
+              {pulse.holds.map((a, i) => (
+                <button key={a.id} className="pulse-chip clickable" title={`#${i + 1} to hold · ${a.name} — expand chart`}
+                  onClick={() => openAsset(a.name)}>
+                  <span className="pulse-rank">{i + 1}</span><Cur name={a.name} size={16} />
+                  <span className={`pulse-v ${a.ret_pct >= 0 ? 'gain' : 'loss'}`}>{fmt.pct(a.ret_pct)}</span></button>
+              ))}
+            </div>
           )}
-          {prices.chaos != null && ref !== 'chaos' && (
-            <div className="pulse-chip"><Cur id="chaos" size={16} /><span className="pulse-v">{fmt.rate(prices.chaos)}</span><span className="pulse-u"><Cur id={ref} size={12} /></span></div>
+          {pulse?.movers.length > 0 && (
+            <div className="pulse-group movers">
+              <span className="pulse-group-label" title="Biggest % moves across all currencies over the window. Click to expand its chart.">Movers</span>
+              {pulse.movers.map((a, i) => (
+                <button key={a.id} className="pulse-chip clickable" title={`#${i + 1} biggest move across all currencies · ${a.name} — expand chart`}
+                  onClick={() => openAsset(a.name)}>
+                  <span className="pulse-rank">{i + 1}</span><Cur name={a.name} size={16} />
+                  <span className={`pulse-v ${a.change_pct >= 0 ? 'gain' : 'loss'}`}>{fmt.pct(a.change_pct)}</span></button>
+              ))}
+            </div>
           )}
-          {pulse.top && (
-            <div className="pulse-chip"><span className="pulse-label">Top mover</span><Cur id={pulse.top.id} size={16} />
-              <span className={`pulse-v ${pulse.top.change_pct >= 0 ? 'gain' : 'loss'}`}>{fmt.pct(pulse.top.change_pct)}</span></div>
-          )}
-          <div className="pulse-chip"><span className="pulse-label">Breadth</span>
-            <span className="gain">{pulse.up}▲</span><span className="loss">{pulse.down}▼</span></div>
         </div>
       )}
       <div className="board-bar">
@@ -349,6 +390,18 @@ export default function BoardView({ status }) {
           const num = numFor(openRow)
           return <CardDetail key="detail" r={openRow} num={num} factor={prices[num] ?? 1}
             numOptions={numOptions} onNum={setNum} prices={prices} onClose={() => setOpenId(null)} />
+        })()}
+      </AnimatePresence>
+      {/* A pulse-strip Hold/Mover item expanded into the SAME detail modal as a board currency. */}
+      <AnimatePresence>
+        {assetDetail && (() => {
+          const r = assetDetail.row
+          const ap = assetDetail.prices || {}
+          const num = (assetNum && ap[assetNum] != null) ? assetNum : (ap.divine != null ? 'divine' : (assetDetail.reference || 'exalted'))
+          const numOpts = Object.keys(ap).filter(id => id !== r.id).sort((a, b) => (ap[b] || 0) - (ap[a] || 0)).map(id => ({ id, name: nameById[id] || id }))
+          const close = () => { setAssetDetail(null); setAssetNum(null) }
+          return <CardDetail key="asset" r={r} num={num} factor={ap[num] ?? 1}
+            numOptions={numOpts} onNum={(id, n) => setAssetNum(n)} prices={ap} onClose={close} />
         })()}
       </AnimatePresence>
     </div>
