@@ -53,3 +53,12 @@ gh run watch "$RID" --repo "$REPO" --exit-status --interval 10
 # CI has created the release with the Windows assets; drop the Mac assets into the same release.
 gh release upload "$TAG" "${FILES[@]}" --repo "$REPO" --clobber
 echo "published Mac artifacts to GitHub release $TAG"
+
+# ── LEGACY BRIDGE (remove after 0.2.39) ─────────────────────────────────────────────────
+# One-time transition: mirror to the shazam /downloads channel so users on <=0.2.37 — whose
+# updater still points at shazam — can pull this release. Once everyone is on a GitHub-updater
+# build, delete this block and publish.sh. Set NO_BRIDGE=1 to skip.
+if [ "${NO_BRIDGE:-}" != "1" ]; then
+  echo "bridging to shazam /downloads (legacy, retires after 0.2.39) ..."
+  ./publish.sh
+fi
