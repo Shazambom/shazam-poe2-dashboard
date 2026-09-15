@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { api, toast } from '../lib/api.js'
 import { uid, searchFromParsed, tradeUrl, parseTradeUrl, openTrade } from '../lib/session.js'
 import { useAutosave } from '../lib/hooks.js'
+import Toggle from './Toggle.jsx'
 
 // Saved trade searches, Better-Trading style: folders → searches. We store only
 // {type, slug} + title (never the league or query); the URL is rebuilt at open
@@ -71,7 +72,7 @@ export default function WatchesView({ league }) {
             <div className="wf-body">
               {f.searches.map(s => (
                 <div className={`watch-row ${s.done ? 'done' : ''}`} key={s.id}>
-                  <input type="checkbox" checked={!!s.done} title="Mark done" onChange={e => updSearch(f.id, s.id, { done: e.target.checked })} />
+                  <Toggle checked={!!s.done} title="Mark done" onChange={v => updSearch(f.id, s.id, { done: v })} />
                   <input className="ws-title" value={s.title} onChange={e => updSearch(f.id, s.id, { title: e.target.value })} />
                   <span className="ws-slug muted" title={`${s.type}/${s.slug}`}>{s.slug.slice(0, 8)}</span>
                   <span className="spacer" />

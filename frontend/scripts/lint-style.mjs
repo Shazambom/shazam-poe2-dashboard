@@ -99,6 +99,8 @@ function walk(dir) {
           err(rel, i + 1, `raw hex ${raw} in JSX — colors belong in theme.js, not inline${hint}`, ln)
         }
       }
+      // ---- Check 6: raw checkboxes are banned — use <Toggle> (the themed slider switch). ----
+      if (/type\s*=\s*["']checkbox["']/.test(ln)) err(rel, i + 1, 'raw <input type="checkbox"> is banned — use <Toggle> (components/Toggle.jsx)', ln)
     })
   }
 }

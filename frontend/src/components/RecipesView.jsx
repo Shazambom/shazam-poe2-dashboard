@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { api, surface } from '../lib/api.js'
 import Cur from './Cur.jsx'
+import Toggle from './Toggle.jsx'
 
 const blank = () => ({ id: Math.random().toString(36).slice(2, 10), name: '', kind: 'combine', inputs: { '': 3 }, outputs: { '': 1 }, enabled: true, note: '' })
 const one = (obj) => { const [k, v] = Object.entries(obj)[0] ?? ['', 1]; return { id: k, qty: v } }
@@ -54,7 +55,7 @@ export default function RecipesView({ currencies, embedded = false }) {
               const known = (id) => opts.some(o => o.id === id)
               return (
                 <tr key={r.id}>
-                  <td><input type="checkbox" checked={!!r.enabled} onChange={e => upd(i, { enabled: e.target.checked })} /></td>
+                  <td><Toggle checked={!!r.enabled} onChange={v => upd(i, { enabled: v })} title="Enable this recipe" /></td>
                   <td><input className="btn" value={r.name} onChange={e => upd(i, { name: e.target.value })} style={{ width: 180 }} /></td>
                   <td><select className="btn" value={r.kind} onChange={e => upd(i, { kind: e.target.value })}>
                     <option value="combine">combine</option><option value="disenchant">disenchant</option><option value="reforge">reforge</option><option value="vendor">vendor</option>

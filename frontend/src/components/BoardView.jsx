@@ -6,6 +6,7 @@ import Cur from './Cur.jsx'
 import CardDetail, { Spark, SRC_LABEL, useAssetModal, rangeLabel } from './CardDetail.jsx'
 import CurrencyPicker from './CurrencyPicker.jsx'
 import RefreshButton from './RefreshButton.jsx'
+import Toggle from './Toggle.jsx'
 
 const isDesktop = typeof window !== 'undefined' && !!window.poe2desktop
 
@@ -242,7 +243,7 @@ export default function BoardView({ status }) {
         {canLive ? (
           <>
             <RefreshButton busy={busy} onClick={refreshLive} title="Refresh live rates" />
-            <label className="check" style={{ margin: 0 }}><input type="checkbox" checked={auto} onChange={e => setAuto(e.target.checked)} /> auto (60s)</label>
+            <Toggle checked={auto} onChange={setAuto} label="auto (60s)" />
           </>
         ) : <span className="hint">Connect live data (top bar) for real-time rates.</span>}
       </div>

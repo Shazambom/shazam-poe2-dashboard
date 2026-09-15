@@ -5,6 +5,7 @@ import ConvertView from './ConvertView.jsx'
 import Cur from './Cur.jsx'
 import GoldValueSlider from './GoldValueSlider.jsx'
 import RefreshButton from './RefreshButton.jsx'
+import Toggle from './Toggle.jsx'
 import { Detail, Loop } from './RouteSteps.jsx'
 
 const INF = Infinity
@@ -174,7 +175,7 @@ export default function RoutesView({ capital, status, currencies, onCapitalSaved
             {held.map(c => <option key={c} value={c}>{c}</option>)}
           </select>
         </div>
-        <label className="check"><input type="checkbox" checked={!!f.live_only} onChange={set('live_only')} /> Live quotes only</label>
+        <div className="check"><Toggle checked={!!f.live_only} onChange={v => setF(x => ({ ...x, live_only: v }))} label="Live quotes only" /></div>
 
         <details className="adv">
           <summary>More filters</summary>
@@ -187,7 +188,7 @@ export default function RoutesView({ capital, status, currencies, onCapitalSaved
           <div className="field"><label>Minimum traded volume, {ref} per hour</label><input type="number" step="1" placeholder="no limit" value={f.min_volume_ref_per_h} onChange={set('min_volume_ref_per_h')} />
             {f.min_volume_ref_per_h !== '' && Number(f.min_volume_ref_per_h) < 100 && <span className="warn-hint">⚠ Below 100/h markets are too thin to trust — expect a bad time.</span>}</div>
           <div className="field"><label>Maximum estimated fill time, hours</label><input type="number" step="0.5" placeholder="no limit" value={f.max_fill_hours} onChange={set('max_fill_hours')} /></div>
-          <label className="check"><input type="checkbox" checked={!!f.exclude_recipes} onChange={set('exclude_recipes')} /> Exchange steps only</label>
+          <div className="check"><Toggle checked={!!f.exclude_recipes} onChange={v => setF(x => ({ ...x, exclude_recipes: v }))} label="Exchange steps only" /></div>
           <div className="field"><label>Show at most</label><input type="number" value={f.limit} onChange={set('limit')} /></div>
         </details>
 
@@ -200,7 +201,7 @@ export default function RoutesView({ capital, status, currencies, onCapitalSaved
               <RefreshButton busy={liveBusy} onClick={refreshTop} title={`Refresh top ${liveN} loops now`} />
               <span className="hint">Top {liveN} loops</span>
             </div>
-            <label className="check" style={{ marginTop: 8 }}><input type="checkbox" checked={autoLive} onChange={e => setAutoLive(e.target.checked)} /> Keep fresh (every 2 min)</label>
+            <div className="check" style={{ marginTop: 8 }}><Toggle checked={autoLive} onChange={setAutoLive} label="Keep fresh (every 2 min)" /></div>
           </>
         )}
         {rl && (

@@ -14,7 +14,7 @@ export default function CurrencyPicker({ value, onChange, options = [], placehol
   const selected = useMemo(() => options.find(o => o.id === value), [options, value])
   const matches = useMemo(() => {
     const t = q.trim().toLowerCase()
-    return t ? options.filter(o => o.name.toLowerCase().includes(t) || o.id.toLowerCase().includes(t)) : options
+    return t ? options.filter(o => o.name.toLowerCase().includes(t) || String(o.id).toLowerCase().includes(t)) : options
   }, [options, q])
 
   // close on outside click

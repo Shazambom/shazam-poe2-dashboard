@@ -3,6 +3,8 @@ import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceL
 import { api, fmt } from '../lib/api.js'
 import { series as SERIES, chart } from '../theme.js'
 import Cur from './Cur.jsx'
+import CurrencyPicker from './CurrencyPicker.jsx'
+import Toggle from './Toggle.jsx'
 
 // Categorical hues + chart chrome come from the shared theme (single source of truth,
 // enforced by `npm run lint:style`). SERIES is validated colorblind-safe — see theme.js.
@@ -73,6 +75,8 @@ function LeagueAgeChart({ rows, keys, scale, refLine, valueFmt }) {
 
 export default function InflationView({ league }) {
   const [anchor, setAnchor] = useState('hinekora')
+  const [hidden, setHidden] = useState(() => new Set())   // currencies toggled off the inflation graph only
+  const toggleCur = (id) => setHidden(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n })
   const [data, setData] = useState(null)
   const [err, setErr] = useState(null)
   const [busy, setBusy] = useState(true)
@@ -95,10 +99,8 @@ export default function InflationView({ league }) {
       <div className="board-bar">
         <h2 style={{ margin: 0 }}>Inflation <span className="muted" style={{ fontWeight: 400 }}>· soft currencies priced in a hard asset, indexed to 100 at league start</span></h2>
         <span className="spacer" />
-        <label className="hint">Hard-asset anchor&nbsp;
-          <select value={anchor} onChange={e => setAnchor(e.target.value)}>
-            {anchors.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-          </select>
+        <label className="hint" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>Hard-asset anchor
+          <CurrencyPicker value={anchor} onChange={setAnchor} options={anchors} placeholder="anchor…" />
         </label>
       </div>
 
@@ -136,7 +138,7 @@ export default function InflationView({ league }) {
                 <Tooltip cursor={CURSOR} content={<ChartTooltip labelFmt={day} valueFmt={v => v.toFixed(1)} nameFmt={nameOf} />} />
                 <ReferenceLine y={100} stroke={chart.refLine} strokeDasharray="3 3" label={{ value: 'league start', position: 'insideTopRight', fill: chart.axis, fontSize: 10 }} />
                 <Legend wrapperStyle={{ fontSize: 12 }} formatter={nameOf} />
-                {keys.map((k, i) => (
+                {keys.map((k, i) => hidden.has(k.id) ? null : (
                   <Line key={k.id} type="monotone" dataKey={k.id} stroke={SERIES[i % SERIES.length]}
                     dot={false} activeDot={{ r: 4, strokeWidth: 2, stroke: 'var(--panel)' }} strokeWidth={1.8} isAnimationActive={false} connectNulls />
                 ))}
@@ -147,16 +149,20 @@ export default function InflationView({ league }) {
 
       <div className="infl-table">
         <table>
-          <thead><tr><th>Currency</th><th className="num">Index now</th><th className="num">Inflation since start</th><th className="num">Hours</th></tr></thead>
+          <thead><tr><th title="Show this currency's line in the graph above">Graph</th><th>Currency</th><th className="num">Index now</th><th className="num">Inflation since start</th><th className="num">Hours</th></tr></thead>
           <tbody>
-            {(data?.currencies ?? []).map((cur, i) => (
-              <tr key={cur.id}>
-                <td><span className="dot-key" style={{ background: SERIES[i % SERIES.length] }} /> <Cur name={cur.name} text /></td>
-                <td className="num">{cur.current}</td>
-                <td className={`num ${cur.since_base_pct >= 0 ? 'loss' : 'gain'}`}>{fmt.pct(cur.since_base_pct)}</td>
-                <td className="num muted">{cur.coverage}</td>
-              </tr>
-            ))}
+            {(data?.currencies ?? []).map((cur, i) => {
+              const on = !hidden.has(cur.id)
+              return (
+                <tr key={cur.id} style={{ opacity: on ? 1 : 0.45 }}>
+                  <td><Toggle checked={on} onChange={() => toggleCur(cur.id)} title={`${on ? 'Hide' : 'Show'} ${cur.name} in the graph`} /></td>
+                  <td><span className="dot-key" style={{ background: SERIES[i % SERIES.length] }} /> <Cur name={cur.name} text /></td>
+                  <td className="num">{cur.current}</td>
+                  <td className={`num ${cur.since_base_pct >= 0 ? 'loss' : 'gain'}`}>{fmt.pct(cur.since_base_pct)}</td>
+                  <td className="num muted">{cur.coverage}</td>
+                </tr>
+              )
+            })}
           </tbody>
         </table>
       </div>
@@ -243,10 +249,8 @@ function CrossLeague() {
       <div className="board-bar">
         <h2 style={{ margin: 0 }}>Across leagues <span className="muted" style={{ fontWeight: 400 }}>· {data?.item_name || 'Divine'} priced in Exalted, each league rebased to day-0 = 100 and aligned by day-of-league</span></h2>
         <span className="spacer" />
-        <label className="hint">Anchor&nbsp;
-          <select value={item} onChange={e => setItem(Number(e.target.value))}>
-            {items.map(it => <option key={it.id} value={it.id}>{it.name}</option>)}
-          </select>
+        <label className="hint" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>Anchor
+          <CurrencyPicker value={item} onChange={setItem} options={items} placeholder="anchor…" />
         </label>
       </div>
       {err && <div className="notice error">{err}</div>}

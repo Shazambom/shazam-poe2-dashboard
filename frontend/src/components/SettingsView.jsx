@@ -5,6 +5,7 @@ import RecipesView from './RecipesView.jsx'
 import TradingSettings from './TradingSettings.jsx'
 import CurrencyPicker from './CurrencyPicker.jsx'
 import RefreshButton from './RefreshButton.jsx'
+import Toggle from './Toggle.jsx'
 
 // Everything auto-saves (debounced) — there is no Save button. The league lives
 // in the top bar; essentials are visible; the rest sits behind "Advanced".
@@ -76,8 +77,8 @@ export default function SettingsView({ currencies, status, onSaved }) {
             <textarea rows={3} defaultValue={s.watchlist.join(', ')} onBlur={e => set('watchlist', e.target.value.split(/[\s,]+/).filter(Boolean))} />
             <span className="hint">{s.watchlist.length} currencies. Keep it under ~50 to stay clear of the exchange rate limit.</span>
           </div>
-          <label className="check"><input type="checkbox" checked={s.allow_digest_edges} onChange={e => set('allow_digest_edges', e.target.checked)} /> Fill missing pairs from hourly market data</label>
-          <label className="check"><input type="checkbox" checked={s.allow_recipe_edges} onChange={e => set('allow_recipe_edges', e.target.checked)} /> Use recipe steps</label>
+          <div className="check"><Toggle checked={s.allow_digest_edges} onChange={v => set('allow_digest_edges', v)} label="Fill missing pairs from hourly market data" /></div>
+          <div className="check"><Toggle checked={s.allow_recipe_edges} onChange={v => set('allow_recipe_edges', v)} label="Use recipe steps" /></div>
 
           <details className="adv" style={{ marginTop: 18 }}>
             <summary>Advanced — route search &amp; fetch policy</summary>
@@ -92,8 +93,8 @@ export default function SettingsView({ currencies, status, onSaved }) {
             <div className="field"><label>Never refetch the same pair sooner than (seconds)</label><input type="number" value={s.min_refetch_s} onChange={e => set('min_refetch_s', e.target.value)} /></div>
             <div className="field"><label>Serve identical route queries from memory for (seconds)</label><input type="number" value={s.routes_cache_s} onChange={e => set('routes_cache_s', e.target.value)} /></div>
             <div className="field"><label>Haves per exchange request</label><input type="number" min="1" max="20" value={s.batch_max_have} onChange={e => set('batch_max_have', e.target.value)} /></div>
-            <label className="check"><input type="checkbox" checked={!!s.batch_pad} onChange={e => set('batch_pad', e.target.checked)} /> Fill spare request slots with likely-useful pairs</label>
-            <label className="check"><input type="checkbox" checked={!!s.background_sweep} onChange={e => set('background_sweep', e.target.checked)} /> Background sweep of the whole watchlist</label>
+            <div className="check"><Toggle checked={!!s.batch_pad} onChange={v => set('batch_pad', v)} label="Fill spare request slots with likely-useful pairs" /></div>
+            <div className="check"><Toggle checked={!!s.background_sweep} onChange={v => set('background_sweep', v)} label="Background sweep of the whole watchlist" /></div>
 
             <h2>Ranking weights</h2>
             <p className="hint">The default sort blends these; velocity (profit per hour per gold) leads.</p>

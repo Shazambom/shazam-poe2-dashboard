@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { api, toast } from '../lib/api.js'
 import { getSoundPrefs, setSoundPrefs, playPing } from '../lib/ping-sound.js'
+import Toggle from './Toggle.jsx'
 
 const isDesktop = typeof window !== 'undefined' && !!window.poe2desktop
 
@@ -41,10 +42,9 @@ export default function TradingSettings() {
   return (
     <section className="settings-section">
       <h3>Trading</h3>
-      <label className="set-row">
-        <input type="checkbox" checked={prefs.on} onChange={e => save({ on: e.target.checked })} />
-        <span>Play a sound on each live-search ping</span>
-      </label>
+      <div className="set-row">
+        <Toggle checked={prefs.on} onChange={v => save({ on: v })} label="Play a sound on each live-search ping" />
+      </div>
       <div className="set-row">
         <span style={{ width: 120 }}>Ping volume</span>
         <input type="range" min="0" max="1" step="0.05" value={prefs.volume}

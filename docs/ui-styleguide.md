@@ -149,6 +149,12 @@ Reuse these before writing new CSS. Each is a small, composable block already in
   `:active` nudges `translateY(1px)`.
 - **Segmented control — `.seg` / `.seg-btn`** (`.on` = gold gradient). For 2–4 mutually
   exclusive options (time horizons, modes).
+- **Toggle switch — `<Toggle>`** (`components/Toggle.jsx`, `.toggle`/`.toggle-track`/`.toggle-thumb`).
+  The **only** on/off control. **Raw `<input type="checkbox">` is BANNED** and fails
+  `npm run lint:style`. `onChange` receives the new boolean; pass a `label` for the inline text.
+- **Refresh — `<RefreshButton>`** (icon-only, spins on activation). No "Refresh"/"Live" text.
+- **Currency selection — `<CurrencyPicker>`** (progressive-search combobox). Use it for **every**
+  currency/anchor field — never a raw `<select>` of currencies. `value`/`onChange` are the id.
 - **Chips (pill family):** `.cmdk-chip`, `.ver-chip`, `.pulse-chip`, `.update-chip`
   (`.busy`/`.ready`/`.ok`/`.err`), `.download-app`. All `border-radius: 999px`, inline-flex,
   small gap, `--muted`→`--ink` on hover. Status chips add an icon + label, never color alone.
