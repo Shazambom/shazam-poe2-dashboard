@@ -98,6 +98,12 @@ def main():
                     help="keep private/dead leagues too (default: public leagues only)")
     ap.add_argument("--no-gzip", action="store_true",
                     help="write a plain .sqlite instead of gzipping (default: gzip)")
+    ap.add_argument("--max-digest-lag-h", type=float, default=3.0,
+                    help="refuse to export if the digest is more than this many hours behind the "
+                         "current hour (i.e. a sync is still catching up). Guards against shipping a "
+                         "half-synced snapshot that would make every client re-seed into gappy data.")
+    ap.add_argument("--force", action="store_true",
+                    help="skip the digest freshness guard (export even if mid-sync)")
     args = ap.parse_args()
 
     # Digest is dominated by hundreds of tiny dead private leagues "(PLxxxxx)"; drop them
@@ -113,6 +119,36 @@ def main():
     src = sqlite3.connect(f"file:{args.src}?mode=ro", uri=True, timeout=30)
     dst = sqlite3.connect(tmp)
     try:
+        # Guard: never publish a snapshot while the digest is mid-catch-up — a partial sync would
+        # ship gappy data to every client that re-seeds from it. digest_cursor is the next hour to
+        # fetch; when caught up it sits at ~the current (unpublished) hour. Live under one
+        # consistent read (BEGIN) so all table copies see the same point-in-time even under writes.
+        src.execute("BEGIN")
+        tset = {r[0] for r in src.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+        kvt = "kv_ops" if "kv_ops" in tset else ("kv" if "kv" in tset else None)
+        cursor = None
+        if kvt:
+            row = src.execute(f"SELECT value FROM {kvt} WHERE key='digest_cursor'").fetchone()
+            if row and row[0] is not None:
+                try:
+                    import json as _json
+                    cursor = int(_json.loads(row[0]))
+                except Exception:
+                    try: cursor = int(row[0])
+                    except Exception: cursor = None
+        now_hour = int(time.time()) - int(time.time()) % 3600
+        if cursor is not None:
+            lag_h = (now_hour - cursor) / 3600.0
+            print(f"  digest_cursor lag: {lag_h:.1f}h (cursor={cursor}, now_hour={now_hour})")
+            if lag_h > args.max_digest_lag_h and not args.force:
+                raise SystemExit(
+                    f"ABORT: digest is {lag_h:.1f}h behind (> {args.max_digest_lag_h}h) — a sync is "
+                    f"still catching up. Refusing to publish a half-synced snapshot. Re-run when "
+                    f"caught up, or pass --force.")
+        elif not args.force:
+            raise SystemExit("ABORT: no digest_cursor found — can't confirm the sync is complete. "
+                             "Pass --force to override.")
+
         dst.executescript(MARKET_SCHEMA)
 
         # Digest: recent window only (bounds bundle size). `hour` is epoch seconds.

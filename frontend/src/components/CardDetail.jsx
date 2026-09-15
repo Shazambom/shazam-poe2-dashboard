@@ -59,6 +59,18 @@ export default function CardDetail({ r, num, factor, numOptions, onNum, prices, 
   const trend = r.trend ? r.trend.map(p => ({ t: p.t, v: p.v / f })) : r.trend
   const change = r.change_pct
   const inCurs = Object.keys(prices).filter(c => c !== r.id && prices[c]).sort((a, b) => prices[b] - prices[a]).slice(0, 8)
+  // Ghost Wealth: if the user HOLDS this currency, show what the stack would actually cash out to.
+  // Pulls the enriched capital row (realizable/ghost/slippage/fill) — no bespoke endpoint.
+  const [cash, setCash] = useState(null)
+  useEffect(() => {
+    let live = true
+    api.capital().then(d => {
+      if (!live) return
+      const row = d.rows.find(x => x.currency === r.id && Number(x.qty) > 0)
+      if (row) setCash({ ...row, reference: d.reference })
+    }).catch(() => {})
+    return () => { live = false }
+  }, [r.id])
   useEffect(() => {
     const h = (e) => { if (e.key === 'Escape') onClose() }
     window.addEventListener('keydown', h); return () => window.removeEventListener('keydown', h)
@@ -94,6 +106,25 @@ export default function CardDetail({ r, num, factor, numOptions, onNum, prices, 
           {r.hub && <div className="cd-stat" title="A central market — a lot of value routes through it"><span>market</span><b className="cd-hub">⬢ hub</b></div>}
         </div>
         {r.hub && <div className="cd-hub-note"><span className="cd-hub">⬢</span> A hub is one of the market's most-traded currencies — most trades route through it, so it's easy to buy and sell.</div>}
+        {cash && cash.realizable_ref != null && cash.source !== 'cash' && (() => {
+          const cref = cash.reference || 'exalted'
+          const gh = (cash.value_ref != null) ? cash.value_ref - cash.realizable_ref : null
+          return <>
+            <div className="cd-section">Cash out <span className="muted" style={{ fontWeight: 400 }}>· selling all {fmt.n(cash.qty)}</span></div>
+            <div className="cd-grid">
+              <div className="cd-stat" title="what the whole stack would realize now, net of gold"><span>realizable</span><b>{fmt.n(cash.realizable_ref, 1)} <Cur id={cref} size={14} /></b></div>
+              {gh != null && <div className="cd-stat" title="paper value you can't currently cash out"><span>ghost</span><b className={gh > 0.5 ? 'cd-ghost' : ''}>👻 {fmt.n(gh, 1)} <Cur id={cref} size={14} /></b></div>}
+              {cash.slippage_pct != null && <div className="cd-stat" title="market-depth loss on the filled portion (excludes gold)"><span>slippage</span><b>{Math.max(0, cash.slippage_pct).toFixed(1)}%</b></div>}
+              {cash.fill_hours != null && <div className="cd-stat"><span>fill time</span><b>{fmt.age(cash.fill_hours * 3600)}</b></div>}
+              {cash.full_fill === false && <div className="cd-stat" title="the market can't absorb the whole stack right now"><span>fill</span><b className="cd-ghost">partial</b></div>}
+            </div>
+            {cash.cashout_path && cash.cashout_path.length > 1 && (
+              <div className="cd-cashpath">sell via {cash.cashout_path.map((id, i) => (
+                <React.Fragment key={id}>{i > 0 && <span className="cd-arrow"> › </span>}<Cur id={id} size={15} /></React.Fragment>
+              ))}</div>
+            )}
+          </>
+        })()}
         {inCurs.length > 0 && <>
           <div className="cd-section">Value in other currencies</div>
           <div className="cd-invalue">

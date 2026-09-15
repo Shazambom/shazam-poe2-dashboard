@@ -12,7 +12,7 @@ from pydantic import BaseModel
 
 from fastapi.responses import RedirectResponse, PlainTextResponse
 
-from . import arbitrage, db, digest, gamedata, gateway, holdscore, inflation, leaguehistory, migrations_user, movers, oauth, orderbook, recipes, session
+from . import arbitrage, db, digest, gamedata, gateway, holdscore, inflation, leaguehistory, liquidity, migrations_user, movers, oauth, orderbook, recipes, session
 from .currencies import registry
 from .settings import get_settings, save_settings
 
@@ -205,10 +205,23 @@ def capital():
     caps = db.get_capital()
     g = arbitrage.cached_graph()
     ref = g.ref_values()
-    rows = [{"currency": c, "name": registry.name(c), "qty": q, "ref_value": ref.get(c),
-             "value_ref": (q * ref[c]) if c in ref else None} for c, q in caps.items()]
+    gv = float(g.s.get("gold_value_per_1k") or arbitrage.GOLD_VALUE_DIVINE_PER_1K)
+    cash = liquidity.cash_set(g, ref)          # hub currencies = cash-like; derived once (PageRank)
+    rows = []
+    for c, q in caps.items():
+        row = {"currency": c, "name": registry.name(c), "qty": q, "ref_value": ref.get(c),
+               "value_ref": (q * ref[c]) if c in ref else None}
+        # Ghost Wealth: what the stack would ACTUALLY realize if cashed out now (best path to
+        # the reference, net of gold), plus slippage/fill-time/confidence. Never fails a request.
+        liq = liquidity.realizable(g, ref, c, q, cash=cash, gold_value_per_1k=gv)
+        row.update(realizable_ref=liq["realizable_ref"], slippage_pct=liq["slippage_pct"],
+                   fill_hours=liq["fill_hours"], source=liq["source"], full_fill=liq["full_fill"],
+                   cashout_path=liq["path"])
+        rows.append(row)
     total = sum(r["value_ref"] for r in rows if r["value_ref"] is not None)
-    return {"rows": rows, "total_ref": total, "reference": g.s["reference"]}
+    realizable_total = sum(r["realizable_ref"] for r in rows if r["realizable_ref"] is not None)
+    return {"rows": rows, "total_ref": total, "realizable_total_ref": realizable_total,
+            "ghost_ref": total - realizable_total, "reference": g.s["reference"]}
 
 
 class CapitalBody(BaseModel):

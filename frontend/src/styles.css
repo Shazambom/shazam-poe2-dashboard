@@ -349,6 +349,12 @@ td.num, th.num { text-align: right; }
 tr.route { cursor: pointer; }
 tr.route:hover td { background: var(--panel); }
 tr.route[aria-expanded="true"] td { background: var(--panel); }
+/* subtle σ-band divider between standard-deviation tiers of loops */
+tr.std-sep td { padding: 5px 4px; }
+tr.std-sep:hover td { background: transparent; }
+.std-band { display: flex; align-items: center; gap: 8px; }
+.std-lab { font-size: 9.5px; letter-spacing: .04em; color: var(--muted); white-space: nowrap; }
+.std-bar { flex: 1; height: 1px; background: linear-gradient(90deg, var(--line-strong), transparent 92%); }
 .gain { color: var(--gain); }
 .loss { color: var(--loss); }
 .muted { color: var(--muted); }
@@ -441,6 +447,9 @@ details.adv[open] summary { color: var(--ink-2); margin-bottom: 8px; }
   border: 1px solid var(--line-strong); border-radius: var(--radius); padding: 4px 6px;
 }
 .save-state { color: var(--muted); font-weight: 400; font-size: 12px; margin-left: 6px; }
+.capital-table td { vertical-align: top; }
+.cap-sub { font-size: 11px; color: var(--muted); margin-top: 1px; display: flex; align-items: center; flex-wrap: wrap; gap: 1px 3px; line-height: 1.3; }
+.cap-ghost { color: var(--loss); white-space: nowrap; cursor: help; }
 
 /* ---------- toasts ---------- */
 .toasts { position: fixed; right: 16px; bottom: 16px; display: flex; flex-direction: column; gap: 8px; z-index: 100; }
@@ -547,6 +556,9 @@ details.adv[open] summary { color: var(--ink-2); margin-bottom: 8px; }
 /* Hub glyph: a rare gold accent on the handful of most-central markets (centrality). */
 .pt-hub { flex: none; font-size: 10px; line-height: 1; color: var(--gold); opacity: .85; cursor: help; }
 .cd-hub { color: var(--gold); }
+.cd-ghost { color: var(--loss); }
+.cd-cashpath { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; margin-top: 8px; font-size: 12px; color: var(--muted); }
+.cd-cashpath .cd-arrow { color: var(--muted); opacity: .7; }
 .cd-hub-note { margin-top: 10px; font-size: 12px; line-height: 1.4; color: var(--muted); }
 .cd-hub-note .cd-hub { margin-right: 4px; }
 .pulse-hub { color: var(--gold); font-size: 9px; }

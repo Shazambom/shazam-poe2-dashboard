@@ -649,6 +649,7 @@ def _convert_path(g: Graph, path: list[Edge], amount: float, ref_value: dict[str
         "gold_per_out": (gold / out) if out > 0 and gold > 0 else None,
         "value_ref": sim["value_ref"], "all_live": sim["all_live"], "max_age_s": sim["max_age_s"],
         "liquidity_ref": sim["liquidity_ref"], "volume_ref_per_h": sim["volume_ref_per_h"],
+        "fill_hours": sim["fill_hours"],
         "uses_recipe": any(e.kind == "recipe" for e in path),
     }
 

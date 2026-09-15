@@ -10,6 +10,11 @@ from typing import Any, Iterator
 
 from .config import MARKET_DB_PATH, MARKET_SEED_PATH, USER_DB_PATH
 
+# ⚠️  BEFORE changing any schema, kv routing, or the snapshot: READ docs/db-maintenance.md.
+#     user data → numbered migration (never dropped); market data → no migration, ships in the
+#     snapshot + bump snapshot_version. Getting it wrong loses user data OR forces every client to
+#     re-seed. A new operational kv key needs nothing (lands in kv_ops); a user kv key must be
+#     added to _USER_KV below. When unsure, ask — don't guess.
 log = logging.getLogger("poe2arb.db")
 
 # WAL lets any number of readers run alongside one writer. Writes serialise on

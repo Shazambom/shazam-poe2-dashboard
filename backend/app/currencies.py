@@ -5,10 +5,15 @@ Two id spaces exist:
   * metadata ids — GGG item paths used by the hourly digest
     ("Metadata/Items/Currency/CurrencyRerollRare").
 
-The registry loads the trade site's static currency list, then links metadata ids to
-trade ids using (1) a seed override file and (2) a heuristic match between the
-metadata id's last path segment and the icon filename. Unmatched ids are kept so
-the UI can surface them for manual mapping.
+Metadata ids are linked to trade ids in this precedence (low → high):
+  1. seed override file (`data/currency_map.json`) — a small offline fallback.
+  2. **poe2scout bridge** (`meta_bridge` in kv_ops) — AUTHORITATIVE. poe2scout returns
+     each currency's GGG `BaseItemTypeId` alongside its trade `ApiId`, giving an exact
+     metadata→trade map; the crawl persists it. This is the real source of truth.
+  3. user overrides (`meta_overrides` kv) — an explicit human mapping wins over everything.
+  4. fallback heuristic (icon-filename-stem / tiered suffix) — only for ids none of the
+     above cover (e.g. league-mechanic items poe2scout doesn't list). Anything still
+     unmatched is kept in `unmapped_meta` and logged so gaps are visible, never silent.
 """
 from __future__ import annotations
 
@@ -39,9 +44,11 @@ class Registry:
         self.meta_to_trade: dict[str, str] = {}
         self.unmapped_meta: set[str] = set()
         self.loaded_at: float | None = None
-        self._seed_overrides: dict[str, str] = {}
+        self._seed_overrides: dict[str, str] = {}   # currency_map.json (offline fallback)
+        self._bridge: dict[str, str] = {}           # kv meta_bridge (poe2scout, authoritative)
+        self._user_overrides: dict[str, str] = {}   # kv meta_overrides (human, highest)
         self._load_seed()
-        self._apply_overrides()
+        self.load_bridge()                          # db is booted at import; safe to read kv
 
     # ---------------------------------------------------------------- seed
     def _load_seed(self) -> None:
@@ -56,8 +63,13 @@ class Registry:
                     icon=entry.get("icon"),
                     category=entry.get("category"),
                 )
-        user_overrides = db.kv_get("meta_overrides", {})
-        self._seed_overrides.update(user_overrides)
+        self._user_overrides = db.kv_get("meta_overrides", {}) or {}
+
+    def load_bridge(self) -> None:
+        """(Re)load the authoritative poe2scout metadata→trade bridge from kv_ops (written by
+        the crawl, shipped in the market snapshot) and rebuild all links. Call after a crawl."""
+        self._bridge = db.kv_get("meta_bridge", {}) or {}
+        self._rebuild_links()
 
     # -------------------------------------------------------------- static
     async def load_static(self) -> None:
@@ -82,12 +94,21 @@ class Registry:
                 cur.category = cur.category or cat
                 self.by_id[tid] = cur
         self.loaded_at = time.time()
-        self._apply_overrides()
+        self._rebuild_links()
         log.info("registry loaded %d trade currencies", len(self.by_id))
 
-    def _apply_overrides(self) -> None:
-        for meta, tid in self._seed_overrides.items():
-            self._link(meta, tid)
+    def _rebuild_links(self) -> None:
+        """Rebuild meta→trade links from all sources in precedence order (later wins):
+        seed file < poe2scout bridge < user overrides. Clears learned/heuristic links and the
+        negative cache so a freshly-loaded bridge re-evaluates previously-unmapped ids."""
+        self.meta_to_trade.clear()
+        self.unmapped_meta.clear()
+        for source in (self._seed_overrides, self._bridge, self._user_overrides):
+            for meta, tid in source.items():
+                self._link(meta, tid)
+        log.info("registry links rebuilt: seed=%d bridge=%d user=%d → %d metadata ids mapped",
+                 len(self._seed_overrides), len(self._bridge), len(self._user_overrides),
+                 len(self.meta_to_trade))
 
     def _link(self, meta: str, tid: str) -> None:
         self.meta_to_trade[meta] = tid
@@ -139,13 +160,15 @@ class Registry:
                     self._link(meta, cand)
                     return cand
         self.unmapped_meta.add(meta)
+        log.info("currency: no trade mapping for metadata id %s "
+                 "(not in poe2scout bridge/seed/heuristic — its markets are excluded)", meta)
         return None
 
     def set_override(self, meta: str, tid: str) -> None:
-        overrides = db.kv_get("meta_overrides", {})
+        overrides = db.kv_get("meta_overrides", {}) or {}
         overrides[meta] = tid
         db.kv_set("meta_overrides", overrides)
-        self._seed_overrides[meta] = tid
+        self._user_overrides[meta] = tid   # highest precedence
         self._link(meta, tid)
 
     def name(self, tid: str) -> str:

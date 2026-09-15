@@ -178,6 +178,7 @@ async def _universe(league: str) -> set[int]:
     — global ids, so any league's crawl fills the map."""
     ids = set(ITEMS)
     meta = []
+    bridge_new: dict[str, str] = {}   # GGG BaseItemTypeId -> trade ApiId (authoritative)
     enc = urllib.parse.quote(league)
     for cat in await _category_apiids(league):
         try:
@@ -190,12 +191,38 @@ async def _universe(league: str) -> set[int]:
             if not iid:
                 continue
             meta.append((iid, x.get("Text") or str(iid), cat))
+            # poe2scout hands us the exact GGG metadata id (BaseItemTypeId) next to the trade
+            # ApiId — the authoritative bridge the digest needs to key markets by trade id.
+            bt, api = x.get("BaseItemTypeId"), x.get("ApiId")
+            if bt and api:
+                bridge_new[bt] = api
             if iid in ITEMS or (x.get("CurrentPrice") or 0) >= PRICE_FLOOR_EX:
                 ids.add(iid)
     if meta:
         with db.tx() as c:
             c.executemany("INSERT OR REPLACE INTO item_meta(item_id, name, category) VALUES (?,?,?)", meta)
+    if bridge_new:
+        _merge_meta_bridge(bridge_new)
     return ids
+
+
+def _merge_meta_bridge(new: dict[str, str]) -> None:
+    """Merge freshly-crawled metadata→trade mappings into the authoritative bridge kv (`meta_bridge`,
+    operational → ships in the market snapshot per db-maintenance.md), then refresh the registry and
+    drop graph caches so newly-mapped currencies enter the exchange graph immediately."""
+    cur = db.kv_get("meta_bridge", {}) or {}
+    changed = sum(1 for bt, api in new.items() if cur.get(bt) != api)
+    if changed:
+        cur.update(new)
+        db.kv_set("meta_bridge", cur)
+        from .currencies import registry
+        registry.load_bridge()
+        try:
+            from . import arbitrage
+            arbitrage.invalidate_caches()
+        except Exception:  # never let a cache poke break the crawl
+            pass
+    log.info("meta_bridge: %d total mappings (%d new/changed this pass)", len(cur), changed)
 
 
 async def backfill(force: bool = False, full: bool = True) -> dict:

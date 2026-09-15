@@ -4,7 +4,7 @@
     "Metadata/Items/Currency/CurrencyRerollRare": "chaos",
     "Metadata/Items/Currency/CurrencyAddModToRare": "exalted",
     "Metadata/Items/Currency/CurrencyModValues": "divine",
-    "Metadata/Items/Currency/CurrencyUpgradeToRare": "regal",
+    "Metadata/Items/Currency/CurrencyUpgradeToRare": "alch",
     "Metadata/Items/Currency/CurrencyUpgradeToMagic": "transmute",
     "Metadata/Items/Currency/CurrencyAddModToMagic": "aug",
     "Metadata/Items/Currency/CurrencyUpgradeRandomly": "chance",

@@ -6,6 +6,26 @@ import CurrencyPicker from './CurrencyPicker.jsx'
 
 const PRIMARY = ['chaos', 'exalted', 'divine']
 
+// Compact per-row sub-line under the currency name (the rail is too narrow for extra columns):
+// paper worth, and — only when it differs — what it ACTUALLY cashes out to, with a ghost hint.
+// `partial` = the book can't absorb the whole stack; a `▼x%` tag flags all-in loss; `no market
+// data` = we have no tracked exchange market for it. Cash-like holdings just show their worth.
+function worthLine(v, qtyStr, ref, backfilling) {
+  if (!v || v.value_ref == null) {
+    return Number(qtyStr) > 0 ? <span className="muted" title={backfilling ? 'valued once market data finishes syncing' : 'no market rate yet'}>…</span> : ''
+  }
+  const worth = <>{fmt.n(v.value_ref, 1)} <Cur id={ref} size={13} /></>
+  if (v.realizable_ref == null) {
+    return <>{worth} <span className="muted" title="no tracked exchange market for this currency, so its cash-out can't be measured">· no market data</span></>
+  }
+  const ghost = v.value_ref - v.realizable_ref
+  const ghostPct = v.value_ref > 0 ? ghost / v.value_ref * 100 : 0    // all-in loss: slippage + gold + stranded
+  let tail = null
+  if (v.full_fill === false) tail = <span className="cap-ghost" title={`the market can't absorb the whole stack right now — 👻 ${fmt.n(ghost, 1)} ${ref} ghost`}> → {fmt.n(v.realizable_ref, 1)} <Cur id={ref} size={13} /> partial</span>
+  else if (ghostPct >= 1) tail = <span className="cap-ghost" title={`cash out via best path · 👻 ${fmt.n(ghost, 1)} ${ref} ghost (slippage + gold)`}> → {fmt.n(v.realizable_ref, 1)} <Cur id={ref} size={13} /> ▼{ghostPct.toFixed(0)}%</span>
+  return <>{worth}{tail}</>
+}
+
 // What-you-hold editor that lives in the Routes rail. Quantities auto-save
 // (debounced via the shared useAutosave hook) — no Save button, no separate page.
 export default function CapitalCard({ currencies, status, onSaved }) {
@@ -35,6 +55,7 @@ export default function CapitalCard({ currencies, status, onSaved }) {
   const ref = data?.reference ?? 'exalted'
 
   if (!qty) return <div className="hint">Loading capital…</div>
+  const ghost = data?.ghost_ref
   return (
     <div className="capcard">
       <h2>What you hold <span className="save-state">{state === 'saving' ? 'saving…' : state === 'saved' ? 'saved ✓' : ''}</span></h2>
@@ -44,13 +65,12 @@ export default function CapitalCard({ currencies, status, onSaved }) {
             const v = valueOf(c)
             return (
               <tr key={c}>
-                <td><Cur id={c} text /></td>
+                <td>
+                  <Cur id={c} text />
+                  <div className="cap-sub">{worthLine(v, qty[c], ref, backfilling)}</div>
+                </td>
                 <td className="num"><input type="number" min="0" step="1" value={qty[c]}
                   onChange={e => setOne(c, e.target.value)} /></td>
-                <td className="num muted" title={v?.ref_value != null ? `1 ${c} ≈ ${fmt.rate(v.ref_value)} ${ref}` : ''}>
-                  {v?.value_ref != null ? <>{fmt.n(v.value_ref, 1)} <Cur id={ref} size={14} /></>
-                    : Number(qty[c]) > 0 ? <span title={backfilling ? 'valued once market data finishes syncing' : 'no market rate yet'}>…</span> : ''}
-                </td>
                 <td>{!PRIMARY.includes(c) && <button className="btn small" title="Remove" onClick={() => remove(c)}>×</button>}</td>
               </tr>
             )
@@ -62,7 +82,12 @@ export default function CapitalCard({ currencies, status, onSaved }) {
           options={(currencies?.currencies ?? []).filter(c => !(c.id in (qty || {})))}
           onChange={id => { if (id && !(id in (qty || {}))) setQty(r => ({ ...r, [id]: 0 })) }} />
       </div>
-      <p className="hint" style={{ marginTop: 6 }}>Total <b>{fmt.n(data?.total_ref, 1)} <Cur id={ref} size={14} /></b> · loops are sized from these counts.</p>
+      <p className="hint" style={{ marginTop: 6 }}>
+        Total <b>{fmt.n(data?.total_ref, 1)} <Cur id={ref} size={14} /></b>
+        {data?.realizable_total_ref != null && <> · realizable <b>{fmt.n(data.realizable_total_ref, 1)} <Cur id={ref} size={14} /></b></>}
+        {ghost > 0.5 && <> <span className="cap-ghost" title="Paper value you can't currently cash out (slippage + thin books)">(👻 {fmt.n(ghost, 1)} ghost)</span></>}
+        <br />loops are sized from these counts.
+      </p>
     </div>
   )
 }

@@ -148,14 +148,34 @@ export default function RoutesView({ capital, status, currencies, onCapitalSaved
   const set = (k) => (e) => setF(x => ({ ...x, [k]: e.target.type === 'checkbox' ? e.target.checked : e.target.value }))
   const clickSort = (key, defDir) => setSort(s => s.key === key ? { key, dir: s.dir === 'desc' ? 'asc' : 'desc' } : { key, dir: defDir })
   const ref = meta?.reference ?? capital?.reference ?? 'ref'
-  const shown = useMemo(() => {
+  // Surface only the standout loops: those at least 1σ better-than-mean on the SELECTED metric
+  // (velocity/score by default), and split what's left into σ bands so the truly exceptional
+  // loops read apart from the merely-good. Degenerate data (too few loops, no spread, or nothing
+  // clears +1σ) falls back to showing everything so the view never blanks.
+  const banded = useMemo(() => {
     const col = COLS.find(c => c[0] === sort.key) ?? COLS[0]
-    const acc = col[2]
-    const arr = [...routes].sort((a, b) => { const ka = acc(a), kb = acc(b); return ka === kb ? 0 : kb > ka ? 1 : -1 })
-    if (sort.dir === 'asc') arr.reverse()
-    return arr.slice(0, Number(f.limit) || 100)
+    const acc = col[2], desc = col[3] !== 'asc'
+    const limit = Number(f.limit) || 100
+    const display = (arr) => {
+      arr.sort((a, b) => { const ka = acc(a), kb = acc(b); return ka === kb ? 0 : kb > ka ? 1 : -1 })
+      if (sort.dir === 'asc') arr.reverse()
+      return arr
+    }
+    const all = () => ({ rows: display([...routes]).slice(0, limit).map(r => ({ r, band: 0 })), active: false })
+    const vals = routes.map(acc).filter(Number.isFinite)
+    if (vals.length < 3) return all()
+    const mean = vals.reduce((a, b) => a + b, 0) / vals.length
+    const sd = Math.sqrt(vals.reduce((a, b) => a + (b - mean) ** 2, 0) / vals.length)
+    if (!(sd > 0)) return all()
+    // σ better-than-mean: +ve = better. Non-finite (∞ velocity / free gold) counts as top-tier.
+    const sig = (r) => { const v = acc(r); if (!Number.isFinite(v)) return (v > 0) === desc ? 9 : -9; return (desc ? v - mean : mean - v) / sd }
+    let kept = routes.filter(r => sig(r) >= 1)
+    if (!kept.length) return all()
+    kept = display(kept).slice(0, limit)
+    return { rows: kept.map(r => ({ r, band: Math.min(4, Math.max(1, Math.floor(sig(r)))) })), active: true, metric: col[1] }
   }, [routes, sort, f.limit])
-  const maxVel = useMemo(() => Math.max(1e-9, ...shown.map(r => r.velocity_inf ? 0 : (r.velocity || 0))), [shown])
+  const shown = banded.rows
+  const maxVel = useMemo(() => Math.max(1e-9, ...shown.map(({ r }) => r.velocity_inf ? 0 : (r.velocity || 0))), [shown])
   const held = Object.keys(meta?.capital ?? {})
   const backfilling = status?.digest?.backfilling
 
@@ -234,6 +254,7 @@ export default function RoutesView({ capital, status, currencies, onCapitalSaved
           <span className="spacer" />
           {streaming && <span className="streaming">searching… {routes.length} found</span>}
           {!streaming && counts && <span>{counts.total_after_filters ?? routes.length} of {counts.total_candidates} loops pass{counts.truncated ? ' (search capped)' : ''}</span>}
+          {!streaming && banded.active && <span title={`Only loops at least 1 standard deviation above the mean ${banded.metric} of the passing loops are shown, grouped into σ bands.`}>· showing {shown.length} standout (≥1σ {banded.metric})</span>}
           {meta && <span>· {meta.graph.edges.live} live / {meta.graph.edges.digest} digest / {meta.graph.edges.recipe} recipe edges</span>}
         </div>
 
@@ -260,8 +281,13 @@ export default function RoutesView({ capital, status, currencies, onCapitalSaved
               </tr>
             </thead>
             <tbody>
-              {shown.map(r => (
+              {shown.map(({ r, band }, i) => (
                 <React.Fragment key={r.id}>
+                  {banded.active && i > 0 && band !== shown[i - 1].band && (
+                    <tr className="std-sep" aria-hidden="true"><td colSpan={12}>
+                      <div className="std-band"><span className="std-lab">≥{band}σ</span><span className="std-bar" /></div>
+                    </td></tr>
+                  )}
                   <tr className="route" aria-expanded={open === r.id} onClick={() => setOpen(open === r.id ? null : r.id)}>
                     <td className="loop-cell"><Loop r={r} /></td>
                     <td className="num">{r.score == null ? <span className="muted">–</span> : r.score.toFixed(3)}</td>
