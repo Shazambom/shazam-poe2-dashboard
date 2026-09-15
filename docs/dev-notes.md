@@ -1,0 +1,170 @@
+# Dev notes — the working loop & hard-won gotchas
+
+Practical, load-bearing knowledge for building on Arbiter, distilled from doing the work.
+This is the **glue** between the canonical docs — read those for the contracts, this for how to
+actually move:
+
+- [`../CLAUDE.md`](../CLAUDE.md) — the desktop contract, web-vs-desktop rules, DB rules, philosophy.
+- [`release-runbook.md`](./release-runbook.md) — cutting a desktop release, step by step.
+- [`desktop-debugging.md`](./desktop-debugging.md) — driving the real renderer over CDP.
+- [`ui-styleguide.md`](./ui-styleguide.md) — the visual contract + the style linter.
+- [`db-architecture.md`](./db-architecture.md) / [`db-maintenance.md`](./db-maintenance.md) — the DB split.
+- [`strategy-ecosystem-plan.md`](./strategy-ecosystem-plan.md) — **the roadmap; start here to pick up work.**
+
+---
+
+## The three environments (know which you're in)
+
+| | What it is | Where | How to build/run |
+|---|---|---|---|
+| **Web** | TEST/staging surface | shazam Docker — backend `:8000`, frontend `:8080` (`http://192.168.1.250:8080`) | rsync + `docker compose up -d --build` (see below) |
+| **Desktop dev** | representative local run | this Mac — backend `127.0.0.1:8210`, CDP `:9222` | `npx electron . --remote-debugging-port=9222` |
+| **Desktop packaged** | PRODUCTION artifact | `desktop/release/mac-arm64/Arbiter.app` | `npm run dist:mac` → `open …/Arbiter.app` |
+
+**Web = test, desktop = production. "Ship" = publish a desktop release, and only with explicit
+per-change authorization** (CLAUDE.md). A desktop **user check** is always the *packaged* app
+launched in place (`dist:mac` → `open …/Arbiter.app`), never the dev launch or the web env.
+
+### Deploy to the web test env (fast iteration)
+
+```bash
+# from repo root — rsync only what changed
+rsync -az --delete --exclude='__pycache__' backend/app/  shazam@192.168.1.250:/home/shazam/shazam-poe2-dashboard/backend/app/
+rsync -az --delete --exclude='node_modules' --exclude='dist' frontend/src/ shazam@192.168.1.250:/home/shazam/shazam-poe2-dashboard/frontend/src/
+# rebuild the container(s) — shazam is NOT in the docker group, so sudo via the wrapper:
+sshshazambom sudo bash -c "'cd /home/shazam/shazam-poe2-dashboard && docker compose up -d --build backend frontend'"
+```
+
+- `sshshazambom` wrapper: `sshshazambom sudo …` roots **only the first program** — compound
+  commands need `sudo bash -c '…'` (note the nested quoting above). Plain `docker` fails with a
+  permission error (not in the docker group). See [[reference_sshshazambom]] in memory.
+- Rebuild only the service that changed (`backend` and/or `frontend`) to save time.
+
+---
+
+## Backend gotchas (these bit me — save yourself the loop)
+
+1. **Desktop dev runs the COMPILED backend binary, not your `.py`.** After editing anything under
+   `backend/app`, you MUST rebuild it or the running app serves stale code:
+   ```bash
+   cd desktop && ./build-backend.sh    # PyInstaller → backend-bin/poe2arb-backend (~1–2 min)
+   ```
+   Symptom of forgetting: a new setting/endpoint "does nothing" in the desktop app while the
+   web env (which runs the `.py` directly in Docker) works fine. `npm run build:frontend` only
+   rebuilds the UI — it does NOT rebuild the backend.
+
+2. **The board is TTL-cached AND keyed.** `arbitrage.board()` caches on
+   `(league, reference, watchlist, window_h, hub_count)` + `orderbook.state["version"]`. Any new
+   input that changes the board's output MUST be added to that key, **and** `invalidate_caches()`
+   must clear `_board_cache` (it clears graph + route + board caches). Settings edits call
+   `invalidate_caches()` via the PUT endpoint. Miss either and your change won't show until the
+   30s TTL lapses — or ever. (Learned shipping `hub_count`.)
+
+3. **Everything is priced through `arbitrage.Graph.ref_values()`** (levelled BFS from the
+   reference, poe2scout fallback for unreachable currencies). The board's per-currency **display
+   numeraire** is `pref_num` — the highest-**volume** readable counterpart (MIN_READABLE walk in
+   `board()`). Reuse `pref_num` / the frontend `numFor(r)` whenever you show a currency's price so
+   it matches the cards (e.g. Mirror shows in Divine, Divine in Chaos) — never hardcode a unit.
+
+4. **One-time settings seeds** follow the `_liq_floor_v1` pattern in `settings.py::get_settings`
+   (and `_hub_seed_v1`, applied in `board()` once real data exists). Use this when a default needs
+   to be computed from live data or back-filled for existing users: guard with a boolean flag,
+   run once, then leave the user in control (their later edits stick).
+
+5. **Market-side DB changes must not silently break the snapshot exporter** — the CLAUDE.md DB
+   guardrail. Centrality/hubs touch **no DB** (computed live from the in-memory graph), so they're
+   exempt; anything that adds a market table/column/kv-routing is not.
+
+---
+
+## Frontend patterns
+
+- **Design tokens are law.** No raw hex in `.jsx` or `styles.css` — `var(--token)` in CSS, the
+  `theme.js` export in JS. `cd frontend && npm run lint:style` enforces it (and bans raw
+  `<input type="checkbox">`). Run it before every commit; it's in CI.
+- **Reuse these components** before writing UI: `Toggle` (the only on/off control), `RefreshButton`
+  (icon-only), `CurrencyPicker` (every currency field — progressive search), `CardDetail` (+ its
+  `useAssetModal` / `rangeLabel`; it **requires** a `range` prop or `"all"` and throws otherwise),
+  `Cur` (canonical currency icon+name). The board's **pulse-strip** groups (Hubs/Hold/Movers) are
+  the pattern for at-a-glance clusters that click into `CardDetail`.
+- **New pages are the failure mode.** Prefer a sub-tab, a badge/column on an existing view, or an
+  inbox entry (see CLAUDE.md "ecosystem, not dashboards"). Hubs shipped as a tile glyph + a
+  pulse-strip group + a CardDetail stat — zero new pages, zero new endpoints.
+- **Scale-to-fit over premature wrap:** the pulse-strip measures itself vs its container
+  (`ResizeObserver`) and applies `transform: scale()` to stay on one line, only adding `.wrap`
+  below a floor. `vw`-based `clamp()` alone does NOT help near normal widths (it only shrinks near
+  small viewports) — measure and scale when "always fits" is the requirement.
+
+---
+
+## Adding a settings-driven feature (end-to-end checklist)
+
+Threading a new user setting all the way through (as `hub_count` did):
+
+1. **`backend/app/settings.py`** → add the key + default to `DEFAULTS` (with a comment).
+2. **Consume it** in the relevant backend module; clamp/validate at the read site
+   (`max(1, int(s.get("hub_count") or …))`). If it affects `board()`, add it to the **cache key**.
+3. **`frontend/src/components/SettingsView.jsx`** → add the field (themed `.field` + number input,
+   or `Toggle`/`CurrencyPicker`) **and** add the key to the `persist()` whitelist — that function
+   only sends listed keys, so a field with no whitelist entry silently never saves.
+4. `/api/settings` PUT already deep-merges arbitrary keys and calls `invalidate_caches()`.
+5. Rebuild the backend binary (gotcha #1) before checking on desktop.
+
+---
+
+## Testing & validation
+
+- **Backend tests** are pure over a synthetic `arbitrage.Graph` — no DB needed (see
+  `test_convert.py`, `test_centrality.py`). Prefer extracting a pure helper and testing that over
+  trying to test `board()`/endpoints directly.
+  ```bash
+  python3.12 -m venv .venv-test && source .venv-test/bin/activate && pip install -r backend/requirements.txt pytest
+  DATA_DIR=$(mktemp -d) MARKET_SEED= python -m pytest backend/tests/ -q
+  ```
+- **Drive the real renderer** for any UI/data claim (`desktop-debugging.md`): `build:frontend` →
+  launch with `--remote-debugging-port=9222` → `node scripts/cdp.mjs "<js>"` / `scripts/shot.mjs`.
+  A passing `vite build` proves compilation, not that the feature renders. The CDP tab is hidden,
+  so animations freeze mid-flight — assert on settled DOM, not on a frame.
+- **`transform: scale()` and clicks:** click targets still map correctly under a scaled ancestor
+  (verified with `elementFromPoint`) — scaling the pulse-strip didn't break its chip buttons.
+
+---
+
+## Verifying the packaged Windows app (telemetry)
+
+The policy — *the user is not your tester; build telemetry so YOU can see behavior* — lives in
+CLAUDE.md. The mechanics:
+
+- This Mac can't run the Windows build, and native-module / install / update / OS-permission
+  behavior isn't observable from dev. So: add server-reporting telemetry to the thing under test,
+  cut a build, have the user just *use* it, and read the results yourself:
+  `GET http://192.168.1.250:8080/api/installlog`, filtered by a `?p=<tag>` marker.
+- Existing markers: `p=init` (installer self-heal), `p=login` (PoE/Steam login), `p=update`
+  (auto-updater events), `p=ee2` (EE2 integration hooks).
+- This is the **one sanctioned exception** to the desktop "server-for-updates-only" contract. Keep
+  it a clearly-marked TEMPORARY DEV DIAGNOSTIC, put it OUTSIDE contract-clean packages (e.g.
+  `desktop/src/dev-ee2-telemetry.js`, not inside `integrations/`), report only what you need (never
+  secrets / keystrokes / raw clipboard), and strip or gate it before a contract-clean release.
+
+## Deploying a desktop release (mechanics)
+
+Full runbook: [`release-runbook.md`](./release-runbook.md). Shape: bump `desktop/package.json`,
+commit on `main`, push a `desktop-v<ver>` tag (fires the Windows CI, which builds the Windows
+`.exe` + backend and uploads them), then `cd desktop && ./publish-github.sh` (builds the Mac app,
+waits on the CI run via `gh run watch`, uploads both platforms into the same release). Then verify:
+GitHub's "Latest" == your tag, both `latest*.yml` + installers present, and the installer URLs
+resolve `200` (a 404 means the space-free-naming rule was violated — GitHub rewrites spaces to
+dots and the updater can't find the asset). **Shipping requires explicit per-change authorization**
+(CLAUDE.md) — do not push a `desktop-v*` tag or run `publish-github.sh` until told.
+
+## Quick map (where things live)
+
+- **Pricing/graph:** `arbitrage.py` — `Graph.build/ref_values/iter_cycles/iter_paths`, `simulate`,
+  `board()`, `find_routes/stream_routes`, `convert`/`_best_conversions`, `centrality`.
+- **Analytics:** `movers.py`, `holdscore.py`, `inflation.py`/`leaguehistory.py`, `centrality.py`.
+- **Data ingest:** `digest.py`, `orderbook.py`, `gamedata.py` (gold fees), `gateway.py` (rate-limited HTTP).
+- **API:** `main.py` (all routes). **Settings:** `settings.py`. **DB:** `db.py`/`config.py`.
+- **Frontend views:** `BoardView`, `HoldView`, `RoutesView`/`ConvertView`, `InflationView`,
+  `WatchesView`, `SettingsView`; shells `EconomyView`/`StrategyView`/`TradingView`.
+- **Ops:** `ops/` (market-seed export/publish), `desktop/{build-backend,fetch-seed,publish-github}.sh`,
+  `desktop/scripts/{cdp,shot}.mjs`.

@@ -29,53 +29,31 @@ Consequences to preserve in any change:
 - Any new feature that needs data must work against the local backend + local DB
   (which backfills poe2scout on first run), not the server.
 
-## Deploy: publish to GitHub Releases
+## Releases (the update path — contract)
 
-Apps update from **GitHub Releases** directly, and versions publish by pushing artifacts
-to GitHub — the shazam server is not in the update path. One release per version, tagged
-`desktop-v<ver>`, carrying BOTH platforms' assets:
-- **Windows**: CI (`release-desktop-win.yml`) builds on `windows-latest` and uploads the
-  `.exe`/`.zip`/`.blockmap` + `latest.yml` to the release.
-- **Mac**: built + uploaded locally (PyInstaller can't cross-compile) by `desktop/publish-github.sh`,
-  which drops the `arm64` dmg/zip/blockmap + `latest-mac.yml` into the same `desktop-v<ver>` release.
+Apps update from **GitHub Releases** directly; the shazam server is NOT in the update path.
+One release per version, tagged `desktop-v<ver>`, carrying BOTH platforms' assets (Windows built
+in CI, Mac built + uploaded locally). electron-updater's `github` provider resolves off GitHub's
+"Latest release" pointer; the `market-seed-latest` release is a **Pre-release** so it's never
+"Latest". **Asset names must be space-free** (`nsis.artifactName`) or GitHub rewrites spaces to
+dots and the updater 404s.
 
-electron-updater's `github` provider resolves updates off GitHub's "Latest release"
-pointer, so the `desktop-v*` tag name is fine (the compared version comes from the yml's
-`version:` field). The `market-seed-latest` release is a **Pre-release**, so it is never
-picked as "Latest".
-
-Asset names must be **space-free** (`nsis.artifactName` → `Arbiter-Setup-<ver>.exe`):
-GitHub rewrites spaces to dots on upload, which would leave the yml url and the asset name
-disagreeing and the updater would 404. Keep it dash-form.
-
-## Cutting a desktop release
-
-Full step-by-step runbook: [`docs/release-runbook.md`](docs/release-runbook.md). TL;DR: bump
-`desktop/package.json`, commit on `main`, push a `desktop-v<version>` tag (fires the Windows
-CI, which builds + uploads Windows assets to the GitHub release), then
-`cd desktop && ./publish-github.sh` — it builds the Mac app, waits on the Windows CI run
-(`gh run watch`, event-driven, no polling), and uploads the Mac assets into the same release.
-Verify the GitHub release is GitHub's "Latest" and shows both platforms' `latest*.yml` +
-installers, and that the Windows installer URL resolves (not a 404 — the naming check above).
+**How to cut a release** (the mechanics, verification, and gotchas): step-by-step in
+[`docs/release-runbook.md`](docs/release-runbook.md); shorter shape in
+[`docs/dev-notes.md`](docs/dev-notes.md) → "Deploying a desktop release". Shipping is gated on
+authorization (see "Web vs desktop" below).
 
 ## Verifying the Windows app — telemetry is mandatory
 
 **The user is NOT the tester. If you need to verify behavior in the Windows (or any
 packaged) desktop app, you MUST build telemetry so YOU can see what's happening —
-never ask the user to be your eyes.** Cross-platform desktop behavior (native modules,
-OS permissions, install/update, EE2 hooks) can't be observed from this Mac, so:
+never ask the user to be your eyes.** This is the ONE sanctioned exception to the
+desktop "server-for-updates-only" contract: a clearly-marked TEMPORARY DEV DIAGNOSTIC,
+kept OUTSIDE contract-clean packages, reporting only what you need (never
+secrets/keystrokes/raw clipboard), stripped or gated before a clean release.
 
-- Add server-reporting telemetry to the thing you're testing, cut a build, have the
-  user just *use* it, and read the results yourself from the shazam dev server
-  (`GET http://192.168.1.250:8080/api/installlog`, filtered by a `?p=<tag>` marker —
-  e.g. `p=login`, `p=update`, `p=ee2`).
-- This is the ONE sanctioned exception to the desktop contract above. Keep it clearly
-  marked as a TEMPORARY DEV DIAGNOSTIC, put it OUTSIDE contract-clean packages (e.g.
-  `desktop/src/dev-ee2-telemetry.js`, not inside `integrations/`), report only what you
-  need (never secrets/keystrokes/raw clipboard), and strip or gate it before a
-  contract-clean release.
-- Existing markers: `p=init` (installer self-heal), `p=login` (PoE/Steam login flow),
-  `p=update` (auto-updater events), `p=ee2` (EE2 integration hooks).
+How (the endpoint, existing `?p=` markers, where to put the file):
+[`docs/dev-notes.md`](docs/dev-notes.md) → "Verifying the packaged Windows app".
 
 ## Debugging
 
@@ -121,11 +99,9 @@ token or on colors pasted into JSX. New colors → add a semantic token to `:roo
   harness, or the web env for a desktop user check — those aren't the packaged artifact users run.
   This is a test build, NOT a release: building to test ≠ shipping (above), so it needs no ship
   authorization. (My own CDP drive-validation stays how *I* verify; it is not a user check.)
-- **Web (TEST env)** — served from shazam via Docker: rsync `frontend/src` + `backend/app` to
-  shazam and `docker compose up -d --build`. Fast; for validation, not delivery.
-- **Desktop release (only when told to ship)**: bump `desktop/package.json`, commit, push a
-  `desktop-v<ver>` tag (fires Windows CI), then `cd desktop && ./publish-github.sh` (builds Mac,
-  waits on CI, uploads both platforms). Full steps: [`docs/release-runbook.md`](docs/release-runbook.md).
+- **The how-to** — deploying to the web test env, the desktop dev loop, and cutting a release —
+  lives in [`docs/dev-notes.md`](docs/dev-notes.md) and [`docs/release-runbook.md`](docs/release-runbook.md).
+  This section is the policy; those are the mechanics.
 
 ## Database: user data vs market data
 
@@ -219,8 +195,9 @@ to their upstream behavior and is TDD applied to porting.
 
 - `backend/` — FastAPI + SQLite (`run_desktop.py` is the local-mode entrypoint; reads
   `DATA_DIR`/`PORT` env). Prices for every traded currency thread through
-  `arbitrage.Graph.ref_values()` (exchange graph + poe2scout fallback via
-  `leaguehistory.scout_prices`).
-- `frontend/` — React/Vite/Recharts.
-- `desktop/` — Electron shell: local UI server + bundled backend manager + updater.
-- `docs/` — architecture & maintenance docs (see the Database section above).
+  `arbitrage.Graph.ref_values()` (exchange graph + poe2scout fallback).
+- `frontend/` — React/Vite/Recharts. `desktop/` — Electron shell (local UI server + bundled
+  backend manager + updater). `docs/` — architecture & maintenance docs.
+
+A **detailed module-by-module map** (and the dev loop, gotchas, testing, and settings-feature
+checklist) is in [`docs/dev-notes.md`](docs/dev-notes.md) — read it before touching code.

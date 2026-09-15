@@ -2,6 +2,13 @@
 
 Architecture & maintenance docs for Arbiter (the PoE2 economy dashboard).
 
+## Start here to build
+
+- [`dev-notes.md`](./dev-notes.md) — the working loop & hard-won gotchas: the three environments
+  (web/desktop-dev/packaged), how to deploy to the web test env, the "dev runs the compiled
+  backend binary" trap, board cache keys, the settings-feature checklist, testing & CDP driving,
+  and a where-things-live map. **Read before touching code.**
+
 ## Strategy ecosystem — build plan & handoff
 
 - [`strategy-ecosystem-plan.md`](./strategy-ecosystem-plan.md) — the roadmap for expanding the
@@ -20,4 +27,5 @@ Architecture & maintenance docs for Arbiter (the PoE2 economy dashboard).
 - [`db-split-handoff.md`](./db-split-handoff.md) — **implementer starts here.** Ordered build
   plan, current-state facts, acceptance criteria, test plan, risks, PR sequence.
 
-Status: the split is fully designed but the code still uses a single `poe2arb.sqlite`.
+Status: **IMPLEMENTED** (2026-09-14) — `user.sqlite` + `market.sqlite` are live; `db-split-handoff.md`
+is kept as the historical build plan.
