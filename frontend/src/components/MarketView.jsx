@@ -1,8 +1,11 @@
 import React, { useEffect, useState } from 'react'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts'
 import { api, fmt } from '../lib/api.js'
+import { color, chart } from '../theme.js'
 import Cur from './Cur.jsx'
 
+const AXIS = { fill: chart.axis, fontSize: 11 }
+const TIP = { background: chart.tooltipBg, border: `1px solid ${chart.tooltipBorder}` }
 const hourLabel = (h) => new Date(h * 1000).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit' })
 
 export default function MarketView({ currencies }) {
@@ -44,10 +47,10 @@ export default function MarketView({ currencies }) {
             ) : (
               <ResponsiveContainer>
                 <LineChart data={digestSeries.length ? digestSeries : liveSeries}>
-                  <XAxis dataKey="t" tick={{ fill: '#8f95a5', fontSize: 11 }} minTickGap={40} />
-                  <YAxis domain={['auto', 'auto']} tick={{ fill: '#8f95a5', fontSize: 11 }} width={60} tickFormatter={fmt.rate} />
-                  <Tooltip contentStyle={{ background: '#20232c', border: '1px solid #464b5c' }} formatter={(v) => fmt.rate(v)} />
-                  <Line type="monotone" dataKey="rate" stroke="#b39ddb" dot={false} strokeWidth={1.5} isAnimationActive={false} />
+                  <XAxis dataKey="t" tick={AXIS} minTickGap={40} />
+                  <YAxis domain={['auto', 'auto']} tick={AXIS} width={60} tickFormatter={fmt.rate} />
+                  <Tooltip contentStyle={TIP} formatter={(v) => fmt.rate(v)} />
+                  <Line type="monotone" dataKey="rate" stroke={color.digest} dot={false} strokeWidth={1.5} isAnimationActive={false} />
                 </LineChart>
               </ResponsiveContainer>
             )}
@@ -58,9 +61,9 @@ export default function MarketView({ currencies }) {
               <ResponsiveContainer>
                 <BarChart data={digestSeries}>
                   <XAxis dataKey="t" hide />
-                  <YAxis tick={{ fill: '#8f95a5', fontSize: 11 }} width={60} />
-                  <Tooltip contentStyle={{ background: '#20232c', border: '1px solid #464b5c' }} />
-                  <Bar dataKey="vol" fill="#6b5722" isAnimationActive={false} />
+                  <YAxis tick={AXIS} width={60} />
+                  <Tooltip contentStyle={TIP} />
+                  <Bar dataKey="vol" fill={color.goldDim} isAnimationActive={false} />
                 </BarChart>
               </ResponsiveContainer>
             </div>

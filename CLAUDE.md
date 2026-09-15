@@ -85,6 +85,17 @@ drive the real renderer over CDP (`desktop/scripts/cdp.mjs` / `shot.mjs`) to val
 UI changes against live backend data. A passing `vite build` proves compilation, not
 that the feature renders correctly — always drive the app before claiming a UI change works.
 
+## UI styleguide — the visual contract
+
+The frontend's design system (dark "vault" theme: slate surfaces, one gold accent, IBM
+Plex Sans, tabular figures) is documented in [`docs/ui-styleguide.md`](docs/ui-styleguide.md).
+Design tokens live in the `:root` block of `frontend/src/styles.css` (the single source of
+truth), mirrored for JS/Recharts consumers in `frontend/src/theme.js`. **Never paste a raw
+hex** — use `var(--token)` in CSS or the `theme.js` export in JS. It's enforced: `cd frontend
+&& npm run lint:style` (zero-dep checker, also runs in CI) fails on hex that duplicates a
+token or on colors pasted into JSX. New colors → add a semantic token to `:root`, mirror in
+`theme.js` if JS needs it, then reference the token.
+
 ## Web vs desktop
 
 - **Web** (served from shazam via Docker) is the cheap iteration surface: rsync
@@ -106,6 +117,17 @@ real work. Highest-level rules:
 - Adding **user** schema → write a numbered migration. Adding/changing **market** schema → bump
   the snapshot version and ship a new snapshot (no migration).
 - New `kv` keys must be classified (user vs operational) in `db.py`.
+- **⚠️ If you change the DB on the DATA (market) side in ANY way — a table, a column, a kv
+  routing rule, a file/path, the split layout — you MUST verify snapshot generation still
+  works against the change.** The seed exporter (`ops/export-market-snapshot.py` +
+  `ops/publish-market-snapshot.sh`, run by shazam's root cron) reads the live DB directly and
+  is easy to silently break: the DB split moved market data to `market.sqlite` and operational
+  kv to `kv_ops`, but the exporter still pointed at the legacy `poe2arb.sqlite` / `kv` table,
+  so the bundled seed silently froze until fixed. After any market-side change, run the
+  publisher on shazam (`sudo /home/shazam/bin/publish-market-snapshot.sh`) and confirm the
+  `market-seed-latest` GitHub asset's version advances. Seeds ship to desktop builds **only**
+  via that GitHub release (Windows CI + the Mac build both pull it; the old `/downloads` path
+  is deprecated).
 
 Full design + rules + implementation plan live in `docs/`:
 - [`docs/db-architecture.md`](docs/db-architecture.md) — design & data classification.

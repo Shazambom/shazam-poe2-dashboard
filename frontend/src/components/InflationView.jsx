@@ -1,15 +1,14 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine, Legend, CartesianGrid } from 'recharts'
 import { api, fmt } from '../lib/api.js'
+import { series as SERIES, chart } from '../theme.js'
 import Cur from './Cur.jsx'
 
-// Fixed categorical hues (assigned in order, never cycled) — validated colorblind-safe
-// against the dark surface (OKLCH lightness band + chroma floor + CVD/normal ΔE, via the
-// dataviz palette validator). Identity is carried by the legend, never colour alone.
-const SERIES = ['#4a90d9', '#b88a2f', '#3aa568', '#a878e0', '#e8615f', '#12a89a', '#cc7a2f', '#cf68a8']
-const AXIS = { fill: '#8b91a1', fontSize: 11 }
-const GRID = '#2b3040'
-const CURSOR = { stroke: '#d4ac52', strokeWidth: 1, strokeDasharray: '3 3', strokeOpacity: 0.5 }
+// Categorical hues + chart chrome come from the shared theme (single source of truth,
+// enforced by `npm run lint:style`). SERIES is validated colorblind-safe — see theme.js.
+const AXIS = { fill: chart.axis, fontSize: 11 }
+const GRID = chart.grid
+const CURSOR = { stroke: chart.cursor, strokeWidth: 1, strokeDasharray: '3 3', strokeOpacity: 0.5 }
 const day = (h) => new Date(h * 1000).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit' })
 
 // Dark, elevated tooltip: rows sorted by value, each with its series dot — reads like
@@ -60,7 +59,7 @@ function LeagueAgeChart({ rows, keys, scale, refLine, valueFmt }) {
           tickFormatter={d => `d${d}`} label={{ value: 'day of league', position: 'insideBottom', offset: -2, ...AXIS }} />
         <YAxis scale={scale || 'auto'} domain={['auto', 'auto']} tick={AXIS} width={54} axisLine={false} tickLine={false} tickFormatter={v => fmt.n(v, 0)} />
         <Tooltip cursor={CURSOR} content={<ChartTooltip labelFmt={d => `day ${d}`} valueFmt={v => fmt.n(v, 0)} />} />
-        {refLine != null && <ReferenceLine y={refLine} stroke="#464b5c" strokeDasharray="3 3" />}
+        {refLine != null && <ReferenceLine y={refLine} stroke={chart.refLine} strokeDasharray="3 3" />}
         <Legend wrapperStyle={{ fontSize: 12 }} />
         {keys.map((k, i) => (
           <Line key={k.id} type="monotone" dataKey={k.id} name={k.id + (k.current ? ' (current)' : '')}
@@ -135,7 +134,7 @@ export default function InflationView({ league }) {
                 <XAxis dataKey="t" tickFormatter={day} tick={AXIS} minTickGap={48} axisLine={{ stroke: GRID }} tickLine={false} />
                 <YAxis domain={['auto', 'auto']} tick={AXIS} width={44} axisLine={false} tickLine={false} tickFormatter={v => v.toFixed(0)} />
                 <Tooltip cursor={CURSOR} content={<ChartTooltip labelFmt={day} valueFmt={v => v.toFixed(1)} nameFmt={nameOf} />} />
-                <ReferenceLine y={100} stroke="#464b5c" strokeDasharray="3 3" label={{ value: 'league start', position: 'insideTopRight', fill: '#8b91a1', fontSize: 10 }} />
+                <ReferenceLine y={100} stroke={chart.refLine} strokeDasharray="3 3" label={{ value: 'league start', position: 'insideTopRight', fill: chart.axis, fontSize: 10 }} />
                 <Legend wrapperStyle={{ fontSize: 12 }} formatter={nameOf} />
                 {keys.map((k, i) => (
                   <Line key={k.id} type="monotone" dataKey={k.id} stroke={SERIES[i % SERIES.length]}

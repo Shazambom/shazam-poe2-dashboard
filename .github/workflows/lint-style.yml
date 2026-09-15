@@ -1,0 +1,27 @@
+name: UI style lint
+
+# Enforces the Arbiter design system: no raw hex colors that duplicate a design token,
+# no colors pasted into JSX/Recharts props instead of theme.js. The check's source of
+# truth is the `:root` token block in frontend/src/styles.css. See docs/ui-styleguide.md.
+on:
+  push:
+    paths:
+      - 'frontend/src/**'
+      - 'frontend/scripts/lint-style.mjs'
+      - '.github/workflows/lint-style.yml'
+  pull_request:
+    paths:
+      - 'frontend/src/**'
+      - 'frontend/scripts/lint-style.mjs'
+
+jobs:
+  lint-style:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      # Zero runtime deps — the linter is a single stdlib-only Node script, so no install.
+      - name: Lint UI style tokens
+        run: node frontend/scripts/lint-style.mjs

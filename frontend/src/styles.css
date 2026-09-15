@@ -4,6 +4,8 @@
   --panel: #1b1f28;
   --panel-2: #222734;
   --panel-hi: #2a303f;
+  --surface-1: #16181d;
+  --surface-pop: #1c212c;
   --line: #2b3040;
   --line-strong: #3a4152;
   --ink: #ece8dd;
@@ -14,6 +16,8 @@
   --gold-dim: #6b5722;
   --gain: #6fce9f;
   --loss: #e07a68;
+  --afk: #e0a83a;
+  --offline: #e8615f;
   --live: #7fb4d9;
   --digest: #b39ddb;
   --recipe: #e0b866;
@@ -81,7 +85,7 @@ a { color: var(--live); }
 .cur { display: inline-flex; align-items: center; gap: 4px; vertical-align: middle; }
 .cur-img { object-fit: contain; vertical-align: middle; }
 .cur-name { white-space: nowrap; }
-.ver-chip { font-size: 11px; color: var(--muted, #8a8f9a); background: transparent; border: 1px solid rgba(255,255,255,.12); border-radius: 999px; padding: 1px 7px; cursor: pointer; margin-left: 2px; }
+.ver-chip { font-size: 11px; color: var(--muted); background: transparent; border: 1px solid rgba(255,255,255,.12); border-radius: 999px; padding: 1px 7px; cursor: pointer; margin-left: 2px; }
 .ver-chip:hover { color: #cfd3da; border-color: rgba(255,255,255,.25); }
 .cmdk-chip { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); background: var(--panel-2); border: 1px solid var(--line-strong); border-radius: 8px; padding: 4px 10px; cursor: pointer; transition: color .12s var(--ease), border-color .12s var(--ease); }
 .cmdk-chip:hover { color: var(--ink-2); border-color: var(--gold-dim); }
@@ -89,7 +93,7 @@ a { color: var(--live); }
 
 /* command palette */
 .cmdk-backdrop { position: fixed; inset: 0; z-index: 300; display: flex; align-items: flex-start; justify-content: center; padding-top: 12vh; background: rgba(6,7,10,.72); backdrop-filter: blur(6px); }
-.cmdk { width: min(600px, 92vw); background: #1c212c; border: 1px solid rgba(212,172,82,.4); border-radius: 14px; box-shadow: var(--shadow-2), var(--glow-gold); overflow: hidden; }
+.cmdk { width: min(600px, 92vw); background: var(--surface-pop); border: 1px solid rgba(212,172,82,.4); border-radius: 14px; box-shadow: var(--shadow-2), var(--glow-gold); overflow: hidden; }
 .cmdk-input { width: 100%; border: 0; background: transparent; padding: 16px 18px; font-size: 16px; color: var(--ink); border-bottom: 1px solid var(--line); outline: none; }
 .cmdk-input::placeholder { color: var(--muted); }
 .cmdk-list { max-height: 52vh; overflow: auto; padding: 6px; }
@@ -140,7 +144,7 @@ a { color: var(--live); }
    NOTE: named .trade-ws (NOT .workspace) — .workspace is RoutesView's grid layout. */
 .trade-ws { display: flex; gap: 12px; flex: 1; height: calc(100vh - 150px); min-height: 400px; align-items: stretch; }
 .ws-rail { width: 280px; flex: 0 0 280px; display: flex; flex-direction: column;
-  background: var(--surface-1, #16181d); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+  background: var(--surface-1); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
 .ws-divider { width: 16px; flex: 0 0 16px; display: flex; align-items: center; justify-content: center;
   background: none; border: 0; cursor: pointer; color: var(--muted); align-self: stretch; }
 .ws-divider:hover { color: var(--ink); background: var(--line); }
@@ -165,10 +169,10 @@ a { color: var(--live); }
 .ws-mini { background: none; border: 0; color: var(--muted); cursor: pointer; padding: 2px 4px; font-size: 12px; opacity: 0; transition: opacity .12s; flex: 0 0 auto; }
 .ws-node:hover .ws-mini, .ws-node.active .ws-mini { opacity: .8; }
 .ws-mini:hover { color: var(--ink); opacity: 1; }
-.live-badge { font-size: 10px; font-weight: 700; color: #e8615f; border: 1px solid rgba(232,97,95,.5); border-radius: 4px; padding: 0 4px; letter-spacing: .04em; text-transform: uppercase; }
+.live-badge { font-size: 10px; font-weight: 700; color: var(--offline); border: 1px solid rgba(232,97,95,.5); border-radius: 4px; padding: 0 4px; letter-spacing: .04em; text-transform: uppercase; }
 /* Right side: the embedded trade window (or the empty-state overlay). */
 .ws-main { flex: 1 1 auto; min-width: 0; min-height: 0; position: relative; display: flex; flex-direction: column;
-  border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: #0e0f13; }
+  border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: #0e0f13; } /* style-ok: near-black behind the embedded webview, intentionally below --bg */
 .ws-webhint { display: flex; align-items: center; gap: 10px; padding: 6px 12px; border-bottom: 1px solid var(--line); font-size: 12px; min-height: 30px; flex: 0 0 auto; }
 .ws-webhint.hidden { visibility: hidden; }
 .ws-cap { color: var(--muted); }
@@ -214,14 +218,14 @@ a { color: var(--live); }
    can virtualize (it needs a concrete pixel height, not auto). */
 .live-tree-wrap { display: flex; height: 52vh; min-height: 220px; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
 .ping-card { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: 1px solid var(--line);
-  border-radius: 10px; background: var(--surface-1, #16181d); margin-bottom: 8px; }
+  border-radius: 10px; background: var(--surface-1); margin-bottom: 8px; }
 .ping-card.compact { padding: 8px 12px; }
 .ping-info { flex: 1; min-width: 0; }
 .ping-name { font-weight: 600; color: var(--ink); }
 .ping-sub { display: flex; align-items: center; gap: 10px; font-size: 12px; margin-top: 2px; }
 .ping-presence { font-weight: 600; }
 .btn.teleport { font-weight: 700; min-width: 130px; }
-.btn.teleport.hot { background: linear-gradient(180deg,#e8615f,#c8403e); color: #fff; border-color: #c8403e; box-shadow: 0 0 12px rgba(232,60,60,.4); }
+.btn.teleport.hot { background: linear-gradient(180deg,var(--offline),#c8403e); color: #fff; border-color: #c8403e; box-shadow: 0 0 12px rgba(232,60,60,.4); }
 .btn.teleport.stale { background: #7a3a3a; color: #f0d0d0; }
 .btn.teleport.sending { opacity: .7; }
 .btn.teleport.pending { background: var(--gain); color: #08120c; border-color: var(--gain); }
@@ -229,10 +233,10 @@ a { color: var(--live); }
 .btn.teleport.gone, .btn.teleport.expired { background: var(--line); color: var(--muted); }
 
 /* sonner most-recent-ping banner (custom DOM) */
-.ping-banner { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: #191b22;
+.ping-banner { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: #191b22; /* style-ok: bespoke sonner alert surface */
   border: 1px solid #c8403e; border-radius: 10px; box-shadow: 0 8px 30px rgba(0,0,0,.5), 0 0 14px rgba(232,60,60,.35); min-width: 300px; }
 .ping-banner .pb-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); }
-.ping-banner .pb-dot.online { background: #6fce9f; } .ping-banner .pb-dot.afk { background: #e0a83a; } .ping-banner .pb-dot.offline { background: #e8615f; }
+.ping-banner .pb-dot.online { background: var(--gain); } .ping-banner .pb-dot.afk { background: var(--afk); } .ping-banner .pb-dot.offline { background: var(--offline); }
 .ping-banner .pb-main { flex: 1; min-width: 0; }
 .ping-banner .pb-name { font-weight: 600; color: var(--ink); font-size: 13px; }
 .ping-banner .pb-sub { font-size: 12px; }
@@ -358,7 +362,7 @@ td.mpg { white-space: nowrap; }
   display: inline-flex; align-items: center; gap: 7px; white-space: nowrap;
   padding: 6px 14px; border-radius: 999px; font-size: 13px; font-weight: 600;
   color: #1b1608; text-decoration: none; cursor: pointer;
-  background: linear-gradient(135deg, #e7c56b, var(--gold) 55%, #b8862f);
+  background: linear-gradient(135deg, var(--gold-2), var(--gold) 55%, #b8862f);
   border: 1px solid rgba(0,0,0,.25);
   box-shadow: 0 1px 0 rgba(255,255,255,.35) inset, 0 2px 8px rgba(201,162,74,.35);
   transition: transform .12s ease, box-shadow .12s ease, filter .12s ease;
@@ -377,7 +381,7 @@ td.mpg { white-space: nowrap; }
 }
 .update-chip.busy { color: var(--muted); }
 .update-chip.ready {
-  cursor: pointer; color: #0e1a12; border-color: transparent;
+  cursor: pointer; color: #0e1a12; border-color: transparent; /* style-ok: dark-green ink for contrast on the green "ready" chip */
   background: linear-gradient(135deg, #8fd6a8, var(--gain) 60%, #4f9e73);
   box-shadow: 0 2px 10px rgba(111,185,143,.45); animation: chip-pulse 1.8s ease-in-out infinite;
 }
@@ -495,10 +499,10 @@ details.adv[open] summary { color: var(--ink-2); margin-bottom: 8px; }
 .cd-vrow b { white-space: nowrap; }
 .cd-num { margin-top: 14px; }
 .pt-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
-.pt-remove { margin-left: auto; border: 0; background: transparent; color: var(--muted, #8a8f9a); cursor: pointer; font-size: 15px; line-height: 1; padding: 0 4px; opacity: 0; transition: opacity .12s; }
+.pt-remove { margin-left: auto; border: 0; background: transparent; color: var(--muted); cursor: pointer; font-size: 15px; line-height: 1; padding: 0 4px; opacity: 0; transition: opacity .12s; }
 .price-tile:hover .pt-remove { opacity: 1; }
-.pt-remove:hover { color: var(--loss, #e06b6b); }
-.pt-num-row { margin-top: 6px; font-size: 11px; color: var(--muted, #8a8f9a); display: flex; align-items: center; gap: 5px; }
+.pt-remove:hover { color: var(--loss); }
+.pt-num-row { margin-top: 6px; font-size: 11px; color: var(--muted); display: flex; align-items: center; gap: 5px; }
 .pt-num-row select { font-size: 11px; padding: 1px 4px; background: transparent; color: inherit; border: 1px solid rgba(255,255,255,.12); border-radius: 5px; max-width: 130px; }
 .pt-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pt-src { font-size: 9.5px; font-weight: 600; letter-spacing: .06em; color: var(--muted); border: 1px solid var(--line-strong); border-radius: 999px; padding: 1px 6px; background: rgba(255,255,255,.02); }
@@ -561,7 +565,7 @@ details.adv[open] summary { color: var(--ink-2); margin-bottom: 8px; }
 .trade-wrap { height: 100%; min-height: 0; display: flex; flex-direction: column; }
 .trade-bar { display: flex; align-items: center; gap: 6px; padding: 6px 10px; border-bottom: 1px solid var(--line); background: var(--panel); }
 .trade-url { flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 46vw; font-size: 12px; }
-.trade-webview { flex: 1 1 auto; width: 100%; min-height: 0; border: 0; background: #0c0d10; }
+.trade-webview { flex: 1 1 auto; width: 100%; min-height: 0; border: 0; background: #0c0d10; } /* style-ok: near-black webview backdrop, intentionally below --bg */
 
 /* ---------- watches ---------- */
 .watch-folder { border: 1px solid var(--line); border-radius: 10px; margin-bottom: 12px; background: var(--panel); box-shadow: var(--shadow-1); overflow: hidden; }
@@ -615,7 +619,7 @@ code { background: var(--bg); padding: 1px 5px; border-radius: 3px; font-size: 1
 .curpick-box.open, .curpick-box:focus-within { border-color: var(--gold-dim); box-shadow: 0 0 0 3px rgba(212,172,82,.12); }
 .curpick-input { flex: 1; min-width: 0; border: 0; background: transparent; color: var(--ink); outline: none; padding: 2px 0; }
 .curpick-input::placeholder { color: var(--muted); }
-.curpick-pop { position: absolute; z-index: 40; left: 0; right: 0; margin-top: 4px; background: #1c212c; border: 1px solid var(--line-strong); border-radius: 10px; box-shadow: var(--shadow-2); max-height: 44vh; overflow: auto; padding: 6px; }
+.curpick-pop { position: absolute; z-index: 40; left: 0; right: 0; margin-top: 4px; background: var(--surface-pop); border: 1px solid var(--line-strong); border-radius: 10px; box-shadow: var(--shadow-2); max-height: 44vh; overflow: auto; padding: 6px; }
 .convert-form .btn { min-width: 104px; }   /* fixed width so "Finding…" doesn't reflow the pickers */
 
 /* Gold-value slider (Arbitrage rail): Divine-icon thumb, log gold-per-Divine axis */
