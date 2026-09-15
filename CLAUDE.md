@@ -114,6 +114,62 @@ Full design + rules + implementation plan live in `docs/`:
 - [`docs/db-split-handoff.md`](docs/db-split-handoff.md) — **implementer start here** (the split
   is designed but NOT yet built).
 
+## Design philosophy — an ecosystem, not a ball of dashboards
+
+New capabilities must knit into a single harmonious app, NOT each become another page. A
+"big ball of dashboards and mud" is the failure mode to avoid. Before building a feature,
+decide the RIGHT surface for it — most are not a new page:
+
+- **Time-sensitive discovery** ("what's about to move", a fired signal) → a **notification /
+  inbox** entry. Clicking it opens the SAME graph/metric UI the dashboard already uses
+  (reuse `CardDetail`), never a bespoke page.
+- **A signal that improves another feature** (e.g. exchange-graph **centrality** informing
+  which routes/bridge currencies to suggest, or priming "what propagates") → a **background
+  signal** feeding existing tools, not a visible tab.
+- **An enrichment** ("can I cash out?", realizable-vs-paper value, cheap-vs-history) → a
+  **badge / column / section** on an existing view (Board, `CardDetail`, Capital), not a
+  standalone screen.
+- Give something its **own sub-tab only** when it's a genuinely distinct primary workflow
+  (as Hold and Arbitrage are).
+
+Rules of thumb: **reuse UI relentlessly** — new data flows into existing components
+(`CardDetail`, board sparkline/graph, chips, capital card) first. Features should cross-link
+and share data through the fewest new surfaces. Think ecosystem, not screens.
+
+## Heavy analytics: a local sidecar runtime, not a bloated binary
+
+The stdlib-bias keeps the MAIN backend binary lean. When a capability genuinely needs a heavy
+library (graph algorithms via `networkx`, time-series motif/anomaly via `STUMPY`, DTW via
+`dtaidistance`, pattern mining), **do NOT reimplement it and do NOT bloat the main binary.**
+Run it in a **separate bundled local runtime** (its own process + its own deps), bundled
+per-platform and spawned locally exactly as the app already spawns the PyInstaller backend.
+
+**Transport = SQLite, not a network layer** (decided via arena + owner steer). No loopback
+server, no port, no socket. Instead:
+- The sidecar reads `market.sqlite` **read-only** (WAL → concurrent readers) for BULK input, so
+  large series/matrices never cross a channel.
+- Sidecar → backend results/events flow through a **dedicated SQLite table** (an outbox/queue
+  pattern; evaluate an existing SQLite-backed queue/event library rather than hand-rolling —
+  per "use libraries, don't reimplement"). The sidecar is the sole writer of that table; the
+  backend reads it. Backend → sidecar control (job triggers) is symmetric (a jobs row it polls).
+- Endpoints only ever READ the cache table, so the sidecar can never take down a request
+  (graceful degrade when it's down).
+
+**Lifecycle:** the sidecar is the backend's child (supervision tree Electron → backend →
+sidecar). It dies on the backend's exit; guarantee no-dangling with a **PARENT_PID watchdog**
+(retrofit the same watchdog to the backend — today it can dangle on a hard Electron crash).
+
+This preserves the DESKTOP CONTRACT: the sidecar is LOCAL, bundled per-platform like the
+backend — NOT a remote call. (If "internal-network"/LAN access is ever intended for a shared
+analytics service, that changes the contract and must be confirmed explicitly first.)
+
+## Porting library code: port the tests first
+
+When you PORT/vendor a piece of an open-source library (rather than pip-installing it as a
+dep), **port that code's TESTS for the piece first, watch them fail, then port the code** until
+they pass. Never port implementation without its tests. This keeps vendored algorithms faithful
+to their upstream behavior and is TDD applied to porting.
+
 ## Layout
 
 - `backend/` — FastAPI + SQLite (`run_desktop.py` is the local-mode entrypoint; reads

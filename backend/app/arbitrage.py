@@ -210,6 +210,18 @@ class Graph:
     def cycles(self, start: str, max_steps: int) -> list[list[Edge]]:
         return list(self.iter_cycles(start, max_steps))
 
+    def iter_paths(self, start: str, target: str, max_steps: int):
+        """Lazily yield simple OPEN paths from `start` to `target` (the conversion sibling of
+        `iter_cycles`, which closes back to start). Each path is a list[Edge] ending at
+        `target`, visiting no node twice, at most `max_steps` hops long."""
+        def dfs(node: str, path: list[Edge], visited: set[str]):
+            for e in self.adj.get(node, []):
+                if e.dst == target:
+                    yield path + [e]
+                elif e.dst not in visited and len(path) < max_steps - 1:
+                    yield from dfs(e.dst, path + [e], visited | {e.dst})
+        yield from dfs(start, [], {start})
+
 
 def gold_fee(model: dict, edge: Edge, in_units: float, out_units: float,
              ref_value: dict[str, float], table: dict[str, int]) -> float:
@@ -343,6 +355,11 @@ def invalidate_caches() -> None:
     _route_cache.clear()
 
 
+def _edge_list_id(edges: list[Edge]) -> str:
+    """Stable id for an ordered edge list (loop or open path): 'a>b|b>c', recipe hops ':r'."""
+    return "|".join(f"{e.src}>{e.dst}" + (":r" if e.kind == "recipe" else "") for e in edges)
+
+
 def route_pairs(route_id: str) -> list[tuple[str, str]]:
     """Exchange pairs behind a route id like 'chaos>exalted|exalted>divine|divine>chaos'."""
     pairs = []
@@ -376,6 +393,25 @@ def find_routes(filters: dict | None = None, start_currencies: list[str] | None 
 MAX_CANDIDATES = 20000   # hard ceiling on simulated cycles per search
 
 
+# Velocity's gold penalty is priced by the user's gold-value slider. Gold enters as an ADDITIVE
+# cost (not a bare divisor) with a floor, so the slider genuinely REORDERS loops instead of
+# scaling every velocity uniformly (a rank-invariant no-op under the composite score). FLOOR is a
+# reference-value threshold: once a loop's priced gold cost exceeds it, gold is penalised; below
+# it (cheap gold / low slider) gold is effectively ignored and margin-per-hour leads.
+VELOCITY_GOLD_FLOOR = 1.0
+
+
+def _velocity(margin_ref: float, fill_hours: float | None, gold: float, gold_price_ref: float,
+              floor: float = VELOCITY_GOLD_FLOOR) -> float | None:
+    """margin per hour per unit of priced gold cost. `gold_price_ref` = reference value of 1 gold
+    (from the slider). Gold-free loops rank best (INF); no turnover data -> None."""
+    if fill_hours is None or fill_hours <= 0:
+        return None
+    if gold <= 0:
+        return INF if margin_ref > 0 else 0.0
+    return margin_ref / fill_hours / max(gold * gold_price_ref, floor)
+
+
 def _route_from(g: Graph, cyc: list[Edge], start: str, held: float, budget: float,
                 ref_value: dict[str, float]) -> dict | None:
     # Size in whole tradable cycles: commit = (cycles) × (one-cycle unit), so the amount
@@ -391,14 +427,12 @@ def _route_from(g: Graph, cyc: list[Edge], start: str, held: float, budget: floa
     gold = sim["gold"]
     mp1k = (margin_ref / gold * 1000) if gold > 0 else (INF if margin_ref > 0 else 0.0)
     fh = sim["fill_hours"]
-    if fh is None or fh <= 0:
-        velocity = None                      # no turnover data for a step
-    elif gold > 0:
-        velocity = margin_ref / fh / gold * 1000   # ref per hour per 1k gold
-    else:
-        velocity = INF if margin_ref > 0 else 0.0
+    # Gold priced by the user's slider (Divine per 1k gold -> reference per 1 gold).
+    gold_price_ref = float(g.s.get("gold_value_per_1k") or GOLD_VALUE_DIVINE_PER_1K) \
+        * (ref_value.get("divine") or 1.0) / 1000.0
+    velocity = _velocity(margin_ref, fh, gold, gold_price_ref)
     return {
-        "id": "|".join(f"{e.src}>{e.dst}" + (":r" if e.kind == "recipe" else "") for e in cyc),
+        "id": _edge_list_id(cyc),
         "start": start, "start_name": registry.name(start),
         "path": [start] + [e.dst for e in cyc],
         "path_names": [registry.name(start)] + [registry.name(e.dst) for e in cyc],
@@ -430,6 +464,11 @@ def _route_from(g: Graph, cyc: list[Edge], start: str, held: float, budget: floa
 # Users can lower them, but the UI warns them (routes below this are usually unfillable).
 RECOMMENDED_MIN_LIQUIDITY_REF = 50.0
 RECOMMENDED_MIN_VOLUME_REF_PER_H = 100.0
+
+# Default price of gold for net-value ranking (Convert): Divine per 1000 gold. Gold's real
+# worth shifts across a league, so this is user-tunable via a slider (settings.gold_value_per_1k);
+# this constant is only the fallback. 1.0 divine/1k gold == a Divine is "worth" 1k gold.
+GOLD_VALUE_DIVINE_PER_1K = 1.0
 
 
 def _keep(r: dict, f: dict) -> bool:
@@ -575,6 +614,90 @@ def _find_routes(filters: dict | None, start_currencies: list[str] | None) -> di
         "notional": notional,
         "filters": f,
     }
+
+
+def _convert_path(g: Graph, path: list[Edge], amount: float, ref_value: dict[str, float],
+                  have: str, want: str) -> dict | None:
+    """Size one open path by `amount` capped by its liquidity (reusing route_cap/cycle_unit),
+    simulate the real fills, and shape it like a route dict so the UI renderer is reused.
+    `out` = whole units of `want` produced; loss is vs the committed value in the reference."""
+    unit = cycle_unit(path)
+    committed = (math.floor(route_cap(path, amount) / unit) * unit) if unit > 0 else 0
+    if committed < 1:
+        return None
+    sim = simulate(g, path, committed, ref_value)
+    value_in = committed * ref_value.get(have, 0.0)
+    value_out = sim["end_amount"] * ref_value.get(want, 0.0)
+    loss_ref = value_in - value_out
+    out = int(sim["end_amount"])
+    gold = sim["gold"]
+    return {
+        "id": _edge_list_id(path),
+        "path": [have] + [e.dst for e in path],
+        "path_names": [registry.name(have)] + [registry.name(e.dst) for e in path],
+        "kinds": [e.kind for e in path],
+        "steps": sim["steps"],
+        "in": committed, "out": out, "end_amount": sim["end_amount"],
+        "hops": len(path), "full_fill": committed >= amount - 1e-9,
+        "loss_ref": loss_ref, "loss_pct": (loss_ref / value_in * 100) if value_in else 0.0,
+        "gold": gold, "gold_free": gold <= 0,
+        # velocity analog: output delivered per 1k gold (gold is a real, precious cost). None
+        # when gold-free (ranked in its own tier above paid routes). Also gold-per-output for UI.
+        "out_per_1k_gold": (out / gold * 1000) if gold > 0 else None,
+        "gold_per_out": (gold / out) if out > 0 and gold > 0 else None,
+        "value_ref": sim["value_ref"], "all_live": sim["all_live"], "max_age_s": sim["max_age_s"],
+        "liquidity_ref": sim["liquidity_ref"], "volume_ref_per_h": sim["volume_ref_per_h"],
+        "uses_recipe": any(e.kind == "recipe" for e in path),
+    }
+
+
+def _best_conversions(g: Graph, ref_value: dict[str, float], have: str, want: str,
+                      amount: float, max_steps: int | None = None, k: int = 3,
+                      max_gain_pct: float = 2.0,
+                      gold_value_per_1k: float = GOLD_VALUE_DIVINE_PER_1K) -> dict:
+    """Rank open conversion paths have->want by NET value delivered: the value of the `want` you
+    receive minus the gold spent, where gold is charged at `gold_value_per_1k` (Divine per 1k
+    gold — a user-tunable price, since gold's worth shifts across a league). This makes gold a
+    first-class, precious cost: a route delivering slightly more `want` for far more gold loses
+    (the chaos->omen->divine '114 divine / 585k gold' path). Fully-converting routes rank above
+    partial fills. Pure over (g, ref_value).
+
+    A conversion CANNOT legitimately create value: any path implying a value GAIN beyond
+    `max_gain_pct` is a cross-rate inconsistency / disguised arbitrage (belongs in the Arbitrage
+    tab), so it is rejected here. Set a huge tolerance to disable (tests)."""
+    if max_steps is None:
+        max_steps = g.s.get("max_steps", 4)
+    gold_ref_per_1k = gold_value_per_1k * (ref_value.get("divine") or 1.0)   # Divine/1k -> ref/1k
+    seen: dict[str, dict] = {}
+    count = 0
+    for path in g.iter_paths(have, want, max_steps):
+        count += 1
+        if count > MAX_CANDIDATES:
+            break
+        r = _convert_path(g, path, amount, ref_value, have, want)
+        if r is not None and r["loss_pct"] >= -max_gain_pct:   # drop phantom-gain arbitrage mirages
+            # net value delivered = value of `want` received - gold charged at the user's price.
+            r["net_ref"] = r["out"] * ref_value.get(want, 0.0) - r["gold"] / 1000.0 * gold_ref_per_1k
+            seen[r["id"]] = r
+    ranked = sorted(seen.values(), key=lambda r: (r["full_fill"], r["net_ref"], -r["hops"]), reverse=True)
+    best = ranked[0] if ranked else None
+    direct_edge = g.edges.get((have, want))
+    direct = _convert_path(g, [direct_edge], amount, ref_value, have, want) if direct_edge else None
+    alternatives = [r for r in ranked if best is None or r["id"] != best["id"]]
+    return {"have": have, "want": want, "amount": amount, "reference": g.s["reference"],
+            "best": best, "direct": direct, "alternatives": alternatives}
+
+
+def convert(have: str, want: str, amount: float | None = None, max_steps: int | None = None) -> dict:
+    """Cheapest way to turn `have` into `want` across the live exchange graph (open path, not a
+    loop). `amount` defaults to the user's held `have`. Rides the cached graph — read-only."""
+    from . import db
+    g = cached_graph()
+    ref_value = g.ref_values()
+    if amount is None:
+        amount = db.get_capital().get(have, 0.0) or 1.0
+    gv = float(g.s.get("gold_value_per_1k") or GOLD_VALUE_DIVINE_PER_1K)
+    return _best_conversions(g, ref_value, have, want, float(amount), max_steps, gold_value_per_1k=gv)
 
 
 def _composite_score(routes: list[dict], weights: dict) -> None:

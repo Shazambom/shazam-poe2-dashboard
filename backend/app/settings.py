@@ -53,6 +53,10 @@ DEFAULTS: dict = {
     "rank_weights": {"velocity": 0.5, "margin_per_1k_gold": 0.2, "margin_ref": 0.2, "volume": 0.1},
     "volume_window_h": 24,
     "step_overhead_min": 2.0,       # minutes per exchange step to place and collect an order
+    # Price of gold for ranking, in Divine per 1000 gold. Gold's real worth shifts across a
+    # league, so a slider (Arbitrage page) tunes this; it feeds Convert's net-value ranking and
+    # Arbitrage velocity. Default 1.0 == 1 Divine is "worth" 1k gold (gold precious).
+    "gold_value_per_1k": 1.0,
     # Default filters (UI can override per request)
     "filters": {
         "min_margin_pct": 3.0,            # skip sub-3% flips — noise once you count effort/fees

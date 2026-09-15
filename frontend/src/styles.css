@@ -594,3 +594,45 @@ details.adv[open] summary { color: var(--ink-2); margin-bottom: 8px; }
 .empty { padding: 40px 0; color: var(--muted); }
 .empty b { color: var(--ink-2); font-weight: 500; }
 code { background: var(--bg); padding: 1px 5px; border-radius: 3px; font-size: 12.5px; }
+
+/* Convert tool (on the Arbitrage page) + searchable currency picker */
+.convert-panel { background: linear-gradient(180deg, rgba(42,48,63,.35), var(--panel)); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; margin-bottom: 14px; }
+.convert-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 10px; }
+.convert-head h3 { font-size: 14px; color: var(--gold-2); margin: 0; }
+.convert-form { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; }
+.convert-field { display: flex; flex-direction: column; gap: 4px; font-size: 11.5px; color: var(--muted); }
+.convert-field.amount input { width: 110px; background: var(--panel-2); border: 1px solid var(--line-strong); border-radius: 8px; padding: 7px 10px; color: var(--ink); }
+.convert-arrow { color: var(--muted); padding-bottom: 8px; font-size: 15px; }
+.convert-result { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); }
+.convert-result .hint { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
+.convert-result .gain { color: var(--gain); }
+.convert-alts { margin-top: 8px; }
+.convert-alts summary { color: var(--muted); font-size: 12px; cursor: pointer; }
+.convert-alts .row { gap: 8px; margin-top: 6px; align-items: center; }
+
+.curpick { position: relative; min-width: 190px; }
+.curpick-box { display: flex; align-items: center; gap: 8px; background: var(--panel-2); border: 1px solid var(--line-strong); border-radius: 8px; padding: 6px 10px; cursor: text; transition: border-color .12s var(--ease), box-shadow .12s var(--ease); }
+.curpick-box.open, .curpick-box:focus-within { border-color: var(--gold-dim); box-shadow: 0 0 0 3px rgba(212,172,82,.12); }
+.curpick-input { flex: 1; min-width: 0; border: 0; background: transparent; color: var(--ink); outline: none; padding: 2px 0; }
+.curpick-input::placeholder { color: var(--muted); }
+.curpick-pop { position: absolute; z-index: 40; left: 0; right: 0; margin-top: 4px; background: #1c212c; border: 1px solid var(--line-strong); border-radius: 10px; box-shadow: var(--shadow-2); max-height: 44vh; overflow: auto; padding: 6px; }
+.convert-form .btn { min-width: 104px; }   /* fixed width so "Finding…" doesn't reflow the pickers */
+
+/* Gold-value slider (Arbitrage rail): Divine-icon thumb, log gold-per-Divine axis */
+.gold-slider-wrap { margin: 2px 0 6px; }
+.gold-slider-label { display: flex; align-items: center; gap: 5px; font-size: 13px; color: var(--ink); }
+.gold-slider-label b { color: var(--gold-2); font-weight: 600; }
+.gold-slider-hint { margin-left: auto; display: inline-flex; align-items: center; gap: 3px; color: var(--muted); font-size: 11px; }
+.gold-slider { -webkit-appearance: none; appearance: none; width: 100%; height: 20px; background: transparent; margin: 8px 0 2px; cursor: pointer; }
+.gold-slider::-webkit-slider-runnable-track { height: 5px; border-radius: 999px; background: linear-gradient(90deg, var(--gold), var(--gold-dim)); }
+.gold-slider::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none; width: 22px; height: 22px; margin-top: -8.5px;
+  border-radius: 50%; background-color: var(--panel-2); background-image: var(--thumb);
+  background-size: 18px 18px; background-position: center; background-repeat: no-repeat;
+  border: 1px solid var(--gold-2); box-shadow: 0 0 0 2px rgba(212,172,82,.18), var(--shadow-2);
+  transition: box-shadow .12s var(--ease), transform .08s var(--ease);
+}
+.gold-slider:hover::-webkit-slider-thumb { box-shadow: 0 0 0 3px rgba(212,172,82,.28), var(--shadow-2); }
+.gold-slider:active::-webkit-slider-thumb { transform: scale(1.08); }
+.gold-slider:focus-visible { outline: none; }
+.gold-slider-ends { display: flex; justify-content: space-between; color: var(--muted); font-size: 10.5px; margin-top: 2px; }

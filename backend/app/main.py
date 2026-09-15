@@ -457,6 +457,13 @@ async def asset_ep(q: str, window_h: int = 24):
     return res
 
 
+@app.get("/api/convert")
+async def convert_ep(have: str, want: str, amount: float | None = None, max_steps: int | None = None):
+    """Cheapest way to turn `have` into `want` across the live exchange graph (open path, not a
+    profit loop). Returns the best route + the direct-market baseline + loss. Read-only."""
+    return await run_in_threadpool(arbitrage.convert, have, want, amount, max_steps)
+
+
 @app.get("/api/inflation/marketcap")
 async def inflation_marketcap():
     """Economy size per league in Mirrors (total value traded/day). Served from the

@@ -5,7 +5,7 @@ import HoldView from './HoldView.jsx'
 import RoutesView from './RoutesView.jsx'
 
 // "Strategy" tab: what to do with capital. Hold = long-term stores of value that beat
-// inflation; Arbitrage = active exchange-loop routes (formerly the "Routes" tab).
+// inflation; Arbitrage = active exchange-loop routes (which also hosts the Convert tool).
 const SUBS = [
   { id: 'hold', label: 'Hold' },
   { id: 'arbitrage', label: 'Arbitrage' },

@@ -1,0 +1,47 @@
+import React, { useEffect, useRef, useState } from 'react'
+import { api } from '../lib/api.js'
+import { lookup, useIcons } from '../lib/icons.js'
+import Cur from './Cur.jsx'
+
+// How much a Divine is worth in gold shifts across a league, so the player sets it. The slider
+// axis is gold-per-Divine on a log scale from 1k → 1M; the stored setting is its inverse,
+// gold_value_per_1k (Divine per 1000 gold), which feeds Convert's net-value ranking AND
+// Arbitrage velocity. The thumb is the Divine icon for a bit of flair.
+const LOG_MIN = 3   // 10^3  = 1,000 gold per Divine (gold precious)
+const LOG_MAX = 6   // 10^6  = 1,000,000 gold per Divine (gold cheap)
+const fmtGpd = (g) => g >= 1e6 ? `${(g / 1e6).toFixed(g >= 1e7 ? 0 : 1)}M` : g >= 1e3 ? `${Math.round(g / 1e3)}k` : `${Math.round(g)}`
+
+export default function GoldValueSlider({ onCommit }) {
+  useIcons()                                   // re-render once icons load (for the thumb url)
+  const [gpd, setGpd] = useState(1000)         // gold per Divine (default gold_value_per_1k 1.0 → 1k)
+  const timer = useRef(null)
+
+  useEffect(() => {
+    api.settings().then(s => {
+      const gv = Number(s.gold_value_per_1k) || 1.0
+      setGpd(Math.min(1e6, Math.max(1e3, Math.round(1000 / gv))))
+    }).catch(() => {})
+  }, [])
+
+  const commit = (nextGpd) => {
+    setGpd(nextGpd)
+    clearTimeout(timer.current)
+    timer.current = setTimeout(() => {
+      api.putSettings({ gold_value_per_1k: 1000 / nextGpd }).then(() => onCommit?.()).catch(() => {})
+    }, 350)                                    // debounce: persist + re-rank routes after the drag settles
+  }
+
+  const thumb = lookup({ id: 'divine' })?.icon
+  return (
+    <div className="gold-slider-wrap">
+      <div className="gold-slider-label">
+        1 <Cur id="divine" size={16} /> = <b>{fmtGpd(gpd)}</b> gold
+      </div>
+      <input className="gold-slider" type="range" min={LOG_MIN} max={LOG_MAX} step="0.01"
+        value={Math.log10(gpd)}
+        style={thumb ? { '--thumb': `url(${thumb})` } : undefined}
+        onChange={e => commit(Math.round(10 ** Number(e.target.value)))} />
+      <div className="gold-slider-ends"><span>gold precious</span><span>gold cheap</span></div>
+    </div>
+  )
+}

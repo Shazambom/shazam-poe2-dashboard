@@ -10,3 +10,4 @@ desktop/app-dist/
 desktop/backend-bin/
 desktop/.venv-build/
 desktop/market-seed/
+.venv-test/

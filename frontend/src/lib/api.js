@@ -47,6 +47,7 @@ export const api = {
   leagues: () => fetch('/api/leagues').then(j),
   rateLimits: () => fetch('/api/ratelimits').then(j),
   hold: (horizon, category, numeraire) => fetch('/api/hold' + qs({ horizon, category, numeraire })).then(j),
+  convert: (have, want, amount, max_steps) => fetch('/api/convert' + qs({ have, want, amount, max_steps })).then(j),
   movers: (window_h, n) => fetch('/api/movers' + qs({ window_h, n })).then(j),
   asset: (q, window_h) => fetch('/api/asset' + qs({ q, window_h })).then(j),
   inflation: (anchor, hours) => fetch('/api/inflation' + qs({ anchor, hours })).then(j),
