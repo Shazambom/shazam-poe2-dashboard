@@ -182,8 +182,10 @@ Full table + steps: [`release-runbook.md`](./release-runbook.md) → "Two channe
 
 ## Quick map (where things live)
 
-- **Pricing/graph:** `arbitrage.py` — `Graph.build/ref_values/iter_cycles/iter_paths`, `simulate`,
-  `board()`, `find_routes/stream_routes`, `convert`/`_best_conversions`, `centrality`.
+- **Pricing/graph:** the `arbitrage/` package (import the facade `arbitrage`): `graph.py`
+  (`Graph.build/ref_values/iter_cycles/iter_paths`, `simulate`, the graph cache), `routes.py`
+  (`find_routes/stream_routes`, ranking, the route cache), `convert.py` (`convert`/`_best_conversions`),
+  `board.py` (`board()`, `edge_table`); `centrality.py` alongside.
 - **Analytics:** `movers.py`, `holdscore.py`, `inflation.py`/`leaguehistory.py`, `centrality.py`.
 - **Data ingest:** `digest.py`, `orderbook.py`, `gamedata.py` (gold fees), `gateway.py` (rate-limited HTTP).
 - **API:** `main.py` (all routes). **Settings:** `settings.py`. **DB:** `db.py`/`config.py`.

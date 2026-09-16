@@ -80,6 +80,7 @@ def test_stream_scores_server_side(monkeypatch):
     db.kv_set("settings", SETTINGS)
     arbitrage.invalidate_caches()
     g = _synthetic_graph()
+    monkeypatch.setattr(arbitrage.graph, "cached_graph", lambda: g)
     monkeypatch.setattr(arbitrage, "cached_graph", lambda: g)
     monkeypatch.setattr(db, "get_capital", lambda: {"chaos": 100.0})
     r = client.get("/api/routes/stream")

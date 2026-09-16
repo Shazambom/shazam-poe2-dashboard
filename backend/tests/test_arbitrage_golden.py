@@ -105,6 +105,7 @@ def _seed_digest_league() -> None:
 
 def test_find_routes_and_stream_routes_agree(frozen, monkeypatch):
     g = _synthetic_graph()
+    monkeypatch.setattr(arbitrage.graph, "cached_graph", lambda: g)
     monkeypatch.setattr(arbitrage, "cached_graph", lambda: g)
     arbitrage._route_cache.clear()
     direct = arbitrage._find_routes({}, None)
@@ -125,6 +126,7 @@ def test_find_routes_and_stream_routes_agree(frozen, monkeypatch):
 
 def test_stream_routes_second_call_is_served_from_cache(frozen, monkeypatch):
     g = _synthetic_graph()
+    monkeypatch.setattr(arbitrage.graph, "cached_graph", lambda: g)
     monkeypatch.setattr(arbitrage, "cached_graph", lambda: g)
     arbitrage._route_cache.clear()
     first = list(arbitrage.stream_routes({"sort": "margin_ref"}, ["chaos"]))
@@ -135,6 +137,7 @@ def test_stream_routes_second_call_is_served_from_cache(frozen, monkeypatch):
 
 def test_convert_golden(frozen, monkeypatch):
     g = _synthetic_graph()
+    monkeypatch.setattr(arbitrage.graph, "cached_graph", lambda: g)
     monkeypatch.setattr(arbitrage, "cached_graph", lambda: g)
     out = arbitrage.convert("chaos", "divine", 100)
     assert out["best"] is not None

@@ -229,6 +229,7 @@ def test_capital_endpoint_enriches_rows(monkeypatch):
 
     g = _g(reference="exalted")
     g.add(_edge("divine", "exalted", 50.0, 1_000_000))
+    monkeypatch.setattr(arbitrage.graph, "cached_graph", lambda: g)
     monkeypatch.setattr(arbitrage, "cached_graph", lambda: g)
     monkeypatch.setattr(db, "get_capital", lambda: {"divine": 10, "exalted": 100})
 

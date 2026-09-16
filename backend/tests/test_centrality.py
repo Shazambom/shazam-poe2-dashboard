@@ -112,6 +112,7 @@ def test_scores_shape(monkeypatch):
     """scores() returns the combined {"hub","bridge"} contract Phase 4 reads, off the cache."""
     from app import orderbook
     g = _star()
+    monkeypatch.setattr(arbitrage.graph, "cached_graph", lambda: g)
     monkeypatch.setattr(arbitrage, "cached_graph", lambda: g)
     orderbook.state["version"] = orderbook.state.get("version", 0) + 1
     centrality._cache = None

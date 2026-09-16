@@ -45,7 +45,7 @@ def test_memo_caches_by_key_ttl_and_version(monkeypatch):
 
 def test_every_module_level_ttl_cache_goes_through_memo():
     """No more hand-rolled `time.time() - hit[0] < TTL` checks outside cache.py."""
-    offenders = [p.name for p in APP.glob("*.py") if p.name != "cache.py"
+    offenders = [p.name for p in APP.rglob("*.py") if p.name != "cache.py"
                  and "- hit[0] <" in p.read_text()]
     assert offenders == []
 
@@ -56,6 +56,7 @@ def test_stream_routes_evicts_like_find_routes(monkeypatch):
     db.kv_set("settings", SETTINGS)
     arbitrage.invalidate_caches()
     g = _synthetic_graph()
+    monkeypatch.setattr(arbitrage.graph, "cached_graph", lambda: g)
     monkeypatch.setattr(arbitrage, "cached_graph", lambda: g)
     monkeypatch.setattr(db, "get_capital", lambda: {"chaos": 100.0})
     for i in range(40):
@@ -66,7 +67,7 @@ def test_stream_routes_evicts_like_find_routes(monkeypatch):
 
 
 def test_stream_and_find_share_result_and_cache_helpers():
-    src = (APP / "arbitrage.py").read_text()
+    src = (APP / "arbitrage" / "routes.py").read_text()
     assert src.count('"fee_table_size": len(g.fee_table)') == 1, "graph summary built in one place"
     assert "def _cache_put(" in src and "def _cache_get(" in src and "def _result(" in src
 
@@ -194,7 +195,7 @@ def test_registry_metas_and_scout_lookup():
     assert leaguehistory.scout_lookup(table, "divine") == 5.0      # by registry name
     assert leaguehistory.scout_lookup(table, "chaos") == 1.0       # by id
     assert leaguehistory.scout_lookup(table, "nope") is None
-    assert "scout.get(str(" not in (APP / "arbitrage.py").read_text()
+    assert all("scout.get(str(" not in p.read_text() for p in (APP / "arbitrage").glob("*.py"))
 
 
 def test_settings_clamps_have_one_home():
@@ -202,8 +203,8 @@ def test_settings_clamps_have_one_home():
     assert settings.gold_value_per_1k({"gold_value_per_1k": "0.02"}) == 0.02
     assert settings.hub_count({"hub_count": 0}) >= 1
     assert settings.hub_count({"hub_count": 3}) == 3
-    for name in ("arbitrage.py", "main.py", "liquidity.py"):
-        src = (APP / name).read_text()
+    for path in (*(APP / "arbitrage").glob("*.py"), APP / "main.py", APP / "liquidity.py"):
+        src = path.read_text()
         assert 'or GOLD_VALUE_DIVINE_PER_1K' not in src.replace("def gold_value_per_1k", "")
         assert 'or centrality.HUB_N' not in src
 
