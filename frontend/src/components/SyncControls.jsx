@@ -10,13 +10,6 @@ import Toggle from './Toggle.jsx'
 //   <SyncMetrics/>     — market-data freshness, live-order-book status + queue, and the connect action.
 // Both read the shared sync store / status; nothing is duplicated across views (topbar is the sole home).
 
-function feedState(ts, staleAfter, enabled = true) {
-  if (!enabled) return 'off'
-  if (!ts) return ''
-  const age = Date.now() / 1000 - ts
-  return age < staleAfter ? 'ok' : 'stale'
-}
-
 export function RefreshControls({ connected }) {
   const auto = useSync(s => s.auto)
   const setAuto = useSync(s => s.setAuto)
@@ -34,8 +27,9 @@ export function RefreshControls({ connected }) {
 export function SyncMetrics({ status, bridge, connecting, onConnect, rl }) {
   const connected = !!status?.session?.connected
   const backfilling = status?.digest?.backfilling
-  const digestOk = feedState(status?.digest?.last_fetch, 2 * 3600)
-  const bookOk = feedState(status?.orderbook?.last_fetch, 3600, connected)
+  // Feed freshness comes from the backend as a state string (it owns the thresholds).
+  const digestOk = status?.digest?.state === 'waiting' ? '' : (status?.digest?.state || '')
+  const bookOk = !connected ? 'off' : status?.orderbook?.feed === 'idle' ? '' : (status?.orderbook?.feed || '')
   const ob = status?.orderbook || {}
   const queue = ob.queue || 0
   const inFlight = ob.in_flight || 0

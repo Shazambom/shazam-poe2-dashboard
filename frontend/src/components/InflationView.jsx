@@ -74,7 +74,7 @@ function LeagueAgeChart({ rows, keys, scale, refLine, valueFmt }) {
 }
 
 export default function InflationView({ league }) {
-  const [anchor, setAnchor] = useState('hinekora')
+  const [anchor, setAnchor] = useState('lock')
   const [hidden, setHidden] = useState(() => new Set())   // currencies toggled off the inflation graph only
   const toggleCur = (id) => setHidden(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n })
   const [data, setData] = useState(null)
@@ -92,7 +92,7 @@ export default function InflationView({ league }) {
 
   const b = data?.basket
   const vel = b?.velocity_pct_per_day
-  const anchors = data?.anchors ?? [{ id: 'hinekora', name: "Hinekora's Lock" }, { id: 'mirror', name: 'Mirror of Kalandra' }, { id: 'divine', name: 'Divine Orb' }]
+  const anchors = data?.anchors ?? []   // the backend's anchor table (see /api/currencies)
 
   return (
     <div className="single infl">
@@ -273,7 +273,7 @@ function CrossLeague({ league }) {
     setBusy(true)
     api.inflationCross(item).then(setData).catch(e => setErr(String(e.message || e))).finally(() => setBusy(false))
   }, [item])
-  const items = data?.items ?? [{ id: 291, name: 'Divine Orb' }]
+  const items = data?.items ?? []
 
   const leagues = data?.leagues ?? []
   const cur = useMemo(() => pickLeague(leagues, league), [leagues, league])

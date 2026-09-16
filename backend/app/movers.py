@@ -29,8 +29,7 @@ _cache: dict = {}
 _TTL = 300
 
 
-def _win_days(window_h: int) -> int:
-    return max(1, round((window_h or 24) / 24))
+_win_days = marketseries.win_days
 
 
 def _current_series():

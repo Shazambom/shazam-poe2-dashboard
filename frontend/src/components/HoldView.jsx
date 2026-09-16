@@ -2,15 +2,14 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { api, fmt } from '../lib/api.js'
 import Cur from './Cur.jsx'
 import { useAssetModal } from './CardDetail.jsx'
-import { useHorizon, holdHorizon } from '../lib/horizonStore.js'
+import { useHorizon } from '../lib/horizonStore.js'
 
 // "What to hold" leaderboard: assets ranked by how well they retain/gain value in
 // Divine over a horizon, with a cross-league forward-return prediction. Surfaces the
 // obscure winners (omens, liquid emotions, essences…), not just Mirror/Divine.
-// Horizon is the app-wide one (topbar). Hold ranks non-currency items priced only by poe2scout
-// DAILY data, so it maps the global hours to the nearest day-horizon via holdHorizon (1d/3d/7d) —
-// sub-day is impossible for these items (no hourly source).
-const NUMERAIRES = [['divine', 'vs Divine'], ['mirror', 'vs Mirror'], ['lock', 'vs Lock']]
+// Horizon is the app-wide one (topbar), sent as hours; the backend maps it to Hold's day
+// horizon (daily poe2scout data can't resolve sub-day) and clamps it to 7d, reporting the
+// effective `horizon` back. Numeraires come from the response (the backend's anchor table).
 const MOVERS_N = 50  // "all of the top movers" — a full leaderboard, not the board's top-3 pulse
 
 function ConfBadge({ c }) {
@@ -21,7 +20,6 @@ function ConfBadge({ c }) {
 export default function HoldView() {
   const [view, setView] = useState('hold')   // 'hold' (primary) | 'movers' (positive swings, secondary)
   const hours = useHorizon(s => s.hours)      // app-wide horizon (topbar)
-  const horizon = holdHorizon(hours)          // → Hold's day-string (daily data)
   const [category, setCategory] = useState('all')
   const [numeraire, setNumeraire] = useState('divine')
   const [data, setData] = useState(null)
@@ -33,8 +31,8 @@ export default function HoldView() {
 
   useEffect(() => {
     setBusy(true)
-    api.hold(horizon, category, numeraire).then(d => { setData(d); setErr(null) }).catch(e => setErr(String(e.message || e))).finally(() => setBusy(false))
-  }, [horizon, category, numeraire])
+    api.hold(hours, category, numeraire).then(d => { setData(d); setErr(null) }).catch(e => setErr(String(e.message || e))).finally(() => setBusy(false))
+  }, [hours, category, numeraire])
 
   // Positive-movers board (secondary view): full-universe upward swings over the same window.
   useEffect(() => {
@@ -47,6 +45,8 @@ export default function HoldView() {
   const rows = useMemo(() => data?.assets ?? [], [data])
   const mvRows = useMemo(() => movers?.assets ?? [], [movers])
   const delta = data?.delta_days ?? 30
+  const horizon = data?.horizon ?? '3d'       // the EFFECTIVE hold horizon (backend-clamped)
+  const numeraires = data?.numeraires ?? [{ id: 'divine', name: 'Divine Orb' }]
   const numName = data?.numeraire_name ?? 'Divine'
   const unit = { divine: 'Div', mirror: 'Mir', lock: 'Lock' }[numeraire] || 'Div'
   const isMovers = view === 'movers'
@@ -66,8 +66,8 @@ export default function HoldView() {
         {/* Numeraire + Category apply only to Hold, but stay rendered (disabled/dimmed) in the
             Movers view so switching doesn't collapse the bar and jump the layout. */}
         <div className={`seg ${isMovers ? 'hold-inactive' : ''}`} title="Hard-asset numeraire — what 'holds value' is measured against">
-          {NUMERAIRES.map(([k, label]) => (
-            <button key={k} disabled={isMovers} className={`seg-btn ${!isMovers && numeraire === k ? 'on' : ''}`} onClick={() => setNumeraire(k)}>{label}</button>
+          {numeraires.map(({ id: k, name }) => (
+            <button key={k} disabled={isMovers} className={`seg-btn ${!isMovers && numeraire === k ? 'on' : ''}`} title={name} onClick={() => setNumeraire(k)}>vs {k[0].toUpperCase() + k.slice(1)}</button>
           ))}
         </div>
         <label className={`hint ${isMovers ? 'hold-inactive' : ''}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>Category

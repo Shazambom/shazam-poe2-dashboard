@@ -23,7 +23,7 @@ import re
 import time
 from dataclasses import dataclass, field
 
-from . import db, gateway
+from . import db, marketseries, gateway
 from .config import SEED_DIR, TRADE_STATIC_URL
 
 log = logging.getLogger(__name__)
@@ -192,6 +192,10 @@ class Registry:
                 for c in sorted(self.by_id.values(), key=lambda c: c.name)
             ],
             "unmapped_metadata_ids": sorted(self.unmapped_meta),
+            # The hard-asset anchor vocabulary (Hold numeraires, Inflation anchors, cross-league
+            # items) — one table, served so the client never hardcodes it.
+            "anchors": [{"id": k, "item_id": a.item_id, "name": a.name, "metadata_id": a.metadata_id}
+                        for k, a in marketseries.ANCHORS.items()],
         }
 
 

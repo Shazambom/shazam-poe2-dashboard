@@ -21,12 +21,23 @@ from . import analytics, cache, db, marketseries
 from .marketseries import league_age as _age
 from .settings import get_settings
 
-DIVINE_ID = 291
+DIVINE_ID = marketseries.DIVINE_ID
 # Numeraires to price "held value" against. Divine = liquid default; Mirror & Lock
 # (Hinekora's Lock) are the hardest anchors but trade thinly, so coverage is lower.
-NUMERAIRES = {"divine": (291, "Divine Orb"), "mirror": (295, "Mirror of Kalandra"),
-              "lock": (4287, "Hinekora's Lock")}
+NUMERAIRES = {k: (a.item_id, a.name) for k, a in marketseries.ANCHORS.items() if k != "chaos"}
 HORIZON_DAYS = {"1d": 1, "3d": 3, "7d": 7}   # fast-league day horizons (daily poe2scout data)
+MAX_HORIZON_DAYS = 7                          # hold scores are tuned to a week; longer windows clamp
+
+
+def horizon_for(window_h: int | None = None, horizon: str | None = None) -> str:
+    """The app-wide window (hours) → Hold's day-horizon string, clamped to MAX_HORIZON_DAYS.
+    `horizon` (1d|3d|7d) is the legacy spelling and wins when given."""
+    if horizon in HORIZON_DAYS:
+        return horizon
+    if window_h:
+        days = min(MAX_HORIZON_DAYS, marketseries.win_days(window_h))
+        return max((h for h, d in HORIZON_DAYS.items() if d <= days), key=HORIZON_DAYS.get)
+    return "3d"
 SHRINK_K = 8            # data-count shrinkage: confidence = n/(n+K)
 VALUE_FLOOR = 30_000_000.0   # median daily traded VALUE (exalted) for full liquidity confidence.
 # The board answers "what's a good place to park currency to beat inflation" — so a hold must
@@ -226,7 +237,7 @@ def _leaderboard(horizon: str, category: str, numeraire: str, num_id: int, num_n
         })
     assets.sort(key=lambda x: -x["hold"])
     cats = sorted({a["category"] for a in assets})
-    return {"league": cur_name, "horizon": horizon, "delta_days": delta,
+    return {"league": cur_name, "horizon": horizon, "delta_days": delta, "window_h": delta * 24,
             "pred_weighted": weights is not None,   # Phase 3: forward pred is DTW-weighted vs recency
             "numeraire": numeraire, "numeraire_name": num_name,
             "numeraires": [{"id": k, "name": v[1]} for k, v in NUMERAIRES.items()],

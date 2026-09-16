@@ -31,22 +31,6 @@ const COLS = [
   ['max_age_s', 'Age', r => r.max_age_s ?? INF, 'asc'],
 ]
 
-function scoreAll(routes, w) {
-  const n = routes.length
-  if (!n) return
-  const wv = w?.velocity ?? 0.5, we = w?.margin_per_1k_gold ?? 0.2, wl = w?.margin_ref ?? 0.2, wo = w?.volume ?? 0.1
-  const tot = (wv + we + wl + wo) || 1
-  const rank = (key) => {
-    const order = [...routes].sort((a, b) => { const ka = key(a), kb = key(b); return ka === kb ? 0 : kb > ka ? 1 : -1 })
-    const m = {}; order.forEach((r, i) => { m[r.id] = 1 - i / n }); return m
-  }
-  const eff = rank(r => r.gold_free && r.margin_ref > 0 ? INF : (r.margin_per_1k_gold ?? -INF))
-  const val = rank(r => r.margin_ref)
-  const vol = rank(r => r.volume_ref_per_h == null ? INF : r.volume_ref_per_h)
-  const vel = rank(r => r.velocity_inf ? INF : (r.velocity ?? -INF))
-  routes.forEach(r => { r.score = Math.round(((wv * vel[r.id] + we * eff[r.id] + wl * val[r.id] + wo * vol[r.id]) / tot) * 1e4) / 1e4 })
-}
-
 export default function RoutesView({ capital, status, currencies, onCapitalSaved }) {
   const [f, setF] = useState(DEFAULT_FILTERS)
   const [routes, setRoutes] = useState([])
@@ -65,7 +49,6 @@ export default function RoutesView({ capital, status, currencies, onCapitalSaved
   const [liveN, setLiveN] = useState(5)
   const esRef = useRef(null)
   const accRef = useRef([])
-  const weightsRef = useRef(null)
   const canLive = !!status?.session?.connected
   const filterKey = JSON.stringify([f.min_margin_pct, f.min_margin_ref, f.max_gold, f.min_margin_per_1k_gold,
     f.min_liquidity_ref, f.min_volume_ref_per_h, f.max_fill_hours, f.min_velocity, f.live_only, f.exclude_recipes, f.start])
@@ -76,19 +59,18 @@ export default function RoutesView({ capital, status, currencies, onCapitalSaved
     setRoutes([]); setCounts(null); setErr(null); setStreaming(true)
     const es = new EventSource(api.routesStreamUrl({ ...f, sort: undefined, limit: undefined }))
     esRef.current = es
-    es.addEventListener('meta', e => {
-      const m = JSON.parse(e.data)
-      weightsRef.current = m.rank_weights
-      setMeta(m)
-    })
+    // The server scores as it streams (provisional `scores` after each batch, authoritative on
+    // `done`) — one ranking implementation, in the backend.
+    const applyScores = (scores) => { if (scores) accRef.current.forEach(r => { if (scores[r.id] != null) r.score = scores[r.id] }) }
+    es.addEventListener('meta', e => setMeta(JSON.parse(e.data)))
     es.addEventListener('routes', e => {
       accRef.current = accRef.current.concat(JSON.parse(e.data))
-      scoreAll(accRef.current, weightsRef.current)
       setRoutes([...accRef.current])
     })
+    es.addEventListener('scores', e => { applyScores(JSON.parse(e.data)); setRoutes([...accRef.current]) })
     es.addEventListener('done', e => {
       const d = JSON.parse(e.data)
-      if (d.scores) accRef.current.forEach(r => { if (d.scores[r.id] != null) r.score = d.scores[r.id] })
+      applyScores(d.scores)
       setRoutes([...accRef.current])
       setCounts(d)
       setStreaming(false)

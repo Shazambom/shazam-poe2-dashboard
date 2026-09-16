@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import datetime as _dt
 import sqlite3
+from typing import NamedTuple
 
 # Operational kv key holding the game's currently-live leagues (written by the poe2scout crawl).
 CURRENT_LEAGUES_KEY = "lh_current"
@@ -102,9 +103,36 @@ def series_for_league(conn: sqlite3.Connection, league: str) -> tuple[dict, dict
     return build_series(rows, league), read_meta(conn)
 
 
-# Divine Orb — the anchor currency whose Exalted price arc IS the league's inflation curve.
-# Duplicated from holdscore.DIVINE_ID (the sidecar must not import the backend). See leaguearc.
-DIVINE_ID = 291
+# The hard-asset ANCHORS — the one table every "priced in X" feature derives from (Hold's
+# numeraires, the cross-league items, Inflation's anchors, the market-cap numeraire, the
+# sidecar's arc signature). poe2scout item ids are global across leagues; the metadata id is
+# GGG's key in the hourly digest. Stdlib-only so the sidecar can import it too.
+class Anchor(NamedTuple):
+    item_id: int
+    name: str
+    metadata_id: str
+
+
+ANCHORS: dict[str, Anchor] = {
+    "divine": Anchor(291, "Divine Orb", "Metadata/Items/Currency/CurrencyModValues"),
+    "mirror": Anchor(295, "Mirror of Kalandra", "Metadata/Items/Currency/CurrencyDuplicate"),
+    "lock": Anchor(4287, "Hinekora's Lock", "Metadata/Items/Currency/CurrencyHinekorasLock"),
+    "chaos": Anchor(287, "Chaos Orb", "Metadata/Items/Currency/CurrencyRerollRare"),
+}
+ANCHOR_ALIASES = {"hinekora": "lock"}   # older URL spelling, kept so links never break
+# Divine — the anchor whose Exalted price arc IS the league's inflation curve (see leaguearc).
+DIVINE_ID = ANCHORS["divine"].item_id
+
+
+def anchor_key(key: str, default: str = "divine") -> str:
+    """Canonical anchor slug for a user/URL spelling (aliases honoured), or `default`."""
+    k = ANCHOR_ALIASES.get(key, key)
+    return k if k in ANCHORS else default
+
+
+def win_days(window_h: int) -> int:
+    """The app-wide horizon (hours) as whole days — daily poe2scout data can't resolve sub-day."""
+    return max(1, round((window_h or 24) / 24))
 
 
 def item_rows(conn: sqlite3.Connection, item_id: int) -> list:

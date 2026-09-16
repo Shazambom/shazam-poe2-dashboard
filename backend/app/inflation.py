@@ -19,7 +19,7 @@ from __future__ import annotations
 import math
 import time
 
-from . import cache, db
+from . import cache, db, marketseries
 from .currencies import registry
 from .settings import get_settings
 
@@ -28,16 +28,14 @@ HOUR = 3600
 # Hard-asset anchors by GGG metadata id. Divine is dense (appears every hour);
 # Mirror and Hinekora are the truest stores of value but trade thinly, so their
 # series has gaps — the UI notes coverage per anchor.
-ANCHORS: dict[str, tuple[str, str]] = {
-    "mirror":   ("Mirror of Kalandra", "Metadata/Items/Currency/CurrencyDuplicate"),
-    "hinekora": ("Hinekora's Lock",    "Metadata/Items/Currency/CurrencyHinekorasLock"),
-    "divine":   ("Divine Orb",         "Metadata/Items/Currency/CurrencyModValues"),
-}
+ANCHORS: dict[str, tuple[str, str]] = {k: (a.name, a.metadata_id)
+                                       for k, a in marketseries.ANCHORS.items() if k in ("divine", "mirror", "lock")}
+DEFAULT_ANCHOR = "lock"
 
 # Divine is the pivot: soft currencies almost never trade DIRECTLY against a Mirror
 # or Hinekora, but they trade densely against Divine, and Divine trades densely
 # against both hard assets. So we price soft→hard as soft→divine × divine→hard.
-PIVOT_META = "Metadata/Items/Currency/CurrencyModValues"
+PIVOT_META = marketseries.ANCHORS["divine"].metadata_id
 
 
 _metas = registry.metas
@@ -86,8 +84,7 @@ TTL_S = 300
 
 
 def compute(anchor_key: str, hours: int = 336) -> dict:
-    if anchor_key not in ANCHORS:
-        anchor_key = "hinekora"
+    anchor_key = marketseries.anchor_key(anchor_key, DEFAULT_ANCHOR)
     s = get_settings()
     league = s["league"]
     # Watchlist is in the key — it determines the soft set/basket (was omitted, so a

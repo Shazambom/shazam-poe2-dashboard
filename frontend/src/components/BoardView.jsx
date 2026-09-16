@@ -5,7 +5,7 @@ import { nav } from '../lib/nav.js'
 import Cur from './Cur.jsx'
 import CardDetail, { Spark, SRC_LABEL, useAssetModal, rangeLabel } from './CardDetail.jsx'
 import CurrencyPicker from './CurrencyPicker.jsx'
-import { useHorizon, holdHorizon } from '../lib/horizonStore.js'
+import { useHorizon } from '../lib/horizonStore.js'
 import { useSync } from '../lib/syncStore.js'
 
 const isDesktop = typeof window !== 'undefined' && !!window.poe2desktop
@@ -147,11 +147,10 @@ export default function BoardView({ status }) {
   useEffect(() => nav.on(e => { if (e.type === 'openCurrency') setOpenId(e.id) }), [])
   useEffect(() => { api.currencies().then(d => setOpts(d?.currencies ?? [])).catch(() => {}) }, [])
   // Hold leaderboard powers the pulse strip's top-3 holds + the full-universe top mover.
-  // Hold data is poe2scout DAILY, so map the board's window to the nearest day-horizon.
   useEffect(() => {
     // Holds = top stores of value (divine-denominated hold score). Movers = biggest |% change|
     // over the SAME window as the board, full universe — a genuinely different ranking.
-    api.hold(holdHorizon(winH), 'all', 'divine').then(setHold).catch(() => setHold(null))
+    api.hold(winH, 'all', 'divine').then(setHold).catch(() => setHold(null))
     api.movers(winH, 3).then(setMovers).catch(() => setMovers(null))
   }, [winH])
   // Expand a pulse-strip item into the shared detail modal (enlarged graph + volume + change

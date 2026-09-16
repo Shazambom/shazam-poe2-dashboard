@@ -22,7 +22,3 @@ export const useHorizon = create((set) => ({
     set({ hours: h })
   },
 }))
-
-// Hours → Hold's day-string. Daily poe2scout data can't resolve sub-day, so 24→'1d', 72→'3d',
-// and both 168 (7d) and 336 (14d) collapse to '7d'. (Preserves the old holdHorizon bridge.)
-export const holdHorizon = (h) => (h <= 24 ? '1d' : h <= 72 ? '3d' : '7d')

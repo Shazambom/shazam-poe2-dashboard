@@ -116,9 +116,9 @@ BASE = "https://api.poe2scout.com/poe2"
 # Item ids are global across leagues (poe2scout), priced in the league base (Exalted).
 # Mirror and Hinekora are the hardest inflation anchors; Divine is the densest and
 # the default. (Hinekora has no Dawn-of-the-Hunt data — it's a newer currency.)
-ITEMS = {291: "Divine Orb", 295: "Mirror of Kalandra", 4287: "Hinekora's Lock", 287: "Chaos Orb"}
-DEFAULT_ITEM = 291
-MIRROR_ITEM = 295   # numeraire for the economy market cap
+ITEMS = {a.item_id: a.name for a in marketseries.ANCHORS.values()}
+DEFAULT_ITEM = marketseries.ANCHORS["divine"].item_id
+MIRROR_ITEM = marketseries.ANCHORS["mirror"].item_id   # numeraire for the economy market cap
 
 # Hold leaderboard tracks EVERY currency category poe2scout exposes (discovered live
 # from /Items/Categories). Items below the price floor are dust and skipped so the

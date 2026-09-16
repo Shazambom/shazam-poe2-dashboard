@@ -103,19 +103,30 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], all
 
 
 # ------------------------------------------------------------------ status
+DIGEST_STALE_S = 2 * 3600      # hourly digest older than this → "stale" (also the backfilling bar)
+ORDERBOOK_STALE_S = 3600       # no live book fetched for an hour → "stale"
+
+
 @app.get("/api/status")
 def status():
     s = get_settings()
+    now = time.time()
     d = dict(digest.state)
-    behind = max(0.0, time.time() - (d["last_hour"] + 3600)) if d.get("last_hour") else None
+    behind = max(0.0, now - (d["last_hour"] + 3600)) if d.get("last_hour") else None
     d["behind_h"] = round(behind / 3600, 1) if behind is not None else None
     d["backfilling"] = behind is not None and behind > 2 * 3600
+    # Feed freshness as a STATE the UI renders verbatim (one owner for the thresholds).
+    d["state"] = ("waiting" if not d.get("last_fetch")
+                  else "stale" if now - d["last_fetch"] > DIGEST_STALE_S else "ok")
+    ob = dict(orderbook.state)
+    ob["feed"] = ("idle" if not ob.get("last_fetch")
+                  else "stale" if now - ob["last_fetch"] > ORDERBOOK_STALE_S else "ok")
     return {
-        "time": time.time(),
+        "time": now,
         "league": s["league"],
         "reference": s["reference"],
         "digest": d,
-        "orderbook": orderbook.state,
+        "orderbook": ob,
         "rate_limits": gateway.status(),
         "session": session.status(),
         "oauth": oauth.status(),
@@ -418,10 +429,13 @@ async def inflation_cross(item: int = leaguehistory.DEFAULT_ITEM):
 
 
 @app.get("/api/hold")
-async def hold(horizon: str = "3d", category: str = "all", numeraire: str = "divine"):
-    """Store-of-value leaderboard. Served from the stored full-currency backfill;
-    kicks the background crawl if nothing's stored yet."""
-    res = await run_in_threadpool(holdscore.leaderboard, horizon, category, numeraire)
+async def hold(window_h: int | None = None, horizon: str | None = None, category: str = "all",
+               numeraire: str = "divine"):
+    """Store-of-value leaderboard over the app-wide window (`window_h`, clamped to 7d — hold
+    scores are tuned to a week; `horizon=1d|3d|7d` is the legacy spelling). Served from the
+    stored full-currency backfill; kicks the background crawl if nothing's stored yet."""
+    hz = holdscore.horizon_for(window_h, horizon)
+    res = await run_in_threadpool(holdscore.leaderboard, hz, category, numeraire)
     if not res["assets"]:
         _spawn(leaguehistory.backfill(full=True))
         return {**res, "building": True}
@@ -656,17 +670,28 @@ def routes_stream(q: RouteQuery = Depends()):
 
     f, starts = q.to_filters(), q.starts()
 
+    weights = get_settings().get("rank_weights", {})
+
     def gen():
         buf: list[dict] = []
+        seen: list[dict] = []
         last = time.time()
+
         def flush():
+            """Emit the pending batch, then PROVISIONAL scores for everything streamed so far — the
+            same rank-normalised blend `done` finalises — so the order the user watches fill in is
+            the order they end up with (the client never re-implements the ranking)."""
             nonlocal buf, last
-            if buf:
-                out = f"event: routes\ndata: {_json.dumps(buf)}\n\n"
-                buf = []
-                last = time.time()
-                return out
-            return ""
+            if not buf:
+                return ""
+            out = f"event: routes\ndata: {_json.dumps(buf)}\n\n"
+            seen.extend(buf)
+            buf = []
+            last = time.time()
+            scored = [dict(r) for r in seen]
+            arbitrage._composite_score(scored, weights)
+            out += f"event: scores\ndata: {_json.dumps({r['id']: r['score'] for r in scored})}\n\n"
+            return out
         try:
             for kind, payload in arbitrage.stream_routes(f, starts):
                 if kind == "route":

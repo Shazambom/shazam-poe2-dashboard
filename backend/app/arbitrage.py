@@ -572,7 +572,7 @@ def stream_routes(filters: dict | None = None, start_currencies: list[str] | Non
     if cached is not None:
         yield "meta", {"reference": cached["reference"], "capital": cached["capital"],
                        "notional": cached["notional"], "graph": cached["graph"],
-                       "rank_weights": s.get("rank_weights", {}), "filters": cached["filters"]}
+                       "filters": cached["filters"]}
         for r in cached["routes"]:
             yield "route", r
         yield "done", {"total_candidates": cached["total_candidates"],
@@ -582,7 +582,7 @@ def stream_routes(filters: dict | None = None, start_currencies: list[str] | Non
         return
     yield "meta", {
         "reference": s["reference"], "capital": capital, "notional": notional,
-        "graph": _graph_summary(g), "rank_weights": s.get("rank_weights", {}), "filters": f,
+        "graph": _graph_summary(g), "filters": f,
     }
     routes: list[dict] = []
     for r in _iter_candidates(g, s, ref_value, capital, starts, notional):
