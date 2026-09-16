@@ -1,15 +1,15 @@
 import { bus } from './api.js'
 import { useStatus } from './statusStore.js'
-import { playPing, DEFAULT_TONE } from './ping-sound.js'
+import { playPing, DEFAULT_TONE, DEFAULT_VOLUME } from './ping-sound.js'
 
 // THE notification dispatcher. Two families (live trade pings, market signals) × three channels
 // (in-app banner in the toast stack, the ping sound, an OS notification). What fires is decided
 // by settings.notifications (Settings → Notifications): banner + sound on by default, OS off.
 // Everything that wants to alert the user calls notify(family, …) — never a channel directly.
 export const DEFAULT_NOTIFICATIONS = {
-  volume: 0.5,
+  volume: DEFAULT_VOLUME,
   live: { banner: true, sound: true, os: false, tone: DEFAULT_TONE },
-  signals: { banner: true, sound: true, os: false, tone: 'coin' },
+  signals: { banner: true, sound: true, os: false, tone: 'glass' },
 }
 
 export function notifyPrefs() {

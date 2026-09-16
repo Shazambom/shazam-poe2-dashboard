@@ -34,25 +34,25 @@ export default function NotificationsPanel() {
     <section className="settings-section">
       <h3>Notifications</h3>
       <table className="notif-table">
-        <thead><tr><th></th>{CHANNELS.map(([k, label, hint]) => <th key={k} title={hint}>{label}</th>)}<th></th></tr></thead>
+        <thead><tr><th></th>{CHANNELS.map(([k, label, hint]) => <React.Fragment key={k}><th title={hint}>{label}</th>{k === 'sound' && <th title="which chime this family plays">Tone</th>}</React.Fragment>)}<th></th></tr></thead>
         <tbody>
           {FAMILIES.map(([fam, label, hint]) => (
             <tr key={fam}>
               <td><b>{label}</b><div className="muted" style={{ fontSize: 12 }}>{hint}</div></td>
               {CHANNELS.map(([ch]) => (
-                <td key={ch}>
-                  <Toggle checked={!!n[fam][ch]} onChange={v => setFlag(fam, ch, v)} />
+                <React.Fragment key={ch}>
+                  <td><Toggle checked={!!n[fam][ch]} onChange={v => setFlag(fam, ch, v)} /></td>
                   {ch === 'sound' && (
-                    <div className="row" style={{ marginTop: 6, justifyContent: 'center', gap: 4 }}>
+                    <td className="notif-tone">
                       <select className="league-select" value={n[fam].tone || 'vaal'} disabled={!n[fam].sound}
                         onChange={e => { setFlag(fam, 'tone', e.target.value); playPing(n.volume, e.target.value, { preview: true }) }}>
                         {Object.entries(TONES).map(([id, t]) => <option key={id} value={id}>{t.label}</option>)}
                       </select>
                       <button className="btn small" title="Preview this tone" disabled={!n[fam].sound}
                         onClick={() => playPing(n.volume, n[fam].tone, { preview: true })}>▶</button>
-                    </div>
+                    </td>
                   )}
-                </td>))}
+                </React.Fragment>))}
               <td><button className="btn small" title="Fires this row's enabled channels" onClick={() => test(fam)}>Test</button></td>
             </tr>
           ))}
@@ -71,9 +71,10 @@ export default function NotificationsPanel() {
 }
 
 function merge(n) {
-  return {
-    volume: typeof n?.volume === 'number' ? n.volume : DEFAULT_NOTIFICATIONS.volume,
-    live: { ...DEFAULT_NOTIFICATIONS.live, ...(n?.live || {}) },
-    signals: { ...DEFAULT_NOTIFICATIONS.signals, ...(n?.signals || {}) },
+  const fam = (k) => {
+    const f = { ...DEFAULT_NOTIFICATIONS[k], ...(n?.[k] || {}) }
+    if (!(f.tone in TONES)) f.tone = DEFAULT_NOTIFICATIONS[k].tone   // a retired tone id → the default
+    return f
   }
+  return { volume: typeof n?.volume === 'number' ? n.volume : DEFAULT_NOTIFICATIONS.volume, live: fam('live'), signals: fam('signals') }
 }

@@ -11,9 +11,9 @@ from app import db, migrations_user, settings  # noqa: E402
 
 def test_defaults_banner_on_sound_on_os_off():
     n = settings.DEFAULTS["notifications"]
-    assert n == {"volume": 0.5,
-                 "live": {"banner": True, "sound": True, "os": False, "tone": "vaal"},
-                 "signals": {"banner": True, "sound": True, "os": False, "tone": "coin"}}
+    assert n == {"volume": 0.3,
+                 "live": {"banner": True, "sound": True, "os": False, "tone": "confirm"},
+                 "signals": {"banner": True, "sound": True, "os": False, "tone": "glass"}}
     assert "ping_sound" not in settings.DEFAULTS and "ping_volume" not in settings.DEFAULTS
 
 
@@ -44,5 +44,5 @@ def test_m4_noop_without_legacy_keys(tmp_path):
 def test_merged_settings_deep_merge_partial_notifications():
     db.kv_set("settings", {"notifications": {"live": {"os": True}}})
     n = settings.get_settings()["notifications"]
-    assert n["live"] == {"banner": True, "sound": True, "os": True, "tone": "vaal"} and n["signals"]["os"] is False
+    assert n["live"] == {"banner": True, "sound": True, "os": True, "tone": "confirm"} and n["signals"]["os"] is False
     db.kv_set("settings", {})

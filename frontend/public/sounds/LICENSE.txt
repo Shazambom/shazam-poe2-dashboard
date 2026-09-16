@@ -1,0 +1,4 @@
+Notification tones: "Interface Sounds" by Kenney (https://kenney.nl/assets/interface-sounds),
+licensed CC0 1.0 Universal (public domain — no attribution required; credited here anyway).
+Obtained via https://github.com/Calinou/kenney-interface-sounds; loudness-normalised
+(-23 LUFS, -3 dBTP) and encoded to AAC (.m4a) for bundling. Mapping: see frontend/src/lib/ping-sound.js.

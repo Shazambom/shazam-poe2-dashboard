@@ -63,9 +63,9 @@ DEFAULTS: dict = {
     # Notifications, per family (live trade pings, market signals) and per channel. In-app banner
     # and sound on by default; OS notifications opt-in. `volume` is the shared ping volume.
     "notifications": {
-        "volume": 0.5,
-        "live": {"banner": True, "sound": True, "os": False, "tone": "vaal"},
-        "signals": {"banner": True, "sound": True, "os": False, "tone": "coin"},
+        "volume": 0.3,
+        "live": {"banner": True, "sound": True, "os": False, "tone": "confirm"},
+        "signals": {"banner": True, "sound": True, "os": False, "tone": "glass"},
     },
     # Default filters (UI can override per request)
     "filters": {

@@ -466,6 +466,10 @@ details.adv[open] summary { color: var(--ink-2); margin-bottom: 8px; }
 .notif-table th { font-weight: 500; color: var(--muted); font-size: 12px; text-align: center; padding: 4px 14px; }
 .notif-table td { padding: 8px 14px; border-top: 1px solid var(--line); text-align: center; vertical-align: middle; }
 .notif-table td:first-child { text-align: left; padding-left: 0; }
+.notif-table td.notif-tone { white-space: nowrap; }
+.notif-table td.notif-tone .btn { margin-left: 6px; vertical-align: middle; }
+.notif-table td.notif-tone select { vertical-align: middle; }
+input[type=range] { accent-color: var(--gold); }
 /* ---------- toasts ---------- */
 .toasts { position: fixed; right: 16px; bottom: 16px; display: flex; flex-direction: column; gap: 8px; z-index: 100; }
 .toast {

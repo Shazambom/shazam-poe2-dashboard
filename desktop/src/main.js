@@ -190,7 +190,8 @@ function startUiServer() {
     ? path.join(__dirname, '..', 'app-dist')
     : path.join(__dirname, '..', '..', 'frontend', 'dist')
   const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml',
-                 '.png': 'image/png', '.ico': 'image/x-icon', '.woff2': 'font/woff2', '.map': 'application/json' }
+                 '.png': 'image/png', '.ico': 'image/x-icon', '.woff2': 'font/woff2', '.map': 'application/json',
+                 '.m4a': 'audio/mp4' }
   const server = http.createServer((req, res) => {
     const u = new URL(req.url, 'http://x')
     if (u.pathname.startsWith('/api/') || u.pathname === '/callback') {
