@@ -45,15 +45,17 @@ def _tlog(msg: str) -> None:
 # with the league carried INSIDE the value — so the reader reads a stable key instead of having to
 # re-resolve the league and hope it matches what was written. New kinds register here.
 def handle_discords(conn: sqlite3.Connection, job: dict) -> None:
-    from sidecar.analytics import discords          # lazy: keep numpy/stumpy off the import path
+    from sidecar.analytics import discords
     league = (job.get("params") or {}).get("league")
     series, meta = marketseries.series_for_league(conn, league) if league else ({}, {})
+    _tlog(f"discords read league={league!r} items={len(series)}")   # <-- pinpoints read vs compute hang
     signals = discords.compute(series, meta) if league else []
+    _tlog(f"discords computed n={len(signals)}")
     analytics.complete(conn, job["id"], "discords", "current", {"league": league, "signals": signals})
 
 
 def handle_arc(conn: sqlite3.Connection, job: dict) -> None:
-    from sidecar.analytics import arc               # lazy: keep numpy/dtaidistance off the import path
+    from sidecar.analytics import arc
     league = (job.get("params") or {}).get("league")
     sigs = marketseries.league_signatures(conn)
     weights: dict = {}
@@ -109,6 +111,20 @@ def main() -> None:
     parent = os.environ.get("ARBITER_PARENT_PID")
     ppid = int(parent) if parent and parent.isdigit() else None
     _tlog(f"start pid={os.getpid()} parent={ppid} stdin={bool(getattr(sys, 'stdin', None))}")
+
+    # Eagerly import numpy + the analytics modules HERE — in the main thread, BEFORE any watchdog
+    # threads exist — so it matches the (proven-good) --selftest import order. The v0.2.50/0.2.51
+    # Windows hang was a job claimed then wedged with no crash/timeout; the only heavy thing left in
+    # that path is numpy's first (lazy) import happening in a spawned, console-less process with
+    # daemon threads already running. Doing it up-front removes that variable and surfaces a slow/
+    # stuck import as its own telemetry line instead of an invisible mid-job wedge.
+    try:
+        import numpy  # noqa: F401
+        from sidecar.analytics import arc, discords  # noqa: F401
+        _tlog("numpy+analytics imported")
+    except Exception as exc:
+        _tlog(f"IMPORT CRASH {exc!r}")
+        raise
 
     # Die with the parent (backend): stdin-EOF is primary, PARENT_PID poll is the debounced backup.
     # on_dead posts WHICH signal fired before exiting, so a spurious watchdog kill is now visible
