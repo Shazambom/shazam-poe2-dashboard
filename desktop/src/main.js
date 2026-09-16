@@ -512,6 +512,7 @@ async function startEe2Integration() {
         manager: _ee2, worker: { spawn: spawnWorker }, prefs: readPrefs,
         send: win && !win.isDestroyed() && !win.webContents.isLoading() ? (ch, p) => { try { win.webContents.send(ch, p) } catch {} } : null,
         log: (line) => telemetry.installLog('ee2', line),
+        hint: (policy) => { try { require('./trade/budget.js').hint(policy) } catch {} },   // 4-B shared GGG budget
       })
       try { _unwatchEe2Config = require('./integrations/exiled-exchange/ee2-config.js').watchConfig(() => _history?.invalidatePrefs()) } catch {}
     } catch (e) { console.log('[ee2-history] disabled:', String(e)); _history = null }
@@ -619,7 +620,15 @@ app.on('web-contents-created', (_e, contents) => {
 const diagLog = require('./diag-bridge.js').makeDiagBridge({ installLog: telemetry.installLog })
 ipcMain.handle('diag:log', (_e, p) => diagLog(p?.marker, p?.line))
 // Clipboard-add: MAIN reads and classifies; only the classification crosses (never the text).
-ipcMain.handle('clipboard:classify', () => require('./clipboard-add.js').classifyClipboard(() => clipboard.readText()))
+ipcMain.handle('clipboard:classify', async () => {
+  const { classifyClipboard, MAX_CLIP } = require('./clipboard-add.js')
+  const cls = classifyClipboard(() => clipboard.readText())
+  if (cls.kind !== 'item') return cls
+  // 4-A: the item rung — the history consumer's worker builds the query here; the text stays in main.
+  if (!_history) return { kind: 'none', len: 0 }
+  const intent = await _history.buildIntent(String(clipboard.readText() || '').slice(0, MAX_CLIP), 'clipboard')
+  return intent ? { kind: 'item', intent } : { kind: 'none', len: 0, currency: true }
+})
 
 // Give the renderer a beat to flush its debounced workspace save before we go: send ws:flush,
 // wait for ws:flushed (or 1 s), then quit for real.

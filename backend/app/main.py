@@ -589,6 +589,14 @@ def rate_observe(body: RateObserve):
     return {"ok": True}
 
 
+@app.post("/api/ratelimits/hint")
+def rate_hint(body: RateAcquire):
+    """An out-of-band request on the same budget (an ExiledExchange2 price check, reported by the
+    desktop shell) — fold it in as a used slot so armed live searches don't walk into a penalty."""
+    _policy_or_404(body.policy).hint()
+    return {"ok": True}
+
+
 @app.post("/api/digest/sync")
 async def digest_sync():
     await digest.sync_once()

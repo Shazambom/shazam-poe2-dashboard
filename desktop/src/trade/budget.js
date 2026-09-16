@@ -42,4 +42,14 @@ function observe(policy, status, headers) {
   } catch {}
 }
 
-module.exports = { RateLimitError, configure, acquire, observe }
+// Tell the backend a request it didn't make just spent a slot (an EE2 price check on the same
+// account/IP — batch 4-B). Fire-and-forget; the backend folds it in without penalising.
+function hint(policy) {
+  try {
+    fetch(`${_backendUrl()}/api/ratelimits/hint`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ policy }), signal: AbortSignal.timeout(3000),
+    }).catch(() => {})
+  } catch {}
+}
+
+module.exports = { RateLimitError, configure, acquire, observe, hint }

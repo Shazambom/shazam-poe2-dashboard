@@ -82,6 +82,12 @@ class Policy:
         self.requests += 1
         return 0.0
 
+    def hint(self) -> None:
+        """A request made by ANOTHER process on the same account/IP (an EE2 price check) just spent a
+        slot: consume one from our view if there is one, never penalise, never block."""
+        self.limiter.try_acquire(self.name, blocking=False)
+        self.requests += 1
+
     # ---------------------------------------------------------- adapting
     def observe(self, resp: httpx.Response) -> None:
         self.observe_headers(resp.status_code, dict(resp.headers.items()))

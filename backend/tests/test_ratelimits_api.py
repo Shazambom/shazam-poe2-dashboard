@@ -68,3 +68,17 @@ def test_observe_applies_headers_and_429s():
 def test_unknown_policy_is_404():
     assert client.post("/api/ratelimits/acquire", json={"policy": "nope"}).status_code == 404
     assert client.post("/api/ratelimits/observe", json={"policy": "nope", "status": 200, "headers": {}}).status_code == 404
+
+
+def test_hint_folds_an_external_request_into_the_budget_without_penalising():
+    """Batch 4-B: an EE2 price check on the same account/IP spends a slot Arbiter didn't make."""
+    p = _fresh("trade-fetch")
+    p.rates = [gateway.Rate(1, gateway.Duration.SECOND)]   # pin the rule: earlier tests may have re-advertised it
+    p.limiter = gateway.Limiter(p.rates)
+    before = p.requests
+    r = client.post("/api/ratelimits/hint", json={"policy": "trade-fetch"}).json()
+    assert r["ok"] is True and p.requests == before + 1
+    # the slot really is gone: an immediate reservation on the 1/s rule is refused, with no penalty
+    assert client.post("/api/ratelimits/acquire", json={"policy": "trade-fetch"}).json()["ok"] is False
+    assert p.penalty_until == 0.0
+    assert client.post("/api/ratelimits/hint", json={"policy": "nope"}).status_code == 404

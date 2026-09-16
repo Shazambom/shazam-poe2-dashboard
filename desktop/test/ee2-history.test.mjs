@@ -85,3 +85,23 @@ test('warm-if-running: warmed only when the package reports EE2 running', () => 
   h.pkg.emit('ee2-detected', { present: true, running: true }); assert.equal(h.spawns.length, 1)
   assert.ok(h.lines.some(l => l.startsWith('history-attached cfg=ok')))
 })
+
+test('buildIntent (clipboard paste): folder null, source clipboard, currency → null, no raw', async () => {
+  const h = harness()
+  const intent = await h.c.buildIntent(RAW, 'clipboard')
+  assert.equal(intent.source, 'clipboard'); assert.equal(intent.folder, null); assert.equal(intent.q, '{"query":{}}'); assert.ok(!('raw' in intent))
+  const h2 = harness({ build: async () => ({ error: { stage: 'currency' } }) })
+  assert.equal(await h2.c.buildIntent(RAW, 'clipboard'), null)
+  const h3 = harness({ enabled: false })
+  assert.ok(await h3.c.buildIntent(RAW, 'clipboard'), 'paste works even when the automatic stream is off')
+})
+
+test('rate-budget hint: an EE2-originated price check spends one trade-fetch slot; clipboard copies do not', async () => {
+  const hints = []
+  const pkg = new EventEmitter()
+  const c = createHistoryConsumer({ manager: pkg, worker: { spawn: () => ({ build: async () => ({ q: '{}', name: 'x', item: {} }) }) }, prefs: () => ({ prefs: {}, source: 'default' }), send: () => {}, log: () => {}, hint: (p) => hints.push(p) })
+  pkg.emit('item-checked', item('ee2')); pkg.emit('item-checked', item('clipboard'))
+  await new Promise(r => setTimeout(r, 10))
+  assert.deepEqual(hints, ['trade-fetch'])
+  c.stop()
+})

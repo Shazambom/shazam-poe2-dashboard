@@ -13,7 +13,7 @@ test('classify: ?q= link → query-url with the exact q; exchange → exchange; 
   assert.deepEqual(classify(`https://www.pathofexile.com/trade2/search/poe2/Standard?q=${encodeURIComponent(Q)}`), { kind: 'query-url', parsed: { q: Q } })
   assert.deepEqual(classify('https://www.pathofexile.com/trade2/exchange/poe2/Standard/abc'), { kind: 'exchange' })
   assert.deepEqual(classify('https://www.pathofexile.com/trade2/exchange/poe2/Standard?q={}'), { kind: 'exchange' })
-  assert.deepEqual(classify('Rarity: Unique\nHeadhunter\nHeavy Belt'), { kind: 'none', len: 36 })
+  assert.deepEqual(classify('hello world, not a link'), { kind: 'none', len: 23 })
   assert.deepEqual(classify(''), { kind: 'none', len: 0 })
   assert.deepEqual(classify('   '), { kind: 'none', len: 0 })
 })
@@ -42,4 +42,11 @@ test('the desktop URL helpers agree with the frontend ones on every fixture', as
   }
   assert.equal(d.queryUrl({ q: Q }, 'A B'), f.queryUrl({ q: Q }, 'A B'))
   assert.equal(d.tradeUrl({ type: 'search', slug: 's' }, 'A B', true), f.tradeUrl({ type: 'search', slug: 's' }, 'A B', true))
+})
+
+// ---- Batch 4-A: the item rung ----
+test('classify: PoE item text → item (the worker builds the intent in main; text never returned)', () => {
+  const raw = 'Item Class: Belts\nRarity: Unique\nHeadhunter\nHeavy Belt\n--------\n+41 to maximum Life\n'
+  assert.deepEqual(classify(raw), { kind: 'item' })
+  assert.deepEqual(classify('Rarity: Rare\nFoe Slicer\nBastard Sword\n--------\nItem Level: 80\n'), { kind: 'item' })
 })

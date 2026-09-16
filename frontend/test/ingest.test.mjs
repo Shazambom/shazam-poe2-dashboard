@@ -71,3 +71,11 @@ test('nameFromQuery prefers "<name> <type>", then type, then a fallback', async 
   assert.equal(nameFromQuery(JSON.stringify({ query: { filters: { type_filters: { filters: { category: { option: 'accessory.ring' } } } } } })), 'Ring query')
   assert.equal(nameFromQuery('{}'), 'Query search')
 })
+
+test('clipboard item rung: an intent from main lands in the chosen folder (never the history folder) and selects it', async () => {
+  st().hydrate({ version: 2, tree: [{ id: 'f', kind: 'folder', name: 'F', children: [] }, { id: 'h', kind: 'folder', sys: HISTORY_SYS, name: 'H', children: [] }], layout: null, openTabs: [] }); await sleep(5)
+  const r = st().ingest({ source: 'clipboard', origin: 'clipboard', q: Q, name: 'Headhunter', item: { name: 'Headhunter' }, folder: null, targetId: 'f' })
+  assert.equal(r.result, 'added'); assert.equal(st().nodeById('f').children[0].id, r.id); assert.equal(st().activeId, r.id)
+  const r2 = st().ingest({ source: 'clipboard', origin: 'clipboard', q: Q.replace('Headhunter', 'X'), name: 'X', folder: null, targetId: 'h' })
+  assert.equal(st().nodeById('h').children.length, 0, 'history folder is never a clipboard target'); assert.ok(st().tree.some(n => n.id === r2.id))
+})

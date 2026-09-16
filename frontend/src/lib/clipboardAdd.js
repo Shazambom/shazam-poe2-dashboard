@@ -28,8 +28,14 @@ export async function addFromClipboard(targetId = null) {
       return done('ok', ' src=query-url')
     }
     case 'exchange': toast("Bulk exchange links aren't saved here — use the Board", false); return done('exchange')
-    case 'item': return done('invalid', ' src=item')   // the builder lands in batch 3
+    case 'item': {
+      const r = st.ingest({ ...cls.intent, folder: null, targetId })
+      if (r.result === 'dup') { toast('Already saved — selected it'); return done('dup', ' src=item') }
+      if (r.result !== 'added') { toast('Could not add right now', false); return done('dropped', ' src=item') }
+      return done('ok', ' src=item')
+    }
     default:
+      if (cls?.currency) { toast('Currency and stackables have no item search — use the Board', false); return done('currency', ' src=item') }
       if (!cls || !cls.len) { toast('Clipboard is empty', false); return done('empty') }
       toast("That's not a trade link", false); return done('invalid', ` len=${cls.len}`)
   }
