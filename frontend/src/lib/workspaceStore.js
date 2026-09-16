@@ -16,7 +16,7 @@ let saveTimer = null
 let armed = false   // don't PUT while hydrating the initial load
 
 function persist(get) {
-  if (!armed) return
+  if (!armed || get().loadError) return
   clearTimeout(saveTimer)
   saveTimer = setTimeout(async () => {
     try {
@@ -64,14 +64,16 @@ export const useWorkspace = create((set, get) => ({
   layout: null,
   openTabs: [],
   loaded: false,
+  loadError: null,  // set when the GET failed: the tree is NOT the user's and must never be written back
   activeId: null,   // which search entry is open in the trade window (persisted → restores on relaunch)
 
-  setActive: (id) => { set({ activeId: id }); persist(get) },
+  setActive: (id) => { if (get().loadError) return; set({ activeId: id }); persist(get) },
 
   hydrate: (doc) => {
     armed = false
     set({
       version: 2,
+      loadError: null,
       tree: Array.isArray(doc?.tree) ? doc.tree : [],
       layout: doc?.layout ?? null,
       openTabs: Array.isArray(doc?.openTabs) ? doc.openTabs : [],
@@ -82,7 +84,13 @@ export const useWorkspace = create((set, get) => ({
     setTimeout(() => { armed = true }, 0)
   },
 
+  // A load failure leaves an EMPTY tree that is not the user's. Every mutation is refused (and
+  // persist stays disarmed) until a retry hydrates the real document — otherwise the first
+  // edit would PUT that empty tree over the saved one.
+  failLoad: (message) => { armed = false; set({ loaded: true, loadError: message || 'load failed', tree: [], activeId: null }) },
+
   addFolder: (parentId = null) => {
+    if (get().loadError) return null
     const f = newFolder()
     set(s => parentId
       ? { tree: mapNode(s.tree, parentId, n => ({ ...n, open: true, children: [...(n.children || []), f] })) }
@@ -90,17 +98,19 @@ export const useWorkspace = create((set, get) => ({
     persist(get); return f.id
   },
   addSearch: (parentId, parsed, name) => {
+    if (get().loadError) return null
     const node = searchNode(parsed, name)
     set(s => parentId
       ? { tree: mapNode(s.tree, parentId, n => ({ ...n, open: true, children: [...(n.children || []), node] })) }
       : { tree: [...s.tree, node] })
     persist(get); return node.id
   },
-  rename: (id, name) => { set(s => ({ tree: mapNode(s.tree, id, n => ({ ...n, name, auto: false })) })); persist(get) },
-  autoName: (id, name) => { set(s => ({ tree: mapNode(s.tree, id, n => (n.auto === false ? n : { ...n, name })) })); persist(get) },
-  setField: (id, patch) => { set(s => ({ tree: mapNode(s.tree, id, n => ({ ...n, ...patch })) })); persist(get) },
-  toggleOpen: (id) => { set(s => ({ tree: mapNode(s.tree, id, n => ({ ...n, open: !n.open })) })); persist(get) },
+  rename: (id, name) => { if (get().loadError) return; set(s => ({ tree: mapNode(s.tree, id, n => ({ ...n, name, auto: false })) })); persist(get) },
+  autoName: (id, name) => { if (get().loadError) return; set(s => ({ tree: mapNode(s.tree, id, n => (n.auto === false ? n : { ...n, name })) })); persist(get) },
+  setField: (id, patch) => { if (get().loadError) return; set(s => ({ tree: mapNode(s.tree, id, n => ({ ...n, ...patch })) })); persist(get) },
+  toggleOpen: (id) => { if (get().loadError) return; set(s => ({ tree: mapNode(s.tree, id, n => ({ ...n, open: !n.open })) })); persist(get) },
   remove: (id) => {
+    if (get().loadError) return
     set(s => {
       const tree = removeNode(s.tree, id)
       // If the removed subtree contained the open search, drop the selection so the trade
@@ -113,6 +123,7 @@ export const useWorkspace = create((set, get) => ({
 
   // Move `id` into `parentId` (null = root) at `index`. Used by react-arborist onMove.
   move: (id, parentId, index) => {
+    if (get().loadError) return
     set(s => {
       const node = findNode(s.tree, id)
       if (!node) return {}
@@ -142,6 +153,6 @@ export async function loadWorkspace() {
     const { workspace } = await api.workspace()
     useWorkspace.getState().hydrate(workspace)
   } catch (e) {
-    useWorkspace.getState().hydrate({ version: 2, tree: [], layout: null, openTabs: [] })
+    useWorkspace.getState().failLoad(cleanErr(e))
   }
 }

@@ -198,6 +198,9 @@ a { color: var(--live); }
 .ws-webview { flex: 1 1 auto; width: 100%; min-height: 0; border: 0; display: flex; }
 .ws-overlay { position: absolute; inset: 30px 0 0 0; display: flex; align-items: center; justify-content: center; text-align: center; padding: 24px; color: var(--muted); pointer-events: none; }
 .ws-overlay p { pointer-events: auto; max-width: 420px; }
+.ws-load-error { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.ws-load-error b { color: var(--ink); }
+.ws-load-error .muted { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ws-inline-add, .ws-empty-add { font-weight: 800; }
 .ws-inline-add { background: linear-gradient(180deg, var(--gold-2), var(--gold)); color: var(--ink-on-gold); border: 0; border-radius: 6px; width: 22px; height: 22px; cursor: pointer; vertical-align: middle; }
 .empty.small { padding: 20px 8px; font-size: 12px; color: var(--muted); text-align: center; }

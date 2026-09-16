@@ -26,6 +26,7 @@ export default function LiveView({ league }) {
   const searchStates = usePings(s => s.searchStates)
   const tree = useWorkspace(s => s.tree)
   const loaded = useWorkspace(s => s.loaded)
+  const loadError = useWorkspace(s => s.loadError)
   const setField = useWorkspace(s => s.setField)
   // Go-live state is the DB-persisted `armed` flag on each node (single source of truth).
   // useLiveSync reconciles the engine to it; `searchStates` is the engine's per-search verdict.
@@ -90,7 +91,9 @@ export default function LiveView({ league }) {
 
       <div className="live-searches">
         <div className="live-recent-head muted">Watched searches</div>
-        {searches.length === 0
+        {loadError
+          ? <div className="notice error ws-load-error" role="alert"><b>Couldn't load your searches</b><span className="muted">{loadError}</span><button className="btn small" onClick={() => loadWorkspace()}>Retry</button></div>
+          : searches.length === 0
           ? <div className="empty small">No saved searches yet — add some in Workspace.</div>
           : (
             <div className="live-tree-wrap">

@@ -86,6 +86,7 @@ async function readSearchName(el) {
 export default function WorkspaceView({ league }) {
   const tree = useWorkspace(s => s.tree)
   const loaded = useWorkspace(s => s.loaded)
+  const loadError = useWorkspace(s => s.loadError)
   const activeId = useWorkspace(s => s.activeId)
   const addFolder = useWorkspace(s => s.addFolder)
   const addSearch = useWorkspace(s => s.addSearch)
@@ -160,6 +161,19 @@ export default function WorkspaceView({ league }) {
   }, [nodeById, setField, autoName])
 
   if (!loaded) return <div className="single hint">Loading workspace…</div>
+  // A failed load must block the tree: the store holds an empty document that is NOT the
+  // user's, and nothing may be written until a retry succeeds (see workspaceStore.failLoad).
+  if (loadError) {
+    return (
+      <div className="single">
+        <div className="notice error ws-load-error" role="alert">
+          <b>Couldn't load your searches</b>
+          <span className="muted">{loadError}</span>
+          <button className="btn small" onClick={() => loadWorkspace()}>Retry</button>
+        </div>
+      </div>
+    )
+  }
 
   const activeNode = activeId ? nodeById(activeId) : null
 
