@@ -1,0 +1,10 @@
+{
+ "fixture": "RequiresOneAttribute.txt",
+ "prefs": {
+  "leagueId": "Standard",
+  "searchStatRange": 20,
+  "defaultAllSelected": true
+ },
+ "q": "{\"query\":{\"status\":{\"option\":\"securable\"},\"stats\":[{\"type\":\"and\",\"filters\":[]}],\"filters\":{\"trade_filters\":{\"filters\":{\"collapse\":{\"option\":\"true\"}}},\"type_filters\":{\"filters\":{\"rarity\":{\"option\":\"nonunique\"},\"ilvl\":{\"min\":68}}},\"misc_filters\":{\"filters\":{\"corrupted\":{\"option\":\"false\"},\"fractured_item\":{\"option\":\"false\"},\"mirrored\":{\"option\":\"false\"},\"sanctified\":{\"option\":\"false\"}}}},\"type\":\"Dunerunner Sandals\"},\"sort\":{\"price\":\"asc\"}}",
+ "name": "Dunerunner Sandals"
+}

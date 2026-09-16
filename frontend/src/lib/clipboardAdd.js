@@ -43,6 +43,10 @@ export function nameFromQuery(q) {
     const parts = [qq.name, qq.type].filter(x => typeof x === 'string' && x.trim())
     if (parts.length) return parts.join(' ').slice(0, 60)
     const t = qq.type && typeof qq.type === 'object' ? qq.type.option : null
-    return t || 'Query search'
+    if (t) return t
+    // No item name (a rare/magic query): name it by the trade category, e.g. accessory.ring → "Ring query".
+    const cat = qq.filters?.type_filters?.filters?.category?.option
+    if (typeof cat === 'string' && cat) { const last = cat.split('.').pop().replace(/_/g, ' '); return `${last.charAt(0).toUpperCase()}${last.slice(1)} query` }
+    return 'Query search'
   } catch { return 'Query search' }
 }

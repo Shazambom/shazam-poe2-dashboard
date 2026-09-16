@@ -1,0 +1,8 @@
+{
+ "fixture": "MagicItem.txt",
+ "prefs": {
+  "leagueId": "Standard"
+ },
+ "q": "{\"query\":{\"status\":{\"option\":\"securable\"},\"stats\":[{\"type\":\"and\",\"filters\":[{\"id\":\"pseudo.pseudo_total_strength\",\"value\":{\"min\":7},\"disabled\":true}]}],\"filters\":{\"trade_filters\":{\"filters\":{\"collapse\":{\"option\":\"true\"}}},\"type_filters\":{\"filters\":{\"category\":{\"option\":\"weapon.twomace\"},\"rarity\":{\"option\":\"nonunique\"}}},\"misc_filters\":{\"filters\":{\"corrupted\":{\"option\":\"false\"},\"mirrored\":{\"option\":\"false\"},\"sanctified\":{\"option\":\"false\"}}},\"equipment_filters\":{\"filters\":{\"dps\":{\"min\":105},\"edps\":{\"min\":28},\"pdps\":{\"min\":77}}}}},\"sort\":{\"price\":\"asc\"}}",
+ "name": "Temple Maul"
+}

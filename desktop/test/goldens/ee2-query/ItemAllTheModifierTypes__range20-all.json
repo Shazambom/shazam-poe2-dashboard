@@ -1,0 +1,10 @@
+{
+ "fixture": "ItemAllTheModifierTypes.txt",
+ "prefs": {
+  "leagueId": "Standard",
+  "searchStatRange": 20,
+  "defaultAllSelected": true
+ },
+ "q": "{\"query\":{\"status\":{\"option\":\"securable\"},\"stats\":[{\"type\":\"and\",\"filters\":[{\"id\":\"enchant.stat_387439868\",\"value\":{\"min\":45},\"disabled\":false},{\"id\":\"rune.stat_1368271171\",\"value\":{\"min\":30},\"disabled\":false},{\"id\":\"implicit.stat_1967051901\",\"value\":{\"min\":1},\"disabled\":false},{\"id\":\"skill.hyena_cackle\",\"value\":{\"min\":18},\"disabled\":true},{\"id\":\"explicit.stat_387439868\",\"value\":{\"min\":100},\"disabled\":false},{\"id\":\"explicit.stat_669069897\",\"value\":{\"min\":7},\"disabled\":false},{\"id\":\"explicit.stat_1368271171\",\"value\":{\"min\":21},\"disabled\":false}]}],\"filters\":{\"trade_filters\":{\"filters\":{\"collapse\":{\"option\":\"true\"}}},\"type_filters\":{\"filters\":{\"category\":{\"option\":\"weapon.crossbow\"},\"rarity\":{\"option\":\"nonunique\"}}},\"equipment_filters\":{\"filters\":{\"rune_sockets\":{\"min\":2},\"dps\":{\"min\":493},\"edps\":{\"min\":224},\"aps\":{\"min\":1.87},\"crit\":{\"min\":5},\"reload_time\":{\"max\":0.93}}},\"misc_filters\":{\"filters\":{\"mirrored\":{\"option\":\"false\"}}}}},\"sort\":{\"price\":\"asc\"}}",
+ "name": "Storm Core Gemini Crossbow"
+}

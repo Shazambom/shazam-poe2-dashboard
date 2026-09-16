@@ -1,0 +1,9 @@
+{
+ "fixture": "CurrencySingleDivine.txt",
+ "prefs": {
+  "leagueId": "Standard"
+ },
+ "error": {
+  "stage": "currency"
+ }
+}

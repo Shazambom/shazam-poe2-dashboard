@@ -1,0 +1,10 @@
+{
+ "fixture": "FracturedItem.txt",
+ "prefs": {
+  "leagueId": "Standard",
+  "language": "de"
+ },
+ "error": {
+  "stage": "lang"
+ }
+}

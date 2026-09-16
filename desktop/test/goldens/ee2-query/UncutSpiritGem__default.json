@@ -1,0 +1,9 @@
+{
+ "fixture": "UncutSpiritGem.txt",
+ "prefs": {
+  "leagueId": "Standard"
+ },
+ "error": {
+  "stage": "currency"
+ }
+}

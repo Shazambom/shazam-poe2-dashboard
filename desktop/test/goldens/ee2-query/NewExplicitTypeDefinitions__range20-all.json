@@ -1,0 +1,10 @@
+{
+ "fixture": "NewExplicitTypeDefinitions.txt",
+ "prefs": {
+  "leagueId": "Standard",
+  "searchStatRange": 20,
+  "defaultAllSelected": true
+ },
+ "q": "{\"query\":{\"status\":{\"option\":\"securable\"},\"stats\":[{\"type\":\"and\",\"filters\":[{\"id\":\"pseudo.pseudo_total_elemental_resistance\",\"value\":{\"min\":49},\"disabled\":false},{\"id\":\"pseudo.pseudo_total_cold_resistance\",\"value\":{\"min\":36},\"disabled\":true},{\"id\":\"pseudo.pseudo_total_chaos_resistance\",\"value\":{\"min\":13},\"disabled\":false},{\"id\":\"pseudo.pseudo_total_mana\",\"value\":{\"min\":90},\"disabled\":false},{\"id\":\"enchant.stat_2954116742|56776\",\"value\":{},\"disabled\":true},{\"id\":\"implicit.stat_3917489142\",\"value\":{\"min\":14},\"disabled\":false},{\"id\":\"explicit.stat_2974417149\",\"value\":{\"min\":27},\"disabled\":false},{\"id\":\"explicit.stat_124131830\",\"value\":{\"min\":3},\"disabled\":false},{\"id\":\"fractured.stat_4220027924\",\"value\":{\"min\":36},\"disabled\":true},{\"id\":\"desecrated.stat_378817135\",\"value\":{\"min\":13},\"disabled\":true}]},{\"type\":\"count\",\"value\":{\"min\":1},\"disabled\":false,\"filters\":[{\"id\":\"explicit.stat_2704225257\",\"value\":{\"min\":30},\"disabled\":false},{\"id\":\"explicit.stat_3981240776\",\"value\":{\"min\":30},\"disabled\":false}]}],\"filters\":{\"trade_filters\":{\"filters\":{\"collapse\":{\"option\":\"true\"}}},\"type_filters\":{\"filters\":{\"category\":{\"option\":\"accessory.amulet\"},\"rarity\":{\"option\":\"nonunique\"}}},\"misc_filters\":{\"filters\":{\"corrupted\":{\"option\":\"false\"},\"mirrored\":{\"option\":\"false\"},\"sanctified\":{\"option\":\"false\"}}}}},\"sort\":{\"price\":\"asc\"}}",
+ "name": "Brood Locket Gold Amulet"
+}

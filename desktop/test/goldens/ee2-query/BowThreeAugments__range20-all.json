@@ -1,0 +1,10 @@
+{
+ "fixture": "BowThreeAugments.txt",
+ "prefs": {
+  "leagueId": "Standard",
+  "searchStatRange": 20,
+  "defaultAllSelected": true
+ },
+ "q": "{\"query\":{\"status\":{\"option\":\"securable\"},\"stats\":[{\"type\":\"and\",\"filters\":[{\"id\":\"rune.stat_3885405204\",\"value\":{\"min\":1},\"disabled\":false},{\"id\":\"implicit.stat_3398402065\",\"value\":{\"min\":-50},\"disabled\":false},{\"id\":\"explicit.stat_55876295\",\"value\":{\"min\":9},\"disabled\":false}]}],\"filters\":{\"trade_filters\":{\"filters\":{\"collapse\":{\"option\":\"true\"}}},\"type_filters\":{\"filters\":{\"category\":{\"option\":\"weapon.bow\"},\"rarity\":{\"option\":\"nonunique\"}}},\"equipment_filters\":{\"filters\":{\"rune_sockets\":{\"min\":3},\"dps\":{\"min\":531},\"pdps\":{\"min\":455},\"aps\":{\"min\":1.25},\"crit\":{\"min\":8.1}}},\"misc_filters\":{\"filters\":{\"mirrored\":{\"option\":\"false\"}}}}},\"sort\":{\"price\":\"asc\"}}",
+ "name": "Oblivion Branch Obliterator Bow"
+}

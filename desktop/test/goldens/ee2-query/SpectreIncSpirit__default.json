@@ -1,0 +1,8 @@
+{
+ "fixture": "SpectreIncSpirit.txt",
+ "prefs": {
+  "leagueId": "Standard"
+ },
+ "q": "{\"query\":{\"status\":{\"option\":\"securable\"},\"stats\":[{\"type\":\"and\",\"filters\":[{\"id\":\"pseudo.pseudo_total_intelligence\",\"value\":{\"min\":25},\"disabled\":true},{\"id\":\"pseudo.pseudo_total_mana\",\"value\":{\"min\":130},\"disabled\":true},{\"id\":\"skill.purity_of_lightning\",\"value\":{\"min\":17},\"disabled\":true},{\"id\":\"explicit.stat_2854751904\",\"value\":{\"min\":17},\"disabled\":true},{\"id\":\"explicit.stat_789117908\",\"value\":{\"min\":16},\"disabled\":true},{\"id\":\"explicit.stat_770672621\",\"value\":{\"min\":26},\"disabled\":true}]}],\"filters\":{\"trade_filters\":{\"filters\":{\"collapse\":{\"option\":\"true\"}}},\"type_filters\":{\"filters\":{\"category\":{\"option\":\"weapon.sceptre\"},\"rarity\":{\"option\":\"nonunique\"}}},\"misc_filters\":{\"filters\":{\"corrupted\":{\"option\":\"false\"},\"mirrored\":{\"option\":\"false\"},\"sanctified\":{\"option\":\"false\"}}},\"equipment_filters\":{\"filters\":{\"spirit\":{\"min\":151}}}}},\"sort\":{\"price\":\"asc\"}}",
+ "name": "Skull Song Shrine Sceptre"
+}

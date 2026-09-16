@@ -1,0 +1,5 @@
+This directory vendors code from Exiled Exchange 2 (https://github.com/Kvan7/Exiled-Exchange-2),
+MIT License, which is a fork of Awakened PoE Trade (https://github.com/SnosMe/awakened-poe-trade),
+MIT License, Copyright (c) 2020 Alexander Drozdov. See LICENSE.EE2 for the full text.
+The generated bundle and data files under vendor/ and data/ are their work; shims/, entry.js and
+index.js are Arbiter's (same MIT terms as the rest of this repository).

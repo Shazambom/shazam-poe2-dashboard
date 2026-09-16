@@ -19,7 +19,7 @@ function Node({ node, style, dragHandle }) {
   const cls = ['ws-node', isFolder ? 'folder' : 'search', active ? 'active' : '', d.done ? 'done' : '',
     node.willReceiveDrop ? 'drop-target' : '', node.isDragging ? 'dragging' : '', node.isFocused ? 'focused' : ''].join(' ')
   return (
-    <div className={cls} style={style} ref={dragHandle} role="treeitem" aria-level={node.level + 1}
+    <div className={cls} style={style} ref={dragHandle} role="treeitem" aria-level={node.level + 1} data-id={d.id}
       aria-expanded={isFolder ? node.isOpen : undefined} aria-selected={active || undefined}
       onClick={() => isFolder ? node.toggle() : onSelect(d.id, node)}
       onContextMenu={onContext ? (e) => { e.preventDefault(); e.stopPropagation(); node.focus(); onContext(e, d, node) } : undefined}>

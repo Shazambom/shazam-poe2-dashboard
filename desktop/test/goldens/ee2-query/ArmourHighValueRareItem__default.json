@@ -1,0 +1,8 @@
+{
+ "fixture": "ArmourHighValueRareItem.txt",
+ "prefs": {
+  "leagueId": "Standard"
+ },
+ "q": "{\"query\":{\"status\":{\"option\":\"securable\"},\"stats\":[{\"type\":\"and\",\"filters\":[{\"id\":\"pseudo.pseudo_total_strength\",\"value\":{\"min\":31},\"disabled\":true},{\"id\":\"explicit.stat_1692879867\",\"value\":{\"max\":-46},\"disabled\":true},{\"id\":\"explicit.stat_3855016469\",\"value\":{\"min\":40},\"disabled\":true}]}],\"filters\":{\"trade_filters\":{\"filters\":{\"collapse\":{\"option\":\"true\"}}},\"type_filters\":{\"filters\":{\"category\":{\"option\":\"armour.chest\"},\"rarity\":{\"option\":\"nonunique\"}}},\"equipment_filters\":{\"filters\":{\"rune_sockets\":{\"min\":3},\"ar\":{\"min\":2927}}},\"misc_filters\":{\"filters\":{\"corrupted\":{\"option\":\"false\"},\"mirrored\":{\"option\":\"false\"},\"sanctified\":{\"option\":\"false\"}}}}},\"sort\":{\"price\":\"asc\"}}",
+ "name": "Hate Pelt Soldier Cuirass"
+}

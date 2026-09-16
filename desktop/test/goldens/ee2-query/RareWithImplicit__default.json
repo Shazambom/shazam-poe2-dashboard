@@ -1,0 +1,8 @@
+{
+ "fixture": "RareWithImplicit.txt",
+ "prefs": {
+  "leagueId": "Standard"
+ },
+ "q": "{\"query\":{\"status\":{\"option\":\"securable\"},\"stats\":[{\"type\":\"and\",\"filters\":[{\"id\":\"pseudo.pseudo_total_all_elemental_resistances\",\"value\":{\"min\":7},\"disabled\":true},{\"id\":\"pseudo.pseudo_total_elemental_resistance\",\"value\":{\"min\":35},\"disabled\":false},{\"id\":\"pseudo.pseudo_total_cold_resistance\",\"value\":{\"min\":20},\"disabled\":true},{\"id\":\"pseudo.pseudo_total_strength\",\"value\":{\"min\":10},\"disabled\":true},{\"id\":\"explicit.stat_789117908\",\"value\":{\"min\":8},\"disabled\":true},{\"id\":\"explicit.stat_1263695895\",\"value\":{\"min\":5},\"disabled\":true}]},{\"type\":\"count\",\"value\":{\"min\":1,\"max\":1},\"disabled\":true,\"filters\":[{\"id\":\"pseudo.pseudo_number_of_empty_prefix_mods\",\"value\":{\"min\":2},\"disabled\":true}]},{\"type\":\"count\",\"value\":{\"min\":1},\"disabled\":true,\"filters\":[{\"id\":\"explicit.stat_2144192055\",\"value\":{\"min\":128},\"disabled\":true},{\"id\":\"explicit.stat_53045048\",\"value\":{\"min\":128},\"disabled\":true}]}],\"filters\":{\"trade_filters\":{\"filters\":{\"collapse\":{\"option\":\"true\"}}},\"type_filters\":{\"filters\":{\"category\":{\"option\":\"accessory.ring\"},\"rarity\":{\"option\":\"nonunique\"}}},\"misc_filters\":{\"filters\":{\"corrupted\":{\"option\":\"false\"},\"mirrored\":{\"option\":\"false\"},\"sanctified\":{\"option\":\"false\"}}}}},\"sort\":{\"price\":\"asc\"}}",
+ "name": "Rune Loop Prismatic Ring"
+}

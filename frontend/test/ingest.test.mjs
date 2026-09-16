@@ -68,5 +68,6 @@ test('nameFromQuery prefers "<name> <type>", then type, then a fallback', async 
   assert.equal(nameFromQuery(Q), 'Headhunter Heavy Belt')
   assert.equal(nameFromQuery(JSON.stringify({ query: { type: 'Heavy Belt' } })), 'Heavy Belt')
   assert.equal(nameFromQuery(JSON.stringify({ query: { type: { option: 'Sapphire Ring' } } })), 'Sapphire Ring')
+  assert.equal(nameFromQuery(JSON.stringify({ query: { filters: { type_filters: { filters: { category: { option: 'accessory.ring' } } } } } })), 'Ring query')
   assert.equal(nameFromQuery('{}'), 'Query search')
 })

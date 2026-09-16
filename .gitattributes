@@ -1,0 +1,3 @@
+desktop/src/vendor/ee2-query/vendor/** linguist-generated=true -diff
+desktop/src/vendor/ee2-query/data/** linguist-generated=true -diff
+desktop/test/goldens/ee2-query/** linguist-generated=true

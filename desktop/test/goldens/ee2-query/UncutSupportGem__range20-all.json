@@ -1,0 +1,11 @@
+{
+ "fixture": "UncutSupportGem.txt",
+ "prefs": {
+  "leagueId": "Standard",
+  "searchStatRange": 20,
+  "defaultAllSelected": true
+ },
+ "error": {
+  "stage": "currency"
+ }
+}

@@ -1,0 +1,12 @@
+{
+ "fixture": "GermanRare.txt",
+ "prefs": {
+  "leagueId": "Standard",
+  "searchStatRange": 20,
+  "defaultAllSelected": true
+ },
+ "error": {
+  "stage": "parse",
+  "message": "item.wrong_language|Deutsch|English"
+ }
+}

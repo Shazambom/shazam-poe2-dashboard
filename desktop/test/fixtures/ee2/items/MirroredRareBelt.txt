@@ -1,0 +1,17 @@
+Item Class: Belts
+Rarity: Rare
+Doom Harness
+Heavy Belt
+--------
+Requires: Level 48
+--------
+Item Level: 81
+--------
++18 to Strength (implicit)
+--------
++92 to maximum Life
++42% to Fire Resistance
++31% to Cold Resistance
+25% increased Flask Charges gained
+--------
+Mirrored

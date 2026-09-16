@@ -1,0 +1,8 @@
+{
+ "fixture": "UnidentifiedTier.txt",
+ "prefs": {
+  "leagueId": "Standard"
+ },
+ "q": "{\"query\":{\"status\":{\"option\":\"securable\"},\"stats\":[{\"type\":\"and\",\"filters\":[{\"id\":\"implicit.stat_4220027924\",\"value\":{\"min\":22},\"disabled\":false}]}],\"filters\":{\"trade_filters\":{\"filters\":{\"collapse\":{\"option\":\"true\"}}},\"type_filters\":{\"filters\":{\"rarity\":{\"option\":\"magic\"},\"ilvl\":{\"min\":54}}},\"misc_filters\":{\"filters\":{\"corrupted\":{\"option\":\"false\"},\"fractured_item\":{\"option\":\"false\"},\"mirrored\":{\"option\":\"false\"},\"sanctified\":{\"option\":\"false\"}}}},\"type\":\"Sapphire Ring\"},\"sort\":{\"price\":\"asc\"}}",
+ "name": "Sapphire Ring"
+}

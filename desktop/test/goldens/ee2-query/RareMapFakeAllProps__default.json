@@ -1,0 +1,8 @@
+{
+ "fixture": "RareMapFakeAllProps.txt",
+ "prefs": {
+  "leagueId": "Standard"
+ },
+ "q": "{\"query\":{\"status\":{\"option\":\"securable\"},\"stats\":[{\"type\":\"and\",\"filters\":[{\"id\":\"explicit.stat_1890519597\",\"value\":{\"min\":27},\"disabled\":true},{\"id\":\"explicit.stat_2539290279\",\"value\":{},\"disabled\":true},{\"id\":\"explicit.stat_1629357380\",\"value\":{},\"disabled\":true},{\"id\":\"explicit.stat_1994551050\",\"value\":{\"min\":70},\"disabled\":true},{\"id\":\"explicit.stat_4101943684\",\"value\":{\"min\":70},\"disabled\":true},{\"id\":\"explicit.stat_2549889921\",\"value\":{\"min\":-35},\"disabled\":true},{\"id\":\"explicit.stat_1879340377\",\"value\":{\"min\":32},\"disabled\":true}]}],\"filters\":{\"trade_filters\":{\"filters\":{\"collapse\":{\"option\":\"true\"}}},\"type_filters\":{\"filters\":{\"category\":{\"option\":\"map\"},\"rarity\":{\"option\":\"nonunique\"}}},\"map_filters\":{\"filters\":{\"map_tier\":{\"min\":16,\"max\":16}}},\"misc_filters\":{\"filters\":{\"mirrored\":{\"option\":\"false\"},\"sanctified\":{\"option\":\"false\"}}}}},\"sort\":{\"price\":\"asc\"}}",
+ "name": "Blasted Control Waystone (Tier 16)"
+}

@@ -1,0 +1,95 @@
+{
+ "ee2Tag": "local-cca3066",
+ "ee2Commit": "cca3066",
+ "modules": [
+  "../../../../../shazam-poe2-dashboard/desktop/src/vendor/ee2-query/entry.js",
+  "src/assets/data/index.ts",
+  "src/assets/data/interfaces.ts",
+  "src/parser/ParsedItem.ts",
+  "src/parser/Parser.ts",
+  "src/parser/advanced-mod-desc.ts",
+  "src/parser/augment-builder.ts",
+  "src/parser/calc-base.ts",
+  "src/parser/calc-q20.ts",
+  "src/parser/index.ts",
+  "src/parser/magic-name.ts",
+  "src/parser/meta.ts",
+  "src/parser/modifiers.ts",
+  "src/parser/stat-translations.ts",
+  "src/parser/utils.ts",
+  "src/web/price-check/filters/common.ts",
+  "src/web/price-check/filters/create-item-filters.ts",
+  "src/web/price-check/filters/create-presets.ts",
+  "src/web/price-check/filters/create-stat-filters.ts",
+  "src/web/price-check/filters/create-unique-filters.ts",
+  "src/web/price-check/filters/interfaces.ts",
+  "src/web/price-check/filters/pseudo/anointments.ts",
+  "src/web/price-check/filters/pseudo/atzoatl-rules.ts",
+  "src/web/price-check/filters/pseudo/index.ts",
+  "src/web/price-check/filters/pseudo/item-property.ts",
+  "src/web/price-check/filters/pseudo/missing-fractured-rules.ts",
+  "src/web/price-check/filters/pseudo/reflection-rules.ts",
+  "src/web/price-check/filters/util.ts",
+  "src/web/price-check/item-editor/augment.ts",
+  "src/web/price-check/trade/Cache.ts",
+  "src/web/price-check/trade/RateLimiter.ts",
+  "src/web/price-check/trade/common.ts",
+  "src/web/price-check/trade/pathofexile-trade.ts",
+  "src/web/price-check/trends/getDetailsId.ts"
+ ],
+ "syncedAt": "2026-09-16T23:41:50.706Z",
+ "files": {
+  "vendor/bundle.cjs": {
+   "sha256": "266394bdc6d00923e6630775e047af28c48c1c06d6e134d3289a82e39f3933d9",
+   "bytes": 262884
+  },
+  "data/en/app_i18n.json": {
+   "sha256": "93091588afd261cbaf28f1c4c91e1b301797cb449a41eddc496c4ea5dcd78953",
+   "bytes": 23170
+  },
+  "data/en/client_strings.mjs": {
+   "sha256": "595d3a2f99a824307b0e82f98e903469dc8526e46e483b79f4b5eda64cc7a688",
+   "bytes": 7049
+  },
+  "data/en/items-name.index.bin": {
+   "sha256": "291088671a09c8f681eae89c9e8f505d222253ba8cc1f48c2e5da9ac7840a947",
+   "bytes": 28720
+  },
+  "data/en/items-ref.index.bin": {
+   "sha256": "724a36f94d350840def3bbbd2d8c41103904fed9c8ba66d07e01370e6ac72275",
+   "bytes": 28720
+  },
+  "data/en/items.ndjson": {
+   "sha256": "b4757b4756433f5d729e93b0b25490fd72cd60cd54f6906aa9bd3a7053dfa139",
+   "bytes": 1671319
+  },
+  "data/en/stats-matcher.index.bin": {
+   "sha256": "8890939f0d617d732bf27e95bcc93a522a3abf2fa7681627fc9f2f15070e7c29",
+   "bytes": 38632
+  },
+  "data/en/stats-ref.index.bin": {
+   "sha256": "f36032b87a5375254ebf146618c30fc7c4b2e3efa645a11cf70f71716540b06f",
+   "bytes": 20208
+  },
+  "data/en/stats.ndjson": {
+   "sha256": "2ec9393adfdaef10efa8aacc6720cafe42f5d58661b0b8193ca8efb6923fea30",
+   "bytes": 895065
+  },
+  "data/item-drop.json": {
+   "sha256": "77c1b6ba52d1db0c68235d51984c2fa35f6e030e8fa29ccd5d84ec993acda022",
+   "bytes": 23700
+  },
+  "data/patrons.json": {
+   "sha256": "6a6181dae4c4fbcc2bd7579dfb3eea3c99d5974142568327764ac752aa7a2358",
+   "bytes": 9398
+  },
+  "data/trade/items.json": {
+   "sha256": "ed1b3ae28b0eeb68d924e9d84501c0a8c7a6155e9d148c1bb1460e919e82aafb",
+   "bytes": 186636
+  },
+  "data/trade/stats.json": {
+   "sha256": "c6216155650936d455ffbc026b8aa88644cb35a5b9a904a5f50fe4036c95afe8",
+   "bytes": 853055
+  }
+ }
+}

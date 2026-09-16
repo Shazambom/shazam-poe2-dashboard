@@ -1,0 +1,17 @@
+Item Class: Rings
+Rarity: Rare
+Havoc Twirl
+Sapphire Ring
+--------
+Requires: Level 44
+--------
+Item Level: 68
+--------
++28% to Cold Resistance (implicit)
+--------
++39 to maximum Life
++21% to Fire Resistance
++17% to Lightning Resistance
+19% increased Rarity of Items found
+--------
+Corrupted

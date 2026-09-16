@@ -1,0 +1,8 @@
+{
+ "fixture": "CharmQuality.txt",
+ "prefs": {
+  "leagueId": "Standard"
+ },
+ "q": "{\"query\":{\"status\":{\"option\":\"securable\"},\"stats\":[{\"type\":\"and\",\"filters\":[{\"id\":\"implicit.stat_2778646494\",\"value\":{},\"disabled\":true},{\"id\":\"explicit.stat_2365392475\",\"value\":{\"min\":96},\"disabled\":true},{\"id\":\"explicit.stat_1366840608\",\"value\":{\"min\":47},\"disabled\":true}]}],\"filters\":{\"trade_filters\":{\"filters\":{\"collapse\":{\"option\":\"true\"}}},\"type_filters\":{\"filters\":{\"category\":{\"option\":\"flask.charm\"},\"rarity\":{\"option\":\"nonunique\"},\"quality\":{\"min\":14}}},\"misc_filters\":{\"filters\":{\"corrupted\":{\"option\":\"false\"},\"mirrored\":{\"option\":\"false\"},\"sanctified\":{\"option\":\"false\"}}}}},\"sort\":{\"price\":\"asc\"}}",
+ "name": "Silver Charm"
+}

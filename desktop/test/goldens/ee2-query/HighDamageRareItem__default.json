@@ -1,0 +1,8 @@
+{
+ "fixture": "HighDamageRareItem.txt",
+ "prefs": {
+  "leagueId": "Standard"
+ },
+ "q": "{\"query\":{\"status\":{\"option\":\"securable\"},\"stats\":[{\"type\":\"and\",\"filters\":[{\"id\":\"implicit.stat_1980802737\",\"value\":{\"min\":1},\"disabled\":true},{\"id\":\"explicit.stat_1202301673\",\"value\":{\"min\":7},\"disabled\":true},{\"id\":\"explicit.stat_1967051901\",\"value\":{\"min\":2},\"disabled\":true},{\"id\":\"desecrated.stat_1940865751\",\"value\":{\"min\":66},\"disabled\":true}]},{\"type\":\"count\",\"value\":{\"min\":1},\"disabled\":true,\"filters\":[{\"id\":\"explicit.stat_691932474\",\"value\":{\"min\":175},\"disabled\":true},{\"id\":\"explicit.stat_803737631\",\"value\":{\"min\":175},\"disabled\":true}]},{\"type\":\"count\",\"value\":{\"min\":1},\"disabled\":true,\"filters\":[{\"id\":\"fractured.stat_210067635\",\"value\":{\"min\":23},\"disabled\":true},{\"id\":\"fractured.stat_681332047\",\"value\":{\"min\":23},\"disabled\":true}]}],\"filters\":{\"trade_filters\":{\"filters\":{\"collapse\":{\"option\":\"true\"}}},\"type_filters\":{\"filters\":{\"category\":{\"option\":\"weapon.crossbow\"},\"rarity\":{\"option\":\"nonunique\"}}},\"misc_filters\":{\"filters\":{\"corrupted\":{\"option\":\"false\"},\"mirrored\":{\"option\":\"false\"},\"sanctified\":{\"option\":\"false\"}}},\"equipment_filters\":{\"filters\":{\"pdps\":{\"min\":1357}}}}},\"sort\":{\"price\":\"asc\"}}",
+ "name": "Dragon Core Siege Crossbow"
+}

@@ -1,0 +1,8 @@
+{
+ "fixture": "UniqueItem.txt",
+ "prefs": {
+  "leagueId": "Standard"
+ },
+ "q": "{\"query\":{\"status\":{\"option\":\"securable\"},\"stats\":[{\"type\":\"and\",\"filters\":[{\"id\":\"explicit.stat_4015621042\",\"value\":{\"min\":54},\"disabled\":false},{\"id\":\"explicit.stat_3308030688\",\"value\":{},\"disabled\":true},{\"id\":\"explicit.stat_1671376347\",\"value\":{\"min\":25},\"disabled\":false},{\"id\":\"explicit.stat_1011760251\",\"value\":{},\"disabled\":true},{\"id\":\"explicit.stat_789117908\",\"value\":{},\"disabled\":true}]}],\"filters\":{\"trade_filters\":{\"filters\":{\"collapse\":{\"option\":\"true\"}}},\"misc_filters\":{\"filters\":{\"corrupted\":{\"option\":\"false\"}}}},\"name\":\"The Eternal Spark\",\"type\":\"Crystal Focus\"},\"sort\":{\"price\":\"asc\"}}",
+ "name": "The Eternal Spark"
+}

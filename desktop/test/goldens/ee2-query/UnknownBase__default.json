@@ -1,0 +1,10 @@
+{
+ "fixture": "UnknownBase.txt",
+ "prefs": {
+  "leagueId": "Standard"
+ },
+ "error": {
+  "stage": "parse",
+  "message": "item.unknown"
+ }
+}

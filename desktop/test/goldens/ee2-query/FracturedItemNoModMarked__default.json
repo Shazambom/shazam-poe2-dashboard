@@ -1,0 +1,8 @@
+{
+ "fixture": "FracturedItemNoModMarked.txt",
+ "prefs": {
+  "leagueId": "Standard"
+ },
+ "q": "{\"query\":{\"status\":{\"option\":\"securable\"},\"stats\":[{\"type\":\"and\",\"filters\":[{\"id\":\"implicit.stat_3398402065\",\"value\":{\"min\":-50},\"disabled\":true},{\"id\":\"explicit.stat_1881230714\",\"value\":{\"min\":20},\"disabled\":true},{\"id\":\"explicit.stat_3035140377\",\"value\":{\"min\":3},\"disabled\":true}]},{\"type\":\"count\",\"value\":{\"min\":1},\"disabled\":true,\"filters\":[{\"id\":\"explicit.stat_691932474\",\"value\":{\"min\":101},\"disabled\":true},{\"id\":\"explicit.stat_803737631\",\"value\":{\"min\":101},\"disabled\":true}]}],\"filters\":{\"trade_filters\":{\"filters\":{\"collapse\":{\"option\":\"true\"}}},\"type_filters\":{\"filters\":{\"category\":{\"option\":\"weapon.bow\"},\"rarity\":{\"option\":\"nonunique\"}}},\"misc_filters\":{\"filters\":{\"corrupted\":{\"option\":\"false\"},\"mirrored\":{\"option\":\"false\"},\"sanctified\":{\"option\":\"false\"}}},\"equipment_filters\":{\"filters\":{\"pdps\":{\"min\":562}}}}},\"sort\":{\"price\":\"asc\"}}",
+ "name": "Miracle Siege Obliterator Bow"
+}

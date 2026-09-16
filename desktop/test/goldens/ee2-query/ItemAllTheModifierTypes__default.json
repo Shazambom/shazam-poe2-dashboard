@@ -1,0 +1,8 @@
+{
+ "fixture": "ItemAllTheModifierTypes.txt",
+ "prefs": {
+  "leagueId": "Standard"
+ },
+ "q": "{\"query\":{\"status\":{\"option\":\"securable\"},\"stats\":[{\"type\":\"and\",\"filters\":[{\"id\":\"enchant.stat_387439868\",\"value\":{\"min\":45},\"disabled\":true},{\"id\":\"rune.stat_1368271171\",\"value\":{\"min\":30},\"disabled\":true},{\"id\":\"implicit.stat_1967051901\",\"value\":{\"min\":1},\"disabled\":true},{\"id\":\"skill.hyena_cackle\",\"value\":{\"min\":18},\"disabled\":true},{\"id\":\"explicit.stat_387439868\",\"value\":{\"min\":100},\"disabled\":true},{\"id\":\"explicit.stat_669069897\",\"value\":{\"min\":7},\"disabled\":true},{\"id\":\"explicit.stat_1368271171\",\"value\":{\"min\":21},\"disabled\":true}]}],\"filters\":{\"trade_filters\":{\"filters\":{\"collapse\":{\"option\":\"true\"}}},\"type_filters\":{\"filters\":{\"category\":{\"option\":\"weapon.crossbow\"},\"rarity\":{\"option\":\"nonunique\"}}},\"equipment_filters\":{\"filters\":{\"rune_sockets\":{\"min\":2},\"dps\":{\"min\":500},\"edps\":{\"min\":240}}},\"misc_filters\":{\"filters\":{\"mirrored\":{\"option\":\"false\"}}}}},\"sort\":{\"price\":\"asc\"}}",
+ "name": "Storm Core Gemini Crossbow"
+}

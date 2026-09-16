@@ -1,0 +1,12 @@
+Gegenstandsklasse: Ringe
+Seltenheit: Selten
+Todesspirale
+Saphirring
+--------
+Erfordert: Stufe 44
+--------
+Gegenstandsstufe: 68
+--------
++28% zu Kältewiderstand (implizit)
+--------
++39 zu maximalem Leben

@@ -1,0 +1,12 @@
+Item Class: Jewels
+Rarity: Rare
+Kraken Bliss
+Sapphire
+--------
+Item Level: 79
+--------
+6% increased Elemental Damage
+12% increased Critical Damage Bonus
+4% increased Attack Speed
+--------
+Place into an allocated Jewel Socket on the Passive Skill Tree. Right click to remove from the Socket.

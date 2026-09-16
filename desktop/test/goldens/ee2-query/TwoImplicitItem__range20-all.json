@@ -1,0 +1,10 @@
+{
+ "fixture": "TwoImplicitItem.txt",
+ "prefs": {
+  "leagueId": "Standard",
+  "searchStatRange": 20,
+  "defaultAllSelected": true
+ },
+ "q": "{\"query\":{\"status\":{\"option\":\"securable\"},\"stats\":[{\"type\":\"and\",\"filters\":[{\"id\":\"pseudo.pseudo_total_elemental_resistance\",\"value\":{\"min\":31},\"disabled\":false},{\"id\":\"pseudo.pseudo_total_fire_resistance\",\"value\":{\"min\":31},\"disabled\":true},{\"id\":\"pseudo.pseudo_total_strength\",\"value\":{\"min\":31},\"disabled\":false},{\"id\":\"pseudo.pseudo_total_life\",\"value\":{\"min\":212},\"disabled\":false},{\"id\":\"implicit.stat_1570770415\",\"value\":{\"min\":11},\"disabled\":false},{\"id\":\"implicit.stat_1416292992\",\"value\":{\"min\":2},\"disabled\":false},{\"id\":\"explicit.stat_1389754388\",\"value\":{\"min\":10},\"disabled\":false},{\"id\":\"explicit.stat_915769802\",\"value\":{\"min\":75},\"disabled\":false}]},{\"type\":\"count\",\"value\":{\"min\":1,\"max\":1},\"disabled\":true,\"filters\":[{\"id\":\"pseudo.pseudo_number_of_empty_prefix_mods\",\"value\":{\"min\":1},\"disabled\":true}]}],\"filters\":{\"trade_filters\":{\"filters\":{\"collapse\":{\"option\":\"true\"}}},\"type_filters\":{\"filters\":{\"category\":{\"option\":\"accessory.belt\"},\"rarity\":{\"option\":\"nonunique\"}}},\"misc_filters\":{\"filters\":{\"corrupted\":{\"option\":\"false\"},\"mirrored\":{\"option\":\"false\"},\"sanctified\":{\"option\":\"false\"}}}}},\"sort\":{\"price\":\"asc\"}}",
+ "name": "Corpse Snare Ornate Belt"
+}

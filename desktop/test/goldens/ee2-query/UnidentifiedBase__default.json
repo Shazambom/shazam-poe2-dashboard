@@ -1,0 +1,8 @@
+{
+ "fixture": "UnidentifiedBase.txt",
+ "prefs": {
+  "leagueId": "Standard"
+ },
+ "q": "{\"query\":{\"status\":{\"option\":\"securable\"},\"stats\":[{\"type\":\"and\",\"filters\":[{\"id\":\"skill.volatile_dead\",\"value\":{\"min\":15},\"disabled\":false}]}],\"filters\":{\"trade_filters\":{\"filters\":{\"collapse\":{\"option\":\"true\"}}},\"type_filters\":{\"filters\":{\"rarity\":{\"option\":\"nonunique\"},\"ilvl\":{\"min\":69}}},\"misc_filters\":{\"filters\":{\"corrupted\":{\"option\":\"false\"},\"fractured_item\":{\"option\":\"false\"},\"mirrored\":{\"option\":\"false\"},\"sanctified\":{\"option\":\"false\"}}}},\"type\":\"Volatile Wand\"},\"sort\":{\"price\":\"asc\"}}",
+ "name": "Volatile Wand"
+}

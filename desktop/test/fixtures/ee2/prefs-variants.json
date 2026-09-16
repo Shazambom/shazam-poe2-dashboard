@@ -1,0 +1,5 @@
+[
+ { "id": "default", "leagueId": "Standard" },
+ { "id": "range20-all", "leagueId": "Standard", "searchStatRange": 20, "defaultAllSelected": true },
+ { "id": "de", "leagueId": "Standard", "language": "de" }
+]

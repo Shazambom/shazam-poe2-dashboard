@@ -1,0 +1,21 @@
+Item Class: Belts
+Rarity: Unique
+Headhunter
+Heavy Belt
+--------
+Requires: Level 40
+--------
+Item Level: 83
+--------
++18 to Strength (implicit)
+--------
++41 to maximum Life
++36 to Strength
++34 to Dexterity
+24% increased Stun Threshold
+Has 1 Charm Slot
+When you kill a Rare monster, you gain its Modifiers for 60 seconds
+--------
+"A man's soul rules from a cavern of bone, learns and
+judges through flesh-born windows. The heart is where
+the true self lies, and only a fool tries to pierce it."

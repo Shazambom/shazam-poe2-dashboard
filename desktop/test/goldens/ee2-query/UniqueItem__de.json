@@ -1,0 +1,10 @@
+{
+ "fixture": "UniqueItem.txt",
+ "prefs": {
+  "leagueId": "Standard",
+  "language": "de"
+ },
+ "error": {
+  "stage": "lang"
+ }
+}

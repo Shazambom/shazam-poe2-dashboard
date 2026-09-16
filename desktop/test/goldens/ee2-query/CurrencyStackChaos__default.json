@@ -1,0 +1,9 @@
+{
+ "fixture": "CurrencyStackChaos.txt",
+ "prefs": {
+  "leagueId": "Standard"
+ },
+ "error": {
+  "stage": "currency"
+ }
+}

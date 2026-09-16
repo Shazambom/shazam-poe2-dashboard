@@ -1,0 +1,8 @@
+{
+ "fixture": "RareItem.txt",
+ "prefs": {
+  "leagueId": "Standard"
+ },
+ "q": "{\"query\":{\"status\":{\"option\":\"securable\"},\"stats\":[{\"type\":\"and\",\"filters\":[{\"id\":\"explicit.stat_1263695895\",\"value\":{\"min\":15},\"disabled\":true}]},{\"type\":\"count\",\"value\":{\"min\":1,\"max\":1},\"disabled\":true,\"filters\":[{\"id\":\"pseudo.pseudo_number_of_empty_suffix_mods\",\"value\":{\"min\":2},\"disabled\":true}]},{\"type\":\"count\",\"value\":{\"min\":1},\"disabled\":true,\"filters\":[{\"id\":\"explicit.stat_691932474\",\"value\":{\"min\":51},\"disabled\":true},{\"id\":\"explicit.stat_803737631\",\"value\":{\"min\":51},\"disabled\":true}]}],\"filters\":{\"trade_filters\":{\"filters\":{\"collapse\":{\"option\":\"true\"}}},\"type_filters\":{\"filters\":{\"category\":{\"option\":\"weapon.bow\"},\"rarity\":{\"option\":\"nonunique\"}}},\"misc_filters\":{\"filters\":{\"corrupted\":{\"option\":\"false\"},\"mirrored\":{\"option\":\"false\"},\"sanctified\":{\"option\":\"false\"}}},\"equipment_filters\":{\"filters\":{\"dps\":{\"min\":155},\"edps\":{\"min\":92}}}}},\"sort\":{\"price\":\"asc\"}}",
+ "name": "Oblivion Strike Rider Bow"
+}

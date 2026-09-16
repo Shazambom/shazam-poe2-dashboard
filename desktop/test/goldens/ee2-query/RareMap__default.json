@@ -1,0 +1,8 @@
+{
+ "fixture": "RareMap.txt",
+ "prefs": {
+  "leagueId": "Standard"
+ },
+ "q": "{\"query\":{\"status\":{\"option\":\"securable\"},\"stats\":[{\"type\":\"and\",\"filters\":[{\"id\":\"explicit.stat_3477720557\",\"value\":{},\"disabled\":true},{\"id\":\"explicit.stat_1890519597\",\"value\":{\"min\":26},\"disabled\":true},{\"id\":\"explicit.stat_1309819744\",\"value\":{\"min\":2},\"disabled\":true},{\"id\":\"explicit.stat_2753083623\",\"value\":{\"min\":263},\"disabled\":true}]}],\"filters\":{\"trade_filters\":{\"filters\":{\"collapse\":{\"option\":\"true\"}}},\"type_filters\":{\"filters\":{\"category\":{\"option\":\"map\"},\"rarity\":{\"option\":\"nonunique\"}}},\"map_filters\":{\"filters\":{\"map_tier\":{\"min\":14,\"max\":14}}},\"misc_filters\":{\"filters\":{\"mirrored\":{\"option\":\"false\"},\"sanctified\":{\"option\":\"false\"}}}}},\"sort\":{\"price\":\"asc\"}}",
+ "name": "Desolate Route Waystone (Tier 14)"
+}

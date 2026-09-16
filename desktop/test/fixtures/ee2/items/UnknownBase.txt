@@ -1,0 +1,8 @@
+Item Class: Rings
+Rarity: Rare
+Made Up Loop
+Ring of Nonexistence
+--------
+Item Level: 68
+--------
++39 to maximum Life

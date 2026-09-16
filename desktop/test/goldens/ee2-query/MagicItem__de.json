@@ -1,0 +1,10 @@
+{
+ "fixture": "MagicItem.txt",
+ "prefs": {
+  "leagueId": "Standard",
+  "language": "de"
+ },
+ "error": {
+  "stage": "lang"
+ }
+}
