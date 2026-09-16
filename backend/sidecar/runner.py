@@ -82,18 +82,21 @@ def run_once(conn: sqlite3.Connection) -> bool:
         return False
     handler = HANDLERS.get(job["kind"])
     if handler is None:
-        analytics.fail(conn, job["id"], f"no handler for kind {job['kind']!r}")
+        with conn:                      # the sidecar owns its transactions (helpers never commit)
+            analytics.fail(conn, job["id"], f"no handler for kind {job['kind']!r}")
         return True
     kind = job["kind"]
     league = (job.get("params") or {}).get("league")
     _tlog(f"claim {kind} league={league!r}")   # <-- last line before a native death pinpoints it
     try:
-        handler(conn, job)
+        with conn:                      # compute + cache write + 'done' land as one commit
+            handler(conn, job)
         cached = analytics.read_cache(conn, kind, "current") or {}
         n = len(cached.get("signals") or []) if kind == "discords" else len(cached.get("weights") or {})
         _tlog(f"done {kind} n={n}")
     except Exception as exc:            # a bad series must not wedge the loop
-        analytics.fail(conn, job["id"], repr(exc))
+        with conn:
+            analytics.fail(conn, job["id"], repr(exc))
         _tlog(f"FAIL {kind} {exc!r}")
     return True
 
@@ -138,7 +141,8 @@ def main() -> None:
     # SELF-HEAL: re-queue jobs orphaned in 'running' by a previous crash so the pipeline recovers
     # instead of wedging forever (the v0.2.50 Windows symptom).
     try:
-        healed = analytics.requeue_stale(conn, older_than_s=0)
+        with conn:
+            healed = analytics.requeue_stale(conn, older_than_s=0)
         if healed:
             _tlog(f"requeued {healed} stale running job(s) at startup")
     except sqlite3.Error as exc:
@@ -157,13 +161,15 @@ def main() -> None:
         if worked:
             done += 1
             if done % 50 == 0:          # trim occasionally, not on every job's hot path
-                analytics.prune_jobs(conn)
+                with conn:
+                    analytics.prune_jobs(conn)
             idle = 0
         else:
             # periodically re-heal in case a job was orphaned while we were idle-looping
             if idle == 0:
                 try:
-                    analytics.requeue_stale(conn, older_than_s=120)
+                    with conn:
+                        analytics.requeue_stale(conn, older_than_s=120)
                 except sqlite3.Error:
                     pass
             time.sleep(min(5.0, 0.5 * (idle + 1)))   # gentle idle backoff

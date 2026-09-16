@@ -3,7 +3,7 @@
 This is the ONE shared crossing point between the backend and the heavy-analytics sidecar.
 It is deliberately **stdlib-only and connection-injected**:
 
-  * The backend passes its ATTACHed connection (`db._conn()`); the two tables live in the
+  * The backend passes its ATTACHed connection (`with db.tx() as c`); the two tables live in the
     `market` database, and SQLite resolves the unqualified names there.
   * The lean sidecar — a separate PyInstaller binary that must NOT drag the FastAPI backend in
     — passes its own `market.sqlite` connection. Importing this module runs no DB boot.
@@ -15,6 +15,10 @@ Two tables (market side, self-healed on boot; see MARKET_SCHEMA in db.py):
 Contract: endpoints only ever READ the cache, so a dead/slow sidecar can never take down a
 request — it just serves stale-or-empty results. Every read here returns a benign default
 (None / []) rather than raising, to keep that guarantee.
+
+TRANSACTIONS: every helper here runs plain statements on the connection it is handed and NEVER
+commits — the caller owns the transaction (backend: `with db.tx() as c`; sidecar: `with conn:`).
+The one exception is claim(), which needs its own BEGIN IMMEDIATE for exactly-once semantics.
 """
 from __future__ import annotations
 
@@ -43,7 +47,6 @@ def enqueue(conn: sqlite3.Connection, kind: str, params: Optional[dict] = None,
     cur = conn.execute(
         "INSERT INTO analytics_jobs(kind, params_json, state, enqueued_at) VALUES(?,?, 'queued', ?)",
         (kind, json.dumps(params or {}), _now()))
-    conn.commit()
     return cur.lastrowid
 
 
@@ -61,7 +64,6 @@ def requeue_stale(conn: sqlite3.Connection, *, older_than_s: int = 120) -> int:
         "UPDATE analytics_jobs SET state='queued', started_at=NULL WHERE state='running' "
         "AND started_at IS NOT NULL AND started_at <= ?",
         (_now() - older_than_s,)).rowcount
-    conn.commit()
     return n
 
 
@@ -107,13 +109,11 @@ def complete(conn: sqlite3.Connection, job_id: Optional[int], kind: str, key: st
     if job_id is not None:
         conn.execute("UPDATE analytics_jobs SET state='done', finished_at=? WHERE id=?",
                      (_now(), job_id))
-    conn.commit()
 
 
 def fail(conn: sqlite3.Connection, job_id: int, error: str) -> None:
     conn.execute("UPDATE analytics_jobs SET state='error', error=?, finished_at=? WHERE id=?",
                  (str(error)[:2000], _now(), job_id))
-    conn.commit()
 
 
 def prune_jobs(conn: sqlite3.Connection, keep: int = 200) -> None:
@@ -123,7 +123,6 @@ def prune_jobs(conn: sqlite3.Connection, keep: int = 200) -> None:
         "DELETE FROM analytics_jobs WHERE state IN ('done','error') AND id NOT IN "
         "(SELECT id FROM analytics_jobs WHERE state IN ('done','error') ORDER BY id DESC LIMIT ?)",
         (keep,))
-    conn.commit()
 
 
 # ------------------------------------------------------------------- results (cache) — READ only

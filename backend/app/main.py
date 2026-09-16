@@ -88,9 +88,9 @@ async def _analytics_loop():
                 # Both heavy jobs target the on-screen league. enqueue coalesces per kind, so this
                 # never piles up; the sidecar claims oldest-first and computes each.
                 def _enqueue():
-                    c = db._conn()
-                    analytics.enqueue(c, "discords", {"league": league})
-                    analytics.enqueue(c, "arc", {"league": league})
+                    with db.tx() as c:
+                        analytics.enqueue(c, "discords", {"league": league})
+                        analytics.enqueue(c, "arc", {"league": league})
                 await run_in_threadpool(_enqueue)
         except Exception as exc:
             log.warning("analytics enqueue error: %s", exc)
@@ -544,12 +544,9 @@ async def signals_ep():
             blob = analytics.read_cache(c, "discords", "current")   # {league, signals}, or None
         league = blob.get("league") if blob else movers.current_league()
         signals = (blob.get("signals") or []) if blob else []
-        ack = db.kv_get("signals_ack", {}) or {}
-        pruned = signalsack.prune(ack, signals)     # drop acks whose signal has aged out
-        if pruned != ack:
-            db.kv_set("signals_ack", pruned)
-        return {"league": league, "signals": signalsack.annotate(signals, pruned),
-                "unseen": signalsack.unseen_count(signals, pruned)}
+        ack = db.kv_get("signals_ack", {}) or {}   # read-only: pruning happens on the ack path
+        return {"league": league, "signals": signalsack.annotate(signals, ack),
+                "unseen": signalsack.unseen_count(signals, ack)}
     return await run_in_threadpool(_read)
 
 
@@ -567,9 +564,10 @@ async def signals_ack_ep(body: SignalAck):
             blob = analytics.read_cache(c, "discords", "current")
         signals = (blob.get("signals") or []) if blob else []
         keys = [signalsack.sig_key(s) for s in signals] if body.all else (body.keys or [])
-        ack = db.kv_get("signals_ack", {}) or {}
-        merged = signalsack.prune(signalsack.merge(ack, keys, int(time.time())), signals)
-        db.kv_set("signals_ack", merged)
+        now = int(time.time())
+        merged = db.kv_update("signals_ack",
+                              lambda ack: signalsack.prune(signalsack.merge(ack or {}, keys, now), signals),
+                              {})
         return {"ok": True, "unseen": signalsack.unseen_count(signals, merged)}
     return await run_in_threadpool(_ack)
 

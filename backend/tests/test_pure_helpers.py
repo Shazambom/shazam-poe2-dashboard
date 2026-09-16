@@ -26,15 +26,14 @@ def test_deep_update_merges_nested_and_replaces_leaves():
     assert base == {"a": 2, "f": {"x": 1, "y": 3, "z": 4}, "l": [9], "n": {"k": 1}}
 
 
-def test_get_settings_bakes_liquidity_floor_once():
-    db.kv_set("settings", {"filters": {"min_liquidity_ref": 0, "min_volume_ref_per_h": 5}})
+def test_get_settings_merges_stored_over_defaults():
+    db.kv_set("settings", {"filters": {"min_liquidity_ref": 1.0}, "league": "L"})
     s = settings.get_settings()
-    assert s["filters"]["min_liquidity_ref"] == 50.0
-    assert s["filters"]["min_volume_ref_per_h"] == 100.0
-    assert s["_liq_floor_v1"] is True
-    # After the bake the user may lower them and it sticks.
-    settings.save_settings({"filters": {"min_liquidity_ref": 1.0}})
-    assert settings.get_settings()["filters"]["min_liquidity_ref"] == 1.0
+    assert s["league"] == "L"
+    assert s["filters"]["min_liquidity_ref"] == 1.0                     # stored wins
+    assert s["filters"]["min_volume_ref_per_h"] == 100.0                # default fills the rest
+    settings.save_settings({"filters": {"min_liquidity_ref": 2.0}})
+    assert settings.get_settings()["filters"]["min_liquidity_ref"] == 2.0
     db.kv_set("settings", {})
 
 

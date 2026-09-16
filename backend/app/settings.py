@@ -77,27 +77,25 @@ DEFAULTS: dict = {
 }
 
 
-def get_settings() -> dict:
-    stored = db.kv_get("settings", {})
+def _merged(stored: dict | None) -> dict:
     merged = copy.deepcopy(DEFAULTS)
-    _deep_update(merged, stored)
-    # One-time: bake the per-step liquidity/volume minimums into filters saved before they
-    # existed (they'd otherwise keep overriding the new defaults with 0). Runs once, then
-    # the user is free to lower them (the UI warns) and it sticks.
-    if not merged.get("_liq_floor_v1"):
-        f = merged["filters"]
-        f["min_liquidity_ref"] = max(f.get("min_liquidity_ref") or 0.0, 50.0)
-        f["min_volume_ref_per_h"] = max(f.get("min_volume_ref_per_h") or 0.0, 100.0)
-        merged["_liq_floor_v1"] = True
-        db.kv_set("settings", merged)
+    _deep_update(merged, stored or {})
     return merged
 
 
+def get_settings() -> dict:
+    """Stored settings over DEFAULTS. Read-only (one-time transforms are user migrations)."""
+    return _merged(db.kv_get("settings", {}))
+
+
 def save_settings(patch: dict) -> dict:
-    current = get_settings()
-    _deep_update(current, patch)
-    db.kv_set("settings", current)
-    return current
+    """Deep-merge `patch` into the stored settings atomically (read → merge → write under the
+    write lock, so two concurrent saves never drop each other's keys)."""
+    def apply(stored):
+        current = _merged(stored)
+        _deep_update(current, patch)
+        return current
+    return db.kv_update("settings", apply, {})
 
 
 def _deep_update(base: dict, patch: dict) -> None:

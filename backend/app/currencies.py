@@ -165,9 +165,7 @@ class Registry:
         return None
 
     def set_override(self, meta: str, tid: str) -> None:
-        overrides = db.kv_get("meta_overrides", {}) or {}
-        overrides[meta] = tid
-        db.kv_set("meta_overrides", overrides)
+        db.kv_update("meta_overrides", lambda o: {**(o or {}), meta: tid}, {})
         self._user_overrides[meta] = tid   # highest precedence
         self._link(meta, tid)
 

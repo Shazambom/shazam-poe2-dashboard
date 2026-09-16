@@ -98,7 +98,15 @@ def _m1_split_from_legacy(conn: sqlite3.Connection) -> None:
     ).fetchone()
     if done and done[0] == "1":
         return
+    backup = DB_PATH.with_suffix(DB_PATH.suffix + ".premigration")
     if not DB_PATH.exists():
+        if backup.exists():
+            # The live file was renamed but split_done never landed (a crash between the rename
+            # and the commit on an older build). Refuse to stamp "done" over a lift that never
+            # happened — restore the backup by hand (mv it back to poe2arb.sqlite) and re-run.
+            raise RuntimeError(
+                f"legacy split: {backup.name} exists but the lift never committed; "
+                f"restore it to {DB_PATH.name} and restart")
         # Fresh install, no legacy DB — nothing to lift. Mark done so we don't re-check.
         conn.execute(
             "INSERT OR REPLACE INTO user_meta(key, value) VALUES('split_done','1')"
@@ -143,20 +151,49 @@ def _m1_split_from_legacy(conn: sqlite3.Connection) -> None:
     conn.execute(
         "INSERT OR REPLACE INTO user_meta(key, value) VALUES('split_done','1')"
     )
-    # Rename the legacy file so we never touch it again but keep it as a safety backup.
-    backup = DB_PATH.with_suffix(DB_PATH.suffix + ".premigration")
+
+    def _rename_legacy() -> None:
+        # Runs only AFTER the lift is committed (the runner calls it post-commit): if the commit
+        # fails or the process dies first, the legacy file is still in place and the next boot
+        # simply lifts again. Keeps the file as a safety backup; moves the WAL/SHM sidecars too
+        # so the .premigration copy is self-consistent.
+        try:
+            for suffix in ("", "-wal", "-shm"):
+                src = DB_PATH.parent / (DB_PATH.name + suffix)
+                if src.exists():
+                    src.rename(backup.parent / (backup.name + suffix))
+            log.info("legacy split: renamed %s -> %s", DB_PATH.name, backup.name)
+        except OSError as exc:
+            log.warning("legacy split: could not rename legacy DB (non-fatal): %s", exc)
+
+    return _rename_legacy
+
+
+def _m3_liq_floor(conn: sqlite3.Connection) -> None:
+    """One-time: bake the per-step liquidity/volume minimums into filters saved before they
+    existed (they'd otherwise keep overriding the newer defaults with 0). Idempotent on the
+    `_liq_floor_v1` marker; after it the user is free to lower them and it sticks. This used
+    to be a write-on-read shim inside settings.get_settings() — a getter must not write."""
+    row = conn.execute("SELECT value FROM kv WHERE key='settings'").fetchone()
+    if not row:
+        return
     try:
-        # Move the WAL/SHM sidecars too so the .premigration copy is self-consistent.
-        for suffix in ("", "-wal", "-shm"):
-            src = DB_PATH.parent / (DB_PATH.name + suffix)
-            if src.exists():
-                src.rename(backup.parent / (backup.name + suffix))
-        log.info("legacy split: renamed %s -> %s", DB_PATH.name, backup.name)
-    except OSError as exc:
-        log.warning("legacy split: could not rename legacy DB (non-fatal): %s", exc)
+        s = json.loads(row[0])
+    except (ValueError, TypeError):
+        return
+    if not isinstance(s, dict) or s.get("_liq_floor_v1"):
+        return
+    f = s.setdefault("filters", {})
+    if isinstance(f, dict):
+        f["min_liquidity_ref"] = max(f.get("min_liquidity_ref") or 0.0, 50.0)
+        f["min_volume_ref_per_h"] = max(f.get("min_volume_ref_per_h") or 0.0, 100.0)
+    s["_liq_floor_v1"] = True
+    conn.execute("UPDATE kv SET value=? WHERE key='settings'", (json.dumps(s),))
+    log.info("m3: baked liquidity/volume floors into saved filters")
 
 
 USER_MIGRATIONS: list[tuple[int, str, object]] = [
     (1, "initial split from legacy poe2arb.sqlite", _m1_split_from_legacy),
     (2, "derive trading_workspace tree from flat watches", _m2_watches_to_workspace),
+    (3, "bake liquidity/volume filter floors into pre-floor settings", _m3_liq_floor),
 ]

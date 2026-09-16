@@ -52,7 +52,7 @@ def _market_db():
 
 def test_run_once_computes_discords_into_cache():
     c = _market_db()
-    analytics.enqueue(c, "discords", {"league": "Std"})
+    analytics.enqueue(c, "discords", {"league": "Std"}); c.commit()
     did = runner.run_once(c)
     assert did is True
     # discords caches ONE blob under a fixed key with the league carried inside the value.
@@ -82,7 +82,7 @@ def test_run_once_computes_arc_weights_into_cache():
         rows.append(("Std", 291, day, close, close, 100))
     c.executemany("INSERT INTO league_daily VALUES(?,?,?,?,?,?)", rows)
     c.commit()
-    analytics.enqueue(c, "arc", {"league": "Std"})
+    analytics.enqueue(c, "arc", {"league": "Std"}); c.commit()
     assert runner.run_once(c) is True
     blob = analytics.read_cache(c, "arc", "current")
     assert blob["league"] == "Std"
@@ -99,7 +99,7 @@ def test_run_once_returns_false_when_idle():
 
 def test_unknown_kind_is_marked_error_not_fatal():
     c = _market_db()
-    analytics.enqueue(c, "no-such-kind", {})
+    analytics.enqueue(c, "no-such-kind", {}); c.commit()
     did = runner.run_once(c)
     assert did is True
     row = c.execute("SELECT state, error FROM analytics_jobs ORDER BY id DESC LIMIT 1").fetchone()

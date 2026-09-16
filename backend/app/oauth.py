@@ -57,11 +57,13 @@ def start(redirect_uri: str | None = None) -> dict:
     challenge = _b64url(hashlib.sha256(verifier.encode()).digest())
     state = pysecrets.token_hex(16)
     redirect = redirect_uri or REDIRECT_URI
-    pending = db.kv_get("oauth_pending", {})
     now = time.time()
-    pending = {k: v for k, v in pending.items() if now - v["created"] < 600}
-    pending[state] = {"verifier": verifier, "redirect_uri": redirect, "created": now}
-    db.kv_set("oauth_pending", pending)
+
+    def apply(pending):
+        live = {k: v for k, v in (pending or {}).items() if now - v["created"] < 600}
+        live[state] = {"verifier": verifier, "redirect_uri": redirect, "created": now}
+        return live
+    db.kv_update("oauth_pending", apply, {})
     url = AUTHORIZE_URL + "?" + urlencode({
         "client_id": CLIENT_ID, "response_type": "code", "scope": SCOPES, "state": state,
         "redirect_uri": redirect, "code_challenge": challenge, "code_challenge_method": "S256",
@@ -70,9 +72,14 @@ def start(redirect_uri: str | None = None) -> dict:
 
 
 async def complete(code: str, state: str) -> dict:
-    pending = db.kv_get("oauth_pending", {})
-    p = pending.pop(state, None)
-    db.kv_set("oauth_pending", pending)
+    taken: dict = {}
+
+    def apply(pending):
+        pending = dict(pending or {})
+        taken["p"] = pending.pop(state, None)
+        return pending
+    db.kv_update("oauth_pending", apply, {})
+    p = taken.get("p")
     if not p:
         raise ValueError("unknown or expired state; start the login again")
     form = {

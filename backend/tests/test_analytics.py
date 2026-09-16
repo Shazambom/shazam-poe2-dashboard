@@ -20,7 +20,7 @@ from app import analytics, db  # noqa: E402
 
 
 def _conn():
-    return db._conn()
+    return db._conn()   # tests own the transaction: commit after every write helper
 
 
 def _clear():
@@ -33,7 +33,7 @@ def _clear():
 def test_enqueue_then_claim_is_exactly_once():
     _clear()
     c = _conn()
-    jid = analytics.enqueue(c, "discords", {"league": "Std"})
+    jid = analytics.enqueue(c, "discords", {"league": "Std"}); c.commit()
     assert isinstance(jid, int) and jid > 0
 
     first = analytics.claim(c)
@@ -48,20 +48,20 @@ def test_enqueue_then_claim_is_exactly_once():
 def test_enqueue_coalesces_duplicate_queued_jobs():
     _clear()
     c = _conn()
-    a = analytics.enqueue(c, "discords")
+    a = analytics.enqueue(c, "discords"); c.commit()
     b = analytics.enqueue(c, "discords")          # same kind still queued -> no new row
     assert a == b
     n = c.execute("SELECT COUNT(*) FROM analytics_jobs WHERE kind='discords'").fetchone()[0]
     assert n == 1
     # coalesce=False forces a distinct row.
-    d = analytics.enqueue(c, "discords", coalesce=False)
+    d = analytics.enqueue(c, "discords", coalesce=False); c.commit()
     assert d != a
 
 
 def test_complete_writes_cache_and_marks_done():
     _clear()
     c = _conn()
-    jid = analytics.enqueue(c, "discords")
+    jid = analytics.enqueue(c, "discords"); c.commit()
     job = analytics.claim(c)
     analytics.complete(c, job["id"], "discords", "62", {"z": 3.1, "day": "2026-09-14"})
 
@@ -83,7 +83,7 @@ def test_complete_upserts_same_key():
 def test_fail_marks_error():
     _clear()
     c = _conn()
-    jid = analytics.enqueue(c, "discords")
+    jid = analytics.enqueue(c, "discords"); c.commit()
     job = analytics.claim(c)
     analytics.fail(c, job["id"], "boom")
     row = c.execute("SELECT state, error FROM analytics_jobs WHERE id=?", (jid,)).fetchone()
@@ -108,8 +108,8 @@ def test_claim_is_fifo_across_kinds():
     so mixed kinds come out in enqueue order."""
     _clear()
     c = _conn()
-    analytics.enqueue(c, "discords")
-    analytics.enqueue(c, "arc")
+    analytics.enqueue(c, "discords"); c.commit()
+    analytics.enqueue(c, "arc"); c.commit()
     first = analytics.claim(c)
     second = analytics.claim(c)
     assert [first["kind"], second["kind"]] == ["discords", "arc"]
@@ -122,17 +122,17 @@ def test_requeue_stale_recovers_orphaned_running_jobs():
     'running' back to 'queued' so it's reprocessed — while leaving a fresh in-flight job alone."""
     _clear()
     c = _conn()
-    analytics.enqueue(c, "discords", {"league": "Std"})
+    analytics.enqueue(c, "discords", {"league": "Std"}); c.commit()
     claimed = analytics.claim(c)                       # -> running
     assert claimed is not None
     assert analytics.claim(c) is None                 # nothing else queued; the row is 'running'
 
     # Fresh running job (started just now) is NOT stolen by a generous window.
-    assert analytics.requeue_stale(c, older_than_s=120) == 0
+    assert analytics.requeue_stale(c, older_than_s=120) == 0; c.commit()
     assert analytics.claim(c) is None
 
     # Orphaned long enough -> requeued -> claimable again.
-    assert analytics.requeue_stale(c, older_than_s=0) == 1
+    assert analytics.requeue_stale(c, older_than_s=0) == 1; c.commit()
     again = analytics.claim(c)
     assert again is not None and again["kind"] == "discords"
 

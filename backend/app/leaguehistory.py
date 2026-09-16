@@ -210,11 +210,16 @@ def _merge_meta_bridge(new: dict[str, str]) -> None:
     """Merge freshly-crawled metadata→trade mappings into the authoritative bridge kv (`meta_bridge`,
     operational → ships in the market snapshot per db-maintenance.md), then refresh the registry and
     drop graph caches so newly-mapped currencies enter the exchange graph immediately."""
-    cur = db.kv_get("meta_bridge", {}) or {}
-    changed = sum(1 for bt, api in new.items() if cur.get(bt) != api)
-    if changed:
+    changed = 0
+
+    def apply(cur):
+        nonlocal changed
+        cur = dict(cur or {})
+        changed = sum(1 for bt, api in new.items() if cur.get(bt) != api)
         cur.update(new)
-        db.kv_set("meta_bridge", cur)
+        return cur
+    cur = db.kv_update("meta_bridge", apply, {})
+    if changed:
         from .currencies import registry
         registry.load_bridge()
         try:

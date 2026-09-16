@@ -6,7 +6,7 @@ import shutil
 import sqlite3
 import threading
 from contextlib import contextmanager
-from typing import Any, Iterator
+from typing import Any, Callable, Iterator
 
 from .config import MARKET_DB_PATH, MARKET_SEED_PATH, USER_DB_PATH
 
@@ -268,7 +268,9 @@ def _run_user_migrations(conn: sqlite3.Connection) -> None:
     for mid, desc, fn in pending:
         log.info("user migration %d: %s", mid, desc)
         try:
-            fn(conn)
+            # A migration may return a callable to run AFTER its transaction is durable (file
+            # moves etc. that must never precede the commit — see m1).
+            after = fn(conn)
             conn.execute(
                 "INSERT INTO user_meta(key, value) VALUES('schema_version', ?) "
                 "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
@@ -279,6 +281,8 @@ def _run_user_migrations(conn: sqlite3.Connection) -> None:
             conn.rollback()
             log.exception("user migration %d FAILED — aborting startup", mid)
             raise
+        if callable(after):
+            after()
 
 
 def _boot_databases() -> None:
@@ -318,7 +322,9 @@ def _connect() -> sqlite3.Connection:
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA market.journal_mode=WAL")
     conn.execute("PRAGMA busy_timeout=15000")
-    conn.execute("PRAGMA synchronous=NORMAL")
+    # user.sqlite must survive power loss ("never lose user data"); its writes are rare, debounced
+    # single-row upserts, so FULL costs nothing a user can feel. Market data is disposable: NORMAL.
+    conn.execute("PRAGMA main.synchronous=FULL")
     conn.execute("PRAGMA market.synchronous=NORMAL")
     return conn
 
@@ -369,6 +375,23 @@ def kv_set(key: str, value: Any) -> None:
             "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
             (key, json.dumps(value)),
         )
+
+
+def kv_update(key: str, fn: Callable[[Any], Any], default: Any = None) -> Any:
+    """Read-modify-write a kv blob inside ONE write transaction: `fn(current) -> new` runs while
+    the app-wide write lock is held, so concurrent updaters (a polled GET and a POST, two threadpool
+    requests) can never overwrite each other. `fn` must be pure and quick — it runs under the lock
+    and must not touch the DB itself (tx() is not reentrant). Returns the stored value."""
+    table = _kv_table(key)
+    with tx() as c:
+        row = c.execute(f"SELECT value FROM {table} WHERE key=?", (key,)).fetchone()
+        value = fn(json.loads(row["value"]) if row else default)
+        c.execute(
+            f"INSERT INTO {table}(key, value) VALUES(?, ?) "
+            "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+            (key, json.dumps(value)),
+        )
+    return value
 
 
 def get_capital() -> dict[str, float]:
