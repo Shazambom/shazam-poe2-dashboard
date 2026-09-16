@@ -216,6 +216,55 @@ graceful-degrades (sidecar off), board/capital unregressed. **NOT shipped** — 
 
 > **Port-tests-first** still applies if Phase 3/4 VENDOR (rather than pip-install) any library code.
 
+### Phase 6 plumbing reference — entry points, endpoints, contracts (Phase 3/4 build ON this)
+
+**Processes / entry points**
+- **Sidecar binary** `backend/sidecar/run_sidecar.py` → `runner.main()`. PyInstaller onefile
+  `poe2arb-sidecar[.exe]` (numpy/stumpy, ~73 MB). Opens `market.sqlite` (RO reads + writes to the
+  two analytics tables) via its OWN plain sqlite3 conn — it must NEVER `import app.db` (that boots
+  the backend). Loop: `run_once(conn)` → `analytics.claim` → dispatch via `HANDLERS` → write cache;
+  idle backoff ≤5 s; prunes every 50th job.
+- **Backend** `app/main.py` lifespan starts it: `sidecar_supervisor.start()` (spawn + restart
+  w/ backoff), `watchdog.guard(...)` (backend dies with Electron), and `_analytics_loop` (enqueues
+  a `discords` refresh for the resolved current league every 2 h; `enqueue` coalesces).
+- **Supervisor** `app/sidecar_supervisor.py`: `start()` / `stop()`. Spawns the sidecar with a
+  held-open stdin pipe (EOF on backend death) + `ARBITER_PARENT_PID`.
+
+**Env-var contracts** (set by Electron `desktop/src/main.js`, read by the backend/sidecar)
+- `DATA_DIR` — dir holding `user.sqlite` + `market.sqlite` (existing).
+- `MARKET_SEED` — bundled snapshot to seed `market.sqlite` (existing).
+- `ARBITER_PARENT_PID` — backend's parent (Electron) pid → backend watchdog. Backend passes its own
+  pid to the sidecar the same way. Absent on the web/server env ⇒ no watchdog (never self-kill a server).
+- `SIDECAR_BIN` — path to the bundled sidecar binary (Electron passes the EXPECTED path even if
+  missing, so the supervisor can WARN on a packaging regression). If set-and-missing ⇒ warn + no-op.
+- `SIDECAR_FROM_SOURCE=1` — opt-in to run the sidecar from source with the current interpreter
+  (local dev only; the web/Docker env sets neither var ⇒ supervisor no-ops, endpoints serve empty).
+
+**HTTP endpoint** `GET /api/signals` → `{ "league": str|null, "signals": [ {item_id, name, t,
+mp_dist, vol_z, close} ] }`. READ-ONLY over `analytics_cache`; never fails a request — if the
+sidecar is down/idle it returns `signals: []` (and the resolved current league). This is the read
+surface the Phase-4 inbox will consume.
+
+**SQLite transport** (`app/analytics.py`, stdlib-only, connection-injected — pass `db._conn()` in
+the backend or the sidecar's own conn):
+- Tables (market side, `MARKET_SCHEMA`): `analytics_jobs(id,kind,params_json,state,enqueued_at,
+  started_at,finished_at,error)` — control channel; `analytics_cache(kind,key,computed_at,
+  value_json)` PK`(kind,key)` — results, sidecar is SOLE writer.
+- API: `enqueue(conn, kind, params=None, coalesce=True) -> id` · `claim(conn) -> {id,kind,params}|None`
+  (single-pass, oldest-of-any-kind, exactly-once) · `complete(conn, job_id, kind, key, value)`
+  (upsert cache + mark done; `job_id=None` allowed) · `fail(conn, job_id, error)` ·
+  `read_cache(conn, kind, key=None)` (value | list | None/[]) · `prune_jobs(conn, keep=200)`.
+- **Cache-key contract**: one blob per kind under a **fixed key**, the varying dimension carried
+  INSIDE the value — discords writes `key="current"`, value `{"league": L, "signals": [...]}`, and
+  the reader reads `("discords","current")` (no league re-resolution → no write/read drift).
+
+**Extension recipe (add a job kind, e.g. Phase 3 `arc`)**: (1) write a pure compute fn (sidecar,
+its own module); (2) add a `handle_<kind>(conn, job)` that reads `job["params"]`, computes, and
+`analytics.complete(conn, job["id"], "<kind>", "current", {..., "result": ...})`; (3) register it in
+`runner.HANDLERS`; (4) enqueue from a backend loop/endpoint via `analytics.enqueue`; (5) add a
+read-only endpoint that `read_cache(c, "<kind>", "current")`. No new tables, no snapshot bump. Heavy
+libs go in `requirements-sidecar.txt` + get bundled by `build-sidecar.sh` / the Windows CI step.
+
 ## Suggested order (lightest-first)
 1.5 slider → 5 centrality → 2 Ghost Wealth → 6 sidecar scaffold (+watchdog retrofit) → 3 arc →
 4 signals. Each phase: `/tdd` (tests first), then drive-validate over CDP, web env first.
