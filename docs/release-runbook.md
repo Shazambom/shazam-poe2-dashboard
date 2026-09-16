@@ -75,6 +75,13 @@ exporter's mid-sync guard enforces this): `sshshazambom sudo bash /home/shazam/b
    bundled via `sidecar-bin` extraResources; the Windows CI builds its own `.exe`. `dist:mac`/
    `publish-github.sh` bundle whatever is in `sidecar-bin/`, so it must exist and be current.
 
+   > **Build everything as one packaged app.** `npm run dist:mac:all` chains
+   > `build:backend` + `build:sidecar` + `build:frontend` + `electron-builder --mac`, producing one
+   > `Arbiter.app` whose `Contents/Resources/` holds `backend-bin/`, `sidecar-bin/`, `market-seed/`,
+   > and the frontend `app.asar` — the single double-clickable artifact users run. Use it for a
+   > from-scratch build; use the individual `build:*` scripts when iterating. (`dist:mac` alone
+   > packages whatever binaries already exist in `backend-bin/`/`sidecar-bin/`.)
+
    > Workspace fields like `activeId` / `armed` are stored inside the `trading_workspace`
    > JSON blob, which the backend persists opaquely — new fields need **no backend change
    > and no migration**. Adding/altering an actual DB **table/column** does (user → numbered

@@ -9,8 +9,11 @@
   "scripts": {
     "start": "electron .",
     "build:frontend": "cd ../frontend && npm run build && rm -rf ../desktop/app-dist && cp -R dist ../desktop/app-dist",
+    "build:backend": "./build-backend.sh",
+    "build:sidecar": "./build-sidecar.sh",
     "dist:mac": "npm run build:frontend && electron-builder --mac",
     "dist:win": "npm run build:frontend && electron-builder --win",
+    "dist:mac:all": "npm run build:backend && npm run build:sidecar && npm run dist:mac",
     "publish": "./publish-github.sh"
   },
   "devDependencies": {
