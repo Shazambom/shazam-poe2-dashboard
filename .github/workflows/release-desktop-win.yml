@@ -107,7 +107,8 @@ jobs:
             desktop/release/*.exe
             desktop/release/*.exe.blockmap
             desktop/release/*.zip
-            desktop/release/*.yml
+            desktop/release/latest.yml
+            desktop/release/beta.yml
       - name: Also upload as workflow artifact
         uses: actions/upload-artifact@v4
         with:
