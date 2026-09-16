@@ -1,6 +1,6 @@
 import { bus } from './api.js'
 import { useStatus } from './statusStore.js'
-import { playPing } from './ping-sound.js'
+import { playPing, DEFAULT_TONE } from './ping-sound.js'
 
 // THE notification dispatcher. Two families (live trade pings, market signals) × three channels
 // (in-app banner in the toast stack, the ping sound, an OS notification). What fires is decided
@@ -8,8 +8,8 @@ import { playPing } from './ping-sound.js'
 // Everything that wants to alert the user calls notify(family, …) — never a channel directly.
 export const DEFAULT_NOTIFICATIONS = {
   volume: 0.5,
-  live: { banner: true, sound: true, os: false },
-  signals: { banner: true, sound: true, os: false },
+  live: { banner: true, sound: true, os: false, tone: DEFAULT_TONE },
+  signals: { banner: true, sound: true, os: false, tone: 'coin' },
 }
 
 export function notifyPrefs() {
@@ -45,7 +45,7 @@ export function osNotify(title, body, { tag, onClick } = {}) {
   } catch { return null }
 }
 
-let channels = { sound: (volume) => playPing(volume), os: osNotify }
+let channels = { sound: (volume, tone) => playPing(volume, tone), os: osNotify }
 export function setChannels(patch) { channels = { ...channels, ...patch } }   // tests
 
 // family: 'live' | 'signals'. `node` is the banner's React node (rendered in the toast stack under
@@ -53,6 +53,6 @@ export function setChannels(patch) { channels = { ...channels, ...patch } }   //
 export function notify(family, { title, body, node, id = family, ttl = 10000, tag, onOpen } = {}) {
   const p = notifyPrefs()[family] || DEFAULT_NOTIFICATIONS.live
   if (p.banner && node) bus.emit({ id, ttl, node })
-  if (p.sound) channels.sound(notifyPrefs().volume)
+  if (p.sound) channels.sound(notifyPrefs().volume, p.tone)
   if (p.os) channels.os(title, body, { tag, onClick: onOpen })
 }

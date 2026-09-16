@@ -10,7 +10,7 @@ const { useStatus } = await import('../src/lib/statusStore.js')
 const { bus } = await import('../src/lib/api.js')
 
 test('defaults: banner + sound on, OS off, for both families', () => {
-  assert.deepEqual(N.notifyPrefs(), { volume: 0.5, live: { banner: true, sound: true, os: false }, signals: { banner: true, sound: true, os: false } })
+  assert.deepEqual(N.notifyPrefs(), { volume: 0.5, live: { banner: true, sound: true, os: false, tone: 'vaal' }, signals: { banner: true, sound: true, os: false, tone: 'coin' } })
   useStatus.setState({ settings: { notifications: { volume: 0.9, signals: { os: true } } } })
   const p = N.notifyPrefs()
   assert.equal(p.volume, 0.9); assert.equal(p.signals.os, true); assert.equal(p.signals.banner, true); assert.equal(p.live.os, false)
@@ -52,4 +52,19 @@ test('osNotify prefers the desktop bridge and routes its click back by tag', asy
   globalThis.__click('t1')
   assert.deepEqual(clicked, ['t1'])
   globalThis.window = undefined
+})
+
+test('a palette of distinct tones, one selectable per family', async () => {
+  const { TONES, DEFAULT_TONE } = await import('../src/lib/ping-sound.js')
+  assert.ok(Object.keys(TONES).length >= 6)
+  for (const [id, t] of Object.entries(TONES)) { assert.ok(t.label && t.wave && t.notes.length >= 1, id) }
+  assert.ok(DEFAULT_TONE in TONES)
+  assert.equal(N.notifyPrefs().live.tone, 'vaal')
+  assert.equal(N.notifyPrefs().signals.tone, 'coin')
+  useStatus.setState({ settings: { notifications: { signals: { tone: 'bell' } } } })
+  const calls = []
+  N.setChannels({ sound: (v, tone) => calls.push(tone), os: () => {} })
+  N.notify('signals', { title: 't' }); N.notify('live', { title: 't' })
+  assert.deepEqual(calls, ['bell', 'vaal'])
+  useStatus.setState({ settings: null })
 })

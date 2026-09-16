@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { useStatus, ensureSettings } from '../lib/statusStore.js'
 import { DEFAULT_NOTIFICATIONS, notify, osNotify } from '../lib/notifications.js'
-import { playPing } from '../lib/ping-sound.js'
+import { playPing, TONES } from '../lib/ping-sound.js'
 import { isDesktop } from '../lib/session.js'
 import Toggle from './Toggle.jsx'
 
@@ -11,7 +11,7 @@ const FAMILIES = [
 ]
 const CHANNELS = [
   ['banner', 'In-app banner', 'a card in the top-right stack with an Open action'],
-  ['sound', 'Sound', 'the ping chime (also when the window is hidden)'],
+  ['sound', 'Sound', 'a chime (also when the window is hidden) — pick which one per row'],
   ['os', 'OS notification', isDesktop ? 'a native system notification' : 'a browser notification (needs permission)'],
 ]
 
@@ -39,7 +39,20 @@ export default function NotificationsPanel() {
           {FAMILIES.map(([fam, label, hint]) => (
             <tr key={fam}>
               <td><b>{label}</b><div className="muted" style={{ fontSize: 12 }}>{hint}</div></td>
-              {CHANNELS.map(([ch]) => <td key={ch}><Toggle checked={!!n[fam][ch]} onChange={v => setFlag(fam, ch, v)} /></td>)}
+              {CHANNELS.map(([ch]) => (
+                <td key={ch}>
+                  <Toggle checked={!!n[fam][ch]} onChange={v => setFlag(fam, ch, v)} />
+                  {ch === 'sound' && (
+                    <div className="row" style={{ marginTop: 6, justifyContent: 'center', gap: 4 }}>
+                      <select className="league-select" value={n[fam].tone || 'vaal'} disabled={!n[fam].sound}
+                        onChange={e => { setFlag(fam, 'tone', e.target.value); playPing(n.volume, e.target.value, { preview: true }) }}>
+                        {Object.entries(TONES).map(([id, t]) => <option key={id} value={id}>{t.label}</option>)}
+                      </select>
+                      <button className="btn small" title="Preview this tone" disabled={!n[fam].sound}
+                        onClick={() => playPing(n.volume, n[fam].tone, { preview: true })}>▶</button>
+                    </div>
+                  )}
+                </td>))}
               <td><button className="btn small" title="Fires this row's enabled channels" onClick={() => test(fam)}>Test</button></td>
             </tr>
           ))}
@@ -48,7 +61,7 @@ export default function NotificationsPanel() {
       <div className="set-row">
         <span style={{ width: 120 }}>Ping volume</span>
         <input type="range" min="0" max="1" step="0.05" value={n.volume} onChange={e => save({ ...n, volume: Number(e.target.value) })} />
-        <button className="btn small" onClick={() => playPing(n.volume)}>Play</button>
+        <button className="btn small" onClick={() => playPing(n.volume, n.live.tone, { preview: true })}>Play</button>
       </div>
       {!isDesktop && (n.live.os || n.signals.os) && typeof Notification !== 'undefined' && Notification.permission !== 'granted' && (
         <p className="hint">Your browser has not granted notification permission — <button className="link-btn" onClick={() => Notification.requestPermission()}>allow</button>.</p>
