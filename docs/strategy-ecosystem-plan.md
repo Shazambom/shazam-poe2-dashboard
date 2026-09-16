@@ -19,8 +19,8 @@ Hold=KEEP. The big gap was **TIME** (when to act).
 | 1 | **Convert** (cheapest A→B) | TIME/execution | ✅ DONE (see below) |
 | — | **Gold-value slider** | shared gold price for ranking | ✅ DONE (phase 1.5) |
 | 2 | **Ghost Wealth** (can I cash out?) | KEEP/DECIDE | ⬜ TODO |
-| 3 | **Timing / league-arc** (when to buy/sell) | TIME | ⬜ TODO |
-| 4 | **What's about to move** | TIME | ⬜ TODO (sidecar READY; first job shipped) |
+| 3 | **Timing / league-arc** (when to buy/sell) | TIME | ✅ DONE (DTW arc in CardDetail + Hold) |
+| 4 | **What's about to move** | TIME | ✅ DONE (Divine-orb signal inbox → CardDetail) |
 | 2 | **Ghost Wealth** (can I cash out?) | KEEP/DECIDE | ✅ DONE (0.2.45) |
 | — | **Centrality** (connective tissue) | feeds 1/2/4, never a page | ✅ DONE (Phase 5 below) |
 | — | **Sidecar runtime** | hosts heavy libs for 3 & 4 | ✅ DONE (Phase 6 below) |
@@ -113,35 +113,53 @@ Realizable-vs-paper value: price sites show a number, not whether the market abs
 - **Tests**: deep book ≈ paper; thin book → ghost>0; digest-only low-confidence; poe2scout-only →
   null; `/api/capital` back-compat.
 
-## Phase 3 — Timing / league-arc (TODO) — TIME, uses SIDECAR (DTW)
-Where you are on the league's price arc + good buy/sell windows.
-- **Algorithm**: generalize `holdscore._predict` (forward Δ-day return from league-day N averaged
-  over past leagues, `GAMMA` recency, dispersion band) into a full **forward arc**. DTW
-  (`dtaidistance`, sidecar) emits a tiny **per-league weight vector** ("which past league does now
-  resemble") that replaces `GAMMA**rank` via a new `_predict(weights=None)` arg — fully
-  backward-compatible, so a dead sidecar degrades to today's behavior.
-- **Endpoints**: `GET /api/arc?item=&numeraire=` (reads `analytics_cache`, computes naive arc
-  inline as fallback). Hold's existing `pred_pct` silently becomes DTW-weighted.
-- **UI (enrichment)**: a "League arc" section in `CardDetail` — overlay the projected band + "you
-  are here at day N" on the existing `Spark`; a "resembles <league>" line; buy/sell window chips.
-  NO new tab (owner: arc = CardDetail + Hold column, not a board — promote later only if it earns).
-- **Tests**: synthetic hump → arc recovers it, windows at extrema; sidecar-down → analog null, arc
-  still returned; DTW nearest-league correct.
+## Phase 3 — Timing / league-arc (✅ DONE) — TIME, uses SIDECAR (DTW)
+Where you are on the league's price arc + good buy/sell windows, DTW-weighted toward the past
+league the current run resembles.
+- **Algorithm**: `holdscore._predict` gained a `weights=None` arg — a `{league: weight}` map that
+  REPLACES `GAMMA**rank` recency; fully backward-compatible, and if the weights cover no league
+  with data (`sum ≤ 0`) it falls back to recency, so a dead sidecar degrades to today's numbers.
+  The sidecar's `arc` job (`sidecar/analytics/arc.py`, `dtaidistance` DTW) z-normalizes each
+  league's Divine-in-Exalted inflation arc (`marketseries.league_signatures`), DTW-compares the
+  current partial arc to each past league over the same elapsed phase, and writes a softmax weight
+  vector. `leaguearc.project` turns the item's series + past leagues into a history + forward band +
+  buy/sell windows (peak = sell, trough = buy); `holdscore.build_context` is the shared
+  league-builder for Hold + arc so they can't drift on which league is "current".
+- **Endpoints**: `GET /api/arc?item=&numeraire=` → `{league, item, item_id, numeraire,
+  numeraire_name, resembles, weighted, cur_age, history:[{age,price}], arc:[{age,pred_pct,lo_pct,
+  hi_pct,price}], windows:[{kind:'buy'|'sell', age, ret_pct}]}` (reads `analytics_cache` kind
+  `arc`, projects inline; recency fallback when the sidecar is idle). `GET /api/leaguearc` →
+  `{league, day, phase, resembles, weighted}` (league-level anchor, no item). Hold's `pred_pct`
+  silently becomes DTW-weighted and the board carries `pred_weighted: bool`.
+- **UI (enrichment, NO new tab)**: `components/LeagueArc.jsx` — a "League arc" section in
+  `CardDetail` overlaying the projected gold band + dashed projection + "you are here at day N" on
+  its own `ArcSpark`; a "resembles <league>" line; buy/sell window chips. A topbar `day N · phase`
+  chip (`arc-chip`) polls `/api/leaguearc`. Hold's column is DTW-weighted with zero new UI.
+- **Cache contract**: kind `arc`, fixed key `"current"`, value `{league, weights:{lg:w}, resembles}`.
+- **Tests**: `test_arc.py` (DTW shape-not-level, short-signal degrade, signature reader),
+  `test_leaguearc.py` (weights override recency + backward-compat + miss→fallback, project
+  history/band/windows, phase thresholds), `test_sidecar_runner.py::…arc…`, `test_signals_api.py`.
 
-## Phase 4 — What's about to move (TODO) — TIME, uses SIDECAR + notification inbox
-Spot an item starting to pump/crash, or one that reliably follows another, early.
-- **Algorithm** (sidecar): matrix-profile **discords** (`STUMPY`) over each liquid item's series,
-  **volume-confirmed** (MAD-z on volume — the piece Movers lacks); **association rules**
-  (`mlxtend`) "X moves → Y follows", centrality-primed + cross-league confirmation gate. Background
-  loop writes fired signals to `analytics_cache`.
-- **Endpoints**: `GET /api/signals` (reads cache); `POST /api/signals/ack` (dismissals are USER
-  data → `signals_ack` in `_USER_KV`).
-- **UI (inbox, reuse existing)**: reuse `pingStore`/`VaalPingOrb` for the signal inbox; a click
-  fires `nav.openCurrency`/`openAsset` → the SAME `CardDetail`, plus a "Signal" section explaining
-  why it fired. NO bespoke page.
-- **Tests**: planted pump → discord only when volume-confirmed; lead-lag rule surfaces with right
-  leader; cross-league gate drops unconfirmed; ack → user-kv round-trip; `/api/signals` serves
-  cache with sidecar down.
+## Phase 4 — What's about to move (✅ DONE) — TIME, uses SIDECAR + notification inbox
+Spot an item starting to pump/crash early — a market-signal inbox distinct from the live trade-ping
+orb. (The `mlxtend` "X moves → Y follows" association-rule variant stays deferred — not needed to
+ship the inbox, and it would bloat the sidecar binary; the volume-confirmed discord is enough.)
+- **Algorithm** (sidecar, from Phase 6): matrix-profile **discords** (`STUMPY`, `normalize=False`,
+  short motif `m=3`) over each liquid item, **volume-confirmed** (MAD-z on volume — the piece Movers
+  lacks) and RECENT. The 2h analytics loop enqueues a `discords` refresh for the on-screen league.
+- **Endpoints**: `GET /api/signals` → `{league, signals:[{item_id, name, t, mp_dist, vol_z, close,
+  acked}], unseen}` (annotates + self-prunes acks not in the live set; never fails a request).
+  `POST /api/signals/ack` body `{keys?:[…], all?:bool}` → `{ok, unseen}` (dismissals are USER data →
+  `signals_ack` in `_USER_KV`). Signal identity = `"item_id:t"` (`app/signalsack.py`, pure helpers).
+- **UI (inbox, reuse the pattern — SEPARATE store)**: a **Divine orb** (`DivinePingOrb.jsx`) in the
+  topbar — the wealth/economy counterpart to the red Vaal trade-ping orb — badges the unseen count
+  and opens a small inbox popover. A row fires the shared `useAssetModal().open(name)` → the SAME
+  `CardDetail`, which gains a "⚡ Signal" section (why it fired: vol_z, mp_dist, close). Backed by
+  `lib/signalStore.js` (zustand, server-sourced/persistent), NOT `pingStore` — market signals have a
+  different lifecycle (persistent + ack'd) than ephemeral live-search pings. NAME is the join key
+  across the UI (signal carries a numeric `item_id`; CardDetail rows carry a currency id).
+- **Tests**: `test_signalsack.py` (key/annotate/merge-idempotent/prune), `test_signals_api.py`
+  (endpoint degrade + ack round-trip); discord math in `test_discords.py` (Phase 6).
 
 ## Phase 5 — Centrality (✅ DONE) — connective tissue, stdlib, NO page/sidecar
 `backend/app/centrality.py`: **PageRank** (power iteration) + **betweenness-lite** (reuses

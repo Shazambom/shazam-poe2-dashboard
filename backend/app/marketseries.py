@@ -73,3 +73,21 @@ def series_for_league(conn: sqlite3.Connection, league: str) -> tuple[dict, dict
     """Convenience for the sidecar: (series, meta) for one league in one call."""
     rows = read_rows(conn, league)
     return build_series(rows, league), read_meta(conn)
+
+
+# Divine Orb — the anchor currency whose Exalted price arc IS the league's inflation curve.
+# Duplicated from holdscore.DIVINE_ID (the sidecar must not import the backend). See leaguearc.
+DIVINE_ID = 291
+
+
+def league_signatures(conn: sqlite3.Connection, anchor_id: int = DIVINE_ID) -> dict:
+    """{league: [anchor_close ...] oldest→newest} — each league's price-arc SHAPE signature for
+    the Phase-3 DTW league-similarity (arc.compute_weights). The anchor is Divine-in-Exalted, the
+    canonical inflation curve; leagues without anchor data simply don't appear."""
+    rows = conn.execute(
+        "SELECT league, day, close FROM league_daily WHERE item_id=? AND close>0 ORDER BY league, day",
+        (anchor_id,)).fetchall()
+    sigs: dict = {}
+    for r in rows:
+        sigs.setdefault(r[0], []).append(r[2])
+    return sigs

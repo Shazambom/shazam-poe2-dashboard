@@ -2,6 +2,9 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { motion, AnimatePresence } from 'motion/react'
 import { api, fmt, toast } from '../lib/api.js'
 import Cur from './Cur.jsx'
+import LeagueArcSection from './LeagueArc.jsx'
+import { useSignals } from '../lib/signalStore.js'
+import { useHorizon } from '../lib/horizonStore.js'
 
 export const SRC_LABEL = { live: 'live order book', digest: 'hourly market data', derived: 'derived via other markets', scout: 'poe2scout', none: 'no data' }
 
@@ -59,6 +62,9 @@ export default function CardDetail({ r, num, factor, numOptions, onNum, prices, 
   const trend = r.trend ? r.trend.map(p => ({ t: p.t, v: p.v / f })) : r.trend
   const change = r.change_pct
   const inCurs = Object.keys(prices).filter(c => c !== r.id && prices[c]).sort((a, b) => prices[b] - prices[a]).slice(0, 8)
+  // Phase 4: if this item currently has a fired 'about to move' signal, explain why it fired.
+  // Joined by NAME (the signal carries a numeric item_id, the row a currency id).
+  const signal = useSignals(s => s.byName[r.name])
   // Ghost Wealth: if the user HOLDS this currency, show what the stack would actually cash out to.
   // Pulls the enriched capital row (realizable/ghost/slippage/fill) — no bespoke endpoint.
   const [cash, setCash] = useState(null)
@@ -93,6 +99,16 @@ export default function CardDetail({ r, num, factor, numOptions, onNum, prices, 
           {change != null && <span className={`pt-chg ${change >= 0 ? 'gain' : 'loss'}`}>{fmt.pct(change)}<span className="muted" style={{ fontWeight: 400, marginLeft: 4 }}>· {range}</span></span>}
         </div>
         <div className="cd-spark"><Spark points={trend} w={560} h={150} /></div>
+        {signal && <>
+          <div className="cd-section">⚡ Signal <span className="muted" style={{ fontWeight: 400 }}>· volume-confirmed move forming</span></div>
+          <div className="cd-chips">
+            <span className="arc-win signal">about to move</span>
+            <span className="cd-chip" title="robust volume z-score at the anomaly — the confirmation Movers lacks">vol ×{Number(signal.vol_z).toFixed(1)}</span>
+            <span className="cd-chip" title="matrix-profile discord distance — how unlike anything this item has done">mp {fmt.rate(signal.mp_dist)}</span>
+            <span className="cd-chip" title="price at the anomaly">at {fmt.rate(signal.close)}</span>
+          </div>
+        </>}
+        <LeagueArcSection name={r.name} />
         <div className="cd-grid">
           {r.source === 'live' && <>
             <div className="cd-stat"><span>buy</span><b>{buy == null ? '–' : fmt.rate(buy)}</b></div>
@@ -157,7 +173,8 @@ export function useAssetModal() {
   useEffect(() => {
     api.currencies().then(d => setNameById(Object.fromEntries((d?.currencies ?? []).map(o => [o.id, o.name])))).catch(() => {})
   }, [])
-  const open = async (name, w = 24) => {
+  const open = async (name) => {
+    const w = useHorizon.getState().hours   // the app-wide horizon at open time
     try { setWinH(w); setDetail(await api.asset(name, w)); setNum(null) }
     catch { toast('No price history for that item yet', false) }
   }

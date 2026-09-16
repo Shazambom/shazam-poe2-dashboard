@@ -66,6 +66,32 @@ def test_run_once_computes_discords_into_cache():
     assert st == "done"
 
 
+def test_run_once_computes_arc_weights_into_cache():
+    c = _market_db()
+    # give a second, differently-shaped league so DTW has a field to weight over.
+    from datetime import datetime, timezone
+    rows = []
+    for i in range(20):
+        close = 8.0 + 0.5 * i                              # a steadily-rising league
+        day = datetime.fromtimestamp(1_600_000_000 + i * DAY, timezone.utc).strftime("%Y-%m-%d")
+        rows.append(("Old", 291, day, close, close, 100))
+    # the current league ("Std") needs its own Divine (item 291) arc to compare.
+    for i in range(12):
+        close = 10.0 + 0.4 * i
+        day = datetime.fromtimestamp(1_700_000_000 + i * DAY, timezone.utc).strftime("%Y-%m-%d")
+        rows.append(("Std", 291, day, close, close, 100))
+    c.executemany("INSERT INTO league_daily VALUES(?,?,?,?,?,?)", rows)
+    c.commit()
+    analytics.enqueue(c, "arc", {"league": "Std"})
+    assert runner.run_once(c) is True
+    blob = analytics.read_cache(c, "arc", "current")
+    assert blob["league"] == "Std"
+    assert blob["weights"].get("Old") is not None          # weighted the one past league
+    assert blob["resembles"] == "Old"
+    st = c.execute("SELECT state FROM analytics_jobs ORDER BY id DESC LIMIT 1").fetchone()[0]
+    assert st == "done"
+
+
 def test_run_once_returns_false_when_idle():
     c = _market_db()
     assert runner.run_once(c) is False

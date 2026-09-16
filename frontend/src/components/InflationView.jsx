@@ -173,15 +173,48 @@ export default function InflationView({ league }) {
         {' '}Mirror and Hinekora trade thinly, so their lines have gaps; Divine is the densest anchor.
       </p>
 
-      <CrossLeague />
-      <MarketCap />
+      <CrossLeague league={league} />
+      <MarketCap league={league} />
     </div>
   )
 }
 
 // Economy market cap: total value TRADED per day across all currencies, in Mirrors
 // (Σ volume × price ÷ mirror price). Traded throughput, not supply — labelled as such.
-function MarketCap() {
+// Which league to highlight/stat across the cross-league charts: the user's SELECTED league if it
+// has data, else the newest-STARTED still-active league, else the newest overall. The backend can
+// flag several leagues 'current' at once (a lingering old league alongside the new one, both crawled
+// to today), so we can't take the first current — that showed a dead league's 0-mir/day stats — nor
+// the most-recent last-day (concurrent live leagues tie). The active challenge league is the one that
+// began most recently, i.e. the latest day-0. `day` is a sortable YYYY-MM-DD string.
+function firstDay(l) { const p = l.points; return (p && p.length) ? (p[0].day || '') : '' }
+function pickLeague(leagues, selected) {
+  if (!leagues || !leagues.length) return null
+  const newestStart = (a, b) => (firstDay(b) < firstDay(a) ? -1 : firstDay(b) > firstDay(a) ? 1 : 0)
+  return leagues.find(l => l.league === selected)
+    || leagues.filter(l => l.current).slice().sort(newestStart)[0]
+    || leagues.slice().sort(newestStart)[0]
+}
+
+// The most recent day present anywhere is TODAY's in-progress crawl — a partial day whose throughput
+// is a fraction of a full day's, which made "traded today" read ~0 and the current league's line
+// plunge at the right edge. Drop it (and recompute each league's latest/total/days from the trimmed
+// series). Ended leagues don't have today, so they're untouched.
+function trimPartialDay(leagues) {
+  if (!leagues || !leagues.length) return leagues
+  const today = leagues.reduce((m, l) => {
+    const d = l.points?.length ? l.points[l.points.length - 1].day : ''
+    return d > m ? d : m
+  }, '')
+  return leagues.map(l => {
+    const points = (l.points || []).filter(p => p.day !== today)
+    if (!points.length) return { ...l, points }
+    const last = points[points.length - 1]
+    return { ...l, points, latest_mirrors: last.mirrors, total_mirrors: last.cum, days: last.age + 1 }
+  }).filter(l => l.points.length)
+}
+
+function MarketCap({ league }) {
   const [data, setData] = useState(null)
   const [err, setErr] = useState(null)
   const [busy, setBusy] = useState(true)
@@ -190,9 +223,10 @@ function MarketCap() {
     api.inflationMarketcap().then(setData).catch(e => setErr(String(e.message || e))).finally(() => setBusy(false))
   }, [])
 
-  const { rows, keys } = useMemo(() =>   // log scale needs positive values
-    mergeSeries(data?.leagues ?? [], { x: 'age', val: 'mirrors', meta: lg => ({ id: lg.league, current: lg.current }), filter: p => p.mirrors > 0 }), [data])
-  const cur = (data?.leagues ?? []).find(l => l.current)
+  const leagues = useMemo(() => trimPartialDay(data?.leagues ?? []), [data])
+  const cur = useMemo(() => pickLeague(leagues, league), [leagues, league])
+  const { rows, keys } = useMemo(() =>   // log scale needs positive values; bold the selected league
+    mergeSeries(leagues, { x: 'age', val: 'mirrors', meta: lg => ({ id: lg.league, current: lg.league === cur?.league }), filter: p => p.mirrors > 0 }), [leagues, cur])
 
   return (
     <div style={{ marginTop: 28 }}>
@@ -229,7 +263,7 @@ function MarketCap() {
 // Cross-league inflation: Divine-in-Exalted per league, each rebased to its own
 // day-0 = 100 and plotted by day-of-league, so the current league's inflation can
 // be read against past leagues at the same age. Data via poe2scout history.
-function CrossLeague() {
+function CrossLeague({ league }) {
   const [item, setItem] = useState(291)   // Divine (densest, all leagues) by default
   const [data, setData] = useState(null)
   const [err, setErr] = useState(null)
@@ -241,8 +275,10 @@ function CrossLeague() {
   }, [item])
   const items = data?.items ?? [{ id: 291, name: 'Divine Orb' }]
 
-  const { rows, keys } = useMemo(() =>
-    mergeSeries(data?.leagues ?? [], { x: 'age', val: 'index', meta: lg => ({ id: lg.league, current: lg.current }) }), [data])
+  const leagues = data?.leagues ?? []
+  const cur = useMemo(() => pickLeague(leagues, league), [leagues, league])
+  const { rows, keys } = useMemo(() =>   // bold the selected league (else freshest active), not an arbitrary current
+    mergeSeries(leagues, { x: 'age', val: 'index', meta: lg => ({ id: lg.league, current: lg.league === cur?.league }) }), [leagues, cur])
 
   return (
     <div style={{ marginTop: 28 }}>

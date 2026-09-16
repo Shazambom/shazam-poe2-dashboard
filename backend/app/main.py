@@ -13,7 +13,7 @@ from pydantic import BaseModel
 
 from fastapi.responses import RedirectResponse, PlainTextResponse
 
-from . import analytics, arbitrage, db, digest, gamedata, gateway, holdscore, inflation, leaguehistory, liquidity, migrations_user, movers, oauth, orderbook, recipes, session, sidecar_supervisor, watchdog
+from . import analytics, arbitrage, db, digest, gamedata, gateway, holdscore, inflation, leaguearc, leaguehistory, liquidity, migrations_user, movers, oauth, orderbook, recipes, session, sidecar_supervisor, signalsack, watchdog
 from .currencies import registry
 from .settings import get_settings, save_settings
 
@@ -85,7 +85,13 @@ async def _analytics_loop():
         try:
             league = await run_in_threadpool(movers.current_league)
             if league:
-                await run_in_threadpool(lambda: analytics.enqueue(db._conn(), "discords", {"league": league}))
+                # Both heavy jobs target the on-screen league. enqueue coalesces per kind, so this
+                # never piles up; the sidecar claims oldest-first and computes each.
+                def _enqueue():
+                    c = db._conn()
+                    analytics.enqueue(c, "discords", {"league": league})
+                    analytics.enqueue(c, "arc", {"league": league})
+                await run_in_threadpool(_enqueue)
         except Exception as exc:
             log.warning("analytics enqueue error: %s", exc)
         await asyncio.sleep(7200)       # every 2h (daily data — no need to churn)
@@ -509,10 +515,52 @@ async def signals_ep():
     def _read():
         with db.q() as c:
             blob = analytics.read_cache(c, "discords", "current")   # {league, signals}, or None
-        if blob:
-            return {"league": blob.get("league"), "signals": blob.get("signals") or []}
-        return {"league": movers.current_league(), "signals": []}   # nothing computed yet
+        league = blob.get("league") if blob else movers.current_league()
+        signals = (blob.get("signals") or []) if blob else []
+        ack = db.kv_get("signals_ack", {}) or {}
+        pruned = signalsack.prune(ack, signals)     # drop acks whose signal has aged out
+        if pruned != ack:
+            db.kv_set("signals_ack", pruned)
+        return {"league": league, "signals": signalsack.annotate(signals, pruned),
+                "unseen": signalsack.unseen_count(signals, pruned)}
     return await run_in_threadpool(_read)
+
+
+class SignalAck(BaseModel):
+    keys: list[str] | None = None   # sig_keys ("item_id:t") to dismiss
+    all: bool = False               # dismiss every currently-fired signal
+
+
+@app.post("/api/signals/ack")
+async def signals_ack_ep(body: SignalAck):
+    """Dismiss signals (user data → signals_ack in user.sqlite). `keys` dismisses those signal ids;
+    `all: true` dismisses everything currently fired. Returns the new unseen count."""
+    def _ack():
+        with db.q() as c:
+            blob = analytics.read_cache(c, "discords", "current")
+        signals = (blob.get("signals") or []) if blob else []
+        keys = [signalsack.sig_key(s) for s in signals] if body.all else (body.keys or [])
+        ack = db.kv_get("signals_ack", {}) or {}
+        merged = signalsack.prune(signalsack.merge(ack, keys, int(time.time())), signals)
+        db.kv_set("signals_ack", merged)
+        return {"ok": True, "unseen": signalsack.unseen_count(signals, merged)}
+    return await run_in_threadpool(_ack)
+
+
+@app.get("/api/leaguearc")
+async def leaguearc_ep(numeraire: str = "divine"):
+    """League-level arc anchor for the topbar chip: {league, day, phase, resembles, weighted}. The
+    ambient 'where are we in the league' indicator; per-item detail is /api/arc. Read-only."""
+    return await run_in_threadpool(leaguearc.context, numeraire)
+
+
+@app.get("/api/arc")
+async def arc_ep(item: str, numeraire: str = "divine"):
+    """Phase 3 league-arc for one item priced in `numeraire`: the price history so far ('you are here
+    at day N'), a forward projected band, buy/sell windows, and which past league it resembles. The
+    projection is DTW-weighted by the sidecar when available and silently falls back to recency
+    otherwise. READ-ONLY over market data + the analytics cache — never fails a request."""
+    return await run_in_threadpool(leaguearc.arc_for, item, numeraire)
 
 
 @app.get("/api/convert")
@@ -563,8 +611,20 @@ def market_edges():
 
 
 @app.get("/api/market/top")
-def market_top(hours: int = 24, limit: int = 40):
-    return digest.top_markets(get_settings()["league"], hours, limit)
+def market_top(hours: int = 24, limit: int = 40, by: str = "activity"):
+    """Busiest markets. `by=activity` (default) ranks on how many hours the pair traded (raw turnover);
+    `by=value` ranks on traded VALUE normalized to Exalted (volume × the exchange graph's ref-value),
+    consistent with the rest of the app. Each row carries both raw volumes and `value_ex`."""
+    league = get_settings()["league"]
+    rows = digest.top_markets(league, hours, max(limit, 1000))   # value-sort needs the full field, not top-N-by-activity
+    ref = arbitrage.cached_graph().ref_values()                  # {trade_id: value in Exalted}
+    for r in rows:
+        va = (r.get("volume_a") or 0) * (ref.get(r["a"]) or 0)
+        vb = (r.get("volume_b") or 0) * (ref.get(r["b"]) or 0)   # same trade valued from the other side (fallback)
+        r["value_ex"] = round(va or vb, 2) if (va or vb) else None
+    if by == "value":
+        rows.sort(key=lambda r: (r.get("value_ex") or 0), reverse=True)
+    return rows[:limit]
 
 
 @app.get("/api/market/history")

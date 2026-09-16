@@ -127,6 +127,22 @@ Threading a new user setting all the way through (as `hub_count` did):
   so animations freeze mid-flight — assert on settled DOM, not on a frame.
 - **`transform: scale()` and clicks:** click targets still map correctly under a scaled ancestor
   (verified with `elementFromPoint`) — scaling the pulse-strip didn't break its chip buttons.
+- **Owner review on the packaged app (a REQUIRED step, before committing UI/UX changes).** After the
+  automated tests + your own CDP drive-validation pass, build the app the owner actually runs and let
+  them check the changes in the real production binary — don't declare a UI change reviewable off the
+  web/dev drive alone:
+  ```bash
+  cd desktop && npm run dist:mac:all          # from-scratch: backend + sidecar + frontend + electron
+  #   (use `npm run dist:mac` if backend-bin/ + sidecar-bin/ are already current — faster)
+  open desktop/release/mac-arm64/Arbiter.app  # launch in place on this Mac for the owner to explore
+  ```
+  To also CDP-screenshot the production binary yourself, launch it with a debug port instead of `open`:
+  `desktop/release/mac-arm64/Arbiter.app/Contents/MacOS/Arbiter --remote-debugging-port=9222 &`, then
+  `node scripts/cdp.mjs`/`scripts/shot.mjs` against `:9222` (backend on `:8210`). Heavy sidecar jobs
+  (STUMPY/DTW) need ~30–60 s of numba cold-JIT after boot before `/api/signals` + `/api/arc` fill in.
+  This is a **test build, NOT a ship** (building/running/CDP ≠ delivery — see CLAUDE.md), so it needs no
+  ship authorization. Sequence: implement → tests + CDP drive → **owner reviews the packaged build** →
+  commit → (only on explicit "ship") publish.
 
 ---
 

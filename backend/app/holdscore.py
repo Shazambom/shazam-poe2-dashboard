@@ -18,7 +18,7 @@ import math
 import statistics
 import time
 
-from . import db
+from . import analytics, db
 from .leaguehistory import _age
 from .settings import get_settings
 
@@ -109,22 +109,67 @@ def _metrics(series: dict[int, tuple[float, float]], hz_days: int | None):
             "conf": depth * liq, "stab": stab, "cur_age": last_age}
 
 
-def _predict(item_id, N, delta, past):
-    """Forward Δ-day return from day N averaged across past leagues, recency-weighted."""
-    fwd, wts = [], []
-    for rank, (_lg, per) in enumerate(past):     # past already sorted most-recent first
+def _predict(item_id, N, delta, past, weights=None, min_leagues=MIN_PRED_LEAGUES):
+    """Forward Δ-day return from day N averaged across past leagues.
+
+    Weighting: by default recency (`GAMMA**rank`, most-recent league = 1). Phase 3 passes a DTW
+    `weights` map {league_name: weight} — 'which past league does now resemble' — which REPLACES
+    recency. Backward-compatible: weights=None reproduces the original behavior exactly. If the
+    weights cover none of the leagues that actually have data for this item (sum ≤ 0), we fall back
+    to recency rather than emit a degenerate prediction — so a dead/partial sidecar degrades to Hold's
+    original numbers. The returned `weighted` flag records which path was taken."""
+    fwd = []                                     # (rank, league, log_return)
+    for rank, (lg, per) in enumerate(past):      # past already sorted most-recent first
         s = per.get(item_id)
         if not s:
             continue
         p0, p1 = _nearest(s, N), _nearest(s, N + delta)
         if p0 and p1 and p0[0] > 0:
-            fwd.append(math.log(p1[0] / p0[0]))
-            wts.append(GAMMA ** rank)
-    if len(fwd) < MIN_PRED_LEAGUES:
+            fwd.append((rank, lg, math.log(p1[0] / p0[0])))
+    if len(fwd) < min_leagues:
         return None
-    wmean = sum(f * w for f, w in zip(fwd, wts)) / sum(wts)
-    return {"pred": math.exp(wmean) - 1, "band": statistics.pstdev(fwd) if len(fwd) > 1 else 0.0,
-            "n_leagues": len(fwd)}
+    wts = [max(0.0, weights.get(lg, 0.0)) for _r, lg, _f in fwd] if weights else None
+    used_weights = bool(wts) and sum(wts) > 0
+    if not used_weights:
+        wts = [GAMMA ** r for r, _lg, _f in fwd]
+    vals = [f for _r, _lg, f in fwd]
+    wmean = sum(f * w for f, w in zip(vals, wts)) / sum(wts)
+    return {"pred": math.exp(wmean) - 1, "band": statistics.pstdev(vals) if len(vals) > 1 else 0.0,
+            "n_leagues": len(vals), "weighted": used_weights}
+
+
+def build_context(num_id: int):
+    """Shared league-building for Hold + the league-arc: read all league_daily, price everything in
+    `num_id`, resolve the current league (user's if it has data, else newest live/known), and sort the
+    rest most-recent-first. Returns (cur_name, cur_per, past, meta) where past = [(league, per), ...].
+    One place so Hold's board and the arc projection can't drift on which league is 'current'."""
+    s = get_settings()
+    cur_name = s["league"]
+    with db.q() as c:
+        meta = {r["item_id"]: (r["name"], r["category"]) for r in c.execute("SELECT item_id, name, category FROM item_meta")}
+        rows = c.execute("SELECT league, item_id, day, close, volume FROM league_daily WHERE close>0 ORDER BY league, day").fetchall()
+    by_league: dict[str, list] = {}
+    for r in rows:
+        by_league.setdefault(r["league"], []).append((r["item_id"], r["day"], r["close"], r["volume"]))
+    built, day0s = {}, {}
+    for lg, rws in by_league.items():
+        built[lg], day0s[lg] = _build_league(rws, num_id)
+    if cur_name not in built:   # viewing a league with no data yet → pick a current/newest one
+        current = set(db.kv_get("lh_current", []))
+        cur_name = next((l for l in built if l in current), None) or (max(built, key=lambda l: day0s[l] or "") if built else None)
+    cur = built.get(cur_name, {})
+    past = sorted(((lg, built[lg]) for lg in built if lg != cur_name), key=lambda x: day0s[x[0]] or "", reverse=True)
+    return cur_name, cur, past, meta
+
+
+def _arc_weights(cur_name: str) -> dict | None:
+    """The sidecar's DTW league-weight vector for the current league, or None (dead/stale sidecar →
+    Hold silently uses recency). Only honoured when the cache blob is for the same league."""
+    with db.q() as c:
+        blob = analytics.read_cache(c, "arc", "current")
+    if blob and blob.get("league") == cur_name:
+        return blob.get("weights") or None
+    return None
 
 
 def leaderboard(horizon: str = "3d", category: str = "all", numeraire: str = "divine") -> dict:
@@ -138,25 +183,10 @@ def leaderboard(horizon: str = "3d", category: str = "all", numeraire: str = "di
     if hit and time.time() - hit[0] < _TTL:
         return hit[1]
 
-    s = get_settings()
-    cur_name = s["league"]
-    with db.q() as c:
-        meta = {r["item_id"]: (r["name"], r["category"]) for r in c.execute("SELECT item_id, name, category FROM item_meta")}
-        rows = c.execute("SELECT league, item_id, day, close, volume FROM league_daily WHERE close>0 ORDER BY league, day").fetchall()
-    by_league: dict[str, list] = {}
-    for r in rows:
-        by_league.setdefault(r["league"], []).append((r["item_id"], r["day"], r["close"], r["volume"]))
-
-    built, day0s = {}, {}
-    for lg, rws in by_league.items():
-        built[lg], day0s[lg] = _build_league(rws, num_id)
-    if cur_name not in built:   # viewing a league with no data yet → pick a current/newest one
-        current = set(db.kv_get("lh_current", []))
-        cur_name = next((l for l in built if l in current), None) or (max(built, key=lambda l: day0s[l] or "") if built else None)
-    cur = built.get(cur_name, {})
+    cur_name, cur, past, meta = build_context(num_id)
+    weights = _arc_weights(cur_name)        # Phase 3: DTW-weight the forward prediction when available
     hz = HORIZON_DAYS[horizon]
     delta = hz or 30
-    past = sorted(((lg, built[lg]) for lg in built if lg != cur_name), key=lambda x: day0s[x[0]] or "", reverse=True)
 
     assets = []
     for iid, series in cur.items():
@@ -168,7 +198,7 @@ def leaderboard(horizon: str = "3d", category: str = "all", numeraire: str = "di
         m = _metrics(series, hz)
         if not m:
             continue
-        pr = _predict(iid, m["cur_age"], delta, past)
+        pr = _predict(iid, m["cur_age"], delta, past, weights)
         assets.append({
             "id": iid, "name": name, "category": cat,
             "ret_pct": round(m["ret"] * 100, 1), "mdd_pct": round(m["mdd"] * 100, 1),
@@ -183,6 +213,7 @@ def leaderboard(horizon: str = "3d", category: str = "all", numeraire: str = "di
     assets.sort(key=lambda x: -x["hold"])
     cats = sorted({a["category"] for a in assets})
     res = {"league": cur_name, "horizon": horizon, "delta_days": delta,
+           "pred_weighted": weights is not None,   # Phase 3: forward pred is DTW-weighted vs recency
            "numeraire": numeraire, "numeraire_name": num_name,
            "numeraires": [{"id": k, "name": v[1]} for k, v in NUMERAIRES.items()],
            "categories": ["all"] + cats, "count": len(assets), "assets": assets}

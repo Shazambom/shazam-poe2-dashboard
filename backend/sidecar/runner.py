@@ -29,7 +29,22 @@ def handle_discords(conn: sqlite3.Connection, job: dict) -> None:
     analytics.complete(conn, job["id"], "discords", "current", {"league": league, "signals": signals})
 
 
-HANDLERS = {"discords": handle_discords}
+def handle_arc(conn: sqlite3.Connection, job: dict) -> None:
+    from sidecar.analytics import arc               # lazy: keep numpy/dtaidistance off the import path
+    league = (job.get("params") or {}).get("league")
+    sigs = marketseries.league_signatures(conn)
+    weights: dict = {}
+    resembles = None
+    if league and league in sigs:
+        past = {lg: s for lg, s in sigs.items() if lg != league}
+        weights = arc.compute_weights(sigs[league], past)
+        if weights:
+            resembles = max(weights, key=weights.get)   # the most-similar past league
+    analytics.complete(conn, job["id"], "arc", "current",
+                       {"league": league, "weights": weights, "resembles": resembles})
+
+
+HANDLERS = {"discords": handle_discords, "arc": handle_arc}
 
 
 def run_once(conn: sqlite3.Connection) -> bool:

@@ -69,12 +69,29 @@ a { color: var(--live); }
 
 /* ---------- top bar ---------- */
 .topbar {
-  display: flex; align-items: center; gap: 14px 18px; flex-wrap: wrap;
-  padding: 11px 18px; border-bottom: 1px solid var(--line);
+  display: flex; flex-direction: column; align-items: stretch; gap: 8px;
+  padding: 10px 18px; border-bottom: 1px solid var(--line);
   background: linear-gradient(180deg, rgba(42,48,63,.55), var(--panel));
   box-shadow: 0 1px 0 rgba(255,255,255,.03) inset, 0 2px 14px rgba(0,0,0,.35);
   position: relative; z-index: 5;
 }
+/* Two intentional rows, each single-line (no wrap): identity/nav up top, controls/status below. */
+.topbar-row { display: flex; align-items: center; gap: 12px; flex-wrap: nowrap; min-width: 0; }
+.topbar-row-2 { gap: 10px; }
+.tb-spacer { flex: 1 1 auto; min-width: 8px; }
+.oauth-user { font-size: 12px; white-space: nowrap; }
+/* The app-wide horizon picker (reuses .seg) — a touch tighter in the bar. */
+.horizon-seg .seg-btn { padding: 4px 10px; font-size: 12px; }
+/* The single sync cluster (metrics + live/queue + refresh + auto toggle). */
+.sync-cluster { display: inline-flex; align-items: center; gap: 12px; flex-wrap: nowrap;
+  color: var(--muted); font-size: 13px; white-space: nowrap; }
+/* Live-refresh controls, lifted up next to the Divine notification orb (row 1). */
+.refresh-controls { display: inline-flex; align-items: center; gap: 10px; color: var(--muted); font-size: 13px; }
+.sync-rl { font-size: 11px; opacity: .75; }
+/* Merged version+update chip: 'up to date' tints the version chip green. */
+.ver-chip.ok { color: var(--gain); border-color: rgba(111,206,159,.35); }
+/* Hold-only controls stay rendered but inert in the Movers view (no layout jump on switch). */
+.hold-inactive { opacity: .4; pointer-events: none; }
 .topbar h1 {
   font-size: 16px; font-weight: 700; margin: 0; letter-spacing: .02em;
   display: flex; align-items: center; gap: 8px;
@@ -697,3 +714,65 @@ code { background: var(--bg); padding: 1px 5px; border-radius: 3px; font-size: 1
 .gold-slider:active::-webkit-slider-thumb { transform: scale(1.08); }
 .gold-slider:focus-visible { outline: none; }
 .gold-slider-ends { display: flex; justify-content: space-between; color: var(--muted); font-size: 10.5px; margin-top: 2px; }
+
+/* ── Phase 3/4 — market-signal inbox (Divine orb) + league-arc ─────────────────────────────── */
+/* Divine orb: the market-signal counterpart to the red Vaal trade-ping orb — a golden Divine Orb
+   in the topbar, intensity by unseen count (not rAF), reduced-motion falls back to a static glow. */
+.divine-orb-wrap { position: relative; display: inline-flex; }
+.divine-orb { position: relative; width: 26px; height: 26px; padding: 0; border: none; background: transparent;
+  cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
+.divine-orb-img, .divine-orb-glyph { width: 22px; height: 22px; display: block; border-radius: 50%; }
+.divine-orb-glyph { color: var(--gold); font-size: 18px; }
+.divine-orb.hot .divine-orb-img { animation: divine-spin 3s linear infinite, divine-pulse 1.4s var(--ease) infinite; }
+.divine-orb.warm .divine-orb-img { animation: divine-spin 4.5s linear infinite; filter: drop-shadow(0 0 4px rgba(212,172,82,.7)); }
+.divine-orb.idle .divine-orb-img { opacity: .85; }
+.divine-orb-badge { position: absolute; top: -5px; right: -6px; min-width: 15px; height: 15px; padding: 0 3px;
+  border-radius: 8px; background: var(--gold); color: var(--bg); font-size: 10px; font-weight: 700;
+  line-height: 15px; text-align: center; box-shadow: 0 0 0 2px var(--bg); }
+@keyframes divine-spin { to { transform: rotate(360deg); } }
+@keyframes divine-pulse { 0%,100% { filter: drop-shadow(0 0 3px rgba(212,172,82,.7)); }
+  50% { filter: drop-shadow(0 0 10px rgba(212,172,82,1)); } }
+@media (prefers-reduced-motion: reduce) {
+  .divine-orb .divine-orb-img { animation: none !important; filter: drop-shadow(0 0 6px rgba(212,172,82,.9)) !important; } }
+
+/* Signal inbox popover */
+.signal-inbox { position: absolute; top: 34px; right: 0; left: auto; z-index: 50; width: 300px; max-height: 60vh;
+  overflow-y: auto; background: var(--surface-pop); border: 1px solid var(--line); border-radius: 12px;
+  box-shadow: 0 12px 34px rgba(0,0,0,.45); padding: 6px; }
+.signal-inbox-head { display: flex; align-items: center; justify-content: space-between; padding: 6px 8px;
+  font-size: 12px; color: var(--muted); letter-spacing: .02em; }
+.link-btn { background: none; border: none; color: var(--gold); font-size: 12px; cursor: pointer; padding: 0; }
+.link-btn:hover { color: var(--gold-2); }
+.signal-list { list-style: none; margin: 0; padding: 0; }
+.signal-row { display: flex; align-items: center; gap: 4px; border-radius: 8px; }
+.signal-row:hover { background: var(--panel-hi); }
+.signal-row.acked { opacity: .5; }
+.signal-main { flex: 1; display: flex; align-items: center; gap: 8px; background: none; border: none;
+  color: inherit; cursor: pointer; padding: 7px 8px; text-align: left; font-size: 13px; min-width: 0; }
+.signal-name { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.signal-vz { color: var(--gold-2); font-variant-numeric: tabular-nums; font-size: 12px; }
+.signal-x { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 16px;
+  line-height: 1; padding: 4px 8px; border-radius: 6px; }
+.signal-x:hover { color: var(--loss); }
+
+/* Topbar league-day chip (ambient 'where are we on the arc') */
+.arc-chip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px; border-radius: 999px;
+  border: 1px solid var(--line); background: var(--surface-1); color: var(--muted); font-size: 12px;
+  font-variant-numeric: tabular-nums; }
+.arc-chip .arc-phase { font-style: normal; text-transform: uppercase; font-size: 10px; letter-spacing: .05em; color: var(--gold); }
+.arc-chip.early .arc-phase { color: var(--gain); }
+.arc-chip.late .arc-phase { color: var(--loss); }
+.arc-chip .arc-lg { color: var(--muted); }
+
+/* CardDetail: signal chips + league-arc overlay */
+.cd-chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0 4px; }
+.cd-chip { display: inline-flex; align-items: center; gap: 4px; padding: 3px 9px; border-radius: 999px;
+  background: var(--panel-2); border: 1px solid var(--line); font-size: 12px; font-variant-numeric: tabular-nums; }
+.cd-chip.muted { color: var(--muted); }
+.cd-arc { margin: 8px 0 2px; }
+.arc-spark { display: block; }
+.arc-win { display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px; border-radius: 999px;
+  font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.arc-win.buy { background: rgba(111,206,159,.14); color: var(--gain); border: 1px solid rgba(111,206,159,.4); }
+.arc-win.sell { background: rgba(224,122,104,.14); color: var(--loss); border: 1px solid rgba(224,122,104,.4); }
+.arc-win.signal { background: rgba(212,172,82,.16); color: var(--gold-2); border: 1px solid rgba(212,172,82,.45); }

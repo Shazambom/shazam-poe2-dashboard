@@ -5,13 +5,10 @@ import { nav } from '../lib/nav.js'
 import Cur from './Cur.jsx'
 import CardDetail, { Spark, SRC_LABEL, useAssetModal, rangeLabel } from './CardDetail.jsx'
 import CurrencyPicker from './CurrencyPicker.jsx'
-import RefreshButton from './RefreshButton.jsx'
-import Toggle from './Toggle.jsx'
+import { useHorizon, holdHorizon } from '../lib/horizonStore.js'
+import { useSync } from '../lib/syncStore.js'
 
 const isDesktop = typeof window !== 'undefined' && !!window.poe2desktop
-
-// The board's trend window (hours) → the nearest Hold day-horizon (Hold data is poe2scout DAILY).
-const holdHorizon = (winH) => (winH <= 24 ? '1d' : winH <= 72 ? '3d' : '7d')
 
 // A number that counts up on mount, then rolls when its value changes between polls.
 // Fast, stiff spring (~0.5s) so the count-up feels snappy, not a slow loading crawl.
@@ -105,10 +102,12 @@ export default function BoardView({ status }) {
   const assetModal = useAssetModal()                 // shared "zoom into any asset by name" modal (pulse-strip items)
   const [err, setErr] = useState(null)
   const [busy, setBusy] = useState(false)
-  const [auto, setAuto] = useState(false)
+  const winH = useHorizon(s => s.hours)              // app-wide horizon (topbar picker)
+  const auto = useSync(s => s.auto)                  // global auto-refresh toggle (topbar)
+  const tick = useSync(s => s.tick)                  // topbar ⟳ pulse → refresh this view
+  const setSyncBusy = useSync(s => s.setBusy)        // drive the topbar ⟳ spinner
   const [watchlist, setWatchlist] = useState(null)   // desktop-only board customization
   const [opts, setOpts] = useState([])               // all currencies (names for pickers)
-  const [winH, setWinH] = useState(24)               // trend / %-change horizon (hours)
   const [openId, setOpenId] = useState(null)         // card expanded into detail view
   const [numById, setNumById] = useState(() => {     // per-card numeraire overrides (persisted)
     try { return JSON.parse(localStorage.getItem('board.num.v1') || '{}') } catch { return {} }
@@ -139,9 +138,9 @@ export default function BoardView({ status }) {
   const removeCur = (id) => saveWatchlist((watchlist || []).filter(x => x !== id), 'Removed from board')
   const refreshLive = async () => {
     if (!canLive || busy) return
-    setBusy(true)
+    setBusy(true); setSyncBusy(true)
     try { setData(await api.boardRefresh(winH)) } catch (e) { setErr(String(e.message || e)) }
-    setBusy(false)
+    setBusy(false); setSyncBusy(false)
   }
   useEffect(() => { load(); const t = setInterval(load, 30000); return () => clearInterval(t) }, [winH]) // eslint-disable-line
   // command palette → open a currency's detail here
@@ -157,17 +156,20 @@ export default function BoardView({ status }) {
   }, [winH])
   // Expand a pulse-strip item into the shared detail modal (enlarged graph + volume + change
   // over time), identical to clicking a board currency — via /api/asset (daily data).
-  const openAsset = (name) => assetModal.open(name, winH)
+  const openAsset = (name) => assetModal.open(name)
   useEffect(() => {
     if (!isDesktop) return
     api.settings().then(s => setWatchlist(s.watchlist || [])).catch(() => {})
   }, [])
+  // Global auto-refresh (topbar toggle) — Board's own 60s cadence, gated on the shared flag.
   useEffect(() => {
     if (!auto || !canLive) return
     refreshLive()
     timer.current = setInterval(refreshLive, 60000)
     return () => clearInterval(timer.current)
-  }, [auto, canLive]) // eslint-disable-line
+  }, [auto, canLive, winH]) // eslint-disable-line
+  // Manual refresh from the topbar ⟳ (bumps the shared tick) refreshes the mounted view.
+  useEffect(() => { if (tick > 0) refreshLive() }, [tick]) // eslint-disable-line
 
   const ref = data?.reference ?? 'ref'
   const rows = data?.rows ?? []
@@ -272,20 +274,9 @@ export default function BoardView({ status }) {
         </div>
       )}
       <div className="board-bar">
-        <h2 style={{ margin: 0 }}>Price board <span className="muted" style={{ fontWeight: 400 }}>· {rows.length} currencies · each priced in its top market</span></h2>
-        <div className="seg" title="Trend & % change window">
-          {[['24h', 24], ['3d', 72], ['7d', 168], ['14d', 336]].map(([label, h]) => (
-            <button key={h} className={`seg-btn ${winH === h ? 'on' : ''}`} onClick={() => setWinH(h)}>{label}</button>
-          ))}
-        </div>
+        <h2 style={{ margin: 0 }}>Price board <span className="muted" style={{ fontWeight: 400 }}>· {rows.length} currencies · each priced in its top market · {rangeLabel(winH)}</span></h2>
         <span className="spacer" />
         <span className="hint">{live} live · {rows.length - live} from hourly data</span>
-        {canLive ? (
-          <>
-            <RefreshButton busy={busy} onClick={refreshLive} title="Refresh live rates" />
-            <Toggle checked={auto} onChange={setAuto} label="auto (60s)" />
-          </>
-        ) : <span className="hint">Connect live data (top bar) for real-time rates.</span>}
       </div>
       {isDesktop && watchlist && (
         <div className="board-bar" style={{ marginTop: 4 }}>

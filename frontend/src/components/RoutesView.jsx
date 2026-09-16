@@ -4,9 +4,9 @@ import CapitalCard from './CapitalCard.jsx'
 import ConvertView from './ConvertView.jsx'
 import Cur from './Cur.jsx'
 import GoldValueSlider from './GoldValueSlider.jsx'
-import RefreshButton from './RefreshButton.jsx'
 import Toggle from './Toggle.jsx'
 import { Detail, Loop } from './RouteSteps.jsx'
+import { useSync } from '../lib/syncStore.js'
 
 const INF = Infinity
 const hrs = (h) => h == null ? '–' : h < 1 / 60 ? '<1m' : h < 1 ? `${Math.round(h * 60)}m` : h < 48 ? `${h.toFixed(1)}h` : `${(h / 24).toFixed(1)}d`
@@ -57,10 +57,11 @@ export default function RoutesView({ capital, status, currencies, onCapitalSaved
   const [err, setErr] = useState(null)
   const [open, setOpen] = useState(null)
   const [liveBusy, setLiveBusy] = useState(false)
-  const [autoLive, setAutoLive] = useState(false)
+  const autoLive = useSync(s => s.auto)          // global auto-refresh (topbar)
+  const tick = useSync(s => s.tick)              // topbar ⟳ → refresh loops
+  const setSyncBusy = useSync(s => s.setBusy)    // drive the topbar ⟳ spinner
   const [refreshingId, setRefreshingId] = useState(null)
   const [note, setNote] = useState(null)
-  const [rl, setRl] = useState(null)
   const [liveN, setLiveN] = useState(5)
   const esRef = useRef(null)
   const accRef = useRef([])
@@ -106,10 +107,6 @@ export default function RoutesView({ capital, status, currencies, onCapitalSaved
     const t = setInterval(() => { if (document.visibilityState === 'visible' && !streaming) load() }, 120000)
     return () => clearInterval(t)
   }, [filterKey, streaming]) // eslint-disable-line
-  useEffect(() => {
-    const tick = () => api.rateLimits().then(setRl).catch(() => {})
-    tick(); const t = setInterval(tick, 5000); return () => clearInterval(t)
-  }, [])
 
   const applyResult = (d) => {
     accRef.current = d.routes
@@ -118,7 +115,7 @@ export default function RoutesView({ capital, status, currencies, onCapitalSaved
   }
   const refreshTop = async () => {
     if (!canLive || liveBusy) return
-    setLiveBusy(true); setNote(null)
+    setLiveBusy(true); setSyncBusy(true); setNote(null)
     try {
       const d = await api.refreshTop(f, Number(liveN))
       applyResult(d)
@@ -126,7 +123,7 @@ export default function RoutesView({ capital, status, currencies, onCapitalSaved
       setNote(r.waited === 0 ? `Top ${r.top_n}: all ${r.pairs_considered} pairs already fresh, nothing fetched.`
         : `Top ${r.top_n}: fetched ${r.done} of ${r.waited} stale pairs${r.timed_out ? ' (rest still queued)' : ''}.`)
     } catch (e) { setNote(String(e.message || e)) }
-    setLiveBusy(false)
+    setLiveBusy(false); setSyncBusy(false)
   }
   const refreshOne = async (r) => {
     setRefreshingId(r.id); setNote(null)
@@ -138,12 +135,15 @@ export default function RoutesView({ capital, status, currencies, onCapitalSaved
     } catch (e) { setNote(String(e.message || e)) }
     setRefreshingId(null)
   }
+  // Global auto-refresh (topbar toggle) — Routes' own 2-min cadence, gated on the shared flag.
   useEffect(() => {
     if (!autoLive || !canLive) return
     refreshTop()
     const t = setInterval(refreshTop, 120000)
     return () => clearInterval(t)
   }, [autoLive, canLive, filterKey, liveN]) // eslint-disable-line
+  // Manual refresh from the topbar ⟳ refreshes the top loops (this view is the one mounted).
+  useEffect(() => { if (tick > 0) refreshTop() }, [tick]) // eslint-disable-line
 
   const set = (k) => (e) => setF(x => ({ ...x, [k]: e.target.type === 'checkbox' ? e.target.checked : e.target.value }))
   const clickSort = (key, defDir) => setSort(s => s.key === key ? { key, dir: s.dir === 'desc' ? 'asc' : 'desc' } : { key, dir: defDir })
@@ -216,23 +216,7 @@ export default function RoutesView({ capital, status, currencies, onCapitalSaved
         {!canLive ? (
           <p className="hint">Not connected — loops use hourly market data. Connect a trade session in Settings for real-time order books.</p>
         ) : (
-          <>
-            <div className="row">
-              <RefreshButton busy={liveBusy} onClick={refreshTop} title={`Refresh top ${liveN} loops now`} />
-              <span className="hint">Top {liveN} loops</span>
-            </div>
-            <div className="check" style={{ marginTop: 8 }}><Toggle checked={autoLive} onChange={setAutoLive} label="Keep fresh (every 2 min)" /></div>
-          </>
-        )}
-        {rl && (
-          <details className="adv">
-            <summary>Fetch status</summary>
-            <p className="hint">
-              Exchange budget: {rl.policies.trade.rates.map(r => `${r.limit}/${r.window_s}s`).join(', ')}
-              {rl.policies.trade.penalty_remaining_s > 0 && <span className="loss"> · holding {Math.ceil(rl.policies.trade.penalty_remaining_s)}s</span>}
-              <br />queue {rl.queue.queue}{rl.queue.in_flight ? ` · fetching ${rl.queue.in_flight}` : ''} · {rl.policies.trade.requests} requests this run
-            </p>
-          </details>
+          <p className="hint">Refreshing (the top-bar ⟳ or auto toggle) fetches live order books for the top {liveN} loops.{liveBusy ? ' · refreshing…' : ''}</p>
         )}
       </aside>
 

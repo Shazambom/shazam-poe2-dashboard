@@ -4,6 +4,7 @@ import { api, fmt } from '../lib/api.js'
 import { color, chart } from '../theme.js'
 import Cur from './Cur.jsx'
 import CurrencyPicker from './CurrencyPicker.jsx'
+import Toggle from './Toggle.jsx'
 
 const AXIS = { fill: chart.axis, fontSize: 11 }
 const TIP = { background: chart.tooltipBg, border: `1px solid ${chart.tooltipBorder}` }
@@ -15,11 +16,10 @@ export default function MarketView({ currencies }) {
   const [pair, setPair] = useState({ a: 'divine', b: 'exalted' })
   const [hist, setHist] = useState(null)
   const [q, setQ] = useState('')
+  const [byValue, setByValue] = useState(false)   // false = raw turnover, true = Exalted-normalized value
 
-  useEffect(() => {
-    api.edges().then(setEdges).catch(console.error)
-    api.topMarkets().then(setTop).catch(console.error)
-  }, [])
+  useEffect(() => { api.edges().then(setEdges).catch(console.error) }, [])
+  useEffect(() => { api.topMarkets(byValue ? 'value' : 'activity').then(setTop).catch(console.error) }, [byValue])
   useEffect(() => { api.history(pair.a, pair.b).then(setHist).catch(console.error) }, [pair])
 
   const names = Object.fromEntries((currencies?.currencies ?? []).map(c => [c.id, c.name]))
@@ -67,21 +67,34 @@ export default function MarketView({ currencies }) {
         </div>
 
         <div>
-          <h2>Busiest markets, last 24h</h2>
+          <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+            <h2 style={{ margin: 0 }}>Busiest markets, last 24h</h2>
+            <Toggle checked={byValue} onChange={setByValue}
+              label={byValue ? 'value (ex)' : 'raw turnover'} />
+          </div>
           {top.length === 0 ? <p className="hint">Nothing yet — the digest hasn't synced for this league.</p> : (
             <table>
-              <thead><tr><th>Market</th><th className="num">Volume</th><th className="num">Hours active</th></tr></thead>
+              <thead><tr><th>Market</th><th className="num">{byValue ? 'Value traded' : 'Volume'}</th><th className="num">Hours active</th></tr></thead>
               <tbody>
                 {top.slice(0, 15).map((m, i) => (
                   <tr key={i} style={{ cursor: 'pointer' }} onClick={() => setPair({ a: m.a, b: m.b })}>
                     <td><Cur id={m.a} name={names[m.a]} /> / <Cur id={m.b} name={names[m.b]} /></td>
-                    <td className="num">{fmt.n(m.volume_a)} / {fmt.n(m.volume_b)}</td>
+                    <td className="num">
+                      {byValue
+                        ? (m.value_ex != null ? <>{fmt.n(m.value_ex)} <Cur id="exalted" size={12} /></> : '–')
+                        : `${fmt.n(m.volume_a)} / ${fmt.n(m.volume_b)}`}
+                    </td>
                     <td className="num">{m.hours_active}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           )}
+          <p className="hint" style={{ marginTop: 6 }}>
+            {byValue
+              ? 'Ranked by traded value in Exalted (volume × exchange-graph value) — comparable across cheap and expensive currencies.'
+              : 'Ranked by how many hours the pair traded; volumes are raw units in each currency.'}
+          </p>
         </div>
       </div>
 

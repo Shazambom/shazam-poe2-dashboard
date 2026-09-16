@@ -2,15 +2,14 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { api, fmt } from '../lib/api.js'
 import Cur from './Cur.jsx'
 import { useAssetModal } from './CardDetail.jsx'
+import { useHorizon, holdHorizon } from '../lib/horizonStore.js'
 
 // "What to hold" leaderboard: assets ranked by how well they retain/gain value in
 // Divine over a horizon, with a cross-league forward-return prediction. Surfaces the
 // obscure winners (omens, liquid emotions, essences…), not just Mirror/Divine.
-// Fast-league horizons. The canonical app horizon set is 1h/6h/12h/1d/3d/7d; Hold ranks
-// non-currency items priced only by poe2scout DAILY data, so it uses the day-granularity
-// members (1d/3d/7d) — sub-day is impossible for these items (no hourly source).
-const HORIZONS = [['1d', '1d'], ['3d', '3d'], ['7d', '7d']]
-const HORIZON_HOURS = { '1d': 24, '3d': 72, '7d': 168 }  // Hold day-horizon → hours, for /api/asset + /api/movers
+// Horizon is the app-wide one (topbar). Hold ranks non-currency items priced only by poe2scout
+// DAILY data, so it maps the global hours to the nearest day-horizon via holdHorizon (1d/3d/7d) —
+// sub-day is impossible for these items (no hourly source).
 const NUMERAIRES = [['divine', 'vs Divine'], ['mirror', 'vs Mirror'], ['lock', 'vs Lock']]
 const MOVERS_N = 50  // "all of the top movers" — a full leaderboard, not the board's top-3 pulse
 
@@ -21,7 +20,8 @@ function ConfBadge({ c }) {
 
 export default function HoldView() {
   const [view, setView] = useState('hold')   // 'hold' (primary) | 'movers' (positive swings, secondary)
-  const [horizon, setHorizon] = useState('3d')
+  const hours = useHorizon(s => s.hours)      // app-wide horizon (topbar)
+  const horizon = holdHorizon(hours)          // → Hold's day-string (daily data)
   const [category, setCategory] = useState('all')
   const [numeraire, setNumeraire] = useState('divine')
   const [data, setData] = useState(null)
@@ -29,7 +29,7 @@ export default function HoldView() {
   const [err, setErr] = useState(null)
   const [busy, setBusy] = useState(true)
   const assetModal = useAssetModal()          // click any row → the SAME zoom modal the Board uses
-  const zoom = (name) => assetModal.open(name, HORIZON_HOURS[horizon] || 72)
+  const zoom = (name) => assetModal.open(name)
 
   useEffect(() => {
     setBusy(true)
@@ -40,8 +40,8 @@ export default function HoldView() {
   useEffect(() => {
     if (view !== 'movers') return
     setBusy(true)
-    api.movers(HORIZON_HOURS[horizon] || 72, MOVERS_N, 'up').then(d => { setMovers(d); setErr(null) }).catch(e => setErr(String(e.message || e))).finally(() => setBusy(false))
-  }, [view, horizon])
+    api.movers(hours, MOVERS_N, 'up').then(d => { setMovers(d); setErr(null) }).catch(e => setErr(String(e.message || e))).finally(() => setBusy(false))
+  }, [view, hours])
 
   const cats = data?.categories ?? ['all']
   const rows = useMemo(() => data?.assets ?? [], [data])
@@ -63,25 +63,18 @@ export default function HoldView() {
           <button className={`seg-btn ${!isMovers ? 'on' : ''}`} onClick={() => setView('hold')}>Hold</button>
           <button className={`seg-btn ${isMovers ? 'on' : ''}`} onClick={() => setView('movers')}>Positive movers</button>
         </div>
-        {!isMovers && (
-          <div className="seg" title="Hard-asset numeraire — what 'holds value' is measured against">
-            {NUMERAIRES.map(([k, label]) => (
-              <button key={k} className={`seg-btn ${numeraire === k ? 'on' : ''}`} onClick={() => setNumeraire(k)}>{label}</button>
-            ))}
-          </div>
-        )}
-        <div className="seg">
-          {HORIZONS.map(([k, label]) => (
-            <button key={k} className={`seg-btn ${horizon === k ? 'on' : ''}`} onClick={() => setHorizon(k)}>{label}</button>
+        {/* Numeraire + Category apply only to Hold, but stay rendered (disabled/dimmed) in the
+            Movers view so switching doesn't collapse the bar and jump the layout. */}
+        <div className={`seg ${isMovers ? 'hold-inactive' : ''}`} title="Hard-asset numeraire — what 'holds value' is measured against">
+          {NUMERAIRES.map(([k, label]) => (
+            <button key={k} disabled={isMovers} className={`seg-btn ${!isMovers && numeraire === k ? 'on' : ''}`} onClick={() => setNumeraire(k)}>{label}</button>
           ))}
         </div>
-        {!isMovers && (
-          <label className="hint" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>Category
-            <select className="league-select" value={category} onChange={e => setCategory(e.target.value)}>
-              {cats.map(c => <option key={c} value={c}>{c}</option>)}
-            </select>
-          </label>
-        )}
+        <label className={`hint ${isMovers ? 'hold-inactive' : ''}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>Category
+          <select className="league-select" value={category} disabled={isMovers} onChange={e => setCategory(e.target.value)}>
+            {cats.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
+        </label>
       </div>
 
       {err && <div className="notice error">{err}</div>}

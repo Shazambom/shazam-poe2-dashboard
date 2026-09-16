@@ -5,6 +5,11 @@ import { api, fmt, bus, surface } from './lib/api.js'
 import { nav } from './lib/nav.js'
 import { useLiveWiring, useLiveSync } from './lib/liveWiring.js'
 import VaalPingOrb from './components/VaalPingOrb.jsx'
+import DivinePingOrb from './components/DivinePingOrb.jsx'
+import HorizonPicker from './components/HorizonPicker.jsx'
+import { SyncMetrics, RefreshControls } from './components/SyncControls.jsx'
+import { useSignals } from './lib/signalStore.js'
+import { useAssetModal } from './components/CardDetail.jsx'
 import CommandPalette from './components/CommandPalette.jsx'
 import { connectBridge, connectSessionWithToast } from './lib/session.js'
 import BoardView from './components/BoardView.jsx'
@@ -28,13 +33,6 @@ const SUB_DESTS = [
   { section: 'Trading', sub: 'live', label: 'Live' },
 ]
 
-function feedState(ts, staleAfter, enabled = true) {
-  if (!enabled) return 'off'
-  if (!ts) return ''
-  const age = Date.now() / 1000 - ts
-  return age < staleAfter ? 'ok' : 'stale'
-}
-
 export default function App() {
   const [tab, setTab] = useState('Board')
   const [status, setStatus] = useState(null)
@@ -45,13 +43,17 @@ export default function App() {
   const [connecting, setConnecting] = useState(false)
   const [appVersion, setAppVersion] = useState(null)
   const [cmdOpen, setCmdOpen] = useState(false)
+  const [arcCtx, setArcCtx] = useState(null)   // league-level arc anchor for the topbar day chip
+  const assetModal = useAssetModal()           // global CardDetail — signals open into it
   const toastId = useRef(0)
 
+  const [rl, setRl] = useState(null)   // trade-API rate/queue budget — surfaced in the topbar sync cluster
   const refreshHeader = async () => {
     try {
       const [s, c] = await Promise.all([api.status(), api.capital()])
       setStatus(s); setCapital(c)
     } catch (e) { console.error(e) }
+    api.rateLimits().then(setRl).catch(() => {})
   }
   useEffect(() => {
     const q = new URLSearchParams(window.location.search)
@@ -77,6 +79,22 @@ export default function App() {
     return () => window.removeEventListener('keydown', h)
   }, [])
 
+  // Phase 4: poll the market-signal inbox (Divine orb). Phase 3: poll the league-arc anchor for the
+  // topbar day chip. Both re-key on league change; both degrade silently when the sidecar is idle.
+  useEffect(() => {
+    const refresh = () => useSignals.getState().refresh()
+    refresh()
+    const t = setInterval(refresh, 60000)
+    return () => clearInterval(t)
+  }, [status?.league])
+  useEffect(() => {
+    let live = true
+    const load = () => api.leagueArc().then(d => { if (live) setArcCtx(d) }).catch(() => {})
+    load()
+    const t = setInterval(load, 300000)
+    return () => { live = false; clearInterval(t) }
+  }, [status?.league])
+
   // Jump to Trading → Live (used by the ping banner, the VaalPingOrb, and the hotkey).
   const goLive = React.useCallback(() => { nav.openTrading('live'); setTab('Trading') }, [])
   useLiveWiring(goLive)
@@ -100,70 +118,55 @@ export default function App() {
     try { await connectSessionWithToast(refreshHeader) } finally { setConnecting(false) }
   }
 
-  const digestOk = feedState(status?.digest?.last_fetch, 2 * 3600)
-  const connected = !!status?.session?.connected
-  const bookOk = feedState(status?.orderbook?.last_fetch, 3600, connected)
   const ref = capital?.reference ?? 'ref'
-  const backfilling = status?.digest?.backfilling
   const league = status?.league ?? ''
   const bridge = connectBridge()   // 'desktop' | 'extension' | null
 
   return (
     <div className="app">
       <header className="topbar">
-        <BrandOrb onDone={refreshHeader} />
-        <h1>Arbiter</h1>
-        {appVersion && (
-          <button className="ver-chip" title="Click to check for updates"
-            onClick={() => window.poe2desktop?.checkUpdate?.()}>v{appVersion}</button>
-        )}
-        <button className="cmdk-chip" title="Command palette (⌘K)" onClick={() => setCmdOpen(true)}>
-          <span className="cmdk-k">⌘K</span> Search
-        </button>
-        <select className="league-select" value={league} title="League — saves on select"
-          onChange={e => setLeague(e.target.value)} disabled={!status}>
-          {league && !leagues.some(l => l.id === league) && <option value={league}>{league}</option>}
-          {leagues.map(l => <option key={l.id} value={l.id}>{l.text}</option>)}
-        </select>
-        <nav className="tabs" role="tablist">
-          {TABS.map(t => (
-            <button key={t} role="tab" aria-selected={tab === t} onClick={() => setTab(t)}>
-              {t}
-              {t === 'Trading' && <VaalPingOrb onClick={goLive} />}
-              {tab === t && <motion.span className="tab-underline" layoutId="tab-underline"
-                transition={{ type: 'spring', stiffness: 420, damping: 34 }} />}
-            </button>
-          ))}
-        </nav>
-        <div className="feeds">
-          <span className="feed" title={status?.digest?.last_error || `last hour ${status?.digest?.last_hour ?? '–'}`}>
-            <i className={`dot ${backfilling ? 'stale' : digestOk}`} />
-            {backfilling ? `syncing history · ${fmt.n(status.digest.behind_h, 0)}h behind`
-              : status?.digest?.last_fetch ? `market data ${fmt.age(Date.now() / 1000 - status.digest.last_fetch)} ago` : 'waiting for market data'}
-          </span>
-          {connected ? (
-            <span className="feed" title={status?.orderbook?.last_error || 'Live order book'}>
-              <i className={`dot ${bookOk}`} />
-              {status.orderbook.in_flight ? `fetching ${status.orderbook.in_flight}`
-                : status.orderbook.queue ? `${status.orderbook.queue} queued`
-                : status.orderbook.last_fetch ? `live ${fmt.age(Date.now() / 1000 - status.orderbook.last_fetch)} ago` : 'live: idle'}
-            </span>
-          ) : bridge === 'desktop' ? (
-            <button className="btn primary connect-live" disabled={connecting} onClick={doConnect}
-              title="Sign in to pathofexile.com and stream live order books">
-              {connecting ? 'Connecting…' : 'Connect live data'}
-            </button>
-          ) : (
-            // Web build: live order book needs the desktop app — steer there, don't
-            // advertise the extension flow. (The download button is right here.)
-            <span className="feed muted" title="Live order books run in the desktop app">
-              <i className="dot" /> live: desktop app
+        {/* Row 1 — identity + navigation, Divine signal orb pinned to the far corner */}
+        <div className="topbar-row">
+          <BrandOrb onDone={refreshHeader} />
+          <h1>Arbiter</h1>
+          <button className="cmdk-chip" title="Command palette (⌘K)" onClick={() => setCmdOpen(true)}>
+            <span className="cmdk-k">⌘K</span> Search
+          </button>
+          <nav className="tabs" role="tablist">
+            {TABS.map(t => (
+              <button key={t} role="tab" aria-selected={tab === t} onClick={() => setTab(t)}>
+                {t}
+                {t === 'Trading' && <VaalPingOrb onClick={goLive} />}
+                {tab === t && <motion.span className="tab-underline" layoutId="tab-underline"
+                  transition={{ type: 'spring', stiffness: 420, damping: 34 }} />}
+              </button>
+            ))}
+          </nav>
+          <span className="tb-spacer" />
+          <RefreshControls connected={!!status?.session?.connected} />
+          <DivinePingOrb onOpenSignal={(s) => { setTab('Board'); assetModal.open(s.name) }} />
+        </div>
+
+        {/* Row 2 — league + app-wide horizon (left); sync/status + capital + version (right) */}
+        <div className="topbar-row topbar-row-2">
+          <select className="league-select" value={league} title="League — saves on select"
+            onChange={e => setLeague(e.target.value)} disabled={!status}>
+            {league && !leagues.some(l => l.id === league) && <option value={league}>{league}</option>}
+            {leagues.map(l => <option key={l.id} value={l.id}>{l.text}</option>)}
+          </select>
+          {arcCtx?.day != null && (
+            <span className={`arc-chip ${arcCtx.phase || ''}`}
+              title={arcCtx.resembles ? `League arc · resembles ${arcCtx.resembles}` : 'Where we are on the league price arc'}>
+              day {arcCtx.day}<i className="arc-phase">{arcCtx.phase}</i><span className="arc-lg">league</span>
             </span>
           )}
+          <HorizonPicker />
+          <span className="tb-spacer" />
+          <SyncMetrics status={status} bridge={bridge} connecting={connecting} onConnect={doConnect} rl={rl} />
           <span className="capital-pill" title="Total value of what you hold, in the reference currency">
             capital <b>{fmt.n(capital?.total_ref, 1)}</b> <Cur id={ref} size={14} /></span>
-          {status?.oauth?.logged_in && <span className="muted">{status.oauth.username}</span>}
-          <UpdateStatus />
+          {status?.oauth?.logged_in && <span className="muted oauth-user">{status.oauth.username}</span>}
+          <UpdateStatus version={appVersion} />
           <DownloadApp />
         </div>
       </header>
@@ -182,6 +185,8 @@ export default function App() {
         leagues={leagues} onSetLeague={setLeague}
         onOpenCurrency={(id) => { setTab('Board'); setTimeout(() => nav.openCurrency(id), 0) }}
       />
+
+      {assetModal.node}
 
       <Toaster position="top-right" theme="dark" offset={64} toastOptions={{ unstyled: false }} />
 
