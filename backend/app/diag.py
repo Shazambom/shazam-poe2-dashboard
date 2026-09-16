@@ -7,6 +7,7 @@ Settings → Diagnostics. No data leaves the machine.
 """
 from __future__ import annotations
 
+import asyncio
 import time
 
 from . import analytics, config, db, digest, gateway, leaguehistory, movers, orderbook, session, sidecar_supervisor
@@ -14,10 +15,13 @@ from .currencies import registry
 from .settings import get_settings
 
 _TABLES = ("league_daily", "item_meta", "digest_markets", "orderbook", "capital", "kv", "kv_ops")
+# Probes ride the SAME httpx client as every real fetch (so a PyInstaller SSL/cert failure shows
+# up here), but on the lenient `static` policy and concurrently: a diagnostic must answer in a
+# second or two, not queue behind the exchange sweep's 1-per-6s trade budget.
 _PROBES = {
-    "poecdn(digest)": (config.GGG_DIGEST_URL, "digest"),
-    "poe2scout": (leaguehistory.BASE + "/Leagues", "poe2scout"),
-    "pathofexile": (config.TRADE_STATIC_URL, "trade"),
+    "poecdn(digest)": (config.GGG_DIGEST_URL, "static"),
+    "poe2scout": (leaguehistory.BASE + "/Leagues", "static"),
+    "pathofexile": (config.TRADE_STATIC_URL, "static"),
 }
 
 
@@ -37,15 +41,17 @@ def _db_counts(league: str) -> dict:
     return counts
 
 
+async def _probe(url: str, policy: str):
+    try:
+        r = await gateway.request("GET", url, policy=policy, retries=0, timeout=8)
+        return r.status_code
+    except Exception as e:
+        return f"ERR {type(e).__name__}: {str(e)[:140]}"
+
+
 async def _connectivity() -> dict:
-    net: dict = {}
-    for name, (url, policy) in _PROBES.items():
-        try:
-            r = await gateway.request("GET", url, policy=policy, retries=0, timeout=8)
-            net[name] = r.status_code
-        except Exception as e:
-            net[name] = f"ERR {type(e).__name__}: {str(e)[:140]}"
-    return net
+    results = await asyncio.gather(*(_probe(url, policy) for url, policy in _PROBES.values()))
+    return dict(zip(_PROBES, results))
 
 
 def _analytics(league: str) -> dict:
