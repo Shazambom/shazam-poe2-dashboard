@@ -194,6 +194,24 @@ async def diag():
                 net[name] = r.status_code
             except Exception as e:
                 net[name] = f"ERR {type(e).__name__}: {str(e)[:140]}"
+    # Heavy-analytics (sidecar) pipeline state — is it producing signals, or failing (e.g. numpy/
+    # stumpy not loading on Windows)? jobs by state + the newest error message pinpoint it.
+    analytics_diag: dict = {}
+    try:
+        from . import analytics as _an
+        analytics_diag["sidecar_cmd"] = bool(sidecar_supervisor._sidecar_cmd())
+        with db.q() as c:
+            analytics_diag["jobs"] = {r[0]: r[1] for r in c.execute(
+                "SELECT state, COUNT(*) FROM analytics_jobs GROUP BY state")}
+            err = c.execute("SELECT kind, error FROM analytics_jobs WHERE state='error' "
+                            "ORDER BY id DESC LIMIT 1").fetchone()
+            analytics_diag["last_error"] = (f"{err[0]}: {str(err[1])[:200]}" if err else None)
+            sig = _an.read_cache(c, "discords", "current")
+            analytics_diag["signals"] = len((sig or {}).get("signals") or [])
+            analytics_diag["arc_weighted"] = bool((_an.read_cache(c, "arc", "current") or {}).get("weights"))
+    except Exception as e:
+        analytics_diag["err"] = f"{type(e).__name__}: {str(e)[:160]}"
+
     return {
         "time": time.time(),
         "data_dir": str(config.DATA_DIR),
@@ -205,6 +223,7 @@ async def diag():
         "leaguehistory_current": db.kv_get("lh_current", []),
         "session_connected": session.status().get("connected", False),
         "connectivity": net,
+        "analytics": analytics_diag,
     }
 
 

@@ -127,6 +127,16 @@ async function startBackend() {
     const t0 = Date.now()
     if (await waitFor(`${localUrl}/api/status`, 240)) {   // ~2min: cover a slow first-boot re-seed before declaring failure
       bkLog(`bound after ${Math.round((Date.now() - t0) / 1000)}s`)
+      // DEV DIAGNOSTIC: report the heavy-analytics pipeline state once, ~90s in (after the sidecar
+      // has had time to compute the first discords/arc), so we can see on Windows whether signals
+      // are produced or the job is erroring (e.g. numpy/stumpy failing to load).
+      setTimeout(async () => {
+        try {
+          const r = await fetch(`${localUrl}/api/diag`, { signal: AbortSignal.timeout(8000) })
+          const d = await r.json()
+          bkLog(`analytics ${JSON.stringify(d.analytics || {})}`)
+        } catch (e) { bkLog(`analytics-probe-failed ${String(e && e.message || e)}`) }
+      }, 90000)
       backendUrl = localUrl
       backendKind = 'local'
       return
