@@ -409,7 +409,15 @@ function setupUpdates() {
     })
     autoUpdater.on('download-progress', (p) => _emitUpdate({ phase: 'downloading', percent: Math.round(p.percent) }))
     autoUpdater.on('update-downloaded', (info) => { _latestVersion = info?.version; updLog(`downloaded ${info?.version}`); _emitUpdate({ phase: 'ready', version: info?.version }) })
-    autoUpdater.on('error', (e) => { updLog(`ERROR ${String(e.message || e)}`); console.log('[updater]', String(e)); _emitUpdate({ phase: 'error', message: String(e.message || e) }) })
+    autoUpdater.on('error', (e) => {
+      const msg = String(e?.message || e)
+      updLog(`ERROR ${msg}`); console.log('[updater]', String(e))
+      // An empty channel is not a failure: on the beta channel before the first beta is published,
+      // GitHub has no beta.yml → "No published versions" / 404. Treat as "up to date", not an error,
+      // so opting into beta never shows a scary error when the channel is simply empty.
+      const benign = /No published versions|404|Cannot find (channel|latest)|ENOTFOUND|net::/i.test(msg)
+      _emitUpdate(benign ? { phase: 'none' } : { phase: 'error', message: msg })
+    })
     updLog('startup check')
     autoUpdater.checkForUpdates().catch((e) => updLog(`check-threw ${String(e.message || e)}`))
     setInterval(() => autoUpdater.checkForUpdates().catch(() => {}), 30 * 60 * 1000)
