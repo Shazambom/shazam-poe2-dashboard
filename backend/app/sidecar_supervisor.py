@@ -17,27 +17,17 @@ import time
 from pathlib import Path
 from typing import Optional
 
+from . import devtelemetry
+
 log = logging.getLogger("poe2arb.sidecar")
 
 _proc: Optional[subprocess.Popen] = None
 _stop = False
 
 # TEMPORARY DEV DIAGNOSTIC (see CLAUDE.md): a native sidecar crash (rc=0xC0000005) dies too fast to
-# post its own telemetry, so the supervisor reports the exit code + stderr tail. Best-effort, only
-# on desktop (parent pid set). Strip with the rest of the Windows-signals diagnostics.
+# post its own telemetry, so the supervisor reports the exit code + stderr tail (beta/dev only).
 def _tlog(msg: str) -> None:
-    if os.environ.get("ARBITER_TELEMETRY") != "1":
-        return                       # beta/dev channel only (stable + web/server stay silent)
-    try:
-        import sys
-        import urllib.request
-        ver = os.environ.get("ARBITER_VERSION", "?")
-        body = f"v{ver} {sys.platform} [supervisor]: {msg}".encode("utf-8", "replace")
-        req = urllib.request.Request("http://192.168.1.250:8080/api/installlog?p=sidecar",
-                                     data=body, headers={"Content-Type": "text/plain"})
-        urllib.request.urlopen(req, timeout=4).close()
-    except Exception:
-        pass
+    devtelemetry.tlog("supervisor", msg)
 
 
 def _sidecar_cmd() -> Optional[list[str]]:

@@ -11,7 +11,7 @@ export const usePings = create((set, get) => ({
   seen: {},               // listingId -> true (kept small: last MAX)
   unseen: 0,
   engine: { active: 0, budgetMax: 20, rate: {} },
-  states: {},             // pingId -> lifecycle state (set by PR6 machine hookups)
+  searchStates: {},       // search node id -> { state: live|auth|reconnecting|error, message }
 
   addPing: (p) => {
     if (!p || !p.listingId) return
@@ -25,7 +25,22 @@ export const usePings = create((set, get) => ({
   remove: (pingId) => set(s => ({ pings: s.pings.filter(p => p.pingId !== pingId) })),
   clear: () => set({ pings: [], unseen: 0 }),
   setEngine: (e) => set({ engine: { ...get().engine, ...e } }),
-  setState: (pingId, state) => set(s => ({ states: { ...s.states, [pingId]: state } })),
+  setSearchState: ({ itemId, state, message }) =>
+    set(s => ({ searchStates: { ...s.searchStates, [itemId]: { state, message } } })),
+  clearSearchState: (itemId) => set(s => { const n = { ...s.searchStates }; delete n[itemId]; return { searchStates: n } }),
 
   newest: () => get().pings[0] || null,
 }))
+
+// The Live toggle's label for a search node, from its persisted `armed` flag and the engine's
+// last reported state for it. Pure, so the mapping is testable without React.
+export function liveLabel(node, st) {
+  if (!node.armed) return { text: 'Go live', title: '' }
+  switch (st?.state) {
+    case 'live': return { text: 'Live ●', title: 'Connected' }
+    case 'auth': return { text: 'Reconnect session', title: st.message || 'Reconnect your PoE session' }
+    case 'reconnecting': return { text: 'Reconnecting…', title: st.message || '' }
+    case 'error': return { text: 'Error', title: st.message || '' }
+    default: return { text: 'Live …', title: 'Connecting' }
+  }
+}

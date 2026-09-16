@@ -169,22 +169,7 @@ async function teleport(token) {
   rateGate.observe('whisper', resp.headers)
   const data = poeJson(resp) || {}
   dlog(`[trade] teleport -> HTTP ${resp.status} success=${!!data.success}`)
-  _sink('trade:rate-state', rateGate.snapshot())
   return { success: !!data.success, status: resp.status }
 }
 
-// DEV: emit a synthetic ping so the renderer alert UI (orb/banner/sound/button) can be
-// exercised + screenshotted without waiting on a real listing. No network, no token.
-function emitTestPing() {
-  _sink('trade:ping', {
-    pingId: `p_test_${Date.now()}`, itemId: 'test', searchId: 'test', listingId: `test_${Date.now()}`,
-    item: { name: 'Divine Orb', typeLine: 'Divine Orb', icon: '' },
-    price: { amount: 3, currency: 'chaos' },
-    account: 'TestSeller', online: 'online',
-    indexedAt: Date.now(), receivedAt: Date.now(),
-    token: null, tokenExp: Date.now() + 5 * 60 * 1000,
-    flags: { gone: false, inDemand: true },
-  })
-}
-
-module.exports = { setSink, startSearch, stopSearch, stopAll, teleport, activeCount, emitState, emitTestPing }
+module.exports = { setSink, startSearch, stopSearch, stopAll, teleport, activeCount, emitState }

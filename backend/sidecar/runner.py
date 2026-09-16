@@ -16,28 +16,13 @@ import sys
 import time
 import traceback
 
-from app import analytics, marketseries, watchdog
-
-# ── TEMPORARY DEV DIAGNOSTIC (see CLAUDE.md "telemetry is mandatory") ──────────────────────────
-# The sidecar is invisible on Windows: the supervisor discards its stdout/stderr, so a mid-job
-# death (watchdog os._exit, native crash, OS kill) left no trace and jobs just wedged at 'running'
-# (v0.2.50). This posts the sidecar's own lifecycle to the sanctioned installlog endpoint so we can
-# SEE where it dies. Best-effort, stdlib-only, no secrets. Strip once the Windows no-signals issue
-# is confirmed fixed. Enabled only when a parent pid is set (desktop), never on the web/server.
-_TLOG_URL = "http://192.168.1.250:8080/api/installlog?p=sidecar"
+from app import analytics, devtelemetry, marketseries, watchdog
 
 
+# TEMPORARY DEV DIAGNOSTIC (see CLAUDE.md "telemetry is mandatory"): the sidecar's lifecycle,
+# posted via the shared beta/dev-gated sender so a mid-job death on Windows is visible.
 def _tlog(msg: str) -> None:
-    if os.environ.get("ARBITER_TELEMETRY") != "1":
-        return                       # only the beta/dev channel opts in; web/server + stable stay silent
-    try:
-        import urllib.request
-        ver = os.environ.get("ARBITER_VERSION", "?")
-        body = f"v{ver} {sys.platform} frozen={getattr(sys, 'frozen', False)}: {msg}".encode("utf-8", "replace")
-        req = urllib.request.Request(_TLOG_URL, data=body, headers={"Content-Type": "text/plain"})
-        urllib.request.urlopen(req, timeout=4).close()
-    except Exception:
-        pass
+    devtelemetry.tlog("sidecar", msg)
 
 
 # ---- job handlers: kind -> fn(conn, job) that writes analytics_cache -----------------------

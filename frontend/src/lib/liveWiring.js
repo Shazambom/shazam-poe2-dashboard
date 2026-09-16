@@ -56,7 +56,11 @@ export function useLiveWiring(goLive) {
       sonner.custom((id) => bannerEl(p, () => { sonner.dismiss(id); goLive?.() }), { id: 'live-ping', duration: PING_TTL })
     })
     const offEngine = window.poe2desktop.trade.onEngineState((e) => usePings.getState().setEngine(e))
-    return () => { offPing?.(); offEngine?.(); window.removeEventListener('pointerdown', unlock); window.removeEventListener('keydown', unlock) }
+    // Per-search connection state (live / auth / reconnecting / error) drives the Live button
+    // label, so an expired session or a dropped socket is visible instead of a stuck "Live …".
+    const offSearch = window.poe2desktop.trade.onSearchState((s) => usePings.getState().setSearchState(s))
+    const offErr = window.poe2desktop.trade.onEngineError((e) => { if (e?.message) toast(e.message, false) })
+    return () => { offPing?.(); offEngine?.(); offSearch?.(); offErr?.(); window.removeEventListener('pointerdown', unlock); window.removeEventListener('keydown', unlock) }
   }, [goLive])
 }
 

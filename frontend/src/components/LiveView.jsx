@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { usePings } from '../lib/pingStore.js'
+import { usePings, liveLabel } from '../lib/pingStore.js'
 import { useWorkspace, loadWorkspace } from '../lib/workspaceStore.js'
 import PingButton from './PingButton.jsx'
 import SearchTree from './SearchTree.jsx'
@@ -23,12 +23,12 @@ export default function LiveView({ league }) {
   const pings = usePings(s => s.pings)
   const markSeen = usePings(s => s.markSeen)
   const engine = usePings(s => s.engine)
+  const searchStates = usePings(s => s.searchStates)
   const tree = useWorkspace(s => s.tree)
   const loaded = useWorkspace(s => s.loaded)
   const setField = useWorkspace(s => s.setField)
   // Go-live state is the DB-persisted `armed` flag on each node (single source of truth).
-  // useLiveSync reconciles the engine to it. `engine.activeIds` = which are actually connected.
-  const activeIds = engine.activeIds || []
+  // useLiveSync reconciles the engine to it; `searchStates` is the engine's per-search verdict.
   const headRef = useRef(null)
 
   useEffect(() => { if (!loaded) loadWorkspace() }, [loaded])
@@ -96,11 +96,16 @@ export default function LiveView({ league }) {
             <div className="live-tree-wrap">
               <SearchTree
                 onSelect={() => {}}
-                renderTrailing={(d) => d.kind === 'search' ? (
-                  <button className={`btn small ${d.armed ? 'primary' : ''}`} onClick={e => { e.stopPropagation(); toggleLive(d) }}>
-                    {d.armed ? (activeIds.includes(d.id) ? 'Live ●' : 'Live …') : 'Go live'}
-                  </button>
-                ) : null}
+                renderTrailing={(d) => {
+                  if (d.kind !== 'search') return null
+                  const { text, title } = liveLabel(d, searchStates[d.id])
+                  return (
+                    <button className={`btn small ${d.armed ? 'primary' : ''}`} title={title}
+                            onClick={e => { e.stopPropagation(); toggleLive(d) }}>
+                      {text}
+                    </button>
+                  )
+                }}
               />
             </div>
           )}

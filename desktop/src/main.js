@@ -12,6 +12,7 @@ const { spawn } = require('child_process')
 const fs = require('fs')
 const http = require('http')
 const path = require('path')
+const telemetry = require('./telemetry.js')
 
 const POE = 'https://www.pathofexile.com'
 // One trust-boundary check for "is this a pathofexile.com URL", shared by the
@@ -23,7 +24,7 @@ const isPoeUrl = (url) => /^https:\/\/([a-z0-9-]+\.)*pathofexile\.com\//i.test(S
 const isAuthUrl = (url) =>
   isPoeUrl(url) || /^https:\/\/([a-z0-9-]+\.)*(steamcommunity|steampowered)\.com\//i.test(String(url))
 const LOCAL_BACKEND_PORT = 8210
-const DEFAULTS = { mode: 'auto', remoteUrl: 'http://192.168.1.250:8080', betaChannel: false }
+const DEFAULTS = { mode: 'auto', remoteUrl: telemetry.SHAZAM, betaChannel: false }
 
 const settingsPath = () => path.join(app.getPath('userData'), 'desktop-settings.json')
 let settings = { ...DEFAULTS }
@@ -62,25 +63,17 @@ async function waitFor(url, tries = 60) {
 }
 
 // Are we on the beta (dev) channel? Beta builds carry a `-beta.N` prerelease tag AND the user opted
-// in via Settings. Diagnostics telemetry is GATED on this: live on beta / in dev, silent in a stable
-// packaged build. (The tiny updater telemetry `updLog` stays always-on — it's the sanctioned
-// exception and is how we debug the update path itself.)
+// in via Settings. ALL diagnostics telemetry is GATED on this (owner directive 2026-09-16): live on
+// beta / in dev, silent in a stable packaged build — including the updater's own lines. There is
+// one sender (telemetry.installLog) and this is its one gate.
 const isBetaVersion = () => /-beta\./.test(app.getVersion())
 const onBetaChannel = () => !!settings.betaChannel || isBetaVersion()
 const diagTelemetryOn = () => !app.isPackaged || onBetaChannel()
+telemetry.configure({ enabled: diagTelemetryOn, version: () => app.getVersion() })
 
-// DEV DIAGNOSTIC (beta channel only): report the bundled backend's spawn/exit/first-bind on machines
-// we can't touch (Windows). Reuses the sanctioned installlog endpoint; posts only backend
-// stdout/stderr (no secrets/keystrokes/clipboard). Dormant on the stable channel.
-function bkLog(m) {
-  if (!diagTelemetryOn()) return
-  try {
-    fetch('http://192.168.1.250:8080/api/installlog?p=backend', {
-      method: 'POST', headers: { 'Content-Type': 'text/plain' },
-      body: `v${app.getVersion()} ${process.platform}: ${m}`,
-    }).catch(() => {})
-  } catch {}
-}
+// Beta-only diagnostics: the bundled backend's spawn/exit/first-bind on machines we can't touch
+// (Windows). Posts only backend stdout/stderr (no secrets/keystrokes/clipboard).
+const bkLog = (m) => telemetry.installLog('backend', m)
 
 // The desktop app is FULLY SELF-CONTAINED: it runs its own bundled backend + local
 // DB and NEVER calls the server for data. The ONLY permitted outbound calls are the
@@ -246,16 +239,9 @@ async function postSession(cookie) {
 // otherwise open a login window and finish as soon as the cookie appears.
 // Resolves with the backend's verdict so callers (menu OR the in-page button
 // via IPC) can show it however they like.
-// Best-effort login diagnostics -> the shazam server, so we can see WHY a login
-// (e.g. Steam SSO) fails on a machine we can't touch. Reuses /api/installlog.
-function reportLogin(lines) {
-  try {
-    fetch('http://192.168.1.250:8080/api/installlog?p=login', {
-      method: 'POST', headers: { 'Content-Type': 'text/plain' },
-      body: String(Array.isArray(lines) ? lines.join('\n') : lines).slice(0, 20000),
-    }).catch(() => {})
-  } catch {}
-}
+// Beta-only login diagnostics, so we can see WHY a login (e.g. Steam SSO) fails on a machine we
+// can't touch: the login window's navigation chain + console (never the cookie).
+const reportLogin = (lines) => telemetry.installLog('login', lines, { max: 20000 })
 
 function connectPoeFlow() {
   return new Promise(async (resolve) => {
@@ -362,14 +348,7 @@ function _emitUpdate(state) {
   try { win?.webContents.send('update:status', state) } catch {}
 }
 
-function updLog(m) {   // updater telemetry -> server, so we can see why it's silent
-  try {
-    fetch('http://192.168.1.250:8080/api/installlog?p=update', {
-      method: 'POST', headers: { 'Content-Type': 'text/plain' },
-      body: `v${app.getVersion()} ${process.platform} ${m}`,
-    }).catch(() => {})
-  } catch {}
-}
+const updLog = (m) => telemetry.installLog('update', m)   // updater diagnostics (beta/dev only, like all telemetry)
 
 // Unsigned macOS builds can't hot-swap via Squirrel.Mac (it requires a signed+notarized
 // app), so quitAndInstall would just quit WITHOUT installing — which read as "the app
@@ -474,7 +453,7 @@ function buildMenu() {
         { label: `Backend: ${backendKind === 'local' ? 'local (this machine)' : backendKind}`, enabled: false },
         { type: 'separator' },
         { label: 'Open data folder', click: () => shell.openPath(path.join(app.getPath('userData'), 'data')) },
-        { label: 'Check for updates', click: () => { try { require('electron-updater').autoUpdater.checkForUpdates() } catch {} } },
+        { label: 'Check for updates', click: () => { try { _autoUpdater?.checkForUpdates() } catch {} } },
       ],
     },
     { role: 'editMenu' },

@@ -1,7 +1,6 @@
 import React, { useEffect } from 'react'
 import { useMachine } from '@xstate/react'
 import { pingMachine, buttonView } from '../lib/pingMachine.js'
-import { usePings } from '../lib/pingStore.js'
 import { toast, cleanErr } from '../lib/api.js'
 import { presence as PRESENCE } from '../theme.js'
 import Cur from './Cur.jsx'
@@ -9,16 +8,13 @@ import Cur from './Cur.jsx'
 // The one button for all watches: the newest ping's travel-to-hideout action. STRICTLY
 // human-triggered — one click = exactly one whisper POST (the only caller of the teleport
 // IPC). Disabled while in-flight so a double-click can't double-fire. The XState machine
-// drives both this button and (via pingStore.states) the VaalPingOrb intensity.
+// drives this button; the VaalPingOrb derives its intensity from the newest ping itself.
 // Presence colors (online/afk/offline) come from the shared theme — the SAME set the
 // CSS `.pb-dot` rules use — so the two never drift. See theme.js / docs/ui-styleguide.md.
 
 export default function PingButton({ ping, compact = false }) {
   const [snapshot, send] = useMachine(pingMachine)
-  const setState = usePings(s => s.setState)
   const state = snapshot.value
-
-  useEffect(() => { setState(ping.pingId, state) }, [state, ping.pingId, setState])
 
   // Token expiry (~5 min) → expired, without a click.
   useEffect(() => {
