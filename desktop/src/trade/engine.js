@@ -4,7 +4,7 @@
 // auto-buy. See docs/trading-rework-plan.md.
 const WebSocket = require('ws')
 const { POE, poeRequest, poeJson, cookieHeader, userAgent } = require('./proxy.js')
-const rateGate = require('./rateGate.js')
+const budget = require('./budget.js')
 
 const MAX_SOCKETS = 20          // GGG closes excess live searches with code 1013
 const FETCH_CHUNK = 10          // /fetch takes at most 10 ids per call
@@ -23,7 +23,7 @@ function setSink(fn) { _sink = fn }
 function activeCount() { return sockets.size }
 
 function emitState(extra = {}) {
-  _sink('trade:engine-state', { active: sockets.size, activeIds: [...sockets.keys()], budgetMax: MAX_SOCKETS, rate: rateGate.snapshot(), ...extra })
+  _sink('trade:engine-state', { active: sockets.size, activeIds: [...sockets.keys()], budgetMax: MAX_SOCKETS, ...extra })
 }
 
 async function startSearch(itemId, league, slug, type = 'search') {
@@ -105,11 +105,11 @@ async function _onPingIds(itemId, ids) {
   if (!rec) return
   for (let i = 0; i < ids.length; i += FETCH_CHUNK) {
     const chunk = ids.slice(i, i + FETCH_CHUNK)
-    try { rateGate.check('fetch') } catch (e) { _sink('trade:engine-error', { itemId, reason: 'rate', message: e.message }); return }
+    try { await budget.acquire('trade-fetch') } catch (e) { _sink('trade:engine-error', { itemId, reason: 'rate', message: e.message }); return }
     const path = `/api/trade2/fetch/${chunk.join(',')}?query=${rec.searchId}&realm=poe2`
     const resp = await poeRequest({ path, referer: `${POE}/trade2/search/poe2/${encodeURIComponent(rec.league)}/${rec.searchId}` })
-    if (resp.status === 429) { rateGate.observe429('fetch', resp.headers); _sink('trade:engine-error', { itemId, reason: 'rate', message: 'fetch 429' }); return }
-    rateGate.observe('fetch', resp.headers)
+    budget.observe('trade-fetch', resp.status, resp.headers)
+    if (resp.status === 429) { _sink('trade:engine-error', { itemId, reason: 'rate', message: 'fetch 429' }); return }
     const data = poeJson(resp)
     let n = 0
     for (const r of (data?.result || [])) {
@@ -160,13 +160,13 @@ function stopAll() { for (const id of [...sockets.keys()]) stopSearch(id) }
 // The manual teleport (PR6 wires the button). One call per human click; POST the
 // hideout_token to travel to the seller's hideout. Returns { success } or throws.
 async function teleport(token) {
-  rateGate.check('whisper')
+  await budget.acquire('trade-whisper')
   const resp = await poeRequest({
     method: 'POST', path: '/api/trade2/whisper',
     body: { token }, referer: `${POE}/trade2`,
   })
-  if (resp.status === 429) { rateGate.observe429('whisper', resp.headers); throw new rateGate.RateLimitError(30) }
-  rateGate.observe('whisper', resp.headers)
+  budget.observe('trade-whisper', resp.status, resp.headers)
+  if (resp.status === 429) throw new budget.RateLimitError(30)
   const data = poeJson(resp) || {}
   dlog(`[trade] teleport -> HTTP ${resp.status} success=${!!data.success}`)
   return { success: !!data.success, status: resp.status }

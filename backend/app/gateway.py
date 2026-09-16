@@ -69,12 +69,30 @@ class Policy:
         self.throttled += 1
         log.warning("%s: holding %.0fs (%s)", self.name, seconds, why)
 
+    def try_acquire_now(self) -> float:
+        """Non-blocking reservation for an out-of-process caller (the Electron live-search engine):
+        0.0 when a slot was taken, else the seconds to wait. Never sleeps — request threads stay
+        snappy; the caller decides whether to retry."""
+        hold = self.penalty_until - time.time()
+        if hold > 0:
+            return hold
+        if not self.limiter.try_acquire(self.name, blocking=False):
+            win = max((r.interval for r in self.rates), default=1000) / 1000.0
+            return max(1.0, min(win, 30.0))
+        self.requests += 1
+        return 0.0
+
     # ---------------------------------------------------------- adapting
     def observe(self, resp: httpx.Response) -> None:
-        h = {k.lower(): v for k, v in resp.headers.items() if k.lower().startswith("x-rate-limit") or k.lower() == "retry-after"}
+        self.observe_headers(resp.status_code, dict(resp.headers.items()))
+
+    def observe_headers(self, status_code: int, headers: dict) -> None:
+        """Reconcile to the server's X-Rate-Limit-* view. Also the entry point for headers
+        observed by another process against the same budget (Electron → /api/ratelimits/observe)."""
+        h = {k.lower(): v for k, v in headers.items() if k.lower().startswith("x-rate-limit") or k.lower() == "retry-after"}
         if h:
             self.last_headers = h
-        if resp.status_code == 429:
+        if status_code == 429:
             self.penalize(float(h.get("retry-after", 60)) + 1, "429")
             return
         rules = [r.strip().lower() for r in h.get("x-rate-limit-rules", "").split(",") if r.strip()]
@@ -124,6 +142,11 @@ def _triples(s: str) -> list[tuple[int, int, int]]:
 POLICIES: dict[str, Policy] = {p.name: p for p in [
     # Trade-site exchange: undocumented, the strictest. Start at 1 per 6 s / 8 per minute.
     Policy("trade", [Rate(1, Duration.SECOND * 6), Rate(8, Duration.MINUTE)], ("www.pathofexile.com",)),
+    # Trade-site listing fetch + whisper, driven by the Electron live-search engine through
+    # /api/ratelimits (same host, separate GGG rules; reached by override only — host lookup
+    # resolves to "trade" above). Conservative starts; re-derived from headers like the rest.
+    Policy("trade-fetch", [Rate(1, Duration.SECOND), Rate(20, Duration.MINUTE)], ("www.pathofexile.com",)),
+    Policy("trade-whisper", [Rate(1, Duration.SECOND * 2), Rate(10, Duration.MINUTE)], ("www.pathofexile.com",)),
     # OAuth'd account API and token endpoint.
     Policy("ggg-api", [Rate(1, Duration.SECOND * 2), Rate(20, Duration.MINUTE)], ("api.pathofexile.com",)),
     # Public hourly digest CDN: no headers. Quick enough that a week's backfill

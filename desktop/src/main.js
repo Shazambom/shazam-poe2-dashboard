@@ -521,7 +521,7 @@ app.whenReady().then(async () => {
   win.webContents.setWindowOpenHandler(({ url }) => { shell.openExternal(url); return { action: 'deny' } })
   setupUpdates()
   startEe2Integration()   // self-gates on EE2 presence; dormant if EE2 isn't installed
-  try { require('./trade').registerTrade(() => win) } catch (e) { console.log('[trade] register failed:', String(e)) }
+  try { require('./trade').registerTrade(() => win, () => backendUrl) } catch (e) { console.log('[trade] register failed:', String(e)) }
   try {
     const { registerHotkey } = require('./trade/hotkey.js')
     const combo = settings.focusHotkey || 'CommandOrControl+G'

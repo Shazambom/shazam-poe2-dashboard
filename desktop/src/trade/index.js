@@ -5,8 +5,10 @@ const { ipcMain } = require('electron')
 const { installCloudflareCookieFix } = require('./proxy.js')
 const engine = require('./engine.js')
 
-function registerTrade(getWin) {
+// getBackendUrl: where the bundled backend (the rate-budget owner) lives — set once it has bound.
+function registerTrade(getWin, getBackendUrl) {
   installCloudflareCookieFix()
+  if (getBackendUrl) require('./budget.js').configure({ backendUrl: getBackendUrl })
 
   // Engine -> renderer: forward every engine event to the focused window's webContents.
   engine.setSink((channel, payload) => {

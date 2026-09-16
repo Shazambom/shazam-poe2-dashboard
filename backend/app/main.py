@@ -682,6 +682,39 @@ def rate_limits():
     return {"policies": gateway.status(), "queue": orderbook.state, "pair_scores": pairscore.top(12)}
 
 
+class RateAcquire(BaseModel):
+    policy: str
+
+
+class RateObserve(BaseModel):
+    policy: str
+    status: int
+    headers: dict[str, str] = {}
+
+
+def _policy_or_404(name: str) -> gateway.Policy:
+    p = gateway.POLICIES.get(name)
+    if p is None:
+        raise HTTPException(404, f"unknown rate policy {name!r}")
+    return p
+
+
+@app.post("/api/ratelimits/acquire")
+def rate_acquire(body: RateAcquire):
+    """Reserve one slot of a pathofexile.com budget for the desktop live-search engine (the backend
+    is the single owner of the budget both processes share). Non-blocking: {ok} or {ok:false,
+    retry_after_s} — the caller fails fast instead of the request thread sleeping."""
+    wait = _policy_or_404(body.policy).try_acquire_now()
+    return {"ok": True} if wait <= 0 else {"ok": False, "retry_after_s": round(wait, 1)}
+
+
+@app.post("/api/ratelimits/observe")
+def rate_observe(body: RateObserve):
+    """Feed the X-Rate-Limit-* headers (and 429s) the engine saw into the shared budget."""
+    _policy_or_404(body.policy).observe_headers(body.status, body.headers)
+    return {"ok": True}
+
+
 @app.post("/api/digest/sync")
 async def digest_sync():
     await digest.sync_once()
