@@ -98,6 +98,19 @@ def save_settings(patch: dict) -> dict:
     return db.kv_update("settings", apply, {})
 
 
+# Read-site clamps for tunables the UI can save as 0/blank — one home, not per caller.
+GOLD_VALUE_DIVINE_PER_1K = 0.01   # fallback: 1 Divine ≈ 100k gold (the slider's default)
+HUB_N = 5                         # fallback hub count (centrality.HUB_N mirrors this)
+
+
+def gold_value_per_1k(s: dict) -> float:
+    return float(s.get("gold_value_per_1k") or GOLD_VALUE_DIVINE_PER_1K)
+
+
+def hub_count(s: dict) -> int:
+    return max(1, int(s.get("hub_count") or HUB_N))
+
+
 def _deep_update(base: dict, patch: dict) -> None:
     for k, v in patch.items():
         if isinstance(v, dict) and isinstance(base.get(k), dict):

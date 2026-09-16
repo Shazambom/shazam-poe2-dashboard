@@ -15,7 +15,8 @@ Pure over (graph, ref_value): no DB, no network, no sidecar. `liquidity` imports
 """
 from __future__ import annotations
 
-from . import arbitrage, centrality
+from . import arbitrage, centrality, settings
+from .currencies import registry
 
 
 def cash_set(g: "arbitrage.Graph", ref_value: dict[str, float]) -> set[str]:
@@ -24,8 +25,7 @@ def cash_set(g: "arbitrage.Graph", ref_value: dict[str, float]) -> set[str]:
     wealth (a player doesn't "cash out" a hub, they already hold liquid value), so they realize
     at paper. Derived, not hardcoded — it tracks the `hub_count` setting and the live market,
     so as the economy shifts (or the user retunes the threshold) the cash set follows."""
-    n = max(1, int(g.s.get("hub_count") or centrality.HUB_N))
-    return centrality.hubs(g, ref_value, n)
+    return centrality.hubs(g, ref_value, settings.hub_count(g.s))
 
 
 def _source(kinds: list[str]) -> str:
@@ -107,3 +107,23 @@ def realizable(g: "arbitrage.Graph", ref_value: dict[str, float], currency: str,
             "slippage_pct": best["loss_pct"], "fill_hours": best["fill_hours"],
             "source": _source(best["kinds"]), "full_fill": best["full_fill"],
             "path": best["path"]}
+
+
+def capital_rows(caps: dict[str, float], g: "arbitrage.Graph", ref_value: dict[str, float]) -> dict:
+    """The /api/capital payload: every holding priced at paper AND at what it would realize
+    (Ghost Wealth), plus the totals. Pure over (caps, graph, ref_value)."""
+    gv = settings.gold_value_per_1k(g.s)
+    cash = cash_set(g, ref_value)          # hub currencies = cash-like; derived once (PageRank)
+    rows = []
+    for c, q in caps.items():
+        row = {"currency": c, "name": registry.name(c), "qty": q, "ref_value": ref_value.get(c),
+               "value_ref": (q * ref_value[c]) if c in ref_value else None}
+        liq = realizable(g, ref_value, c, q, cash=cash, gold_value_per_1k=gv)
+        row.update(realizable_ref=liq["realizable_ref"], slippage_pct=liq["slippage_pct"],
+                   fill_hours=liq["fill_hours"], source=liq["source"], full_fill=liq["full_fill"],
+                   cashout_path=liq["path"])
+        rows.append(row)
+    total = sum(r["value_ref"] for r in rows if r["value_ref"] is not None)
+    realizable_total = sum(r["realizable_ref"] for r in rows if r["realizable_ref"] is not None)
+    return {"rows": rows, "total_ref": total, "realizable_total_ref": realizable_total,
+            "ghost_ref": total - realizable_total, "reference": g.s["reference"]}

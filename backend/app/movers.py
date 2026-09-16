@@ -15,7 +15,7 @@ from __future__ import annotations
 import statistics
 import time
 
-from . import db, marketseries
+from . import cache, db, marketseries
 from .leaguehistory import _slug
 from .settings import get_settings
 
@@ -37,19 +37,18 @@ def _current_series():
     """(current_league, {item_id: [(t_epoch, close_ex, value_ex)] oldest→newest},
     {item_id: (name, category)}) — the current league's daily series. Cached ~5 min."""
     league = get_settings()["league"]
-    hit = _cache.get(league)
-    if hit and time.time() - hit[0] < _TTL:
-        return hit[1]
+    return cache.memo(_cache, league, _TTL, lambda: _build_current_series(league))
+
+
+def _build_current_series(league: str):
     # Read + shaping live in the stdlib `marketseries` module (shared with the analytics sidecar);
     # here we only pick which league to view (needs settings + the lh_current kv).
     with db.q() as c:
         meta = marketseries.read_meta(c)
         rows = marketseries.read_rows(c)          # all leagues, ORDER BY league, day
-    cur_name = marketseries.pick_league(rows, league, db.kv_get("lh_current", []))
+    cur_name = marketseries.pick_league(rows, league, db.kv_get(marketseries.CURRENT_LEAGUES_KEY, []))
     series = marketseries.build_series(rows, cur_name)
-    out = (cur_name, series, meta)
-    _cache[league] = (time.time(), out)
-    return out
+    return cur_name, series, meta
 
 
 def current_league() -> str | None:
@@ -62,15 +61,7 @@ def current_league() -> str | None:
 def _change_pct(pts, window_days):
     """% change of close over the window: last close vs the close at (or nearest before)
     the window start — the same measure the price board uses for its scout-sourced rows."""
-    if len(pts) < 2:
-        return None
-    last_t, last_c = pts[-1][0], pts[-1][1]
-    start = last_t - window_days * _DAY
-    prior = [p for p in pts if p[0] <= start]
-    base = prior[-1] if prior else pts[0]
-    if not base[1]:
-        return None
-    return (last_c - base[1]) / base[1] * 100
+    return marketseries.change_over(pts, window_days * _DAY, t=lambda p: p[0], v=lambda p: p[1])[1]
 
 
 def top_movers(window_h: int = 24, n: int = 3, min_value_ex: float = MIN_VALUE_EX,
@@ -123,13 +114,11 @@ def asset_row(q: str, window_h: int = 24) -> dict | None:
     # first plotted value IS the % denominator and the graph rises by change_pct across the
     # window. Falls back to the whole series if there's no point before the window start.
     start = last_t - wd * _DAY
-    prior = [p for p in pts if p[0] <= start]
-    base = prior[-1] if prior else pts[0]
+    base, ch = marketseries.change_over(pts, wd * _DAY, t=lambda p: p[0], v=lambda p: p[1])
     win_pts = [base] + [p for p in pts if p[0] > start]
     if len(win_pts) < 2:                       # degenerate (e.g. brand-new item): show a bit more
         win_pts = pts[-2:] if len(pts) >= 2 else pts
     trend = [{"t": p[0], "v": p[1]} for p in win_pts]
-    ch = _change_pct(pts, wd)
     row = {"id": _slug(name), "name": name, "category": cat,
            "mid": pts[-1][1], "buy": None, "sell": None, "spread": None, "spread_pct": None,
            "source": "scout", "age_s": max(0, int(time.time()) - last_t), "depth": None,
@@ -141,7 +130,8 @@ def asset_row(q: str, window_h: int = 24) -> dict | None:
     from . import leaguehistory
     sp = leaguehistory.scout_prices(cur_name)
     prices = {"exalted": 1.0}
-    for rid, nm in (("divine", "divine orb"), ("chaos", "chaos orb"), ("mirror", "mirror of kalandra")):
-        if sp.get(nm):
-            prices[rid] = sp[nm]
+    for rid in ("divine", "chaos", "mirror"):
+        px = leaguehistory.scout_lookup(sp, rid)
+        if px:
+            prices[rid] = px
     return {"row": row, "prices": prices, "reference": "exalted"}

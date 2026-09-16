@@ -169,6 +169,11 @@ class Registry:
         self._user_overrides[meta] = tid   # highest precedence
         self._link(meta, tid)
 
+    def metas(self, tid: str) -> list[str]:
+        """Every GGG metadata id linked to a trade id (the digest keys by metadata id)."""
+        cur = self.by_id.get(tid)
+        return list(cur.metadata_ids) if cur else []
+
     def name(self, tid: str) -> str:
         cur = self.by_id.get(tid)
         return cur.name if cur else tid

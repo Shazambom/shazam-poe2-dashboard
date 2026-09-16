@@ -24,6 +24,8 @@ _seed = os.environ.get("MARKET_SEED", "").strip()
 MARKET_SEED_PATH = Path(_seed) if _seed else None
 
 RECIPES_PATH = DATA_DIR / "recipes.json"
+# Installer/desktop diagnostic reports (POST /api/installlog) are appended here.
+INSTALL_LOG_PATH = DATA_DIR / "install-reports.log"
 SEED_DIR = Path(__file__).resolve().parent.parent / "data"
 
 LEAGUE = os.environ.get("LEAGUE", "Standard")

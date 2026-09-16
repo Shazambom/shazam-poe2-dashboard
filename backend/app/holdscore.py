@@ -16,10 +16,9 @@ from __future__ import annotations
 
 import math
 import statistics
-import time
 
-from . import analytics, db
-from .leaguehistory import _age
+from . import analytics, cache, db, marketseries
+from .marketseries import league_age as _age
 from .settings import get_settings
 
 DIVINE_ID = 291
@@ -36,8 +35,15 @@ VALUE_FLOOR = 30_000_000.0   # median daily traded VALUE (exalted) for full liqu
 GAMMA = 0.65            # recency weight for past leagues (most recent = weight 1)
 MIN_PRED_LEAGUES = 2
 
-_cache: dict[str, tuple[float, dict]] = {}
+_cache: dict = {}            # leaderboard results
+_ctx_cache: dict = {}        # build_context per (league setting, numeraire)
 _TTL = 600
+_CTX_TTL = 300
+
+
+def invalidate() -> None:
+    cache.clear(_cache)
+    cache.clear(_ctx_cache)
 
 
 def _build_league(rows, num_id) -> tuple[dict[int, dict[int, tuple[float, float]]], str | None]:
@@ -139,27 +145,35 @@ def _predict(item_id, N, delta, past, weights=None, min_leagues=MIN_PRED_LEAGUES
 
 
 def build_context(num_id: int):
-    """Shared league-building for Hold + the league-arc: read all league_daily, price everything in
-    `num_id`, resolve the current league (user's if it has data, else newest live/known), and sort the
-    rest most-recent-first. Returns (cur_name, cur_per, past, meta) where past = [(league, per), ...].
-    One place so Hold's board and the arc projection can't drift on which league is 'current'."""
-    s = get_settings()
-    cur_name = s["league"]
+    """Shared league-building for Hold + the league-arc: read all league_daily (via the shared
+    marketseries reader), price everything in `num_id`, resolve the current league the same way
+    movers does (marketseries.pick_league), and sort the rest most-recent-first. Returns
+    (cur_name, cur_per, past, meta) where past = [(league, per), ...]. Memoized 5 min per
+    (league setting, numeraire) — the topbar arc chip and every /api/arc open hit this."""
+    preferred = get_settings()["league"]
+    return cache.memo(_ctx_cache, (preferred, num_id), _CTX_TTL, lambda: _build_context(preferred, num_id))
+
+
+def _build_context(preferred: str, num_id: int):
     with db.q() as c:
-        meta = {r["item_id"]: (r["name"], r["category"]) for r in c.execute("SELECT item_id, name, category FROM item_meta")}
-        rows = c.execute("SELECT league, item_id, day, close, volume FROM league_daily WHERE close>0 ORDER BY league, day").fetchall()
+        meta = marketseries.read_meta(c)
+        rows = marketseries.read_rows(c)
+        current = movers_current_leagues()
+    cur_name = marketseries.pick_league(rows, preferred, current)
     by_league: dict[str, list] = {}
     for r in rows:
-        by_league.setdefault(r["league"], []).append((r["item_id"], r["day"], r["close"], r["volume"]))
+        by_league.setdefault(r[0], []).append((r[1], r[2], r[3], r[4]))
     built, day0s = {}, {}
     for lg, rws in by_league.items():
         built[lg], day0s[lg] = _build_league(rws, num_id)
-    if cur_name not in built:   # viewing a league with no data yet → pick a current/newest one
-        current = set(db.kv_get("lh_current", []))
-        cur_name = next((l for l in built if l in current), None) or (max(built, key=lambda l: day0s[l] or "") if built else None)
     cur = built.get(cur_name, {})
     past = sorted(((lg, built[lg]) for lg in built if lg != cur_name), key=lambda x: day0s[x[0]] or "", reverse=True)
     return cur_name, cur, past, meta
+
+
+def movers_current_leagues() -> list:
+    """The game's currently-live leagues as poe2scout reports them (operational kv)."""
+    return db.kv_get(marketseries.CURRENT_LEAGUES_KEY, []) or []
 
 
 def _arc_weights(cur_name: str) -> dict | None:
@@ -178,11 +192,11 @@ def leaderboard(horizon: str = "3d", category: str = "all", numeraire: str = "di
     if numeraire not in NUMERAIRES:
         numeraire = "divine"
     num_id, num_name = NUMERAIRES[numeraire]
-    key = f"{horizon}|{category}|{numeraire}"
-    hit = _cache.get(key)
-    if hit and time.time() - hit[0] < _TTL:
-        return hit[1]
+    return cache.memo(_cache, f"{horizon}|{category}|{numeraire}", _TTL,
+                      lambda: _leaderboard(horizon, category, numeraire, num_id, num_name))
 
+
+def _leaderboard(horizon: str, category: str, numeraire: str, num_id: int, num_name: str) -> dict:
     cur_name, cur, past, meta = build_context(num_id)
     weights = _arc_weights(cur_name)        # Phase 3: DTW-weight the forward prediction when available
     hz = HORIZON_DAYS[horizon]
@@ -212,10 +226,8 @@ def leaderboard(horizon: str = "3d", category: str = "all", numeraire: str = "di
         })
     assets.sort(key=lambda x: -x["hold"])
     cats = sorted({a["category"] for a in assets})
-    res = {"league": cur_name, "horizon": horizon, "delta_days": delta,
-           "pred_weighted": weights is not None,   # Phase 3: forward pred is DTW-weighted vs recency
-           "numeraire": numeraire, "numeraire_name": num_name,
-           "numeraires": [{"id": k, "name": v[1]} for k, v in NUMERAIRES.items()],
-           "categories": ["all"] + cats, "count": len(assets), "assets": assets}
-    _cache[key] = (time.time(), res)
-    return res
+    return {"league": cur_name, "horizon": horizon, "delta_days": delta,
+            "pred_weighted": weights is not None,   # Phase 3: forward pred is DTW-weighted vs recency
+            "numeraire": numeraire, "numeraire_name": num_name,
+            "numeraires": [{"id": k, "name": v[1]} for k, v in NUMERAIRES.items()],
+            "categories": ["all"] + cats, "count": len(assets), "assets": assets}

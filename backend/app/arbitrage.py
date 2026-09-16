@@ -17,11 +17,13 @@ rounding, then score:
 """
 from __future__ import annotations
 
+import json
 import math
 import time
 from dataclasses import dataclass, field
 
-from . import centrality, digest, gamedata, orderbook, recipes
+from . import cache, centrality, db, digest, gamedata, leaguehistory, marketseries, orderbook, pairscore, recipes, session
+from . import settings as settings_mod
 from .currencies import registry
 from .settings import get_settings
 
@@ -182,14 +184,13 @@ class Graph:
         # omens): value them from poe2scout (priced in Exalted). This threads a price
         # for EVERY traded currency through capital, routes, market and the board.
         try:
-            from . import leaguehistory
             scout = leaguehistory.scout_prices(self.s["league"])
             ex = vals.get("exalted")                     # reference-per-exalted
             if scout and ex:
-                for cid, cur in registry.by_id.items():
+                for cid in registry.by_id:
                     if cid in vals:
                         continue
-                    px = scout.get(str(cur.name).lower()) or scout.get(str(cid).lower())
+                    px = leaguehistory.scout_lookup(scout, cid)
                     if px:
                         vals[cid] = px * ex
         except Exception:
@@ -325,36 +326,30 @@ def cycle_unit(cycle: list[Edge], limit: int = 512) -> int:
     return 1
 
 
-_route_cache: dict[str, tuple[float, int, dict]] = {}
-_graph_cache: tuple[float, int, tuple, "Graph"] | None = None
+_route_cache: dict = {}      # search key -> (ts, orderbook version, result); see _cache_get/_cache_put
+_graph_cache: dict = {}
+_board_cache: dict = {}
 GRAPH_TTL_S = 5.0
+BOARD_TTL_S = 30.0
+ROUTE_CACHE_MAX = 32
 
 
 def cached_graph() -> Graph:
     """Graph.build() with a short TTL so header polling, capital valuation and route
     search share one build instead of re-reading the digest tables per request."""
-    global _graph_cache
     s = get_settings()
     key = (s["league"], s["reference"], s["allow_digest_edges"], s["allow_recipe_edges"],
            s["live_max_age_s"], s["digest_max_age_h"],
            s.get("min_edge_volume_ref_per_h"), s.get("min_edge_depth"))
-    now = time.time()
-    if _graph_cache:
-        ts, ver, k, g = _graph_cache
-        if k == key and ver == orderbook.state["version"] and now - ts < GRAPH_TTL_S:
-            return g
-    g = Graph.build()
-    _graph_cache = (now, orderbook.state["version"], key, g)
-    return g
+    return cache.memo(_graph_cache, key, GRAPH_TTL_S, Graph.build, version=orderbook.state["version"])
 
 
 def invalidate_caches() -> None:
     """Drop the graph + route + board caches (call after settings changes, e.g. league switch,
     reference, watchlist, or hub_count — so a settings edit reflects immediately)."""
-    global _graph_cache, _board_cache
-    _graph_cache = None
-    _route_cache.clear()
-    _board_cache = None
+    cache.clear(_graph_cache)
+    cache.clear(_route_cache)
+    cache.clear(_board_cache)
 
 
 def _edge_list_id(edges: list[Edge]) -> str:
@@ -373,22 +368,42 @@ def route_pairs(route_id: str) -> list[tuple[str, str]]:
     return pairs
 
 
+def _cache_key(filters: dict | None, start_currencies: list[str] | None) -> str:
+    return json.dumps([filters or {}, start_currencies], sort_keys=True)
+
+
+def _cache_get(key: str, s: dict) -> dict | None:
+    """A fresh cached search result (same order-book version, within routes_cache_s), or None."""
+    hit = cache.get(_route_cache, key, s["routes_cache_s"], version=orderbook.state["version"])
+    return None if hit is cache.MISS else hit
+
+
+def _cache_put(key: str, result: dict) -> None:
+    cache.put(_route_cache, key, result, version=orderbook.state["version"], max_entries=ROUTE_CACHE_MAX)
+
+
+def _graph_summary(g: Graph) -> dict:
+    return {"nodes": len(g.adj), "edges": g.sources, "fee_table_size": len(g.fee_table)}
+
+
+def _result(g: Graph, s: dict, f: dict, ref_value: dict, capital: dict, notional: bool,
+            routes: list[dict], kept: list[dict], limit: int) -> dict:
+    """The one search-result shape (served by /api/routes*, cached, and replayed by the stream)."""
+    return {
+        "routes": kept[:limit], "total_candidates": len(routes), "total_after_filters": len(kept),
+        "graph": _graph_summary(g), "reference": s["reference"], "ref_values": ref_value,
+        "capital": capital, "notional": notional, "filters": f,
+    }
+
+
 def find_routes(filters: dict | None = None, start_currencies: list[str] | None = None,
                 use_cache: bool = True) -> dict:
-    import json as _json
-
-    from . import db, orderbook
-
-    s0 = get_settings()
-    key = _json.dumps([filters or {}, start_currencies], sort_keys=True)
-    hit = _route_cache.get(key)
-    if use_cache and hit and time.time() - hit[0] < s0["routes_cache_s"] and hit[1] == orderbook.state["version"]:
-        return {**hit[2], "cached": True}
+    key = _cache_key(filters, start_currencies)
+    hit = _cache_get(key, get_settings()) if use_cache else None
+    if hit is not None:
+        return {**hit, "cached": True}
     result = _find_routes(filters, start_currencies)
-    _route_cache[key] = (time.time(), orderbook.state["version"], result)
-    if len(_route_cache) > 32:
-        oldest = min(_route_cache, key=lambda k: _route_cache[k][0])
-        _route_cache.pop(oldest, None)
+    _cache_put(key, result)
     return {**result, "cached": False}
 
 
@@ -430,8 +445,7 @@ def _route_from(g: Graph, cyc: list[Edge], start: str, held: float, budget: floa
     mp1k = (margin_ref / gold * 1000) if gold > 0 else (INF if margin_ref > 0 else 0.0)
     fh = sim["fill_hours"]
     # Gold priced by the user's slider (Divine per 1k gold -> reference per 1 gold).
-    gold_price_ref = float(g.s.get("gold_value_per_1k") or GOLD_VALUE_DIVINE_PER_1K) \
-        * (ref_value.get("divine") or 1.0) / 1000.0
+    gold_price_ref = settings_mod.gold_value_per_1k(g.s) * (ref_value.get("divine") or 1.0) / 1000.0
     velocity = _velocity(margin_ref, fh, gold, gold_price_ref)
     return {
         "id": _edge_list_id(cyc),
@@ -470,7 +484,7 @@ RECOMMENDED_MIN_VOLUME_REF_PER_H = 100.0
 # Default price of gold for net-value ranking (Convert): Divine per 1000 gold. Gold's real
 # worth shifts across a league, so this is user-tunable via a slider (settings.gold_value_per_1k);
 # this constant is only the fallback. 0.01 divine/1k gold == a Divine is "worth" ~100k gold.
-GOLD_VALUE_DIVINE_PER_1K = 0.01
+GOLD_VALUE_DIVINE_PER_1K = settings_mod.GOLD_VALUE_DIVINE_PER_1K
 
 
 def _keep(r: dict, f: dict) -> bool:
@@ -512,8 +526,6 @@ def _sort_key(sort: str):
 
 
 def _search_setup(filters: dict | None, start_currencies: list[str] | None):
-    from . import db
-
     g = cached_graph()
     s = g.s
     f = {**s["filters"], **(filters or {})}
@@ -542,7 +554,6 @@ def _iter_candidates(g: Graph, s: dict, ref_value: dict, capital: dict, starts: 
 
 
 def _finish(routes: list[dict], f: dict, s: dict) -> tuple[list[dict], int]:
-    from . import pairscore
     pairscore.observe(routes)
     kept = [r for r in routes if _keep(r, f)]
     _composite_score(kept, s.get("rank_weights", {}))
@@ -554,16 +565,11 @@ def stream_routes(filters: dict | None = None, start_currencies: list[str] | Non
     """Generator for the SSE endpoint: ('meta', …) once, ('route', r) for every route
     that passes the filters as it is discovered, then ('done', summary). The finished,
     scored result is also placed in the route cache so follow-up queries are instant."""
-    import json as _json
-
-    from . import orderbook
-
     g, s, f, ref_value, capital, starts, notional = _search_setup(filters, start_currencies)
     # Serve a fresh cached result as one burst instead of re-searching.
-    key = _json.dumps([filters or {}, start_currencies], sort_keys=True)
-    hit = _route_cache.get(key)
-    if hit and time.time() - hit[0] < s["routes_cache_s"] and hit[1] == orderbook.state["version"]:
-        cached = hit[2]
+    key = _cache_key(filters, start_currencies)
+    cached = _cache_get(key, s)
+    if cached is not None:
         yield "meta", {"reference": cached["reference"], "capital": cached["capital"],
                        "notional": cached["notional"], "graph": cached["graph"],
                        "rank_weights": s.get("rank_weights", {}), "filters": cached["filters"]}
@@ -576,8 +582,7 @@ def stream_routes(filters: dict | None = None, start_currencies: list[str] | Non
         return
     yield "meta", {
         "reference": s["reference"], "capital": capital, "notional": notional,
-        "graph": {"nodes": len(g.adj), "edges": g.sources, "fee_table_size": len(g.fee_table)},
-        "rank_weights": s.get("rank_weights", {}), "filters": f,
+        "graph": _graph_summary(g), "rank_weights": s.get("rank_weights", {}), "filters": f,
     }
     routes: list[dict] = []
     for r in _iter_candidates(g, s, ref_value, capital, starts, notional):
@@ -585,14 +590,8 @@ def stream_routes(filters: dict | None = None, start_currencies: list[str] | Non
         if _keep(r, f):
             yield "route", r
     kept, limit = _finish(routes, f, s)
-    result = {
-        "routes": kept[:limit], "total_candidates": len(routes), "total_after_filters": len(kept),
-        "graph": {"nodes": len(g.adj), "edges": g.sources, "fee_table_size": len(g.fee_table)},
-        "reference": s["reference"], "ref_values": ref_value, "capital": capital,
-        "notional": notional, "filters": f,
-    }
-    key = _json.dumps([filters or {}, start_currencies], sort_keys=True)
-    _route_cache[key] = (time.time(), orderbook.state["version"], result)
+    result = _result(g, s, f, ref_value, capital, notional, routes, kept, limit)
+    _cache_put(key, result)
     yield "done", {
         "total_candidates": len(routes), "total_after_filters": len(kept),
         "truncated": len(routes) >= MAX_CANDIDATES,
@@ -605,17 +604,7 @@ def _find_routes(filters: dict | None, start_currencies: list[str] | None) -> di
     g, s, f, ref_value, capital, starts, notional = _search_setup(filters, start_currencies)
     routes = list(_iter_candidates(g, s, ref_value, capital, starts, notional))
     kept, limit = _finish(routes, f, s)
-    return {
-        "routes": kept[:limit],
-        "total_candidates": len(routes),
-        "total_after_filters": len(kept),
-        "graph": {"nodes": len(g.adj), "edges": g.sources, "fee_table_size": len(g.fee_table)},
-        "reference": s["reference"],
-        "ref_values": ref_value,
-        "capital": capital,
-        "notional": notional,
-        "filters": f,
-    }
+    return _result(g, s, f, ref_value, capital, notional, routes, kept, limit)
 
 
 def _convert_path(g: Graph, path: list[Edge], amount: float, ref_value: dict[str, float],
@@ -703,12 +692,11 @@ def _best_conversions(g: Graph, ref_value: dict[str, float], have: str, want: st
 def convert(have: str, want: str, amount: float | None = None, max_steps: int | None = None) -> dict:
     """Cheapest way to turn `have` into `want` across the live exchange graph (open path, not a
     loop). `amount` defaults to the user's held `have`. Rides the cached graph — read-only."""
-    from . import db
     g = cached_graph()
     ref_value = g.ref_values()
     if amount is None:
         amount = db.get_capital().get(have, 0.0) or 1.0
-    gv = float(g.s.get("gold_value_per_1k") or GOLD_VALUE_DIVINE_PER_1K)
+    gv = settings_mod.gold_value_per_1k(g.s)
     bridge = centrality.betweenness_lite(g, ref_value)
     return _best_conversions(g, ref_value, have, want, float(amount), max_steps,
                              gold_value_per_1k=gv, bridge=bridge)
@@ -742,10 +730,6 @@ def _composite_score(routes: list[dict], weights: dict) -> None:
                             "value": round(val[r["id"]], 3), "volume": round(vol[r["id"]], 3)}
 
 
-_board_cache: tuple[float, int, tuple, dict] | None = None
-BOARD_TTL_S = 30.0
-
-
 def board(window_h: int = 24) -> dict:
     """Live price board: each watched currency priced in the reference, with the
     buy/sell rates that make up the spread, depth, freshness, and a trend series.
@@ -760,17 +744,14 @@ def board(window_h: int = 24) -> dict:
     Result is TTL-cached: it runs one history query per watched currency, but the
     underlying digest only changes hourly, so repeated polls are served from memory
     (invalidated when a new live book lands, via orderbook.state["version"])."""
-    from . import session
-
-    global _board_cache
     s0 = get_settings()
     window_h = max(1, int(window_h or 24))
     key = (s0["league"], s0["reference"], tuple(s0["watchlist"]), window_h, s0.get("hub_count"))
-    now = time.time()
-    if _board_cache and _board_cache[2] == key and _board_cache[1] == orderbook.state["version"] \
-            and now - _board_cache[0] < BOARD_TTL_S:
-        return _board_cache[3]
+    return cache.memo(_board_cache, key, BOARD_TTL_S, lambda: _board(window_h),
+                      version=orderbook.state["version"])
 
+
+def _board(window_h: int) -> dict:
     g = cached_graph()
     s = g.s
     R = s["reference"]
@@ -789,16 +770,14 @@ def board(window_h: int = 24) -> dict:
             ranked.setdefault(node, []).append((volr, other))
     for lst in ranked.values():
         lst.sort(reverse=True)
-    hub_ids = centrality.hubs(g, rv, max(1, int(s.get("hub_count") or centrality.HUB_N)))  # top PageRank → Board "hub" chip (count user-tunable)
+    hub_ids = centrality.hubs(g, rv, settings_mod.hub_count(s))   # top PageRank → Board "hub" chip (count user-tunable)
     # One-time: seed the board with the market's hub currencies so a fresh board always shows the
     # central markets. Runs once, only once real hubs are known (skips the cold graph), then the
     # user owns the board — later removals stick (mirrors the _liq_floor_v1 seed in settings.py).
     if hub_ids and not s.get("_hub_seed_v1"):
-        from . import settings as _settings
         missing = centrality.seed_missing(s["watchlist"], hub_ids, R)
-        _settings.save_settings({"watchlist": s["watchlist"] + missing, "_hub_seed_v1": True})
+        settings_mod.save_settings({"watchlist": s["watchlist"] + missing, "_hub_seed_v1": True})
         s["watchlist"] = s["watchlist"] + missing
-    from . import leaguehistory
     scout = leaguehistory.scout_prices(league)   # poe2scout fallback prices (Exalted), by name/slug
     scout_hist = leaguehistory.scout_history(league)   # poe2scout daily trend, by name/slug
     rows = []
@@ -813,7 +792,7 @@ def board(window_h: int = 24) -> dict:
         # Source label: prefer live/digest exchange data; a currency the exchange graph
         # doesn't cover is priced from poe2scout ("scout"); anything else valued only
         # via multi-hop is "derived".
-        in_scout = bool(scout.get(str(registry.name(c)).lower()) or scout.get(str(c).lower()))
+        in_scout = bool(leaguehistory.scout_lookup(scout, c))
         source = ("live" if "live" in kinds else "digest" if "digest" in kinds
                   else "scout" if (not kinds and in_scout) else ("derived" if mid is not None else None))
         from_scout = source == "scout"
@@ -826,18 +805,12 @@ def board(window_h: int = 24) -> dict:
         hist = digest.pair_history(league, c, R, window_h)   # rate = R per c = price of c in R
         trend = [{"t": h["hour"], "v": h["rate"]} for h in hist]
         if len(trend) < 2:   # not on the exchange digest → draw from poe2scout dailies
-            sh = scout_hist.get(str(registry.name(c)).lower()) or scout_hist.get(str(c).lower())
+            sh = leaguehistory.scout_lookup(scout_hist, c)
             if sh:
                 cutoff = sh[-1]["t"] - window_h * 3600
                 trend = [p for p in sh if p["t"] >= cutoff] or sh[-2:]
         # change over the window = latest vs the point at (or nearest before) the window start.
-        change_pct = None
-        if len(trend) >= 2:
-            start = trend[-1]["t"] - window_h * 3600
-            prior = [p for p in trend if p["t"] <= start]
-            base_pt = prior[-1] if prior else trend[0]
-            if base_pt["v"]:
-                change_pct = (trend[-1]["v"] - base_pt["v"]) / base_pt["v"] * 100
+        change_pct = marketseries.change_over(trend, window_h * 3600)[1]
         # Default numeraire: the highest-VOLUME counterpart whose price stays readable.
         # Cheap currencies' biggest market is often Divine (huge value moves even on
         # modest flow), which would print a useless micro-price (Regal = 0.0034 div) — so
@@ -877,10 +850,8 @@ def board(window_h: int = 24) -> dict:
     # so the client can reprice any card into any of them. Reference itself is 1.
     need = {R} | {r["id"] for r in rows} | {r["pref_num"] for r in rows}
     prices = {i: (1.0 if i == R else rv.get(i)) for i in need if i == R or rv.get(i)}
-    result = {"reference": R, "league": league, "rows": rows, "prices": prices,
-              "session": session.status().get("connected", False)}
-    _board_cache = (now, orderbook.state["version"], key, result)
-    return result
+    return {"reference": R, "league": league, "rows": rows, "prices": prices,
+            "session": session.status().get("connected", False)}
 
 
 def board_pairs() -> list[tuple[str, str]]:

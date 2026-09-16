@@ -14,6 +14,9 @@ from __future__ import annotations
 import datetime as _dt
 import sqlite3
 
+# Operational kv key holding the game's currently-live leagues (written by the poe2scout crawl).
+CURRENT_LEAGUES_KEY = "lh_current"
+
 
 def read_meta(conn: sqlite3.Connection) -> dict:
     """{item_id: (name, category)}."""
@@ -34,9 +37,33 @@ def read_rows(conn: sqlite3.Connection, league: str | None = None) -> list:
         "WHERE close>0 AND league=? ORDER BY league, day", (league,)).fetchall()
 
 
-def _epoch(day: str) -> int:
+def day_to_epoch(day: str) -> int:
+    """UTC epoch seconds for a YYYY-MM-DD day string (the league_daily day key)."""
     return int(_dt.datetime.strptime(day, "%Y-%m-%d")
                .replace(tzinfo=_dt.timezone.utc).timestamp())
+
+
+_epoch = day_to_epoch
+
+
+def league_age(day: str, day0: str) -> int:
+    """Whole days between two YYYY-MM-DD strings — real day-of-league, gap-proof."""
+    return (_dt.date.fromisoformat(day) - _dt.date.fromisoformat(day0)).days
+
+
+def change_over(pts: list, window_s: float, t=lambda p: p["t"], v=lambda p: p["v"]):
+    """(base_point, change_pct) of the last point vs the point at-or-before the window start —
+    the ONE definition of "% change over the window" the board, movers and asset detail share.
+    Falls back to the first point when the series is shorter than the window; (None, None) with
+    fewer than two points; (base, None) on a zero base."""
+    if len(pts) < 2:
+        return None, None
+    start = t(pts[-1]) - window_s
+    prior = [p for p in pts if t(p) <= start]
+    base = prior[-1] if prior else pts[0]
+    if not v(base):
+        return base, None
+    return base, (v(pts[-1]) - v(base)) / v(base) * 100
 
 
 def pick_league(rows: list, preferred: str, current_leagues=()) -> str | None:
@@ -80,14 +107,19 @@ def series_for_league(conn: sqlite3.Connection, league: str) -> tuple[dict, dict
 DIVINE_ID = 291
 
 
+def item_rows(conn: sqlite3.Connection, item_id: int) -> list:
+    """(league, day, close) rows for ONE item across all leagues, close>0, ORDER BY league, day
+    (indexed on item_id — cheap even on the full history)."""
+    return conn.execute(
+        "SELECT league, day, close FROM league_daily WHERE item_id=? AND close>0 ORDER BY league, day",
+        (item_id,)).fetchall()
+
+
 def league_signatures(conn: sqlite3.Connection, anchor_id: int = DIVINE_ID) -> dict:
     """{league: [anchor_close ...] oldest→newest} — each league's price-arc SHAPE signature for
     the Phase-3 DTW league-similarity (arc.compute_weights). The anchor is Divine-in-Exalted, the
     canonical inflation curve; leagues without anchor data simply don't appear."""
-    rows = conn.execute(
-        "SELECT league, day, close FROM league_daily WHERE item_id=? AND close>0 ORDER BY league, day",
-        (anchor_id,)).fetchall()
     sigs: dict = {}
-    for r in rows:
+    for r in item_rows(conn, anchor_id):
         sigs.setdefault(r[0], []).append(r[2])
     return sigs

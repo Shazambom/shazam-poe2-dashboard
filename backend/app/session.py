@@ -11,7 +11,7 @@ from __future__ import annotations
 import time
 
 from . import gateway, secrets
-from .config import POESESSID, TRADE_EXCHANGE_URL, USER_AGENT
+from .config import POESESSID, TRADE_EXCHANGE_URL
 from .settings import get_settings
 
 
@@ -40,17 +40,6 @@ def status() -> dict:
     }
 
 
-def _headers(league: str) -> dict:
-    return {
-        "User-Agent": USER_AGENT,
-        "Accept": "application/json",
-        "Content-Type": "application/json",
-        "Origin": "https://www.pathofexile.com",
-        "Referer": f"https://www.pathofexile.com/trade2/exchange/poe2/{league}",
-        "X-Requested-With": "XMLHttpRequest",
-    }
-
-
 async def validate(cookie: str) -> tuple[bool, str]:
     """One cheap exchange query: 401/403 means the cookie is bad."""
     league = get_settings()["league"]
@@ -58,12 +47,7 @@ async def validate(cookie: str) -> tuple[bool, str]:
             "sort": {"have": "asc"}, "engine": "new"}
     try:
         from . import orderbook
-        r = await gateway.request("POST", orderbook.exchange_url(league), policy="trade", retries=0,
-                                  json=body, headers=_headers(league), cookies={"POESESSID": cookie})
-        if r.status_code == 404 and orderbook.state["url_form"] == "poe2/{league}":
-            orderbook.state["url_form"] = "{league}"
-            r = await gateway.request("POST", orderbook.exchange_url(league), policy="trade", retries=0,
-                                      json=body, headers=_headers(league), cookies={"POESESSID": cookie})
+        r = await orderbook.exchange_post(league, body, cookie, retries=0)
     except gateway.RateLimited as exc:
         return True, f"session stored; verification deferred ({exc})"
     except Exception as exc:

@@ -14,13 +14,12 @@ rebased to its own day-0 = 100 and plotted by day-of-league, so you can read
 from __future__ import annotations
 
 import asyncio
-import datetime as _dt
 import logging
 import re
 import time
 import urllib.parse
 
-from . import db, gateway
+from . import cache, db, gateway, marketseries
 
 log = logging.getLogger(__name__)
 
@@ -32,9 +31,17 @@ def scout_prices(league: str) -> dict[str, float]:
     """Latest poe2scout close (in Exalted) per currency for `league`, keyed by BOTH
     lowercased name and slug — so the board can price currencies the currency-exchange
     graph doesn't cover (e.g. Hinekora's Lock, omens). 5-min TTL cached."""
-    hit = _scout_cache.get(league)
-    if hit and time.time() - hit[0] < 300:
-        return hit[1]
+    return cache.memo(_scout_cache, league, 300, lambda: _scout_prices(league))
+
+
+def scout_lookup(table: dict, trade_id: str):
+    """Look a registry trade id up in a poe2scout name/slug-keyed table (scout_prices /
+    scout_history): by the registry's display name first, then by the id itself."""
+    from .currencies import registry
+    return table.get(str(registry.name(trade_id)).lower()) or table.get(str(trade_id).lower())
+
+
+def _scout_prices(league: str) -> dict[str, float]:
     out: dict[str, float] = {}
     try:
         with db.q() as c:
@@ -53,7 +60,6 @@ def scout_prices(league: str) -> dict[str, float]:
             out[_slug(name)] = close
     except Exception as e:  # never let a price lookup break the board
         log.warning("scout_prices(%s) failed: %s", league, e)
-    _scout_cache[league] = (time.time(), out)
     return out
 
 
@@ -65,9 +71,10 @@ def scout_history(league: str, days: int = 60) -> dict[str, list]:
     keyed by lowercased name AND slug — so the board can draw a sparkline for currencies
     the GGG exchange digest doesn't cover (Hinekora's Lock, omens, …). Each value is a
     list of {t: epoch_seconds, v: close}, oldest→newest. 5-min TTL cached."""
-    hit = _shist_cache.get(league)
-    if hit and time.time() - hit[0] < 300:
-        return hit[1]
+    return cache.memo(_shist_cache, league, 300, lambda: _scout_history(league, days))
+
+
+def _scout_history(league: str, days: int) -> dict[str, list]:
     series: dict[str, list] = {}
     try:
         with db.q() as c:
@@ -82,8 +89,8 @@ def scout_history(league: str, days: int = 60) -> dict[str, list]:
             if not name:
                 continue
             try:
-                t = int(_dt.datetime.strptime(day, "%Y-%m-%d").replace(tzinfo=_dt.timezone.utc).timestamp())
-            except Exception:
+                t = marketseries.day_to_epoch(day)
+            except (ValueError, TypeError):
                 continue
             pt = {"t": t, "v": close}
             series.setdefault(name.lower(), []).append(pt)
@@ -92,7 +99,6 @@ def scout_history(league: str, days: int = 60) -> dict[str, list]:
         log.warning("scout_history(%s) failed: %s", league, e)
     for k in series:
         series[k] = series[k][-days:]
-    _shist_cache[league] = (time.time(), series)
     return series
 
 _backfill_lock = asyncio.Lock()   # only one backfill crawl at a time (shared rate limit)
@@ -105,10 +111,6 @@ progress: dict = {
     "started": None, "updated": None, "last": None,
 }
 
-
-def _age(day: str, day0: str) -> int:
-    """Whole days between two YYYY-MM-DD strings — real day-of-league, gap-proof."""
-    return (_dt.date.fromisoformat(day) - _dt.date.fromisoformat(day0)).days
 
 BASE = "https://api.poe2scout.com/poe2"
 # Item ids are global across leagues (poe2scout), priced in the league base (Exalted).
@@ -308,12 +310,7 @@ _CACHE_TTL_S = 600
 
 
 def _cached(key: str, build):
-    hit = _cache.get(key)
-    if hit and time.time() - hit[0] < _CACHE_TTL_S:
-        return hit[1]
-    val = build()
-    _cache[key] = (time.time(), val)
-    return val
+    return cache.memo(_cache, key, _CACHE_TTL_S, build)
 
 
 def _finalize(leagues: list[dict]) -> list[dict]:
@@ -329,19 +326,18 @@ def cross(item_id: int = DEFAULT_ITEM) -> dict:
 
     def build():
         with db.q() as c:
-            rows = c.execute("SELECT league, day, close FROM league_daily WHERE item_id=? AND close>0 ORDER BY league, day",
-                             (item_id,)).fetchall()
+            rows = marketseries.item_rows(c, item_id)
         by_league: dict[str, list] = {}
         for r in rows:
-            by_league.setdefault(r["league"], []).append((r["day"], r["close"]))
-        current = set(db.kv_get("lh_current", []))
+            by_league.setdefault(r[0], []).append((r[1], r[2]))
+        current = set(db.kv_get(marketseries.CURRENT_LEAGUES_KEY, []))
         leagues = []
         for name, series in by_league.items():
             series.sort()
             day0, base = series[0][0], series[0][1]
             if not base:
                 continue
-            pts = [{"age": _age(d, day0), "day": d, "index": round(100.0 * cl / base, 2)} for d, cl in series]
+            pts = [{"age": marketseries.league_age(d, day0), "day": d, "index": round(100.0 * cl / base, 2)} for d, cl in series]
             leagues.append({
                 "league": name, "days": pts[-1]["age"] + 1, "points": pts,
                 "final_index": pts[-1]["index"], "current": name in current,
@@ -359,17 +355,18 @@ def marketcap() -> dict:
     minted supply isn't observable. Age-aligned per league, plus a cumulative total."""
     def build():
         with db.q() as c:
-            rows = c.execute("""SELECT league, item_id, day, close, volume FROM league_daily
-                                WHERE close>0 AND volume>0 ORDER BY league, day""").fetchall()
+            rows = marketseries.read_rows(c)          # close>0, ORDER BY league, day
         # per league: {day: total_exalted_traded}, and {day: mirror_price}
         traded: dict[str, dict[str, float]] = {}
         mirror: dict[str, dict[str, float]] = {}
-        for r in rows:
-            traded.setdefault(r["league"], {}).setdefault(r["day"], 0.0)
-            traded[r["league"]][r["day"]] += r["close"] * r["volume"]
-            if r["item_id"] == MIRROR_ITEM:
-                mirror.setdefault(r["league"], {})[r["day"]] = r["close"]
-        current = set(db.kv_get("lh_current", []))
+        for lg, item_id, day, close, volume in rows:
+            if not volume or volume <= 0:
+                continue
+            traded.setdefault(lg, {}).setdefault(day, 0.0)
+            traded[lg][day] += close * volume
+            if item_id == MIRROR_ITEM:
+                mirror.setdefault(lg, {})[day] = close
+        current = set(db.kv_get(marketseries.CURRENT_LEAGUES_KEY, []))
         leagues = []
         for name, by_day in traded.items():
             days = sorted(by_day)
@@ -382,7 +379,7 @@ def marketcap() -> dict:
                     continue                              # no Mirror price yet → skip early days
                 val = by_day[d] / price                   # traded value that day, in Mirrors
                 cum += val
-                pts.append({"age": _age(d, day0), "day": d, "mirrors": round(val, 2), "cum": round(cum, 2)})
+                pts.append({"age": marketseries.league_age(d, day0), "day": d, "mirrors": round(val, 2), "cum": round(cum, 2)})
             if not pts:
                 continue
             leagues.append({

@@ -110,18 +110,24 @@ def exchange_url(league: str) -> str:
     return f"{TRADE_EXCHANGE_URL}/{state['url_form'].format(league=league)}"
 
 
-async def _post(league: str, body: dict, cookie: str):
+async def exchange_post(league: str, body: dict, cookie: str, *, retries: int = 2):
+    """The one exchange POST: headers, session cookie, and the one-time URL-form fallback (two URL
+    forms are in use by live tools). Returns the raw response; callers map status codes."""
     headers = {"Accept": "application/json", "Content-Type": "application/json",
                "Origin": "https://www.pathofexile.com", "X-Requested-With": "XMLHttpRequest",
                "Referer": f"https://www.pathofexile.com/trade2/exchange/poe2/{league}"}
-    r = await gateway.request("POST", exchange_url(league), policy="trade",
+    r = await gateway.request("POST", exchange_url(league), policy="trade", retries=retries,
                               json=body, headers=headers, cookies={"POESESSID": cookie})
     if r.status_code == 404 and state["url_form"] == "poe2/{league}":
-        # Two URL forms are in use by live tools; fall back to the other once.
         state["url_form"] = "{league}"
         log.info("exchange: switching to URL form without realm segment")
-        r = await gateway.request("POST", exchange_url(league), policy="trade",
+        r = await gateway.request("POST", exchange_url(league), policy="trade", retries=retries,
                                   json=body, headers=headers, cookies={"POESESSID": cookie})
+    return r
+
+
+async def _post(league: str, body: dict, cookie: str):
+    r = await exchange_post(league, body, cookie)
     if r.status_code in (401, 403):
         raise PermissionError("exchange rejected the session (reconnect it in Settings)")
     r.raise_for_status()

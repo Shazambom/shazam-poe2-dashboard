@@ -19,7 +19,7 @@ from __future__ import annotations
 import math
 import time
 
-from . import db
+from . import cache, db
 from .currencies import registry
 from .settings import get_settings
 
@@ -40,9 +40,7 @@ ANCHORS: dict[str, tuple[str, str]] = {
 PIVOT_META = "Metadata/Items/Currency/CurrencyModValues"
 
 
-def _metas(tid: str) -> list[str]:
-    cur = registry.by_id.get(tid)
-    return list(cur.metadata_ids) if cur else []
+_metas = registry.metas
 
 
 def _hourly_soft_per_hard(c, league, soft_metas, hard_metas, since=0) -> dict[int, tuple[float, float]]:
@@ -95,10 +93,10 @@ def compute(anchor_key: str, hours: int = 336) -> dict:
     # Watchlist is in the key — it determines the soft set/basket (was omitted, so a
     # watchlist change served a stale basket for up to TTL_S).
     ck = f"{league}|{anchor_key}|{hours}|{','.join(s['watchlist'])}"
-    hit = _cache.get(ck)
-    if hit and time.time() - hit[0] < TTL_S:
-        return hit[1]
+    return cache.memo(_cache, ck, TTL_S, lambda: _compute(anchor_key, hours, s, league))
 
+
+def _compute(anchor_key: str, hours: int, s: dict, league: str) -> dict:
     name, hard_meta = ANCHORS[anchor_key]
     pivot_is_hard = hard_meta == PIVOT_META
     anchor_tid = registry.resolve_meta(hard_meta)
@@ -172,5 +170,4 @@ def compute(anchor_key: str, hours: int = 336) -> dict:
         "anchors": [{"id": k, "name": v[0]} for k, v in ANCHORS.items()],
         "hours_covered": len(all_hours),
     }
-    _cache[ck] = (time.time(), result)
     return result

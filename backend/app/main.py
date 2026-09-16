@@ -6,14 +6,15 @@ import os
 import time
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.concurrency import run_in_threadpool
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from fastapi.responses import RedirectResponse, PlainTextResponse
 
-from . import analytics, arbitrage, db, digest, gamedata, gateway, holdscore, inflation, leaguearc, leaguehistory, liquidity, migrations_user, movers, oauth, orderbook, recipes, session, sidecar_supervisor, signalsack, watchdog
+from . import analytics, arbitrage, db, diag, digest, gamedata, gateway, holdscore, inflation, leaguearc, leaguehistory, liquidity, migrations_user, movers, oauth, orderbook, recipes, session, sidecar_supervisor, signalsack, watchdog
+from .config import INSTALL_LOG_PATH
 from .currencies import registry
 from .settings import get_settings, save_settings
 
@@ -127,8 +128,8 @@ def status():
 # ------------------------------------------------------ installer telemetry
 # The Windows NSIS installer POSTs a diagnostic report here (process list, env,
 # existing-install listing) on every attempt, so we can see WHY it fails on a PC
-# we can't touch. Appended to /data/install-reports.log; readable back for triage.
-_INSTALL_LOG = "/data/install-reports.log"
+# we can't touch. Appended to DATA_DIR/install-reports.log; readable back for triage.
+_INSTALL_LOG = INSTALL_LOG_PATH
 
 
 @app.post("/api/installlog")
@@ -159,80 +160,9 @@ def backfill_status():
 
 
 @app.get("/api/diag")
-async def diag():
-    """Local self-diagnostics for the (self-contained) desktop app: settings, DB row
-    counts, backfill/digest state, and a live connectivity probe. Read in-app under
-    Settings → Diagnostics. No data leaves the machine."""
-    import httpx
-
-    from . import config
-    s = get_settings()
-    counts: dict = {}
-    with db.q() as c:
-        for t in ("league_daily", "item_meta", "digest_markets", "orderbook", "capital", "kv"):
-            try:
-                counts[t] = c.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0]
-            except Exception as e:
-                counts[t] = f"err:{e}"
-        try:
-            counts["league_daily[current_league]"] = c.execute(
-                "SELECT COUNT(*) FROM league_daily WHERE league=?", (s["league"],)).fetchone()[0]
-        except Exception:
-            pass
-    # Live reachability from THIS backend (catches PyInstaller SSL/cert failures that
-    # silently break every price fetch → "no prices").
-    net: dict = {}
-    probes = {
-        "poecdn(digest)": config.GGG_DIGEST_URL,
-        "poe2scout": "https://api.poe2scout.com/poe2/Leagues",
-        "pathofexile": config.TRADE_STATIC_URL,
-    }
-    async with httpx.AsyncClient(timeout=8, headers={"User-Agent": config.USER_AGENT}) as cx:
-        for name, url in probes.items():
-            try:
-                r = await cx.get(url)
-                net[name] = r.status_code
-            except Exception as e:
-                net[name] = f"ERR {type(e).__name__}: {str(e)[:140]}"
-    # Heavy-analytics (sidecar) pipeline state — is it producing signals, or failing (e.g. numpy/
-    # stumpy not loading on Windows)? jobs by state + the newest error message pinpoint it.
-    analytics_diag: dict = {}
-    try:
-        from . import analytics as _an
-        analytics_diag["sidecar_cmd"] = bool(sidecar_supervisor._sidecar_cmd())
-        with db.q() as c:
-            analytics_diag["jobs"] = {r[0]: r[1] for r in c.execute(
-                "SELECT state, COUNT(*) FROM analytics_jobs GROUP BY state")}
-            err = c.execute("SELECT kind, error FROM analytics_jobs WHERE state='error' "
-                            "ORDER BY id DESC LIMIT 1").fetchone()
-            analytics_diag["last_error"] = (f"{err[0]}: {str(err[1])[:200]}" if err else None)
-            sig = _an.read_cache(c, "discords", "current")
-            analytics_diag["signals"] = len((sig or {}).get("signals") or [])
-            analytics_diag["cache_league"] = (sig or {}).get("league")   # which league the cache is for
-            analytics_diag["arc_weighted"] = bool((_an.read_cache(c, "arc", "current") or {}).get("weights"))
-            # the league the sidecar is actually being asked to compute (same resolver the enqueue
-            # loop uses). Mismatch vs cache_league = "computed the wrong league"; equal with
-            # signals=0 = "this league genuinely has no volume-confirmed discords right now".
-            try:
-                analytics_diag["screen_league"] = movers.current_league()
-            except Exception:
-                analytics_diag["screen_league"] = s["league"]
-    except Exception as e:
-        analytics_diag["err"] = f"{type(e).__name__}: {str(e)[:160]}"
-
-    return {
-        "time": time.time(),
-        "data_dir": str(config.DATA_DIR),
-        "settings": {"league": s["league"], "reference": s["reference"], "watchlist": s["watchlist"]},
-        "db_counts": counts,
-        "registry": {"loaded_at": registry.loaded_at, "count": len(registry.by_id)},
-        "digest": dict(digest.state),
-        "orderbook": orderbook.state,
-        "leaguehistory_current": db.kv_get("lh_current", []),
-        "session_connected": session.status().get("connected", False),
-        "connectivity": net,
-        "analytics": analytics_diag,
-    }
+async def diag_ep():
+    """Local self-diagnostics (Settings → Diagnostics). No data leaves the machine."""
+    return await diag.collect()
 
 
 @app.get("/api/installlog")
@@ -264,26 +194,9 @@ def map_currency(body: MetaOverride):
 # ---------------------------------------------------------------- capital
 @app.get("/api/capital")
 def capital():
-    caps = db.get_capital()
+    """Holdings at paper value AND at what they would realize (Ghost Wealth) — see liquidity."""
     g = arbitrage.cached_graph()
-    ref = g.ref_values()
-    gv = float(g.s.get("gold_value_per_1k") or arbitrage.GOLD_VALUE_DIVINE_PER_1K)
-    cash = liquidity.cash_set(g, ref)          # hub currencies = cash-like; derived once (PageRank)
-    rows = []
-    for c, q in caps.items():
-        row = {"currency": c, "name": registry.name(c), "qty": q, "ref_value": ref.get(c),
-               "value_ref": (q * ref[c]) if c in ref else None}
-        # Ghost Wealth: what the stack would ACTUALLY realize if cashed out now (best path to
-        # the reference, net of gold), plus slippage/fill-time/confidence. Never fails a request.
-        liq = liquidity.realizable(g, ref, c, q, cash=cash, gold_value_per_1k=gv)
-        row.update(realizable_ref=liq["realizable_ref"], slippage_pct=liq["slippage_pct"],
-                   fill_hours=liq["fill_hours"], source=liq["source"], full_fill=liq["full_fill"],
-                   cashout_path=liq["path"])
-        rows.append(row)
-    total = sum(r["value_ref"] for r in rows if r["value_ref"] is not None)
-    realizable_total = sum(r["realizable_ref"] for r in rows if r["realizable_ref"] is not None)
-    return {"rows": rows, "total_ref": total, "realizable_total_ref": realizable_total,
-            "ghost_ref": total - realizable_total, "reference": g.s["reference"]}
+    return liquidity.capital_rows(db.get_capital(), g, g.ref_values())
 
 
 class CapitalBody(BaseModel):
@@ -539,15 +452,7 @@ async def signals_ep():
     analytics sidecar and cached in market.sqlite. READ-ONLY: if the sidecar is down or hasn't
     run yet this returns an empty list — it never fails a request (graceful degrade). The Phase-4
     inbox UI will consume this; for now it's the sidecar's read surface."""
-    def _read():
-        with db.q() as c:
-            blob = analytics.read_cache(c, "discords", "current")   # {league, signals}, or None
-        league = blob.get("league") if blob else movers.current_league()
-        signals = (blob.get("signals") or []) if blob else []
-        ack = db.kv_get("signals_ack", {}) or {}   # read-only: pruning happens on the ack path
-        return {"league": league, "signals": signalsack.annotate(signals, ack),
-                "unseen": signalsack.unseen_count(signals, ack)}
-    return await run_in_threadpool(_read)
+    return await run_in_threadpool(signalsack.read)
 
 
 class SignalAck(BaseModel):
@@ -559,17 +464,7 @@ class SignalAck(BaseModel):
 async def signals_ack_ep(body: SignalAck):
     """Dismiss signals (user data → signals_ack in user.sqlite). `keys` dismisses those signal ids;
     `all: true` dismisses everything currently fired. Returns the new unseen count."""
-    def _ack():
-        with db.q() as c:
-            blob = analytics.read_cache(c, "discords", "current")
-        signals = (blob.get("signals") or []) if blob else []
-        keys = [signalsack.sig_key(s) for s in signals] if body.all else (body.keys or [])
-        now = int(time.time())
-        merged = db.kv_update("signals_ack",
-                              lambda ack: signalsack.prune(signalsack.merge(ack or {}, keys, now), signals),
-                              {})
-        return {"ok": True, "unseen": signalsack.unseen_count(signals, merged)}
-    return await run_in_threadpool(_ack)
+    return await run_in_threadpool(signalsack.ack, body.keys, body.all, int(time.time()))
 
 
 @app.get("/api/leaguearc")
@@ -639,17 +534,9 @@ def market_edges():
 def market_top(hours: int = 24, limit: int = 40, by: str = "activity"):
     """Busiest markets. `by=activity` (default) ranks on how many hours the pair traded (raw turnover);
     `by=value` ranks on traded VALUE normalized to Exalted (volume × the exchange graph's ref-value),
-    consistent with the rest of the app. Each row carries both raw volumes and `value_ex`."""
-    league = get_settings()["league"]
-    rows = digest.top_markets(league, hours, max(limit, 1000))   # value-sort needs the full field, not top-N-by-activity
-    ref = arbitrage.cached_graph().ref_values()                  # {trade_id: value in Exalted}
-    for r in rows:
-        va = (r.get("volume_a") or 0) * (ref.get(r["a"]) or 0)
-        vb = (r.get("volume_b") or 0) * (ref.get(r["b"]) or 0)   # same trade valued from the other side (fallback)
-        r["value_ex"] = round(va or vb, 2) if (va or vb) else None
-    if by == "value":
-        rows.sort(key=lambda r: (r.get("value_ex") or 0), reverse=True)
-    return rows[:limit]
+    consistent with the rest of the app. Each row carries both raw volumes and the traded value."""
+    return digest.top_markets_valued(get_settings()["league"], hours, limit, by,
+                                     arbitrage.cached_graph().ref_values())
 
 
 @app.get("/api/market/history")
@@ -722,48 +609,41 @@ async def digest_sync():
 
 
 # ----------------------------------------------------------------- routes
+SORT_KEYS = "^(score|velocity|margin_per_1k_gold|margin_ref|margin_pct|margin|value_ref|gold|liquidity_ref|volume_ref_per_h|fill_hours)$"
+
+
+class RouteQuery(BaseModel):
+    """The route-search filters, declared ONCE: the GET query string (via Depends) and the
+    `filters` of the refresh POST bodies both use it. Field names are the wire contract with
+    frontend api.js (`qs(f)`). Unset fields fall back to the saved default filters."""
+    min_margin_pct: float | None = None
+    min_margin_ref: float | None = None
+    max_gold: float | None = None
+    min_margin_per_1k_gold: float | None = None
+    min_liquidity_ref: float | None = None
+    live_only: bool | None = None
+    exclude_recipes: bool | None = None
+    min_volume_ref_per_h: float | None = None
+    max_fill_hours: float | None = None
+    min_velocity: float | None = None
+    sort: str | None = Field(None, pattern=SORT_KEYS)
+    limit: int | None = None
+    start: str | None = None      # comma-separated start currencies; omitted = all held
+
+    def to_filters(self) -> dict:
+        return {k: v for k, v in self.model_dump(exclude={"start"}).items() if v not in (None, "")}
+
+    def starts(self) -> list[str] | None:
+        return [x for x in self.start.split(",") if x] if self.start else None
+
+
 @app.get("/api/routes")
-def routes(
-    min_margin_pct: float | None = None,
-    min_margin_ref: float | None = None,
-    max_gold: float | None = None,
-    min_margin_per_1k_gold: float | None = None,
-    min_liquidity_ref: float | None = None,
-    live_only: bool | None = None,
-    exclude_recipes: bool | None = None,
-    min_volume_ref_per_h: float | None = None,
-    max_fill_hours: float | None = None,
-    min_velocity: float | None = None,
-    sort: str | None = Query(None, pattern="^(score|velocity|margin_per_1k_gold|margin_ref|margin_pct|margin|value_ref|gold|liquidity_ref|volume_ref_per_h|fill_hours)$"),
-    limit: int | None = None,
-    start: str | None = None,
-):
-    f = {k: v for k, v in {
-        "min_margin_pct": min_margin_pct, "min_margin_ref": min_margin_ref, "max_gold": max_gold,
-        "min_margin_per_1k_gold": min_margin_per_1k_gold, "min_liquidity_ref": min_liquidity_ref,
-        "live_only": live_only, "exclude_recipes": exclude_recipes, "sort": sort, "limit": limit,
-        "min_volume_ref_per_h": min_volume_ref_per_h, "max_fill_hours": max_fill_hours, "min_velocity": min_velocity,
-    }.items() if v is not None}
-    starts = [s for s in start.split(",") if s] if start else None
-    return arbitrage.find_routes(f, starts)
+def routes(q: RouteQuery = Depends()):
+    return arbitrage.find_routes(q.to_filters(), q.starts())
 
 
 @app.get("/api/routes/stream")
-def routes_stream(
-    min_margin_pct: float | None = None,
-    min_margin_ref: float | None = None,
-    max_gold: float | None = None,
-    min_margin_per_1k_gold: float | None = None,
-    min_liquidity_ref: float | None = None,
-    live_only: bool | None = None,
-    exclude_recipes: bool | None = None,
-    min_volume_ref_per_h: float | None = None,
-    max_fill_hours: float | None = None,
-    min_velocity: float | None = None,
-    sort: str | None = Query(None, pattern="^(score|velocity|margin_per_1k_gold|margin_ref|margin_pct|margin|value_ref|gold|liquidity_ref|volume_ref_per_h|fill_hours)$"),
-    limit: int | None = None,
-    start: str | None = None,
-):
+def routes_stream(q: RouteQuery = Depends()):
     """SSE version of /api/routes: loops stream out as the search finds them.
 
     Events: `meta` (once), `routes` (batches of passing loops), `done` (final
@@ -774,13 +654,7 @@ def routes_stream(
 
     from fastapi.responses import StreamingResponse
 
-    f = {k: v for k, v in {
-        "min_margin_pct": min_margin_pct, "min_margin_ref": min_margin_ref, "max_gold": max_gold,
-        "min_margin_per_1k_gold": min_margin_per_1k_gold, "min_liquidity_ref": min_liquidity_ref,
-        "live_only": live_only, "exclude_recipes": exclude_recipes, "sort": sort, "limit": limit,
-        "min_volume_ref_per_h": min_volume_ref_per_h, "max_fill_hours": max_fill_hours, "min_velocity": min_velocity,
-    }.items() if v is not None}
-    starts = [s for s in start.split(",") if s] if start else None
+    f, starts = q.to_filters(), q.starts()
 
     def gen():
         buf: list[dict] = []
@@ -812,18 +686,14 @@ def routes_stream(
                              headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
 
-def _filters_from(body: dict) -> tuple[dict, list[str] | None]:
-    f = {k: v for k, v in (body.get("filters") or {}).items() if v not in (None, "")}
-    start = body.get("start")
-    starts = [x for x in start.split(",") if x] if isinstance(start, str) and start else None
-    return f, starts
-
-
 class RefreshTopBody(BaseModel):
-    filters: dict = {}
+    filters: RouteQuery = RouteQuery()
     start: str | None = None
     n: int | None = None
     wait_s: float = 45
+
+    def query(self) -> RouteQuery:
+        return self.filters.model_copy(update={"start": self.start})
 
 
 @app.post("/api/routes/refresh-top")
@@ -836,7 +706,8 @@ async def routes_refresh_top(body: RefreshTopBody):
     if not session.get_cookie():
         raise HTTPException(400, "no trade session connected")
     s = get_settings()
-    f, starts = _filters_from(body.dict())
+    q = body.query()
+    f, starts = q.to_filters(), q.starts()
     n = body.n if body.n is not None else s["live_top_n"]
     before = arbitrage.find_routes(f, starts)
     pairs = [tuple(p) for r in before["routes"][:max(0, n)] for p in r["pairs"]]
@@ -850,9 +721,12 @@ async def routes_refresh_top(body: RefreshTopBody):
 class RefreshRouteBody(BaseModel):
     id: str
     pairs: list[list[str]] | None = None   # exchange pairs only (the UI sends route.pairs)
-    filters: dict = {}
+    filters: RouteQuery = RouteQuery()
     start: str | None = None
     wait_s: float = 45
+
+    def query(self) -> RouteQuery:
+        return self.filters.model_copy(update={"start": self.start})
 
 
 @app.post("/api/routes/refresh")
@@ -863,7 +737,8 @@ async def routes_refresh_one(body: RefreshRouteBody):
     pairs = [tuple(p) for p in body.pairs] if body.pairs else arbitrage.route_pairs(body.id)
     futs = orderbook.request_pairs(pairs, priority=0, force=True)
     waited = await orderbook.wait_for(futs, body.wait_s)
-    f, starts = _filters_from(body.dict())
+    q = body.query()
+    f, starts = q.to_filters(), q.starts()
     res = arbitrage.find_routes(f, starts, use_cache=False)
     route = next((r for r in res["routes"] if r["id"] == body.id), None)
     if route is None:  # it may no longer pass the filters; recompute unfiltered so the user sees why

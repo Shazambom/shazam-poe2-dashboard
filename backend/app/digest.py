@@ -16,7 +16,7 @@ import time
 
 import httpx
 
-from . import db, gateway
+from . import cache, db, gateway
 from .datapolicy import MARKET_RETENTION_DAYS
 from .config import DIGEST_BACKFILL_HOURS, DIGEST_POLL_SECONDS, GGG_DIGEST_URL
 from .currencies import registry
@@ -135,8 +135,8 @@ def latest_rates(league: str, max_age_hours: int = 6) -> dict[tuple[str, str], d
 
 def pair_history(league: str, a: str, b: str, hours: int = 168) -> list[dict]:
     """Hourly series for the a<->b market, expressed as b per a."""
-    metas_a = [m for m, t in registry.meta_to_trade.items() if t == a]
-    metas_b = [m for m, t in registry.meta_to_trade.items() if t == b]
+    metas_a = registry.metas(a)
+    metas_b = registry.metas(b)
     if not metas_a or not metas_b:
         return []
     since = _hour(time.time()) - hours * 3600
@@ -163,10 +163,10 @@ _volume_cache: dict[tuple[str, int], tuple[float, dict]] = {}
 def pair_volume(league: str, hours: int = 24) -> dict[tuple[str, str], float]:
     """Executed volume per hour of the *source* currency for each directed pair,
     averaged over the whole window (quiet hours count as zero — that's the point)."""
-    key = (league, hours)
-    hit = _volume_cache.get(key)
-    if hit and time.time() - hit[0] < 600:
-        return hit[1]
+    return cache.memo(_volume_cache, (league, hours), 600, lambda: _pair_volume(league, hours))
+
+
+def _pair_volume(league: str, hours: int) -> dict[tuple[str, str], float]:
     since = _hour(time.time()) - hours * 3600
     with db.q() as c:
         rows = c.execute("""SELECT cur_a, cur_b, SUM(vol_a) va, SUM(vol_b) vb FROM digest_markets
@@ -178,7 +178,6 @@ def pair_volume(league: str, hours: int = 24) -> dict[tuple[str, str], float]:
             continue
         out[(a, b)] = out.get((a, b), 0) + (r["va"] or 0) / hours
         out[(b, a)] = out.get((b, a), 0) + (r["vb"] or 0) / hours
-    _volume_cache[key] = (time.time(), out)
     return out
 
 
@@ -188,11 +187,11 @@ _partners_cache: dict[tuple[str, str, int], tuple[float, list[tuple[str, float]]
 def partners(league: str, want: str, hours: int = 168) -> list[tuple[str, float]]:
     """Haves that actually trade into `want`, ranked by executed volume of `want` over
     the window. Drives batch padding: the pairs the market uses most get the free slots."""
-    key = (league, want, hours)
-    hit = _partners_cache.get(key)
-    if hit and time.time() - hit[0] < 600:
-        return hit[1]
-    metas = [m for m, t in registry.meta_to_trade.items() if t == want]
+    return cache.memo(_partners_cache, (league, want, hours), 600, lambda: _partners(league, want, hours))
+
+
+def _partners(league: str, want: str, hours: int) -> list[tuple[str, float]]:
+    metas = registry.metas(want)
     out: list[tuple[str, float]] = []
     if metas:
         since = _hour(time.time()) - hours * 3600
@@ -212,7 +211,6 @@ def partners(league: str, want: str, hours: int = 168) -> list[tuple[str, float]
             if tid and tid != want:
                 agg[tid] = agg.get(tid, 0) + vol
         out = sorted(agg.items(), key=lambda kv: kv[1], reverse=True)
-    _partners_cache[key] = (time.time(), out)
     return out
 
 
@@ -230,3 +228,17 @@ def top_markets(league: str, hours: int = 24, limit: int = 40) -> list[dict]:
          "meta_a": r["cur_a"], "meta_b": r["cur_b"], "volume_a": r["va"], "volume_b": r["vb"], "hours_active": r["n"]}
         for r in rows
     ]
+
+
+def top_markets_valued(league: str, hours: int, limit: int, by: str, ref_value: dict[str, float]) -> list[dict]:
+    """Busiest markets with `value_ex` (traded value in the reference, volume × ref value; the other
+    side of the trade is the fallback). `by='activity'` keeps the raw turnover order; `by='value'`
+    re-sorts on value_ex. Pulls the full field (not top-N) so a value sort is over every market."""
+    rows = top_markets(league, hours, max(limit, 1000))
+    for r in rows:
+        va = (r.get("volume_a") or 0) * (ref_value.get(r["a"]) or 0)
+        vb = (r.get("volume_b") or 0) * (ref_value.get(r["b"]) or 0)
+        r["value_ex"] = round(va or vb, 2) if (va or vb) else None
+    if by == "value":
+        rows.sort(key=lambda r: (r.get("value_ex") or 0), reverse=True)
+    return rows[:limit]
