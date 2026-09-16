@@ -29,6 +29,7 @@ from itertools import permutations
 
 from . import db, digest, gateway, pairscore, session
 from .config import ORDERBOOK_SWEEP_SECONDS, TRADE_EXCHANGE_URL
+from .datapolicy import ORDERBOOK_HISTORY_RETENTION_H
 from .settings import get_settings
 
 log = logging.getLogger(__name__)
@@ -294,9 +295,22 @@ async def worker() -> None:
         await asyncio.sleep(0)  # yield between requests even if the gateway didn't wait
 
 
+def prune_history() -> int:
+    """Drop orderbook_history rows past ORDERBOOK_HISTORY_RETENTION_H (readers use 48h). Runs
+    from the background sweeper, never on a request."""
+    cutoff = int(time.time()) - ORDERBOOK_HISTORY_RETENTION_H * 3600
+    with db.tx() as c:
+        return c.execute("DELETE FROM orderbook_history WHERE fetched_at < ?", (cutoff,)).rowcount
+
+
 async def sweeper() -> None:
-    """Optional low-priority background sweep of the whole watchlist."""
+    """Optional low-priority background sweep of the whole watchlist; also the home of the
+    orderbook_history retention prune (one row lands per live fetch, forever otherwise)."""
     while True:
+        try:
+            await asyncio.to_thread(prune_history)
+        except Exception as exc:
+            log.warning("orderbook: prune failed: %s", exc)
         s = get_settings()
         if s.get("background_sweep") and session.get_cookie():
             pairs = list(permutations(s["watchlist"], 2)) + [tuple(p) for p in s.get("extra_pairs", [])]

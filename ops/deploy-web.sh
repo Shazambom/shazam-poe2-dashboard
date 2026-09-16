@@ -28,6 +28,7 @@ case "$WHAT" in
     rsync -az --delete --exclude='node_modules' --exclude='dist' frontend/src/ "$HOST:$REMOTE/frontend/src/"
     rsync -az frontend/nginx.conf "$HOST:$REMOTE/frontend/nginx.conf" ;;
 esac
+rsync -az docker-compose.yml "$HOST:$REMOTE/docker-compose.yml"
 case "$WHAT" in
   ops)
     rsync -az ops/publish-market-snapshot.sh ops/export-market-snapshot.py ops/upload-seed-github.sh "$HOST:bin/"

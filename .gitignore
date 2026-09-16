@@ -1,6 +1,5 @@
 .env
 /data/
-downloads/
 node_modules/
 dist/
 __pycache__/

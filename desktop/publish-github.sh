@@ -35,10 +35,10 @@ git push origin main
 git push origin "$TAG"
 
 if [ "${1:-}" != "--no-build" ]; then
-  # shazam is the seed build-server for the Mac half: pull the CURRENT market snapshot from
-  # its /downloads before packaging so every release bundles a fresh seed (Windows CI pulls
-  # the same snapshot from the market-seed-latest GitHub release). fetch-seed.sh fails hard
-  # if shazam is unreachable or the gz is corrupt — better a failed build than a seedless ship.
+  # Pull the CURRENT market snapshot from the market-seed-latest GitHub release before
+  # packaging so every release bundles a fresh seed (Windows CI pulls the same asset).
+  # fetch-seed.sh fails hard if the download or the gz is bad — better a failed build than a
+  # seedless ship.
   ./fetch-seed.sh
   npm run dist:mac
 fi

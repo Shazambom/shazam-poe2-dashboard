@@ -9,12 +9,13 @@ from contextlib import contextmanager
 from typing import Any, Callable, Iterator
 
 from .config import MARKET_DB_PATH, MARKET_SEED_PATH, USER_DB_PATH
+from .datapolicy import is_user_kv
 
 # ⚠️  BEFORE changing any schema, kv routing, or the snapshot: READ docs/db-maintenance.md.
 #     user data → numbered migration (never dropped); market data → no migration, ships in the
 #     snapshot + bump snapshot_version. Getting it wrong loses user data OR forces every client to
 #     re-seed. A new operational kv key needs nothing (lands in kv_ops); a user kv key must be
-#     added to _USER_KV below. When unsure, ask — don't guess.
+#     added to USER_KV in datapolicy.py. When unsure, ask — don't guess.
 log = logging.getLogger("poe2arb.db")
 
 # WAL lets any number of readers run alongside one writer. Writes serialise on
@@ -141,15 +142,8 @@ CREATE TABLE IF NOT EXISTS analytics_jobs (
 CREATE INDEX IF NOT EXISTS idx_analytics_jobs_state ON analytics_jobs(state, id);
 """
 
-# kv keys owned by the user (persist + migrate). Everything else is operational and
-# lands in market.sqlite.kv_ops (ships in the snapshot, disposable). `secret:`-prefixed
-# keys (encrypted session/oauth) are always user. See docs/db-maintenance.md.
-_USER_KV = {"settings", "watches", "oauth_pending", "meta_overrides", "trading_workspace",
-            "signals_ack"}   # Phase 4: which fired signals the user has dismissed (user data)
-
-
-def _is_user_kv(key: str) -> bool:
-    return key in _USER_KV or key.startswith("secret:")
+# kv routing (user vs operational) is defined ONCE in datapolicy.py — add new user keys there.
+_is_user_kv = is_user_kv
 
 
 # ---------------------------------------------------------------------------

@@ -17,6 +17,7 @@ import time
 import httpx
 
 from . import db, gateway
+from .datapolicy import MARKET_RETENTION_DAYS
 from .config import DIGEST_BACKFILL_HOURS, DIGEST_POLL_SECONDS, GGG_DIGEST_URL
 from .currencies import registry
 
@@ -87,10 +88,21 @@ async def sync_once() -> None:
     db.kv_set("digest_cursor", cursor)
 
 
+def prune_old() -> int:
+    """Drop digest rows older than MARKET_RETENTION_DAYS (the longest reader window is 14d, so
+    nothing can miss them). Runs in the background sync loop, never on a request."""
+    cutoff = _hour(time.time()) - MARKET_RETENTION_DAYS * 86400
+    with db.tx() as c:
+        return c.execute("DELETE FROM digest_markets WHERE hour < ?", (cutoff,)).rowcount
+
+
 async def run_forever() -> None:
     while True:
         try:
             await sync_once()
+            n = await asyncio.to_thread(prune_old)
+            if n:
+                log.info("digest: pruned %d rows older than %dd", n, MARKET_RETENTION_DAYS)
         except Exception as exc:  # never let the loop die
             log.exception("digest loop error: %s", exc)
         await asyncio.sleep(DIGEST_POLL_SECONDS)

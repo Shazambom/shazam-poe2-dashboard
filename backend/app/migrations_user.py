@@ -19,12 +19,9 @@ import logging
 import sqlite3
 
 from .config import DB_PATH
+from .datapolicy import is_user_kv as _is_user_kv
 
 log = logging.getLogger("poe2arb.migrate")
-
-# kv keys that belong to the user (mirrors _USER_KV in db.py). Kept local so this
-# module has no import cycle with db.py. `secret:` is handled by prefix below.
-_LEGACY_USER_KV = {"settings", "watches", "oauth_pending", "meta_overrides", "trading_workspace"}
 
 
 def watches_to_workspace(folders: list) -> dict:
@@ -78,10 +75,6 @@ def _m2_watches_to_workspace(conn: sqlite3.Connection) -> None:
     ws = watches_to_workspace(folders)
     conn.execute("INSERT INTO kv(key, value) VALUES('trading_workspace', ?)", (json.dumps(ws),))
     log.info("m2: derived trading_workspace with %d folders (watches kept as backup)", len(ws["tree"]))
-
-
-def _is_user_kv(key: str) -> bool:
-    return key in _LEGACY_USER_KV or key.startswith("secret:")
 
 
 def _m1_split_from_legacy(conn: sqlite3.Connection) -> None:
