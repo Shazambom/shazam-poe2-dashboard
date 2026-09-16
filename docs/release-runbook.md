@@ -39,11 +39,14 @@ There are **two update channels**, so we can iterate on the packaged app WITHOUT
 ### "deploy dev" — publish a beta build
 When the owner says **"deploy dev"** (or "deploy to the dev/beta channel"), cut a **pre-release** with a
 `-beta.N` version — same mechanics as a stable release, three differences:
-1. **Version:** set `desktop/package.json` to `x.y.z-beta.N` (bump `N` per dev push). electron-builder
-   derives the channel from the prerelease tag and writes `beta.yml` / `beta-mac.yml` automatically.
+1. **Version:** set `desktop/package.json` to `x.y.z-beta.N` (bump `N` per dev push).
+   ⚠️ electron-builder does **not** auto-name the channel from the prerelease tag — it always writes
+   `latest.yml`/`latest-mac.yml`. Both build paths therefore **rename** it to `beta.yml`/`beta-mac.yml`
+   for a `-beta` version (Win CI after `electron-builder`; `publish-github.sh` after `dist:mac`), so a
+   beta build emits ONLY the beta manifest and never disturbs stable's `latest*.yml`.
 2. **Tag:** `desktop-v<x.y.z-beta.N>`. The Windows CI marks the release **pre-release**
-   (`prerelease: contains(tag,'-beta')`) and uploads `*.yml` (so `beta.yml` rides along); the crash gate
-   still runs. `publish-github.sh` auto-selects `beta-mac.yml`.
+   (`prerelease: contains(tag,'-beta')`) and uploads `beta.yml`; the crash gate still runs.
+   `publish-github.sh` uploads `beta-mac.yml`.
 3. **Snapshot rule still applies** (Step 0) — a dev build with stale market data still shows wrong data
    to the tester (you). Ask first.
 

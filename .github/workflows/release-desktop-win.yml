@@ -95,6 +95,10 @@ jobs:
           cd desktop
           npm run build:frontend
           npx electron-builder --win --x64 --publish never
+          # electron-builder names the manifest latest.yml regardless of the -beta version tag. For a
+          # beta (dev) release, rename to beta.yml so beta clients fetch it and stable's latest.yml is
+          # never touched (a beta build must emit ONLY beta.yml).
+          if [[ "${{ github.ref_name }}" == *-beta* ]]; then mv -f release/latest.yml release/beta.yml; fi
       - name: Upload installer to a Release
         uses: softprops/action-gh-release@v2
         with:

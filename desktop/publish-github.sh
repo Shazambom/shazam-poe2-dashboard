@@ -25,6 +25,11 @@ if [ "${1:-}" != "--no-build" ]; then
   npm run dist:mac
 fi
 
+# electron-builder always names the Mac update manifest latest-mac.yml regardless of the version's
+# prerelease tag. For a -beta version, rename it to the beta channel file the beta updater fetches —
+# so a beta build emits ONLY beta-mac.yml and never disturbs stable's latest-mac.yml.
+case "$VER" in *-beta*) [ -f release/latest-mac.yml ] && mv -f release/latest-mac.yml release/beta-mac.yml ;; esac
+
 # Preflight: never publish a seedless build. Confirm the seed the app will bundle exists and
 # is a valid gzip, with its version sidecar (the backend reads the sidecar to decide re-seeding).
 SEED="market-seed/market-seed.sqlite.gz"
