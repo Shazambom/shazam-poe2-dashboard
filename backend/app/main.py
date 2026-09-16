@@ -133,7 +133,16 @@ def status():
         "registry_loaded_at": registry.loaded_at,
         "unmapped_metadata_ids": len(registry.unmapped_meta),
         "gold_fees": gamedata.state,
+        "wealth_prices": _wealth_prices(),   # reference per unit of chaos/divine/mirror (UI wealth rule)
     }
+
+
+def _wealth_prices() -> dict:
+    try:
+        return arbitrage.anchor_prices()
+    except Exception as exc:      # a cold/empty graph must never fail the status poll
+        log.warning("wealth prices unavailable: %s", exc)
+        return {get_settings()["reference"]: 1.0}
 
 
 # ------------------------------------------------------ installer telemetry

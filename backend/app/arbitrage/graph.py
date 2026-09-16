@@ -316,3 +316,16 @@ def cached_graph() -> Graph:
            s["live_max_age_s"], s["digest_max_age_h"],
            s.get("min_edge_volume_ref_per_h"), s.get("min_edge_depth"))
     return cache.memo(_graph_cache, key, GRAPH_TTL_S, Graph.build, version=orderbook.state["version"])
+
+
+def anchor_prices() -> dict[str, float]:
+    """Reference-per-unit prices of the currencies the UI re-denominates wealth into (the
+    display-layer wealth rule: ex under the hood, chaos/divine on screen when the amount is
+    large). Reads the cached graph, so it is cheap enough to ride the 30s status poll."""
+    s = get_settings()
+    rv = cached_graph().ref_values()
+    out = {s["reference"]: 1.0}
+    for tid in ("exalted", "chaos", "divine", "mirror"):
+        if rv.get(tid):
+            out[tid] = float(rv[tid])
+    return out

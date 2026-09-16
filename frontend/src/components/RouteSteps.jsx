@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { fmt } from '../lib/api.js'
 import Cur from './Cur.jsx'
 import RefreshButton from './RefreshButton.jsx'
+import Wealth from './Wealth.jsx'
 
 // Shared route-path renderers, extracted from RoutesView so the Convert tool renders a
 // conversion exactly like an arbitrage loop (same visual vocabulary). `Loop` works for any
@@ -45,9 +46,9 @@ export function Detail({ r, refCur, onRefresh, refreshing, canLive }) {
           {r.cycle_unit > 1 && <span className="muted"> ({fmt.n(r.cycles)} × {fmt.n(r.cycle_unit)}/cycle)</span>}
           , hold {fmt.n(r.capital_held)}</span>
         <span>· ends with <b>{fmt.n(r.end_amount)}</b></span>
-        <span>· value through loop {fmt.n(r.value_ref, 1)} <Cur id={refCur} size={14} /></span>
+        <span>· value through loop <Wealth v={r.value_ref} cur={refCur} /></span>
         <span>· oldest quote {fmt.age(r.max_age_s)}</span>
-        {r.profit_per_hour != null && <span>· earns {fmt.n(r.profit_per_hour, 2)} <Cur id={refCur} size={14} />/h</span>}
+        {r.profit_per_hour != null && <span>· earns <Wealth v={r.profit_per_hour} cur={refCur} suffix="/h" /></span>}
         {r.score != null && r.score_parts && <span>· score {r.score} (velocity {r.score_parts.velocity}, efficiency {r.score_parts.efficiency}, value {r.score_parts.value}, volume {r.score_parts.volume})</span>}
         <span className="spacer" />
         {canLive && r.pairs.length > 0 && (

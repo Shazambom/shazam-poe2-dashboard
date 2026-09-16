@@ -6,6 +6,7 @@ import { color, chart } from '../theme.js'
 import Cur from './Cur.jsx'
 import CurrencyPicker from './CurrencyPicker.jsx'
 import Toggle from './Toggle.jsx'
+import Wealth from './Wealth.jsx'
 
 const AXIS = { fill: chart.axis, fontSize: 11 }
 const TIP = { background: chart.tooltipBg, border: `1px solid ${chart.tooltipBorder}` }
@@ -78,7 +79,7 @@ export default function MarketView({ currencies }) {
                     <td><Cur id={m.a} name={names[m.a]} /> / <Cur id={m.b} name={names[m.b]} /></td>
                     <td className="num">
                       {byValue
-                        ? (m.value_ex != null ? <>{fmt.n(m.value_ex)} <Cur id="exalted" size={12} /></> : '–')
+                        ? (m.value_ex != null ? <Wealth v={m.value_ex} cur="exalted" size={12} /> : '–')
                         : `${fmt.n(m.volume_a)} / ${fmt.n(m.volume_b)}`}
                     </td>
                     <td className="num">{m.hours_active}</td>

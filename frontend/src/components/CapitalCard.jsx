@@ -3,6 +3,7 @@ import { api, fmt, surface } from '../lib/api.js'
 import { useAutosave } from '../lib/hooks.js'
 import Cur from './Cur.jsx'
 import CurrencyPicker from './CurrencyPicker.jsx'
+import Wealth, { useWealthText } from './Wealth.jsx'
 
 const PRIMARY = ['chaos', 'exalted', 'divine']
 
@@ -10,19 +11,19 @@ const PRIMARY = ['chaos', 'exalted', 'divine']
 // paper worth, and — only when it differs — what it ACTUALLY cashes out to, with a ghost hint.
 // `partial` = the book can't absorb the whole stack; a `▼x%` tag flags all-in loss; `no market
 // data` = we have no tracked exchange market for it. Cash-like holdings just show their worth.
-function worthLine(v, qtyStr, ref, backfilling) {
+function worthLine(v, qtyStr, ref, backfilling, wtext) {
   if (!v || v.value_ref == null) {
     return Number(qtyStr) > 0 ? <span className="muted" title={backfilling ? 'valued once market data finishes syncing' : 'no market rate yet'}>…</span> : ''
   }
-  const worth = <>{fmt.n(v.value_ref, 1)} <Cur id={ref} size={13} /></>
+  const worth = <Wealth v={v.value_ref} cur={ref} size={13} />
   if (v.realizable_ref == null) {
     return <>{worth} <span className="muted" title="no tracked exchange market for this currency, so its cash-out can't be measured">· no market data</span></>
   }
   const ghost = v.value_ref - v.realizable_ref
   const ghostPct = v.value_ref > 0 ? ghost / v.value_ref * 100 : 0    // all-in loss: slippage + gold + stranded
   let tail = null
-  if (v.full_fill === false) tail = <span className="cap-ghost" title={`the market can't absorb the whole stack right now — 👻 ${fmt.n(ghost, 1)} ${ref} ghost`}> → {fmt.n(v.realizable_ref, 1)} <Cur id={ref} size={13} /> partial</span>
-  else if (ghostPct >= 1) tail = <span className="cap-ghost" title={`cash out via best path · 👻 ${fmt.n(ghost, 1)} ${ref} ghost (slippage + gold)`}> → {fmt.n(v.realizable_ref, 1)} <Cur id={ref} size={13} /> ▼{ghostPct.toFixed(0)}%</span>
+  if (v.full_fill === false) tail = <span className="cap-ghost" title={`the market can't absorb the whole stack right now — 👻 ${wtext(ghost, ref)} ghost`}> → <Wealth v={v.realizable_ref} cur={ref} size={13} /> partial</span>
+  else if (ghostPct >= 1) tail = <span className="cap-ghost" title={`cash out via best path · 👻 ${wtext(ghost, ref)} ghost (slippage + gold)`}> → <Wealth v={v.realizable_ref} cur={ref} size={13} /> ▼{ghostPct.toFixed(0)}%</span>
   return <>{worth}{tail}</>
 }
 
@@ -53,6 +54,7 @@ export default function CapitalCard({ currencies, status, onSaved }) {
   const valueOf = (c) => data?.rows.find(r => r.currency === c)
   const backfilling = status?.digest?.backfilling
   const ref = data?.reference ?? 'exalted'
+  const wtext = useWealthText()
 
   if (!qty) return <div className="hint">Loading capital…</div>
   const ghost = data?.ghost_ref
@@ -67,7 +69,7 @@ export default function CapitalCard({ currencies, status, onSaved }) {
               <tr key={c}>
                 <td>
                   <Cur id={c} text />
-                  <div className="cap-sub">{worthLine(v, qty[c], ref, backfilling)}</div>
+                  <div className="cap-sub">{worthLine(v, qty[c], ref, backfilling, wtext)}</div>
                 </td>
                 <td className="num"><input type="number" min="0" step="1" value={qty[c]}
                   onChange={e => setOne(c, e.target.value)} /></td>
@@ -83,9 +85,9 @@ export default function CapitalCard({ currencies, status, onSaved }) {
           onChange={id => { if (id && !(id in (qty || {}))) setQty(r => ({ ...r, [id]: 0 })) }} />
       </div>
       <p className="hint" style={{ marginTop: 6 }}>
-        Total <b>{fmt.n(data?.total_ref, 1)} <Cur id={ref} size={14} /></b>
-        {data?.realizable_total_ref != null && <> · realizable <b>{fmt.n(data.realizable_total_ref, 1)} <Cur id={ref} size={14} /></b></>}
-        {ghost > 0.5 && <> <span className="cap-ghost" title="Paper value you can't currently cash out (slippage + thin books)">(👻 {fmt.n(ghost, 1)} ghost)</span></>}
+        Total <b><Wealth v={data?.total_ref} cur={ref} /></b>
+        {data?.realizable_total_ref != null && <> · realizable <b><Wealth v={data.realizable_total_ref} cur={ref} /></b></>}
+        {ghost > 0.5 && <> <span className="cap-ghost" title="Paper value you can't currently cash out (slippage + thin books)">(👻 <Wealth v={ghost} cur={ref} size={12} /> ghost)</span></>}
         <br />loops are sized from these counts.
       </p>
     </div>

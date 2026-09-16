@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { motion, AnimatePresence } from 'motion/react'
 import { api, fmt, toast } from '../lib/api.js'
 import Cur from './Cur.jsx'
+import Wealth from './Wealth.jsx'
 import { useCurrencies } from '../lib/icons.js'
 import LeagueArcSection from './LeagueArc.jsx'
 import { useSignals } from '../lib/signalStore.js'
@@ -120,7 +121,7 @@ export default function CardDetail({ r, num, factor, numOptions, onNum, prices, 
             {r.spread_pct != null && <div className="cd-stat"><span>spread</span><b>{r.spread_pct.toFixed(1)}%</b></div>}
             {r.depth != null && <div className="cd-stat"><span>depth</span><b>{r.depth} offers</b></div>}
           </>}
-          {r.medvol != null && <div className="cd-stat"><span>volume</span><b>{fmt.n(r.medvol, 0)}<span className="muted"> ex/day</span></b></div>}
+          {r.medvol != null && <div className="cd-stat"><span>volume</span><b><Wealth v={r.medvol} cur="exalted" suffix={<span className="muted">/day</span>} /></b></div>}
           <div className="cd-stat"><span>source</span><b>{SRC_LABEL[r.source] || 'no data'}</b></div>
           {r.age_s != null && <div className="cd-stat"><span>updated</span><b>{fmt.age(r.age_s)} ago</b></div>}
           {r.hub && <div className="cd-stat" title="A central market — a lot of value routes through it"><span>market</span><b className="cd-hub">⬢ hub</b></div>}
@@ -132,8 +133,8 @@ export default function CardDetail({ r, num, factor, numOptions, onNum, prices, 
           return <>
             <div className="cd-section">Cash out <span className="muted" style={{ fontWeight: 400 }}>· selling all {fmt.n(cash.qty)}</span></div>
             <div className="cd-grid">
-              <div className="cd-stat" title="what the whole stack would realize now, net of gold"><span>realizable</span><b>{fmt.n(cash.realizable_ref, 1)} <Cur id={cref} size={14} /></b></div>
-              {gh != null && <div className="cd-stat" title="paper value you can't currently cash out"><span>ghost</span><b className={gh > 0.5 ? 'cd-ghost' : ''}>👻 {fmt.n(gh, 1)} <Cur id={cref} size={14} /></b></div>}
+              <div className="cd-stat" title="what the whole stack would realize now, net of gold"><span>realizable</span><b><Wealth v={cash.realizable_ref} cur={cref} /></b></div>
+              {gh != null && <div className="cd-stat" title="paper value you can't currently cash out"><span>ghost</span><b className={gh > 0.5 ? 'cd-ghost' : ''}>👻 <Wealth v={gh} cur={cref} /></b></div>}
               {cash.slippage_pct != null && <div className="cd-stat" title="market-depth loss on the filled portion (excludes gold)"><span>slippage</span><b>{Math.max(0, cash.slippage_pct).toFixed(1)}%</b></div>}
               {cash.fill_hours != null && <div className="cd-stat"><span>fill time</span><b>{fmt.dur(cash.fill_hours)}</b></div>}
               {cash.full_fill === false && <div className="cd-stat" title="the market can't absorb the whole stack right now"><span>fill</span><b className="cd-ghost">partial</b></div>}

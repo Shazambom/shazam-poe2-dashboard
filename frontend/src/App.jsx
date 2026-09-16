@@ -9,7 +9,10 @@ import VaalPingOrb from './components/VaalPingOrb.jsx'
 import DivinePingOrb from './components/DivinePingOrb.jsx'
 import HorizonPicker from './components/HorizonPicker.jsx'
 import { SyncMetrics, RefreshControls } from './components/SyncControls.jsx'
-import { useSignals } from './lib/signalStore.js'
+import { useSignals, startSignalPolling } from './lib/signalStore.js'
+import { playPing } from './lib/ping-sound.js'
+import { osNotify } from './lib/notify.js'
+import Wealth from './components/Wealth.jsx'
 import { useAssetModal } from './components/CardDetail.jsx'
 import CommandPalette from './components/CommandPalette.jsx'
 import { connectBridge, connectSessionWithToast } from './lib/session.js'
@@ -75,14 +78,29 @@ export default function App() {
     return () => window.removeEventListener('keydown', h)
   }, [])
 
-  // Phase 4: poll the market-signal inbox (Divine orb). Phase 3: poll the league-arc anchor for the
+  // Phase 4: the market-signal inbox (Divine orb) polls in the background (signalStore); a change
+  // in the fired set pings — sound, OS notification, and a banner in the toast stack whose Open
+  // action lands on the SAME CardDetail the orb opens. Phase 3: poll the league-arc anchor for the
   // topbar day chip. Both re-key on league change; both degrade silently when the sidecar is idle.
+  useEffect(() => startSignalPolling(), [status?.league])
+  const lastNew = useSignals(s => s.lastNew)
   useEffect(() => {
-    const refresh = () => useSignals.getState().refresh()
-    refresh()
-    const t = setInterval(refresh, 60000)
-    return () => clearInterval(t)
-  }, [status?.league])
+    if (!lastNew?.signals?.length) return
+    const names = lastNew.signals.map(s => s.name)
+    const title = `${names.length} new market signal${names.length === 1 ? '' : 's'}`
+    const openFirst = () => { setTab('Board'); assetModal.open(names[0]) }
+    playPing()
+    osNotify(title, names.slice(0, 3).join(', '), { tag: `signals-${lastNew.at}`, onClick: openFirst })
+    bus.emit({ id: 'signals', ttl: 12000, node: (
+      <div className="ping-banner">
+        <span className="pb-dot online" />
+        <div className="pb-main">
+          <div className="pb-name">◆ {title}</div>
+          <div className="pb-sub muted">{names.slice(0, 3).join(' · ')}{names.length > 3 ? ` +${names.length - 3}` : ''}</div>
+        </div>
+        <button className="btn small primary pb-go" onClick={() => { bus.emit({ id: 'signals', dismiss: true }); openFirst() }}>Open</button>
+      </div>) })
+  }, [lastNew]) // eslint-disable-line
   useEffect(() => {
     let live = true
     const load = () => api.leagueArc().then(d => { if (live) setArcCtx(d) }).catch(() => {})
@@ -159,8 +177,8 @@ export default function App() {
           <HorizonPicker />
           <span className="tb-spacer" />
           <SyncMetrics status={status} bridge={bridge} connecting={connecting} onConnect={doConnect} rl={rl} />
-          <span className="capital-pill" title="Total value of what you hold, in the reference currency">
-            capital <b>{fmt.n(capital?.total_ref, 1)}</b> <Cur id={ref} size={14} /></span>
+          <span className="capital-pill">
+            capital <b><Wealth v={capital?.total_ref} cur={ref} /></b></span>
           {status?.oauth?.logged_in && <span className="muted oauth-user">{status.oauth.username}</span>}
           <UpdateStatus version={appVersion} />
           <DownloadApp />

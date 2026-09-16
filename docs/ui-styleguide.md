@@ -125,6 +125,19 @@ provenance, never as decoration.
 
 ---
 
+### Wealth — the one display rule for amounts
+
+Every amount of wealth is computed and stored in the **reference currency** (exalted by default;
+`/api/*` payloads carry `*_ref`, `value_ex`, `medvol`, … in it). That baseline is what makes
+worth comparable. On screen, big numbers stop meaning anything, so the display layer
+re-denominates: **≥1,000,000 ref → mirrors, ≥1,000 ref → divines, ≥100 ref → chaos**, else the
+reference. The rule lives in ONE place — `WEALTH_TIERS` + `wealthUnit()` in
+`frontend/src/lib/wealth.js` — and every wealth figure renders through
+`<Wealth v={amount} />` (`frontend/src/components/Wealth.jsx`: value + currency icon, raw
+reference amount on hover) or `wealthText()` for tooltips. Prices come from `/api/status →
+wealth_prices` (reference per unit), so the conversion follows the live market. Never format a
+wealth amount with `fmt.n(x) <Cur/>` by hand — add the site to `<Wealth>` instead.
+
 ## 4. Color usage rules
 
 1. **Never write a raw hex that a token already names.** Use `var(--token)` (CSS) or the

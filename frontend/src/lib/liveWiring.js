@@ -3,6 +3,7 @@ import { usePings } from './pingStore.js'
 import { useWorkspace, loadWorkspace } from './workspaceStore.js'
 import { toast, bus } from './api.js'
 import { playPing, unlockSound } from './ping-sound.js'
+import { osNotify } from './notify.js'
 import { nav } from './nav.js'
 import { hasTradeEngine as isDesktop } from './session.js'
 
@@ -45,17 +46,8 @@ export function useLiveWiring(goLive) {
       if (after === before) return   // deduped — don't re-alert
 
       playPing()
-      // OS notification (Electron routes renderer Notifications to the native notifier;
-      // survives a hidden window). Permission is effectively granted in Electron.
-      try {
-        if ('Notification' in window) {
-          const n = new Notification(`Ping: ${p.item?.name || 'item'}`, {
-            body: p.price ? `${p.price.amount} ${p.price.currency} · ${p.online}` : p.online,
-            tag: p.pingId, silent: true,
-          })
-          n.onclick = () => { goLive?.(); window.focus?.() }
-        }
-      } catch {}
+      osNotify(`Ping: ${p.item?.name || 'item'}`, p.price ? `${p.price.amount} ${p.price.currency} · ${p.online}` : p.online,
+        { tag: p.pingId, onClick: () => goLive?.() })
       showBanner(p, goLive)   // in-app most-recent-ping banner (replaced by each newer ping)
     })
     const offEngine = window.poe2desktop.trade.onEngineState((e) => usePings.getState().setEngine(e))

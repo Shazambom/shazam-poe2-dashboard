@@ -6,6 +6,7 @@ import Cur from './Cur.jsx'
 import GoldValueSlider from './GoldValueSlider.jsx'
 import Toggle from './Toggle.jsx'
 import { Detail, Loop } from './RouteSteps.jsx'
+import Wealth from './Wealth.jsx'
 import { useSync } from '../lib/syncStore.js'
 import { ensureSettings } from '../lib/statusStore.js'
 
@@ -263,7 +264,7 @@ export default function RoutesView({ capital, status, currencies, onCapitalSaved
                     </td>
                     <td className={`num ${r.margin >= 0 ? 'gain' : 'loss'}`}>{r.margin >= 0 ? '+' : ''}{fmt.n(r.margin)}</td>
                     <td className={`num ${r.margin >= 0 ? 'gain' : 'loss'}`}>{fmt.pct(r.margin_pct)}</td>
-                    <td className="num">{fmt.n(r.margin_ref, 2)}</td>
+                    <td className="num"><Wealth v={r.margin_ref} cur={ref} size={12} /></td>
                     <td className="num">{r.gold_free ? <span className="muted">free</span> : fmt.n(r.gold)}</td>
                     <td className="num mpg">
                       {r.velocity_inf ? <span className="gain">∞</span> : r.velocity == null ? <span className="muted">–</span> : (
@@ -273,8 +274,8 @@ export default function RoutesView({ capital, status, currencies, onCapitalSaved
                         </>
                       )}
                     </td>
-                    <td className="num">{r.liquidity_ref == null ? <span className="muted">∞</span> : fmt.n(r.liquidity_ref, 0)}</td>
-                    <td className="num">{r.volume_ref_per_h == null ? <span className="muted">–</span> : fmt.n(r.volume_ref_per_h, 0)}</td>
+                    <td className="num">{r.liquidity_ref == null ? <span className="muted">∞</span> : <Wealth v={r.liquidity_ref} cur={ref} size={12} />}</td>
+                    <td className="num">{r.volume_ref_per_h == null ? <span className="muted">–</span> : <Wealth v={r.volume_ref_per_h} cur={ref} size={12} suffix="/h" />}</td>
                     <td className={`num ${r.fill_hours != null && r.fill_hours > 4 ? 'muted' : ''}`}>{fmt.dur(r.fill_hours)}</td>
                     <td className="num muted">{fmt.age(r.max_age_s)}</td>
                   </tr>
