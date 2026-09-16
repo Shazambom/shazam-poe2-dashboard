@@ -30,8 +30,8 @@ export const TONES = {
   soft4:    { label: "Modern 4", file: '/sounds/soft4.m4a' },
   soft5:    { label: "Modern 5", file: '/sounds/soft5.m4a' },
 }
-export const DEFAULT_TONE = 'chime'
-export const DEFAULT_VOLUME = 0.3
+export const DEFAULT_TONE = 'soft1'
+export const DEFAULT_VOLUME = 0.15   // the owner's audited comfortable level
 
 function audioContext() {
   ctx = ctx || new (window.AudioContext || window.webkitAudioContext)()

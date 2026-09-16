@@ -9,7 +9,7 @@ import { playPing, DEFAULT_TONE, DEFAULT_VOLUME } from './ping-sound.js'
 export const DEFAULT_NOTIFICATIONS = {
   volume: DEFAULT_VOLUME,
   live: { banner: true, sound: true, os: false, tone: DEFAULT_TONE },
-  signals: { banner: true, sound: true, os: false, tone: 'pop' },
+  signals: { banner: true, sound: true, os: false, tone: 'alert' },
 }
 
 export function notifyPrefs() {
