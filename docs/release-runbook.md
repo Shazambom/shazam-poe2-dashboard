@@ -69,6 +69,12 @@ exporter's mid-sync guard enforces this): `sshshazambom sudo bash /home/shazam/b
    `desktop/build-backend.sh` (~1–2 min; needs local python3.12 → `.venv-build`). The
    Windows CI **always** rebuilds its own backend `.exe` on the runner regardless.
 
+   **Also rebuild the Mac analytics SIDECAR** (`desktop/build-sidecar.sh`, ~1 min → `sidecar-bin/`)
+   when `backend/sidecar/**`, `backend/app/marketseries.py`, or `backend/requirements-sidecar.txt`
+   changed since the last tag. It's a SECOND per-platform PyInstaller binary (numpy/stumpy, ~73 MB)
+   bundled via `sidecar-bin` extraResources; the Windows CI builds its own `.exe`. `dist:mac`/
+   `publish-github.sh` bundle whatever is in `sidecar-bin/`, so it must exist and be current.
+
    > Workspace fields like `activeId` / `armed` are stored inside the `trading_workspace`
    > JSON blob, which the backend persists opaquely — new fields need **no backend change
    > and no migration**. Adding/altering an actual DB **table/column** does (user → numbered

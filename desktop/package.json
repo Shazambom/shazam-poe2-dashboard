@@ -88,6 +88,13 @@
         "filter": [
           "**/*"
         ]
+      },
+      {
+        "from": "sidecar-bin",
+        "to": "sidecar-bin",
+        "filter": [
+          "**/*"
+        ]
       }
     ],
     "npmRebuild": false

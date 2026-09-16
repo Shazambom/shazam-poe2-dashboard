@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import time
 from contextlib import asynccontextmanager
 
@@ -12,7 +13,7 @@ from pydantic import BaseModel
 
 from fastapi.responses import RedirectResponse, PlainTextResponse
 
-from . import arbitrage, db, digest, gamedata, gateway, holdscore, inflation, leaguehistory, liquidity, migrations_user, movers, oauth, orderbook, recipes, session
+from . import analytics, arbitrage, db, digest, gamedata, gateway, holdscore, inflation, leaguehistory, liquidity, migrations_user, movers, oauth, orderbook, recipes, session, sidecar_supervisor, watchdog
 from .currencies import registry
 from .settings import get_settings, save_settings
 
@@ -33,15 +34,27 @@ def _spawn(coro) -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Die with our parent (Electron). Desktop sets ARBITER_PARENT_PID; the web/server env does
+    # NOT, so this is a no-op there (never self-terminate a server). Deliberately PID-poll ONLY
+    # (stdin_eof=False): Electron spawns us with stdin='ignore', not a held-open pipe, so there's
+    # no EOF signal to watch — and leaving stdin alone keeps uvicorn unaffected. The poll (incl.
+    # the Windows handle check in watchdog._win_alive) is the backend's sole death signal, which is
+    # sufficient: it catches a hard Electron crash, the exact "dangling backend locks the install
+    # dir" case. (The sidecar, spawned WITH a stdin pipe, additionally gets the EOF primary.)
+    _parent = os.environ.get("ARBITER_PARENT_PID")
+    if _parent and _parent.isdigit():
+        watchdog.guard(parent_pid=int(_parent), stdin_eof=False)
     await registry.load_static()
+    sidecar_supervisor.start()          # spawn + supervise the heavy-analytics sidecar (no-op if absent)
     tasks = [asyncio.create_task(digest.run_forever()), asyncio.create_task(_gold_fee_loop()),
              asyncio.create_task(orderbook.worker()), asyncio.create_task(orderbook.sweeper()),
-             asyncio.create_task(_league_history_loop())]
+             asyncio.create_task(_league_history_loop()), asyncio.create_task(_analytics_loop())]
     if not session.get_cookie():
         log.info("no trade session yet: connect one in Settings to enable the live order book")
     yield
     for t in tasks:
         t.cancel()
+    sidecar_supervisor.stop()
 
 
 async def _gold_fee_loop():
@@ -60,6 +73,22 @@ async def _league_history_loop():
         except Exception as exc:
             log.exception("league history backfill error: %s", exc)
         await asyncio.sleep(12 * 3600)
+
+
+async def _analytics_loop():
+    """Periodically ask the sidecar to refresh analytics for the league actually on screen (the
+    resolved current league, so we never target one with no data). enqueue coalesces, so a busy
+    or down sidecar just means the request waits — the endpoint degrades to empty meanwhile.
+    league_daily only gains rows daily, so a low cadence is plenty."""
+    await asyncio.sleep(20)             # let the sidecar come up first
+    while True:
+        try:
+            league = await run_in_threadpool(movers.current_league)
+            if league:
+                await run_in_threadpool(lambda: analytics.enqueue(db._conn(), "discords", {"league": league}))
+        except Exception as exc:
+            log.warning("analytics enqueue error: %s", exc)
+        await asyncio.sleep(7200)       # every 2h (daily data — no need to churn)
 
 
 app = FastAPI(title="PoE2 currency arbitrage", lifespan=lifespan)
@@ -469,6 +498,21 @@ async def asset_ep(q: str, window_h: int = 24):
     if not res:
         raise HTTPException(404, f"no daily data for {q!r}")
     return res
+
+
+@app.get("/api/signals")
+async def signals_ep():
+    """Volume-confirmed 'about to move' discord signals for the current league, computed by the
+    analytics sidecar and cached in market.sqlite. READ-ONLY: if the sidecar is down or hasn't
+    run yet this returns an empty list — it never fails a request (graceful degrade). The Phase-4
+    inbox UI will consume this; for now it's the sidecar's read surface."""
+    def _read():
+        with db.q() as c:
+            blob = analytics.read_cache(c, "discords", "current")   # {league, signals}, or None
+        if blob:
+            return {"league": blob.get("league"), "signals": blob.get("signals") or []}
+        return {"league": movers.current_league(), "signals": []}   # nothing computed yet
+    return await run_in_threadpool(_read)
 
 
 @app.get("/api/convert")

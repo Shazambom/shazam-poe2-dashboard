@@ -8,6 +8,8 @@ desktop/node_modules/
 desktop/release/
 desktop/app-dist/
 desktop/backend-bin/
+desktop/sidecar-bin/
 desktop/.venv-build/
+desktop/.venv-sidecar/
 desktop/market-seed/
 .venv-test/

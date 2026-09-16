@@ -12,11 +12,10 @@ Pure Python (stdlib only); a few hundred items × ~150 days, cached briefly.
 """
 from __future__ import annotations
 
-import datetime as _dt
 import statistics
 import time
 
-from . import db
+from . import db, marketseries
 from .leaguehistory import _slug
 from .settings import get_settings
 
@@ -41,28 +40,23 @@ def _current_series():
     hit = _cache.get(league)
     if hit and time.time() - hit[0] < _TTL:
         return hit[1]
+    # Read + shaping live in the stdlib `marketseries` module (shared with the analytics sidecar);
+    # here we only pick which league to view (needs settings + the lh_current kv).
     with db.q() as c:
-        meta = {r["item_id"]: (r["name"], r["category"]) for r in c.execute("SELECT item_id, name, category FROM item_meta")}
-        rows = c.execute("SELECT league, item_id, day, close, volume FROM league_daily WHERE close>0 ORDER BY league, day").fetchall()
-    day0s: dict[str, str] = {}
-    for r in rows:                       # rows are ORDER BY league, day → first day per league is day-0
-        day0s.setdefault(r["league"], r["day"])
-    cur_name = league
-    if cur_name not in day0s:            # viewing a league with no data → newest league that does
-        current = set(db.kv_get("lh_current", []))
-        cur_name = next((l for l in day0s if l in current), None) or (max(day0s, key=lambda l: day0s[l] or "") if day0s else None)
-    series: dict[int, list] = {}
-    for r in rows:
-        if r["league"] != cur_name:
-            continue
-        try:
-            t = int(_dt.datetime.strptime(r["day"], "%Y-%m-%d").replace(tzinfo=_dt.timezone.utc).timestamp())
-        except Exception:
-            continue
-        series.setdefault(r["item_id"], []).append((t, r["close"], (r["volume"] or 0) * r["close"]))
+        meta = marketseries.read_meta(c)
+        rows = marketseries.read_rows(c)          # all leagues, ORDER BY league, day
+    cur_name = marketseries.pick_league(rows, league, db.kv_get("lh_current", []))
+    series = marketseries.build_series(rows, cur_name)
     out = (cur_name, series, meta)
     _cache[league] = (time.time(), out)
     return out
+
+
+def current_league() -> str | None:
+    """The league the board/movers currently resolve to (the user's setting, or the newest league
+    with data). The one place callers should get 'which league are we showing' — via the shared
+    5-min cache, so it's cheap to call."""
+    return _current_series()[0]
 
 
 def _change_pct(pts, window_days):

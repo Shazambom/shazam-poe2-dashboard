@@ -20,9 +20,10 @@ Hold=KEEP. The big gap was **TIME** (when to act).
 | — | **Gold-value slider** | shared gold price for ranking | ✅ DONE (phase 1.5) |
 | 2 | **Ghost Wealth** (can I cash out?) | KEEP/DECIDE | ⬜ TODO |
 | 3 | **Timing / league-arc** (when to buy/sell) | TIME | ⬜ TODO |
-| 4 | **What's about to move** | TIME | ⬜ TODO |
+| 4 | **What's about to move** | TIME | ⬜ TODO (sidecar READY; first job shipped) |
+| 2 | **Ghost Wealth** (can I cash out?) | KEEP/DECIDE | ✅ DONE (0.2.45) |
 | — | **Centrality** (connective tissue) | feeds 1/2/4, never a page | ✅ DONE (Phase 5 below) |
-| — | **Sidecar runtime** | hosts heavy libs for 3 & 4 | ⬜ TODO |
+| — | **Sidecar runtime** | hosts heavy libs for 3 & 4 | ✅ DONE (Phase 6 below) |
 
 ## Cross-cutting decisions (locked)
 - **Ecosystem, not dashboards.** Reuse `CardDetail`, the `Loop`/`Detail` route renderer
@@ -155,15 +156,65 @@ term = mean betweenness of intermediate nodes, only decides genuine ties); Board
 snapshot, or sidecar (computed live from the in-memory graph). Tests: `backend/tests/test_centrality.py`.
 Drive-validated on web + desktop: hubs resolve to divine/chaos/mirror (economically correct).
 
-## Phase 6 — Sidecar runtime (TODO) — enables 3 & 4
-A second bundled-per-platform PyInstaller binary (`numpy/stumpy/dtaidistance/mlxtend`). Spawned by
-the BACKEND as a child (supervision tree Electron→backend→sidecar). Transport = SQLite: sidecar
-reads `market.sqlite` RO for bulk input, writes results to `analytics_cache`; backend reads.
-Consider an existing SQLite-backed queue/event lib rather than hand-rolling (owner preference).
-Lifecycle: dies on backend exit (stdin-EOF / process-tree) + PARENT_PID watchdog (retrofit the
-watchdog to the backend too — today it can dangle on a hard Electron crash, `desktop/src/main.js:479`).
-Bundle like the backend (`build-backend.sh` sibling on Mac; CI step on Windows). Endpoints only
-read the cache. **Port-tests-first** for any vendored library code.
+## Phase 6 — Sidecar runtime (✅ DONE) — enables 3 & 4
+A second bundled-per-platform PyInstaller binary (`numpy/stumpy/dtaidistance`) that hosts heavy
+analytics off the lean backend. Spawned + supervised by the BACKEND as a child (supervision tree
+Electron→backend→sidecar). Transport = **SQLite, no network**.
+
+**Built:**
+- **Transport** `backend/app/analytics.py` — stdlib-only, **connection-injected** so BOTH the
+  backend (`db._conn()`, tables via ATTACHed `market`) and the lean sidecar (own `market.sqlite`
+  conn) share it with no boot side effects. `enqueue` (coalescing) / `claim` (lock-free pre-check
+  then BEGIN IMMEDIATE + state guard = single-pass, exactly-once, oldest-of-any-kind — the sidecar
+  dispatches by kind itself) / `complete` (upsert cache + mark done) / `fail` / `read_cache` /
+  `prune_jobs`. Every read returns a benign default (endpoints never fail).
+  **Hand-rolled** the ~4 tiny queue ops rather than add a SQLite-queue lib to two PyInstaller
+  binaries (evaluated litequeue/huey — not worth the bundling risk for a single consumer).
+- **Tables** (market side, in `MARKET_SCHEMA`): `analytics_jobs` (control) + `analytics_cache`
+  (results). Additive, empty, RUNTIME-only → **NOT in the exported snapshot** (exporter builds
+  from its own list) and **self-healed** by the boot `executescript(MARKET_SCHEMA)` after seeding,
+  so **NO snapshot rebuild is needed** (the snapshot's data is unchanged).
+- **Shared series** `backend/app/marketseries.py` — stdlib-only reader (`league_daily`→per-item
+  series); `movers._current_series` delegates; the sidecar reuses it (the backend picks the league,
+  since only it has the user setting, and passes it in the job params).
+- **First job** `backend/sidecar/analytics/discords.py` — STUMPY matrix-profile discords,
+  **volume-confirmed** (MAD-z on units = value/close, NOT value, so a price spike alone can't
+  self-confirm) + liquidity floor + recency gate. `vol_z` MAD-floored & clamped (±50) so a
+  near-constant series can't explode the score. **SHORT-HORIZON tuned** (owner steer: PoE leagues
+  are short-lived, the metric must work early): `normalize=False` (the DEFAULT z-normalized profile
+  finds unusual *shapes* and normalizes magnitude away — it missed a planted 3× spike; non-normalized
+  lands the discord on the magnitude dislocation, the actual pump/crash) · short motif `m=3`
+  (signals from ~7 days, vs 9+ with m=4) · modest `vol_z≥2.5` floor because MAD-z is statistically
+  compressed with few points (calibrated to real ~11-day data where clear standouts sat at 2.5–2.8,
+  not 3+). It's a ranked shortlist (by vol_z, top_n=20), not a binary alarm. Higher-res (hourly
+  digest) input is the bigger short-horizon lever — a Phase-4 consideration.
+- **Runtime** `backend/sidecar/{run_sidecar,runner}.py` — own plain `market.sqlite` conn (never
+  imports app.db), poll→claim→dispatch→write, idle backoff, unknown-kind → error (never wedges).
+- **Watchdog** `backend/app/watchdog.py` — stdlib, shared. Sidecar dies with backend via
+  **stdin-EOF** (backend holds the pipe) + PARENT_PID poll. Backend **retrofit**: PARENT_PID poll
+  only (no stdin-EOF), gated on `ARBITER_PARENT_PID` (Electron sets it; the web/server never does,
+  so servers are unaffected) → fixes the dangling-backend-on-hard-Electron-crash bug.
+- **Supervisor** `backend/app/sidecar_supervisor.py` — spawns (stdin PIPE + `ARBITER_PARENT_PID`),
+  restarts w/ capped backoff, no-ops when no sidecar. Launch source: `SIDECAR_BIN` (bundled binary,
+  Electron sets it) or `SIDECAR_FROM_SOURCE=1` (opt-in local dev). Started in `main.py` lifespan;
+  `_analytics_loop` enqueues a discord refresh every 30 min for the resolved current league.
+- **Endpoint** `GET /api/signals` — READ-only cache; empty when the sidecar is down/idle (graceful
+  degrade). The Phase-4 inbox UI will consume it; for now it's the sidecar's read surface.
+- **Build**: `desktop/build-sidecar.sh` (mirror of `build-backend.sh`) + Windows CI step +
+  `sidecar-bin` extraResources + `main.js` resolves `SIDECAR_BIN`. **`--collect-all stumpy` is
+  REQUIRED** (onefile has no source on disk for stumpy's njit-cache enumeration — the frozen binary
+  FileNotFoundErrors on import without it). `backend/requirements-sidecar.txt` keeps the heavy deps
+  out of the lean backend. Binary ≈ 73MB; **~34s numba JIT cold-start on first job** (fine — endpoints
+  only read cache). **mlxtend deferred to Phase 4** (drags sklearn/pandas/matplotlib).
+
+**Validated:** 21 new backend tests (transport, marketseries, discords incl. a short-league case,
+watchdog, runner). Frozen production binaries drive-tested end-to-end: supervisor spawns the real
+sidecar, it computes over a snapshot-seeded market.sqlite, writes cache, job→done; killing the
+backend kills the sidecar (watchdog OK); `/api/signals` 200. On real ~11-day Forbidden Rites data
+the metric surfaces a sensible shortlist (Deadly Fate, Her Declaration, …). Web: boots,
+graceful-degrades (sidecar off), board/capital unregressed. **NOT shipped** — awaiting authorization.
+
+> **Port-tests-first** still applies if Phase 3/4 VENDOR (rather than pip-install) any library code.
 
 ## Suggested order (lightest-first)
 1.5 slider → 5 centrality → 2 Ghost Wealth → 6 sidecar scaffold (+watchdog retrofit) → 3 arc →

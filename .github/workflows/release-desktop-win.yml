@@ -37,6 +37,22 @@ jobs:
           mkdir -p desktop/backend-bin
           cp dist/poe2arb-backend.exe desktop/backend-bin/poe2arb-backend.exe
           ls -la desktop/backend-bin
+      - name: Build heavy-analytics sidecar (PyInstaller, Windows x64)
+        # A SEPARATE binary from the backend (numpy/stumpy) so the backend stays lean. The backend
+        # spawns + supervises it. --collect-all stumpy is required or the frozen binary can't find
+        # stumpy's own source at import (validated in the Phase-6 spike). Its own venv keeps the
+        # heavy deps out of the backend build.
+        shell: bash
+        run: |
+          python -m pip install --quiet -r backend/requirements-sidecar.txt pyinstaller
+          pyinstaller --noconfirm --clean --onefile \
+            --name poe2arb-sidecar \
+            --paths backend \
+            --collect-all stumpy \
+            backend/sidecar/run_sidecar.py
+          mkdir -p desktop/sidecar-bin
+          cp dist/poe2arb-sidecar.exe desktop/sidecar-bin/poe2arb-sidecar.exe
+          ls -la desktop/sidecar-bin
       - name: Install node deps
         run: |
           cd frontend && npm ci

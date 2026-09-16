@@ -37,13 +37,20 @@ let backendKind = 'remote'     // 'local' | 'remote'
 let uiUrl = null
 
 // ---------------------------------------------------------------- backend
+// Resolve a bundled per-platform binary: the packed location (extraResources) preferred, then the
+// dev location. Returns {found, expected} — `found` is the existing path or null; `expected` is the
+// packed path to report when nothing is found (a packaging regression). Shared by the backend and
+// the analytics sidecar so the resolution rule lives in one place.
+function findBundledBin(dir, name) {
+  const packed = path.join(process.resourcesPath || '', dir, name)
+  const dev = path.join(__dirname, '..', dir, name)
+  const found = fs.existsSync(packed) ? packed : (fs.existsSync(dev) ? dev : null)
+  return { found, expected: packed }
+}
+
 function backendBinary() {
   const name = process.platform === 'win32' ? 'poe2arb-backend.exe' : 'poe2arb-backend'
-  const packed = path.join(process.resourcesPath || '', 'backend-bin', name)
-  const dev = path.join(__dirname, '..', 'backend-bin', name)
-  if (fs.existsSync(packed)) return packed
-  if (fs.existsSync(dev)) return dev
-  return null
+  return findBundledBin('backend-bin', name).found
 }
 
 async function waitFor(url, tries = 60) {
@@ -77,8 +84,20 @@ async function startBackend() {
       const p = path.join(d, n); if (fs.existsSync(p)) { marketSeed = p; break }
     } if (marketSeed) break }
     if (marketSeed) console.log('[backend] market seed:', marketSeed)
+    // Sidecar binary (heavy analytics), bundled per-platform via extraResources like the
+    // backend. The backend spawns + supervises it; SIDECAR_BIN tells it where. Absent in dev =
+    // backend runs the sidecar from source (or skips it). See docs/db-architecture.md.
+    const sidecarName = process.platform === 'win32' ? 'poe2arb-sidecar.exe' : 'poe2arb-sidecar'
+    const sc = findBundledBin('sidecar-bin', sidecarName)
+    // Pass the EXPECTED path even when not found, so the backend supervisor can log a warning
+    // (packaging regression) instead of silently disabling analytics.
+    const sidecarBin = sc.found || sc.expected
+    console.log('[backend] sidecar bin:', sidecarBin, sc.found ? '' : '(expected; not found)')
     backendProc = spawn(bin, [], {
-      env: { ...process.env, DATA_DIR: dataDir, PORT: String(LOCAL_BACKEND_PORT), MARKET_SEED: marketSeed },
+      // ARBITER_PARENT_PID lets the backend die with us if Electron hard-crashes (parent-pid
+      // watchdog); the web/server env never sets it, so servers are unaffected.
+      env: { ...process.env, DATA_DIR: dataDir, PORT: String(LOCAL_BACKEND_PORT), MARKET_SEED: marketSeed,
+             SIDECAR_BIN: sidecarBin, ARBITER_PARENT_PID: String(process.pid) },
       stdio: ['ignore', 'pipe', 'pipe'],
     })
     backendProc.stdout.on('data', d => console.log('[backend]', String(d).trimEnd()))

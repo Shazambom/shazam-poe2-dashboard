@@ -110,6 +110,35 @@ CREATE TABLE IF NOT EXISTS market_meta (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
 );
+
+-- Sidecar analytics transport (docs/db-architecture.md "Heavy analytics"). Both tables
+-- are additive, empty, and RUNTIME-only: they are NOT copied into the exported snapshot
+-- (ops/export-market-snapshot.py builds from its own explicit table list), and the boot
+-- self-heal above (executescript(MARKET_SCHEMA) after seeding) recreates them against any
+-- older seed. So adding them needs NO snapshot rebuild — the snapshot's data is unchanged.
+--   analytics_cache: the sidecar is the SOLE writer; the backend/endpoints only READ it, so
+--     the sidecar can never take down a request (graceful degrade when it's down).
+--   analytics_jobs: the control channel — the backend enqueues 'queued' rows; the sidecar
+--     claims them (queued->running), runs the compute, writes analytics_cache, marks done/error.
+CREATE TABLE IF NOT EXISTS analytics_cache (
+    kind TEXT NOT NULL,
+    key TEXT NOT NULL,
+    computed_at INTEGER NOT NULL,
+    value_json TEXT NOT NULL,
+    PRIMARY KEY (kind, key)
+);
+
+CREATE TABLE IF NOT EXISTS analytics_jobs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    kind TEXT NOT NULL,
+    params_json TEXT NOT NULL DEFAULT '{}',
+    state TEXT NOT NULL DEFAULT 'queued',   -- queued | running | done | error
+    enqueued_at INTEGER NOT NULL,
+    started_at INTEGER,
+    finished_at INTEGER,
+    error TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_analytics_jobs_state ON analytics_jobs(state, id);
 """
 
 # kv keys owned by the user (persist + migrate). Everything else is operational and
