@@ -99,11 +99,15 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
+          # A `-beta` tag is a DEV channel release: mark it a GitHub pre-release so it's never "Latest"
+          # and stable users (allowPrerelease=false) never pull it. electron-builder emits beta.yml for
+          # a -beta version; the *.yml glob uploads whichever channel manifest was written.
+          prerelease: ${{ contains(github.ref_name, '-beta') }}
           files: |
             desktop/release/*.exe
             desktop/release/*.exe.blockmap
             desktop/release/*.zip
-            desktop/release/latest.yml
+            desktop/release/*.yml
       - name: Also upload as workflow artifact
         uses: actions/upload-artifact@v4
         with:

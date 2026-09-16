@@ -26,8 +26,8 @@ _stop = False
 # post its own telemetry, so the supervisor reports the exit code + stderr tail. Best-effort, only
 # on desktop (parent pid set). Strip with the rest of the Windows-signals diagnostics.
 def _tlog(msg: str) -> None:
-    if not os.environ.get("ARBITER_PARENT_PID"):
-        return
+    if os.environ.get("ARBITER_TELEMETRY") != "1":
+        return                       # beta/dev channel only (stable + web/server stay silent)
     try:
         import sys
         import urllib.request

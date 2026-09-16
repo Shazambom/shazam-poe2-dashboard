@@ -18,6 +18,45 @@ Windows builds in **CI** and uploads its assets to the release directly. Mac bui
 Installer names are space-free (`nsis.artifactName`) so the yml url, the on-disk file, and
 the GitHub asset all match — otherwise GitHub rewrites spaces to dots and the updater 404s.
 
+## Two channels: stable and beta (dev)  — "deploy dev"
+
+There are **two update channels**, so we can iterate on the packaged app WITHOUT testing in prod:
+
+| Channel | Version form | GitHub release | Manifests | Who gets it | Diagnostics telemetry |
+|---|---|---|---|---|---|
+| **stable** | `x.y.z` | marked **Latest** | `latest.yml`, `latest-mac.yml` | everyone (default) | **off** |
+| **beta (dev)** | `x.y.z-beta.N` | **pre-release** (never Latest) | `beta.yml`, `beta-mac.yml` | only clients opted into beta | **on** |
+
+- **Opt in (client side):** Settings → Diagnostics → **"Beta updates (dev channel + diagnostics telemetry)"**.
+  That persists `betaChannel` in `desktop-settings.json`; `main.js` then sets `autoUpdater.channel='beta'`
+  + `allowPrerelease=true`. A build that is *itself* a `-beta` version forces the beta channel on
+  (`locked`). Diagnostics telemetry (`p=backend`, `p=sidecar`, the `/api/diag.analytics` probe) fires
+  **only** on the beta channel or an unpackaged dev run — gated by `diagTelemetryOn()` in `main.js`
+  (which passes `ARBITER_TELEMETRY=1` to the backend→sidecar). Stable builds are silent.
+- **Isolation:** beta releases are GitHub **pre-releases**, so `releases/latest` never points at them and
+  stable clients (`allowPrerelease=false`, `channel='latest'`) never pull them. Safe to push freely.
+
+### "deploy dev" — publish a beta build
+When the owner says **"deploy dev"** (or "deploy to the dev/beta channel"), cut a **pre-release** with a
+`-beta.N` version — same mechanics as a stable release, three differences:
+1. **Version:** set `desktop/package.json` to `x.y.z-beta.N` (bump `N` per dev push). electron-builder
+   derives the channel from the prerelease tag and writes `beta.yml` / `beta-mac.yml` automatically.
+2. **Tag:** `desktop-v<x.y.z-beta.N>`. The Windows CI marks the release **pre-release**
+   (`prerelease: contains(tag,'-beta')`) and uploads `*.yml` (so `beta.yml` rides along); the crash gate
+   still runs. `publish-github.sh` auto-selects `beta-mac.yml`.
+3. **Snapshot rule still applies** (Step 0) — a dev build with stale market data still shows wrong data
+   to the tester (you). Ask first.
+
+Verify a dev release resolves on the beta channel:
+```
+gh release view desktop-v<x.y.z-beta.N> --json isPrerelease,assets \
+  -q '{prerelease:.isPrerelease, files:[.assets[].name]}'   # isPrerelease:true, beta.yml + beta-mac.yml present
+```
+Then read `p=sidecar` / `p=backend` telemetry once the tester's app updates.
+
+**Promote beta → stable:** when a dev build is good, cut the SAME code as a plain `x.y.z` stable release
+(no `-beta`). Nothing else changes.
+
 ## ⚠️ Step 0 — ALWAYS ASK: does this release need a fresh market snapshot?
 
 The desktop app bundles a **market snapshot** at build time (`desktop/market-seed/`, fetched

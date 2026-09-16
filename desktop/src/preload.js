@@ -18,6 +18,8 @@ contextBridge.exposeInMainWorld('poe2desktop', {
   onUpdate: (cb) => { const h = (_e, s) => cb(s); ipcRenderer.on('update:status', h); return () => ipcRenderer.removeListener('update:status', h) },
   checkUpdate: () => ipcRenderer.invoke('update:check'),
   installUpdate: () => ipcRenderer.invoke('update:install'),
+  getChannel: () => ipcRenderer.invoke('update:getChannel'),
+  setChannel: (beta) => ipcRenderer.invoke('update:setChannel', beta),
 
   // Live-search engine (desktop-only). Renderer sends intents; main runs the WS + fetch
   // + teleport against the user's own logged-in session and pushes pings/state back.

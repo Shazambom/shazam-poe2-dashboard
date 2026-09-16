@@ -169,10 +169,37 @@ export default function SettingsView({ currencies, status, onSaved }) {
 
           <details className="adv">
             <summary>Diagnostics</summary>
+            <BetaChannelToggle />
             <DiagPanel />
           </details>
         </div>
       </div>
+    </div>
+  )
+}
+
+// Beta (dev) update channel opt-in — desktop only. On beta, the app auto-updates to pre-release
+// `-beta.N` builds AND enables diagnostics telemetry so we can debug packaged behavior remotely.
+// Stable users never see beta releases (they're GitHub pre-releases). No-op in the web build.
+function BetaChannelToggle() {
+  const desk = typeof window !== 'undefined' && window.poe2desktop
+  const [st, setSt] = useState(null)
+  useEffect(() => { desk?.getChannel?.().then(setSt).catch(() => {}) }, [])
+  if (!desk?.getChannel) return null
+  const toggle = async (v) => {
+    try { setSt(await desk.setChannel(v)); toast(v ? 'Beta channel on — checking for updates…' : 'Back on stable channel') } catch {}
+  }
+  return (
+    <div style={{ marginBottom: 12 }}>
+      <div className="check">
+        <Toggle checked={!!st?.beta} onChange={toggle} disabled={st?.locked}
+                label="Beta updates (dev channel + diagnostics telemetry)" />
+      </div>
+      <p className="hint">
+        {st?.locked
+          ? 'This is a beta build — reinstall a stable release to leave the beta channel.'
+          : 'Opt in to pre-release builds and send diagnostics so issues can be debugged remotely.'}
+      </p>
     </div>
   )
 }

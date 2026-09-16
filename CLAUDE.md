@@ -99,8 +99,14 @@ token or on colors pasted into JSX. New colors → add a semantic token to `:roo
   harness, or the web env for a desktop user check — those aren't the packaged artifact users run.
   This is a test build, NOT a release: building to test ≠ shipping (above), so it needs no ship
   authorization. (My own CDP drive-validation stays how *I* verify; it is not a user check.)
-- **The how-to** — deploying to the web test env, the desktop dev loop, and cutting a release —
-  lives in [`docs/dev-notes.md`](docs/dev-notes.md) and [`docs/release-runbook.md`](docs/release-runbook.md).
+- **Two desktop channels — "deploy dev" vs "ship".** A **beta (dev) channel** lets the owner test the
+  packaged app without touching prod. **"deploy dev"** (or "deploy to the dev/beta channel") = publish a
+  `x.y.z-beta.N` **pre-release** (GitHub never marks it "Latest"; emits `beta.yml`/`beta-mac.yml`;
+  diagnostics telemetry ON). Plain **"ship"/"deploy"** = a stable `x.y.z` release (marked "Latest";
+  telemetry OFF). Beta is opt-in per client (Settings → Diagnostics → "Beta updates"), so stable users
+  never receive dev builds. Both still require explicit authorization and the Step-0 snapshot check.
+- **The how-to** — deploying to the web test env, the desktop dev loop, and cutting a release (stable or
+  dev) — lives in [`docs/dev-notes.md`](docs/dev-notes.md) and [`docs/release-runbook.md`](docs/release-runbook.md).
   This section is the policy; those are the mechanics.
 
 ## Database: user data vs market data

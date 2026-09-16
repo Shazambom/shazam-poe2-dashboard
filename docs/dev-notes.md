@@ -173,6 +173,13 @@ resolve `200` (a 404 means the space-free-naming rule was violated — GitHub re
 dots and the updater can't find the asset). **Shipping requires explicit per-change authorization**
 (CLAUDE.md) — do not push a `desktop-v*` tag or run `publish-github.sh` until told.
 
+**Two channels — "deploy dev":** a **beta (dev) channel** lets us iterate on the packaged app without
+testing in prod. Same mechanics, but the version is `x.y.z-beta.N` → GitHub **pre-release** (never
+"Latest") → `beta.yml`/`beta-mac.yml`; diagnostics telemetry (`p=backend`/`p=sidecar`) fires **only**
+on beta. Clients opt in via Settings → Diagnostics → "Beta updates". When the owner says **"deploy
+dev"**, publish a `-beta.N` pre-release; "ship"/"deploy" (no "dev") means a stable `x.y.z` release.
+Full table + steps: [`release-runbook.md`](./release-runbook.md) → "Two channels".
+
 ## Quick map (where things live)
 
 - **Pricing/graph:** `arbitrage.py` — `Graph.build/ref_values/iter_cycles/iter_paths`, `simulate`,

@@ -28,8 +28,8 @@ _TLOG_URL = "http://192.168.1.250:8080/api/installlog?p=sidecar"
 
 
 def _tlog(msg: str) -> None:
-    if not os.environ.get("ARBITER_PARENT_PID"):
-        return                       # web/server env: never phone home
+    if os.environ.get("ARBITER_TELEMETRY") != "1":
+        return                       # only the beta/dev channel opts in; web/server + stable stay silent
     try:
         import urllib.request
         ver = os.environ.get("ARBITER_VERSION", "?")

@@ -23,7 +23,7 @@ const isPoeUrl = (url) => /^https:\/\/([a-z0-9-]+\.)*pathofexile\.com\//i.test(S
 const isAuthUrl = (url) =>
   isPoeUrl(url) || /^https:\/\/([a-z0-9-]+\.)*(steamcommunity|steampowered)\.com\//i.test(String(url))
 const LOCAL_BACKEND_PORT = 8210
-const DEFAULTS = { mode: 'auto', remoteUrl: 'http://192.168.1.250:8080' }
+const DEFAULTS = { mode: 'auto', remoteUrl: 'http://192.168.1.250:8080', betaChannel: false }
 
 const settingsPath = () => path.join(app.getPath('userData'), 'desktop-settings.json')
 let settings = { ...DEFAULTS }
@@ -61,11 +61,19 @@ async function waitFor(url, tries = 60) {
   return false
 }
 
-// TEMPORARY DEV DIAGNOSTIC (see CLAUDE.md "telemetry is mandatory"): report the bundled backend's
-// spawn/exit/first-bind on machines we can't touch (Windows). Reuses the sanctioned installlog
-// endpoint; posts only backend stdout/stderr (no secrets/keystrokes/clipboard). Strip once the
-// 0.2.46 Windows-startup failure is understood and fixed.
+// Are we on the beta (dev) channel? Beta builds carry a `-beta.N` prerelease tag AND the user opted
+// in via Settings. Diagnostics telemetry is GATED on this: live on beta / in dev, silent in a stable
+// packaged build. (The tiny updater telemetry `updLog` stays always-on — it's the sanctioned
+// exception and is how we debug the update path itself.)
+const isBetaVersion = () => /-beta\./.test(app.getVersion())
+const onBetaChannel = () => !!settings.betaChannel || isBetaVersion()
+const diagTelemetryOn = () => !app.isPackaged || onBetaChannel()
+
+// DEV DIAGNOSTIC (beta channel only): report the bundled backend's spawn/exit/first-bind on machines
+// we can't touch (Windows). Reuses the sanctioned installlog endpoint; posts only backend
+// stdout/stderr (no secrets/keystrokes/clipboard). Dormant on the stable channel.
 function bkLog(m) {
+  if (!diagTelemetryOn()) return
   try {
     fetch('http://192.168.1.250:8080/api/installlog?p=backend', {
       method: 'POST', headers: { 'Content-Type': 'text/plain' },
@@ -111,7 +119,9 @@ async function startBackend() {
       // watchdog); the web/server env never sets it, so servers are unaffected.
       env: { ...process.env, DATA_DIR: dataDir, PORT: String(LOCAL_BACKEND_PORT), MARKET_SEED: marketSeed,
              SIDECAR_BIN: sidecarBin, ARBITER_PARENT_PID: String(process.pid),
-             ARBITER_VERSION: app.getVersion() },
+             ARBITER_VERSION: app.getVersion(),
+             // Diagnostics telemetry (backend + sidecar) fires only on the beta/dev channel.
+             ARBITER_TELEMETRY: diagTelemetryOn() ? '1' : '' },
       stdio: ['ignore', 'pipe', 'pipe'],
     })
     // DEV DIAGNOSTIC: keep a rolling tail of backend output so a crash/hang on Windows is visible.
@@ -370,6 +380,15 @@ function updLog(m) {   // updater telemetry -> server, so we can see why it's si
 const GH_RELEASES = 'https://github.com/Shazambom/shazam-poe2-dashboard/releases/download'
 function macDmgUrl(v) { return `${GH_RELEASES}/desktop-v${v}/Arbiter-${v}-arm64.dmg` }
 
+function _applyChannel(au) {
+  const beta = onBetaChannel()
+  try {
+    au.allowPrerelease = beta
+    au.channel = beta ? 'beta' : 'latest'
+  } catch {}
+  return beta
+}
+
 function setupUpdates() {
   if (!app.isPackaged) return
   try {
@@ -377,6 +396,9 @@ function setupUpdates() {
     _autoUpdater = autoUpdater
     autoUpdater.autoDownload = !IS_MAC          // Win: pull in background. Mac: no Squirrel apply, so skip.
     autoUpdater.autoInstallOnAppQuit = !IS_MAC
+    // Channel: stable reads latest.yml; beta (dev) reads beta.yml + accepts GitHub pre-releases. The
+    // beta releases are `x.y.z-beta.N` prereleases so stable users (allowPrerelease=false) never see them.
+    _applyChannel(autoUpdater)
     autoUpdater.on('checking-for-update', () => { updLog('checking'); _emitUpdate({ phase: 'checking' }) })
     autoUpdater.on('update-not-available', (info) => { updLog(`not-available (latest=${info?.version})`); _emitUpdate({ phase: 'none' }) })
     autoUpdater.on('update-available', (info) => {
@@ -395,6 +417,15 @@ function setupUpdates() {
 }
 
 ipcMain.handle('update:check', () => { try { _autoUpdater?.checkForUpdates() } catch {} })
+// Beta/dev channel opt-in (persisted). `locked` = the running build is itself a -beta build, so the
+// toggle can't be turned off from here (you'd need to reinstall a stable build); we surface that.
+ipcMain.handle('update:getChannel', () => ({ beta: onBetaChannel(), locked: isBetaVersion() }))
+ipcMain.handle('update:setChannel', (_e, beta) => {
+  settings.betaChannel = !!beta
+  saveSettings()
+  if (_autoUpdater) { _applyChannel(_autoUpdater); _autoUpdater.checkForUpdates().catch(() => {}) }
+  return { beta: onBetaChannel(), locked: isBetaVersion() }
+})
 ipcMain.handle('update:install', () => {
   if (IS_MAC) {
     // Can't hot-swap unsigned — open the DMG in the browser for a manual install; keep the

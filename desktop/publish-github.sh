@@ -32,13 +32,15 @@ SEED="market-seed/market-seed.sqlite.gz"
 [ -f "$SEED.version" ] || { echo "FATAL: $SEED.version sidecar missing — re-run ./fetch-seed.sh"; exit 1; }
 echo "seed OK: v$(cat "$SEED.version") ($(du -h "$SEED" | cut -f1))"
 
-# Mac artifacts electron-builder wrote to release/. latest-mac.yml is what the updater reads.
+# Mac artifacts electron-builder wrote to release/. The channel manifest the Mac updater reads is
+# latest-mac.yml on stable, beta-mac.yml for a -beta version (electron-builder names it by channel).
+case "$VER" in *-beta*) MAC_YML="beta-mac.yml" ;; *) MAC_YML="latest-mac.yml" ;; esac
 FILES=(
   "release/Arbiter-${VER}-arm64.dmg"
   "release/Arbiter-${VER}-arm64.dmg.blockmap"
   "release/Arbiter-${VER}-arm64-mac.zip"
   "release/Arbiter-${VER}-arm64-mac.zip.blockmap"
-  "release/latest-mac.yml"
+  "release/${MAC_YML}"
 )
 for f in "${FILES[@]}"; do
   [ -f "$f" ] || { echo "missing $f — run 'npm run dist:mac' first (or drop --no-build)"; exit 1; }
