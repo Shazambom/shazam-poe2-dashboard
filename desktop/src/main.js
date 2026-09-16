@@ -61,6 +61,19 @@ async function waitFor(url, tries = 60) {
   return false
 }
 
+// TEMPORARY DEV DIAGNOSTIC (see CLAUDE.md "telemetry is mandatory"): report the bundled backend's
+// spawn/exit/first-bind on machines we can't touch (Windows). Reuses the sanctioned installlog
+// endpoint; posts only backend stdout/stderr (no secrets/keystrokes/clipboard). Strip once the
+// 0.2.46 Windows-startup failure is understood and fixed.
+function bkLog(m) {
+  try {
+    fetch('http://192.168.1.250:8080/api/installlog?p=backend', {
+      method: 'POST', headers: { 'Content-Type': 'text/plain' },
+      body: `v${app.getVersion()} ${process.platform}: ${m}`,
+    }).catch(() => {})
+  } catch {}
+}
+
 // The desktop app is FULLY SELF-CONTAINED: it runs its own bundled backend + local
 // DB and NEVER calls the server for data. The ONLY permitted outbound calls are the
 // auto-updater (electron-updater → GitHub Releases) and update telemetry (installlog).
@@ -100,14 +113,27 @@ async function startBackend() {
              SIDECAR_BIN: sidecarBin, ARBITER_PARENT_PID: String(process.pid) },
       stdio: ['ignore', 'pipe', 'pipe'],
     })
-    backendProc.stdout.on('data', d => console.log('[backend]', String(d).trimEnd()))
-    backendProc.stderr.on('data', d => console.log('[backend]', String(d).trimEnd()))
-    backendProc.on('exit', c => { console.log('[backend] exited', c); backendProc = null })
-    if (await waitFor(`${localUrl}/api/status`)) {
+    // DEV DIAGNOSTIC: keep a rolling tail of backend output so a crash/hang on Windows is visible.
+    let bkBuf = ''
+    const capture = (d) => { bkBuf = (bkBuf + String(d)).slice(-6000); console.log('[backend]', String(d).trimEnd()) }
+    backendProc.stdout.on('data', capture)
+    backendProc.stderr.on('data', capture)
+    backendProc.on('error', e => bkLog(`proc-error ${String(e && e.message || e)}`))
+    backendProc.on('exit', (code, signal) => {
+      console.log('[backend] exited', code, signal)
+      bkLog(`EXITED code=${code} signal=${signal}\n--- output tail ---\n${bkBuf.slice(-3000)}`)
+      backendProc = null
+    })
+    const t0 = Date.now()
+    if (await waitFor(`${localUrl}/api/status`, 240)) {   // ~2min: cover a slow first-boot re-seed before declaring failure
+      bkLog(`bound after ${Math.round((Date.now() - t0) / 1000)}s`)
       backendUrl = localUrl
       backendKind = 'local'
       return
     }
+    // Never bound within the wait window: report whether it's still alive (hung) or gone (crashed),
+    // with the output tail showing where it stalled — this is the data we were missing.
+    bkLog(`NOT-BOUND after ${Math.round((Date.now() - t0) / 1000)}s proc=${backendProc ? 'alive' : 'exited'} bin=${bin}\n--- output tail ---\n${bkBuf.slice(-3000)}`)
     console.log('[backend] bundled backend failed to come up')
   } else if (!app.isPackaged) {
     // DEV ONLY (never a shipped build): no bundled binary present, so point at the
