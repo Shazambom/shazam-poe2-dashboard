@@ -60,25 +60,34 @@ poe2-arb/
 │       ├── orderbook.py      live exchange books: priority fetch queue, batching by want,
 │       │                     padding, starvation follow-up, SQLite cache, league list
 │       ├── pairscore.py      which pairs matter: learned from route rankings, persisted
-│       ├── arbitrage.py      graph build, cycle search, fill simulation, gold, velocity,
-│       │                     composite score, filters, route cache
+│       ├── arbitrage/        graph.py (build, fill simulation, graph cache), routes.py (cycle
+│       │                     search, velocity, composite score, filters, route cache),
+│       │                     convert.py, board.py — one facade: `from . import arbitrage`
+│       ├── marketseries.py   the league_daily reader + anchors/day/window helpers (sidecar-safe)
+│       ├── datapolicy.py     user-vs-market kv keys, retention, seed tables (one definition)
+│       ├── cache.py          the one TTL memo every module-level cache uses
 │       ├── recipes.py        recipes.json load/save → routable edges
 │       ├── currencies.py     registry of trade ids/names/icons; metadata-id resolution
 │       ├── gamedata.py       parses CurrencyExchange.datc64 from ggpk.exposed → gold fees
 │       ├── session.py        trade-site cookie: connect/validate/disconnect (encrypted)
 │       ├── oauth.py          OAuth 2.1 PKCE against pathofexile.com; token refresh; API get
-│       └── secrets.py        Fernet store keyed by data/secret.key
+│       ├── secrets.py        Fernet store keyed by data/secret.key
+│       ├── diag.py           /api/diag (probes through the gateway)
+│       └── devtelemetry.py   beta-only diagnostics sender (backend + sidecar)
 └── frontend/
     ├── Dockerfile, nginx.conf (proxies /api and /callback to backend), vite.config.js
     └── src/
         ├── App.jsx           top bar (feed health, capital, account) + tab switch
         ├── styles.css        design tokens; dark slate, gold = the fee currency
-        ├── lib/api.js        fetch wrappers for every endpoint + number/age formatters
+        ├── lib/api.js        fetch wrappers for every endpoint + fmt + the toast bus
+        ├── lib/hooks.js      useApi (fetch-on-deps) + useAutosave (debounced save)
+        ├── lib/statusStore.js the one status/capital/settings poll (zustand)
+        ├── lib/icons.js      useCurrencies — the one /api/currencies fetch + icon index
         └── components/
             ├── RoutesView.jsx    filters rail, live-refresh controls, ranked loop table,
             │                     expandable step detail, per-loop refresh
             ├── MarketView.jsx    pair history chart, busiest markets, edge table
-            ├── CapitalView.jsx   manual stash entry (chaos/exalted/divine pinned)
+            ├── CapitalCard.jsx   manual stash entry (in the Routes rail; autosaves)
             ├── RecipesView.jsx   recipe editor
             ├── SettingsView.jsx  league, watchlist, ranking weights, fetch policy,
             │                     gold fees, unmapped ids
@@ -166,7 +175,7 @@ the redirect locally and posts the code back. Tokens refresh automatically.
 
 ---
 
-## 6. How loops are found and scored (`arbitrage.py`)
+## 6. How loops are found and scored (`arbitrage/`)
 
 1. **Graph**: nodes = currencies; directed edges = live ladder, digest VWAP, or recipe.
    Each edge carries rate, ladder/stock, age, kind, and executed volume per hour (digest).
@@ -224,15 +233,16 @@ persist in SQLite; route results cached 300 s; digest and game data on disk.
 | `GET/PUT /api/recipes` | recipe list |
 | `GET/POST/DELETE /api/session` | trade session status / connect / disconnect |
 | `GET /api/oauth/status` · `POST /api/oauth/start` · `POST /api/oauth/complete` · `GET /callback` · `POST /api/oauth/logout` | OAuth flow |
-| `GET /api/account/profile` · `GET /api/account/characters` | first OAuth consumers |
 | `GET /api/goldfees` · `POST /api/goldfees/refresh` | fee table from game data |
-| `GET /api/market/edges` · `/top` · `/history?a&b` · `POST /api/market/refresh` | graph edges, busiest markets, pair series, low-priority watchlist queue |
+| `GET /api/market/edges` · `/top` · `/history?a&b` | graph edges, busiest markets (with traded value), pair series |
 | `GET /api/leagues` | league ids from the trade site |
 | `GET /api/ratelimits` | policies, queue, top pair scores |
+| `GET /api/hold?window_h` · `/api/movers` · `/api/asset` · `/api/inflation?anchor` · `/api/inflation/cross` · `/api/inflation/marketcap` · `/api/leaguearc` · `/api/arc` · `/api/convert` · `/api/signals` (+ `/ack`) · `/api/board` · `/api/trading/workspace` | the Strategy / Economy / Board / Trading read surfaces (see the views) |
 | `POST /api/digest/sync` | force a digest pass |
-| `GET /api/routes?…` | ranked loops (query params = filters + sort + start) |
+| `GET /api/routes/stream?…` | ranked loops as SSE (`meta`, `routes` batches, provisional `scores`, `done`); query params = filters + sort + start (`RouteQuery`) |
 | `POST /api/routes/refresh-top` | live-refresh pairs behind the top N, recompute |
 | `POST /api/routes/refresh` | force-refresh one loop's pairs (`{id, pairs, filters}`) |
+| `POST /api/ratelimits/acquire` / `observe` | the desktop live-search engine reserves a slot of / reports headers into the backend-owned pathofexile.com budget |
 
 ---
 
@@ -275,14 +285,15 @@ were tested against synthetic data or the schema only:
 - **Settings**: add a default to `settings.DEFAULTS`, expose it in `SettingsView.jsx`,
   and include it in that view's `save()` patch. Unknown keys are preserved.
 - **Secrets**: `secrets.store/load/clear(name)`. Never log them; never put them in `.env`.
-- **Route metrics**: add to the dict in `arbitrage._find_routes`, to `keep()` if filterable,
-  to `key()` if sortable, to `main.routes()` params, and to `RoutesView.jsx` (SORTS, columns).
-- **Frontend**: plain CSS with tokens in `styles.css`; `fmt` helpers in `lib/api.js`;
-  no localStorage; one component per tab.
-- **Tests**: there is no test suite yet. Behaviour was verified with ad-hoc scripts
-  against synthetic order books. A good first contribution is `backend/tests/` with
-  fixtures for `_parse_offers`, `Dat` parsing, `find_routes` on a tiny graph, and the
-  batching worker with a fake `_post`.
+- **Route metrics**: add to `arbitrage/routes.py` (`_route_from`, `_keep` if filterable,
+  `_sort_key` if sortable), to `RouteQuery` in `main.py`, and to `RoutesView.jsx` (COLS).
+- **Frontend**: plain CSS with tokens in `styles.css` (lint-enforced); `fmt` helpers in
+  `lib/api.js`; localStorage only for UI preferences (horizon, per-card numeraire, auto-refresh);
+  fetch through `useApi`, settings/status through `statusStore`, currencies through
+  `useCurrencies`.
+- **Tests**: `./ops/run-tests.sh` — pytest (goldens for the arbitrage core, the DB split,
+  endpoints), `node --test` for frontend/desktop, the workspace fuzz, the style lint. The deploy
+  scripts run it first; run it before every commit and drive the app over CDP.
 
 ---
 

@@ -58,8 +58,7 @@ Then either:
 
 If you own an HTTPS domain, set `OAUTH_CLIENT_SECRET` and an HTTPS `OAUTH_REDIRECT_URI`
 to run as a confidential client (28-day tokens). Tokens refresh automatically; the
-top bar shows the logged-in account. `/api/account/profile` and
-`/api/account/characters` are wired up as the first consumers.
+top bar shows the logged-in account.
 
 ## Data sources
 

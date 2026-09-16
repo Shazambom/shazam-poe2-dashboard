@@ -134,25 +134,23 @@ exporter's mid-sync guard enforces this): `sshshazambom sudo bash /home/shazam/b
    > and no migration**. Adding/altering an actual DB **table/column** does (user → numbered
    > migration; market → new snapshot). See the Database section in CLAUDE.md.
 
-5. **Tag + push both:**
+5. **Publish (one command, test-gated, event-driven):**
    ```bash
-   git tag -a desktop-v<version> -m "Desktop v<version> — <summary>"
-   git push origin main && git push origin desktop-v<version>
+   cd desktop && ./publish-github.sh   # tests → tag + push (fires Windows CI) → dist:mac →
+                                       # WAITS on the CI run (gh run watch) → uploads Mac assets
    ```
-   The tag push triggers `.github/workflows/release-desktop-win.yml` — it builds the
-   Windows installer + backend `.exe` and attaches `Arbiter-Setup-<v>.exe` + `latest.yml`
-   to the `desktop-v<version>` GitHub Release. (The `nsis.artifactName` override keeps the
-   installer name space-free so the yml url, the on-disk file, and the GitHub asset all match
-   — otherwise GitHub rewrites spaces to dots and the updater 404s.)
+   `publish-github.sh` first runs `ops/run-tests.sh` (a red test aborts here, before anything
+   remote), then creates the tag (`desktop-v<version>`, or the bare `<version>` for a beta) and
+   pushes `main` + the tag — that push triggers `.github/workflows/release-desktop-win.yml`,
+   which builds the Windows installer + backend/sidecar `.exe` with the SAME
+   `desktop/build-*.sh` scripts and attaches `Arbiter-Setup-<v>.exe` + `latest.yml` to the
+   release. Meanwhile it fetches the seed and runs `dist:mac`, blocks on `gh run watch` until
+   CI finishes, then uploads the Mac assets into the same release. Pass `--no-build` if
+   `release/` already holds the current build. (The `nsis.artifactName` override keeps the
+   installer name space-free so the yml url, the on-disk file and the GitHub asset all match —
+   otherwise GitHub rewrites spaces to dots and the updater 404s.)
 
-6. **Publish Mac locally (one command, event-driven):**
-   ```bash
-   cd desktop && ./publish-github.sh   # builds Mac, WAITS on the Windows CI run (gh run watch),
-                                       # then uploads Mac assets into the same desktop-v<v> release
-   ```
-   `publish-github.sh` does the whole local half: it runs `dist:mac`, finds this tag's Windows
-   CI run, blocks on `gh run watch` until it finishes (no polling), then uploads. Pass
-   `--no-build` if `release/` already holds the current build.
+6. *(folded into step 5.)*
 
 7. **Verify the release went live:**
    ```bash

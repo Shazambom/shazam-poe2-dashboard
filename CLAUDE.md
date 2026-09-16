@@ -9,23 +9,34 @@ backend (PyInstaller binary in `backend-bin/`, bundled via `build.extraResources
 its own local SQLite DB (in the OS user-data dir). Every `/api` request is served by
 that **bundled local backend on 127.0.0.1** — never a remote server.
 
-The **only** permitted outbound calls are the **auto-updater** and **update telemetry**:
+The **only** permitted outbound calls are the **auto-updater** and, **on the beta/dev channel
+only**, diagnostics telemetry:
 - Auto-updater: electron-updater's `github` provider reads `latest*.yml` + installers from
   **GitHub Releases** (`Shazambom/shazam-poe2-dashboard`, the `desktop-v<ver>` tag GitHub
   marks "Latest"). No token needed (public repo). See the deploy section below.
-- Update telemetry: `updLog()` still POSTs to `…/api/installlog?p=update` on shazam (the
-  sanctioned diagnostic exception, "telemetry only" — never data/metrics).
+- Telemetry (owner directive 2026-09-16): **every** diagnostic sender — backend spawn/exit,
+  updater, login window, EE2 hooks, sidecar — goes through ONE gate, `diagTelemetryOn()` in
+  `desktop/src/main.js` (beta channel or an unpackaged dev run), via the one sender
+  `desktop/src/telemetry.js` (`installLog`) / `backend/app/devtelemetry.py` (`ARBITER_TELEMETRY`).
+  A **stable** packaged build makes zero telemetry calls. Change what is enabled through that
+  gate; do not add a second sender or a second URL constant.
 
 Consequences to preserve in any change:
 - Never route `/api`, session, board, routes, prices, telemetry, etc. to the remote
   server from a *packaged* desktop build. `startBackend()` in `desktop/src/main.js` is
-  local-only; the only non-local branch is a `!app.isPackaged` DEV convenience.
+  local-only; the only non-local branch is a `!app.isPackaged` DEV convenience
+  (`ARBITER_DEV_BACKEND_URL`).
+- The pathofexile.com rate budget has ONE owner: the bundled backend (`gateway.Policy`). The
+  Electron live-search engine reserves/reports through `POST /api/ratelimits/acquire|observe`
+  on loopback (`desktop/src/trade/budget.js`); never re-implement header parsing in JS.
 - Every platform must bundle a backend built **on that platform** (PyInstaller can't
   cross-compile): macOS backend via `desktop/build-backend.sh` (built locally on the
   Mac); Windows backend via the GitHub Action (`.github/workflows/release-desktop-win.yml`,
   which PyInstaller-builds `poe2arb-backend.exe` on `windows-latest` before packaging).
 - Do NOT build the Windows installer locally on the Mac — it would bundle the Mac
-  backend binary. Windows ships through CI only. Mac ships locally.
+  backend binary. Windows ships through CI only. Mac ships locally. Both platforms build
+  their PyInstaller binaries with the SAME scripts (`desktop/build-backend.sh`,
+  `desktop/build-sidecar.sh`); CI calls them rather than carrying a second invocation.
 - Any new feature that needs data must work against the local backend + local DB
   (which backfills poe2scout on first run), not the server.
 
@@ -43,6 +54,11 @@ dots and the updater 404s.
 [`docs/dev-notes.md`](docs/dev-notes.md) → "Deploying a desktop release". Shipping is gated on
 authorization (see "Web vs desktop" below).
 
+**Tests gate the deploy scripts, not GitHub Actions** (owner directive 2026-09-16):
+`ops/run-tests.sh` (pytest + node tests + style lint) runs at the top of `ops/deploy-web.sh`
+and `desktop/publish-github.sh`, and a red test aborts before any rsync, tag push or upload.
+The only workflow that does real work is the Windows build; keep it that way.
+
 ## Verifying the Windows app — telemetry is mandatory
 
 **The user is NOT the tester. If you need to verify behavior in the Windows (or any
@@ -59,9 +75,13 @@ How (the endpoint, existing `?p=` markers, where to put the file):
 
 This is how you debug stuff: [`docs/desktop-debugging.md`](docs/desktop-debugging.md)
 — build the local desktop app, launch it with `--remote-debugging-port=9222`, and
-drive the real renderer over CDP (`desktop/scripts/cdp.mjs` / `shot.mjs`) to validate
-UI changes against live backend data. A passing `vite build` proves compilation, not
-that the feature renders correctly — always drive the app before claiming a UI change works.
+drive the real renderer over CDP (`desktop/scripts/cdp.mjs` / `shot.mjs` / `console.mjs`) to
+validate UI changes against live backend data. A passing `vite build` proves compilation, not
+that the feature renders correctly — always drive the app before claiming a UI change works,
+and drive it **before every commit**. ⚠️ The dev launch uses the SAME data dir as the packaged
+app (`~/Library/Application Support/Arbiter/data`): probe `/api` read-only, exercise writers
+through the UI as a user would, never `PUT`/`POST` synthetic payloads at user-data endpoints
+(a write probe once wiped the owner's saved searches; `user.sqlite.bak-N` was the safety net).
 
 ## UI styleguide — the visual contract
 
@@ -132,14 +152,15 @@ real work. Highest-level rules:
   so the bundled seed silently froze until fixed. After any market-side change, run the
   publisher on shazam (`sudo /home/shazam/bin/publish-market-snapshot.sh`) and confirm the
   `market-seed-latest` GitHub asset's version advances. Seeds ship to desktop builds **only**
-  via that GitHub release (Windows CI + the Mac build both pull it; the old `/downloads` path
-  is deprecated).
+  via that GitHub release (Windows CI + the Mac build both pull it); the LAN `/downloads`
+  channel is gone. The exporter derives each seed table's DDL from the live DB and takes its
+  table list + retention from `backend/app/datapolicy.py` — the ONE definition of user-vs-market
+  kv keys and market retention (`db.py`, `migrations_user.py` and the exporter all import it).
 
 Full design + rules + implementation plan live in `docs/`:
 - [`docs/db-architecture.md`](docs/db-architecture.md) — design & data classification.
 - [`docs/db-maintenance.md`](docs/db-maintenance.md) — how to evolve each DB going forward.
-- [`docs/db-split-handoff.md`](docs/db-split-handoff.md) — **implementer start here** (the split
-  is designed but NOT yet built).
+- [`docs/db-split-handoff.md`](docs/db-split-handoff.md) — the historical build plan (done 2026-09-14).
 
 ## Design philosophy — an ecosystem, not a ball of dashboards
 
@@ -201,7 +222,9 @@ to their upstream behavior and is TDD applied to porting.
 
 - `backend/` — FastAPI + SQLite (`run_desktop.py` is the local-mode entrypoint; reads
   `DATA_DIR`/`PORT` env). Prices for every traded currency thread through
-  `arbitrage.Graph.ref_values()` (exchange graph + poe2scout fallback).
+  `arbitrage.Graph.ref_values()` (exchange graph + poe2scout fallback); `arbitrage/` is a
+  package (graph / routes / convert / board behind one facade). Shared vocabulary lives in
+  `marketseries.py` (anchors, window→days, day helpers) and `datapolicy.py`.
 - `frontend/` — React/Vite/Recharts. `desktop/` — Electron shell (local UI server + bundled
   backend manager + updater). `docs/` — architecture & maintenance docs.
 

@@ -11,16 +11,19 @@ no paste.
 Electron main process
 ├── local UI server (random port): serves app-dist/ and proxies /api + /callback
 │   → the web frontend runs byte-identical, no CORS, SSE streams through
-├── backend manager
-│   ├── local mode: spawns backend-bin/poe2arb-backend (PyInstaller onefile),
-│   │   DATA_DIR=<userData>/data → each machine has its own SQLite + secret.key
-│   └── remote mode: proxies to the shazam server (menu: Dashboard → Use remote server)
-├── "Connect PoE trade session…" menu: login window → cookies.get(POESESSID) → POST /api/session
-└── electron-updater → http://192.168.1.250:8080/downloads (generic provider)
+├── backend manager: spawns backend-bin/poe2arb-backend (PyInstaller onefile) with
+│   DATA_DIR=<userData>/data (each machine has its own user.sqlite + market.sqlite + secret.key),
+│   which in turn supervises sidecar-bin/poe2arb-sidecar (heavy analytics, SQLite transport)
+├── trade engine (src/trade/): live-search WebSockets + fetch + whisper on the user's own session;
+│   rate budget reserved through the local backend (/api/ratelimits)
+├── "Connect PoE trade session…": login window → cookies.get(POESESSID) → POST /api/session
+├── telemetry.js: the ONE diagnostics sender, beta/dev channel only
+└── electron-updater → GitHub Releases (`github` provider; stable = latest*.yml, beta = beta*.yml)
 ```
 
-The dockerised server deployment is unchanged and doubles as the dev/test environment;
-the desktop app in remote mode is a thin client for it.
+The dockerised server deployment is the web TEST environment; a packaged app never talks to
+it (desktop contract in CLAUDE.md). Only an unpackaged `npm start` without a bundled binary
+points at a dev backend (`ARBITER_DEV_BACKEND_URL`, default the shazam test env).
 
 ## Build & run (dev)
 
@@ -32,17 +35,16 @@ npm run build:frontend    # copies ../frontend/dist into app-dist/
 npm start
 ```
 
-Without `backend-bin/`, the app silently uses the remote server — that's the intended
-mode for platforms whose backend binary hasn't been built yet.
+Without `backend-bin/`, an unpackaged launch points at the dev backend (see above); a
+packaged build always requires the bundled binary.
 
 ## Release & auto-update
 
 ```
 npm run dist:mac          # release/: dmg + zip + latest-mac.yml
-npm run dist:win          # release/: NSIS installer + latest.yml (no Windows backend
-                          #   binary unless built on Windows — remote mode by default)
-./publish-github.sh       # builds Mac, waits on the Windows CI run, uploads both platforms'
-                          #   assets to the desktop-v<ver> GitHub Release (see docs/release-runbook.md)
+./publish-github.sh       # test gate → tag + push (Windows CI builds the .exe with the same
+                          #   build-*.sh scripts) → builds Mac → waits on CI → uploads both
+                          #   platforms' assets to the GitHub Release (docs/release-runbook.md)
 ```
 
 Anyone running the app checks the latest **GitHub Release**'s `latest*.yml` on launch and
@@ -53,12 +55,11 @@ every 30 min (electron-updater `github` provider):
   Download" and opens the release's DMG. Signing with an Apple Developer ID would make
   it fully automatic — drop the `identity: null` from package.json when there's a cert.
 
-To ship the FULL local experience on Windows, run `build-backend.sh` (or the PyInstaller
-command inside it) once on any Windows machine with Python 3.12 and commit/copy the
-resulting `poe2arb-backend.exe` into `desktop/backend-bin/` before `dist:win`.
+Windows binaries are built by CI on a Windows runner (`release-desktop-win.yml`) — never
+build the Windows installer on the Mac.
 
 ## Data locations
 
-- macOS: `~/Library/Application Support/poe2-dashboard-desktop/data/`
-- Windows: `%APPDATA%/poe2-dashboard-desktop/data/`
+- macOS: `~/Library/Application Support/Arbiter/data/`
+- Windows: `%APPDATA%/Arbiter/data/`
 - The local backend defaults to league "Standard" — pick your league from the top bar.

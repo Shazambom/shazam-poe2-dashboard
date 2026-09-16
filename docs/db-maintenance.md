@@ -56,7 +56,7 @@ USER_MIGRATIONS = [
 ### Rules
 
 - User migrations must run **before** anything reads user data.
-- Adding a **new user kv key**: also add it to the `_USER_KV` allow-list in `db.py` (see below).
+- Adding a **new user kv key**: add it to `USER_KV` in `backend/app/datapolicy.py` (see below).
   No migration needed for a new kv key (the `kv` table already exists) — just the routing entry.
 - Never store market/derived data in `user.sqlite` to "avoid a migration" — it'll go stale and
   won't get snapshot refreshes.
@@ -67,9 +67,11 @@ Market data has **no migration system**. The schema rides with the code + snapsh
 together. To change it:
 
 1. Edit the market schema (`CREATE TABLE …`) in `db.py` (the `MARKET_SCHEMA` block).
-2. **Bump `snapshot_version`** in the export script so the next snapshot is considered "newer"
-   and **replaces** every client's `market.sqlite` on update (schema comes along for free).
-3. Rebuild + publish the snapshot (below). Ship the backend that matches it in the same release.
+2. Publish a new snapshot (below): its `snapshot_version` is the epoch second of the export, so
+   every publish is "newer" and **replaces** every client's `market.sqlite` on update. The
+   exporter copies each shipped table's DDL from the live DB, so the new schema rides along
+   with no exporter edit.
+3. Ship the backend that matches it in the same release.
 
 > ⚠️ **The backend version and the snapshot are a matched pair.** If you change a market table,
 > you MUST ship a new snapshot with a bumped version in the SAME release. Otherwise a client on
@@ -79,14 +81,16 @@ together. To change it:
 
 ### Classifying a new `kv` key
 
-`db.py` routes `kv_get/kv_set` by key:
+`db.py` routes `kv_get/kv_set` by key through the ONE allow-list, `USER_KV` /
+`is_user_kv()` in `backend/app/datapolicy.py` (dependency-free; `migrations_user.py` and the
+seed exporter import the same module, so there are no hand-mirrored copies to drift):
 
 ```python
-_USER_KV = {"settings", "watches", "oauth_pending", "meta_overrides"}   # + prefix "secret:"
-# everything else → market.sqlite.kv_ops  (operational: cursors, caches, backfill markers)
+USER_KV = {...}            # the user-owned keys — read the file, don't copy the list here
+# + prefix "secret:"; everything else → market.sqlite.kv_ops (operational: cursors, caches)
 ```
 
-- User-owned key → add it to `_USER_KV` (or a `secret:`-style prefix rule).
+- User-owned key → add it to `USER_KV` (or a `secret:`-style prefix rule).
 - Operational/derived key → do nothing; it lands in `kv_ops` and ships in the snapshot.
 - **A new operational cursor/watermark MUST be operational** (in `kv_ops`) so it ships in the
   snapshot and drives catch-up. If you add a new crawl cursor and forget this, new installs
@@ -99,28 +103,27 @@ build time. It ships **gzipped** (`market-seed.sqlite.gz`, ~43 MB vs ~366 MB raw
 decompresses it once during `seed_market()`), with a plaintext `market-seed.sqlite.gz.version`
 sidecar so the client can compare `snapshot_version` without decompressing on every launch.
 
-- Script: `ops/export-market-snapshot.py`. It:
-  1. Opens the live DB read-only.
-  2. Copies market tables (`digest_markets` within a 14-day rolling window and **public leagues
-     only** by default — private "(PLxxxxx)" leagues are dropped; `league_daily` full,
-     `item_meta` full, `orderbook*` if present) **and** the operational kv (`digest_cursor`,
-     `lh_*`, `gold_fees_meta`, `pair_scores`, `trade_leagues`) into `kv_ops`.
-  3. Writes `market_meta.snapshot_version` = current epoch seconds (monotonic; a MARKET_SCHEMA
-     change ships a newer version for free since epoch grows).
+- Script: `ops/export-market-snapshot.py` (runs inside the backend container so it can import
+  `app.datapolicy`). It:
+  1. Opens the live `market.sqlite` read-only (the legacy single-file DB is not supported).
+  2. Copies `datapolicy.SEED_TABLES` — `digest_markets` (windowed to `MARKET_RETENTION_DAYS`,
+     **public leagues only** by default; private "(PLxxxxx)" leagues are dropped), `league_daily`
+     and `item_meta` in full, and `kv_ops` (the crawl watermarks + `meta_bridge`) — copying each
+     table's DDL and indices from the source's `sqlite_master`. `orderbook*` (session-bound,
+     re-accrues live in minutes) and the `analytics_*` runtime tables never ship.
+  3. Writes `market_meta.snapshot_version` = current epoch seconds (monotonic).
   4. `VACUUM`s, then gzips (`--no-gzip` to skip) and writes the `.version` sidecar.
-  Flags: `--all-leagues` (keep private leagues), `--no-gzip`, `--version N`.
-- **Publishing (release-time):** run `ops/publish-market-snapshot.sh` on shazam via the ssh
-  wrapper (it needs sudo for `docker exec` + writing `/downloads`; shazam is not in the docker
-  group and cron has no tty, so this is a **manual release-time step, not a cron**):
-  `sshshazambom sudo bash /home/shazam/bin/publish-market-snapshot.sh`.
-  It exports inside the backend container and copies the seed + sidecar to
-  `/downloads/market-seed.sqlite.gz`.
-- **GitHub Release asset (for Windows CI, which can't reach the LAN):** `publish-market-snapshot.sh`
-  auto-sources a token from `shazam:~/.poe2-gh-token` (fine-grained PAT, **Contents: Read and
-  write**; `GH_REPO` defaults to `Shazambom/shazam-poe2-dashboard`) and calls
-  `ops/upload-seed-github.sh`, which creates/updates the rolling `market-seed-latest` prerelease
-  with `market-seed.sqlite.gz` + `.version`. The CI step (`gh release download market-seed-latest`)
-  fails loudly if the asset is missing rather than shipping a seedless (cold-backfill) binary.
+  Flags: `--all-leagues` (keep private leagues), `--no-gzip`, `--version N`, `--force` (skip the
+  digest-freshness guard).
+- **Publishing:** `ops/publish-market-snapshot.sh` runs on shazam from **root's cron, daily at
+  04:17** (`crontab -l` as root; log in `/home/shazam/poe2-snapshot.log`), and on demand with
+  `sshshazambom sudo /home/shazam/bin/publish-market-snapshot.sh` (do this after any market-side
+  change — see CLAUDE.md). It exports inside the backend container and uploads the seed +
+  sidecar to the rolling `market-seed-latest` GitHub prerelease via `ops/upload-seed-github.sh`;
+  the token comes from `shazam:~/.poe2-gh-token` (fine-grained PAT, **Contents: Read and write**;
+  placed/rotated by `ops/refresh-gh-token.sh`). **It fails hard without a token** — there is no
+  LAN copy any more, so a frozen seed can't be silent. `./ops/deploy-web.sh ops` syncs the three
+  scripts to `shazam:~/bin`.
   - **Place / rotate the token:** run `ops/refresh-gh-token.sh` from the Mac (paste a scoped PAT;
     input is hidden and piped straight to the server — never printed). Rotating = create a new PAT,
     re-run the script. Editing an existing fine-grained PAT's permissions keeps the same value, so
@@ -128,9 +131,9 @@ sidecar so the client can compare `snapshot_version` without decompressing on ev
 
 ### Consuming the snapshot in builds
 
-- **Mac** (local, reaches the LAN): `desktop/fetch-seed.sh` pulls
-  `market-seed.sqlite.gz` (+ `.version`) from shazam `/downloads` → `desktop/market-seed/`.
-  Run it before `electron-builder --mac`.
+- **Mac** (local): `desktop/fetch-seed.sh` pulls `market-seed.sqlite.gz` (+ `.version`) from
+  the `market-seed-latest` GitHub release → `desktop/market-seed/` (`publish-github.sh` runs it
+  before `electron-builder --mac`). Same asset as Windows CI — one seed channel.
 - **Windows CI** (`.github/workflows/release-desktop-win.yml`): a `gh release download
   market-seed-latest` step pulls the seed asset → `desktop/market-seed/`.
 - `desktop/package.json` `build.extraResources` bundles `desktop/market-seed/` so the backend
@@ -143,8 +146,8 @@ sidecar so the client can compare `snapshot_version` without decompressing on ev
 | Task | Action |
 |---|---|
 | Add a user column/table | New numbered migration in `migrations_user.py` |
-| Add a user kv key | Add to `_USER_KV` in `db.py` (no migration) |
-| Add/change a market table | Edit `MARKET_SCHEMA` + bump `snapshot_version` + ship new snapshot |
+| Add a user kv key | Add to `USER_KV` in `datapolicy.py` (no migration) |
+| Add/change a market table | Edit `MARKET_SCHEMA` (+ `datapolicy.SEED_TABLES` if it should ship) + publish a snapshot |
 | Add a market kv/cursor | Nothing (lands in `kv_ops`); ensure it's a watermark for catch-up |
 | Refresh users' market data | Publish a newer snapshot (bumped version) — clients replace on update |
 | Reset a user's market data | Delete `DATA_DIR/market.sqlite`; it re-seeds on next launch |

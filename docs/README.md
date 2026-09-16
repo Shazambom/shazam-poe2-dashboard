@@ -5,9 +5,11 @@ Architecture & maintenance docs for Arbiter (the PoE2 economy dashboard).
 ## Start here to build
 
 - [`dev-notes.md`](./dev-notes.md) — the working loop & hard-won gotchas: the three environments
-  (web/desktop-dev/packaged), how to deploy to the web test env, the "dev runs the compiled
-  backend binary" trap, board cache keys, the settings-feature checklist, testing & CDP driving,
-  and a where-things-live map. **Read before touching code.**
+  (web/desktop-dev/packaged), how to deploy to the web test env (`ops/deploy-web.sh`), the "dev
+  runs the compiled backend binary" trap, board cache keys, the settings-feature checklist,
+  testing & CDP driving, and a where-things-live map. **Read before touching code.**
+- [`desktop-debugging.md`](./desktop-debugging.md) — drive the real renderer over CDP before
+  claiming a UI change works.
 
 ## Strategy ecosystem — build plan & handoff
 
@@ -24,8 +26,8 @@ Architecture & maintenance docs for Arbiter (the PoE2 economy dashboard).
   data classification, seeding, and cross-DB access. **Read first.**
 - [`db-maintenance.md`](./db-maintenance.md) — the going-forward rulebook: how to add user
   migrations, how to change market schema + refresh the snapshot, how to classify new kv keys.
-- [`db-split-handoff.md`](./db-split-handoff.md) — **implementer starts here.** Ordered build
-  plan, current-state facts, acceptance criteria, test plan, risks, PR sequence.
+- [`db-split-handoff.md`](./db-split-handoff.md) — the historical build plan (kept for the
+  reasoning; the living rules are the two docs above).
 
 Status: **IMPLEMENTED** (2026-09-14) — `user.sqlite` + `market.sqlite` are live; `db-split-handoff.md`
 is kept as the historical build plan.

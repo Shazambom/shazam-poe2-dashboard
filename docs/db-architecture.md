@@ -51,19 +51,24 @@ are rebuildable/derivable and therefore disposable: `gamedata/` (cached game dat
 
 **USER → `user.sqlite`** (persist + migrate):
 - Table `capital` — held currency quantities.
-- `kv` keys: `settings` (league, reference, watchlist, filters, gold_model…), `watches`
-  (saved searches), `oauth_pending` (OAuth PKCE state), `meta_overrides` (user currency
-  id→trade mappings), `secret:*` (encrypted session cookie + oauth tokens).
+- `kv` keys: the `USER_KV` set in `backend/app/datapolicy.py` — settings, the trading
+  workspace tree (and the legacy `watches` blob it was migrated from), signal dismissals, OAuth
+  PKCE state, user currency-id overrides — plus every `secret:*` key (encrypted session cookie +
+  oauth tokens). The module is the authoritative list; this doc states the rule.
 
 **MARKET/OPERATIONAL → `market.sqlite`** (disposable, shippable):
-- Tables `digest_markets`, `orderbook`, `orderbook_history`, `league_daily`, `item_meta`.
-- `kv` keys (moved to a `kv_ops` table): `digest_cursor`, `gold_fees_meta`, `lh_current`,
-  `pair_scores`, `trade_leagues`, `lh_complete:*`, `lh_fetch:*`.
+- Tables `digest_markets`, `orderbook`, `orderbook_history`, `league_daily`, `item_meta`,
+  plus the runtime-only `analytics_jobs` / `analytics_cache` (sidecar transport; never ship).
+- `kv_ops` keys: crawl watermarks (`digest_cursor`, `lh_current`, `lh_complete:*`,
+  `lh_fetch:*`), `meta_bridge` (poe2scout metadata→trade mapping), `gold_fees_meta`,
+  `pair_scores`, `trade_leagues`.
+- Retention: `digest_markets` is pruned past `MARKET_RETENTION_DAYS` and `orderbook_history`
+  past `ORDERBOOK_HISTORY_RETENTION_H` (both in `datapolicy.py`) by the background loops.
 
 > The `kv` table is the one that splits: user keys stay in `user.sqlite.kv`, operational keys
-> move to `market.sqlite.kv_ops`. Routing is by an explicit allow-list in `db.py` (see
-> maintenance doc). **Any new kv key must be classified there** or it defaults to user
-> (safe: persists, never blown away).
+> live in `market.sqlite.kv_ops`. Routing is `datapolicy.is_user_kv()`, imported by `db.py`,
+> `migrations_user.py` and the seed exporter alike. **Any new kv key must be classified there**
+> or it defaults to operational (lands in `kv_ops`, ships in the snapshot).
 
 ## How the two files are accessed
 
@@ -147,14 +152,13 @@ The crawl is **not** run per-build from scratch. **shazam already crawls continu
 holds the full financial history, so the snapshot is an **export of shazam's market tables**:
 
 ```
-shazam cron  ──►  ops/export-market-snapshot.py  ──►  market-seed.sqlite (+bumped snapshot_version)
-                                                   ├─►  published to /downloads (LAN, for Mac local builds)
-                                                   └─►  uploaded as a GitHub Release asset  ──► Windows CI pulls it
+shazam root cron (daily)  ──►  ops/export-market-snapshot.py  ──►  market-seed.sqlite.gz (+ .version)
+                                                                └─►  GitHub release `market-seed-latest`
+                                                                       ├─► Windows CI pulls it
+                                                                       └─► Mac build pulls it (fetch-seed.sh)
 ```
 
-- **Mac local build** fetches the seed from shazam over the LAN (or the GitHub asset).
-- **Windows CI** (GitHub cloud, **cannot reach the LAN**) downloads the seed from the GitHub
-  Release asset. This is why shazam publishes the seed to GitHub, not only to `/downloads`.
+- Both platforms fetch the seed from the **same GitHub release asset**; there is no LAN copy.
 - The desktop build drops `market-seed.sqlite` into `desktop/market-seed/` and bundles it via
   `extraResources`.
 

@@ -28,12 +28,13 @@ launched in place (`dist:mac` → `open …/Arbiter.app`), never the dev launch 
 ### Deploy to the web test env (fast iteration)
 
 ```bash
-# from repo root — rsync only what changed
-rsync -az --delete --exclude='__pycache__' backend/app/  shazam@192.168.1.250:/home/shazam/shazam-poe2-dashboard/backend/app/
-rsync -az --delete --exclude='node_modules' --exclude='dist' frontend/src/ shazam@192.168.1.250:/home/shazam/shazam-poe2-dashboard/frontend/src/
-# rebuild the container(s) — shazam is NOT in the docker group, so sudo via the wrapper:
-sshshazambom sudo bash -c "'cd /home/shazam/shazam-poe2-dashboard && docker compose up -d --build backend frontend'"
+./ops/deploy-web.sh              # tests → rsync backend/app + sidecar + frontend/src + compose → rebuild both
+./ops/deploy-web.sh backend      # ... rebuild only the backend container (or `frontend`)
+./ops/deploy-web.sh ops          # sync the seed publisher/exporter/uploader to shazam:~/bin
 ```
+The script runs `ops/run-tests.sh` first and aborts on a red test. Under the hood it is the
+rsync + `sshshazambom sudo bash -c 'docker compose up -d --build …'` sequence (shazam is not
+in the docker group, so compound commands need `sudo bash -c`).
 
 - `sshshazambom` wrapper: `sshshazambom sudo …` roots **only the first program** — compound
   commands need `sudo bash -c '…'` (note the nested quoting above). Plain `docker` fails with a
@@ -114,17 +115,22 @@ Threading a new user setting all the way through (as `hub_count` did):
 
 ## Testing & validation
 
+- **The one test gate:** `./ops/run-tests.sh` (backend pytest, frontend + desktop `node --test`,
+  the workspace fuzz, the style lint). The deploy scripts run it first; run it yourself before
+  every commit. Setup once: `python3.12 -m venv .venv-test && source .venv-test/bin/activate &&
+  pip install -r backend/requirements.txt pytest`.
 - **Backend tests** are pure over a synthetic `arbitrage.Graph` — no DB needed (see
   `test_convert.py`, `test_centrality.py`). Prefer extracting a pure helper and testing that over
-  trying to test `board()`/endpoints directly.
-  ```bash
-  python3.12 -m venv .venv-test && source .venv-test/bin/activate && pip install -r backend/requirements.txt pytest
-  DATA_DIR=$(mktemp -d) MARKET_SEED= python -m pytest backend/tests/ -q
-  ```
+  trying to test `board()`/endpoints directly. `tests/golden/*.json` pin the arbitrage core's
+  full JSON output (routes, stream==direct, convert, board) — a deliberate behaviour change
+  regenerates them with `UPDATE_GOLDEN=1`.
 - **Drive the real renderer** for any UI/data claim (`desktop-debugging.md`): `build:frontend` →
-  launch with `--remote-debugging-port=9222` → `node scripts/cdp.mjs "<js>"` / `scripts/shot.mjs`.
-  A passing `vite build` proves compilation, not that the feature renders. The CDP tab is hidden,
-  so animations freeze mid-flight — assert on settled DOM, not on a frame.
+  launch with `--remote-debugging-port=9222` → `node scripts/cdp.mjs "<js>"` / `scripts/shot.mjs`
+  / `scripts/console.mjs` (reload + capture renderer exceptions — a blank page after a rebuild
+  means look here). A passing `vite build` proves compilation, not that the feature renders. The
+  CDP tab is hidden, so animations freeze mid-flight — assert on settled DOM, not on a frame.
+  ⚠️ The dev launch shares the packaged app's data dir: probe `/api` read-only, exercise writers
+  through the UI, never `PUT`/`POST` synthetic payloads at user-data endpoints.
 - **`transform: scale()` and clicks:** click targets still map correctly under a scaled ancestor
   (verified with `elementFromPoint`) — scaling the pulse-strip didn't break its chip buttons.
 - **Owner review on the packaged app (a REQUIRED step, before committing UI/UX changes).** After the
@@ -155,19 +161,23 @@ CLAUDE.md. The mechanics:
   behavior isn't observable from dev. So: add server-reporting telemetry to the thing under test,
   cut a build, have the user just *use* it, and read the results yourself:
   `GET http://192.168.1.250:8080/api/installlog`, filtered by a `?p=<tag>` marker.
-- Existing markers: `p=init` (installer self-heal), `p=login` (PoE/Steam login), `p=update`
-  (auto-updater events), `p=ee2` (EE2 integration hooks).
-- This is the **one sanctioned exception** to the desktop "server-for-updates-only" contract. Keep
-  it a clearly-marked TEMPORARY DEV DIAGNOSTIC, put it OUTSIDE contract-clean packages (e.g.
-  `desktop/src/dev-ee2-telemetry.js`, not inside `integrations/`), report only what you need (never
-  secrets / keystrokes / raw clipboard), and strip or gate it before a contract-clean release.
+- Existing markers: `p=init` (installer self-heal), `p=backend` (spawn/exit/bind + the analytics
+  probe), `p=login` (PoE/Steam login), `p=update` (auto-updater events), `p=ee2` (EE2 hooks),
+  `p=sidecar` (sidecar + supervisor lifecycle).
+- This is the **one sanctioned exception** to the desktop "server-for-updates-only" contract, and it
+  is **beta/dev-only in every case**: every sender goes through `desktop/src/telemetry.js`
+  (`installLog(marker, body)`, gated by `diagTelemetryOn()` in `main.js`) or
+  `backend/app/devtelemetry.py` (`tlog(tag, msg)`, gated by `ARBITER_TELEMETRY=1`, which
+  `main.js` sets only on beta/dev). Add a marker, never a second sender or URL. Report only what
+  you need (never secrets / keystrokes / raw clipboard).
 
 ## Deploying a desktop release (mechanics)
 
 Full runbook: [`release-runbook.md`](./release-runbook.md). Shape: bump `desktop/package.json`,
-commit on `main`, push a `desktop-v<ver>` tag (fires the Windows CI, which builds the Windows
-`.exe` + backend and uploads them), then `cd desktop && ./publish-github.sh` (builds the Mac app,
-waits on the CI run via `gh run watch`, uploads both platforms into the same release). Then verify:
+commit on `main`, then `cd desktop && ./publish-github.sh` — it runs the test gate, tags + pushes
+(which fires the Windows CI that builds the `.exe`s with the shared `build-*.sh` scripts), builds
+the Mac app, waits on the CI run via `gh run watch`, and uploads both platforms into the same
+release. Then verify:
 GitHub's "Latest" == your tag, both `latest*.yml` + installers present, and the installer URLs
 resolve `200` (a 404 means the space-free-naming rule was violated — GitHub rewrites spaces to
 dots and the updater can't find the asset). **Shipping requires explicit per-change authorization**
@@ -190,6 +200,14 @@ Full table + steps: [`release-runbook.md`](./release-runbook.md) → "Two channe
 - **Data ingest:** `digest.py`, `orderbook.py`, `gamedata.py` (gold fees), `gateway.py` (rate-limited HTTP).
 - **API:** `main.py` (all routes). **Settings:** `settings.py`. **DB:** `db.py`/`config.py`.
 - **Frontend views:** `BoardView`, `HoldView`, `RoutesView`/`ConvertView`, `InflationView`,
-  `WatchesView`, `SettingsView`; shells `EconomyView`/`StrategyView`/`TradingView`.
-- **Ops:** `ops/` (market-seed export/publish), `desktop/{build-backend,fetch-seed,publish-github}.sh`,
-  `desktop/scripts/{cdp,shot}.mjs`.
+  `MarketView`, `WorkspaceView`/`LiveView`, `SettingsView`; shells `EconomyView`/`StrategyView`/
+  `TradingView` over one `SubTabs`. **Shared client plumbing:** `lib/hooks.js` (`useApi`,
+  `useAutosave`), `lib/statusStore.js` (the one status/capital/settings poll),
+  `lib/icons.js` (`useCurrencies`), `lib/session.js` (`isDesktop`, trade URLs), `lib/api.js`
+  (`fmt`, the toast `bus`).
+- **Backend shared plumbing:** `cache.py` (the one TTL memo), `datapolicy.py` (user-vs-market
+  kv, retention, seed tables), `marketseries.py` (anchors, day/window helpers, the league
+  reader — sidecar-safe), `devtelemetry.py`, `diag.py`.
+- **Ops:** `ops/{run-tests,deploy-web}.sh`, `ops/` (market-seed export/publish),
+  `desktop/{build-backend,build-sidecar,fetch-seed,publish-github}.sh`,
+  `desktop/scripts/{cdp,shot,console}.mjs`.

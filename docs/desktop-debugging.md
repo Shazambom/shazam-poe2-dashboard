@@ -76,12 +76,21 @@ server that proxies `/api` to the backend. Two consequences:
   expression in the renderer, print the JSON result.
 - [`desktop/scripts/shot.mjs`](../desktop/scripts/shot.mjs) — screenshot a CSS
   selector's bounding box to a PNG.
+- [`desktop/scripts/console.mjs`](../desktop/scripts/console.mjs) — reload the page and print
+  the first renderer exceptions / `console.error` lines. A blank page after a rebuild is
+  almost always a `ReferenceError` a `vite build` cannot see; this shows it.
 
 Both connect to the first `127.0.0.1` page target on `CDP_PORT` (default 9222) and
 use the `ws` package already in `desktop/node_modules` — run them from `desktop/`.
 
 ## Notes / gotchas
 
+- **The dev launch uses the packaged app's data dir** (`~/Library/Application Support/Arbiter/data`
+  — the owner's real settings, capital and saved searches). Probe `/api` read-only; exercise
+  writers through the UI the way a user would; never `PUT`/`POST` synthetic payloads at
+  user-data endpoints. (Alternative: `npx electron . --user-data-dir=/tmp/arbiter-dev`.)
+- **Rebuild the backend binary after backend changes** (`npm run build:backend`, ~2 min): the dev
+  launch runs the compiled `backend-bin/poe2arb-backend`, not your source.
 - **`vite build` passing ≠ feature works.** It's necessary, not sufficient. Drive it.
 - Never trigger native JS `alert/confirm/prompt` while driving — a modal blocks the
   renderer and CDP hangs.

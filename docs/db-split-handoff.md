@@ -8,10 +8,10 @@
 >
 > Deviations from the plan below, all deliberate: (1) the seed ships **gzipped** + `.version`
 > sidecar (43 MB vs 366 MB), decompressed once in `seed_market()`; (2) export drops private
-> "(PLxxxxx)" leagues by default; (3) snapshot publishing is a **release-time manual step** via
-> the ssh wrapper, not a shazam cron (shazam isn't in the docker group / cron has no tty);
-> (4) the GitHub-asset upload for Windows CI needs a `GH_TOKEN` that isn't configured yet —
-> refresh the Windows seed manually until it is.
+> "(PLxxxxx)" leagues by default; (3) snapshot publishing runs from **root's cron on shazam**
+> (daily) and uploads to the `market-seed-latest` GitHub release — the only seed channel for
+> both platforms; (4) the user-kv allow-list and market retention live in
+> `backend/app/datapolicy.py`, shared by `db.py`, the migrations and the exporter.
 
 ## Goal (one paragraph)
 
