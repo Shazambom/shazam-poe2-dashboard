@@ -23,7 +23,7 @@ test('dead exports and stale comments are gone', () => {
   assert.ok(!src('lib/ping-sound.js').includes('soundReady'))
   assert.ok(!src('lib/nav.js').includes('focusLive'))
   const ws = src('lib/workspaceStore.js')
-  for (const dead of ['setLayout:', 'openTab:', 'closeTab:', 'dockview']) assert.ok(!ws.includes(dead), dead)
+  for (const dead of ['openTab:', 'closeTab:', 'dockview']) assert.ok(!ws.includes(dead), dead)
   assert.ok(!src('components/RouteSteps.jsx').includes('export const RECIPE_GLYPH'))
   assert.ok(!src('components/AccountsPanel.jsx').includes('tools/connect.py --server {host} session'))
 })

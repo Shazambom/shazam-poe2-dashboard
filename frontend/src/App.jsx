@@ -185,7 +185,7 @@ export default function App() {
       {tab === 'Board' && <BoardView key={league} status={status} />}
       {tab === 'Strategy' && <StrategyView key={league} league={league} capital={capital} status={status} currencies={currencies} onCapitalSaved={refreshHeader} />}
       {tab === 'Economy' && <EconomyView key={league} league={league} currencies={currencies} />}
-      {tab === 'Trading' && <TradingView key={league} league={league} />}
+      {tab === 'Trading' && <TradingView league={league} />}
       {tab === 'Settings' && <SettingsView currencies={currencies} status={status} onSaved={refreshHeader} />}
 
       <CommandPalette

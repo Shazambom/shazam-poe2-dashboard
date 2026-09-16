@@ -6,6 +6,7 @@ import { unlockSound } from './ping-sound.js'
 import { notify } from './notifications.js'
 import { nav } from './nav.js'
 import { hasTradeEngine as isDesktop } from './session.js'
+import { flatten } from './tree.js'
 
 const PING_TTL = 10000   // top-right ping banner auto-dismisses after 10s (or when a newer ping replaces it)
 
@@ -68,12 +69,7 @@ export function useLiveSync(league) {
     if (!isDesktop) return
     if (!useWorkspace.getState().loaded) loadWorkspace()
     let lastKey = ''
-    const armedNodes = () => {
-      const out = []
-      const walk = (ns) => (ns || []).forEach(n => { if (n.kind === 'search' && n.armed && n.slug) out.push(n); if (n.children) walk(n.children) })
-      walk(useWorkspace.getState().tree)
-      return out
-    }
+    const armedNodes = () => flatten(useWorkspace.getState().tree, n => n.kind === 'search' && n.armed && n.slug)
     const reconcile = () => {
       const st = useWorkspace.getState()
       if (!st.loaded || !league) return

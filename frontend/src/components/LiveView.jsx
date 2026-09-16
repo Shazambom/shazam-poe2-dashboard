@@ -5,19 +5,12 @@ import PingButton from './PingButton.jsx'
 import SearchTree from './SearchTree.jsx'
 import { toast } from '../lib/api.js'
 import { hasTradeEngine as isDesktop } from '../lib/session.js'
-
+import { flatten } from '../lib/tree.js'
 
 // Trading → Live: the live-search cockpit. Newest ping surfaces at the top as the single
 // travel-to-hideout button ("one button for all watches"); watched searches can be toggled
 // live (desktop-only). Web shows the desktop steer.
-function flattenSearches(nodes, out = []) {
-  for (const n of nodes || []) {
-    if (n.kind === 'search') out.push(n)
-    if (n.children) flattenSearches(n.children, out)
-  }
-  return out
-}
-
+const flattenSearches = (nodes) => flatten(nodes, n => n.kind === 'search')
 
 export default function LiveView({ league }) {
   const pings = usePings(s => s.pings)

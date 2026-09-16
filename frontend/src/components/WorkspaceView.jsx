@@ -1,6 +1,8 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useWorkspace, loadWorkspace } from '../lib/workspaceStore.js'
 import { tradeUrl, tradeHome, parseTradeUrl, openTrade, isDesktop } from '../lib/session.js'
+import { findWhere, flatten } from '../lib/tree.js'
+import { bus } from '../lib/api.js'
 import SearchTree from './SearchTree.jsx'
 
 // The Trading workspace: a file-tree of saved searches on the left, the live trade site
@@ -8,16 +10,11 @@ import SearchTree from './SearchTree.jsx'
 // build the search on the site and it's CAPTURED automatically (no pasting). Selecting an
 // entry reopens its search. Desktop-only for the embedded site (web opens searches in a tab).
 
-const ui = { addSearch: () => {}, addGroup: () => {}, select: () => {}, remove: () => {}, rename: () => {} }
-
 // First search node in the tree holding this slug (used to reject stale cross-node captures).
-function findBySlug(nodes, slug) {
-  for (const n of nodes || []) {
-    if (n.kind === 'search' && n.slug === slug) return n
-    if (n.children) { const f = findBySlug(n.children, slug); if (f) return f }
-  }
-  return null
-}
+const findBySlug = (nodes, slug) => findWhere(nodes, n => n.kind === 'search' && n.slug === slug)
+
+const RAIL_MIN = 220, RAIL_MAX = 420, RAIL_DEFAULT = 280
+const UNDO_TTL = 10000
 
 // Force the trade site's delivery-mode dropdown to "Instant Buyout" (the mode that enables
 // travel-to-hideout). vue-multiselect selects on `mousedown`, not click. Retries a few times
@@ -87,11 +84,15 @@ export default function WorkspaceView({ league }) {
   const tree = useWorkspace(s => s.tree)
   const loaded = useWorkspace(s => s.loaded)
   const loadError = useWorkspace(s => s.loadError)
+  const saveState = useWorkspace(s => s.saveState)
+  const layout = useWorkspace(s => s.layout)
   const activeId = useWorkspace(s => s.activeId)
   const addFolder = useWorkspace(s => s.addFolder)
   const addSearch = useWorkspace(s => s.addSearch)
   const remove = useWorkspace(s => s.remove)
+  const restore = useWorkspace(s => s.restore)
   const setField = useWorkspace(s => s.setField)
+  const setLayout = useWorkspace(s => s.setLayout)
   const autoName = useWorkspace(s => s.autoName)
   const setActive = useWorkspace(s => s.setActive)
   const nodeById = useWorkspace(s => s.nodeById)
@@ -99,20 +100,71 @@ export default function WorkspaceView({ league }) {
   const wv = useRef(null)
   const activeRef = useRef(activeId)
   const [navState, setNavState] = useState({ url: '', loading: false })
-  const [collapsed, setCollapsed] = useState(false)
+  const [confirmId, setConfirmId] = useState(null)   // folder awaiting its inline delete confirm
+  const collapsed = !!layout?.collapsed
+  const railWidth = Math.min(RAIL_MAX, Math.max(RAIL_MIN, layout?.railWidth || RAIL_DEFAULT))
+  const [dragWidth, setDragWidth] = useState(null)   // live width while the divider is being dragged
 
   useEffect(() => { if (!loaded) loadWorkspace() }, [loaded])
   useEffect(() => { activeRef.current = activeId }, [activeId])
 
+  // Flush the debounced save when the page goes away (tab hidden, window closing) so the last
+  // edit isn't lost to a 700 ms window. Main's before-quit also asks for a flush (batch 1).
+  useEffect(() => {
+    const flush = () => { if (document.visibilityState === 'hidden') useWorkspace.getState().flush() }
+    const hide = () => useWorkspace.getState().flush()
+    document.addEventListener('visibilitychange', flush)
+    window.addEventListener('pagehide', hide)
+    return () => { document.removeEventListener('visibilitychange', flush); window.removeEventListener('pagehide', hide) }
+  }, [])
+
   // Selecting/creating only mutate the DB (activeId + tree). The trade window is a pure
   // function of that state — see `mountUrl` + the keyed <webview> below. No imperative
   // navigation here, so there's no activeRef/navTo race to get wrong.
-  useEffect(() => {
-    ui.addSearch = (parentId = null) => setActive(addSearch(parentId, { type: 'search', slug: '', live: false }, 'New search'))
-    ui.addGroup = () => addFolder(null)
-    ui.select = (id) => setActive(id)
-    ui.remove = remove
-  }, [addSearch, addFolder, remove, setActive])
+  const newSearch = useCallback((parentId = null) => setActive(addSearch(parentId, { type: 'search', slug: '', live: false }, 'New search')), [addSearch, setActive])
+  const newGroup = useCallback(() => addFolder(null), [addFolder])
+
+  // Delete with undo: the removed subtree + its exact position ride on a 10 s toast whose Undo
+  // re-inserts it. Folders with children ask first — an inline two-step on the row, never a
+  // native confirm() (it would block the renderer).
+  const deleteNode = useCallback((id) => {
+    const where = remove(id)
+    setConfirmId(null)
+    if (!where) return
+    const label = where.node.name || (where.node.kind === 'folder' ? 'group' : 'search')
+    const n = flatten(where.node.children || [], x => x.kind === 'search').length
+    bus.emit({ id: 'ws-undo', ttl: UNDO_TTL, node: (
+      <div className="ws-undo">
+        <span className="ws-undo-text">Deleted “{label}”{n ? ` (${n} search${n === 1 ? '' : 'es'})` : ''}</span>
+        <button className="btn small primary" onClick={() => { restore(where); bus.emit({ id: 'ws-undo', dismiss: true }) }}>Undo</button>
+      </div>) })
+  }, [remove, restore])
+  const requestDelete = useCallback((d) => {
+    if (d.kind === 'folder' && (d.children || []).length) setConfirmId(d.id)
+    else deleteNode(d.id)
+  }, [deleteNode])
+
+  // The divider is both the collapse toggle (click) and the rail's resize handle (drag,
+  // 220–420 px, rAF-throttled, persisted on mouseup).
+  const onDividerDown = useCallback((e) => {
+    if (collapsed) return
+    e.preventDefault()
+    const x0 = e.clientX, w0 = railWidth
+    let moved = false, raf = 0, w = w0
+    const onMove = (ev) => {
+      const dx = ev.clientX - x0
+      if (Math.abs(dx) > 3) moved = true
+      w = Math.min(RAIL_MAX, Math.max(RAIL_MIN, w0 + dx))
+      if (!raf) raf = requestAnimationFrame(() => { raf = 0; setDragWidth(w) })
+    }
+    const onUp = () => {
+      window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp)
+      cancelAnimationFrame(raf); setDragWidth(null)
+      if (moved) setLayout({ railWidth: w })
+      else setLayout({ collapsed: true })
+    }
+    window.addEventListener('mousemove', onMove); window.addEventListener('mouseup', onUp)
+  }, [collapsed, railWidth, setLayout])
 
   // The trade window's URL is DERIVED from the DB: the active node's saved search (or the
   // blank trade home). Computed per activeId/league only — a slug CAPTURED into the active
@@ -176,33 +228,44 @@ export default function WorkspaceView({ league }) {
   }
 
   const activeNode = activeId ? nodeById(activeId) : null
+  const width = dragWidth ?? railWidth
+  const saveTitle = { idle: 'Saved', dirty: 'Unsaved changes', saving: 'Saving…', error: 'Save failed — retrying on the next change' }[saveState]
 
   return (
-    <div className="trade-ws">
+    <div className={`trade-ws ${dragWidth != null ? 'resizing' : ''}`}>
       {!collapsed && (
-        <aside className="ws-rail">
+        <aside className="ws-rail" style={{ width, flexBasis: width }}>
           <div className="ws-rail-head">
             <b>Searches</b>
+            <span className={`ws-save-dot ${saveState}`} title={saveTitle} aria-label={saveTitle} role="status" />
             <span className="spacer" />
-            <button className="ws-icon-btn" title="New group" onClick={() => ui.addGroup()}>📁</button>
-            <button className="ws-icon-btn primary" title="New search" onClick={() => ui.addSearch(null)}>+</button>
+            <button className="ws-icon-btn" title="New group" aria-label="New group" onClick={newGroup}>📁</button>
+            <button className="ws-icon-btn primary" title="New search" aria-label="New search" onClick={() => newSearch(null)}>+</button>
           </div>
           {tree.length === 0
-            ? <div className="ws-tree"><button className="ws-empty-add" onClick={() => ui.addSearch(null)}>+ New search</button></div>
+            ? <div className="ws-tree"><button className="ws-empty-add" onClick={() => newSearch(null)}>+ New search</button></div>
             : (
-              <SearchTree onSelect={(id) => ui.select(id)} renderTrailing={(d, node) => (
-                <>
-                  {d.kind === 'folder' && <button className="ws-mini" title="New search here" onClick={e => { e.stopPropagation(); ui.addSearch(d.id) }}>+</button>}
-                  <button className="ws-mini" title="Rename" onClick={e => { e.stopPropagation(); node.edit() }}>✎</button>
-                  <button className="ws-mini" title="Delete" onClick={e => { e.stopPropagation(); ui.remove(d.id) }}>×</button>
-                </>
+              <SearchTree onSelect={(id) => setActive(id)} renderTrailing={(d, node) => (
+                confirmId === d.id
+                  ? <span className="ws-confirm" onClick={e => e.stopPropagation()}>
+                      <span>Delete {(d.children || []).length} inside?</span>
+                      <button className="ws-mini on" title="Confirm delete" aria-label="Confirm delete" onClick={() => deleteNode(d.id)}>✓</button>
+                      <button className="ws-mini on" title="Cancel" aria-label="Cancel" onClick={() => setConfirmId(null)}>✕</button>
+                    </span>
+                  : <>
+                      {d.kind === 'folder' && <button className="ws-mini" title="New search here" aria-label="New search here" onClick={e => { e.stopPropagation(); newSearch(d.id) }}>+</button>}
+                      <button className="ws-mini" title="Rename" aria-label="Rename" onClick={e => { e.stopPropagation(); node.edit() }}>✎</button>
+                      <button className="ws-mini" title="Delete" aria-label="Delete" onClick={e => { e.stopPropagation(); requestDelete(d) }}>×</button>
+                    </>
               )} />
             )}
         </aside>
       )}
 
-      {/* Collapse/expand the searches rail — control sits on the boundary between panes. */}
-      <button className="ws-divider" title={collapsed ? 'Show searches' : 'Hide searches'} onClick={() => setCollapsed(c => !c)}>
+      {/* Collapse/expand the searches rail (click) or resize it (drag) — control sits on the boundary. */}
+      <button className={`ws-divider ${collapsed ? 'collapsed' : ''}`} title={collapsed ? 'Show searches' : 'Hide searches · drag to resize'}
+        aria-label={collapsed ? 'Show searches' : 'Hide searches'} aria-expanded={!collapsed}
+        onMouseDown={onDividerDown} onClick={() => { if (collapsed) setLayout({ collapsed: false }) }}>
         <span>{collapsed ? '»' : '«'}</span>
       </button>
 
@@ -216,7 +279,7 @@ export default function WorkspaceView({ league }) {
             <webview key={activeId || 'home'} ref={wv} src={mountUrl} className="ws-webview" allowpopups="true" />
             {!activeNode && (
               <div className="ws-overlay">
-                <p>Press <button className="ws-inline-add" onClick={() => ui.addSearch(null)}>+</button> to start a search — it opens here and saves automatically.</p>
+                <p>Press <button className="ws-inline-add" onClick={() => newSearch(null)}>+</button> to start a search — it opens here and saves automatically.</p>
               </div>
             )}
           </>

@@ -166,7 +166,19 @@ a { color: var(--live); }
 .ws-divider { width: 16px; flex: 0 0 16px; display: flex; align-items: center; justify-content: center;
   background: none; border: 0; cursor: pointer; color: var(--muted); align-self: stretch; }
 .ws-divider:hover { color: var(--ink); background: var(--line); }
+.ws-divider:not(.collapsed) { cursor: col-resize; }
 .ws-divider span { font-size: 12px; }
+.trade-ws.resizing { user-select: none; cursor: col-resize; }
+.trade-ws.resizing .ws-webview { pointer-events: none; }   /* the guest page would swallow mousemove mid-drag */
+.ws-save-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--gain); flex: 0 0 auto; transition: background .15s var(--ease); }
+.ws-save-dot.dirty { background: var(--muted); }
+.ws-save-dot.saving { background: var(--gold); animation: dot-pulse 1s var(--ease) infinite; }
+.ws-save-dot.error { background: var(--loss); }
+@media (prefers-reduced-motion: reduce) { .ws-save-dot.saving { animation: none; } }
+.ws-confirm { display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; color: var(--loss); white-space: nowrap; }
+.ws-mini.on { opacity: 1; color: var(--ink-2); }
+.ws-undo { display: flex; align-items: center; gap: 12px; padding: 10px 14px; }
+.ws-undo-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ws-rail-head { display: flex; align-items: center; gap: 6px; padding: 9px 10px; border-bottom: 1px solid var(--line); font-size: 13px; }
 .ws-icon-btn { background: var(--line); border: 0; color: var(--ink-2); width: 26px; height: 24px; border-radius: 6px;
   cursor: pointer; font-size: 14px; line-height: 1; display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; }

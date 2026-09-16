@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { api, cleanErr, toast } from './api.js'
 import { uid } from './session.js'
+import { find as findNode, locate, mapNode, removeNode, insertAt } from './tree.js'
 
 // The Trading workspace: a nested filesystem-like tree (folders + search items), plus the
 // persisted `layout`/`openTabs` fields (kept in the document for forward compatibility).
@@ -10,40 +11,40 @@ import { uid } from './session.js'
 // The store is the single source of truth for the tree; mutations persist through a
 // debounced PUT so drag/rename/nest survive reload + restart. The league is never stored
 // on a node — it's injected at open time (tradeUrl), so watches survive league resets.
+//
+// Save lifecycle: every mutation marks the document `dirty` and schedules the debounced PUT;
+// `flush()` cancels the debounce and PUTs now (page hide, app quit). `saveState` is
+// idle | dirty | saving | error — the rail head shows it as a dot.
 
 const DEBOUNCE = 700
 let saveTimer = null
 let armed = false   // don't PUT while hydrating the initial load
 
-function persist(get) {
-  if (!armed || get().loadError) return
-  clearTimeout(saveTimer)
-  saveTimer = setTimeout(async () => {
-    try {
-      const { version, tree, layout, openTabs, activeId } = get()
-      await api.putWorkspace({ version, tree, layout, openTabs, activeId })
-    } catch (e) { toast(cleanErr(e), false) }
-  }, DEBOUNCE)
+function payload(get) {
+  const { version, tree, layout, openTabs, activeId } = get()
+  return { version, tree, layout, openTabs, activeId }
 }
 
-// Recursively map a node by id.
-function mapNode(nodes, id, fn) {
-  return nodes.map(n => {
-    if (n.id === id) return fn(n)
-    if (n.children) return { ...n, children: mapNode(n.children, id, fn) }
-    return n
-  })
-}
-function removeNode(nodes, id) {
-  return nodes.filter(n => n.id !== id).map(n =>
-    n.children ? { ...n, children: removeNode(n.children, id) } : n)
-}
-function findNode(nodes, id) {
-  for (const n of nodes) {
-    if (n.id === id) return n
-    if (n.children) { const f = findNode(n.children, id); if (f) return f }
+async function save(get, set) {
+  clearTimeout(saveTimer); saveTimer = null
+  if (!armed || get().loadError) return
+  set({ saveState: 'saving' })
+  try {
+    await api.putWorkspace(payload(get))
+    // A mutation that landed while the PUT was in flight re-dirtied the document; its own
+    // debounce is pending, so leave the state alone.
+    if (get().saveState === 'saving') set({ saveState: 'idle' })
+  } catch (e) {
+    set({ saveState: 'error' })
+    toast(cleanErr(e), false)
   }
-  return null
+}
+
+function persist(get, set) {
+  if (!armed || get().loadError) return
+  set({ saveState: 'dirty' })
+  clearTimeout(saveTimer)
+  saveTimer = setTimeout(() => save(get, set), DEBOUNCE)
 }
 
 export const newFolder = (name = 'New group') => ({
@@ -65,15 +66,17 @@ export const useWorkspace = create((set, get) => ({
   openTabs: [],
   loaded: false,
   loadError: null,  // set when the GET failed: the tree is NOT the user's and must never be written back
+  saveState: 'idle',   // idle | dirty | saving | error
   activeId: null,   // which search entry is open in the trade window (persisted → restores on relaunch)
 
-  setActive: (id) => { if (get().loadError) return; set({ activeId: id }); persist(get) },
+  setActive: (id) => { if (get().loadError) return; set({ activeId: id }); persist(get, set) },
 
   hydrate: (doc) => {
     armed = false
     set({
       version: 2,
       loadError: null,
+      saveState: 'idle',
       tree: Array.isArray(doc?.tree) ? doc.tree : [],
       layout: doc?.layout ?? null,
       openTabs: Array.isArray(doc?.openTabs) ? doc.openTabs : [],
@@ -87,7 +90,12 @@ export const useWorkspace = create((set, get) => ({
   // A load failure leaves an EMPTY tree that is not the user's. Every mutation is refused (and
   // persist stays disarmed) until a retry hydrates the real document — otherwise the first
   // edit would PUT that empty tree over the saved one.
-  failLoad: (message) => { armed = false; set({ loaded: true, loadError: message || 'load failed', tree: [], activeId: null }) },
+  failLoad: (message) => { armed = false; clearTimeout(saveTimer); set({ loaded: true, loadError: message || 'load failed', tree: [], activeId: null, saveState: 'idle' }) },
+
+  // PUT now (cancelling the debounce). Resolves when the request settled either way.
+  flush: () => (saveTimer || get().saveState !== 'idle' ? save(get, set) : Promise.resolve()),
+
+  setLayout: (patch) => { if (get().loadError) return; set(s => ({ layout: { ...(s.layout || {}), ...patch } })); persist(get, set) },
 
   addFolder: (parentId = null) => {
     if (get().loadError) return null
@@ -95,7 +103,7 @@ export const useWorkspace = create((set, get) => ({
     set(s => parentId
       ? { tree: mapNode(s.tree, parentId, n => ({ ...n, open: true, children: [...(n.children || []), f] })) }
       : { tree: [...s.tree, f] })
-    persist(get); return f.id
+    persist(get, set); return f.id
   },
   addSearch: (parentId, parsed, name) => {
     if (get().loadError) return null
@@ -103,14 +111,17 @@ export const useWorkspace = create((set, get) => ({
     set(s => parentId
       ? { tree: mapNode(s.tree, parentId, n => ({ ...n, open: true, children: [...(n.children || []), node] })) }
       : { tree: [...s.tree, node] })
-    persist(get); return node.id
+    persist(get, set); return node.id
   },
-  rename: (id, name) => { if (get().loadError) return; set(s => ({ tree: mapNode(s.tree, id, n => ({ ...n, name, auto: false })) })); persist(get) },
-  autoName: (id, name) => { if (get().loadError) return; set(s => ({ tree: mapNode(s.tree, id, n => (n.auto === false ? n : { ...n, name })) })); persist(get) },
-  setField: (id, patch) => { if (get().loadError) return; set(s => ({ tree: mapNode(s.tree, id, n => ({ ...n, ...patch })) })); persist(get) },
-  toggleOpen: (id) => { if (get().loadError) return; set(s => ({ tree: mapNode(s.tree, id, n => ({ ...n, open: !n.open })) })); persist(get) },
+  rename: (id, name) => { if (get().loadError) return; set(s => ({ tree: mapNode(s.tree, id, n => ({ ...n, name, auto: false })) })); persist(get, set) },
+  autoName: (id, name) => { if (get().loadError) return; set(s => ({ tree: mapNode(s.tree, id, n => (n.auto === false ? n : { ...n, name })) })); persist(get, set) },
+  setField: (id, patch) => { if (get().loadError) return; set(s => ({ tree: mapNode(s.tree, id, n => ({ ...n, ...patch })) })); persist(get, set) },
+  toggleOpen: (id) => { if (get().loadError) return; set(s => ({ tree: mapNode(s.tree, id, n => ({ ...n, open: !n.open })) })); persist(get, set) },
+  // Returns { node, parentId, index } — exactly what restore() needs to undo the delete.
   remove: (id) => {
-    if (get().loadError) return
+    if (get().loadError) return null
+    const where = locate(get().tree, id)
+    if (!where) return null
     set(s => {
       const tree = removeNode(s.tree, id)
       // If the removed subtree contained the open search, drop the selection so the trade
@@ -118,7 +129,19 @@ export const useWorkspace = create((set, get) => ({
       const activeId = findNode(tree, s.activeId) ? s.activeId : null
       return { tree, openTabs: s.openTabs.filter(t => t !== id), activeId }
     })
-    persist(get)
+    persist(get, set)
+    return where
+  },
+  // Undo a remove(): re-insert the subtree at its old spot (root if the parent is gone too).
+  restore: ({ node, parentId, index }) => {
+    if (get().loadError || !node || findNode(get().tree, node.id)) return
+    set(s => {
+      const parentOk = !parentId || findNode(s.tree, parentId)
+      const p = parentOk ? parentId : null
+      const list = p ? (findNode(s.tree, p).children || []) : s.tree
+      return { tree: insertAt(s.tree, node, p, Math.min(index, list.length)) }
+    })
+    persist(get, set)
   },
 
   // Move `id` into `parentId` (null = root) at `index`. Used by react-arborist onMove.
@@ -130,19 +153,9 @@ export const useWorkspace = create((set, get) => ({
       // Refuse to move a node into itself or its own descendant — that would remove the
       // subtree and have nowhere to re-insert it (silent data loss).
       if (parentId && (parentId === id || findNode(node.children || [], parentId))) return {}
-      let tree = removeNode(s.tree, id)
-      if (parentId) {
-        tree = mapNode(tree, parentId, n => {
-          const kids = [...(n.children || [])]
-          kids.splice(index, 0, node)
-          return { ...n, children: kids, open: true }
-        })
-      } else {
-        tree = [...tree]; tree.splice(index, 0, node)
-      }
-      return { tree }
+      return { tree: insertAt(removeNode(s.tree, id), node, parentId, index) }
     })
-    persist(get)
+    persist(get, set)
   },
 
   nodeById: (id) => findNode(get().tree, id),

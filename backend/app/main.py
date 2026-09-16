@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field
 
 from fastapi.responses import RedirectResponse, PlainTextResponse
 
-from . import analytics, arbitrage, db, diag, digest, gamedata, gateway, holdscore, inflation, leaguearc, leaguehistory, liquidity, migrations_user, movers, oauth, orderbook, recipes, session, sidecar_supervisor, signalsack, watchdog
+from . import analytics, arbitrage, db, diag, digest, gamedata, gateway, holdscore, inflation, leaguearc, leaguehistory, liquidity, migrations_user, movers, oauth, orderbook, recipes, session, sidecar_supervisor, signalsack, watchdog, workspace
 from .config import INSTALL_LOG_PATH
 from .currencies import registry
 from .settings import get_settings, save_settings
@@ -395,8 +395,9 @@ def get_workspace():
 @app.put("/api/trading/workspace")
 def put_workspace(body: WorkspaceBody):
     ws = body.workspace
-    if ws.get("version") != 2 or not isinstance(ws.get("tree"), list):
-        raise HTTPException(status_code=400, detail="workspace must be {version:2, tree:[...]}")
+    err = workspace.validate_workspace(ws)   # validates, never truncates (backend/app/workspace.py)
+    if err:
+        raise HTTPException(status_code=err.status, detail=err.detail)
     db.kv_set("trading_workspace", ws)
     return {"workspace": ws}
 
