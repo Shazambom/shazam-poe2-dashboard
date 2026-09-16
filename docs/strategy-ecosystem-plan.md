@@ -283,6 +283,78 @@ its own module); (2) add a `handle_<kind>(conn, job)` that reads `job["params"]`
 read-only endpoint that `read_cache(c, "<kind>", "current")`. No new tables, no snapshot bump. Heavy
 libs go in `requirements-sidecar.txt` + get bundled by `build-sidecar.sh` / the Windows CI step.
 
+## Phase 7 — Windows hardening, sidecar slimming & deploy efficiency (7a DONE, 7b PLANNED)
+
+Triggered by the desktop-v0.2.46 ship (first release carrying the Phase 6 sidecar). Two Windows-only
+failures, found via telemetry (`p=backend` installlog — a TEMPORARY DEV DIAGNOSTIC in `main.js`
+`bkLog`, to be stripped once this phase lands):
+
+1. **Watchdog Ctrl+C (FIXED, v0.2.48).** `watchdog.parent_alive` polled `os.kill(parent_pid, 0)`; on
+   Windows signal 0 is `CTRL_C_EVENT`, so every 2 s it Ctrl+C'd its own console process group and
+   killed the backend + sidecar (`ECONNREFUSED 8210`). Fix: use the `OpenProcess`/`GetExitCodeProcess`
+   handle check on `os.name == "nt"`, never `os.kill`. See [[reference_win_oskill_ctrlc]]. Regression
+   test asserts `os.kill` is never called on nt.
+2. **Sidecar native crash (OPEN — this phase).** Telemetry (v0.2.49 `/api/diag.analytics`) showed
+   `jobs {queued, running}` with **0 done, 0 error, last_error null** — the classic signature of a
+   native crash (`0xC0000005`) mid-compute: the sidecar claims a job (→`running`), then the heavy
+   numeric stack dies before Python can write the result or mark failure, so signals never reach
+   `analytics_cache` → no Divine orb on Windows. Cause: `numba`/`llvmlite` (stumpy's JIT) and/or
+   `dtaidistance`'s C extension crashing under the Windows PyInstaller onefile.
+
+### 7a. Slim the sidecar to numpy-only (fixes #2 AND cuts ~63 MB) — ✅ DONE (2026-09-16)
+Kept the sidecar architecture (it's the right home for heavy/slow background work + future jobs); the
+bloat was one dependency choice, not the concept. Our data is tiny (~few hundred items × ~15 daily
+points, `m=3`), so the reimplementation is trivially cheap and exact:
+- `discords._matrix_profile(a, m)` — pure-numpy brute-force non-normalized matrix profile, replacing
+  `stumpy.stump(closes, m, normalize=False)`. `compute()` takes an injectable `_mp` (defaults to numpy;
+  the gate injects real stumpy).
+- `arc._dtw(a, b)` — small numpy DTW (squared inner cost, sqrt of total, no window/penalty/psi),
+  replacing `dtaidistance.dtw.distance`.
+- `requirements-sidecar.txt` → **numpy only** (dropped `stumpy`, `numba`, `llvmlite`, `scipy`,
+  `dtaidistance`). Dropped `--collect-all stumpy` from `build-sidecar.sh` + the Windows CI step.
+- **Result: frozen sidecar 76.8 MB → 13.8 MB on macOS** (no native-extension code in the compute path
+  → no Windows access violation possible). Endpoints/transport/cache unchanged. Jobs also run without
+  numba JIT warmup (sidecar unit tests 11 s → 0.08 s).
+
+**⚠️ Migration TDD gate — DONE, and now the permanent proof:** `backend/tests/test_sidecar_equivalence.py`
+**imports the REAL heavy libraries** (`stumpy`, `dtaidistance`) alongside the numpy implementations,
+fuzzes randomized inputs, and asserts **1:1** agreement (`rtol=atol=1e-6`):
+- Matrix profile: 120 seeds × random `closes` (varied length ≥ `2m+1`, scale, planted spikes),
+  `_matrix_profile(a,m)` == `stumpy.stump(a,m,normalize=False)[:,0]` (finite-mask equal + allclose),
+  exclusion zone `ceil(m/4)`, plus an argmax-never-disagrees check and a full-`compute()` end-to-end
+  comparison (numpy vs stumpy-injected).
+- DTW: 120 seeds raw + 120 z-normalized pairs, `_dtw` == `dtaidistance.dtw.distance`, plus a
+  `compute_weights` ranking-and-weights parity check over random league fields.
+- Runs in the sidecar venv (`desktop/.venv-sidecar`, which still has the heavy libs); `importorskip`
+  makes it skip loudly elsewhere so a green run always means the comparison actually happened. **257
+  passed.** The existing `test_discords`/`test_arc` still pass on the numpy impl, including in a
+  **numpy-only** venv (proving no residual heavy-lib import).
+
+**Faithful Windows proof (no local Windows box needed):** a new CI step in
+`release-desktop-win.yml` runs the FROZEN `poe2arb-sidecar.exe --selftest` on `windows-latest` — it
+imports the analytics modules and computes both jobs once; a native fault (`0xC0000005`) exits
+non-zero and turns the release build RED. This reproduces the exact v0.2.49 crash environment at
+build time, so a numpy-only regression can never ship again.
+
+### 7b. Deploy efficiency — make updates proportional to what changed
+electron-updater already ships **block-differential** downloads (the `.blockmap` assets), but two
+things defeat it:
+- **PyInstaller `--onefile`** compresses each binary into one blob, so a 1-line change reshuffles all
+  ~21 MB (backend) / whole sidecar of bytes → nearly a full redownload. **Switch backend + sidecar to
+  `--onedir`**: numpy/etc. become stable uncompressed files whose blocks are byte-identical across
+  releases → the updater skips them; a code-only update ships a few KB of changed `.pyc`. Biggest lever
+  for "only redownload what changed."
+- **The bundled snapshot (~40 MB)** rides every installer and changes every release (fetch-seed), so it
+  redownloads on every update even for code-only changes. Options: only refresh it on releases that
+  actually change market data, or bundle a tiny seed and fetch the full one lazily on first run (trades
+  the instant-first-boot board). Evaluate after 7a.
+
+### Note — sidecar output IS cached
+The sidecar is never called synchronously: it upserts results into `analytics_cache` (market.sqlite);
+endpoints (`/api/signals|arc|leaguearc`) only READ that table (instant, graceful-degrade). The cache is
+runtime-only (not in the snapshot, self-healed), so it's empty for ~1 min after an install/re-seed
+until the sidecar's first pass — which, pre-0.2.48, never happened (watchdog killed it first).
+
 ## Suggested order (lightest-first)
 1.5 slider → 5 centrality → 2 Ghost Wealth → 6 sidecar scaffold (+watchdog retrofit) → 3 arc →
 4 signals. Each phase: `/tdd` (tests first), then drive-validate over CDP, web env first.

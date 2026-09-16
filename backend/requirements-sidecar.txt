@@ -1,14 +1,16 @@
-# Heavy-analytics SIDECAR deps — kept OUT of backend/requirements.txt so the main backend
-# binary stays lean (stdlib-bias). These bundle into a SEPARATE per-platform PyInstaller binary
-# (desktop/build-sidecar.sh + the Windows CI step). Pins are the versions validated to bundle +
-# run from a frozen onefile binary (numba JIT works; ~70MB). numba/llvmlite/scipy are stumpy's
-# transitive deps but pinned here for reproducible CI wheels.
+# Heavy-analytics SIDECAR deps. Kept OUT of backend/requirements.txt so the main backend binary
+# stays lean (stdlib-bias). This bundles into a SEPARATE per-platform PyInstaller binary
+# (desktop/build-sidecar.sh + the Windows CI step); the backend spawns + supervises it.
 #
-# NOTE: mlxtend (Phase-4 association rules → drags sklearn/pandas/matplotlib) is intentionally
-# NOT here yet — add it when Phase 4 lands so we don't bloat the binary before it's used.
+# NUMPY ONLY (Phase 7a). The sidecar's two heavy jobs — matrix-profile discords and DTW league-arc
+# — were reimplemented in pure numpy (backend/sidecar/analytics/{discords,arc}.py) and proven 1:1
+# with the original libraries by backend/tests/test_sidecar_equivalence.py (a fuzz that loads the
+# REAL stumpy + dtaidistance and asserts identical output). We dropped stumpy/dtaidistance and
+# their native transitive deps (numba/llvmlite/scipy) because that native code crashed the frozen
+# PyInstaller binary on Windows (STATUS_ACCESS_VIOLATION 0xC0000005) — pure numpy can't. Bonus:
+# the binary shrank from ~99MB to ~35MB and the jobs run without numba JIT warmup.
+#
+# ⚠️ If you ever re-add a heavy library here, you MUST keep it OFF the sidecar's runtime import
+# path unless it's proven to run from a frozen onefile binary ON WINDOWS (build + run it in the
+# release-desktop-win CI, not just locally). numba-backed libraries specifically do not.
 numpy==2.5.3
-stumpy==1.14.1
-dtaidistance==2.5.1
-numba==0.67.0
-llvmlite==0.49.0
-scipy==1.18.1

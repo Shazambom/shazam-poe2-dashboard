@@ -13,15 +13,13 @@ if [ ! -d "$VENV" ]; then "$PY" -m venv "$VENV"; fi
 source "$VENV/bin/activate"
 pip -q install -r ../backend/requirements-sidecar.txt pyinstaller
 
-# --collect-all stumpy is REQUIRED: at runtime stumpy.cache enumerates its own package dir to
-# discover njit functions; onefile mode has no source on disk unless we bundle it as data
-# (validated during the Phase-6 spike — without it the frozen binary FileNotFoundErrors on import).
+# Phase 7a: the sidecar is NUMPY ONLY (no stumpy/dtaidistance/numba), so no --collect-all is
+# needed — numpy bundles cleanly and there's no native code to crash the frozen binary on Windows.
 WORK=.pyi-work-sidecar
 pyinstaller --noconfirm --clean --onefile \
   --name poe2arb-sidecar \
   --workpath "$WORK" \
   --paths ../backend \
-  --collect-all stumpy \
   ../backend/sidecar/run_sidecar.py
 
 mkdir -p sidecar-bin

@@ -6,7 +6,15 @@ so we keep one only when a VOLUME spike sits inside the discord window (MAD-z on
 the confirmation Movers lacks) AND the spike is RECENT (this is "about to move", not history).
 
 Pure over the shaped series from `marketseries` (so it's unit-testable with planted anomalies);
-numpy + stumpy only, so it lives in the lean sidecar binary and never imports the backend.
+NUMPY ONLY, so it lives in the lean sidecar binary and never imports the backend.
+
+The non-normalized matrix profile is computed directly in numpy (`_matrix_profile`) rather than
+via STUMPY. STUMPY drags numba/llvmlite/scipy, whose native code crashed the frozen PyInstaller
+binary on Windows (STATUS_ACCESS_VIOLATION); numpy is pure and can't. `_matrix_profile` is proven
+1:1 with `stumpy.stump(a, m, normalize=False)[:,0]` across a fuzz of randomized inputs by the
+migration gate `backend/tests/test_sidecar_equivalence.py` (which loads the REAL stumpy). Series
+here are short (a league's daily points), so the O(n^2·m) brute force is trivially cheap and
+matches STUMPY's STOMP result exactly.
 
 SHORT HORIZONS ARE THE NORM: PoE leagues are short-lived and a fresh league has only a handful of
 daily points, so the metric must produce meaning early — not only after weeks. Hence a short motif
@@ -17,7 +25,6 @@ Phase-4 consideration.
 from __future__ import annotations
 
 import numpy as np
-import stumpy
 
 # Median daily traded VALUE (Exalted) floor — mirrors movers.MIN_VALUE_EX. The sidecar stays
 # standalone (no backend import), so the constant is duplicated deliberately.
@@ -40,8 +47,34 @@ def _mad_z(arr: np.ndarray, i: int) -> float:
     return float(max(-Z_CAP, min(Z_CAP, z)))
 
 
+def _matrix_profile(a, m: int) -> np.ndarray:
+    """Non-normalized (raw-Euclidean) matrix profile of `a` with subsequence length `m` — the
+    numpy equivalent of `stumpy.stump(a, m, normalize=False)[:, 0]`.
+
+    For each length-m window it returns the Euclidean distance to its nearest OTHER window,
+    excluding the trivial-match zone `|i-j| <= ceil(m/4)` (STUMPY's default exclusion zone). A
+    window with no valid neighbour (all others inside its exclusion zone) gets `inf`, exactly as
+    STUMPY does. O(k^2·m) over k = len(a)-m+1 windows — trivial for a league's daily series and
+    proven 1:1 with STUMPY by test_sidecar_equivalence."""
+    a = np.asarray(a, dtype=float)
+    k = a.shape[0] - m + 1
+    if k <= 0:
+        return np.empty(0, dtype=float)
+    subs = np.lib.stride_tricks.sliding_window_view(a, m)   # (k, m) windows, read-only view
+    excl = int(np.ceil(m / 4.0))                            # STUMPY_EXCL_ZONE_DENOM = 4
+    mp = np.full(k, np.inf, dtype=float)
+    for i in range(k):
+        diff = subs - subs[i]                               # (k, m)
+        d = np.sqrt(np.einsum("ij,ij->i", diff, diff))      # raw Euclidean per window
+        lo, hi = max(0, i - excl), min(k, i + excl + 1)     # exclude the trivial-match zone
+        d[lo:hi] = np.inf
+        if np.isfinite(d).any():
+            mp[i] = d.min()
+    return mp
+
+
 def compute(series: dict, meta: dict, *, min_value_ex: float = MIN_VALUE_EX, m: int = 3,
-            recent_days: int = 5, vol_z: float = 2.5, top_n: int = 20) -> list[dict]:
+            recent_days: int = 5, vol_z: float = 2.5, top_n: int = 20, _mp=_matrix_profile) -> list[dict]:
     """Return volume-confirmed recent discord signals, strongest first (ranked by vol_z, capped at
     top_n): [{item_id, name, t, mp_dist, vol_z, close}]. It's a ranked shortlist, not a binary
     alarm — the vol_z floor (default 2.5 ≈ a clear robust outlier) is deliberately modest so the
@@ -60,13 +93,13 @@ def compute(series: dict, meta: dict, *, min_value_ex: float = MIN_VALUE_EX, m: 
             # value must not masquerade as heavy trading. This independence is the point.
             volumes = np.divide(values, closes, out=np.zeros_like(values), where=closes > 0)
 
-            # normalize=False on PURPOSE: the default z-normalized matrix profile finds unusual
-            # SHAPES and normalizes magnitude away — a 3x price spike becomes just a "step-up".
-            # "About to move" is a MAGNITUDE anomaly (pump/crash), so we want the non-normalized
-            # profile, whose discord lands on the biggest price dislocation (verified: a planted
-            # spike is the discord on both a 7-day and a 30-day series; z-normalized missed it).
-            mp = stumpy.stump(closes, m, normalize=False)
-            dist = np.asarray(mp[:, 0], dtype=float)
+            # Non-normalized on PURPOSE: a z-normalized matrix profile finds unusual SHAPES and
+            # normalizes magnitude away — a 3x price spike becomes just a "step-up". "About to
+            # move" is a MAGNITUDE anomaly (pump/crash), so we use the raw-Euclidean profile,
+            # whose discord lands on the biggest price dislocation (verified: a planted spike is
+            # the discord on both a 7-day and a 30-day series; z-normalized missed it). `_mp` is
+            # numpy by default; the equivalence gate injects the real stumpy profile to prove 1:1.
+            dist = np.asarray(_mp(closes, m), dtype=float)
             dist[~np.isfinite(dist)] = -np.inf               # ignore constant-window nan/inf
             if not np.isfinite(dist).any():
                 continue

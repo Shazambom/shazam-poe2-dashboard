@@ -38,21 +38,29 @@ jobs:
           cp dist/poe2arb-backend.exe desktop/backend-bin/poe2arb-backend.exe
           ls -la desktop/backend-bin
       - name: Build heavy-analytics sidecar (PyInstaller, Windows x64)
-        # A SEPARATE binary from the backend (numpy/stumpy) so the backend stays lean. The backend
-        # spawns + supervises it. --collect-all stumpy is required or the frozen binary can't find
-        # stumpy's own source at import (validated in the Phase-6 spike). Its own venv keeps the
-        # heavy deps out of the backend build.
+        # A SEPARATE binary from the backend so the backend stays lean; the backend spawns +
+        # supervises it. Phase 7a: NUMPY ONLY — the matrix-profile + DTW jobs were reimplemented
+        # in pure numpy (proven 1:1 with stumpy/dtaidistance by test_sidecar_equivalence), so
+        # there's no native code to crash the frozen binary on Windows and no --collect-all needed.
         shell: bash
         run: |
           python -m pip install --quiet -r backend/requirements-sidecar.txt pyinstaller
           pyinstaller --noconfirm --clean --onefile \
             --name poe2arb-sidecar \
             --paths backend \
-            --collect-all stumpy \
             backend/sidecar/run_sidecar.py
           mkdir -p desktop/sidecar-bin
           cp dist/poe2arb-sidecar.exe desktop/sidecar-bin/poe2arb-sidecar.exe
           ls -la desktop/sidecar-bin
+      - name: Smoke-run the frozen sidecar on Windows (crash gate)
+        # Run the FROZEN .exe in the same environment that built it and exercise both heavy jobs'
+        # compute path via --selftest. This is the faithful reproduction of the v0.2.49 field
+        # crash: if a bundled dep faults natively (STATUS_ACCESS_VIOLATION 0xC0000005) the process
+        # exits non-zero and this step fails RED — so a numpy-only regression can never ship again.
+        shell: bash
+        run: |
+          desktop/sidecar-bin/poe2arb-sidecar.exe --selftest
+          echo "frozen sidecar selftest exit code: $?"
       - name: Install node deps
         run: |
           cd frontend && npm ci
