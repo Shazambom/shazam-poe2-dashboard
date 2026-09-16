@@ -1,5 +1,7 @@
-// Notification tones. Real recordings from Kenney's CC0 "Interface Sounds" pack
-// (public/sounds/LICENSE.txt), loudness-normalised at encode time so no tone is a surprise.
+// Notification tones: CC0 (public-domain) recordings — the best-rated, most-downloaded CC0
+// notification/chime sounds on Freesound plus CreatorAssets' CC0 modern chimes (sources, ratings
+// and licences in public/sounds/LICENSE.txt) — loudness-normalised at encode time so no tone is
+// a surprise.
 // Played through WebAudio (decoded once, cached) so a ping sounds EVEN WHEN THE WINDOW IS
 // UNFOCUSED/HIDDEN — WebAudio is not subject to the hidden-tab rAF/animation freeze. Deduped +
 // throttled so a burst coalesces into one ding. Whether it plays at all, which tone, and how
@@ -10,16 +12,25 @@ const MIN_GAP_MS = 1500
 const buffers = new Map()      // tone id -> AudioBuffer (decoded once)
 
 export const TONES = {
-  confirm:  { label: 'Confirm',  file: '/sounds/confirm.m4a' },
-  glass:    { label: 'Glass',    file: '/sounds/glass.m4a' },
-  pluck:    { label: 'Pluck',    file: '/sounds/pluck.m4a' },
-  question: { label: 'Question', file: '/sounds/question.m4a' },
-  bong:     { label: 'Bong',     file: '/sounds/bong.m4a' },
-  drop:     { label: 'Drop',     file: '/sounds/drop.m4a' },
-  open:     { label: 'Open',     file: '/sounds/open.m4a' },
-  rise:     { label: 'Rise',     file: '/sounds/rise.m4a' },
+  chime:    { label: "Chime", file: '/sounds/chime.m4a' },
+  pop:      { label: "Pop-up", file: '/sounds/pop.m4a' },
+  notify:   { label: "Notification", file: '/sounds/notify.m4a' },
+  bell:     { label: "Bell chime", file: '/sounds/bell.m4a' },
+  beep:     { label: "Beep ping", file: '/sounds/beep.m4a' },
+  dingdong: { label: "Soft ding-dong", file: '/sounds/dingdong.m4a' },
+  pup:      { label: "Pup alert", file: '/sounds/pup.m4a' },
+  elevator: { label: "Elevator ping", file: '/sounds/elevator.m4a' },
+  chime2:   { label: "Chime (long)", file: '/sounds/chime2.m4a' },
+  alert:    { label: "UI alert", file: '/sounds/alert.m4a' },
+  scifi:    { label: "Sci-fi ping", file: '/sounds/scifi.m4a' },
+  notify2:  { label: "Notification 2", file: '/sounds/notify2.m4a' },
+  soft1:    { label: "Modern 1", file: '/sounds/soft1.m4a' },
+  soft2:    { label: "Modern 2", file: '/sounds/soft2.m4a' },
+  soft3:    { label: "Modern 3", file: '/sounds/soft3.m4a' },
+  soft4:    { label: "Modern 4", file: '/sounds/soft4.m4a' },
+  soft5:    { label: "Modern 5", file: '/sounds/soft5.m4a' },
 }
-export const DEFAULT_TONE = 'confirm'
+export const DEFAULT_TONE = 'chime'
 export const DEFAULT_VOLUME = 0.3
 
 function audioContext() {

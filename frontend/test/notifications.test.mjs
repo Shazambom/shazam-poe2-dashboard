@@ -10,7 +10,7 @@ const { useStatus } = await import('../src/lib/statusStore.js')
 const { bus } = await import('../src/lib/api.js')
 
 test('defaults: banner + sound on, OS off, for both families', () => {
-  assert.deepEqual(N.notifyPrefs(), { volume: 0.3, live: { banner: true, sound: true, os: false, tone: 'confirm' }, signals: { banner: true, sound: true, os: false, tone: 'glass' } })
+  assert.deepEqual(N.notifyPrefs(), { volume: 0.3, live: { banner: true, sound: true, os: false, tone: 'chime' }, signals: { banner: true, sound: true, os: false, tone: 'pop' } })
   useStatus.setState({ settings: { notifications: { volume: 0.9, signals: { os: true } } } })
   const p = N.notifyPrefs()
   assert.equal(p.volume, 0.9); assert.equal(p.signals.os, true); assert.equal(p.signals.banner, true); assert.equal(p.live.os, false)
@@ -61,12 +61,12 @@ test('a palette of bundled CC0 tones, one selectable per family', async () => {
   for (const [id, t] of Object.entries(TONES)) { assert.ok(t.label && t.file, id); assert.ok(existsSync(pub + t.file), `${id}: ${t.file} missing`) }
   assert.ok(existsSync(pub + '/sounds/LICENSE.txt') && readFileSync(pub + '/sounds/LICENSE.txt', 'utf8').includes('CC0'))
   assert.ok(DEFAULT_TONE in TONES)
-  assert.equal(N.notifyPrefs().live.tone, 'confirm')
-  assert.equal(N.notifyPrefs().signals.tone, 'glass')
-  useStatus.setState({ settings: { notifications: { signals: { tone: 'bong' } } } })
+  assert.equal(N.notifyPrefs().live.tone, 'chime')
+  assert.equal(N.notifyPrefs().signals.tone, 'pop')
+  useStatus.setState({ settings: { notifications: { signals: { tone: 'bell' } } } })
   const calls = []
   N.setChannels({ sound: (v, tone) => calls.push(tone), os: () => {} })
   N.notify('signals', { title: 't' }); N.notify('live', { title: 't' })
-  assert.deepEqual(calls, ['bong', 'confirm'])
+  assert.deepEqual(calls, ['bell', 'chime'])
   useStatus.setState({ settings: null })
 })

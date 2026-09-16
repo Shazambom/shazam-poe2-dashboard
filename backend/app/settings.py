@@ -64,8 +64,8 @@ DEFAULTS: dict = {
     # and sound on by default; OS notifications opt-in. `volume` is the shared ping volume.
     "notifications": {
         "volume": 0.3,
-        "live": {"banner": True, "sound": True, "os": False, "tone": "confirm"},
-        "signals": {"banner": True, "sound": True, "os": False, "tone": "glass"},
+        "live": {"banner": True, "sound": True, "os": False, "tone": "chime"},
+        "signals": {"banner": True, "sound": True, "os": False, "tone": "pop"},
     },
     # Default filters (UI can override per request)
     "filters": {

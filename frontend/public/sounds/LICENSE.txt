@@ -1,4 +1,21 @@
-Notification tones: "Interface Sounds" by Kenney (https://kenney.nl/assets/interface-sounds),
-licensed CC0 1.0 Universal (public domain — no attribution required; credited here anyway).
-Obtained via https://github.com/Calinou/kenney-interface-sounds; loudness-normalised
-(-23 LUFS, -3 dBTP) and encoded to AAC (.m4a) for bundling. Mapping: see frontend/src/lib/ping-sound.js.
+Notification tones bundled with Arbiter. All CC0 1.0 Universal (public domain — no attribution
+required; credited here anyway). Each was loudness-normalised (-23 LUFS, -3 dBTP) and encoded to
+AAC (.m4a) for bundling. Mapping = frontend/src/lib/ping-sound.js TONES.
+
+chime.m4a  "Chime Notification" by Jofae (CC0 1.0) https://freesound.org/people/Jofae/sounds/380482/ — Freesound rating 4.9/5, 7540 downloads
+pop.m4a  "Pop-up/notification.wav" by GabrielAraujo (CC0 1.0) https://freesound.org/people/GabrielAraujo/sounds/242502/ — Freesound rating 4.8/5, 5206 downloads
+notify.m4a  "Notification Sound" by thehorriblejoke (CC0 1.0) https://freesound.org/people/thehorriblejoke/sounds/583554/ — Freesound rating 4.8/5, 2391 downloads
+bell.m4a  "Bell Chime Alert" by plasterbrain (CC0 1.0) https://freesound.org/people/plasterbrain/sounds/419493/ — Freesound rating 4.8/5, 3110 downloads
+beep.m4a  "BeepPing.wav" by noirenex (CC0 1.0) https://freesound.org/people/noirenex/sounds/245242/ — Freesound rating 4.8/5, 1387 downloads
+dingdong.m4a  "Soft-Notifications - Bell - Ding-Dong.mp3" by LegitCheese (CC0 1.0) https://freesound.org/people/LegitCheese/sounds/571513/ — Freesound rating 4.9/5, 1090 downloads
+pup.m4a  "pup_alert.mp3" by willy_ineedthatapp_com (CC0 1.0) https://freesound.org/people/willy_ineedthatapp_com/sounds/167337/ — Freesound rating 4.8/5, 4893 downloads
+elevator.m4a  "Elevator Ping 02" by LilMati (CC0 1.0) https://freesound.org/people/LilMati/sounds/514865/ — Freesound rating 4.9/5, 1678 downloads
+chime2.m4a  "Chime sound" by jgreer (CC0 1.0) https://freesound.org/people/jgreer/sounds/333629/ — Freesound rating 4.8/5, 5399 downloads
+alert.m4a  "GASP_UI_Alert_2.wav" by Rob_Marion (CC0 1.0) https://freesound.org/people/Rob_Marion/sounds/542042/ — Freesound rating 5.0/5, 666 downloads
+scifi.m4a  "scifi ping.wav" by draperz (CC0 1.0) https://freesound.org/people/draperz/sounds/221802/ — Freesound rating 5.0/5, 417 downloads
+notify2.m4a  "Notification_2.wav" by Wax_vibe (CC0 1.0) https://freesound.org/people/Wax_vibe/sounds/554554/ — Freesound rating 4.8/5, 740 downloads
+soft1.m4a  "Notification 1" by CreatorAssets (CC0 1.0) https://creatorassets.com/a/notification-sound-effects
+soft2.m4a  "Notification 2" by CreatorAssets (CC0 1.0) https://creatorassets.com/a/notification-sound-effects
+soft3.m4a  "Notification 5" by CreatorAssets (CC0 1.0) https://creatorassets.com/a/notification-sound-effects
+soft4.m4a  "Notification 6" by CreatorAssets (CC0 1.0) https://creatorassets.com/a/notification-sound-effects
+soft5.m4a  "Notification 8" by CreatorAssets (CC0 1.0) https://creatorassets.com/a/notification-sound-effects
