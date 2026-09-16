@@ -18,13 +18,18 @@ const send = (method, params) => new Promise((resolve) => {
   const onMsg = (raw) => { const m = JSON.parse(raw); if (m.id === mid) { ws.off('message', onMsg); resolve(m) } }
   ws.on('message', onMsg); ws.send(JSON.stringify({ id: mid, method, params }))
 })
+// No `scale` on the clip: a scaled capture flashes device emulation on the visible window.
+process.on('SIGINT', () => { try { ws.close() } catch {}; process.exit(130) })
 ws.on('open', async () => {
-  await send('Page.enable', {}); await send('Runtime.enable', {})
-  const box = await send('Runtime.evaluate', { expression: `(()=>{const e=document.querySelector('${sel}');if(!e)return null;const r=e.getBoundingClientRect();return JSON.stringify({x:r.x,y:r.y,w:r.width,h:r.height})})()`, returnByValue: true })
-  if (!box.result.result.value) { console.error('selector not found:', sel); process.exit(1) }
-  const b = JSON.parse(box.result.result.value)
-  const shot = await send('Page.captureScreenshot', { format: 'png', clip: { x: Math.max(0, b.x - 8), y: Math.max(0, b.y - 8), width: b.w + 16, height: b.h + 16, scale: 2 } })
-  fs.writeFileSync(out, Buffer.from(shot.result.data, 'base64'))
-  console.log('wrote', out)
-  ws.close(); process.exit(0)
+  try {
+    await send('Page.enable', {}); await send('Runtime.enable', {})
+    const box = await send('Runtime.evaluate', { expression: `(()=>{const e=document.querySelector('${sel}');if(!e)return null;const r=e.getBoundingClientRect();return JSON.stringify({x:r.x,y:r.y,w:r.width,h:r.height})})()`, returnByValue: true })
+    if (!box.result.result.value) { console.error('selector not found:', sel); process.exitCode = 1; return }
+    const b = JSON.parse(box.result.result.value)
+    const shot = await send('Page.captureScreenshot', { format: 'png', clip: { x: Math.max(0, b.x - 8), y: Math.max(0, b.y - 8), width: b.w + 16, height: b.h + 16, scale: 1 } })
+    fs.writeFileSync(out, Buffer.from(shot.result.data, 'base64'))
+    console.log('wrote', out)
+  } finally {
+    ws.close(); process.exit(process.exitCode || 0)
+  }
 })

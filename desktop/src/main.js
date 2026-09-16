@@ -350,7 +350,7 @@ ipcMain.handle('poe-set-cookie', async (_e, cookie) => {
 ipcMain.handle('open-trade', (_e, url) => {
   if (!isPoeUrl(url)) return false
   const w = new BrowserWindow({ width: 1280, height: 900, title: 'Path of Exile — Trade',
-    backgroundColor: BACKDROP.trade, webPreferences: { sandbox: true } })
+    backgroundColor: BACKDROP.trade, webPreferences: { sandbox: true, zoomFactor: 1 } })
   w.loadURL(url)
   return true
 })
@@ -459,29 +459,28 @@ ipcMain.handle('update:install', () => {
 })
 
 // ------------------------------------------------------------------- menu
+// Zoom is pinned to 1 everywhere (menu.js explains the bug); this resets any guest that drifted.
+function resetTradeZoom() {
+  try {
+    require('electron').webContents.getAllWebContents().forEach(c => { try { c.setZoomLevel(0); c.setZoomFactor(1) } catch {} })
+  } catch {}
+}
+
 function buildMenu() {
-  const template = [
-    ...(process.platform === 'darwin' ? [{ role: 'appMenu' }] : []),
-    {
-      label: 'Arbiter',
-      submenu: [
-        { label: 'Connect PoE trade session…', click: connectPoeSession },
-        { label: 'Log out of pathofexile.com', click: async () => {
-            await session.defaultSession.clearStorageData({ origin: POE })
-            dialog.showMessageBox(win, { message: 'Cleared the pathofexile.com login.' })
-          } },
-        { type: 'separator' },
-        { label: `Backend: ${backendKind === 'local' ? 'local (this machine)' : 'dev server'}`, enabled: false },
-        { type: 'separator' },
-        { label: 'Open data folder', click: () => shell.openPath(path.join(app.getPath('userData'), 'data')) },
-        { label: 'Check for updates', click: () => { try { _autoUpdater?.checkForUpdates() } catch {} } },
-      ],
-    },
-    { role: 'editMenu' },
-    { role: 'viewMenu' },
-    { role: 'windowMenu' },
+  const arbiter = [
+    { label: 'Connect PoE trade session…', click: connectPoeSession },
+    { label: 'Log out of pathofexile.com', click: async () => {
+        await session.defaultSession.clearStorageData({ origin: POE })
+        dialog.showMessageBox(win, { message: 'Cleared the pathofexile.com login.' })
+      } },
+    { type: 'separator' },
+    { label: `Backend: ${backendKind === 'local' ? 'local (this machine)' : 'dev server'}`, enabled: false },
+    { type: 'separator' },
+    { label: 'Open data folder', click: () => shell.openPath(path.join(app.getPath('userData'), 'data')) },
+    { label: 'Check for updates', click: () => { try { _autoUpdater?.checkForUpdates() } catch {} } },
   ]
-  Menu.setApplicationMenu(Menu.buildFromTemplate(template))
+  const { buildMenuTemplate } = require('./menu.js')
+  Menu.setApplicationMenu(Menu.buildFromTemplate(buildMenuTemplate({ arbiter, resetTradeZoom })))
 }
 
 // ------------------------------------------- EE2 integration (presence-driven)
@@ -534,6 +533,7 @@ app.whenReady().then(async () => {
     webPreferences: {
       contextIsolation: true, sandbox: true, preload: path.join(__dirname, 'preload.js'),
       webviewTag: true,   // the Trade tab embeds pathofexile.com/trade2 in a <webview>
+      zoomFactor: 1,      // never inherit a persisted per-origin zoom (see menu.js)
     },
   })
   win.loadURL(uiUrl)
@@ -560,6 +560,9 @@ app.whenReady().then(async () => {
 // Trade tab too); anything else (forum links, wiki, etc.) opens externally.
 app.on('web-contents-created', (_e, contents) => {
   if (contents.getType() !== 'webview') return
+  // Pin the guest's zoom: Chromium persists zoom per origin on the shared session and syncs the
+  // guest to the embedder on navigation, which is how a stray ⌘+ used to stick across restarts.
+  try { contents.setZoomFactor(1); contents.setVisualZoomLevelLimits(1, 1) } catch {}
   contents.setWindowOpenHandler(({ url }) => {
     if (isAuthUrl(url)) return { action: 'allow' }
     shell.openExternal(url)
@@ -574,7 +577,7 @@ app.on('web-contents-created', (_e, contents) => {
   // The payload names the guest (wcId) so the renderer can ignore the open-trade pop-out, and
   // the loading phases drive the workspace's progress hairline.
   const fwd = (url, phase) => { if (isPoeUrl(url)) try { win?.webContents.send('trade:webview-nav', { url, wcId: contents.id, phase }) } catch {} }
-  contents.on('did-navigate', (_ev, url) => fwd(url, 'nav'))
+  contents.on('did-navigate', (_ev, url) => { try { contents.setZoomLevel(0) } catch {}; fwd(url, 'nav') })
   contents.on('did-navigate-in-page', (_ev, url) => fwd(url, 'nav'))
   contents.on('did-start-loading', () => fwd(contents.getURL(), 'start'))
   contents.on('did-stop-loading', () => fwd(contents.getURL(), 'stop'))
