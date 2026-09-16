@@ -52,7 +52,7 @@ def _convert_path(g: Graph, path: list[Edge], amount: float, ref_value: dict[str
 
 
 def _best_conversions(g: Graph, ref_value: dict[str, float], have: str, want: str,
-                      amount: float, max_steps: int | None = None, k: int = 3,
+                      amount: float, max_steps: int | None = None,
                       max_gain_pct: float = 2.0,
                       gold_value_per_1k: float = GOLD_VALUE_DIVINE_PER_1K,
                       bridge: dict[str, float] | None = None) -> dict:

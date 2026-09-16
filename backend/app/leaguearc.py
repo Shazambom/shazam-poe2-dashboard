@@ -107,7 +107,7 @@ def _resolve_item(meta: dict, item) -> tuple[int | None, str]:
     return None, str(item)
 
 
-def arc_for(item, numeraire: str = "divine", horizon: int = HORIZON) -> dict:
+def arc_for(item, numeraire: str = "divine") -> dict:
     """Read-only league arc for `item` priced in `numeraire`. Degrades gracefully: no data → empty
     arc; sidecar down → recency-weighted (weighted=False, resembles=None)."""
     if numeraire not in holdscore.NUMERAIRES:
@@ -128,7 +128,7 @@ def arc_for(item, numeraire: str = "divine", horizon: int = HORIZON) -> dict:
             "cur_age": None, "history": [], "arc": [], "windows": [], "weighted": False}
     if item_id is None:
         return base
-    proj = project(item_id, cur, past, weights, horizon)
+    proj = project(item_id, cur, past, weights)
     if proj:
         base.update(proj)
         base["resembles"] = resembles if base["weighted"] else None   # only claim a match if used

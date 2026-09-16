@@ -192,14 +192,3 @@ def fees() -> dict:
         else:
             unmapped.append(meta)
     return {"by_trade": by_trade, "by_meta": by_meta, "unmapped": sorted(unmapped), "state": state}
-
-
-def fee_for(trade_id: str) -> int | None:
-    from .currencies import registry
-
-    by_meta = db.kv_get("gold_fees_meta", {})
-    cur = registry.by_id.get(trade_id)
-    for meta in (cur.metadata_ids if cur else []):
-        if meta in by_meta:
-            return by_meta[meta]["fee"]
-    return None

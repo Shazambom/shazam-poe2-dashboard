@@ -11,6 +11,4 @@ export const nav = {
   consumePendingTrading() { const s = pendingTrading; pendingTrading = null; return s },
   // Ask a section container (Strategy/Economy) to switch to a sub-view.
   openSub(section, sub) { subs.forEach(f => { try { f({ type: 'openSub', section, sub }) } catch {} }) },
-  // Ask the Trading tab to jump to Live and focus the newest ping (hotkey / orb click).
-  focusLive() { subs.forEach(f => { try { f({ type: 'focusLive' }) } catch {} }) },
 }

@@ -68,7 +68,7 @@ def _supervise(cmd: list[str]) -> None:
             err_tail = b""
             try:                                    # drain stderr so a chatty child can't block
                 err_tail = (_proc.stderr.read() or b"") if _proc.stderr else b""
-            except Exception:
+            except (OSError, ValueError):   # pipe already closed on a hard crash
                 pass
             rc = _proc.wait()
             if _stop:

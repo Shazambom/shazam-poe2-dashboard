@@ -21,16 +21,13 @@ touches no DB and needs no snapshot.
 """
 from __future__ import annotations
 
-import time
 
 DAMPING = 0.85           # PageRank teleport/follow split (standard 0.85)
 _MAX_ITER = 100          # power-iteration cap (converges in ~tens on these small graphs)
 _TOL = 1e-9              # L1 convergence threshold
 BRIDGE_TOP_K = 12        # betweenness enumerated among the K most valuable currencies
 HUB_N = 5                # how many currencies get the Board hub chip
-_CACHE_TTL_S = 30.0      # scores() memo window (matches board())
 
-_cache: tuple[int, float, dict] | None = None   # (orderbook version, ts, result)
 
 
 def _weights(g, rv: dict[str, float]) -> dict[tuple[str, str], float]:
@@ -117,20 +114,3 @@ def seed_missing(watchlist: list[str], hub_ids: set[str], reference: str) -> lis
     Stable-ordered, no duplicates. Empty when hubs aren't known yet (cold graph) so the
     one-time seed WAITS for real hubs rather than seeding nothing and marking itself done."""
     return [h for h in sorted(hub_ids) if h != reference and h not in watchlist]
-
-
-def scores() -> dict[str, dict[str, float]]:
-    """Combined {"hub":…, "bridge":…} off the live cached graph, memoized per orderbook
-    version (like board()). The read surface for Phase 4's propagation priors."""
-    global _cache
-    from . import arbitrage, orderbook
-
-    ver = orderbook.state["version"]
-    now = time.time()
-    if _cache and _cache[0] == ver and now - _cache[1] < _CACHE_TTL_S:
-        return _cache[2]
-    g = arbitrage.cached_graph()
-    rv = g.ref_values()
-    result = {"hub": pagerank(g, rv), "bridge": betweenness_lite(g, rv)}
-    _cache = (ver, now, result)
-    return result

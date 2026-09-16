@@ -6,7 +6,7 @@ import RefreshButton from './RefreshButton.jsx'
 // Shared route-path renderers, extracted from RoutesView so the Convert tool renders a
 // conversion exactly like an arbitrage loop (same visual vocabulary). `Loop` works for any
 // route-shaped dict (loops AND open conversion paths): it reads path/path_names/kinds/steps.
-export const RECIPE_GLYPH = { disenchant: '⊖', combine: '⊕', reforge: '⟳', vendor: '⇄' }
+const RECIPE_GLYPH = { disenchant: '⊖', combine: '⊕', reforge: '⟳', vendor: '⇄' }
 
 export function Loop({ r }) {
   return (

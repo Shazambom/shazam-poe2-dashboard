@@ -16,7 +16,6 @@ export default function TradingView({ league }) {
   const [sub, setSub] = useState(() => nav.consumePendingTrading() || 'workspace')
   useEffect(() => nav.on(e => {
     if (e.type === 'openTrading' && e.sub) setSub(e.sub === 'browse' || e.sub === 'watches' ? 'workspace' : e.sub)
-    if (e.type === 'focusLive') setSub('live')
   }), [])
 
   return (

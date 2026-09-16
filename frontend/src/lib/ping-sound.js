@@ -58,4 +58,3 @@ export function playPing() {
   } catch {}
 }
 
-export function soundReady() { return unlocked }

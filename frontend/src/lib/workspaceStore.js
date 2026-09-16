@@ -2,9 +2,10 @@ import { create } from 'zustand'
 import { api, cleanErr, toast } from './api.js'
 import { uid } from './session.js'
 
-// The Trading workspace: a nested filesystem-like tree (folders + search items) plus a
-// dockview layout + which items are open as panels. Backed by user.sqlite via
-// /api/trading/workspace; the flat `watches` blob was migrated into this (migration #2).
+// The Trading workspace: a nested filesystem-like tree (folders + search items), plus the
+// persisted `layout`/`openTabs` fields (kept in the document for forward compatibility).
+// Backed by user.sqlite via /api/trading/workspace; the flat `watches` blob was migrated into
+// this (migration #2).
 //
 // The store is the single source of truth for the tree; mutations persist through a
 // debounced PUT so drag/rename/nest survive reload + restart. The league is never stored
@@ -133,9 +134,6 @@ export const useWorkspace = create((set, get) => ({
     persist(get)
   },
 
-  setLayout: (layout) => { set({ layout }); persist(get) },
-  openTab: (id) => { set(s => s.openTabs.includes(id) ? {} : { openTabs: [...s.openTabs, id] }); persist(get) },
-  closeTab: (id) => { set(s => ({ openTabs: s.openTabs.filter(t => t !== id) })); persist(get) },
   nodeById: (id) => findNode(get().tree, id),
 }))
 

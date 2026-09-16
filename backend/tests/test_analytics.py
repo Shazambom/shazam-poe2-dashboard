@@ -90,19 +90,6 @@ def test_fail_marks_error():
     assert row[0] == "error" and row[1] == "boom"
 
 
-def test_read_cache_list_mode():
-    _clear()
-    c = _conn()
-    analytics.complete(c, None, "discords", "10", {"z": 2.0})
-    analytics.complete(c, None, "discords", "20", {"z": 4.0})
-    rows = analytics.read_cache(c, "discords")           # no key -> list of {key, computed_at, value}
-    assert {r["key"] for r in rows} == {"10", "20"}
-    assert all("value" in r and "computed_at" in r for r in rows)
-    # missing key -> None (never raises; endpoints depend on this)
-    assert analytics.read_cache(c, "discords", "nope") is None
-    assert analytics.read_cache(c, "no-such-kind") == []
-
-
 def test_claim_is_fifo_across_kinds():
     """The single consumer claims the OLDEST queued job of any kind (it dispatches by kind itself),
     so mixed kinds come out in enqueue order."""

@@ -47,7 +47,7 @@ def test_watch_parent_noop_without_pid():
 def test_watch_parent_fires_on_dead():
     fired = []
     # A pid that's already gone -> on_dead should fire promptly.
-    t = watchdog.watch_parent(2_000_000_000, interval=0.02, on_dead=lambda: fired.append(True))
+    t = watchdog.watch_parent(2_000_000_000, interval=0.02, on_dead=lambda reason: fired.append(True))
     assert t is not None
     for _ in range(100):
         if fired:

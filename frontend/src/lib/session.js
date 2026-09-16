@@ -3,30 +3,14 @@
 //
 //   * desktop app  → window.poe2desktop.connectSession() (Electron opens the
 //                    login window and reads the HttpOnly cookie natively)
-//   * browser + extension → postMessage handshake with the content script
-//   * plain browser → no bridge; caller falls back to paste/helper
+//   * plain browser → no bridge; caller falls back to paste / tools/connect.py
 import { toast } from './api.js'
-
-let extReady = false
-if (typeof window !== 'undefined') {
-  window.addEventListener('message', (e) => {
-    if (e.source === window && e.origin === window.location.origin &&
-        e.data && e.data.source === 'poe2arb-ext' && e.data.cmd === 'hello') extReady = true
-  })
-  // Prod the content script to re-announce (the app mounts after its first hello).
-  try { window.postMessage({ source: 'poe2arb', cmd: 'ping' }, window.location.origin) } catch {}
-}
 
 // The ONE "are we in the desktop app" predicate (and its trade-engine refinement).
 export const isDesktop = typeof window !== 'undefined' && !!window.poe2desktop
 export const hasTradeEngine = typeof window !== 'undefined' && !!window.poe2desktop?.trade
 
-export function connectBridge() {
-  if (typeof window === 'undefined') return null
-  if (isDesktop) return 'desktop'
-  if (extReady) return 'extension'
-  return null
-}
+export const connectBridge = () => (isDesktop ? 'desktop' : null)   // 'desktop' | null
 
 // Returns a promise resolving to { ok, message }. Never rejects.
 export function connectSession() {
@@ -35,24 +19,6 @@ export function connectSession() {
     return window.poe2desktop.connectSession()
       .then(r => r || { ok: false, message: 'no response' })
       .catch(e => ({ ok: false, message: String(e.message || e) }))
-  }
-  if (bridge === 'extension') {
-    return new Promise((resolve) => {
-      const onMsg = (e) => {
-        if (e.source !== window || e.origin !== window.location.origin) return
-        const m = e.data
-        if (!m || m.source !== 'poe2arb-ext' || m.cmd !== 'connect-result') return
-        window.removeEventListener('message', onMsg)
-        clearTimeout(timer)
-        resolve({ ok: !!m.ok, message: m.message })
-      }
-      window.addEventListener('message', onMsg)
-      const timer = setTimeout(() => {
-        window.removeEventListener('message', onMsg)
-        resolve({ ok: false, message: 'No answer from the extension — reload it on chrome://extensions and refresh.' })
-      }, 10000)
-      window.postMessage({ source: 'poe2arb', cmd: 'connect' }, window.location.origin)
-    })
   }
   return Promise.resolve({ ok: false, message: 'no bridge' })
 }
@@ -65,11 +31,6 @@ export const uid = () => Math.random().toString(36).slice(2, 9)
 // The trade search page for a league (the Trade tab's home). PoE2 URLs carry a `poe2`
 // realm segment: /trade2/search/poe2/{league}[/{slug}].
 export const tradeHome = (league) => `${TRADE_BASE}/search/poe2/${encodeURIComponent(league || 'Standard')}`
-
-// One owner of the stored watch-search shape, built from a parsed trade URL.
-export const searchFromParsed = (p) => ({
-  id: uid(), title: `Search ${p.slug.slice(0, 6)}`, type: p.type, slug: p.slug, live: p.live, done: false,
-})
 
 // Reconstruct a trade-search URL from a stored {type, slug}, injecting the league
 // at open time (never stored). live=true → GGG's native live search.

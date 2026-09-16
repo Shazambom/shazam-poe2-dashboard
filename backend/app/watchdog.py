@@ -73,14 +73,6 @@ def _hard_exit(reason: Optional[str] = None) -> None:
     os._exit(0)
 
 
-def _call_dead(dead: Callable, reason: str) -> None:
-    """Invoke an on_dead callback whether it accepts a reason arg or not (back-compat)."""
-    try:
-        dead(reason)
-    except TypeError:
-        dead()
-
-
 def watch_parent(pid: Optional[int], *, interval: float = 2.0, misses: int = 2,
                  on_dead: Optional[Callable] = None) -> Optional[threading.Thread]:
     """Poll `pid`; call on_dead when it stays gone for `misses` CONSECUTIVE polls. No-op (returns
@@ -100,7 +92,7 @@ def watch_parent(pid: Optional[int], *, interval: float = 2.0, misses: int = 2,
                 continue
             gone += 1
             if gone >= misses:
-                _call_dead(dead, "parent-pid-gone")
+                dead("parent-pid-gone")
                 return
 
     t = threading.Thread(target=_loop, daemon=True, name="parent-pid-watchdog")
@@ -125,7 +117,7 @@ def watch_stdin_eof(on_dead: Optional[Callable] = None) -> Optional[threading.Th
                 pass
         except Exception:
             pass
-        _call_dead(dead, "stdin-eof")
+        dead("stdin-eof")
 
     t = threading.Thread(target=_loop, daemon=True, name="stdin-eof-watchdog")
     t.start()

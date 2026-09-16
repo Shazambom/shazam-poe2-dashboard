@@ -126,25 +126,13 @@ def prune_jobs(conn: sqlite3.Connection, keep: int = 200) -> None:
 
 
 # ------------------------------------------------------------------- results (cache) — READ only
-def read_cache(conn: sqlite3.Connection, kind: str, key: Optional[str] = None):
-    """With a key: the parsed value or None. Without: a list of {key, computed_at, value} for the
-    kind ([] when empty). Never raises — endpoints degrade gracefully when the sidecar is idle."""
+def read_cache(conn: sqlite3.Connection, kind: str, key: str):
+    """The parsed cached value for (kind, key), or None. Never raises — endpoints degrade
+    gracefully when the sidecar is idle."""
     try:
-        if key is not None:
-            row = conn.execute(
-                "SELECT value_json FROM analytics_cache WHERE kind=? AND key=?",
-                (kind, str(key))).fetchone()
-            return json.loads(row[0]) if row else None
-        rows = conn.execute(
-            "SELECT key, computed_at, value_json FROM analytics_cache WHERE kind=? ORDER BY key",
-            (kind,)).fetchall()
-        out = []
-        for k, ts, vj in rows:
-            try:
-                v = json.loads(vj)
-            except (ValueError, TypeError):
-                continue
-            out.append({"key": k, "computed_at": ts, "value": v})
-        return out
+        row = conn.execute(
+            "SELECT value_json FROM analytics_cache WHERE kind=? AND key=?",
+            (kind, str(key))).fetchone()
+        return json.loads(row[0]) if row else None
     except sqlite3.Error:
-        return None if key is not None else []
+        return None

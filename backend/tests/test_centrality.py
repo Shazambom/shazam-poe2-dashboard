@@ -108,19 +108,6 @@ def test_seed_missing_adds_only_new_hubs_excluding_reference():
     assert centrality.seed_missing(["chaos"], set(), "exalted") == []
 
 
-def test_scores_shape(monkeypatch):
-    """scores() returns the combined {"hub","bridge"} contract Phase 4 reads, off the cache."""
-    from app import orderbook
-    g = _star()
-    monkeypatch.setattr(arbitrage.graph, "cached_graph", lambda: g)
-    monkeypatch.setattr(arbitrage, "cached_graph", lambda: g)
-    orderbook.state["version"] = orderbook.state.get("version", 0) + 1
-    centrality._cache = None
-    sc = centrality.scores()
-    assert set(sc) == {"hub", "bridge"}
-    assert sc["hub"]["c"] == max(sc["hub"].values())
-
-
 # ---------------------------------------------------------- empty graph is safe
 def test_empty_graph_is_safe():
     g = Graph({"reference": "x", "league": "T", "max_steps": 4})

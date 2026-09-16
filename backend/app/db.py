@@ -401,18 +401,3 @@ def set_capital(entries: dict[str, float]) -> None:
             "INSERT INTO capital(currency, qty) VALUES(?, ?)",
             [(k, float(v)) for k, v in entries.items() if float(v) > 0],
         )
-
-
-def market_meta_get(key: str, default: Any = None) -> Any:
-    with q() as c:
-        row = c.execute("SELECT value FROM market_meta WHERE key=?", (key,)).fetchone()
-    return row["value"] if row else default
-
-
-def market_meta_set(key: str, value: str) -> None:
-    with tx() as c:
-        c.execute(
-            "INSERT INTO market_meta(key, value) VALUES(?, ?) "
-            "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
-            (key, str(value)),
-        )

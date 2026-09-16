@@ -26,6 +26,4 @@ function registerHotkey(getWin, combo) {
 }
 
 function unregisterAll() { try { globalShortcut.unregisterAll() } catch {} current = null }
-function currentCombo() { return current }
-
-module.exports = { registerHotkey, unregisterAll, currentCombo }
+module.exports = { registerHotkey, unregisterAll }

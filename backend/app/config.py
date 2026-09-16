@@ -39,8 +39,8 @@ USER_AGENT = os.environ.get(
 DIGEST_BACKFILL_HOURS = _int("DIGEST_BACKFILL_HOURS", 168)
 DIGEST_POLL_SECONDS = _int("DIGEST_POLL_SECONDS", 300)
 
-# Live order book: seconds between pair fetches and between full watchlist sweeps.
-ORDERBOOK_MIN_GAP_SECONDS = _int("ORDERBOOK_MIN_GAP_SECONDS", 6)
+# Live order book: seconds between full watchlist sweeps (pacing between pair fetches is the
+# gateway's rate policy, derived from GGG's headers).
 ORDERBOOK_SWEEP_SECONDS = _int("ORDERBOOK_SWEEP_SECONDS", 600)
 
 GGG_DIGEST_URL = "https://web.poecdn.com/api/currency-exchange/poe2"

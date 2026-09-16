@@ -224,11 +224,8 @@ def _merge_meta_bridge(new: dict[str, str]) -> None:
     if changed:
         from .currencies import registry
         registry.load_bridge()
-        try:
-            from . import arbitrage
-            arbitrage.invalidate_caches()
-        except Exception:  # never let a cache poke break the crawl
-            pass
+        from . import arbitrage   # lazy: arbitrage imports this module (the one genuine cycle)
+        arbitrage.invalidate_caches()
     log.info("meta_bridge: %d total mappings (%d new/changed this pass)", len(cur), changed)
 
 

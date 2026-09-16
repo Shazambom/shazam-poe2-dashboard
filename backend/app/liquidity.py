@@ -39,8 +39,7 @@ def _source(kinds: list[str]) -> str:
 
 
 def realizable(g: "arbitrage.Graph", ref_value: dict[str, float], currency: str, qty: float,
-               *, cash: set[str] | None = None, gold_value_per_1k: float = 0.0,
-               max_steps: int | None = None) -> dict:
+               *, cash: set[str] | None = None, gold_value_per_1k: float = 0.0) -> dict:
     """What `qty` of `currency` would ACTUALLY realize if cashed out now, valued in the reference.
 
     Cash-like holdings (the market's hubs — see `cash_set` — plus the reference) are already
@@ -86,7 +85,6 @@ def realizable(g: "arbitrage.Graph", ref_value: dict[str, float], currency: str,
         if target == currency:
             continue
         cand = arbitrage._best_conversions(g, ref_value, currency, target, float(qty),
-                                           max_steps=max_steps,
                                            gold_value_per_1k=gold_value_per_1k)["best"]
         if cand is not None and (best is None or cand["net_ref"] > best["net_ref"]):
             best = cand

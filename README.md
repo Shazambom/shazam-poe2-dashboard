@@ -66,7 +66,7 @@ top bar shows the logged-in account. `/api/account/profile` and
 | Source | What it gives | Cadence |
 |---|---|---|
 | GGG hourly digest (`web.poecdn.com/api/currency-exchange/poe2`) | Executed trade volume, stock and ratio range per market pair, per hour. Rate is derived as volume(B)/volume(A) — the cleared VWAP. | Backfills `DIGEST_BACKFILL_HOURS`, then polls each hour boundary. Always at least one hour behind. |
-| Live order book (`pathofexile.com/api/trade2/exchange/<league>`) | Current sell ladder for every ordered pair in the watchlist, with stock and whisper. Needs a connected trade session. | One request every `ORDERBOOK_MIN_GAP_SECONDS`, full sweep every `ORDERBOOK_SWEEP_SECONDS`. Backs off on 429. |
+| Live order book (`pathofexile.com/api/trade2/exchange/<league>`) | Current sell ladder for every ordered pair in the watchlist, with stock and whisper. Needs a connected trade session. | Paced by GGG's rate-limit headers, full sweep every `ORDERBOOK_SWEEP_SECONDS`. Backs off on 429. |
 | Recipes (`data/recipes.json`, editable in the UI) | Disenchant / combine / reforge conversions. No gold. | Static |
 
 Live quotes win; digest fills gaps when enabled; a recipe is used only where it beats the exchange.

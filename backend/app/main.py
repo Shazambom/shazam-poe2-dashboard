@@ -332,22 +332,6 @@ def oauth_logout():
     return oauth.logout()
 
 
-@app.get("/api/account/profile")
-async def account_profile():
-    try:
-        return await oauth.get("/profile")
-    except PermissionError as exc:
-        raise HTTPException(401, str(exc))
-
-
-@app.get("/api/account/characters")
-async def account_characters():
-    try:
-        return await oauth.get("/character/poe2")
-    except PermissionError as exc:
-        raise HTTPException(401, str(exc))
-
-
 # -------------------------------------------------------------- gold fees
 @app.get("/api/goldfees")
 def gold_fees():
@@ -376,14 +360,15 @@ def get_watches():
 
 @app.put("/api/watches")
 def put_watches(body: WatchesBody):
-    db.kv_set("watches", body.folders)
-    return {"folders": body.folders}
+    """Gone. The flat `watches` shape was migrated into the workspace tree (migration #2) and
+    nothing reads the old key; a lagging client's save must fail LOUDLY rather than either
+    diverge into a blob nobody shows or overwrite the richer tree with its flat copy."""
+    raise HTTPException(410, "saved searches moved to /api/trading/workspace")
 
 
-# Filesystem workspace (nested tree) — the successor to the flat watches organiser.
-# Stored under a NEW user-kv key `trading_workspace`; the legacy `watches` blob is kept
-# untouched as a backup (see migrations_user._m2). /api/watches stays alive so a lagging
-# desktop build during a batched rollout keeps working.
+# Filesystem workspace (nested tree) — the successor to the flat watches organiser, stored under
+# the user-kv key `trading_workspace` (migration #2 derived it from `watches`, which stays as a
+# read-only backup behind GET /api/watches).
 def _empty_workspace() -> dict:
     return {"version": 2, "tree": [], "layout": None, "openTabs": []}
 
@@ -395,12 +380,7 @@ class WorkspaceBody(BaseModel):
 @app.get("/api/trading/workspace")
 def get_workspace():
     ws = db.kv_get("trading_workspace")
-    if isinstance(ws, dict) and ws.get("version") == 2:
-        return {"workspace": ws}
-    # Belt-and-suspenders: coerce a legacy watches blob on read if the migration hasn't run
-    # (e.g. a dev DB). Non-destructive — does not write.
-    legacy = db.kv_get("watches", [])
-    return {"workspace": migrations_user.watches_to_workspace(legacy) if legacy else _empty_workspace()}
+    return {"workspace": ws if isinstance(ws, dict) and ws.get("version") == 2 else _empty_workspace()}
 
 
 @app.put("/api/trading/workspace")
@@ -515,14 +495,6 @@ async def inflation_marketcap():
     return res
 
 
-@app.post("/api/inflation/cross/refresh")
-async def inflation_cross_refresh(force: bool = False):
-    # Fire-and-forget: the full backfill takes minutes (rate-limited), longer than any
-    # proxy/client timeout, and a disconnected request would be cancelled mid-way.
-    _spawn(leaguehistory.backfill(force=force, full=True))
-    return {"started": True}
-
-
 @app.get("/api/board")
 def board(window_h: int = 24):
     return arbitrage.board(window_h)
@@ -558,15 +530,6 @@ def market_history(a: str, b: str, hours: int = 168):
     league = get_settings()["league"]
     return {"digest": digest.pair_history(league, a, b, hours),
             "live": orderbook.pair_history(league, a, b, min(hours, 72))}
-
-
-@app.post("/api/market/refresh")
-def market_refresh():
-    """Queue the whole watchlist at low priority (respects min_refetch_s)."""
-    if not session.get_cookie():
-        raise HTTPException(400, "no trade session connected")
-    orderbook.request_refresh()
-    return {"queued": orderbook.state["queue"]}
 
 
 @app.get("/api/leagues")
@@ -649,11 +612,6 @@ class RouteQuery(BaseModel):
 
     def starts(self) -> list[str] | None:
         return [x for x in self.start.split(",") if x] if self.start else None
-
-
-@app.get("/api/routes")
-def routes(q: RouteQuery = Depends()):
-    return arbitrage.find_routes(q.to_filters(), q.starts())
 
 
 @app.get("/api/routes/stream")

@@ -97,19 +97,16 @@ def _smooth(series: dict[int, tuple[float, float]], target: int) -> float:
     return statistics.median(vals)
 
 
-def _metrics(series: dict[int, tuple[float, float]], hz_days: int | None):
+def _metrics(series: dict[int, tuple[float, float]], hz_days: int):
     ages = sorted(series)
     if len(ages) < 2:
         return None
     last_age = ages[-1]
     last = _smooth(series, last_age)
-    if hz_days is None:
-        base_age = ages[0]
-    else:
-        # base = price hz_days ago; if the league is younger than the horizon, fall back
-        # to the earliest price (so a young league still shows on the 7d board).
-        cand = [a for a in ages if a <= last_age - hz_days]
-        base_age = cand[-1] if cand else ages[0]
+    # base = price hz_days ago; if the league is younger than the horizon, fall back
+    # to the earliest price (so a young league still shows on the 7d board).
+    cand = [a for a in ages if a <= last_age - hz_days]
+    base_age = cand[-1] if cand else ages[0]
     base = _smooth(series, base_age)
     if not base:
         return None
@@ -211,7 +208,7 @@ def _leaderboard(horizon: str, category: str, numeraire: str, num_id: int, num_n
     cur_name, cur, past, meta = build_context(num_id)
     weights = _arc_weights(cur_name)        # Phase 3: DTW-weight the forward prediction when available
     hz = HORIZON_DAYS[horizon]
-    delta = hz or 30
+    delta = hz
 
     assets = []
     for iid, series in cur.items():

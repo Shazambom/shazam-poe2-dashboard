@@ -76,8 +76,6 @@ export default function AccountsPanel({ onChange }) {
                 {busy ? 'Connecting…' : 'Connect via in-app login window'}</button>
               <span className="hint">Opens an embedded login. May get stuck on Cloudflare or Steam SSO — prefer the browser steps above.</span>
             </div>
-            <p className="hint">Or from the PC where you're logged in: <code>pip install browser-cookie3</code> then
-              {' '}<code>python tools/connect.py --server {host} session</code>.</p>
           </details>
           <p className="hint">The cookie is verified with one exchange query, stored encrypted under <code>data/</code>, and only ever sent to pathofexile.com.
             Logging out of the website invalidates it — reconnect afterwards.</p>

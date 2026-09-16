@@ -3,8 +3,8 @@
 // Architecture (borrowed from Exiled Exchange 2 / awakened-poe-trade):
 //   * a tiny local HTTP server serves the built frontend and proxies /api + /callback
 //     to whichever backend is active, so the web app runs completely unmodified;
-//   * the backend is either the bundled local binary (PyInstaller, data in the user's
-//     app-data dir) or a remote server — the split is invisible to the user;
+//   * the backend is the bundled local binary (PyInstaller, data in the user's app-data
+//     dir); only an unpackaged dev launch without a binary points at a dev server;
 //   * being Chromium, we ARE the browser: the PoE login happens in our own window and
 //     the HttpOnly POESESSID is read from our session and handed to the backend.
 const { app, BrowserWindow, Menu, dialog, ipcMain, session, shell, nativeTheme } = require('electron')
@@ -24,7 +24,11 @@ const isPoeUrl = (url) => /^https:\/\/([a-z0-9-]+\.)*pathofexile\.com\//i.test(S
 const isAuthUrl = (url) =>
   isPoeUrl(url) || /^https:\/\/([a-z0-9-]+\.)*(steamcommunity|steampowered)\.com\//i.test(String(url))
 const LOCAL_BACKEND_PORT = 8210
-const DEFAULTS = { mode: 'auto', remoteUrl: telemetry.SHAZAM, betaChannel: false }
+const DEFAULTS = { betaChannel: false }
+// DEV ONLY: where an unpackaged launch without a bundled binary finds a backend.
+const DEV_BACKEND_URL = process.env.ARBITER_DEV_BACKEND_URL || telemetry.SHAZAM
+// The two near-black window backdrops (twins of --bg / the trade webview backdrop in styles.css).
+const BACKDROP = { window: '#191b22', trade: '#0c0d10' }   // style-ok: painted before the CSS loads
 
 const settingsPath = () => path.join(app.getPath('userData'), 'desktop-settings.json')
 let settings = { ...DEFAULTS }
@@ -34,7 +38,7 @@ const saveSettings = () => { try { fs.writeFileSync(settingsPath(), JSON.stringi
 let win = null
 let backendProc = null
 let backendUrl = null          // where /api actually lives
-let backendKind = 'remote'     // 'local' | 'remote'
+let backendKind = 'local'      // 'local' | 'dev' (unpackaged launch against a dev server)
 let uiUrl = null
 
 // ---------------------------------------------------------------- backend
@@ -154,8 +158,8 @@ async function startBackend() {
   } else if (!app.isPackaged) {
     // DEV ONLY (never a shipped build): no bundled binary present, so point at the
     // dev server for convenience. Packaged apps must never reach here.
-    backendUrl = settings.remoteUrl
-    backendKind = 'remote-dev'
+    backendUrl = DEV_BACKEND_URL
+    backendKind = 'dev'
     return
   }
   // Shipped app stays local even if the backend is down — we never fall back to the
@@ -329,7 +333,7 @@ ipcMain.handle('poe-set-cookie', async (_e, cookie) => {
 ipcMain.handle('open-trade', (_e, url) => {
   if (!isPoeUrl(url)) return false
   const w = new BrowserWindow({ width: 1280, height: 900, title: 'Path of Exile — Trade',
-    backgroundColor: '#0c0d10', webPreferences: { sandbox: true } })
+    backgroundColor: BACKDROP.trade, webPreferences: { sandbox: true } })
   w.loadURL(url)
   return true
 })
@@ -450,7 +454,7 @@ function buildMenu() {
             dialog.showMessageBox(win, { message: 'Cleared the pathofexile.com login.' })
           } },
         { type: 'separator' },
-        { label: `Backend: ${backendKind === 'local' ? 'local (this machine)' : backendKind}`, enabled: false },
+        { label: `Backend: ${backendKind === 'local' ? 'local (this machine)' : 'dev server'}`, enabled: false },
         { type: 'separator' },
         { label: 'Open data folder', click: () => shell.openPath(path.join(app.getPath('userData'), 'data')) },
         { label: 'Check for updates', click: () => { try { _autoUpdater?.checkForUpdates() } catch {} } },
@@ -462,8 +466,6 @@ function buildMenu() {
   ]
   Menu.setApplicationMenu(Menu.buildFromTemplate(template))
 }
-
-function relaunch() { app.relaunch(); app.exit(0) }
 
 // ------------------------------------------- EE2 integration (presence-driven)
 // Self-contained LISTENING layer for Exiled-Exchange-2. NO settings toggle:
@@ -510,7 +512,7 @@ app.whenReady().then(async () => {
   win = new BrowserWindow({
     width: 1500, height: 950, minWidth: 900, minHeight: 600,
     title: 'Arbiter',
-    backgroundColor: '#191b22',
+    backgroundColor: BACKDROP.window,
     autoHideMenuBar: true,   // hide the Dashboard/Edit/View/Window bar by default (Win/Linux); tap Alt to reveal
     webPreferences: {
       contextIsolation: true, sandbox: true, preload: path.join(__dirname, 'preload.js'),

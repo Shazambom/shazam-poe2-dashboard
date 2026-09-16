@@ -169,18 +169,15 @@ class Graph:
         # Fallback for currencies the exchange graph can't reach (e.g. Hinekora's Lock,
         # omens): value them from poe2scout (priced in Exalted). This threads a price
         # for EVERY traded currency through capital, routes, market and the board.
-        try:
-            scout = leaguehistory.scout_prices(self.s["league"])
-            ex = vals.get("exalted")                     # reference-per-exalted
-            if scout and ex:
-                for cid in registry.by_id:
-                    if cid in vals:
-                        continue
-                    px = leaguehistory.scout_lookup(scout, cid)
-                    if px:
-                        vals[cid] = px * ex
-        except Exception:
-            pass                                         # never let valuation crash on this
+        scout = leaguehistory.scout_prices(self.s["league"])   # never raises (logs + {} on failure)
+        ex = vals.get("exalted")                     # reference-per-exalted
+        if scout and ex:
+            for cid in registry.by_id:
+                if cid in vals:
+                    continue
+                px = leaguehistory.scout_lookup(scout, cid)
+                if px:
+                    vals[cid] = px * ex
         return vals
 
     # ------------------------------------------------------------ search
@@ -193,9 +190,6 @@ class Graph:
                 elif e.dst not in visited and len(path) < max_steps - 1:
                     yield from dfs(e.dst, path + [e], visited | {e.dst})
         yield from dfs(start, [], {start})
-
-    def cycles(self, start: str, max_steps: int) -> list[list[Edge]]:
-        return list(self.iter_cycles(start, max_steps))
 
     def iter_paths(self, start: str, target: str, max_steps: int):
         """Lazily yield simple OPEN paths from `start` to `target` (the conversion sibling of

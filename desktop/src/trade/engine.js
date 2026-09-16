@@ -157,7 +157,7 @@ function stopSearch(itemId) {
 
 function stopAll() { for (const id of [...sockets.keys()]) stopSearch(id) }
 
-// The manual teleport (PR6 wires the button). One call per human click; POST the
+// The manual teleport (the PingButton's one click). One call per human click; POST the
 // hideout_token to travel to the seller's hideout. Returns { success } or throws.
 async function teleport(token) {
   await budget.acquire('trade-whisper')
