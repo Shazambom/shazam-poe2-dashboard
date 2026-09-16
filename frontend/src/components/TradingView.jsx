@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { motion } from 'motion/react'
+import SubTabs from './SubTabs.jsx'
 import { nav } from '../lib/nav.js'
 import WorkspaceView from './WorkspaceView.jsx'
 import LiveView from './LiveView.jsx'
@@ -21,15 +21,7 @@ export default function TradingView({ league }) {
 
   return (
     <div className="trading">
-      <nav className="subtabs" role="tablist">
-        {SUBS.map(s => (
-          <button key={s.id} role="tab" aria-selected={sub === s.id} onClick={() => setSub(s.id)}>
-            {s.label}
-            {sub === s.id && <motion.span className="subtab-underline" layoutId="subtab-underline-trading"
-              transition={{ type: 'spring', stiffness: 420, damping: 34 }} />}
-          </button>
-        ))}
-      </nav>
+      <SubTabs subs={SUBS} value={sub} onChange={setSub} layoutId="subtab-underline-trading" />
       {/* Keep Workspace mounted (its <webview> is costly to recreate); just hide it. */}
       <div style={{ display: sub === 'workspace' ? 'flex' : 'none', flex: 1, minHeight: 0 }}>
         <WorkspaceView league={league} />

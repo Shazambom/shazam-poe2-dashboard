@@ -1,7 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'motion/react'
-import { Toaster } from 'sonner'
 import { api, fmt, bus, surface } from './lib/api.js'
+import { useStatus, startStatusPolling } from './lib/statusStore.js'
+import { useCurrencies } from './lib/icons.js'
 import { nav } from './lib/nav.js'
 import { useLiveWiring, useLiveSync } from './lib/liveWiring.js'
 import VaalPingOrb from './components/VaalPingOrb.jsx'
@@ -35,9 +36,11 @@ const SUB_DESTS = [
 
 export default function App() {
   const [tab, setTab] = useState('Board')
-  const [status, setStatus] = useState(null)
-  const [capital, setCapital] = useState(null)
-  const [currencies, setCurrencies] = useState(null)
+  const status = useStatus(s => s.status)
+  const capital = useStatus(s => s.capital)
+  const rl = useStatus(s => s.rl)              // trade-API rate/queue budget — surfaced in the topbar sync cluster
+  const refreshHeader = useStatus(s => s.refresh)
+  const { raw: currencies } = useCurrencies()
   const [leagues, setLeagues] = useState([])
   const [toasts, setToasts] = useState([])
   const [connecting, setConnecting] = useState(false)
@@ -47,28 +50,21 @@ export default function App() {
   const assetModal = useAssetModal()           // global CardDetail — signals open into it
   const toastId = useRef(0)
 
-  const [rl, setRl] = useState(null)   // trade-API rate/queue budget — surfaced in the topbar sync cluster
-  const refreshHeader = async () => {
-    try {
-      const [s, c] = await Promise.all([api.status(), api.capital()])
-      setStatus(s); setCapital(c)
-    } catch (e) { console.error(e) }
-    api.rateLimits().then(setRl).catch(() => {})
-  }
   useEffect(() => {
     const q = new URLSearchParams(window.location.search)
     if (q.get('oauth')) { setTab('Settings'); window.history.replaceState({}, '', '/') }
-    refreshHeader()
     if (window.poe2desktop?.getVersion) window.poe2desktop.getVersion().then(setAppVersion).catch(() => {})
-    api.currencies().then(setCurrencies).catch(console.error)
     api.leagues().then(setLeagues).catch(() => setLeagues([]))
-    const t = setInterval(refreshHeader, 30000)
-    return () => clearInterval(t)
+    return startStatusPolling()
   }, [])
+  // The ONE toast stack. A toast with an `id` replaces an earlier one with the same id (the live
+  // ping banner: newest ping on top); `{id, dismiss:true}` removes it; `node` renders custom content.
   useEffect(() => bus.on(t => {
-    const id = ++toastId.current
-    setToasts(x => [...x.slice(-3), { id, ...t }])
-    setTimeout(() => setToasts(x => x.filter(y => y.id !== id)), t.ok === false ? 6000 : 2200)
+    const id = t.id ?? `t${++toastId.current}`
+    if (t.dismiss) { setToasts(x => x.filter(y => y.id !== id)); return }
+    const entry = { ...t, id }
+    setToasts(x => [...x.filter(y => y.id !== id).slice(-3), entry])
+    setTimeout(() => setToasts(x => x.filter(y => y !== entry)), t.ttl ?? (t.ok === false ? 6000 : 2200))
   }), [])
   // Global ⌘K / Ctrl-K opens the command palette (the fast path to anything).
   useEffect(() => {
@@ -108,7 +104,7 @@ export default function App() {
   const setLeague = async (league) => {
     if (!league || league === status?.league) return
     try {
-      await surface(api.putSettings({ league }), `League set to ${league}`)
+      await surface(useStatus.getState().saveSettings({ league }), `League set to ${league}`)
       await refreshHeader()
     } catch {}
   }
@@ -188,15 +184,13 @@ export default function App() {
 
       {assetModal.node}
 
-      <Toaster position="top-right" theme="dark" offset={64} toastOptions={{ unstyled: false }} />
-
       <div className="toasts">
         <AnimatePresence>
           {toasts.map(t => (
-            <motion.div key={t.id} className={`toast ${t.ok === false ? 'error' : ''}`}
+            <motion.div key={t.id} className={`toast ${t.ok === false ? 'error' : ''} ${t.node ? 'custom' : ''}`}
               initial={{ opacity: 0, x: 40, scale: 0.96 }} animate={{ opacity: 1, x: 0, scale: 1 }}
               exit={{ opacity: 0, x: 40, scale: 0.96 }} transition={{ type: 'spring', stiffness: 420, damping: 30 }}>
-              <span className="toast-ic">{t.ok === false ? '⚠' : '✓'}</span>{t.text}
+              {t.node ?? <><span className="toast-ic">{t.ok === false ? '⚠' : '✓'}</span>{t.text}</>}
             </motion.div>
           ))}
         </AnimatePresence>

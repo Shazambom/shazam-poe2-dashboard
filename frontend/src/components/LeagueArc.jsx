@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from 'react'
+import React from 'react'
 import { api } from '../lib/api.js'
+import { useApi } from '../lib/hooks.js'
 
 // Phase 3 — the league-arc overlay inside CardDetail: the item's price history so far ('you are
 // here at day N'), a forward projected band, and buy/sell window chips, DTW-weighted toward the
@@ -48,12 +49,7 @@ function ArcSpark({ history, arc, w = 560, h = 150 }) {
 }
 
 export default function LeagueArcSection({ name }) {
-  const [arc, setArc] = useState(null)
-  useEffect(() => {
-    let live = true
-    api.arc(name, 'divine').then(d => { if (live) setArc(d) }).catch(() => { if (live) setArc(null) })
-    return () => { live = false }
-  }, [name])
+  const { data: arc } = useApi(() => api.arc(name, 'divine'), [name])
   if (!arc || !(arc.arc && arc.arc.length) || !(arc.history && arc.history.length >= 2)) return null
 
   const windows = arc.windows || []

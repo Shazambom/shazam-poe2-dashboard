@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react'
+import { isDesktop } from '../lib/session.js'
 
 // Version + seamless updater, merged into ONE topbar element (desktop only). Idle, it IS the
 // version chip (click → check for updates); when electron-updater reports activity it morphs in
 // place through checking → downloading → ready/install. Hidden in the browser (web uses DownloadApp).
 export default function UpdateStatus({ version }) {
-  const bridge = typeof window !== 'undefined' && window.poe2desktop
+  const bridge = isDesktop ? window.poe2desktop : null
   const [st, setSt] = useState(null)
 
   useEffect(() => {

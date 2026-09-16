@@ -1,5 +1,6 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useMemo, useState } from 'react'
 import { api, fmt } from '../lib/api.js'
+import { useApi } from '../lib/hooks.js'
 import Cur from './Cur.jsx'
 import { useAssetModal } from './CardDetail.jsx'
 import { useHorizon } from '../lib/horizonStore.js'
@@ -22,24 +23,15 @@ export default function HoldView() {
   const hours = useHorizon(s => s.hours)      // app-wide horizon (topbar)
   const [category, setCategory] = useState('all')
   const [numeraire, setNumeraire] = useState('divine')
-  const [data, setData] = useState(null)
-  const [movers, setMovers] = useState(null)
-  const [err, setErr] = useState(null)
-  const [busy, setBusy] = useState(true)
   const assetModal = useAssetModal()          // click any row → the SAME zoom modal the Board uses
   const zoom = (name) => assetModal.open(name)
 
-  useEffect(() => {
-    setBusy(true)
-    api.hold(hours, category, numeraire).then(d => { setData(d); setErr(null) }).catch(e => setErr(String(e.message || e))).finally(() => setBusy(false))
-  }, [hours, category, numeraire])
-
+  const hold = useApi(() => api.hold(hours, category, numeraire), [hours, category, numeraire])
   // Positive-movers board (secondary view): full-universe upward swings over the same window.
-  useEffect(() => {
-    if (view !== 'movers') return
-    setBusy(true)
-    api.movers(hours, MOVERS_N, 'up').then(d => { setMovers(d); setErr(null) }).catch(e => setErr(String(e.message || e))).finally(() => setBusy(false))
-  }, [view, hours])
+  const mv = useApi(() => view === 'movers' ? api.movers(hours, MOVERS_N, 'up') : Promise.resolve(null), [view, hours])
+  const data = hold.data, movers = mv.data
+  const err = hold.err || mv.err
+  const busy = view === 'movers' ? mv.busy : hold.busy
 
   const cats = data?.categories ?? ['all']
   const rows = useMemo(() => data?.assets ?? [], [data])
@@ -144,7 +136,7 @@ export default function HoldView() {
                   <td><Cur name={r.name} text /></td>
                   <td className="muted">{r.category}</td>
                   <td className="num gain">{fmt.pct(r.change_pct)}</td>
-                  <td className="num muted">{r.medvol == null ? '–' : Math.round(r.medvol).toLocaleString()}</td>
+                  <td className="num muted">{fmt.n(r.medvol, 0)}</td>
                 </tr>
               ))}
             </tbody>

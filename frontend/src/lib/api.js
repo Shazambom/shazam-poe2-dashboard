@@ -82,4 +82,8 @@ export const fmt = {
   pct: (v) => v == null ? '–' : `${v >= 0 ? '+' : ''}${Number(v).toFixed(2)}%`,
   rate: (v) => v == null ? '–' : v >= 100 ? v.toFixed(0) : v >= 1 ? v.toFixed(2) : v.toPrecision(3),
   age: (s) => s == null ? '–' : s < 90 ? `${Math.round(s)}s` : s < 5400 ? `${Math.round(s / 60)}m` : `${(s / 3600).toFixed(1)}h`,
+  // A duration given in HOURS (fill times, cash-out times): minutes below an hour, days past two.
+  dur: (h) => h == null ? '–' : h < 1 / 60 ? '<1m' : h < 1 ? `${Math.round(h * 60)}m` : h < 48 ? `${h.toFixed(1)}h` : `${(h / 24).toFixed(1)}d`,
+  // Chart axis label for an epoch-seconds hour.
+  hourLabel: (h) => new Date(h * 1000).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit' }),
 }

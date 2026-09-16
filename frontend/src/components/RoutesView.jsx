@@ -7,9 +7,9 @@ import GoldValueSlider from './GoldValueSlider.jsx'
 import Toggle from './Toggle.jsx'
 import { Detail, Loop } from './RouteSteps.jsx'
 import { useSync } from '../lib/syncStore.js'
+import { ensureSettings } from '../lib/statusStore.js'
 
 const INF = Infinity
-const hrs = (h) => h == null ? '–' : h < 1 / 60 ? '<1m' : h < 1 ? `${Math.round(h * 60)}m` : h < 48 ? `${h.toFixed(1)}h` : `${(h / 24).toFixed(1)}d`
 
 const DEFAULT_FILTERS = {
   min_margin_pct: 0.5, min_margin_ref: 0, max_gold: '', min_margin_per_1k_gold: '',
@@ -83,7 +83,7 @@ export default function RoutesView({ capital, status, currencies, onCapitalSaved
     })
   }
 
-  useEffect(() => { api.settings().then(s => { const g = { ...s.filters }; delete g.sort; ['max_gold','min_margin_per_1k_gold','min_liquidity_ref','min_volume_ref_per_h','max_fill_hours','min_velocity'].forEach(k => { if (!g[k]) g[k] = '' }); setF(x => ({ ...x, ...g })); setLiveN(s.live_top_n ?? 5) }).catch(() => {}) }, [])
+  useEffect(() => { ensureSettings().then(s => { const g = { ...s.filters }; delete g.sort; ['max_gold','min_margin_per_1k_gold','min_liquidity_ref','min_volume_ref_per_h','max_fill_hours','min_velocity'].forEach(k => { if (!g[k]) g[k] = '' }); setF(x => ({ ...x, ...g })); setLiveN(s.live_top_n ?? 5) }).catch(() => {}) }, [])
   useEffect(() => { load(); return () => esRef.current?.close() }, [filterKey]) // eslint-disable-line
   useEffect(() => {
     const t = setInterval(() => { if (document.visibilityState === 'visible' && !streaming) load() }, 120000)
@@ -275,7 +275,7 @@ export default function RoutesView({ capital, status, currencies, onCapitalSaved
                     </td>
                     <td className="num">{r.liquidity_ref == null ? <span className="muted">∞</span> : fmt.n(r.liquidity_ref, 0)}</td>
                     <td className="num">{r.volume_ref_per_h == null ? <span className="muted">–</span> : fmt.n(r.volume_ref_per_h, 0)}</td>
-                    <td className={`num ${r.fill_hours != null && r.fill_hours > 4 ? 'muted' : ''}`}>{hrs(r.fill_hours)}</td>
+                    <td className={`num ${r.fill_hours != null && r.fill_hours > 4 ? 'muted' : ''}`}>{fmt.dur(r.fill_hours)}</td>
                     <td className="num muted">{fmt.age(r.max_age_s)}</td>
                   </tr>
                   {open === r.id && <tr><td colSpan={12} style={{ padding: 0 }}><Detail r={r} refCur={ref} onRefresh={refreshOne} refreshing={refreshingId === r.id} canLive={canLive} /></td></tr>}

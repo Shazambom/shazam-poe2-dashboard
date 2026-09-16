@@ -1,13 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useWorkspace, loadWorkspace } from '../lib/workspaceStore.js'
-import { tradeUrl, tradeHome, parseTradeUrl, openTrade } from '../lib/session.js'
+import { tradeUrl, tradeHome, parseTradeUrl, openTrade, isDesktop } from '../lib/session.js'
 import SearchTree from './SearchTree.jsx'
 
 // The Trading workspace: a file-tree of saved searches on the left, the live trade site
 // embedded on the right. Press + → a new entry is created and the trade window opens; you
 // build the search on the site and it's CAPTURED automatically (no pasting). Selecting an
 // entry reopens its search. Desktop-only for the embedded site (web opens searches in a tab).
-const isDesktop = typeof window !== 'undefined' && !!window.poe2desktop
 
 const ui = { addSearch: () => {}, addGroup: () => {}, select: () => {}, remove: () => {}, rename: () => {} }
 

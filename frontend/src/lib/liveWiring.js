@@ -1,17 +1,21 @@
 import React, { useEffect } from 'react'
-import { toast as sonner } from 'sonner'
 import { usePings } from './pingStore.js'
 import { useWorkspace, loadWorkspace } from './workspaceStore.js'
-import { toast } from './api.js'
+import { toast, bus } from './api.js'
 import { playPing, unlockSound } from './ping-sound.js'
 import { nav } from './nav.js'
+import { hasTradeEngine as isDesktop } from './session.js'
 
-const isDesktop = typeof window !== 'undefined' && !!window.poe2desktop?.trade
 const PING_TTL = 10000   // top-right ping banner auto-dismisses after 10s (or when a newer ping replaces it)
 
 // Mounted once in App. Subscribes to the desktop live-search engine and turns each ping
-// into: (1) a store entry, (2) a sound, (3) an OS notification, (4) a sonner banner that
-// bubbles the newest ping to the top with a jump-to-Live action. Inert on web.
+// into: (1) a store entry, (2) a sound, (3) an OS notification, (4) a banner in the app's one
+// toast stack (id 'live-ping', so the newest ping replaces the last) with a jump-to-Live action.
+// Inert on web.
+const showBanner = (p, goLive) => bus.emit({
+  id: 'live-ping', ttl: PING_TTL,
+  node: bannerEl(p, () => { bus.emit({ id: 'live-ping', dismiss: true }); goLive?.() }),
+})
 export function useLiveWiring(goLive) {
   useEffect(() => {
     // Dev/test hook (stripped from production builds): inject a synthetic ping to validate
@@ -24,7 +28,7 @@ export function useLiveWiring(goLive) {
           indexedAt: Date.now(), receivedAt: Date.now(), token: null, tokenExp: Date.now() + 3e5,
           flags: { gone: false, inDemand: true } }
         usePings.getState().addPing(ping)
-        try { sonner.custom((id) => bannerEl(ping, () => { sonner.dismiss(id); goLive?.() }), { id: 'live-ping', duration: PING_TTL }) } catch {}
+        showBanner(ping, goLive)
       }
     }
     // Unlock WebAudio on the first user gesture (browser autoplay policy).
@@ -52,8 +56,7 @@ export function useLiveWiring(goLive) {
           n.onclick = () => { goLive?.(); window.focus?.() }
         }
       } catch {}
-      // In-app most-recent-ping banner (persistent, replaced by each newer ping).
-      sonner.custom((id) => bannerEl(p, () => { sonner.dismiss(id); goLive?.() }), { id: 'live-ping', duration: PING_TTL })
+      showBanner(p, goLive)   // in-app most-recent-ping banner (replaced by each newer ping)
     })
     const offEngine = window.poe2desktop.trade.onEngineState((e) => usePings.getState().setEngine(e))
     // Per-search connection state (live / auth / reconnecting / error) drives the Live button
@@ -102,8 +105,8 @@ export function useLiveSync(league) {
   }, [league])
 }
 
-// sonner's toast.custom render fn must return a REACT node (not a DOM element — that
-// throws React #31). Build it with createElement to keep this a plain .js module.
+// The banner is a REACT node rendered inside the toast stack. Built with createElement to keep
+// this a plain .js module.
 function bannerEl(p, onOpen) {
   const h = React.createElement
   return h('div', { className: 'ping-banner' },

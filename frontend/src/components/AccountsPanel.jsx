@@ -1,25 +1,24 @@
 import React, { useEffect, useState } from 'react'
 import { api, fmt } from '../lib/api.js'
 import { connectBridge, connectSession } from '../lib/session.js'
+import { useStatus } from '../lib/statusStore.js'
 
 const ago = (t) => t ? fmt.age(Date.now() / 1000 - t) + ' ago' : '–'
 
 export default function AccountsPanel({ onChange }) {
-  const [sess, setSess] = useState(null)
-  const [oa, setOa] = useState(null)
+  // Session + OAuth state ride the app-level status poll (no second poller); `load` = refresh it.
+  const sess = useStatus(s => s.status?.session ?? null)
+  const oa = useStatus(s => s.status?.oauth ?? null)
+  const load = useStatus(s => s.refresh)
   const [cookie, setCookie] = useState('')
   const [msg, setMsg] = useState(null)
   const [busy, setBusy] = useState(false)
   const host = window.location.origin
 
-  const load = () => Promise.all([api.session(), api.oauthStatus()]).then(([s, o]) => { setSess(s); setOa(o) })
   useEffect(() => {
-    load()
     const q = new URLSearchParams(window.location.search)
     if (q.get('oauth') === 'ok') setMsg({ ok: true, text: 'Logged in with Path of Exile.' })
     if (q.get('oauth') === 'error') setMsg({ ok: false, text: `Login failed: ${q.get('msg')}` })
-    const t = setInterval(load, 15000)   // pick up connects (incl. from the top-bar button) without a reload
-    return () => clearInterval(t)
   }, [])
 
   const desktop = connectBridge() === 'desktop'   // live order book is a desktop-app feature

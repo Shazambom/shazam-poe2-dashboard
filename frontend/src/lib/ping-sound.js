@@ -2,7 +2,7 @@
 // ping EVEN WHEN THE WINDOW IS UNFOCUSED/HIDDEN — WebAudio/HTMLAudio are not subject to
 // the hidden-tab rAF/animation freeze, so this is correct by construction. Deduped +
 // throttled so a burst coalesces into one ding. Mutable via settings.
-import { api } from './api.js'
+import { ensureSettings } from './statusStore.js'
 
 let ctx = null
 let unlocked = false
@@ -11,7 +11,7 @@ let prefs = { on: true, volume: 0.5 }
 const MIN_GAP_MS = 1500
 
 // Load persisted prefs once (settings kv).
-api.settings().then(s => {
+ensureSettings().then(s => {
   if (s && typeof s.ping_sound === 'boolean') prefs.on = s.ping_sound
   if (s && typeof s.ping_volume === 'number') prefs.volume = s.ping_volume
 }).catch(() => {})

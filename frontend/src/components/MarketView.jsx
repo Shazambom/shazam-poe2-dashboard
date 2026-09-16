@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from 'react'
+import React, { useState } from 'react'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts'
 import { api, fmt } from '../lib/api.js'
+import { useApi } from '../lib/hooks.js'
 import { color, chart } from '../theme.js'
 import Cur from './Cur.jsx'
 import CurrencyPicker from './CurrencyPicker.jsx'
@@ -8,19 +9,15 @@ import Toggle from './Toggle.jsx'
 
 const AXIS = { fill: chart.axis, fontSize: 11 }
 const TIP = { background: chart.tooltipBg, border: `1px solid ${chart.tooltipBorder}` }
-const hourLabel = (h) => new Date(h * 1000).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit' })
+const hourLabel = fmt.hourLabel
 
 export default function MarketView({ currencies }) {
-  const [edges, setEdges] = useState([])
-  const [top, setTop] = useState([])
   const [pair, setPair] = useState({ a: 'divine', b: 'exalted' })
-  const [hist, setHist] = useState(null)
   const [q, setQ] = useState('')
   const [byValue, setByValue] = useState(false)   // false = raw turnover, true = Exalted-normalized value
-
-  useEffect(() => { api.edges().then(setEdges).catch(console.error) }, [])
-  useEffect(() => { api.topMarkets(byValue ? 'value' : 'activity').then(setTop).catch(console.error) }, [byValue])
-  useEffect(() => { api.history(pair.a, pair.b).then(setHist).catch(console.error) }, [pair])
+  const edges = useApi(() => api.edges(), []).data ?? []
+  const top = useApi(() => api.topMarkets(byValue ? 'value' : 'activity'), [byValue]).data ?? []
+  const hist = useApi(() => api.history(pair.a, pair.b), [pair.a, pair.b]).data
 
   const names = Object.fromEntries((currencies?.currencies ?? []).map(c => [c.id, c.name]))
   const shown = edges.filter(e => !q || `${e.from_name} ${e.to_name} ${e.from} ${e.to}`.toLowerCase().includes(q.toLowerCase()))

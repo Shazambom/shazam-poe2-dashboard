@@ -2,13 +2,15 @@ import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 're
 import { motion, AnimatePresence, useSpring, useTransform } from 'motion/react'
 import { api, fmt, surface, toast } from '../lib/api.js'
 import { nav } from '../lib/nav.js'
+import { isDesktop } from '../lib/session.js'
 import Cur from './Cur.jsx'
-import CardDetail, { Spark, SRC_LABEL, useAssetModal, rangeLabel } from './CardDetail.jsx'
+import CardDetail, { Spark, srcBadge, useAssetModal, rangeLabel } from './CardDetail.jsx'
+import { useCurrencies } from '../lib/icons.js'
+import { useStatus, ensureSettings } from '../lib/statusStore.js'
 import CurrencyPicker from './CurrencyPicker.jsx'
 import { useHorizon } from '../lib/horizonStore.js'
 import { useSync } from '../lib/syncStore.js'
 
-const isDesktop = typeof window !== 'undefined' && !!window.poe2desktop
 
 // A number that counts up on mount, then rolls when its value changes between polls.
 // Fast, stiff spring (~0.5s) so the count-up feels snappy, not a slow loading crawl.
@@ -55,11 +57,7 @@ function Tile({ r, num, factor, numOptions, onNum, onRemove, onOpen, index = 0 }
         <span className="pt-name"><Cur id={r.id} text /></span>
         {r.hub && <span className="pt-hub" title="Hub — a central market; a lot of value routes through it">⬢</span>}
         {onRemove && <button className="pt-remove" title="Remove from board" onClick={e => { e.stopPropagation(); onRemove(r.id) }}>×</button>}
-        <span className={`pt-src ${r.source}`} title={
-          r.source === 'live' ? 'live order book' : r.source === 'digest' ? 'hourly market data'
-            : r.source === 'derived' ? 'derived via other markets' : r.source === 'scout' ? 'poe2scout price' : 'no data'}>
-          {r.source === 'live' ? 'LIVE' : r.source === 'digest' ? 'HR' : r.source === 'derived' ? '~' : r.source === 'scout' ? 'SC' : '–'}
-        </span>
+        <span className={`pt-src ${r.source}`} title={srcBadge(r.source).title}>{srcBadge(r.source).label}</span>
       </div>
       <div className="pt-mid">
         {mid == null ? <span className="muted">no price</span>
@@ -107,7 +105,7 @@ export default function BoardView({ status }) {
   const tick = useSync(s => s.tick)                  // topbar ⟳ pulse → refresh this view
   const setSyncBusy = useSync(s => s.setBusy)        // drive the topbar ⟳ spinner
   const [watchlist, setWatchlist] = useState(null)   // desktop-only board customization
-  const [opts, setOpts] = useState([])               // all currencies (names for pickers)
+  const { list: opts, nameOf } = useCurrencies()      // all currencies (names for pickers)
   const [openId, setOpenId] = useState(null)         // card expanded into detail view
   const [numById, setNumById] = useState(() => {     // per-card numeraire overrides (persisted)
     try { return JSON.parse(localStorage.getItem('board.num.v1') || '{}') } catch { return {} }
@@ -126,7 +124,7 @@ export default function BoardView({ status }) {
 
   const saveWatchlist = async (next, note) => {
     setWatchlist(next)
-    try { await surface(api.putSettings({ watchlist: next }), note) ; await load() }
+    try { await surface(useStatus.getState().saveSettings({ watchlist: next }), note); await load() }
     catch { setWatchlist(watchlist) }   // revert on failure
   }
   const addById = async (id) => {
@@ -145,7 +143,6 @@ export default function BoardView({ status }) {
   useEffect(() => { load(); const t = setInterval(load, 30000); return () => clearInterval(t) }, [winH]) // eslint-disable-line
   // command palette → open a currency's detail here
   useEffect(() => nav.on(e => { if (e.type === 'openCurrency') setOpenId(e.id) }), [])
-  useEffect(() => { api.currencies().then(d => setOpts(d?.currencies ?? [])).catch(() => {}) }, [])
   // Hold leaderboard powers the pulse strip's top-3 holds + the full-universe top mover.
   useEffect(() => {
     // Holds = top stores of value (divine-denominated hold score). Movers = biggest |% change|
@@ -158,7 +155,7 @@ export default function BoardView({ status }) {
   const openAsset = (name) => assetModal.open(name)
   useEffect(() => {
     if (!isDesktop) return
-    api.settings().then(s => setWatchlist(s.watchlist || [])).catch(() => {})
+    ensureSettings().then(s => setWatchlist(s.watchlist || [])).catch(() => {})
   }, [])
   // Global auto-refresh (topbar toggle) — Board's own 60s cadence, gated on the shared flag.
   useEffect(() => {
@@ -174,11 +171,10 @@ export default function BoardView({ status }) {
   const rows = data?.rows ?? []
   const prices = data?.prices ?? {}
   const live = useMemo(() => rows.filter(r => r.source === 'live').length, [rows])
-  const nameById = useMemo(() => Object.fromEntries(opts.map(o => [o.id, o.name])), [opts])
   // Currencies a card can be priced in = those with a known reference price, richest first.
   const numOptions = useMemo(() => Object.keys(prices)
     .sort((a, b) => (prices[b] || 0) - (prices[a] || 0))
-    .map(id => ({ id, name: nameById[id] || id })), [prices, nameById])
+    .map(id => ({ id, name: nameOf(id) })), [prices, nameOf]) // eslint-disable-line
   // Effective numeraire for a card: user override → backend's highest-volume default → reference.
   // Never price a currency against itself (a 1:1 is useless) — fall back to divine/ref.
   const numFor = (r) => {
@@ -239,7 +235,7 @@ export default function BoardView({ status }) {
                 const num = numFor(r)
                 const val = r.mid != null && prices[num] ? r.mid / prices[num] : null
                 return (
-                  <button key={r.id} className="pulse-chip clickable" title={`${r.name || nameById[r.id] || r.id} — central market · expand chart`}
+                  <button key={r.id} className="pulse-chip clickable" title={`${r.name || nameOf(r.id)} — central market · expand chart`}
                     onClick={() => setOpenId(r.id)}>
                     <Cur id={r.id} size={16} /><span className="pulse-v">{val == null ? '–' : fmt.rate(val)}</span><span className="pulse-u"><Cur id={num} size={12} /></span>
                   </button>

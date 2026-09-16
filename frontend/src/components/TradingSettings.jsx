@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react'
-import { api, toast } from '../lib/api.js'
+import { toast } from '../lib/api.js'
+import { useStatus } from '../lib/statusStore.js'
 import { getSoundPrefs, setSoundPrefs, playPing } from '../lib/ping-sound.js'
 import Toggle from './Toggle.jsx'
+import { isDesktop } from '../lib/session.js'
 
-const isDesktop = typeof window !== 'undefined' && !!window.poe2desktop
 
 // Trading settings: live-ping sound + the global focus hotkey. Self-persisting.
 export default function TradingSettings() {
@@ -18,7 +19,7 @@ export default function TradingSettings() {
   const save = (patch) => {
     const next = { ...prefs, ...patch }
     setPrefs(next); setSoundPrefs(next)
-    api.putSettings({ ping_sound: next.on, ping_volume: next.volume }).catch(() => {})
+    useStatus.getState().saveSettings({ ping_sound: next.on, ping_volume: next.volume }).catch(() => {})
   }
 
   // Capture a key combo for the hotkey (desktop).

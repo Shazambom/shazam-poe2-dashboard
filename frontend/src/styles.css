@@ -249,8 +249,8 @@ a { color: var(--live); }
 .btn.teleport.rate { background: #8a6a2a; color: #fff; }
 .btn.teleport.gone, .btn.teleport.expired { background: var(--line); color: var(--muted); }
 
-/* sonner most-recent-ping banner (custom DOM) */
-.ping-banner { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: #191b22; /* style-ok: bespoke sonner alert surface */
+/* most-recent-ping banner (rendered inside the toast stack) */
+.ping-banner { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: #191b22; /* style-ok: bespoke alert surface */
   border: 1px solid #c8403e; border-radius: 10px; box-shadow: 0 8px 30px rgba(0,0,0,.5), 0 0 14px rgba(232,60,60,.35); min-width: 300px; }
 .ping-banner .pb-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); }
 .ping-banner .pb-dot.online { background: var(--gain); } .ping-banner .pb-dot.afk { background: var(--afk); } .ping-banner .pb-dot.offline { background: var(--offline); }
@@ -476,6 +476,7 @@ details.adv[open] summary { color: var(--ink-2); margin-bottom: 8px; }
   padding: 10px 15px; border-radius: 10px; max-width: 380px; box-shadow: var(--shadow-2);
 }
 .toast.error { border-left-color: var(--loss); }
+.toast.custom { padding: 0; overflow: hidden; border-left-color: var(--gold); }
 .toast-ic { color: var(--gain); font-weight: 700; }
 .toast.error .toast-ic { color: var(--loss); }
 /* ---------- price board ---------- */

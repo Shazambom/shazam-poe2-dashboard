@@ -1,6 +1,7 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useMemo, useState } from 'react'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine, Legend, CartesianGrid } from 'recharts'
 import { api, fmt } from '../lib/api.js'
+import { useApi } from '../lib/hooks.js'
 import { series as SERIES, chart } from '../theme.js'
 import Cur from './Cur.jsx'
 import CurrencyPicker from './CurrencyPicker.jsx'
@@ -11,7 +12,7 @@ import Toggle from './Toggle.jsx'
 const AXIS = { fill: chart.axis, fontSize: 11 }
 const GRID = chart.grid
 const CURSOR = { stroke: chart.cursor, strokeWidth: 1, strokeDasharray: '3 3', strokeOpacity: 0.5 }
-const day = (h) => new Date(h * 1000).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit' })
+const day = fmt.hourLabel
 
 // Dark, elevated tooltip: rows sorted by value, each with its series dot — reads like
 // the rest of the app instead of Recharts' default white box.
@@ -77,14 +78,7 @@ export default function InflationView({ league }) {
   const [anchor, setAnchor] = useState('lock')
   const [hidden, setHidden] = useState(() => new Set())   // currencies toggled off the inflation graph only
   const toggleCur = (id) => setHidden(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n })
-  const [data, setData] = useState(null)
-  const [err, setErr] = useState(null)
-  const [busy, setBusy] = useState(true)
-
-  useEffect(() => {
-    setBusy(true)
-    api.inflation(anchor).then(d => { setData(d); setErr(null) }).catch(e => setErr(String(e.message || e))).finally(() => setBusy(false))
-  }, [anchor, league])
+  const { data, err, busy } = useApi(() => api.inflation(anchor), [anchor, league])
 
   const { rows, keys } = useMemo(() =>
     mergeSeries(data?.currencies ?? [], { x: 't', val: 'v', meta: c => ({ id: c.id, name: c.name }) }), [data])
@@ -215,13 +209,7 @@ function trimPartialDay(leagues) {
 }
 
 function MarketCap({ league }) {
-  const [data, setData] = useState(null)
-  const [err, setErr] = useState(null)
-  const [busy, setBusy] = useState(true)
-
-  useEffect(() => {
-    api.inflationMarketcap().then(setData).catch(e => setErr(String(e.message || e))).finally(() => setBusy(false))
-  }, [])
+  const { data, err, busy } = useApi(() => api.inflationMarketcap(), [])
 
   const leagues = useMemo(() => trimPartialDay(data?.leagues ?? []), [data])
   const cur = useMemo(() => pickLeague(leagues, league), [leagues, league])
@@ -265,14 +253,7 @@ function MarketCap({ league }) {
 // be read against past leagues at the same age. Data via poe2scout history.
 function CrossLeague({ league }) {
   const [item, setItem] = useState(291)   // Divine (densest, all leagues) by default
-  const [data, setData] = useState(null)
-  const [err, setErr] = useState(null)
-  const [busy, setBusy] = useState(true)
-
-  useEffect(() => {
-    setBusy(true)
-    api.inflationCross(item).then(setData).catch(e => setErr(String(e.message || e))).finally(() => setBusy(false))
-  }, [item])
+  const { data, err, busy } = useApi(() => api.inflationCross(item), [item])
   const items = data?.items ?? []
 
   const leagues = data?.leagues ?? []

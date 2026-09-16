@@ -17,9 +17,13 @@ if (typeof window !== 'undefined') {
   try { window.postMessage({ source: 'poe2arb', cmd: 'ping' }, window.location.origin) } catch {}
 }
 
+// The ONE "are we in the desktop app" predicate (and its trade-engine refinement).
+export const isDesktop = typeof window !== 'undefined' && !!window.poe2desktop
+export const hasTradeEngine = typeof window !== 'undefined' && !!window.poe2desktop?.trade
+
 export function connectBridge() {
   if (typeof window === 'undefined') return null
-  if (window.poe2desktop) return 'desktop'
+  if (isDesktop) return 'desktop'
   if (extReady) return 'extension'
   return null
 }

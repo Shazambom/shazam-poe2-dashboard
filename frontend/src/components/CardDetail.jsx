@@ -2,11 +2,17 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { motion, AnimatePresence } from 'motion/react'
 import { api, fmt, toast } from '../lib/api.js'
 import Cur from './Cur.jsx'
+import { useCurrencies } from '../lib/icons.js'
 import LeagueArcSection from './LeagueArc.jsx'
 import { useSignals } from '../lib/signalStore.js'
 import { useHorizon } from '../lib/horizonStore.js'
 
 export const SRC_LABEL = { live: 'live order book', digest: 'hourly market data', derived: 'derived via other markets', scout: 'poe2scout', none: 'no data' }
+const SRC_SHORT = { live: 'LIVE', digest: 'HR', derived: '~', scout: 'SC' }
+// The source badge (board tile + detail head): the short tag and its hover title, from one table.
+export function srcBadge(source) {
+  return { label: SRC_SHORT[source] || '–', title: SRC_LABEL[source] || 'no data' }
+}
 
 // Canonical hours → range label (matches the board/hold horizon pickers).
 export function rangeLabel(hours) {
@@ -89,9 +95,7 @@ export default function CardDetail({ r, num, factor, numOptions, onNum, prices, 
         <button className="cd-close" onClick={onClose} title="Close (Esc)">×</button>
         <div className="cd-head">
           <span className="cd-title"><Cur id={r.id} name={r.name} text size={24} /></span>
-          <span className={`pt-src ${r.source}`} title={SRC_LABEL[r.source] || 'no data'}>
-            {r.source === 'live' ? 'LIVE' : r.source === 'digest' ? 'HR' : r.source === 'derived' ? '~' : r.source === 'scout' ? 'SC' : '–'}
-          </span>
+          <span className={`pt-src ${r.source}`} title={srcBadge(r.source).title}>{srcBadge(r.source).label}</span>
         </div>
         <div className="cd-price">
           {mid == null ? <span className="muted">no price</span>
@@ -116,7 +120,7 @@ export default function CardDetail({ r, num, factor, numOptions, onNum, prices, 
             {r.spread_pct != null && <div className="cd-stat"><span>spread</span><b>{r.spread_pct.toFixed(1)}%</b></div>}
             {r.depth != null && <div className="cd-stat"><span>depth</span><b>{r.depth} offers</b></div>}
           </>}
-          {r.medvol != null && <div className="cd-stat"><span>volume</span><b>{Math.round(r.medvol).toLocaleString()}<span className="muted"> ex/day</span></b></div>}
+          {r.medvol != null && <div className="cd-stat"><span>volume</span><b>{fmt.n(r.medvol, 0)}<span className="muted"> ex/day</span></b></div>}
           <div className="cd-stat"><span>source</span><b>{SRC_LABEL[r.source] || 'no data'}</b></div>
           {r.age_s != null && <div className="cd-stat"><span>updated</span><b>{fmt.age(r.age_s)} ago</b></div>}
           {r.hub && <div className="cd-stat" title="A central market — a lot of value routes through it"><span>market</span><b className="cd-hub">⬢ hub</b></div>}
@@ -131,7 +135,7 @@ export default function CardDetail({ r, num, factor, numOptions, onNum, prices, 
               <div className="cd-stat" title="what the whole stack would realize now, net of gold"><span>realizable</span><b>{fmt.n(cash.realizable_ref, 1)} <Cur id={cref} size={14} /></b></div>
               {gh != null && <div className="cd-stat" title="paper value you can't currently cash out"><span>ghost</span><b className={gh > 0.5 ? 'cd-ghost' : ''}>👻 {fmt.n(gh, 1)} <Cur id={cref} size={14} /></b></div>}
               {cash.slippage_pct != null && <div className="cd-stat" title="market-depth loss on the filled portion (excludes gold)"><span>slippage</span><b>{Math.max(0, cash.slippage_pct).toFixed(1)}%</b></div>}
-              {cash.fill_hours != null && <div className="cd-stat"><span>fill time</span><b>{fmt.age(cash.fill_hours * 3600)}</b></div>}
+              {cash.fill_hours != null && <div className="cd-stat"><span>fill time</span><b>{fmt.dur(cash.fill_hours)}</b></div>}
               {cash.full_fill === false && <div className="cd-stat" title="the market can't absorb the whole stack right now"><span>fill</span><b className="cd-ghost">partial</b></div>}
             </div>
             {cash.cashout_path && cash.cashout_path.length > 1 && (
@@ -169,10 +173,7 @@ export function useAssetModal() {
   const [detail, setDetail] = useState(null)
   const [num, setNum] = useState(null)              // numeraire override inside the modal (not persisted)
   const [winH, setWinH] = useState(24)              // the window this detail was opened for (for the range label)
-  const [nameById, setNameById] = useState({})
-  useEffect(() => {
-    api.currencies().then(d => setNameById(Object.fromEntries((d?.currencies ?? []).map(o => [o.id, o.name])))).catch(() => {})
-  }, [])
+  const { nameOf } = useCurrencies()
   const open = async (name) => {
     const w = useHorizon.getState().hours   // the app-wide horizon at open time
     try { setWinH(w); setDetail(await api.asset(name, w)); setNum(null) }
@@ -184,7 +185,7 @@ export function useAssetModal() {
         const r = detail.row
         const ap = detail.prices || {}
         const n = (num && ap[num] != null) ? num : (ap.divine != null ? 'divine' : (detail.reference || 'exalted'))
-        const numOpts = Object.keys(ap).filter(id => id !== r.id).sort((a, b) => (ap[b] || 0) - (ap[a] || 0)).map(id => ({ id, name: nameById[id] || id }))
+        const numOpts = Object.keys(ap).filter(id => id !== r.id).sort((a, b) => (ap[b] || 0) - (ap[a] || 0)).map(id => ({ id, name: nameOf(id) }))
         const close = () => { setDetail(null); setNum(null) }
         return <CardDetail key="asset" r={r} num={n} factor={ap[n] ?? 1} range={rangeLabel(winH)} numOptions={numOpts} onNum={(id, nn) => setNum(nn)} prices={ap} onClose={close} />
       })()}

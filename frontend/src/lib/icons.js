@@ -7,7 +7,7 @@ import { api } from './api.js'
 
 export const CDN = 'https://web.poecdn.com'
 
-let _index = null                 // { byId: Map<id,rec>, byName: Map<lcname,rec> }
+let _index = null                 // { byId: Map<id,rec>, byName: Map<lcname,rec>, raw, list }
 let _promise = null
 const subs = new Set()
 
@@ -24,11 +24,24 @@ export function loadIcons() {
       if (c.id) byId.set(c.id, rec)
       if (c.name) byName.set(c.name.toLowerCase(), rec)
     }
-    _index = { byId, byName }
+    _index = { byId, byName, raw: d, list: items }
     subs.forEach(fn => { try { fn(_index) } catch {} })
     return _index
-  }).catch(() => { _index = { byId: new Map(), byName: new Map() }; return _index })
+  }).catch(() => { _index = { byId: new Map(), byName: new Map(), raw: null, list: [] }; return _index })
   return _promise
+}
+
+// The ONE /api/currencies fetch, as a store: `raw` (the payload, incl. anchors + unmapped ids),
+// `list` (the currency records), `byId`, and `nameOf(id)`. Every view that used to fetch its own
+// copy reads this instead.
+export function useCurrencies() {
+  const idx = useIcons()
+  return {
+    raw: idx?.raw ?? null,
+    list: idx?.list ?? [],
+    byId: idx?.byId ?? new Map(),
+    nameOf: (id) => idx?.byId.get(id)?.name || id,
+  }
 }
 
 // Resolve {id?, name?} -> { name, icon } or null. id wins, then name (case-insensitive).

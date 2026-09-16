@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react'
+import { isDesktop } from '../lib/session.js'
 
 // "Download desktop app" button for the web dashboard. Reads the latest GitHub release and
 // links to the OS-specific installer asset, so the link always points at the current version
 // (no hardcoded filename). Hidden inside the desktop app itself.
-const isDesktop = typeof window !== 'undefined' && !!window.poe2desktop
 const RELEASES = 'https://github.com/Shazambom/shazam-poe2-dashboard/releases/latest'
 const API = 'https://api.github.com/repos/Shazambom/shazam-poe2-dashboard/releases/latest'
 const osKind = () => {

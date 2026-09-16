@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { motion } from 'motion/react'
+import SubTabs from './SubTabs.jsx'
 import { nav } from '../lib/nav.js'
 import InflationView from './InflationView.jsx'
 import MarketView from './MarketView.jsx'
@@ -16,15 +16,7 @@ export default function EconomyView({ league, currencies }) {
   useEffect(() => nav.on(e => { if (e.type === 'openSub' && e.section === 'Economy' && e.sub) setSub(e.sub) }), [])
   return (
     <div className="section">
-      <nav className="subtabs" role="tablist">
-        {SUBS.map(s => (
-          <button key={s.id} role="tab" aria-selected={sub === s.id} onClick={() => setSub(s.id)}>
-            {s.label}
-            {sub === s.id && <motion.span className="subtab-underline" layoutId="subtab-underline-economy"
-              transition={{ type: 'spring', stiffness: 420, damping: 34 }} />}
-          </button>
-        ))}
-      </nav>
+      <SubTabs subs={SUBS} value={sub} onChange={setSub} layoutId="subtab-underline-economy" />
       {sub === 'inflation' && <InflationView key={league} league={league} />}
       {sub === 'market' && <MarketView key={league} currencies={currencies} />}
     </div>

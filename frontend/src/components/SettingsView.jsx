@@ -1,5 +1,8 @@
-import React, { useEffect, useRef, useState } from 'react'
-import { api, surface, toast } from '../lib/api.js'
+import React, { useEffect, useState } from 'react'
+import { api, toast } from '../lib/api.js'
+import { useAutosave } from '../lib/hooks.js'
+import { useStatus } from '../lib/statusStore.js'
+import { isDesktop } from '../lib/session.js'
 import AccountsPanel from './AccountsPanel.jsx'
 import RecipesView from './RecipesView.jsx'
 import TradingSettings from './TradingSettings.jsx'
@@ -11,52 +14,42 @@ import Toggle from './Toggle.jsx'
 // in the top bar; essentials are visible; the rest sits behind "Advanced".
 export default function SettingsView({ currencies, status, onSaved }) {
   const [s, setS] = useState(null)
-  const [state, setState] = useState('')
   const [mapTo, setMapTo] = useState({})
   const [fees, setFees] = useState(null)
   const [busy, setBusy] = useState(false)
-  const timer = useRef(null)
-  const loaded = useRef(false)
+
+  // The PUT payload: the editable subset, numbers coerced (blank → the default).
+  const num = (v, fb) => { const n = Number(v); return Number.isFinite(n) ? n : fb }
+  const payload = (next) => ({
+    reference: next.reference, watchlist: next.watchlist, hub_count: num(next.hub_count, 5),
+    allow_digest_edges: next.allow_digest_edges, allow_recipe_edges: next.allow_recipe_edges,
+    max_steps: num(next.max_steps, 3), max_start_fraction: num(next.max_start_fraction, 1),
+    live_max_age_s: num(next.live_max_age_s, 1800), digest_max_age_h: num(next.digest_max_age_h, 6),
+    min_edge_volume_ref_per_h: num(next.min_edge_volume_ref_per_h, 1),
+    min_edge_depth: num(next.min_edge_depth, 2),
+    gold_model: next.gold_model,
+    live_top_n: num(next.live_top_n, 5), live_min_age_s: num(next.live_min_age_s, 300),
+    min_refetch_s: num(next.min_refetch_s, 300), routes_cache_s: num(next.routes_cache_s, 300),
+    background_sweep: !!next.background_sweep, batch_pad: !!next.batch_pad,
+    batch_max_have: num(next.batch_max_have, 12),
+    rank_weights: next.rank_weights, volume_window_h: num(next.volume_window_h, 24),
+    step_overhead_min: num(next.step_overhead_min, 2),
+  })
+  const { state, save, arm } = useAutosave(async (next) => {
+    await useStatus.getState().saveSettings(payload(next))
+    onSaved?.()
+  }, 800)
 
   useEffect(() => {
-    api.settings().then(x => { setS(x); setTimeout(() => { loaded.current = true }, 0) })
+    useStatus.getState().loadSettings().then(x => { setS(x); arm() })
     api.goldFees().then(setFees).catch(() => {})
-    return () => clearTimeout(timer.current)
-  }, [])
-
-  const persist = (next) => {
-    if (!loaded.current) return
-    clearTimeout(timer.current)
-    setState('saving')
-    timer.current = setTimeout(async () => {
-      const num = (v, fb) => { const n = Number(v); return Number.isFinite(n) ? n : fb }
-      try {
-        await surface(api.putSettings({
-          reference: next.reference, watchlist: next.watchlist, hub_count: num(next.hub_count, 5),
-          allow_digest_edges: next.allow_digest_edges, allow_recipe_edges: next.allow_recipe_edges,
-          max_steps: num(next.max_steps, 3), max_start_fraction: num(next.max_start_fraction, 1),
-          live_max_age_s: num(next.live_max_age_s, 1800), digest_max_age_h: num(next.digest_max_age_h, 6),
-          min_edge_volume_ref_per_h: num(next.min_edge_volume_ref_per_h, 1),
-          min_edge_depth: num(next.min_edge_depth, 2),
-          gold_model: next.gold_model,
-          live_top_n: num(next.live_top_n, 5), live_min_age_s: num(next.live_min_age_s, 300),
-          min_refetch_s: num(next.min_refetch_s, 300), routes_cache_s: num(next.routes_cache_s, 300),
-          background_sweep: !!next.background_sweep, batch_pad: !!next.batch_pad,
-          batch_max_have: num(next.batch_max_have, 12),
-          rank_weights: next.rank_weights, volume_window_h: num(next.volume_window_h, 24),
-          step_overhead_min: num(next.step_overhead_min, 2),
-        }))
-        setState('saved'); onSaved?.()
-        setTimeout(() => setState(x => x === 'saved' ? '' : x), 1500)
-      } catch { setState('') }
-    }, 800)
-  }
+  }, []) // eslint-disable-line
   if (!s) return <div className="single hint">Loading settings…</div>
 
   const opts = currencies?.currencies ?? []
-  const set = (k, v) => setS(x => { const n = { ...x, [k]: v }; persist(n); return n })
-  const setGold = (k, v) => setS(x => { const n = { ...x, gold_model: { ...x.gold_model, [k]: v } }; persist(n); return n })
-  const setWeight = (k, v) => setS(x => { const n = { ...x, rank_weights: { ...x.rank_weights, [k]: Number(v) } }; persist(n); return n })
+  const set = (k, v) => setS(x => { const n = { ...x, [k]: v }; save(n); return n })
+  const setGold = (k, v) => setS(x => { const n = { ...x, gold_model: { ...x.gold_model, [k]: v } }; save(n); return n })
+  const setWeight = (k, v) => setS(x => { const n = { ...x, rank_weights: { ...x.rank_weights, [k]: Number(v) } }; save(n); return n })
   const perUnitText = Object.entries(s.gold_model.per_unit).map(([k, v]) => `${k}=${v}`).join(', ')
 
   return (
@@ -182,7 +175,7 @@ export default function SettingsView({ currencies, status, onSaved }) {
 // `-beta.N` builds AND enables diagnostics telemetry so we can debug packaged behavior remotely.
 // Stable users never see beta releases (they're GitHub pre-releases). No-op in the web build.
 function BetaChannelToggle() {
-  const desk = typeof window !== 'undefined' && window.poe2desktop
+  const desk = isDesktop ? window.poe2desktop : null
   const [st, setSt] = useState(null)
   useEffect(() => { desk?.getChannel?.().then(setSt).catch(() => {}) }, [])
   if (!desk?.getChannel) return null

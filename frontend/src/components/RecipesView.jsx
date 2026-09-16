@@ -1,5 +1,6 @@
-import React, { useEffect, useRef, useState } from 'react'
-import { api, surface } from '../lib/api.js'
+import React, { useEffect, useState } from 'react'
+import { api } from '../lib/api.js'
+import { useAutosave } from '../lib/hooks.js'
 import Cur from './Cur.jsx'
 import Toggle from './Toggle.jsx'
 
@@ -9,27 +10,11 @@ const one = (obj) => { const [k, v] = Object.entries(obj)[0] ?? ['', 1]; return 
 // Auto-saves (debounced); usable standalone or embedded inside Settings.
 export default function RecipesView({ currencies, embedded = false }) {
   const [list, setList] = useState(null)
-  const [state, setState] = useState('')
-  const timer = useRef(null)
-  const loaded = useRef(false)
-  useEffect(() => {
-    api.recipes().then(l => { setList(l); setTimeout(() => { loaded.current = true }, 0) })
-    return () => clearTimeout(timer.current)
-  }, [])
+  const { state, save, arm } = useAutosave(async (next) => setList(await api.putRecipes(next)), 800)
+  useEffect(() => { api.recipes().then(l => { setList(l); arm() }) }, []) // eslint-disable-line
   const opts = currencies?.currencies ?? []
 
-  const persist = (next) => {
-    if (!loaded.current) return
-    clearTimeout(timer.current)
-    setState('saving')
-    timer.current = setTimeout(async () => {
-      try {
-        setList(await surface(api.putRecipes(next)))
-        setState('saved'); setTimeout(() => setState(x => x === 'saved' ? '' : x), 1500)
-      } catch { setState('') }
-    }, 800)
-  }
-  const change = (fn) => setList(l => { const n = fn(l); persist(n); return n })
+  const change = (fn) => setList(l => { const n = fn(l); save(n); return n })
   const upd = (i, patch) => change(l => l.map((r, j) => j === i ? { ...r, ...patch } : r))
   const setSide = (i, side, field, val) => change(l => l.map((r, j) => {
     if (j !== i) return r

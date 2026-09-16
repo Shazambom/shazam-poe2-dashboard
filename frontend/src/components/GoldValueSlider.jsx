@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { api } from '../lib/api.js'
+import { useStatus, ensureSettings } from '../lib/statusStore.js'
 import { lookup, useIcons } from '../lib/icons.js'
 import Cur from './Cur.jsx'
 
@@ -19,7 +19,7 @@ export default function GoldValueSlider({ onCommit }) {
   const timer = useRef(null)
 
   useEffect(() => {
-    api.settings().then(s => {
+    ensureSettings().then(s => {
       const gv = Number(s.gold_value_per_1k) || 0.01
       setGpd(Math.min(GPD_MAX, Math.max(GPD_MIN, Math.round(1000 / gv))))
     }).catch(() => {})
@@ -29,7 +29,7 @@ export default function GoldValueSlider({ onCommit }) {
     setGpd(nextGpd)
     clearTimeout(timer.current)
     timer.current = setTimeout(() => {
-      api.putSettings({ gold_value_per_1k: 1000 / nextGpd }).then(() => onCommit?.()).catch(() => {})
+      useStatus.getState().saveSettings({ gold_value_per_1k: 1000 / nextGpd }).then(() => onCommit?.()).catch(() => {})
     }, 350)                                    // debounce: persist + re-rank routes after the drag settles
   }
 

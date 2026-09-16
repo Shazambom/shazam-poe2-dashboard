@@ -4,8 +4,8 @@ import { useWorkspace, loadWorkspace } from '../lib/workspaceStore.js'
 import PingButton from './PingButton.jsx'
 import SearchTree from './SearchTree.jsx'
 import { toast } from '../lib/api.js'
+import { hasTradeEngine as isDesktop } from '../lib/session.js'
 
-const isDesktop = typeof window !== 'undefined' && !!window.poe2desktop?.trade
 
 // Trading → Live: the live-search cockpit. Newest ping surfaces at the top as the single
 // travel-to-hideout button ("one button for all watches"); watched searches can be toggled
