@@ -116,6 +116,27 @@ def test_claim_is_fifo_across_kinds():
     assert analytics.claim(c) is None
 
 
+def test_requeue_stale_recovers_orphaned_running_jobs():
+    """If the sidecar dies mid-job the row stays 'running' forever and, since claim() only takes
+    'queued', the pipeline wedges (the v0.2.50 Windows symptom). requeue_stale must reset a stale
+    'running' back to 'queued' so it's reprocessed — while leaving a fresh in-flight job alone."""
+    _clear()
+    c = _conn()
+    analytics.enqueue(c, "discords", {"league": "Std"})
+    claimed = analytics.claim(c)                       # -> running
+    assert claimed is not None
+    assert analytics.claim(c) is None                 # nothing else queued; the row is 'running'
+
+    # Fresh running job (started just now) is NOT stolen by a generous window.
+    assert analytics.requeue_stale(c, older_than_s=120) == 0
+    assert analytics.claim(c) is None
+
+    # Orphaned long enough -> requeued -> claimable again.
+    assert analytics.requeue_stale(c, older_than_s=0) == 1
+    again = analytics.claim(c)
+    assert again is not None and again["kind"] == "discords"
+
+
 if __name__ == "__main__":
     import pytest
     raise SystemExit(pytest.main([__file__, "-q"]))

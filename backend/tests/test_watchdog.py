@@ -56,6 +56,51 @@ def test_watch_parent_fires_on_dead():
     assert fired == [True]
 
 
+def test_watch_parent_debounces_a_single_spurious_miss(monkeypatch):
+    # A single not-alive poll (e.g. a transient OpenProcess failure on Windows) must NOT kill a
+    # healthy child; only `misses` consecutive misses do. Script parent_alive: miss, then alive.
+    seq = iter([False, True, True, True, True, True])
+    monkeypatch.setattr(watchdog, "parent_alive", lambda pid: next(seq, True))
+    fired = []
+    watchdog.watch_parent(123, interval=0.01, misses=2, on_dead=lambda reason=None: fired.append(reason))
+    time.sleep(0.15)
+    assert fired == [], "a single spurious miss must not trigger death"
+
+
+def test_watch_parent_fires_after_consecutive_misses_with_reason(monkeypatch):
+    monkeypatch.setattr(watchdog, "parent_alive", lambda pid: False)   # always gone
+    fired = []
+    watchdog.watch_parent(123, interval=0.01, misses=2, on_dead=lambda reason=None: fired.append(reason))
+    for _ in range(100):
+        if fired:
+            break
+        time.sleep(0.01)
+    assert fired and fired[0] == "parent-pid-gone"
+
+
+def test_win_alive_treats_access_denied_as_alive(monkeypatch):
+    # OpenProcess returns NULL for BOTH a dead pid and a live-but-inaccessible one; only
+    # ERROR_INVALID_PARAMETER (87) means "no such process". A NULL + ACCESS_DENIED (5) must read as
+    # ALIVE, or the sidecar self-kills mid-job on Windows (the v0.2.50 bug).
+    import ctypes
+
+    class _FakeK:
+        def __init__(self, err):
+            self._err = err
+        def OpenProcess(self, *a):
+            return 0                      # NULL handle
+        # GetExitCodeProcess/CloseHandle unused on the NULL path
+
+    monkeypatch.setattr(ctypes, "windll", type("W", (), {})(), raising=False)
+    # access-denied -> alive
+    monkeypatch.setattr(ctypes.windll, "kernel32", _FakeK(5), raising=False)
+    monkeypatch.setattr(ctypes, "get_last_error", lambda: 5, raising=False)
+    assert watchdog._win_alive(4321) is True
+    # invalid-parameter (no such pid) -> dead
+    monkeypatch.setattr(ctypes, "get_last_error", lambda: 87, raising=False)
+    assert watchdog._win_alive(4321) is False
+
+
 if __name__ == "__main__":
     import pytest
     raise SystemExit(pytest.main([__file__, "-q"]))

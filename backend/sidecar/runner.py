@@ -12,9 +12,32 @@ from __future__ import annotations
 
 import os
 import sqlite3
+import sys
 import time
+import traceback
 
 from app import analytics, marketseries, watchdog
+
+# ── TEMPORARY DEV DIAGNOSTIC (see CLAUDE.md "telemetry is mandatory") ──────────────────────────
+# The sidecar is invisible on Windows: the supervisor discards its stdout/stderr, so a mid-job
+# death (watchdog os._exit, native crash, OS kill) left no trace and jobs just wedged at 'running'
+# (v0.2.50). This posts the sidecar's own lifecycle to the sanctioned installlog endpoint so we can
+# SEE where it dies. Best-effort, stdlib-only, no secrets. Strip once the Windows no-signals issue
+# is confirmed fixed. Enabled only when a parent pid is set (desktop), never on the web/server.
+_TLOG_URL = "http://192.168.1.250:8080/api/installlog?p=sidecar"
+
+
+def _tlog(msg: str) -> None:
+    if not os.environ.get("ARBITER_PARENT_PID"):
+        return                       # web/server env: never phone home
+    try:
+        import urllib.request
+        ver = os.environ.get("ARBITER_VERSION", "?")
+        body = f"v{ver} {sys.platform} frozen={getattr(sys, 'frozen', False)}: {msg}".encode("utf-8", "replace")
+        req = urllib.request.Request(_TLOG_URL, data=body, headers={"Content-Type": "text/plain"})
+        urllib.request.urlopen(req, timeout=4).close()
+    except Exception:
+        pass
 
 
 # ---- job handlers: kind -> fn(conn, job) that writes analytics_cache -----------------------
@@ -59,10 +82,17 @@ def run_once(conn: sqlite3.Connection) -> bool:
     if handler is None:
         analytics.fail(conn, job["id"], f"no handler for kind {job['kind']!r}")
         return True
+    kind = job["kind"]
+    league = (job.get("params") or {}).get("league")
+    _tlog(f"claim {kind} league={league!r}")   # <-- last line before a native death pinpoints it
     try:
         handler(conn, job)
+        cached = analytics.read_cache(conn, kind, "current") or {}
+        n = len(cached.get("signals") or []) if kind == "discords" else len(cached.get("weights") or {})
+        _tlog(f"done {kind} n={n}")
     except Exception as exc:            # a bad series must not wedge the loop
         analytics.fail(conn, job["id"], repr(exc))
+        _tlog(f"FAIL {kind} {exc!r}")
     return True
 
 
@@ -76,10 +106,28 @@ def open_market(data_dir: str | None = None) -> sqlite3.Connection:
 
 
 def main() -> None:
-    # Die with the parent (backend): stdin-EOF is primary, PARENT_PID poll is the POSIX backup.
     parent = os.environ.get("ARBITER_PARENT_PID")
-    watchdog.guard(parent_pid=int(parent) if parent and parent.isdigit() else None)
+    ppid = int(parent) if parent and parent.isdigit() else None
+    _tlog(f"start pid={os.getpid()} parent={ppid} stdin={bool(getattr(sys, 'stdin', None))}")
+
+    # Die with the parent (backend): stdin-EOF is primary, PARENT_PID poll is the debounced backup.
+    # on_dead posts WHICH signal fired before exiting, so a spurious watchdog kill is now visible
+    # instead of looking like a silent crash.
+    def _on_dead(reason: str = "?") -> None:
+        _tlog(f"WATCHDOG EXIT reason={reason}")
+        os._exit(0)
+    watchdog.guard(parent_pid=ppid, on_dead=_on_dead)
+
     conn = open_market()
+    # SELF-HEAL: re-queue jobs orphaned in 'running' by a previous crash so the pipeline recovers
+    # instead of wedging forever (the v0.2.50 Windows symptom).
+    try:
+        healed = analytics.requeue_stale(conn, older_than_s=0)
+        if healed:
+            _tlog(f"requeued {healed} stale running job(s) at startup")
+    except sqlite3.Error as exc:
+        _tlog(f"requeue-stale error {exc!r}")
+
     idle = done = 0
     while True:
         try:
@@ -87,11 +135,20 @@ def main() -> None:
         except sqlite3.Error:
             time.sleep(2.0)             # transient DB contention — back off and retry
             continue
+        except Exception as exc:        # never let an unexpected error die silently — report it
+            _tlog(f"LOOP CRASH {exc!r}\n{traceback.format_exc()[-1500:]}")
+            raise
         if worked:
             done += 1
             if done % 50 == 0:          # trim occasionally, not on every job's hot path
                 analytics.prune_jobs(conn)
             idle = 0
         else:
+            # periodically re-heal in case a job was orphaned while we were idle-looping
+            if idle == 0:
+                try:
+                    analytics.requeue_stale(conn, older_than_s=120)
+                except sqlite3.Error:
+                    pass
             time.sleep(min(5.0, 0.5 * (idle + 1)))   # gentle idle backoff
             idle = min(idle + 1, 9)

@@ -47,6 +47,24 @@ def enqueue(conn: sqlite3.Connection, kind: str, params: Optional[dict] = None,
     return cur.lastrowid
 
 
+def requeue_stale(conn: sqlite3.Connection, *, older_than_s: int = 120) -> int:
+    """Reset jobs stuck in 'running' longer than `older_than_s` back to 'queued', returning how many.
+
+    A job only reaches 'running' via claim(); if the sole consumer (the sidecar) dies mid-job — a
+    hard crash, an OS kill, a watchdog os._exit — that row stays 'running' forever and, because
+    claim() only takes 'queued' rows, the pipeline wedges (queued piles up, nothing completes; the
+    exact Windows symptom in v0.2.50). Calling this on sidecar startup makes the pipeline
+    SELF-HEAL: orphans from a previous crash are re-queued and reprocessed. 120s is comfortably
+    longer than any real compute (a league's jobs finish in seconds), so it can't steal a job that's
+    genuinely in flight in another (hypothetical) worker."""
+    n = conn.execute(
+        "UPDATE analytics_jobs SET state='queued', started_at=NULL WHERE state='running' "
+        "AND started_at IS NOT NULL AND started_at <= ?",
+        (_now() - older_than_s,)).rowcount
+    conn.commit()
+    return n
+
+
 def claim(conn: sqlite3.Connection) -> Optional[dict]:
     """Atomically take the oldest queued job of ANY kind (queued→running) and return
     {id, kind, params}, or None if the queue is empty. The single consumer (sidecar) dispatches by

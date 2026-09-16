@@ -208,7 +208,15 @@ async def diag():
             analytics_diag["last_error"] = (f"{err[0]}: {str(err[1])[:200]}" if err else None)
             sig = _an.read_cache(c, "discords", "current")
             analytics_diag["signals"] = len((sig or {}).get("signals") or [])
+            analytics_diag["cache_league"] = (sig or {}).get("league")   # which league the cache is for
             analytics_diag["arc_weighted"] = bool((_an.read_cache(c, "arc", "current") or {}).get("weights"))
+            # the league the sidecar is actually being asked to compute (same resolver the enqueue
+            # loop uses). Mismatch vs cache_league = "computed the wrong league"; equal with
+            # signals=0 = "this league genuinely has no volume-confirmed discords right now".
+            try:
+                analytics_diag["screen_league"] = movers.current_league()
+            except Exception:
+                analytics_diag["screen_league"] = s["league"]
     except Exception as e:
         analytics_diag["err"] = f"{type(e).__name__}: {str(e)[:160]}"
 

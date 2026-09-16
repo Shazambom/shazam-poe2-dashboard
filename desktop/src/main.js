@@ -110,7 +110,8 @@ async function startBackend() {
       // ARBITER_PARENT_PID lets the backend die with us if Electron hard-crashes (parent-pid
       // watchdog); the web/server env never sets it, so servers are unaffected.
       env: { ...process.env, DATA_DIR: dataDir, PORT: String(LOCAL_BACKEND_PORT), MARKET_SEED: marketSeed,
-             SIDECAR_BIN: sidecarBin, ARBITER_PARENT_PID: String(process.pid) },
+             SIDECAR_BIN: sidecarBin, ARBITER_PARENT_PID: String(process.pid),
+             ARBITER_VERSION: app.getVersion() },
       stdio: ['ignore', 'pipe', 'pipe'],
     })
     // DEV DIAGNOSTIC: keep a rolling tail of backend output so a crash/hang on Windows is visible.
@@ -127,16 +128,18 @@ async function startBackend() {
     const t0 = Date.now()
     if (await waitFor(`${localUrl}/api/status`, 240)) {   // ~2min: cover a slow first-boot re-seed before declaring failure
       bkLog(`bound after ${Math.round((Date.now() - t0) / 1000)}s`)
-      // DEV DIAGNOSTIC: report the heavy-analytics pipeline state once, ~90s in (after the sidecar
-      // has had time to compute the first discords/arc), so we can see on Windows whether signals
-      // are produced or the job is erroring (e.g. numpy/stumpy failing to load).
-      setTimeout(async () => {
-        try {
-          const r = await fetch(`${localUrl}/api/diag`, { signal: AbortSignal.timeout(8000) })
-          const d = await r.json()
-          bkLog(`analytics ${JSON.stringify(d.analytics || {})}`)
-        } catch (e) { bkLog(`analytics-probe-failed ${String(e && e.message || e)}`) }
-      }, 90000)
+      // DEV DIAGNOSTIC: probe the heavy-analytics pipeline REPEATEDLY (not one blind snapshot) so we
+      // see job progression on Windows — whether the 'done' bucket ever appears, or jobs stay wedged
+      // at 'running'. Combined with the sidecar's own p=sidecar telemetry this pinpoints where it dies.
+      for (const delay of [60000, 150000, 300000]) {
+        setTimeout(async () => {
+          try {
+            const r = await fetch(`${localUrl}/api/diag`, { signal: AbortSignal.timeout(8000) })
+            const d = await r.json()
+            bkLog(`analytics@${Math.round(delay / 1000)}s ${JSON.stringify(d.analytics || {})}`)
+          } catch (e) { bkLog(`analytics-probe-failed ${String(e && e.message || e)}`) }
+        }, delay)
+      }
       backendUrl = localUrl
       backendKind = 'local'
       return

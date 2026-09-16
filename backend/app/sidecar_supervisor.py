@@ -22,6 +22,23 @@ log = logging.getLogger("poe2arb.sidecar")
 _proc: Optional[subprocess.Popen] = None
 _stop = False
 
+# TEMPORARY DEV DIAGNOSTIC (see CLAUDE.md): a native sidecar crash (rc=0xC0000005) dies too fast to
+# post its own telemetry, so the supervisor reports the exit code + stderr tail. Best-effort, only
+# on desktop (parent pid set). Strip with the rest of the Windows-signals diagnostics.
+def _tlog(msg: str) -> None:
+    if not os.environ.get("ARBITER_PARENT_PID"):
+        return
+    try:
+        import sys
+        import urllib.request
+        ver = os.environ.get("ARBITER_VERSION", "?")
+        body = f"v{ver} {sys.platform} [supervisor]: {msg}".encode("utf-8", "replace")
+        req = urllib.request.Request("http://192.168.1.250:8080/api/installlog?p=sidecar",
+                                     data=body, headers={"Content-Type": "text/plain"})
+        urllib.request.urlopen(req, timeout=4).close()
+    except Exception:
+        pass
+
 
 def _sidecar_cmd() -> Optional[list[str]]:
     """How to launch the sidecar:
@@ -53,13 +70,23 @@ def _supervise(cmd: list[str]) -> None:
     while not _stop:
         try:
             env = dict(os.environ, ARBITER_PARENT_PID=str(os.getpid()))
-            _proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, env=env)
+            # Capture the sidecar's stderr so a native crash (rc=0xC0000005) or traceback is
+            # visible instead of being discarded — the death was invisible in v0.2.50.
+            _proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stderr=subprocess.PIPE, env=env)
             log.info("analytics sidecar started pid=%s (%s)", _proc.pid, cmd[0])
             backoff = 1.0                           # a clean start resets the backoff
+            err_tail = b""
+            try:                                    # drain stderr so a chatty child can't block
+                err_tail = (_proc.stderr.read() or b"") if _proc.stderr else b""
+            except Exception:
+                pass
             rc = _proc.wait()
             if _stop:
                 break
             log.info("analytics sidecar exited rc=%s — restarting", rc)
+            # rc=3221225477 (0xC0000005) = native access violation; a clean rc=0 with jobs stuck
+            # usually means a watchdog os._exit. Either way, surface it.
+            _tlog(f"exited rc={rc} stderr_tail={err_tail[-600:].decode('utf-8', 'replace')!r}")
         except Exception as exc:
             log.warning("analytics sidecar spawn failed: %s", exc)
         if _stop:
