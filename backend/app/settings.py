@@ -67,6 +67,9 @@ DEFAULTS: dict = {
         "live": {"banner": True, "sound": True, "os": False, "tone": "soft1"},
         "signals": {"banner": True, "sound": True, "os": False, "tone": "alert"},
     },
+    # ExiledExchange2 History (desktop): record every item copied in game as a row in the workspace's
+    # history folder. `max` rows kept (20…1000), `retentionDays` (7…90); both enforced by the client store.
+    "ee2History": {"enabled": True, "max": 200, "retentionDays": 14},
     # Default filters (UI can override per request)
     "filters": {
         "min_margin_pct": 3.0,            # skip sub-3% flips — noise once you count effort/fees

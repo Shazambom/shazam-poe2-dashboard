@@ -192,6 +192,10 @@ a { color: var(--live); }
 .ws-webhint-name { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .ws-chip { display: inline-flex; align-items: center; gap: 4px; border-radius: 999px; padding: 1px 8px; font-size: 11px; color: var(--muted); border: 1px solid var(--line); white-space: nowrap; }
 .ws-chip.ok { color: var(--gain); border-color: rgba(111,206,159,.35); }
+.ws-chip.ee2 { font-size: 9.5px; font-weight: 700; letter-spacing: .05em; padding: 0 5px; color: var(--muted); border-color: var(--line-strong); }
+.ws-count { font-size: 10.5px; color: var(--muted); background: var(--line); border-radius: 999px; padding: 0 6px; min-width: 18px; text-align: center; flex: 0 0 auto; }
+.ws-rail-head .toggle-label { font-size: 11px; color: var(--muted); white-space: nowrap; letter-spacing: .04em; }
+.settings-sub { margin: 12px 0 6px; font-size: 12px; color: var(--ink-2); text-transform: uppercase; letter-spacing: .05em; }
 .ws-chip.live { color: var(--offline); border-color: rgba(232,97,95,.5); text-transform: uppercase; font-weight: 700; letter-spacing: .04em; font-size: 10px; }
 .ws-webhint .ws-mini.on { font-size: 13px; }
 .ws-progress { height: 2px; flex: 0 0 2px; background: transparent; overflow: hidden; position: relative; }

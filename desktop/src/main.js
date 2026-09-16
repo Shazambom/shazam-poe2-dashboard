@@ -491,6 +491,8 @@ function buildMenu() {
 // Best-effort: any failure here is swallowed and the rest of the app is
 // unaffected. Local-only (no network) by construction.
 let _ee2 = null
+let _history = null          // the ExiledExchange2 History consumer (ee2-history/index.js)
+let _unwatchEe2Config = null
 async function startEe2Integration() {
   if (_ee2) return
   try {
@@ -500,13 +502,39 @@ async function startEe2Integration() {
     _ee2 = new ExiledExchangeIntegration()
     attachLogDemo(_ee2)                       // demo subscriber: logs each hook, no side effects
     attachEe2Telemetry(_ee2)  // TEMP: report hooks to dev server so we can verify remotely
+    // The actions layer (roadmap §9): every item-checked → worker → one IngestIntent to the renderer.
+    // The package is untouched; this attaches beside it. Telemetry goes through the one gated sender.
+    try {
+      const { createHistoryConsumer } = require('./ee2-history')
+      const { spawnWorker } = require('./ee2-history/worker-host.js')
+      const { readPrefs } = require('./ee2-history/prefs.js')
+      _history = createHistoryConsumer({
+        manager: _ee2, worker: { spawn: spawnWorker }, prefs: readPrefs,
+        send: win && !win.isDestroyed() && !win.webContents.isLoading() ? (ch, p) => { try { win.webContents.send(ch, p) } catch {} } : null,
+        log: (line) => telemetry.installLog('ee2', line),
+      })
+      try { _unwatchEe2Config = require('./integrations/exiled-exchange/ee2-config.js').watchConfig(() => _history?.invalidatePrefs()) } catch {}
+    } catch (e) { console.log('[ee2-history] disabled:', String(e)); _history = null }
     await _ee2.start()
   } catch (e) { console.log('[ee2] integration disabled:', String(e)); _ee2 = null }
 }
 function stopEe2Integration() {
+  try { _unwatchEe2Config?.() } catch {}; _unwatchEe2Config = null
+  try { _history?.stop() } catch {}; _history = null
   try { _ee2?.stop() } catch {}
   _ee2 = null
 }
+
+// Renderer ↔ history consumer (batch 3). The renderer owns the setting; main only skips builds.
+ipcMain.on('ee2:set-enabled', (_e, p) => { _history?.setEnabled(p?.enabled !== false) })
+ipcMain.handle('ee2:status', () => (_history ? _history.status() : { present: false, running: false, configRead: false, leagueId: null, warm: false, enabled: true }))
+ipcMain.on('trade:ingest-ack', (_e, ack) => { if (ack && ack.result === 'dropped') telemetry.installLog('ee2', `ingest-drop reason=${ack.reason || '?'}`) })
+// DEV ONLY: feed a fixture item through the real consumer + worker without EE2 running (CDP drives).
+ipcMain.handle('dev:ee2-item', (_e, item) => {
+  if (app.isPackaged || !_history) return false
+  _history.onItem({ name: '', baseType: '', rarity: '', itemClass: '', origin: 'clipboard', ts: Date.now(), ...(item || {}) })
+  return true
+})
 
 // ------------------------------------------------------------------- boot
 // Single-instance lock: a second launch (or the installer relaunching us) hands
@@ -538,6 +566,8 @@ app.whenReady().then(async () => {
   })
   win.loadURL(uiUrl)
   win.webContents.setWindowOpenHandler(({ url }) => { shell.openExternal(url); return { action: 'deny' } })
+  win.webContents.on('did-finish-load', () => { _history?.setSender((ch, p) => { try { win?.webContents.send(ch, p) } catch {} }) })
+  win.on('closed', () => { _history?.setSender(null) })
   setupUpdates()
   startEe2Integration()   // self-gates on EE2 presence; dormant if EE2 isn't installed
   try { require('./trade').registerTrade(() => win, () => backendUrl) } catch (e) { console.log('[trade] register failed:', String(e)) }

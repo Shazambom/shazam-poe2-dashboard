@@ -56,7 +56,7 @@ test('sanitize drops oversize q and trims the history folder to the cap, leaving
   const tree = [{ id: 'h', kind: 'folder', sys: HISTORY_SYS, name: 'H', children: kids },
     { id: 'big', kind: 'search', name: 'Big', q: 'x'.repeat(MAX_Q_BYTES + 1), slug: '' },
     { id: 'ok', kind: 'search', name: 'Ok', q: '{}', slug: '', extra: { keep: true } }]
-  const out = sanitize(tree)
+  const out = sanitize(tree, HISTORY_CAP)
   assert.equal(out[0].children.length, HISTORY_CAP)
   assert.deepEqual(out[0].children.map(c => c.id), kids.slice(0, HISTORY_CAP).map(c => c.id), 'keeps the first (newest) rows')
   assert.equal(out[1].q, null); assert.equal(out[1].degraded, true)

@@ -24,19 +24,23 @@ let armed = false   // don't PUT while hydrating the initial load
 // The ExiledExchange2 History folder: found by `sys` at any depth (the user may rename/move it).
 export const HISTORY_SYS = 'ee2-history'
 export const HISTORY_NAME = 'ExiledExchange2 History'
-export const HISTORY_CAP = 200       // rows kept in the history folder (newest first)
+export const HISTORY_CAP = 200       // default rows kept in the history folder (newest first); Settings can change it
+export const HISTORY_RETENTION_DAYS = 14
+export const HISTORY_PREFS = Object.freeze({ enabled: true, max: HISTORY_CAP, retentionDays: HISTORY_RETENTION_DAYS })
+export const HISTORY_MAX_LIMIT = 1000  // the backend's 5000-node guard leaves room; Settings clamps 20…1000
 export const MAX_Q_BYTES = 16 * 1024 // a q larger than this is dropped (degraded row), never PUT
+const DAY = 86400000
 
 // Keep every PUT inside the backend's limits (it validates and never truncates, so a rejection
 // would mean a bug here): drop oversize q's, trim the history folder to its cap. Pure; untouched
 // nodes are returned as-is.
-export function sanitize(tree) {
+export function sanitize(tree, cap = HISTORY_MAX_LIMIT) {
   return (tree || []).map(n => {
     let out = n
     if (n.kind === 'search' && typeof n.q === 'string' && n.q.length > MAX_Q_BYTES) out = { ...n, q: null, degraded: true }
     if (n.kind === 'folder' && n.children) {
-      let kids = sanitize(n.children)
-      if (n.sys === HISTORY_SYS && kids.length > HISTORY_CAP) kids = kids.slice(0, HISTORY_CAP)
+      let kids = sanitize(n.children, cap)
+      if (n.sys === HISTORY_SYS && kids.length > cap) kids = kids.slice(0, cap)
       if (kids !== n.children && (kids.length !== n.children.length || kids.some((k, i) => k !== n.children[i]))) out = { ...out, children: kids }
     }
     return out
@@ -47,6 +51,19 @@ function payload(get) {
   const { version, tree, layout, openTabs, activeId } = get()
   return { version, tree: sanitize(tree), layout, openTabs, activeId }
 }
+
+// The history folder's children after the folder rules: `rows` newest-first, capped and expired.
+function trimHistory(rows, prefs, now) {
+  const cutoff = now - (prefs.retentionDays || HISTORY_RETENTION_DAYS) * DAY
+  let out = rows.filter(r => !(typeof r.ts === 'number') || r.ts >= cutoff)
+  const expired = rows.length - out.length
+  const max = Math.max(1, prefs.max || HISTORY_CAP)
+  const pruned = Math.max(0, out.length - max)
+  if (pruned) out = out.slice(0, max)
+  return { rows: out, expired, pruned }
+}
+
+let pendingIntents = []   // intents that arrived before the document hydrated (applied in order after)
 
 async function save(get, set) {
   clearTimeout(saveTimer); saveTimer = null
@@ -91,6 +108,9 @@ export const useWorkspace = create((set, get) => ({
   loaded: false,
   loadError: null,  // set when the GET failed: the tree is NOT the user's and must never be written back
   saveState: 'idle',   // idle | dirty | saving | error
+  league: '',          // the app's top-bar league (App keeps it current): stamped on history rows, filters the folder
+  historyPrefs: { ...HISTORY_PREFS },   // mirrors settings.ee2History (enabled / max / retentionDays)
+  lastHistoryEvent: null,   // { type:'add'|'bump'|'cap'|'expire'|'clear', … } — the renderer's telemetry hook reads this
   activeId: null,   // which search entry is open in the trade window (persisted → restores on relaunch)
 
   setActive: (id) => { if (get().loadError) return; set({ activeId: id }); persist(get, set) },
@@ -108,8 +128,17 @@ export const useWorkspace = create((set, get) => ({
       loaded: true,
     })
     // arm on the next tick so hydrate itself doesn't trigger a save
-    setTimeout(() => { armed = true }, 0)
+    setTimeout(() => {
+      armed = true
+      // Producers that fired before the document loaded: apply in arrival order, then expire once.
+      const queued = pendingIntents; pendingIntents = []
+      for (const i of queued) get().ingest(i)
+      get().expireHistory(Date.now())
+    }, 0)
   },
+
+  setLeague: (league) => { if (league !== get().league) set({ league: league || '' }) },
+  setHistoryPrefs: (patch) => set(s => ({ historyPrefs: { ...s.historyPrefs, ...patch } })),
 
   // A load failure leaves an EMPTY tree that is not the user's. Every mutation is refused (and
   // persist stays disarmed) until a retry hydrates the real document — otherwise the first
@@ -210,22 +239,19 @@ export const useWorkspace = create((set, get) => ({
   // { result: 'added'|'dup'|'dropped', id?, reason? }.
   ingest: (intent) => {
     if (get().loadError) return { result: 'dropped', reason: 'load-error' }
+    if (!get().loaded) { pendingIntents.push(intent); return { result: 'buffered' } }
+    if (intent.q && intent.q.length > MAX_Q_BYTES) return { result: 'dropped', reason: 'oversize' }
+    if (intent.folder === HISTORY_SYS) return get()._ingestHistory(intent)
     const st = get()
     const same = intent.q
       ? findWhere(st.tree, n => n.kind === 'search' && n.q === intent.q)
       : intent.slug ? findWhere(st.tree, n => n.kind === 'search' && n.slug === intent.slug) : null
-    const fromClipboard = intent.source === 'clipboard'
-    if (same && fromClipboard) { set({ activeId: same.id }); persist(get, set); return { result: 'dup', id: same.id } }
+    if (same) { set({ activeId: same.id }); persist(get, set); return { result: 'dup', id: same.id } }
     const node = {
       ...searchNode({ type: intent.type || 'search', slug: intent.slug || '', live: !!intent.live }, intent.name),
       auto: intent.q ? false : true,          // rows born from a query keep their parsed name
       q: intent.q || null, origin: intent.origin || intent.source, ts: Date.now(),
       ...(intent.item ? { item: intent.item } : {}), ...(intent.degraded ? { degraded: true } : {}),
-    }
-    if (intent.folder) {
-      const fid = get().ensureFolder(intent.folder, intent.folder === HISTORY_SYS ? HISTORY_NAME : intent.folder)
-      get().prependSearch(fid, node)          // newest first; the item stream never steals the pane
-      return { result: 'added', id: node.id }
     }
     // Clipboard target: the chosen folder unless it is the history folder (never a clipboard target).
     let target = intent.targetId ? findNode(get().tree, intent.targetId) : null
@@ -235,6 +261,64 @@ export const useWorkspace = create((set, get) => ({
       : [...s.tree, node], activeId: node.id }))
     persist(get, set)
     return { result: 'added', id: node.id }
+  },
+
+  // The item stream (roadmap §9): one atomic set() — dedupe per league (bump), newest first, cap,
+  // expiry — never selects, never touches rows outside the folder.
+  _ingestHistory: (intent) => {
+    const { historyPrefs: prefs, league } = get()
+    if (!prefs.enabled) return { result: 'dropped', reason: 'disabled' }
+    const fid = get().ensureFolder(HISTORY_SYS, HISTORY_NAME)
+    const now = Date.now()
+    let result = intent.degraded || !intent.q ? 'degraded' : 'added', bumpedAge = 0, inherited = null
+    const node = {
+      ...searchNode({ type: 'search', slug: '', live: false }, intent.name),
+      auto: false, q: intent.q || null, origin: intent.origin || intent.source, ts: now, league,
+      ...(intent.item ? { item: intent.item } : {}), ...(intent.degraded || !intent.q ? { degraded: true } : {}),
+    }
+    let stats = { expired: 0, pruned: 0 }
+    set(s => ({ tree: mapNode(s.tree, fid, f => {
+      let kids = f.children || []
+      if (node.q) {
+        const twin = kids.find(k => k.q === node.q && k.league === league)
+        if (twin) { result = 'bumped'; bumpedAge = now - (twin.ts || now); inherited = twin.name; kids = kids.filter(k => k !== twin) }
+      }
+      const fresh = inherited ? { ...node, name: inherited } : node
+      const t = trimHistory([fresh, ...kids], prefs, now)
+      stats = t
+      return { ...f, children: t.rows }
+    }) }))
+    set({ lastHistoryEvent: { type: result, name: node.name, total: findNode(get().tree, fid).children.length, age: bumpedAge, cfgLeague: intent.cfgLeague, league, ...stats, at: now } })
+    persist(get, set)
+    return { result, id: node.id, pruned: stats.pruned, expired: stats.expired }
+  },
+
+  // Remove history rows older than the retention window (runs after hydrate and hourly).
+  expireHistory: (now = Date.now()) => {
+    const f = findWhere(get().tree, n => n.kind === 'folder' && n.sys === HISTORY_SYS)
+    if (!f || !(f.children || []).length) return 0
+    const t = trimHistory(f.children, get().historyPrefs, now)
+    if (!t.expired && !t.pruned) return 0
+    const oldest = f.children.reduce((m, r) => Math.min(m, typeof r.ts === 'number' ? r.ts : m), now)
+    set(s => ({ tree: mapNode(s.tree, f.id, x => ({ ...x, children: t.rows })), lastHistoryEvent: { type: 'expire', n: t.expired + t.pruned, oldestDays: Math.round((now - oldest) / DAY), at: now } }))
+    persist(get, set)
+    return t.expired + t.pruned
+  },
+
+  // Empty the folder; returns the undo slot { folderId, rows, n } (null when there was nothing).
+  clearHistory: () => {
+    const f = findWhere(get().tree, n => n.kind === 'folder' && n.sys === HISTORY_SYS)
+    if (!f || !(f.children || []).length) return null
+    const rows = f.children
+    set(s => ({ tree: mapNode(s.tree, f.id, x => ({ ...x, children: [] })), activeId: rows.some(r => r.id === s.activeId) ? null : s.activeId, lastHistoryEvent: { type: 'clear', n: rows.length, at: Date.now() } }))
+    persist(get, set)
+    return { folderId: f.id, rows, n: rows.length }
+  },
+  restoreHistory: (undo) => {
+    if (!undo || get().loadError) return
+    const fid = findNode(get().tree, undo.folderId) ? undo.folderId : get().ensureFolder(HISTORY_SYS, HISTORY_NAME)
+    set(s => ({ tree: mapNode(s.tree, fid, f => ({ ...f, children: [...undo.rows, ...(f.children || []).filter(k => !undo.rows.some(r => r.id === k.id))] })) }))
+    persist(get, set)
   },
 
   nodeById: (id) => findNode(get().tree, id),

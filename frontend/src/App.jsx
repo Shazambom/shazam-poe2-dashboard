@@ -15,8 +15,10 @@ import Wealth from './components/Wealth.jsx'
 import { useAssetModal } from './components/CardDetail.jsx'
 import CommandPalette from './components/CommandPalette.jsx'
 import { connectBridge, connectSessionWithToast } from './lib/session.js'
-import { useWorkspace } from './lib/workspaceStore.js'
+import { useWorkspace, HISTORY_SYS } from './lib/workspaceStore.js'
 import { addFromClipboard } from './lib/clipboardAdd.js'
+import { useEe2History, clearHistoryWithUndo } from './lib/ee2History.js'
+import { findWhere } from './lib/tree.js'
 import BoardView from './components/BoardView.jsx'
 import StrategyView from './components/StrategyView.jsx'
 import EconomyView from './components/EconomyView.jsx'
@@ -112,6 +114,8 @@ export default function App() {
   const goLive = React.useCallback(() => { nav.openTrading('live'); setTab('Trading') }, [])
   useLiveWiring(goLive)
   useLiveSync(status?.league ?? '')   // keep the live engine reconciled to the DB's armed searches
+  useEe2History()                     // ExiledExchange2 History: main's item intents → the workspace store
+  useEffect(() => { useWorkspace.getState().setLeague(status?.league ?? '') }, [status?.league])
   // The global focus hotkey (desktop) raises the window here; jump to Live + focus newest.
   useEffect(() => {
     if (!window.poe2desktop?.trade?.onFocusLive) return
@@ -125,6 +129,7 @@ export default function App() {
     { id: 'ws-new-group', label: 'New group', hint: 'Workspace · ⌘⇧N', run: () => { goWorkspace(); useWorkspace.getState().addFolder(null) } },
     { id: 'ws-toggle-rail', label: 'Toggle searches rail', hint: 'Workspace', run: () => { goWorkspace(); const ws = useWorkspace.getState(); ws.setLayout({ collapsed: !ws.layout?.collapsed }) } },
     ...(window.poe2desktop?.clipboard ? [{ id: 'ws-clipboard', label: 'Add from clipboard', hint: 'Workspace · ⌘⇧V', run: () => { goWorkspace(); addFromClipboard(null) } }] : []),
+    ...(window.poe2desktop?.ee2 ? [{ id: 'ws-clear-history', label: 'Clear EE2 history', hint: 'Workspace', run: () => { goWorkspace(); clearHistoryWithUndo() } }] : []),
   ], [goWorkspace])
 
   const setLeague = async (league) => {

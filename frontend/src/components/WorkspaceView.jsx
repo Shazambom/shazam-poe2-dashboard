@@ -8,6 +8,8 @@ import { bus, toast } from '../lib/api.js'
 import { diag } from '../lib/diag.js'
 import SearchTree from './SearchTree.jsx'
 import ContextMenu from './ContextMenu.jsx'
+import Toggle from './Toggle.jsx'
+import { saveHistoryPrefs, clearHistoryWithUndo } from '../lib/ee2History.js'
 
 // The Trading workspace: a file-tree of saved searches on the left, the live trade site
 // embedded on the right. Press + → a new entry is created and the trade window opens; you
@@ -21,7 +23,8 @@ const RAIL_MIN = 220, RAIL_MAX = 420, RAIL_DEFAULT = 280
 const UNDO_TTL = 10000
 
 // One empty state, shared by the rail and the pane.
-export const EMPTY_HINT = 'Press + to build a search · Paste a trade URL · Copy an item in game and it appears under ExiledExchange2 History.'
+export const EMPTY_HINT = 'Press + to build a search · Paste a trade URL'
+export const EMPTY_HINT_EE2 = ' · Copy an item in game and it appears under ExiledExchange2 History.'
 
 const copyText = (text, what = 'Link') => navigator.clipboard?.writeText(text).then(() => toast(`${what} copied`)).catch(() => toast('Copy failed', false))
 
@@ -121,6 +124,14 @@ export default function WorkspaceView({ league }) {
   const treeApi = useRef(null)
   const duplicate = useWorkspace(s => s.duplicate)
   const move = useWorkspace(s => s.move)
+  const historyOn = useWorkspace(s => s.historyPrefs.enabled)
+  // Is this node inside the history folder? (its rows are never captured into, and open by q)
+  const inHistory = useCallback((id) => { const p = locate(useWorkspace.getState().tree, id)?.parentId; const f = p ? useWorkspace.getState().nodeById(p) : null; return !!(f && f.sys === HISTORY_SYS) }, [])
+  const selectNode = useCallback((id) => {
+    setActive(id)
+    const n = useWorkspace.getState().nodeById(id)
+    if (n && n.ts && inHistory(id)) diag('ee2', `history-open age=${Math.round((Date.now() - n.ts) / 60000)}m`)
+  }, [setActive, inHistory])
   const collapsed = !!layout?.collapsed
   const railWidth = Math.min(RAIL_MAX, Math.max(RAIL_MIN, layout?.railWidth || RAIL_DEFAULT))
   const [dragWidth, setDragWidth] = useState(null)   // live width while the divider is being dragged
@@ -186,11 +197,11 @@ export default function WorkspaceView({ league }) {
     if (mod && (e.key === 'n' || e.key === 'N')) { e.preventDefault(); e.stopPropagation(); if (e.shiftKey) newGroup(); else newSearch(node?.data.kind === 'folder' ? node.data.id : null); return }
     if (mod && (e.key === 'v' || e.key === 'V')) { e.preventDefault(); e.stopPropagation(); clipboardAdd(); return }
     if (!node) return
-    if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); if (node.data.kind === 'folder') node.toggle(); else setActive(node.data.id); return }
+    if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); if (node.data.kind === 'folder') node.toggle(); else selectNode(node.data.id); return }
     if (e.key === 'F2') { e.preventDefault(); e.stopPropagation(); node.edit(); return }
     if (e.key === 'Backspace' || e.key === 'Delete') { e.preventDefault(); e.stopPropagation(); requestDelete(node.data); return }
     if (e.key === 'Escape' && filter) { e.preventDefault(); setFilter('') }
-  }, [newGroup, newSearch, setActive, requestDelete, filter, clipboardAdd])
+  }, [newGroup, newSearch, selectNode, requestDelete, filter, clipboardAdd])
 
   // ⌘⇧V anywhere in the app (not inside an input) = add from clipboard.
   useEffect(() => {
@@ -210,11 +221,12 @@ export default function WorkspaceView({ league }) {
     const url = isSearch && d.slug ? tradeUrl(d, league, d.live) : null
     const folders = flatten(useWorkspace.getState().tree, n => n.kind === 'folder' && n.id !== d.id && !flatten(d.children || []).some(c => c.id === n.id))
     return [
-      { label: 'Open', key: '↵', disabled: !isSearch, run: () => setActive(d.id) },
+      { label: 'Open', key: '↵', disabled: !isSearch, run: () => selectNode(d.id) },
       { label: isDesktop ? 'Open in window' : 'Open in browser', disabled: !url, run: () => openTrade(url) },
       { label: 'Copy link', disabled: !url, run: () => copyText(url) },
       { sep: true },
       ...(isDesktop && d.kind === 'folder' && d.sys !== HISTORY_SYS ? [{ label: 'Add from clipboard here', key: '⌘V', run: () => clipboardAdd(d.id) }] : []),
+      ...(d.kind === 'folder' && d.sys === HISTORY_SYS ? [{ label: 'Clear history', danger: true, run: () => clearHistoryWithUndo() }] : []),
       { label: 'Rename', key: 'F2', run: () => setTimeout(() => node.edit(), 0) },
       { label: 'Duplicate', disabled: !isSearch, run: () => duplicate(d.id) },
       { label: d.done ? 'Mark not done' : 'Mark done', disabled: !isSearch, run: () => setField(d.id, { done: !d.done }) },
@@ -222,7 +234,7 @@ export default function WorkspaceView({ league }) {
       { sep: true },
       { label: 'Delete', key: '⌫', danger: true, run: () => requestDelete(d) },
     ]
-  }, [menu, league, setActive, duplicate, setField, move, requestDelete, clipboardAdd])
+  }, [menu, league, selectNode, duplicate, setField, move, requestDelete, clipboardAdd])
 
   // The divider is both the collapse toggle (click) and the rail's resize handle (drag,
   // 220–420 px, rAF-throttled, persisted on mouseup).
@@ -253,7 +265,7 @@ export default function WorkspaceView({ league }) {
   // restore-on-remount with no imperative navigation.
   const mountUrl = useMemo(() => {
     const n = activeId ? useWorkspace.getState().nodeById(activeId) : null
-    return n?.slug ? tradeUrl(n, league, n.live) : n?.q ? queryUrl(n, league) : tradeHome(league)
+    return n?.slug ? tradeUrl(n, league, n.live) : (n?.q && !n.degraded) ? queryUrl(n, league) : tradeHome(league)
   }, [activeId, league])
 
   // Default each freshly-mounted trade window to Instant Buyout (the mode travel-to-hideout
@@ -295,12 +307,14 @@ export default function WorkspaceView({ league }) {
       if (owner && owner.id !== id) return
       const n = st.nodeById(id)
       if (!n) return
+      // A history row is the query EE2 built; the site's search id is never written into it (promote by dragging it out).
+      if (inHistory(id)) return
       if (n.slug !== parsed.slug || n.live !== parsed.live || n.type !== parsed.type) {
         setField(id, { type: parsed.type, slug: parsed.slug, live: parsed.live })
       }
       if (n.auto !== false && wv.current) readSearchName(wv.current).then(name => { if (name) autoName(id, name) })
     })
-  }, [nodeById, setField, autoName])
+  }, [nodeById, setField, autoName, inHistory])
 
   if (!loaded) return <div className="single hint">Loading workspace…</div>
   // A failed load must block the tree: the store holds an empty document that is NOT the
@@ -330,6 +344,7 @@ export default function WorkspaceView({ league }) {
             <b>Searches</b>
             <span className={`ws-save-dot ${saveState}`} title={saveTitle} aria-label={saveTitle} role="status" />
             <span className="spacer" />
+            {isDesktop && <Toggle checked={historyOn} onChange={v => saveHistoryPrefs({ enabled: v })} label="EE2" title="EE2 history — record every item copied in game under ExiledExchange2 History" />}
             {isDesktop && <button className="ws-icon-btn" title="Add from clipboard (⌘⇧V)" aria-label="Add from clipboard" onClick={() => clipboardAdd()}>⎘</button>}
             <button className="ws-icon-btn" title="New group" aria-label="New group" onClick={newGroup}>📁</button>
             <button className="ws-icon-btn primary" title="New search" aria-label="New search" onClick={() => newSearch(null)}>+</button>
@@ -343,10 +358,10 @@ export default function WorkspaceView({ league }) {
           {tree.length === 0
             ? <div className="ws-tree ws-empty">
                 <button className="ws-empty-add" onClick={() => newSearch(null)}>+ New search</button>
-                <p className="ws-empty-hint">{EMPTY_HINT}</p>
+                <p className="ws-empty-hint">{EMPTY_HINT}{isDesktop && historyOn ? EMPTY_HINT_EE2 : '.'}</p>
               </div>
             : (
-              <SearchTree treeRef={treeApi} filter={filter} onSelect={(id) => setActive(id)} onContext={openMenu} onKey={onTreeKey} onDelete={(id) => { const n = nodeById(id); if (n) requestDelete(n) }} renderTrailing={(d, node) => (
+              <SearchTree treeRef={treeApi} filter={filter} onSelect={selectNode} onContext={openMenu} onKey={onTreeKey} onDelete={(id) => { const n = nodeById(id); if (n) requestDelete(n) }} renderTrailing={(d, node) => (
                 confirmId === d.id
                   ? <span className="ws-confirm" onClick={e => e.stopPropagation()}>
                       <span>Delete {(d.children || []).length} inside?</span>
@@ -354,7 +369,8 @@ export default function WorkspaceView({ league }) {
                       <button className="ws-mini on" title="Cancel" aria-label="Cancel" onClick={() => setConfirmId(null)}>✕</button>
                     </span>
                   : <>
-                      {d.kind === 'folder' && <button className="ws-mini" title="New search here" aria-label="New search here" onClick={e => { e.stopPropagation(); newSearch(d.id) }}>+</button>}
+                      {d.kind === 'folder' && d.sys === HISTORY_SYS && <button className="ws-mini" title="Clear history" aria-label="Clear history" onClick={e => { e.stopPropagation(); clearHistoryWithUndo() }}>🗑</button>}
+                      {d.kind === 'folder' && d.sys !== HISTORY_SYS && <button className="ws-mini" title="New search here" aria-label="New search here" onClick={e => { e.stopPropagation(); newSearch(d.id) }}>+</button>}
                       {d.kind === 'search' && <button className={`ws-mini ${d.done ? 'on' : ''}`} title={d.done ? 'Mark not done' : 'Mark done'} aria-label={d.done ? 'Mark not done' : 'Mark done'} aria-pressed={!!d.done} onClick={e => { e.stopPropagation(); setField(d.id, { done: !d.done }) }}>✓</button>}
                       <button className="ws-mini" title="Rename" aria-label="Rename" onClick={e => { e.stopPropagation(); node.edit() }}>✎</button>
                       <button className="ws-mini" title="Delete" aria-label="Delete" onClick={e => { e.stopPropagation(); requestDelete(d) }}>×</button>
@@ -392,7 +408,7 @@ export default function WorkspaceView({ league }) {
             <webview key={`${activeId || 'home'}:${wvNonce}`} ref={wv} src={mountUrl} className="ws-webview" allowpopups="true" />
             {!activeNode && (
               <div className="ws-overlay">
-                <p>Press <button className="ws-inline-add" onClick={() => newSearch(null)}>+</button> to build a search · Paste a trade URL · Copy an item in game and it appears under ExiledExchange2 History.</p>
+                <p>Press <button className="ws-inline-add" onClick={() => newSearch(null)}>+</button> to build a search · Paste a trade URL{isDesktop && historyOn ? EMPTY_HINT_EE2 : '.'}</p>
               </div>
             )}
           </>

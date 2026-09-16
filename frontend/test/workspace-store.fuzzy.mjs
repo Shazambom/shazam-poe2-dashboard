@@ -21,7 +21,7 @@ globalThis.fetch = async (url, opts) => {
   return { ok: true, status: 200, json: async () => ({ workspace: lastSaved }), text: async () => '' }
 }
 
-const { useWorkspace, searchNode, newFolder } = await import('../src/lib/workspaceStore.js')
+const { useWorkspace, searchNode, newFolder, HISTORY_SYS } = await import('../src/lib/workspaceStore.js')
 
 // ---- deterministic RNG (seeded) so a failure reproduces exactly ----
 let _s = 0x1234abcd
@@ -105,7 +105,7 @@ function runTree(t) {
       // Realistic drop targets: root (null) or a folder — mirrors react-arborist, which never
       // drops a node INTO a leaf search.
       const parent = () => (fIds.length && chance(0.6)) ? pick(fIds) : null
-      const kind = pick(['addSearch', 'addFolder', 'rename', 'setField', 'move', 'toggleOpen', 'setActive', 'remove'])
+      const kind = pick(['addSearch', 'addFolder', 'rename', 'setField', 'move', 'toggleOpen', 'setActive', 'remove', 'ingest', 'ingest', 'ensureFolder', 'clearHistory', 'expireHistory', 'setLeague'])
       try {
         if (kind === 'addSearch') {
           const n = uniqueSearch()
@@ -122,6 +122,16 @@ function runTree(t) {
           s.toggleOpen(pick(ids))
         } else if (kind === 'setActive' && sIds.length) {
           s.setActive(pick(sIds))
+        } else if (kind === 'ingest') {
+          s.ingest({ source: 'ee2', origin: 'ee2', q: JSON.stringify({ query: { name: 'Q' + Math.floor(rnd() * 12) } }), name: 'Item ' + Math.floor(rnd() * 999), folder: HISTORY_SYS })
+        } else if (kind === 'ensureFolder') {
+          s.ensureFolder(HISTORY_SYS, 'ExiledExchange2 History')
+        } else if (kind === 'clearHistory' && chance(0.3)) {
+          const u = s.clearHistory(); if (u && chance(0.5)) s.restoreHistory(u)
+        } else if (kind === 'expireHistory') {
+          s.expireHistory(Date.now() + (chance(0.2) ? 30 * 86400000 : 0))
+        } else if (kind === 'setLeague') {
+          s.setLeague(pick(['Standard', 'Forbidden Rites']))
         } else if (kind === 'remove' && ids.length > 1 && chance(0.5)) {
           const victim = pick(ids)   // may be a folder — its whole subtree goes
           const node = findById(s.tree, victim)
@@ -142,6 +152,10 @@ function runTree(t) {
     // 2) ids are unique (no accidental duplication from move/add)
     const ids = allIds(reloaded.tree)
     assert.strictEqual(new Set(ids).size, ids.length, `duplicate node id on cycle ${cycle}`)
+    // 2b) exactly one node per sys key, and the history folder never exceeds the cap
+    const sysFolders = []; walk(reloaded.tree, n => { if (n.sys === HISTORY_SYS) sysFolders.push(n) })
+    assert.ok(sysFolders.length <= 1, `duplicate history folder on cycle ${cycle}`)
+    if (sysFolders[0]) assert.ok(sysFolders[0].children.length <= reloaded.historyPrefs.max, `history over cap on cycle ${cycle}`)
     // 3) activeId (if set) resolves to a real search node
     if (reloaded.activeId != null) {
       assert.ok(searchIds(reloaded.tree).includes(reloaded.activeId), `activeId lost on cycle ${cycle}`)

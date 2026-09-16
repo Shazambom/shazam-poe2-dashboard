@@ -39,7 +39,16 @@ contextBridge.exposeInMainWorld('poe2desktop', {
     onSearchState: sub('trade:search-state'),   // per-search: live | auth | reconnecting | error
     onEngineError: sub('trade:engine-error'),   // budget / rate errors
     onFocusLive: sub('hotkey:focus-live'),
+    // ExiledExchange2 History (batch 3): main pushes one IngestIntent per copied item; the renderer acks.
+    onIngest: sub('trade:ingest'),
+    ingestAck: (ack) => ipcRenderer.send('trade:ingest-ack', ack),
   },
+  ee2: {
+    setEnabled: (enabled) => ipcRenderer.send('ee2:set-enabled', { enabled }),
+    status: () => ipcRenderer.invoke('ee2:status'),
+  },
+  // DEV ONLY (main refuses when packaged): push a fixture item through the real consumer + worker.
+  dev: { ee2Item: (item) => ipcRenderer.invoke('dev:ee2-item', item) },
   // Batch 1 bridges. diag.log: the renderer's one narrow telemetry path (allow-listed markers,
   // clamped + budgeted in main, beta/dev-gated). clipboard.classify: main reads + classifies the
   // clipboard and returns ONLY the classification. ws: main asks for a flush before quitting.
