@@ -1,0 +1,110 @@
+{
+ "league": "GoldenLeague",
+ "prices": {
+  "chaos": 10.0,
+  "divine": 50.0,
+  "exalted": 1.0
+ },
+ "reference": "exalted",
+ "rows": [
+  {
+   "age_s": 0.0,
+   "buy": 50.0,
+   "change_pct": -4.761904761904762,
+   "depth": null,
+   "hub": true,
+   "id": "divine",
+   "mid": 50.0,
+   "name": "Divine Orb",
+   "pref_num": "exalted",
+   "sell": 50.0,
+   "source": "digest",
+   "spread": 0.0,
+   "spread_pct": 0.0,
+   "trend": [
+    {
+     "t": 1799978400,
+     "v": 52.5
+    },
+    {
+     "t": 1799982000,
+     "v": 52.0
+    },
+    {
+     "t": 1799985600,
+     "v": 51.5
+    },
+    {
+     "t": 1799989200,
+     "v": 51.0
+    },
+    {
+     "t": 1799992800,
+     "v": 50.5
+    },
+    {
+     "t": 1799996400,
+     "v": 50.0
+    }
+   ]
+  },
+  {
+   "age_s": 0.0,
+   "buy": 10.0,
+   "change_pct": 5.000000000000001,
+   "depth": null,
+   "hub": false,
+   "id": "chaos",
+   "mid": 10.0,
+   "name": "Chaos Orb",
+   "pref_num": "exalted",
+   "sell": 10.0,
+   "source": "digest",
+   "spread": 0.0,
+   "spread_pct": 0.0,
+   "trend": [
+    {
+     "t": 1799978400,
+     "v": 9.523809523809524
+    },
+    {
+     "t": 1799982000,
+     "v": 9.615384615384615
+    },
+    {
+     "t": 1799985600,
+     "v": 9.70873786407767
+    },
+    {
+     "t": 1799989200,
+     "v": 9.803921568627452
+    },
+    {
+     "t": 1799992800,
+     "v": 9.900990099009901
+    },
+    {
+     "t": 1799996400,
+     "v": 10.0
+    }
+   ]
+  },
+  {
+   "age_s": null,
+   "buy": null,
+   "change_pct": null,
+   "depth": null,
+   "hub": false,
+   "id": "regal",
+   "mid": null,
+   "name": "Regal Orb",
+   "pref_num": "exalted",
+   "sell": null,
+   "source": null,
+   "spread": null,
+   "spread_pct": null,
+   "trend": []
+  }
+ ],
+ "session": false
+}

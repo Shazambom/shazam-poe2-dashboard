@@ -14,12 +14,25 @@ set -euo pipefail
 cd "$(dirname "$0")"
 REPO="Shazambom/shazam-poe2-dashboard"
 VER=$(node -p "require('./package.json').version")
+
+# TEST GATE — runs before anything remote (tag push, CI trigger, upload). A red test aborts
+# the release here; GitHub Actions never sees it (owner directive: tests gate the deploy
+# scripts, not CI).
+../ops/run-tests.sh
 # Stable tags are `desktop-v<ver>`; BETA tags are the bare semver `<ver>` (e.g. 0.2.54-beta.1).
 # Why: electron-updater's GitHub provider parses the TAG as semver on the prerelease/channel path
 # (`if (!semver.valid(hrefTag)) continue`), and the `desktop-v` prefix makes every tag invalid →
 # "No published versions on GitHub". A bare-semver tag is parseable, so beta clients find it. Stable
 # keeps `desktop-v*` because that path resolves via /releases/latest (literal tag match, no semver).
 case "$VER" in *-beta*) TAG="$VER" ;; *) TAG="desktop-v${VER}" ;; esac
+
+# Tag + push — this is what fires the Windows CI run. Idempotent: if the tag already exists
+# (locally or on origin) it is left alone, so re-running after a failed upload is safe.
+if ! git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
+  git tag -a "$TAG" -m "Desktop v${VER}"
+fi
+git push origin main
+git push origin "$TAG"
 
 if [ "${1:-}" != "--no-build" ]; then
   # shazam is the seed build-server for the Mac half: pull the CURRENT market snapshot from
