@@ -2,8 +2,9 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useWorkspace, loadWorkspace } from '../lib/workspaceStore.js'
 import { tradeUrl, tradeHome, parseTradeUrl, openTrade, isDesktop } from '../lib/session.js'
 import { findWhere, flatten } from '../lib/tree.js'
-import { bus } from '../lib/api.js'
+import { bus, toast } from '../lib/api.js'
 import SearchTree from './SearchTree.jsx'
+import ContextMenu from './ContextMenu.jsx'
 
 // The Trading workspace: a file-tree of saved searches on the left, the live trade site
 // embedded on the right. Press + → a new entry is created and the trade window opens; you
@@ -15,6 +16,11 @@ const findBySlug = (nodes, slug) => findWhere(nodes, n => n.kind === 'search' &&
 
 const RAIL_MIN = 220, RAIL_MAX = 420, RAIL_DEFAULT = 280
 const UNDO_TTL = 10000
+
+// One empty state, shared by the rail and the pane.
+export const EMPTY_HINT = 'Press + to build a search · Paste a trade URL · Copy an item in game and it appears under ExiledExchange2 History.'
+
+const copyText = (text, what = 'Link') => navigator.clipboard?.writeText(text).then(() => toast(`${what} copied`)).catch(() => toast('Copy failed', false))
 
 // Force the trade site's delivery-mode dropdown to "Instant Buyout" (the mode that enables
 // travel-to-hideout). vue-multiselect selects on `mousedown`, not click. Retries a few times
@@ -101,6 +107,12 @@ export default function WorkspaceView({ league }) {
   const activeRef = useRef(activeId)
   const [navState, setNavState] = useState({ url: '', loading: false })
   const [confirmId, setConfirmId] = useState(null)   // folder awaiting its inline delete confirm
+  const [filter, setFilter] = useState('')
+  const [menu, setMenu] = useState(null)             // { at:{x,y}, node } while the context menu is open
+  const [wvNonce, setWvNonce] = useState(0)           // bump to remount (reload) the trade window
+  const treeApi = useRef(null)
+  const duplicate = useWorkspace(s => s.duplicate)
+  const move = useWorkspace(s => s.move)
   const collapsed = !!layout?.collapsed
   const railWidth = Math.min(RAIL_MAX, Math.max(RAIL_MIN, layout?.railWidth || RAIL_DEFAULT))
   const [dragWidth, setDragWidth] = useState(null)   // live width while the divider is being dragged
@@ -144,6 +156,39 @@ export default function WorkspaceView({ league }) {
     else deleteNode(d.id)
   }, [deleteNode])
 
+  // Keyboard, scoped to the row container (react-arborist owns ↑↓ →← Home/End on its own):
+  // Enter open · F2 rename · ⌫ delete (with undo) · ⌘N new search · ⌘⇧N new group · Esc clears the filter.
+  const onTreeKey = useCallback((e, node) => {
+    const mod = e.metaKey || e.ctrlKey
+    if (mod && (e.key === 'n' || e.key === 'N')) { e.preventDefault(); e.stopPropagation(); if (e.shiftKey) newGroup(); else newSearch(node?.data.kind === 'folder' ? node.data.id : null); return }
+    if (!node) return
+    if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); if (node.data.kind === 'folder') node.toggle(); else setActive(node.data.id); return }
+    if (e.key === 'F2') { e.preventDefault(); e.stopPropagation(); node.edit(); return }
+    if (e.key === 'Backspace' || e.key === 'Delete') { e.preventDefault(); e.stopPropagation(); requestDelete(node.data); return }
+    if (e.key === 'Escape' && filter) { e.preventDefault(); setFilter('') }
+  }, [newGroup, newSearch, setActive, requestDelete, filter])
+
+  const openMenu = useCallback((e, d, node) => setMenu({ at: { x: e.clientX, y: e.clientY }, d, node }), [])
+  const menuItems = useMemo(() => {
+    if (!menu) return []
+    const { d, node } = menu
+    const isSearch = d.kind === 'search'
+    const url = isSearch && d.slug ? tradeUrl(d, league, d.live) : null
+    const folders = flatten(useWorkspace.getState().tree, n => n.kind === 'folder' && n.id !== d.id && !flatten(d.children || []).some(c => c.id === n.id))
+    return [
+      { label: 'Open', key: '↵', disabled: !isSearch, run: () => setActive(d.id) },
+      { label: isDesktop ? 'Open in window' : 'Open in browser', disabled: !url, run: () => openTrade(url) },
+      { label: 'Copy link', disabled: !url, run: () => copyText(url) },
+      { sep: true },
+      { label: 'Rename', key: 'F2', run: () => setTimeout(() => node.edit(), 0) },
+      { label: 'Duplicate', disabled: !isSearch, run: () => duplicate(d.id) },
+      { label: d.done ? 'Mark not done' : 'Mark done', disabled: !isSearch, run: () => setField(d.id, { done: !d.done }) },
+      { label: 'Move to', children: [{ label: 'Top level', run: () => move(d.id, null, 0) }, ...folders.map(f => ({ label: f.name, run: () => move(d.id, f.id, 0) }))] },
+      { sep: true },
+      { label: 'Delete', key: '⌫', danger: true, run: () => requestDelete(d) },
+    ]
+  }, [menu, league, setActive, duplicate, setField, move, requestDelete])
+
   // The divider is both the collapse toggle (click) and the rail's resize handle (drag,
   // 220–420 px, rAF-throttled, persisted on mouseup).
   const onDividerDown = useCallback((e) => {
@@ -184,7 +229,7 @@ export default function WorkspaceView({ league }) {
     const onReady = () => ensureInstantBuyout(el)
     el.addEventListener('dom-ready', onReady)
     return () => el.removeEventListener('dom-ready', onReady)
-  }, [activeId, league])
+  }, [activeId, league, wvNonce])
 
   // Capture a run search into the active entry. The trade SPA doesn't fire <webview> DOM
   // navigation events, but the guest webContents DOES — main forwards them here as
@@ -228,6 +273,7 @@ export default function WorkspaceView({ league }) {
   }
 
   const activeNode = activeId ? nodeById(activeId) : null
+  const activeUrl = activeNode?.slug ? tradeUrl(activeNode, league, activeNode.live) : null
   const width = dragWidth ?? railWidth
   const saveTitle = { idle: 'Saved', dirty: 'Unsaved changes', saving: 'Saving…', error: 'Save failed — retrying on the next change' }[saveState]
 
@@ -242,10 +288,19 @@ export default function WorkspaceView({ league }) {
             <button className="ws-icon-btn" title="New group" aria-label="New group" onClick={newGroup}>📁</button>
             <button className="ws-icon-btn primary" title="New search" aria-label="New search" onClick={() => newSearch(null)}>+</button>
           </div>
+          {tree.length > 0 && (
+            <div className="ws-filter">
+              <input className="ws-filter-input" placeholder="Filter searches…" aria-label="Filter searches" value={filter}
+                onChange={e => setFilter(e.target.value)} onKeyDown={e => { if (e.key === 'Escape') { setFilter(''); e.currentTarget.blur() } }} />
+              {filter && <button className="ws-mini on" title="Clear filter" aria-label="Clear filter" onClick={() => setFilter('')}>✕</button>}
+            </div>)}
           {tree.length === 0
-            ? <div className="ws-tree"><button className="ws-empty-add" onClick={() => newSearch(null)}>+ New search</button></div>
+            ? <div className="ws-tree ws-empty">
+                <button className="ws-empty-add" onClick={() => newSearch(null)}>+ New search</button>
+                <p className="ws-empty-hint">{EMPTY_HINT}</p>
+              </div>
             : (
-              <SearchTree onSelect={(id) => setActive(id)} renderTrailing={(d, node) => (
+              <SearchTree treeRef={treeApi} filter={filter} onSelect={(id) => setActive(id)} onContext={openMenu} onKey={onTreeKey} onDelete={(id) => { const n = nodeById(id); if (n) requestDelete(n) }} renderTrailing={(d, node) => (
                 confirmId === d.id
                   ? <span className="ws-confirm" onClick={e => e.stopPropagation()}>
                       <span>Delete {(d.children || []).length} inside?</span>
@@ -254,6 +309,7 @@ export default function WorkspaceView({ league }) {
                     </span>
                   : <>
                       {d.kind === 'folder' && <button className="ws-mini" title="New search here" aria-label="New search here" onClick={e => { e.stopPropagation(); newSearch(d.id) }}>+</button>}
+                      {d.kind === 'search' && <button className={`ws-mini ${d.done ? 'on' : ''}`} title={d.done ? 'Mark not done' : 'Mark done'} aria-label={d.done ? 'Mark not done' : 'Mark done'} aria-pressed={!!d.done} onClick={e => { e.stopPropagation(); setField(d.id, { done: !d.done }) }}>✓</button>}
                       <button className="ws-mini" title="Rename" aria-label="Rename" onClick={e => { e.stopPropagation(); node.edit() }}>✎</button>
                       <button className="ws-mini" title="Delete" aria-label="Delete" onClick={e => { e.stopPropagation(); requestDelete(d) }}>×</button>
                     </>
@@ -273,13 +329,22 @@ export default function WorkspaceView({ league }) {
         {isDesktop ? (
           <>
             <div className={`ws-webhint ${activeNode ? '' : 'hidden'}`}>
-              <span className="muted" title={navState.url}>{navState.loading ? 'loading…' : (activeNode ? activeNode.name : '')}</span>
-              {activeNode && <span className={`ws-cap ${activeNode.slug ? 'ok' : ''}`}>{activeNode.slug ? `captured · ${activeNode.type}/${String(activeNode.slug).slice(0, 8)}` : 'build your search — it captures automatically'}</span>}
+              <span className="ws-webhint-name" title={navState.url || mountUrl}>{navState.loading ? 'loading…' : (activeNode ? activeNode.name : '')}</span>
+              {activeNode && (activeNode.slug || activeNode.q
+                ? <>
+                    <span className="ws-chip ok">{activeNode.q ? 'from item' : 'captured'}</span>
+                    {activeNode.live && <span className="ws-chip live">live</span>}
+                  </>
+                : <span className="ws-chip">build your search — it captures automatically</span>)}
+              <span className="spacer" />
+              {activeUrl && <button className="ws-mini on" title="Copy link" aria-label="Copy link" onClick={() => copyText(activeUrl)}>⧉</button>}
+              {activeUrl && <button className="ws-mini on" title="Open in window" aria-label="Open in window" onClick={() => openTrade(activeUrl)}>↗</button>}
+              <button className="ws-mini on" title="Reload" aria-label="Reload" onClick={() => setWvNonce(n => n + 1)}>↻</button>
             </div>
-            <webview key={activeId || 'home'} ref={wv} src={mountUrl} className="ws-webview" allowpopups="true" />
+            <webview key={`${activeId || 'home'}:${wvNonce}`} ref={wv} src={mountUrl} className="ws-webview" allowpopups="true" />
             {!activeNode && (
               <div className="ws-overlay">
-                <p>Press <button className="ws-inline-add" onClick={() => newSearch(null)}>+</button> to start a search — it opens here and saves automatically.</p>
+                <p>Press <button className="ws-inline-add" onClick={() => newSearch(null)}>+</button> to build a search · Paste a trade URL · Copy an item in game and it appears under ExiledExchange2 History.</p>
               </div>
             )}
           </>
@@ -291,6 +356,7 @@ export default function WorkspaceView({ league }) {
           </div>
         )}
       </section>
+      {menu && <ContextMenu at={menu.at} items={menuItems} onClose={() => setMenu(null)} />}
     </div>
   )
 }

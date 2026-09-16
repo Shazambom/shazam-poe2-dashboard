@@ -117,6 +117,15 @@ export const useWorkspace = create((set, get) => ({
   autoName: (id, name) => { if (get().loadError) return; set(s => ({ tree: mapNode(s.tree, id, n => (n.auto === false ? n : { ...n, name })) })); persist(get, set) },
   setField: (id, patch) => { if (get().loadError) return; set(s => ({ tree: mapNode(s.tree, id, n => ({ ...n, ...patch })) })); persist(get, set) },
   toggleOpen: (id) => { if (get().loadError) return; set(s => ({ tree: mapNode(s.tree, id, n => ({ ...n, open: !n.open })) })); persist(get, set) },
+  // A copy of a search right after its source: same query, fresh id, never live/done.
+  duplicate: (id) => {
+    if (get().loadError) return null
+    const where = locate(get().tree, id)
+    if (!where || where.node.kind !== 'search') return null
+    const copy = { ...where.node, id: 'n_' + uid(), name: `${where.node.name} copy`, auto: false, armed: false, done: false }
+    set(s => ({ tree: insertAt(s.tree, copy, where.parentId, where.index + 1) }))
+    persist(get, set); return copy.id
+  },
   // Returns { node, parentId, index } — exactly what restore() needs to undo the delete.
   remove: (id) => {
     if (get().loadError) return null

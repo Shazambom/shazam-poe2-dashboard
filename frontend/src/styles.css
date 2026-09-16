@@ -175,6 +175,36 @@ a { color: var(--live); }
 .ws-save-dot.saving { background: var(--gold); animation: dot-pulse 1s var(--ease) infinite; }
 .ws-save-dot.error { background: var(--loss); }
 @media (prefers-reduced-motion: reduce) { .ws-save-dot.saving { animation: none; } }
+.ws-filter { display: flex; align-items: center; gap: 4px; padding: 6px 8px 2px; }
+.ws-filter-input { flex: 1; min-width: 0; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; color: var(--ink); padding: 4px 8px; font-size: 12.5px; }
+.ws-filter-input:focus { outline: none; border-color: var(--gold-dim); box-shadow: 0 0 0 3px rgba(212,172,82,.12); }
+.ws-filter-input::placeholder { color: var(--muted); }
+.ws-empty { display: flex; flex-direction: column; }
+.ws-empty-hint { color: var(--muted); font-size: 12px; line-height: 1.5; padding: 0 12px; text-align: center; }
+.ws-grip { color: var(--muted); font-size: 10px; letter-spacing: -2px; width: 8px; flex: 0 0 8px; opacity: 0; cursor: grab; transition: opacity .12s var(--ease); }
+.ws-node:hover .ws-grip, .ws-node:focus-within .ws-grip, .ws-node.focused .ws-grip { opacity: .7; }
+.ws-node.dragging { opacity: .5; }
+.ws-node.drop-target { background: rgba(212,172,82,.18); box-shadow: inset 0 0 0 1px var(--gold-dim); }
+.ws-node.focused { box-shadow: inset 0 0 0 1px var(--line-strong); }
+.ws-node.active.focused { box-shadow: inset 2px 0 0 var(--gold), inset 0 0 0 1px var(--gold-dim); }
+.ws-tree > div:focus-visible { outline: none; }
+.ws-node:focus-within .ws-mini, .ws-node.focused .ws-mini { opacity: .8; }
+.ws-webhint-name { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.ws-chip { display: inline-flex; align-items: center; gap: 4px; border-radius: 999px; padding: 1px 8px; font-size: 11px; color: var(--muted); border: 1px solid var(--line); white-space: nowrap; }
+.ws-chip.ok { color: var(--gain); border-color: rgba(111,206,159,.35); }
+.ws-chip.live { color: var(--offline); border-color: rgba(232,97,95,.5); text-transform: uppercase; font-weight: 700; letter-spacing: .04em; font-size: 10px; }
+.ws-webhint .ws-mini.on { font-size: 13px; }
+/* Right-click menu (ContextMenu.jsx) — the popover surface, gold selection like the palette. */
+.ctx-menu { position: fixed; z-index: 320; min-width: 190px; background: var(--surface-pop); border: 1px solid var(--line-strong); border-radius: 10px; box-shadow: var(--shadow-2); padding: 5px; outline: none; font-size: 13px; }
+.ctx-item { position: relative; display: flex; align-items: center; gap: 10px; padding: 6px 10px; border-radius: 6px; cursor: pointer; color: var(--ink); }
+.ctx-item.sel { background: rgba(212,172,82,.14); }
+.ctx-item.disabled { color: var(--muted); cursor: default; }
+.ctx-item.danger { color: var(--loss); }
+.ctx-label { flex: 1; white-space: nowrap; }
+.ctx-key { color: var(--muted); font-size: 11.5px; }
+.ctx-more { color: var(--muted); font-size: 11px; }
+.ctx-sep { height: 1px; background: var(--line); margin: 4px 6px; }
+.ctx-sub { left: 100%; top: -6px; margin-left: 2px; }
 .ws-confirm { display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; color: var(--loss); white-space: nowrap; }
 .ws-mini.on { opacity: 1; color: var(--ink-2); }
 .ws-undo { display: flex; align-items: center; gap: 12px; padding: 10px 14px; }
@@ -194,7 +224,7 @@ a { color: var(--live); }
 .ws-node.done .ws-name { text-decoration: line-through; color: var(--muted); }
 .ws-caret { width: 12px; text-align: center; color: var(--muted); user-select: none; flex: 0 0 12px; }
 .ws-icon { font-size: 12px; opacity: .85; flex: 0 0 auto; }
-.ws-name { flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); }
+.ws-name { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); }
 .ws-edit { flex: 1; min-width: 0; background: var(--bg); border: 1px solid var(--gold); border-radius: 4px; color: var(--ink); padding: 1px 4px; }
 .ws-mini { background: none; border: 0; color: var(--muted); cursor: pointer; padding: 2px 4px; font-size: 12px; opacity: 0; transition: opacity .12s; flex: 0 0 auto; }
 .ws-node:hover .ws-mini, .ws-node.active .ws-mini { opacity: .8; }
@@ -241,9 +271,11 @@ a { color: var(--live); }
 }
 
 /* Live view + ping cards */
-.live-view { padding: 4px 2px 40px; max-width: 760px; }
+.live-view .ws-rail { width: 340px; flex-basis: 340px; }
+.live-view .ws-main { background: var(--surface-1); padding: 14px 16px; overflow: auto; }
 .live-head { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
 .live-newest { margin-bottom: 18px; }
+.live-placeholder { padding: 12px 8px; }
 .live-recent-head { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; margin: 14px 0 6px; }
 /* Live tab reuses the workspace SearchTree; give it a measured height so react-arborist
    can virtualize (it needs a concrete pixel height, not auto). */

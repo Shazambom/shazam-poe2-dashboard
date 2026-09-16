@@ -1,12 +1,15 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'motion/react'
 import { api } from '../lib/api.js'
+import { useWorkspace } from '../lib/workspaceStore.js'
+import { buildPaletteItems } from '../lib/palette.js'
 import Cur from './Cur.jsx'
 
 // ⌘K command palette — the fast path. Fuzzy-search across the board's currencies
 // (open its detail), the views (jump there), and leagues (switch). Keyboard-first:
 // ↑↓ to move, ↵ to run, esc to close. Opened via ⌘K/Ctrl-K or the top-bar chip.
-export default function CommandPalette({ open, onClose, tabs, onGoTab, subDests = [], onGoSub, leagues, onSetLeague, onOpenCurrency }) {
+export default function CommandPalette({ open, onClose, tabs, onGoTab, subDests = [], onGoSub, leagues, onSetLeague, onOpenCurrency, commands = [], onOpenSearch }) {
+  const tree = useWorkspace(s => s.tree)
   const [q, setQ] = useState('')
   const [rows, setRows] = useState([])   // board currencies (id + name)
   const [sel, setSel] = useState(0)
@@ -21,15 +24,7 @@ export default function CommandPalette({ open, onClose, tabs, onGoTab, subDests 
     return () => clearTimeout(t)
   }, [open])
 
-  const items = useMemo(() => {
-    const list = []
-    for (const t of tabs) list.push({ kind: 'view', id: t, label: t, hint: 'Go to view' })
-    for (const d of subDests) list.push({ kind: 'sub', id: `${d.section}:${d.sub}`, section: d.section, sub: d.sub, label: d.label, hint: `${d.section} view` })
-    for (const r of rows) list.push({ kind: 'cur', id: r.id, label: r.name || r.id, hint: 'Open on board' })
-    for (const l of leagues) list.push({ kind: 'league', id: l.id, label: l.text || l.id, hint: 'Switch league' })
-    const term = q.trim().toLowerCase()
-    return term ? list.filter(i => i.label.toLowerCase().includes(term)) : list
-  }, [tabs, rows, leagues, q])
+  const items = useMemo(() => buildPaletteItems({ tabs, subDests, rows, leagues, commands, tree, q }), [tabs, subDests, rows, leagues, commands, tree, q])
 
   useEffect(() => { if (sel > items.length - 1) setSel(0) }, [items.length, sel])
   // keep the selected row in view as you arrow through
@@ -44,6 +39,8 @@ export default function CommandPalette({ open, onClose, tabs, onGoTab, subDests 
     else if (it.kind === 'sub') onGoSub?.(it.section, it.sub)
     else if (it.kind === 'league') onSetLeague(it.id)
     else if (it.kind === 'cur') onOpenCurrency(it.id)
+    else if (it.kind === 'cmd') it.run?.()
+    else if (it.kind === 'ws') onOpenSearch?.(it.id)
     onClose()
   }
 
@@ -68,7 +65,7 @@ export default function CommandPalette({ open, onClose, tabs, onGoTab, subDests 
               {items.slice(0, 60).map((it, i) => (
                 <div key={it.kind + it.id} className={`cmdk-item ${i === sel ? 'sel' : ''}`}
                   onMouseMove={() => setSel(i)} onClick={() => run(it)}>
-                  <span className="cmdk-ic">{it.kind === 'cur' ? <Cur id={it.id} size={16} /> : it.kind === 'league' ? '🏆' : it.kind === 'sub' ? '→' : '↗'}</span>
+                  <span className="cmdk-ic">{it.kind === 'cur' ? <Cur id={it.id} size={16} /> : it.kind === 'league' ? '🏆' : it.kind === 'sub' ? '→' : it.kind === 'ws' ? '🔎' : it.kind === 'cmd' ? '⌘' : '↗'}</span>
                   <span className="cmdk-label">{it.label}</span>
                   <span className="cmdk-hint">{it.hint}</span>
                 </div>

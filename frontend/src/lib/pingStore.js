@@ -26,21 +26,27 @@ export const usePings = create((set, get) => ({
   clear: () => set({ pings: [], unseen: 0 }),
   setEngine: (e) => set({ engine: { ...get().engine, ...e } }),
   setSearchState: ({ itemId, state, message }) =>
-    set(s => ({ searchStates: { ...s.searchStates, [itemId]: { state, message } } })),
+    set(s => ({ searchStates: { ...s.searchStates, [itemId]: { state, message, at: Date.now() } } })),
   clearSearchState: (itemId) => set(s => { const n = { ...s.searchStates }; delete n[itemId]; return { searchStates: n } }),
 
   newest: () => get().pings[0] || null,
 }))
 
+// A connect that hasn't reported back within this long reads as "Reconnecting…" rather than
+// a stuck "Live …" (the engine retries on its own; this only keeps the label honest).
+export const LIVE_CONNECT_TIMEOUT = 15000
+
 // The Live toggle's label for a search node, from its persisted `armed` flag and the engine's
 // last reported state for it. Pure, so the mapping is testable without React.
-export function liveLabel(node, st) {
+export function liveLabel(node, st, now = Date.now()) {
   if (!node.armed) return { text: 'Go live', title: '' }
   switch (st?.state) {
     case 'live': return { text: 'Live ●', title: 'Connected' }
     case 'auth': return { text: 'Reconnect session', title: st.message || 'Reconnect your PoE session' }
     case 'reconnecting': return { text: 'Reconnecting…', title: st.message || '' }
     case 'error': return { text: 'Error', title: st.message || '' }
-    default: return { text: 'Live …', title: 'Connecting' }
+    default:
+      if (st?.at && now - st.at > LIVE_CONNECT_TIMEOUT) return { text: 'Reconnecting…', title: 'No reply from the live socket yet' }
+      return { text: 'Live …', title: 'Connecting' }
   }
 }

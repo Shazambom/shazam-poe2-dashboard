@@ -80,7 +80,9 @@ export function useLiveSync(league) {
       lastKey = key
       const current = new Set(usePings.getState().engine.activeIds || [])
       armed.forEach(n => {
-        if (!current.has(n.id)) window.poe2desktop.trade.startSearch(n.id, league, n.slug, n.type)
+        if (current.has(n.id)) return
+        usePings.getState().setSearchState({ itemId: n.id, state: 'connecting' })
+        window.poe2desktop.trade.startSearch(n.id, league, n.slug, n.type)
           .then(r => { if (r && !r.ok && r.reason === 'budget') { useWorkspace.getState().setField(n.id, { armed: false }); toast('Live-search cap reached — stop one first', false) } })
           .catch(() => {})
       })

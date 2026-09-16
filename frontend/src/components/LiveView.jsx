@@ -27,6 +27,9 @@ export default function LiveView({ league }) {
 
   useEffect(() => { if (!loaded) loadWorkspace() }, [loaded])
   useEffect(() => { markSeen() }, [markSeen])   // entering Live clears the unseen badge
+  // liveLabel() times out a silent connect after 15 s; re-evaluate every 5 s so the label moves.
+  const [, tick] = useState(0)
+  useEffect(() => { const t = setInterval(() => tick(n => n + 1), 5000); return () => clearInterval(t) }, [])
 
   // Hotkey/orb → focus the newest ping's button.
   useEffect(() => {
@@ -61,51 +64,51 @@ export default function LiveView({ league }) {
   }
 
   return (
-    <div className="live-view">
-      <div className="live-head">
-        <b>Live</b>
-        <span className="muted">· {engine.active}/{engine.budgetMax} searches live</span>
-        <span className="spacer" />
-        {pings.length > 0 && <button className="btn small" onClick={() => usePings.getState().clear()}>Clear</button>}
-      </div>
-
-      <div className="live-newest" ref={headRef}>
-        {newest
-          ? <PingButton ping={newest} />
-          : <div className="empty">Armed watches will ping here. Toggle a search live below.</div>}
-      </div>
-
-      {rest.length > 0 && (
-        <div className="live-recent">
-          <div className="live-recent-head muted">Recent</div>
-          {rest.map(p => <PingButton key={p.pingId} ping={p} compact />)}
+    <div className="trade-ws live-view">
+      <aside className="ws-rail">
+        <div className="ws-rail-head">
+          <b>Watched searches</b>
+          <span className="ws-chip" title="Live searches running / engine cap">{engine.active}/{engine.budgetMax} live</span>
         </div>
-      )}
-
-      <div className="live-searches">
-        <div className="live-recent-head muted">Watched searches</div>
         {loadError
           ? <div className="notice error ws-load-error" role="alert"><b>Couldn't load your searches</b><span className="muted">{loadError}</span><button className="btn small" onClick={() => loadWorkspace()}>Retry</button></div>
           : searches.length === 0
           ? <div className="empty small">No saved searches yet — add some in Workspace.</div>
           : (
-            <div className="live-tree-wrap">
-              <SearchTree
-                onSelect={() => {}}
-                renderTrailing={(d) => {
-                  if (d.kind !== 'search') return null
-                  const { text, title } = liveLabel(d, searchStates[d.id])
-                  return (
-                    <button className={`btn small ${d.armed ? 'primary' : ''}`} title={title}
-                            onClick={e => { e.stopPropagation(); toggleLive(d) }}>
-                      {text}
-                    </button>
-                  )
-                }}
-              />
-            </div>
+            <SearchTree
+              onSelect={() => {}}
+              renderTrailing={(d) => {
+                if (d.kind !== 'search') return null
+                const { text, title } = liveLabel(d, searchStates[d.id])
+                return (
+                  <button className={`btn small ${d.armed ? 'primary' : ''}`} title={title}
+                          onClick={e => { e.stopPropagation(); toggleLive(d) }}>
+                    {text}
+                  </button>
+                )
+              }}
+            />
           )}
-      </div>
+      </aside>
+
+      <section className="ws-main live-main">
+        <div className="live-head">
+          <b>Live</b>
+          <span className="spacer" />
+          {pings.length > 0 && <button className="btn small" onClick={() => usePings.getState().clear()}>Clear</button>}
+        </div>
+        <div className="live-newest" ref={headRef}>
+          {newest
+            ? <PingButton ping={newest} />
+            : <div className="empty small live-placeholder">Armed watches ping here.</div>}
+        </div>
+        {rest.length > 0 && (
+          <div className="live-recent">
+            <div className="live-recent-head muted">Recent</div>
+            {rest.map(p => <PingButton key={p.pingId} ping={p} compact />)}
+          </div>
+        )}
+      </section>
     </div>
   )
 }

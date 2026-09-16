@@ -15,6 +15,7 @@ import Wealth from './components/Wealth.jsx'
 import { useAssetModal } from './components/CardDetail.jsx'
 import CommandPalette from './components/CommandPalette.jsx'
 import { connectBridge, connectSessionWithToast } from './lib/session.js'
+import { useWorkspace } from './lib/workspaceStore.js'
 import BoardView from './components/BoardView.jsx'
 import StrategyView from './components/StrategyView.jsx'
 import EconomyView from './components/EconomyView.jsx'
@@ -116,6 +117,14 @@ export default function App() {
     return window.poe2desktop.trade.onFocusLive(() => goLive())
   }, [goLive])
 
+  // ⌘K workspace commands: each lands on Trading → Workspace and mutates the store directly.
+  const goWorkspace = React.useCallback(() => { setTab('Trading'); setTimeout(() => nav.openTrading('workspace'), 0) }, [])
+  const wsCommands = React.useMemo(() => [
+    { id: 'ws-new-search', label: 'New search', hint: 'Workspace · ⌘N', run: () => { goWorkspace(); const ws = useWorkspace.getState(); ws.setActive(ws.addSearch(null, { type: 'search', slug: '', live: false }, 'New search')) } },
+    { id: 'ws-new-group', label: 'New group', hint: 'Workspace · ⌘⇧N', run: () => { goWorkspace(); useWorkspace.getState().addFolder(null) } },
+    { id: 'ws-toggle-rail', label: 'Toggle searches rail', hint: 'Workspace', run: () => { goWorkspace(); const ws = useWorkspace.getState(); ws.setLayout({ collapsed: !ws.layout?.collapsed }) } },
+  ], [goWorkspace])
+
   const setLeague = async (league) => {
     if (!league || league === status?.league) return
     try {
@@ -195,6 +204,7 @@ export default function App() {
         onGoSub={(section, sub) => { setTab(section); setTimeout(() => (section === 'Trading' ? nav.openTrading(sub) : nav.openSub(section, sub)), 0) }}
         leagues={leagues} onSetLeague={setLeague}
         onOpenCurrency={(id) => { setTab('Board'); setTimeout(() => nav.openCurrency(id), 0) }}
+        commands={wsCommands} onOpenSearch={(id) => { goWorkspace(); useWorkspace.getState().setActive(id) }}
       />
 
       {assetModal.node}

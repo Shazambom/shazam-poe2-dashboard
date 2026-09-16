@@ -62,3 +62,19 @@ export function insertAt(nodes, node, parentId, index) {
     return { ...p, children: kids, open: true }
   })
 }
+
+// The rail's filter box: case-insensitive over the node's name and the parsed item name.
+export function matchesFilter(node, term) {
+  const t = String(term || '').trim().toLowerCase()
+  if (!t) return true
+  return String(node.name || '').toLowerCase().includes(t) || String(node.item?.name || '').toLowerCase().includes(t)
+}
+
+// "Belts / Uniques" — the folder path above a node (empty at root).
+export function pathOf(nodes, id, trail = []) {
+  for (const n of nodes || []) {
+    if (n.id === id) return trail
+    if (n.children) { const p = pathOf(n.children, id, [...trail, n.name]); if (p) return p }
+  }
+  return null
+}

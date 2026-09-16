@@ -9,7 +9,9 @@ test('setSearchState records per-search engine state', () => {
   const st = usePings.getState()
   st.setSearchState({ itemId: 'n1', state: 'auth', message: 'Reconnect your PoE session' })
   st.setSearchState({ itemId: 'n2', state: 'live' })
-  assert.deepEqual(usePings.getState().searchStates.n1, { state: 'auth', message: 'Reconnect your PoE session' })
+  const n1 = usePings.getState().searchStates.n1
+  assert.equal(n1.state, 'auth'); assert.equal(n1.message, 'Reconnect your PoE session')
+  assert.ok(typeof n1.at === 'number', 'stamped with the time it was reported')
   assert.equal(usePings.getState().searchStates.n2.state, 'live')
   st.clearSearchState('n2')
   assert.equal(usePings.getState().searchStates.n2, undefined)
