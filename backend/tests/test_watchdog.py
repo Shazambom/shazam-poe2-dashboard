@@ -25,6 +25,20 @@ def test_parent_alive_for_self_and_dead_for_impossible_pid():
     assert watchdog.parent_alive(None) is True
 
 
+def test_windows_uses_handle_check_and_never_calls_os_kill(monkeypatch):
+    """On Windows, os.kill(pid, 0) is CTRL_C_EVENT — sending it would Ctrl+C our own process group
+    and kill the whole supervision tree (the real 0.2.46 bug). parent_alive must use the handle
+    check and never invoke os.kill there."""
+    calls = []
+    monkeypatch.setattr(watchdog.os, "name", "nt")
+    monkeypatch.setattr(watchdog.os, "kill", lambda *a, **k: calls.append(a))
+    monkeypatch.setattr(watchdog, "_win_alive", lambda pid: pid == 1234)
+    assert watchdog.parent_alive(1234) is True
+    assert watchdog.parent_alive(5678) is False
+    assert watchdog.parent_alive(None) is True        # falsy short-circuits before any probe
+    assert calls == []                                # os.kill NEVER called on Windows
+
+
 def test_watch_parent_noop_without_pid():
     assert watchdog.watch_parent(0) is None
     assert watchdog.watch_parent(None) is None

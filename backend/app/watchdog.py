@@ -23,15 +23,19 @@ def parent_alive(pid: Optional[int]) -> bool:
     standalone/dev run never self-terminates."""
     if not pid:
         return True
+    # ⚠️ Windows: os.kill(pid, 0) is NOT a probe — signal 0 is CTRL_C_EVENT, so calling it would send
+    # Ctrl+C to our own console process group and kill the whole supervision tree (backend + sidecar)
+    # every poll. Use the side-effect-free handle check there and never touch os.kill. (POSIX below.)
+    if os.name == "nt":
+        return _win_alive(pid)
     try:
-        os.kill(pid, 0)            # signal 0 = existence probe (POSIX)
+        os.kill(pid, 0)            # signal 0 = existence probe (POSIX only)
         return True
     except ProcessLookupError:
         return False
     except PermissionError:
         return True                # exists, just not ours
     except (OSError, AttributeError):
-        # Windows os.kill can't probe with 0; fall back to a real handle check.
         return _win_alive(pid)
 
 
