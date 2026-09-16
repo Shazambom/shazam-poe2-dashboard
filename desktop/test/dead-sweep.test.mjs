@@ -34,3 +34,11 @@ test('OS notifications go through the main process on desktop', () => {
   assert.ok(main.includes("ipcMain.handle('notify'") && main.includes('Notification.isSupported()'))
   assert.ok(preload.includes("notify: (") && preload.includes("onNotifyClick: sub('notify:click')"))
 })
+
+test('batch 1 bridges are exposed and the EE2 dev telemetry no longer double-prefixes the version', () => {
+  const preload = readFileSync(`${ROOT}desktop/src/preload.js`, 'utf8')
+  for (const s of ["diag:log", "clipboard:classify", "ws:flush", "ws:flushed"]) assert.ok(preload.includes(s), s)
+  const t = readFileSync(`${ROOT}desktop/src/dev-ee2-telemetry.js`, 'utf8')
+  assert.ok(!t.includes('const tag = `v${appVersion}`'), 'telemetry.js already prefixes the version')
+  assert.ok(main.includes("'trade:webview-nav', { url"), 'nav payload carries wcId/phase')
+})

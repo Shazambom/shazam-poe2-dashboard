@@ -1,7 +1,8 @@
 import { create } from 'zustand'
 import { api, cleanErr, toast } from './api.js'
 import { uid } from './session.js'
-import { find as findNode, locate, mapNode, removeNode, insertAt } from './tree.js'
+import { find as findNode, findWhere, locate, mapNode, removeNode, insertAt } from './tree.js'
+import { diag } from './diag.js'
 
 // The Trading workspace: a nested filesystem-like tree (folders + search items), plus the
 // persisted `layout`/`openTabs` fields (kept in the document for forward compatibility).
@@ -20,9 +21,31 @@ const DEBOUNCE = 700
 let saveTimer = null
 let armed = false   // don't PUT while hydrating the initial load
 
+// The ExiledExchange2 History folder: found by `sys` at any depth (the user may rename/move it).
+export const HISTORY_SYS = 'ee2-history'
+export const HISTORY_NAME = 'ExiledExchange2 History'
+export const HISTORY_CAP = 200       // rows kept in the history folder (newest first)
+export const MAX_Q_BYTES = 16 * 1024 // a q larger than this is dropped (degraded row), never PUT
+
+// Keep every PUT inside the backend's limits (it validates and never truncates, so a rejection
+// would mean a bug here): drop oversize q's, trim the history folder to its cap. Pure; untouched
+// nodes are returned as-is.
+export function sanitize(tree) {
+  return (tree || []).map(n => {
+    let out = n
+    if (n.kind === 'search' && typeof n.q === 'string' && n.q.length > MAX_Q_BYTES) out = { ...n, q: null, degraded: true }
+    if (n.kind === 'folder' && n.children) {
+      let kids = sanitize(n.children)
+      if (n.sys === HISTORY_SYS && kids.length > HISTORY_CAP) kids = kids.slice(0, HISTORY_CAP)
+      if (kids !== n.children && (kids.length !== n.children.length || kids.some((k, i) => k !== n.children[i]))) out = { ...out, children: kids }
+    }
+    return out
+  })
+}
+
 function payload(get) {
   const { version, tree, layout, openTabs, activeId } = get()
-  return { version, tree, layout, openTabs, activeId }
+  return { version, tree: sanitize(tree), layout, openTabs, activeId }
 }
 
 async function save(get, set) {
@@ -37,6 +60,7 @@ async function save(get, set) {
   } catch (e) {
     set({ saveState: 'error' })
     toast(cleanErr(e), false)
+    diag('ws', `ws-save fail err="${cleanErr(e).slice(0, 120)}"`)
   }
 }
 
@@ -167,6 +191,52 @@ export const useWorkspace = create((set, get) => ({
     persist(get, set)
   },
 
+  // Find a system folder (by `sys`, anywhere) or create it at root index 0.
+  ensureFolder: (sysKey, name) => {
+    const hit = findWhere(get().tree, n => n.kind === 'folder' && n.sys === sysKey)
+    if (hit) return hit.id
+    const f = { ...newFolder(name), sys: sysKey }
+    set(s => ({ tree: [f, ...s.tree] }))
+    persist(get, set); return f.id
+  },
+  prependSearch: (parentId, node) => {
+    set(s => ({ tree: parentId ? insertAt(s.tree, node, parentId, 0) : [node, ...s.tree] }))
+    persist(get, set)
+  },
+
+  // THE one entry point for every producer (roadmap §4.1): the clipboard rungs today, the EE2
+  // item stream in batch 3. `intent` = { source, origin?, q?|slug?, type?, live?, name, item?,
+  // folder (sys key | null), targetId? (clipboard: the user's chosen folder) }. Returns
+  // { result: 'added'|'dup'|'dropped', id?, reason? }.
+  ingest: (intent) => {
+    if (get().loadError) return { result: 'dropped', reason: 'load-error' }
+    const st = get()
+    const same = intent.q
+      ? findWhere(st.tree, n => n.kind === 'search' && n.q === intent.q)
+      : intent.slug ? findWhere(st.tree, n => n.kind === 'search' && n.slug === intent.slug) : null
+    const fromClipboard = intent.source === 'clipboard'
+    if (same && fromClipboard) { set({ activeId: same.id }); persist(get, set); return { result: 'dup', id: same.id } }
+    const node = {
+      ...searchNode({ type: intent.type || 'search', slug: intent.slug || '', live: !!intent.live }, intent.name),
+      auto: intent.q ? false : true,          // rows born from a query keep their parsed name
+      q: intent.q || null, origin: intent.origin || intent.source, ts: Date.now(),
+      ...(intent.item ? { item: intent.item } : {}), ...(intent.degraded ? { degraded: true } : {}),
+    }
+    if (intent.folder) {
+      const fid = get().ensureFolder(intent.folder, intent.folder === HISTORY_SYS ? HISTORY_NAME : intent.folder)
+      get().prependSearch(fid, node)          // newest first; the item stream never steals the pane
+      return { result: 'added', id: node.id }
+    }
+    // Clipboard target: the chosen folder unless it is the history folder (never a clipboard target).
+    let target = intent.targetId ? findNode(get().tree, intent.targetId) : null
+    if (!target || target.kind !== 'folder' || target.sys === HISTORY_SYS) target = null
+    set(s => ({ tree: target
+      ? mapNode(s.tree, target.id, n => ({ ...n, open: true, children: [...(n.children || []), node] }))
+      : [...s.tree, node], activeId: node.id }))
+    persist(get, set)
+    return { result: 'added', id: node.id }
+  },
+
   nodeById: (id) => findNode(get().tree, id),
 }))
 
@@ -176,5 +246,6 @@ export async function loadWorkspace() {
     useWorkspace.getState().hydrate(workspace)
   } catch (e) {
     useWorkspace.getState().failLoad(cleanErr(e))
+    diag('ws', `ws-load fail err="${cleanErr(e).slice(0, 120)}"`)
   }
 }

@@ -39,14 +39,36 @@ export function tradeUrl({ type, slug }, league, live) {
   return live ? `${u}/live` : u
 }
 
-// Parse a pasted trade URL into { type, slug, live } (league is read but dropped).
-// Handles the PoE2 realm segment: /trade2/{type}/poe2/{league}/{slug}[/live] as well as
-// the older realm-less /trade2/{type}/{league}/{slug} shape.
+// Parse a trade URL into { type, slug, live } (league is read but dropped). Looks at the
+// PATHNAME only — a `?q=<json>` link has no slug and must never yield one (the JSON can
+// contain '/'). Handles the PoE2 realm segment /trade2/{type}/poe2/{league}/{slug}[/live]
+// and the older realm-less /trade2/{type}/{league}/{slug}. Mirrored byte-for-byte in
+// desktop/src/trade/urls.js (main classifies the clipboard); a desktop test pins parity.
 export function parseTradeUrl(url) {
-  const m = String(url).match(/\/trade2?\/([a-z]+)\/(?:poe2\/)?[^/]+\/([^/?#\s]+?)(\/live)?(?:[/?#]|$)/i)
+  let pathname
+  try { pathname = new URL(String(url), TRADE_BASE).pathname } catch { return null }
+  // With the realm segment the league AND slug must both follow it; without it, league + slug.
+  const m = pathname.match(/\/trade2?\/([a-z]+)\/poe2\/[^/]+\/([^/]+?)(\/live)?\/?$/i)
+    || pathname.match(/\/trade2?\/([a-z]+)\/(?!poe2\/)[^/]+\/([^/]+?)(\/live)?\/?$/i)
   if (!m) return null
   return { type: m[1], slug: m[2], live: !!m[3] }
 }
+
+// Parse an EE2-style query link — /trade2/search/poe2/{league}?q=<json> — into { q } where q is
+// the exact JSON string (validated, never re-serialised). Exchange links and non-JSON → null.
+export function parseTradeQueryUrl(url) {
+  let u
+  try { u = new URL(String(url), TRADE_BASE) } catch { return null }
+  if (!/\/trade2?\/search\/(?:poe2\/)?[^/]+\/?$/i.test(u.pathname)) return null
+  const q = u.searchParams.get('q')
+  if (!q) return null
+  try { const j = JSON.parse(q); if (!j || typeof j !== 'object') return null } catch { return null }
+  return { q }
+}
+
+// A query link for a stored { q }, league injected at open time (never stored). Both parts are
+// percent-encoded; the site decodes to the same bytes EE2 interpolates raw.
+export const queryUrl = ({ q }, league) => `${TRADE_BASE}/search/poe2/${encodeURIComponent(league || 'Standard')}?q=${encodeURIComponent(q)}`
 
 // Open a trade search — a real logged-in window in the desktop app, a new tab in a
 // browser. Human then reads results and whispers manually.

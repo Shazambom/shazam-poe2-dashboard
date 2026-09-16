@@ -40,6 +40,12 @@ contextBridge.exposeInMainWorld('poe2desktop', {
     onEngineError: sub('trade:engine-error'),   // budget / rate errors
     onFocusLive: sub('hotkey:focus-live'),
   },
+  // Batch 1 bridges. diag.log: the renderer's one narrow telemetry path (allow-listed markers,
+  // clamped + budgeted in main, beta/dev-gated). clipboard.classify: main reads + classifies the
+  // clipboard and returns ONLY the classification. ws: main asks for a flush before quitting.
+  diag: { log: (marker, line) => ipcRenderer.invoke('diag:log', { marker, line }) },
+  clipboard: { classify: () => ipcRenderer.invoke('clipboard:classify') },
+  ws: { onFlush: sub('ws:flush'), flushed: () => ipcRenderer.send('ws:flushed') },
   // Global focus hotkey config (desktop-only).
   hotkey: {
     get: () => ipcRenderer.invoke('hotkey:get'),

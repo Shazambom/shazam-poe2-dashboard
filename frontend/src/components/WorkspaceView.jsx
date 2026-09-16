@@ -1,8 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useWorkspace, loadWorkspace } from '../lib/workspaceStore.js'
-import { tradeUrl, tradeHome, parseTradeUrl, openTrade, isDesktop } from '../lib/session.js'
-import { findWhere, flatten } from '../lib/tree.js'
+import { useWorkspace, loadWorkspace, HISTORY_SYS } from '../lib/workspaceStore.js'
+import { tradeUrl, tradeHome, queryUrl, parseTradeUrl, openTrade, isDesktop } from '../lib/session.js'
+import { shouldAcceptNav } from '../lib/webview.js'
+import { addFromClipboard } from '../lib/clipboardAdd.js'
+import { findWhere, flatten, locate } from '../lib/tree.js'
 import { bus, toast } from '../lib/api.js'
+import { diag } from '../lib/diag.js'
 import SearchTree from './SearchTree.jsx'
 import ContextMenu from './ContextMenu.jsx'
 
@@ -37,11 +40,16 @@ async function ensureInstantBuyout(el) {
     for (var j=0;j<opts.length;j++){ if(/^\\s*Instant Buyout\\s*$/i.test(opts[j].textContent)){ var t=opts[j].querySelector('.multiselect__option')||opts[j]; t.dispatchEvent(new MouseEvent('mousedown',{bubbles:true})); return 'set'; } }
     return 'no-option';
   })()`
-  for (let i = 0; i < 6; i++) {
+  for (let i = 0; i < 10; i++) {
     try { const r = await el.executeJavaScript(code); if (r === 'set' || r === 'already') return r } catch {}
     await new Promise(res => setTimeout(res, 900))
   }
-  return 'gave-up'
+  // Gave up: report what the dropdown actually says so the caller only hints when it is truly
+  // NOT Instant Buyout (a slow load that lands there anyway must not raise a false hint).
+  try {
+    const cur = await el.executeJavaScript(`(function(){var s=[...document.querySelectorAll('.search-bar .multiselect .multiselect__single')].map(function(e){return e.textContent.trim()}); return s.find(function(t){return /instant buyout|in person|online|^any$/i.test(t)})||''})()`)
+    return /instant buyout/i.test(cur || '') ? 'already' : (cur ? 'other' : 'gave-up')
+  } catch { return 'gave-up' }
 }
 
 // Read the item name the user typed in the embedded trade window's search box, to auto-name
@@ -105,7 +113,7 @@ export default function WorkspaceView({ league }) {
 
   const wv = useRef(null)
   const activeRef = useRef(activeId)
-  const [navState, setNavState] = useState({ url: '', loading: false })
+  const [navState, setNavState] = useState({ url: '', loading: false, hint: '' })
   const [confirmId, setConfirmId] = useState(null)   // folder awaiting its inline delete confirm
   const [filter, setFilter] = useState('')
   const [menu, setMenu] = useState(null)             // { at:{x,y}, node } while the context menu is open
@@ -127,8 +135,22 @@ export default function WorkspaceView({ league }) {
     const hide = () => useWorkspace.getState().flush()
     document.addEventListener('visibilitychange', flush)
     window.addEventListener('pagehide', hide)
-    return () => { document.removeEventListener('visibilitychange', flush); window.removeEventListener('pagehide', hide) }
+    const offQuit = window.poe2desktop?.ws?.onFlush?.(() => {
+      const t0 = Date.now()
+      useWorkspace.getState().flush().then(() => diag('ws', `ws-flush-on-quit ok ms=${Date.now() - t0}`)).catch(() => {}).finally(() => window.poe2desktop.ws.flushed())
+    })
+    return () => { document.removeEventListener('visibilitychange', flush); window.removeEventListener('pagehide', hide); offQuit?.() }
   }, [])
+
+  // Clipboard-add target: the selected folder, else the selected node's parent, else root.
+  const clipboardTarget = useCallback(() => {
+    const api = treeApi.current
+    const focused = api?.focusedNode?.data || null
+    if (focused?.kind === 'folder') return focused.id
+    const id = focused?.id || activeRef.current
+    return id ? (locate(useWorkspace.getState().tree, id)?.parentId ?? null) : null
+  }, [])
+  const clipboardAdd = useCallback((targetId) => addFromClipboard(targetId === undefined ? clipboardTarget() : targetId), [clipboardTarget])
 
   // Selecting/creating only mutate the DB (activeId + tree). The trade window is a pure
   // function of that state — see `mountUrl` + the keyed <webview> below. No imperative
@@ -145,6 +167,7 @@ export default function WorkspaceView({ league }) {
     if (!where) return
     const label = where.node.name || (where.node.kind === 'folder' ? 'group' : 'search')
     const n = flatten(where.node.children || [], x => x.kind === 'search').length
+    diag('ws', `ws-undo n=${n || 1}`)
     bus.emit({ id: 'ws-undo', ttl: UNDO_TTL, node: (
       <div className="ws-undo">
         <span className="ws-undo-text">Deleted “{label}”{n ? ` (${n} search${n === 1 ? '' : 'es'})` : ''}</span>
@@ -161,12 +184,23 @@ export default function WorkspaceView({ league }) {
   const onTreeKey = useCallback((e, node) => {
     const mod = e.metaKey || e.ctrlKey
     if (mod && (e.key === 'n' || e.key === 'N')) { e.preventDefault(); e.stopPropagation(); if (e.shiftKey) newGroup(); else newSearch(node?.data.kind === 'folder' ? node.data.id : null); return }
+    if (mod && (e.key === 'v' || e.key === 'V')) { e.preventDefault(); e.stopPropagation(); clipboardAdd(); return }
     if (!node) return
     if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); if (node.data.kind === 'folder') node.toggle(); else setActive(node.data.id); return }
     if (e.key === 'F2') { e.preventDefault(); e.stopPropagation(); node.edit(); return }
     if (e.key === 'Backspace' || e.key === 'Delete') { e.preventDefault(); e.stopPropagation(); requestDelete(node.data); return }
     if (e.key === 'Escape' && filter) { e.preventDefault(); setFilter('') }
-  }, [newGroup, newSearch, setActive, requestDelete, filter])
+  }, [newGroup, newSearch, setActive, requestDelete, filter, clipboardAdd])
+
+  // ⌘⇧V anywhere in the app (not inside an input) = add from clipboard.
+  useEffect(() => {
+    if (!isDesktop) return
+    const h = (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === 'v' || e.key === 'V') && !e.target.closest('input, textarea, [contenteditable]')) { e.preventDefault(); clipboardAdd() }
+    }
+    window.addEventListener('keydown', h)
+    return () => window.removeEventListener('keydown', h)
+  }, [clipboardAdd])
 
   const openMenu = useCallback((e, d, node) => setMenu({ at: { x: e.clientX, y: e.clientY }, d, node }), [])
   const menuItems = useMemo(() => {
@@ -180,6 +214,7 @@ export default function WorkspaceView({ league }) {
       { label: isDesktop ? 'Open in window' : 'Open in browser', disabled: !url, run: () => openTrade(url) },
       { label: 'Copy link', disabled: !url, run: () => copyText(url) },
       { sep: true },
+      ...(isDesktop && d.kind === 'folder' && d.sys !== HISTORY_SYS ? [{ label: 'Add from clipboard here', key: '⌘V', run: () => clipboardAdd(d.id) }] : []),
       { label: 'Rename', key: 'F2', run: () => setTimeout(() => node.edit(), 0) },
       { label: 'Duplicate', disabled: !isSearch, run: () => duplicate(d.id) },
       { label: d.done ? 'Mark not done' : 'Mark done', disabled: !isSearch, run: () => setField(d.id, { done: !d.done }) },
@@ -187,7 +222,7 @@ export default function WorkspaceView({ league }) {
       { sep: true },
       { label: 'Delete', key: '⌫', danger: true, run: () => requestDelete(d) },
     ]
-  }, [menu, league, setActive, duplicate, setField, move, requestDelete])
+  }, [menu, league, setActive, duplicate, setField, move, requestDelete, clipboardAdd])
 
   // The divider is both the collapse toggle (click) and the rail's resize handle (drag,
   // 220–420 px, rAF-throttled, persisted on mouseup).
@@ -218,7 +253,7 @@ export default function WorkspaceView({ league }) {
   // restore-on-remount with no imperative navigation.
   const mountUrl = useMemo(() => {
     const n = activeId ? useWorkspace.getState().nodeById(activeId) : null
-    return n && n.slug ? tradeUrl(n, league, n.live) : tradeHome(league)
+    return n?.slug ? tradeUrl(n, league, n.live) : n?.q ? queryUrl(n, league) : tradeHome(league)
   }, [activeId, league])
 
   // Default each freshly-mounted trade window to Instant Buyout (the mode travel-to-hideout
@@ -226,7 +261,10 @@ export default function WorkspaceView({ league }) {
   useEffect(() => {
     const el = wv.current
     if (!isDesktop || !el) return
-    const onReady = () => ensureInstantBuyout(el)
+    // A q-mounted node already carries status.option — forcing the dropdown would rewrite EE2's query.
+    const n = activeId ? useWorkspace.getState().nodeById(activeId) : null
+    if (n?.q && !n.slug) return
+    const onReady = () => ensureInstantBuyout(el).then(r => { if (r === 'other') setNavState(s => ({ ...s, hint: 'Set delivery to Instant Buyout for travel-to-hideout' })) })
     el.addEventListener('dom-ready', onReady)
     return () => el.removeEventListener('dom-ready', onReady)
   }, [activeId, league, wvNonce])
@@ -237,8 +275,15 @@ export default function WorkspaceView({ league }) {
   // auto-name it: "run a search → it's saved."
   useEffect(() => {
     if (!isDesktop || !window.poe2desktop?.trade?.onWebviewNav) return
-    return window.poe2desktop.trade.onWebviewNav((url) => {
-      setNavState({ url, loading: false })
+    return window.poe2desktop.trade.onWebviewNav((p) => {
+      // Only the embedded webview drives the workspace — never the open-trade pop-out.
+      let myId = null
+      try { myId = wv.current?.getWebContentsId() } catch {}
+      if (!shouldAcceptNav(p, myId)) return
+      const { url, phase } = p
+      if (phase === 'start') { setNavState(s => ({ ...s, url, loading: true })); return }
+      if (phase === 'stop') { setNavState(s => ({ ...s, url, loading: false })); return }
+      setNavState(s => ({ ...s, url, hint: '' }))
       const parsed = parseTradeUrl(url)
       const id = activeRef.current
       if (!parsed || !parsed.slug || !id) return
@@ -273,7 +318,7 @@ export default function WorkspaceView({ league }) {
   }
 
   const activeNode = activeId ? nodeById(activeId) : null
-  const activeUrl = activeNode?.slug ? tradeUrl(activeNode, league, activeNode.live) : null
+  const activeUrl = activeNode?.slug ? tradeUrl(activeNode, league, activeNode.live) : activeNode?.q ? queryUrl(activeNode, league) : null
   const width = dragWidth ?? railWidth
   const saveTitle = { idle: 'Saved', dirty: 'Unsaved changes', saving: 'Saving…', error: 'Save failed — retrying on the next change' }[saveState]
 
@@ -285,6 +330,7 @@ export default function WorkspaceView({ league }) {
             <b>Searches</b>
             <span className={`ws-save-dot ${saveState}`} title={saveTitle} aria-label={saveTitle} role="status" />
             <span className="spacer" />
+            {isDesktop && <button className="ws-icon-btn" title="Add from clipboard (⌘⇧V)" aria-label="Add from clipboard" onClick={() => clipboardAdd()}>⎘</button>}
             <button className="ws-icon-btn" title="New group" aria-label="New group" onClick={newGroup}>📁</button>
             <button className="ws-icon-btn primary" title="New search" aria-label="New search" onClick={() => newSearch(null)}>+</button>
           </div>
@@ -329,7 +375,8 @@ export default function WorkspaceView({ league }) {
         {isDesktop ? (
           <>
             <div className={`ws-webhint ${activeNode ? '' : 'hidden'}`}>
-              <span className="ws-webhint-name" title={navState.url || mountUrl}>{navState.loading ? 'loading…' : (activeNode ? activeNode.name : '')}</span>
+              <span className="ws-webhint-name" title={navState.url || mountUrl}>{activeNode ? activeNode.name : ''}</span>
+              {navState.hint && <span className="ws-chip" title="The site's delivery dropdown could not be set automatically">{navState.hint}</span>}
               {activeNode && (activeNode.slug || activeNode.q
                 ? <>
                     <span className="ws-chip ok">{activeNode.q ? 'from item' : 'captured'}</span>
@@ -341,6 +388,7 @@ export default function WorkspaceView({ league }) {
               {activeUrl && <button className="ws-mini on" title="Open in window" aria-label="Open in window" onClick={() => openTrade(activeUrl)}>↗</button>}
               <button className="ws-mini on" title="Reload" aria-label="Reload" onClick={() => setWvNonce(n => n + 1)}>↻</button>
             </div>
+            <div className={`ws-progress ${navState.loading ? 'on' : ''}`} aria-hidden="true" />
             <webview key={`${activeId || 'home'}:${wvNonce}`} ref={wv} src={mountUrl} className="ws-webview" allowpopups="true" />
             {!activeNode && (
               <div className="ws-overlay">

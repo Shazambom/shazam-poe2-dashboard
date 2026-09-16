@@ -7,7 +7,7 @@
 //     dir); only an unpackaged dev launch without a binary points at a dev server;
 //   * being Chromium, we ARE the browser: the PoE login happens in our own window and
 //     the HttpOnly POESESSID is read from our session and handed to the backend.
-const { app, BrowserWindow, Menu, Notification, dialog, ipcMain, session, shell, nativeTheme } = require('electron')
+const { app, BrowserWindow, Menu, Notification, clipboard, dialog, ipcMain, session, shell, nativeTheme } = require('electron')
 const { spawn } = require('child_process')
 const fs = require('fs')
 const http = require('http')
@@ -500,7 +500,7 @@ async function startEe2Integration() {
     const { attachEe2Telemetry } = require('./dev-ee2-telemetry')   // DEV diagnostic (see CLAUDE.md)
     _ee2 = new ExiledExchangeIntegration()
     attachLogDemo(_ee2)                       // demo subscriber: logs each hook, no side effects
-    attachEe2Telemetry(_ee2, app.getVersion())  // TEMP: report hooks to dev server so we can verify remotely
+    attachEe2Telemetry(_ee2)  // TEMP: report hooks to dev server so we can verify remotely
     await _ee2.start()
   } catch (e) { console.log('[ee2] integration disabled:', String(e)); _ee2 = null }
 }
@@ -571,9 +571,33 @@ app.on('web-contents-created', (_e, contents) => {
   // The trade SPA updates the URL without firing <webview> DOM events, but the guest
   // webContents DOES fire did-navigate/did-navigate-in-page. Forward those to the renderer
   // so the workspace can capture a run search into the active entry (event-driven, no poll).
-  const fwd = (url) => { if (isPoeUrl(url)) try { win?.webContents.send('trade:webview-nav', url) } catch {} }
-  contents.on('did-navigate', (_ev, url) => fwd(url))
-  contents.on('did-navigate-in-page', (_ev, url) => fwd(url))
+  // The payload names the guest (wcId) so the renderer can ignore the open-trade pop-out, and
+  // the loading phases drive the workspace's progress hairline.
+  const fwd = (url, phase) => { if (isPoeUrl(url)) try { win?.webContents.send('trade:webview-nav', { url, wcId: contents.id, phase }) } catch {} }
+  contents.on('did-navigate', (_ev, url) => fwd(url, 'nav'))
+  contents.on('did-navigate-in-page', (_ev, url) => fwd(url, 'nav'))
+  contents.on('did-start-loading', () => fwd(contents.getURL(), 'start'))
+  contents.on('did-stop-loading', () => fwd(contents.getURL(), 'stop'))
+})
+
+// ---------------------------------------------------- renderer bridges (batch 1)
+// Diagnostics: the renderer's one narrow path to installLog (allow-list, clamp, budget — see
+// diag-bridge.js); the gate stays telemetry.configure's diagTelemetryOn().
+const diagLog = require('./diag-bridge.js').makeDiagBridge({ installLog: telemetry.installLog })
+ipcMain.handle('diag:log', (_e, p) => diagLog(p?.marker, p?.line))
+// Clipboard-add: MAIN reads and classifies; only the classification crosses (never the text).
+ipcMain.handle('clipboard:classify', () => require('./clipboard-add.js').classifyClipboard(() => clipboard.readText()))
+
+// Give the renderer a beat to flush its debounced workspace save before we go: send ws:flush,
+// wait for ws:flushed (or 1 s), then quit for real.
+let _flushedForQuit = false
+app.on('before-quit', (e) => {
+  if (_flushedForQuit || !win || win.isDestroyed()) return
+  e.preventDefault()
+  const done = () => { if (_flushedForQuit) return; _flushedForQuit = true; app.quit() }
+  ipcMain.once('ws:flushed', done)
+  setTimeout(done, 1000)
+  try { win.webContents.send('ws:flush') } catch { done() }
 })
 
 const stopTrade = () => { try { require('./trade').engine.stopAll() } catch {}; try { require('./trade/hotkey.js').unregisterAll() } catch {} }

@@ -64,3 +64,23 @@ test('dead trade IPC surface is gone', () => {
   const index = readFileSync(join(SRC, 'trade', 'index.js'), 'utf8')
   for (const dead of ['selftest', '__testping', 'trade:new-search', 'trade:describe', 'trade:engine-state']) assert.ok(!index.includes(dead), dead)
 })
+
+// ---- Batch 1: the renderer's narrow diag bridge ----
+const { makeDiagBridge, DIAG_MARKERS } = await import('../src/diag-bridge.js')
+
+test('diag bridge: allow-listed markers only, 300-char clamp, 30 lines/min budget, gate honoured', () => {
+  const sent = []
+  let t = 0
+  const log = makeDiagBridge({ installLog: (m, l) => sent.push([m, l]), now: () => t })
+  assert.deepEqual(DIAG_MARKERS, ['ee2', 'ws', 'sales'])
+  assert.equal(log('login', 'x'), false, 'unlisted marker dropped')
+  assert.equal(log('ws', 42), false, 'non-string line dropped')
+  assert.equal(log('ws', 'ws-load fail err="boom"'), true)
+  assert.deepEqual(sent, [['ws', 'ws-load fail err="boom"']])
+  log('ee2', 'y'.repeat(1000))
+  assert.equal(sent[1][1].length, 300)
+  for (let i = 0; i < 40; i++) log('ws', 'l' + i)
+  assert.equal(sent.length, 30, '30 per minute, then dropped')
+  t = 61_000
+  assert.equal(log('ws', 'after'), true)
+})
