@@ -185,8 +185,33 @@ def _m3_liq_floor(conn: sqlite3.Connection) -> None:
     log.info("m3: baked liquidity/volume floors into saved filters")
 
 
+def _m4_notifications(conn: sqlite3.Connection) -> None:
+    """Fold the legacy `ping_sound` / `ping_volume` settings keys into the per-family
+    `notifications` object (both families inherit the old sound switch; volume carries over),
+    then drop the old keys. Idempotent: no-op once they are gone."""
+    row = conn.execute("SELECT value FROM kv WHERE key='settings'").fetchone()
+    if not row:
+        return
+    try:
+        s = json.loads(row[0])
+    except (ValueError, TypeError):
+        return
+    if not isinstance(s, dict) or not ({"ping_sound", "ping_volume"} & set(s)):
+        return
+    n = s.setdefault("notifications", {})
+    if "ping_sound" in s:
+        on = bool(s.pop("ping_sound"))
+        n.setdefault("live", {})["sound"] = on
+        n.setdefault("signals", {})["sound"] = on
+    if "ping_volume" in s:
+        n["volume"] = s.pop("ping_volume")
+    conn.execute("UPDATE kv SET value=? WHERE key='settings'", (json.dumps(s),))
+    log.info("m4: folded ping_sound/ping_volume into settings.notifications")
+
+
 USER_MIGRATIONS: list[tuple[int, str, object]] = [
     (1, "initial split from legacy poe2arb.sqlite", _m1_split_from_legacy),
     (2, "derive trading_workspace tree from flat watches", _m2_watches_to_workspace),
     (3, "bake liquidity/volume filter floors into pre-floor settings", _m3_liq_floor),
+    (4, "fold ping_sound/ping_volume into settings.notifications", _m4_notifications),
 ]

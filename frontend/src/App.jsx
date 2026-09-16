@@ -10,8 +10,7 @@ import DivinePingOrb from './components/DivinePingOrb.jsx'
 import HorizonPicker from './components/HorizonPicker.jsx'
 import { SyncMetrics, RefreshControls } from './components/SyncControls.jsx'
 import { useSignals, startSignalPolling } from './lib/signalStore.js'
-import { playPing } from './lib/ping-sound.js'
-import { osNotify } from './lib/notify.js'
+import { notify } from './lib/notifications.js'
 import Wealth from './components/Wealth.jsx'
 import { useAssetModal } from './components/CardDetail.jsx'
 import CommandPalette from './components/CommandPalette.jsx'
@@ -89,9 +88,7 @@ export default function App() {
     const names = lastNew.signals.map(s => s.name)
     const title = `${names.length} new market signal${names.length === 1 ? '' : 's'}`
     const openFirst = () => { setTab('Board'); assetModal.open(names[0]) }
-    playPing()
-    osNotify(title, names.slice(0, 3).join(', '), { tag: `signals-${lastNew.at}`, onClick: openFirst })
-    bus.emit({ id: 'signals', ttl: 12000, node: (
+    notify('signals', { title, body: names.slice(0, 3).join(', '), tag: `signals-${lastNew.at}`, onOpen: openFirst, ttl: 12000, node: (
       <div className="ping-banner">
         <span className="pb-dot online" />
         <div className="pb-main">

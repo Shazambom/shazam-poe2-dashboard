@@ -114,7 +114,7 @@ def test_m3_noop_without_settings_row(tmp_path):
 
 
 def test_m3_is_registered():
-    assert [m[0] for m in migrations_user.USER_MIGRATIONS] == [1, 2, 3]
+    assert [m[0] for m in migrations_user.USER_MIGRATIONS][:3] == [1, 2, 3]
 
 
 # ----------------------------------------------------------------- m1 rename after commit

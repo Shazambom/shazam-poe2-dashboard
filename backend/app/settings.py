@@ -60,6 +60,13 @@ DEFAULTS: dict = {
     # league, so a slider (Arbitrage page, range 100k–10M gold/Divine) tunes this; it feeds
     # Convert's net-value ranking and Arbitrage velocity. Default 0.01 == 1 Divine ≈ 100k gold.
     "gold_value_per_1k": 0.01,
+    # Notifications, per family (live trade pings, market signals) and per channel. In-app banner
+    # and sound on by default; OS notifications opt-in. `volume` is the shared ping volume.
+    "notifications": {
+        "volume": 0.5,
+        "live": {"banner": True, "sound": True, "os": False},
+        "signals": {"banner": True, "sound": True, "os": False},
+    },
     # Default filters (UI can override per request)
     "filters": {
         "min_margin_pct": 3.0,            # skip sub-3% flips — noise once you count effort/fees

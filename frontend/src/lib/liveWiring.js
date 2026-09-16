@@ -2,20 +2,23 @@ import React, { useEffect } from 'react'
 import { usePings } from './pingStore.js'
 import { useWorkspace, loadWorkspace } from './workspaceStore.js'
 import { toast, bus } from './api.js'
-import { playPing, unlockSound } from './ping-sound.js'
-import { osNotify } from './notify.js'
+import { unlockSound } from './ping-sound.js'
+import { notify } from './notifications.js'
 import { nav } from './nav.js'
 import { hasTradeEngine as isDesktop } from './session.js'
 
 const PING_TTL = 10000   // top-right ping banner auto-dismisses after 10s (or when a newer ping replaces it)
 
-// Mounted once in App. Subscribes to the desktop live-search engine and turns each ping
-// into: (1) a store entry, (2) a sound, (3) an OS notification, (4) a banner in the app's one
-// toast stack (id 'live-ping', so the newest ping replaces the last) with a jump-to-Live action.
-// Inert on web.
-const showBanner = (p, goLive) => bus.emit({
-  id: 'live-ping', ttl: PING_TTL,
+// Mounted once in App. Subscribes to the desktop live-search engine and turns each ping into a
+// store entry plus a `notify('live', …)` — banner in the app's one toast stack (newest ping replaces
+// the last, with a jump-to-Live action), sound, OS notification — each gated by Settings →
+// Notifications. Inert on web.
+const alertPing = (p, goLive) => notify('live', {
+  id: 'live-ping', ttl: PING_TTL, tag: p.pingId,
+  title: `Ping: ${p.item?.name || 'item'}`,
+  body: p.price ? `${p.price.amount} ${p.price.currency} · ${p.online}` : p.online,
   node: bannerEl(p, () => { bus.emit({ id: 'live-ping', dismiss: true }); goLive?.() }),
+  onOpen: () => goLive?.(),
 })
 export function useLiveWiring(goLive) {
   useEffect(() => {
@@ -29,7 +32,7 @@ export function useLiveWiring(goLive) {
           indexedAt: Date.now(), receivedAt: Date.now(), token: null, tokenExp: Date.now() + 3e5,
           flags: { gone: false, inDemand: true } }
         usePings.getState().addPing(ping)
-        showBanner(ping, goLive)
+        alertPing(ping, goLive)
       }
     }
     // Unlock WebAudio on the first user gesture (browser autoplay policy).
@@ -45,10 +48,7 @@ export function useLiveWiring(goLive) {
       const after = usePings.getState().pings.length
       if (after === before) return   // deduped — don't re-alert
 
-      playPing()
-      osNotify(`Ping: ${p.item?.name || 'item'}`, p.price ? `${p.price.amount} ${p.price.currency} · ${p.online}` : p.online,
-        { tag: p.pingId, onClick: () => goLive?.() })
-      showBanner(p, goLive)   // in-app most-recent-ping banner (replaced by each newer ping)
+      alertPing(p, goLive)
     })
     const offEngine = window.poe2desktop.trade.onEngineState((e) => usePings.getState().setEngine(e))
     // Per-search connection state (live / auth / reconnecting / error) drives the Live button

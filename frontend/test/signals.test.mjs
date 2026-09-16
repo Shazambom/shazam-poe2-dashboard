@@ -40,6 +40,6 @@ test('the store owns the recurring poll', () => {
 
 test('OS notifications have one home', () => {
   const walk = (p) => readFileSync(new URL(`../src/${p}`, import.meta.url), 'utf8')
-  assert.ok(walk('lib/notify.js').includes('export function osNotify('))
+  assert.ok(walk('lib/notifications.js').includes('function osNotify('))
   assert.ok(!walk('lib/liveWiring.js').includes('new Notification('))
 })

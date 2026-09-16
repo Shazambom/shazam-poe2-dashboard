@@ -1,23 +1,11 @@
-// The live-ping "ding". Synthesised with WebAudio (no bundled asset), fires on every new
-// ping EVEN WHEN THE WINDOW IS UNFOCUSED/HIDDEN — WebAudio/HTMLAudio are not subject to
-// the hidden-tab rAF/animation freeze, so this is correct by construction. Deduped +
-// throttled so a burst coalesces into one ding. Mutable via settings.
-import { ensureSettings } from './statusStore.js'
-
+// The ping "ding". Synthesised with WebAudio (no bundled asset), fires EVEN WHEN THE WINDOW IS
+// UNFOCUSED/HIDDEN — WebAudio/HTMLAudio are not subject to the hidden-tab rAF/animation freeze,
+// so this is correct by construction. Deduped + throttled so a burst coalesces into one ding.
+// Whether it plays at all, and how loud, is decided by the caller (lib/notifications.js).
 let ctx = null
 let unlocked = false
 let lastPlay = 0
-let prefs = { on: true, volume: 0.5 }
 const MIN_GAP_MS = 1500
-
-// Load persisted prefs once (settings kv).
-ensureSettings().then(s => {
-  if (s && typeof s.ping_sound === 'boolean') prefs.on = s.ping_sound
-  if (s && typeof s.ping_volume === 'number') prefs.volume = s.ping_volume
-}).catch(() => {})
-
-export function setSoundPrefs(patch) { prefs = { ...prefs, ...patch } }
-export function getSoundPrefs() { return { ...prefs } }
 
 // Browser autoplay policy: the audio context must be resumed inside a user gesture.
 // Call once from a click/keydown handler early in the app's life.
@@ -31,8 +19,7 @@ export function unlockSound() {
 
 // A short two-note "corruption" chime — a low detuned tone into a brighter one, like a
 // Vaal implosion. Kept tiny.
-export function playPing() {
-  if (!prefs.on) return
+export function playPing(volume = 0.5) {
   const now = Date.now()
   if (now - lastPlay < MIN_GAP_MS) return           // coalesce bursts
   lastPlay = now
@@ -41,7 +28,7 @@ export function playPing() {
     if (ctx.state === 'suspended') ctx.resume()
     const t = ctx.currentTime
     const master = ctx.createGain()
-    master.gain.value = Math.max(0, Math.min(1, prefs.volume))
+    master.gain.value = Math.max(0, Math.min(1, volume))
     master.connect(ctx.destination)
     const notes = [[196, 0, 0.14], [392, 0.09, 0.22], [523.25, 0.17, 0.3]]  // G3 -> G4 -> C5
     for (const [freq, start, dur] of notes) {

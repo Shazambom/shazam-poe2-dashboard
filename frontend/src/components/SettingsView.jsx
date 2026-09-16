@@ -6,6 +6,7 @@ import { isDesktop } from '../lib/session.js'
 import AccountsPanel from './AccountsPanel.jsx'
 import RecipesView from './RecipesView.jsx'
 import TradingSettings from './TradingSettings.jsx'
+import NotificationsPanel from './NotificationsPanel.jsx'
 import CurrencyPicker from './CurrencyPicker.jsx'
 import RefreshButton from './RefreshButton.jsx'
 import Toggle from './Toggle.jsx'
@@ -59,6 +60,7 @@ export default function SettingsView({ currencies, status, onSaved }) {
         <div>
           <AccountsPanel onChange={onSaved} />
 
+          <NotificationsPanel />
           <TradingSettings />
 
           <h2 style={{ marginTop: 28 }}>Market</h2>
