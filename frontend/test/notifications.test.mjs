@@ -40,3 +40,16 @@ test('one home: notify.js is gone, liveWiring and App go through notify()', () =
   const ts = readFileSync(new URL('../src/components/TradingSettings.jsx', import.meta.url), 'utf8')
   assert.ok(!ts.includes('ping_sound') && !ts.includes('Play a sound'))
 })
+
+test('osNotify prefers the desktop bridge and routes its click back by tag', async () => {
+  const sent = []
+  globalThis.window = { poe2desktop: { notify: (p) => { sent.push(p); return Promise.resolve(true) }, onNotifyClick: (cb) => { globalThis.__click = cb; return () => {} } } }
+  const clicked = []
+  N.setChannels({ sound: () => {} })
+  N.setChannels({ os: N.osNotify })
+  N.osNotify('T', 'B', { tag: 't1', onClick: () => clicked.push('t1') })
+  assert.deepEqual(sent, [{ title: 'T', body: 'B', tag: 't1' }])
+  globalThis.__click('t1')
+  assert.deepEqual(clicked, ['t1'])
+  globalThis.window = undefined
+})

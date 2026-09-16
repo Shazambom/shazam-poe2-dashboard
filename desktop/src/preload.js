@@ -17,6 +17,9 @@ contextBridge.exposeInMainWorld('poe2desktop', {
   // Open a trade-site search in a real logged-in window (shares our PoE session,
   // so live search + whispering work). Several can be open at once.
   openTrade: (url) => ipcRenderer.invoke('open-trade', url),
+  // OS notification via the main process (shows as Arbiter; click raises the window + echoes the tag).
+  notify: (p) => ipcRenderer.invoke('notify', p),
+  onNotifyClick: sub('notify:click'),
   // Seamless in-app auto-update: subscribe to status, trigger a check, install.
   onUpdate: sub('update:status'),
   checkUpdate: () => ipcRenderer.invoke('update:check'),

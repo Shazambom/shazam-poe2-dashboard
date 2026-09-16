@@ -27,3 +27,10 @@ test('Windows CI runs the same PyInstaller scripts the Mac uses', () => {
 test('engine.js has no stale PR comments', () => {
   assert.ok(!readFileSync(`${ROOT}desktop/src/trade/engine.js`, 'utf8').includes('PR6'))
 })
+
+test('OS notifications go through the main process on desktop', () => {
+  const main = readFileSync(`${ROOT}desktop/src/main.js`, 'utf8')
+  const preload = readFileSync(`${ROOT}desktop/src/preload.js`, 'utf8')
+  assert.ok(main.includes("ipcMain.handle('notify'") && main.includes('Notification.isSupported()'))
+  assert.ok(preload.includes("notify: (") && preload.includes("onNotifyClick: sub('notify:click')"))
+})

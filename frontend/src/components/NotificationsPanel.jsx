@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { useStatus, ensureSettings } from '../lib/statusStore.js'
-import { DEFAULT_NOTIFICATIONS, notify } from '../lib/notifications.js'
+import { DEFAULT_NOTIFICATIONS, notify, osNotify } from '../lib/notifications.js'
 import { playPing } from '../lib/ping-sound.js'
 import { isDesktop } from '../lib/session.js'
 import Toggle from './Toggle.jsx'
@@ -22,7 +22,12 @@ export default function NotificationsPanel() {
   useEffect(() => { ensureSettings().then(s => setN(merge(s?.notifications))).catch(() => setN(merge())) }, [])
   if (!n) return null
   const save = (next) => { setN(next); useStatus.getState().saveSettings({ notifications: next }).catch(() => {}) }
-  const setFlag = (fam, ch, v) => save({ ...n, [fam]: { ...n[fam], [ch]: v } })
+  const setFlag = (fam, ch, v) => {
+    save({ ...n, [fam]: { ...n[fam], [ch]: v } })
+    // Turning OS notifications on sends a sample immediately, so the system's allow prompt (and
+    // where the notification lands) is visible right here rather than on the first real alert.
+    if (ch === 'os' && v) osNotify('Arbiter notifications are on', fam === 'live' ? 'Live trade pings will appear here.' : 'Market signals will appear here.', { tag: `enable-${fam}` })
+  }
   const test = (fam) => notify(fam, { title: `Test: ${fam === 'live' ? 'live ping' : 'market signal'}`, body: 'Notification test', id: `test-${fam}`, ttl: 4000,
     node: <div className="ping-banner"><span className="pb-dot online" /><div className="pb-main"><div className="pb-name">Test notification</div><div className="pb-sub muted">{fam === 'live' ? 'a live trade ping would look like this' : 'a market signal would look like this'}</div></div></div> })
   return (
@@ -35,7 +40,7 @@ export default function NotificationsPanel() {
             <tr key={fam}>
               <td><b>{label}</b><div className="muted" style={{ fontSize: 12 }}>{hint}</div></td>
               {CHANNELS.map(([ch]) => <td key={ch}><Toggle checked={!!n[fam][ch]} onChange={v => setFlag(fam, ch, v)} /></td>)}
-              <td><button className="btn small" onClick={() => test(fam)}>Test</button></td>
+              <td><button className="btn small" title="Fires this row's enabled channels" onClick={() => test(fam)}>Test</button></td>
             </tr>
           ))}
         </tbody>

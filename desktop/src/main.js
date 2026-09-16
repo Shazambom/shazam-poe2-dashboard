@@ -7,7 +7,7 @@
 //     dir); only an unpackaged dev launch without a binary points at a dev server;
 //   * being Chromium, we ARE the browser: the PoE login happens in our own window and
 //     the HttpOnly POESESSID is read from our session and handed to the backend.
-const { app, BrowserWindow, Menu, dialog, ipcMain, session, shell, nativeTheme } = require('electron')
+const { app, BrowserWindow, Menu, Notification, dialog, ipcMain, session, shell, nativeTheme } = require('electron')
 const { spawn } = require('child_process')
 const fs = require('fs')
 const http = require('http')
@@ -295,6 +295,22 @@ async function connectPoeSession() {   // menu entry point: adds dialogs
 }
 
 ipcMain.handle('app-version', () => app.getVersion())
+
+// OS notifications from the MAIN process: on macOS a renderer (HTML5) Notification carries no app
+// identity and is easy for the system to suppress; a main-process one shows as "Arbiter" in
+// Notification Center (and triggers the one-time allow prompt), and a click raises the window.
+// The renderer picks the family/channel rules (lib/notifications.js); this only delivers.
+ipcMain.handle('notify', (_e, { title, body, tag } = {}) => {
+  if (!Notification.isSupported()) { console.log('[notify] not supported on this OS'); return false }
+  try {
+    const n = new Notification({ title: String(title || 'Arbiter'), body: String(body || ''), silent: true })
+    n.on('click', () => { try { if (win) { if (win.isMinimized()) win.restore(); win.show(); win.focus(); win.webContents.send('notify:click', tag) } } catch {} })
+    n.on('show', () => console.log('[notify] shown:', title))
+    n.on('failed', (_ev, err) => console.log('[notify] failed:', err))
+    n.show()
+    return true
+  } catch (e) { console.log('[notify] error:', String(e)); return false }
+})
 
 ipcMain.handle('open-login', () => shell.openExternal(`${POE}/login`))
 

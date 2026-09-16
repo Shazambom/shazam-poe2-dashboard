@@ -21,11 +21,24 @@ export function notifyPrefs() {
   }
 }
 
-// OS-level notification. Electron routes renderer Notifications to the native notifier (survives
-// a hidden window; permission is effectively granted); a plain browser may refuse — never throw.
-function osNotify(title, body, { tag, onClick } = {}) {
+// OS-level notification. On desktop it is delivered by the Electron MAIN process (shows as
+// "Arbiter" in the system's notification center; a click raises the window and echoes the tag
+// back so the right onClick runs). On the web it is the browser's Notification API. Never throws.
+const clicks = new Map()   // tag -> onClick, for desktop click echoes
+let clickSub = false
+export function osNotify(title, body, { tag, onClick } = {}) {
   try {
-    if (typeof window === 'undefined' || !('Notification' in window)) return null
+    if (typeof window === 'undefined') return null
+    const bridge = window.poe2desktop
+    if (bridge?.notify) {
+      const t = tag || `n${Date.now()}`
+      if (onClick) clicks.set(t, onClick)
+      if (!clickSub && bridge.onNotifyClick) { clickSub = true; bridge.onNotifyClick((k) => { const fn = clicks.get(k); clicks.delete(k); fn?.() }) }
+      bridge.notify({ title, body, tag: t })
+      return true
+    }
+    if (!('Notification' in window)) return null
+    if (Notification.permission === 'default') Notification.requestPermission().catch?.(() => {})
     const n = new Notification(title, { body, tag, silent: true })
     if (onClick) n.onclick = () => { onClick(); try { window.focus?.() } catch {} }
     return n
