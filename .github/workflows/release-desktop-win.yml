@@ -88,6 +88,7 @@ jobs:
         # WIN_CSC_KEY_PASSWORD to sign automatically. Without them electron-builder builds
         # UNSIGNED (SmartScreen will warn, but auto-update still works after the installer
         # self-heal fix). Signing removes the SmartScreen warning + improves update trust.
+        shell: bash          # bash for the -beta rename test below (default on Windows is PowerShell)
         env:
           CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
