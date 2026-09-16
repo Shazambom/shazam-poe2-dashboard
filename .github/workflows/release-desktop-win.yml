@@ -7,7 +7,11 @@ name: Build Windows desktop app
 # update channel electron-updater's `github` provider reads.
 on:
   push:
-    tags: ['desktop-v*']
+    # Stable: desktop-v<ver>. Beta (dev): bare-semver `<ver>-beta.N` (electron-updater's prerelease
+    # channel path parses the tag as semver, which the desktop-v prefix breaks). See release-runbook.
+    tags:
+      - 'desktop-v*'
+      - '*-beta.*'
   workflow_dispatch:
 
 permissions:

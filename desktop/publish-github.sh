@@ -14,7 +14,12 @@ set -euo pipefail
 cd "$(dirname "$0")"
 REPO="Shazambom/shazam-poe2-dashboard"
 VER=$(node -p "require('./package.json').version")
-TAG="desktop-v${VER}"
+# Stable tags are `desktop-v<ver>`; BETA tags are the bare semver `<ver>` (e.g. 0.2.54-beta.1).
+# Why: electron-updater's GitHub provider parses the TAG as semver on the prerelease/channel path
+# (`if (!semver.valid(hrefTag)) continue`), and the `desktop-v` prefix makes every tag invalid →
+# "No published versions on GitHub". A bare-semver tag is parseable, so beta clients find it. Stable
+# keeps `desktop-v*` because that path resolves via /releases/latest (literal tag match, no semver).
+case "$VER" in *-beta*) TAG="$VER" ;; *) TAG="desktop-v${VER}" ;; esac
 
 if [ "${1:-}" != "--no-build" ]; then
   # shazam is the seed build-server for the Mac half: pull the CURRENT market snapshot from

@@ -378,7 +378,10 @@ function updLog(m) {   // updater telemetry -> server, so we can see why it's si
 // Updates now come from GitHub Releases (electron-updater `github` provider). The Mac
 // manual-install flow opens the DMG asset attached to that release's `desktop-v<v>` tag.
 const GH_RELEASES = 'https://github.com/Shazambom/shazam-poe2-dashboard/releases/download'
-function macDmgUrl(v) { return `${GH_RELEASES}/desktop-v${v}/Arbiter-${v}-arm64.dmg` }
+// Stable releases are tagged `desktop-v<ver>`; beta releases use the bare semver `<ver>` tag (so
+// electron-updater's prerelease channel path can parse it — the desktop-v prefix fails semver.valid).
+function relTag(v) { return /-beta\./.test(v) ? v : `desktop-v${v}` }
+function macDmgUrl(v) { return `${GH_RELEASES}/${relTag(v)}/Arbiter-${v}-arm64.dmg` }
 
 function _applyChannel(au) {
   const beta = onBetaChannel()

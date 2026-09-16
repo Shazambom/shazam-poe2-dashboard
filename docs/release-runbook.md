@@ -44,9 +44,14 @@ When the owner says **"deploy dev"** (or "deploy to the dev/beta channel"), cut 
    `latest.yml`/`latest-mac.yml`. Both build paths therefore **rename** it to `beta.yml`/`beta-mac.yml`
    for a `-beta` version (Win CI after `electron-builder`; `publish-github.sh` after `dist:mac`), so a
    beta build emits ONLY the beta manifest and never disturbs stable's `latest*.yml`.
-2. **Tag:** `desktop-v<x.y.z-beta.N>`. The Windows CI marks the release **pre-release**
-   (`prerelease: contains(tag,'-beta')`) and uploads `beta.yml`; the crash gate still runs.
-   `publish-github.sh` uploads `beta-mac.yml`.
+2. **Tag:** the **bare semver** `x.y.z-beta.N` (⚠️ NOT `desktop-v…`). electron-updater's GitHub
+   provider parses the tag as semver on the prerelease/channel path (`if (!semver.valid(hrefTag))
+   continue`), so a `desktop-v` prefix makes it skip every release → "No published versions on
+   GitHub". Stable keeps `desktop-v*` (that path resolves via `/releases/latest`, a literal tag
+   match, no semver check). `publish-github.sh` picks the tag automatically from the version; CI
+   triggers on both `desktop-v*` and `*-beta.*`. The Windows CI marks it **pre-release**
+   (`contains(ref,'-beta')`), renames + uploads `beta.yml`; `publish-github.sh` uploads `beta-mac.yml`;
+   the crash gate still runs.
 3. **Snapshot rule still applies** (Step 0) — a dev build with stale market data still shows wrong data
    to the tester (you). Ask first.
 
