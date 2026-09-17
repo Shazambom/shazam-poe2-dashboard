@@ -1,8 +1,50 @@
 # BUG — a release goes live before its files do (publish is not atomic)
 
-**Status:** FIXED 2026-09-17 — proven on 0.2.61-beta.1 (rollback path still unexercised; see the last section) · **Severity:** high (can strand production clients on a broken update) ·
-**Found:** 2026-09-17 during 0.2.60-beta.1 and stable 0.2.60 · **Owner directive:** "This kind of
-shaky release is bad, it could produce clients in a bad state" — dig in and fix the process.
+**Status:** CLOSED 2026-09-17 — fixed and proven on three real releases (0.2.61-beta.1,
+0.2.61-beta.2, stable 0.2.61) · **Severity (as assessed after investigation):** medium — a client that
+hits a missing file shows "up to date" and retries in 30 min; nothing bricks (seen live: a beta client
+404'd at 17:23 UTC and updated by itself at 17:53) · **Found:** 2026-09-17 during 0.2.60-beta.1 and
+stable 0.2.60 · **Owner directive:** "This kind of shaky release is bad, it could produce clients in a
+bad state" — dig in and fix the process.
+
+## Resolution (read this first; the rest is the investigation log, in order, corrections included)
+
+**Cause.** Publishing was not atomic: the update manifest (`latest*.yml` / `beta*.yml`) went up
+alongside — so before — the ~180 MB files it names, on a release that was already public, with no
+timeout, verification or rollback. When GitHub's asset uploads degraded (per-connection stalls and
+`HTTP 500 Error saving asset`, never on githubstatus), clients were pointed at files that weren't there:
+beta ≈ 50 min, production Mac ≈ 13 min + up to ≈ 18 min (the second window was my own error — I
+restored `latest-mac.yml` believing the DMG was "fresh installs only"; the Mac update path opens the DMG).
+
+**Fix — one tool, `desktop/scripts/release-assets.mjs`, used by both `publish-github.sh` and the
+(now dispatch-only) Windows workflow; mechanics in `docs/release-runbook.md` step 5:**
+1. The release is a **draft** until the end — invisible to electron-updater, never "Latest".
+2. **No tag is pushed**; CI is started with `gh workflow run -f tag= -f sha=` and publishing the draft
+   creates the tag (`releases.atom`, which beta clients read, lists bare tags).
+3. Installers first, **manifests last**.
+4. Uploads are streamed by the tool: half-created (`starter`) assets cleared, a connection whose speed
+   collapses (< 300 KB/s over 30 s) is **cut and retried** on a fresh one, success = GitHub's sha256 of
+   the asset equals the local file — never an exit code.
+5. **Go-live check**: every file named by both channel manifests + the Mac DMG is `uploaded` at the
+   manifest's size → flip public → every public URL returns 200 → otherwise **automatic rollback**
+   (re-draft + delete the tag).
+
+**Proof.**
+| Release | What it proved |
+|---|---|
+| 0.2.61-beta.1 | Draft-first flow end to end, zero exposure while two of three big uploads stalled. Exposed the two follow-ups (tag visibility, wall-clock timeout). |
+| 0.2.61-beta.2 | No-tag flow: no tag / no feed entry during the build, **no client errors in telemetry** (beta.1 had one every 30 min), tag created on the built sha; client updated in 12 s. |
+| stable 0.2.61 | "Latest" moved 0.2.60 → 0.2.61 in one verified step. Speed-cut fired for real: zip at 281 KB/s cut after ~30 s, retry landed at 9.4 MB/s (the same failure cost 20–40 min earlier in the day). |
+Plus 16 unit tests (`desktop/test/release-assets.test.mjs`, incl. both incident states and a replay of
+the 47 KB/s collapse) and two throwaway-draft runs that hit — and healed — real GitHub 500s.
+
+**Known residue (not blocking; open a new report if any of it bites):**
+- The **rollback branch has never run** — it only runs when a post-flip check fails, and none has.
+- GitHub's upload slowness was never root-caused; the evidence says it is per-connection (a fresh
+  connection is fast), which is what the speed-cut exploits. "Throttling" was a guess.
+- Smaller release files (Phase 7b, `--onedir` / not re-shipping the snapshot) would shrink every
+  window further. Roadmap item, not part of this bug.
+- If a release must be fixed by hand: `docs/release-runbook.md` → "If a release goes wrong".
 
 ## What happened (times UTC, 2026-09-17)
 
@@ -235,3 +277,9 @@ run also caught a bug in the first cut (run lookup by "created after T0" found n
 clock is 4 min ahead of GitHub's; now the run id comes from the URL `gh workflow run` prints), and
 saw GitHub 500 twice more (`Error creating asset temp dir`), healed on attempt 2 at ~25 MB/s.
 **Not exercised:** tag creation at the flip and the rollback — first real use is the next beta.
+
+## Closed (2026-09-17)
+
+Stable 0.2.61 shipped through the finished flow — see "Resolution" at the top. Every "proposed" item
+is built except #7 (smaller files, a roadmap item); #6 already existed. Nothing here is left for the
+next agent beyond the "Known residue" list.
