@@ -59,10 +59,13 @@ function Node({ node, style, dragHandle }) {
 export default function SearchTree({ onSelect = () => {}, renderTrailing = () => null, onContext = null, onKey = null, onDelete = null, filter = '', treeRef = null }) {
   const tree = useWorkspace(s => s.tree)
   const league = useWorkspace(s => s.league)
+  const ee2Present = useWorkspace(s => s.ee2Present)
   // The history folder shows only the rows captured under the top-bar league (other leagues stay
   // stored, counted against the cap, and reappear when the league switches back).
-  const data = useMemo(() => tree.map(n => (n.kind === 'folder' && n.sys === HISTORY_SYS)
-    ? { ...n, children: (n.children || []).filter(c => !c.league || !league || c.league === league) } : n), [tree, league])
+  const data = useMemo(() => tree
+    .filter(n => !(n.kind === 'folder' && n.sys === HISTORY_SYS && !ee2Present && !(n.children || []).length))
+    .map(n => (n.kind === 'folder' && n.sys === HISTORY_SYS)
+      ? { ...n, children: (n.children || []).filter(c => !c.league || !league || c.league === league) } : n), [tree, league, ee2Present])
   const move = useWorkspace(s => s.move)
   const rename = useWorkspace(s => s.rename)
   const wrap = useRef(null)

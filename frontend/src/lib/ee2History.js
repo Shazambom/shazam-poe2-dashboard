@@ -61,8 +61,11 @@ export function useEe2History() {
     }
     if (import.meta.env.DEV) window.__ee2HistoryTestHook = handle
     const offIngest = window.poe2desktop.trade.onIngest(handle)
+    // EE2 presence gates the whole feature's UI; the package re-detects every 30 s, so poll at that cadence.
+    const pollPresence = () => window.poe2desktop.ee2?.status?.().then(st => useWorkspace.getState().setEe2Present(!!st?.present)).catch(() => {})
+    pollPresence(); const presenceTimer = setInterval(pollPresence, 30000)
     window.poe2desktop.ee2?.setEnabled?.(useWorkspace.getState().historyPrefs.enabled)
     const offEnabled = useWorkspace.subscribe((s, prev) => { if (s.historyPrefs.enabled !== prev.historyPrefs.enabled) window.poe2desktop.ee2?.setEnabled?.(s.historyPrefs.enabled) })
-    return () => { offEvent(); clearInterval(hourly); offIngest?.(); offEnabled() }
+    return () => { offEvent(); clearInterval(hourly); clearInterval(presenceTimer); offIngest?.(); offEnabled() }
   }, [])
 }

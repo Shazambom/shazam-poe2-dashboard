@@ -92,7 +92,7 @@ export default function App() {
     if (!lastNew?.signals?.length) return
     const names = lastNew.signals.map(s => s.name)
     const title = `${names.length} new market signal${names.length === 1 ? '' : 's'}`
-    const openFirst = () => { setTab('Board'); assetModal.open(names[0]) }
+    const openFirst = () => assetModal.open(names[0])   // the card is app-global: open it where the user is
     notify('signals', { title, body: names.slice(0, 3).join(', '), tag: `signals-${lastNew.at}`, onOpen: openFirst, ttl: 12000, node: (
       <div className="ping-banner">
         <span className="pb-dot online" />
@@ -125,14 +125,15 @@ export default function App() {
 
   // ⌘K workspace commands: each lands on Trading → Workspace and mutates the store directly.
   const goWorkspace = React.useCallback(() => { setTab('Trading'); setTimeout(() => nav.openTrading('workspace'), 0) }, [])
+  const ee2Present = useWorkspace(s => s.ee2Present)
   const wsCommands = React.useMemo(() => [
     { id: 'ws-new-search', label: 'New search', hint: 'Workspace · ⌘N', run: () => { goWorkspace(); const ws = useWorkspace.getState(); ws.setActive(ws.addSearch(null, { type: 'search', slug: '', live: false }, 'New search')) } },
     { id: 'ws-new-group', label: 'New group', hint: 'Workspace · ⌘⇧N', run: () => { goWorkspace(); useWorkspace.getState().addFolder(null) } },
     { id: 'ws-toggle-rail', label: 'Toggle searches rail', hint: 'Workspace', run: () => { goWorkspace(); const ws = useWorkspace.getState(); ws.setLayout({ collapsed: !ws.layout?.collapsed }) } },
     ...(window.poe2desktop?.clipboard ? [{ id: 'ws-clipboard', label: 'Add from clipboard', hint: 'Workspace · ⌘⇧V', run: () => { goWorkspace(); addFromClipboard(null) } }] : []),
-    ...(window.poe2desktop?.ee2 ? [{ id: 'ws-clear-history', label: 'Clear EE2 history', hint: 'Workspace', run: () => { goWorkspace(); clearHistoryWithUndo() } }] : []),
+    ...(window.poe2desktop?.ee2 && ee2Present ? [{ id: 'ws-clear-history', label: 'Clear EE2 history', hint: 'Workspace', run: () => { goWorkspace(); clearHistoryWithUndo() } }] : []),
     { id: 'ws-sort', label: 'Sort searches A–Z', hint: 'Workspace · top level', run: () => { goWorkspace(); useWorkspace.getState().sortChildren(null) } },
-  ], [goWorkspace])
+  ], [goWorkspace, ee2Present])
 
   const setLeague = async (league) => {
     if (!league || league === status?.league) return
@@ -173,7 +174,7 @@ export default function App() {
           </nav>
           <span className="tb-spacer" />
           <RefreshControls connected={!!status?.session?.connected} />
-          <DivinePingOrb onOpenSignal={(s) => { setTab('Board'); assetModal.open(s.name) }} />
+          <DivinePingOrb onOpenSignal={(s) => assetModal.open(s.name)} />
         </div>
 
         {/* Row 2 — league + app-wide horizon (left); sync/status + capital + version (right) */}

@@ -76,6 +76,7 @@ function Ee2HistorySettings() {
 
 // Trading settings: the global focus hotkey (desktop). Notifications live in NotificationsPanel.
 export default function TradingSettings() {
+  const ee2Present = useWorkspace(s => s.ee2Present)
   const [hotkey, setHotkey] = useState('CommandOrControl+G')
   const [capturing, setCapturing] = useState(false)
 
@@ -105,7 +106,7 @@ export default function TradingSettings() {
     <section className="settings-section">
       <h3>Trading</h3>
       <WorkspaceTransfer />
-      {isDesktop && <Ee2HistorySettings />}
+      {isDesktop && ee2Present && <Ee2HistorySettings />}
       {isDesktop ? (
         <div className="set-row">
           <span style={{ width: 120 }}>Focus hotkey</span>

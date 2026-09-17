@@ -122,6 +122,7 @@ export const useWorkspace = create((set, get) => ({
   saveState: 'idle',   // idle | dirty | saving | error
   league: '',          // the app's top-bar league (App keeps it current): stamped on history rows, filters the folder
   historyPrefs: { ...HISTORY_PREFS },   // mirrors settings.ee2History (enabled / max / retentionDays)
+  ee2Present: false,   // main's detection (ee2:status.present); every EE2-history control is gated on it
   lastHistoryEvent: null,   // { type:'add'|'bump'|'cap'|'expire'|'clear', … } — the renderer's telemetry hook reads this
   activeId: null,   // which search entry is open in the trade window (persisted → restores on relaunch)
 
@@ -151,6 +152,7 @@ export const useWorkspace = create((set, get) => ({
 
   setLeague: (league) => { if (league !== get().league) set({ league: league || '' }) },
   setHistoryPrefs: (patch) => set(s => ({ historyPrefs: { ...s.historyPrefs, ...patch } })),
+  setEe2Present: (v) => { if (!!v !== get().ee2Present) set({ ee2Present: !!v }) },
 
   // A load failure leaves an EMPTY tree that is not the user's. Every mutation is refused (and
   // persist stays disarmed) until a retry hydrates the real document — otherwise the first

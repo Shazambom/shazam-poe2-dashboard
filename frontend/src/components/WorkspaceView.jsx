@@ -126,7 +126,8 @@ export default function WorkspaceView({ league }) {
   const treeApi = useRef(null)
   const duplicate = useWorkspace(s => s.duplicate)
   const move = useWorkspace(s => s.move)
-  const historyOn = useWorkspace(s => s.historyPrefs.enabled)
+  const ee2Present = useWorkspace(s => s.ee2Present)
+  const historyOn = useWorkspace(s => s.historyPrefs.enabled) && ee2Present   // no EE2 → no EE2 UI at all
   const rerunFromItem = useWorkspace(s => s.rerunFromItem)
   const sortChildren = useWorkspace(s => s.sortChildren)
   const removeMany = useWorkspace(s => s.removeMany)
@@ -382,7 +383,7 @@ export default function WorkspaceView({ league }) {
             <b>Searches</b>
             <span className={`ws-save-dot ${saveState}`} title={saveTitle} aria-label={saveTitle} role="status" />
             <span className="spacer" />
-            {isDesktop && <Toggle checked={historyOn} onChange={v => saveHistoryPrefs({ enabled: v })} label="EE2" title="EE2 history — record every item copied in game under ExiledExchange2 History" />}
+            {isDesktop && ee2Present && <Toggle checked={historyOn} onChange={v => saveHistoryPrefs({ enabled: v })} label="EE2" title="EE2 history — record every item copied in game under ExiledExchange2 History" />}
             {isDesktop && <button className="ws-icon-btn" title="Add from clipboard (⌘⇧V)" aria-label="Add from clipboard" onClick={() => clipboardAdd()}>⎘</button>}
             <button className="ws-icon-btn" title="New group" aria-label="New group" onClick={newGroup}>📁</button>
             <button className="ws-icon-btn primary" title="New search" aria-label="New search" onClick={() => newSearch(null)}>+</button>

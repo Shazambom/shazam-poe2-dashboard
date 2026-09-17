@@ -29,3 +29,9 @@ test('saveHistoryPrefs writes the store, tells main, and PUTs settings.ee2Histor
   await saveHistoryPrefs({ enabled: true, max: 50 })
   assert.equal(st().ingest({ source: 'ee2', q: '{}', name: 'x', folder: HISTORY_SYS }).result, 'added')
 })
+
+test('ee2Present gates the feature: false by default, set from main status', () => {
+  assert.equal(useWorkspace.getState().ee2Present, false)
+  useWorkspace.getState().setEe2Present(true); assert.equal(useWorkspace.getState().ee2Present, true)
+  useWorkspace.getState().setEe2Present(0); assert.equal(useWorkspace.getState().ee2Present, false)
+})
