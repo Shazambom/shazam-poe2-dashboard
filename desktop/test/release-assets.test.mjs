@@ -2,7 +2,7 @@
 // become public when every file a client can be sent to is really there.
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { expectedManifests, manifestFiles, problems, uploadOrder } from '../scripts/release-assets.mjs'
+import { expectedManifests, manifestFiles, problems, stalled, uploadOrder } from '../scripts/release-assets.mjs'
 
 const MAC_YML = `version: 0.2.60
 files:
@@ -86,4 +86,36 @@ test('beta release is checked against the beta manifests', () => {
   const bad = problems('0.2.60-beta.1', FULL, MANIFESTS)
   assert.ok(bad.includes('beta.yml: missing (channel manifest)'))
   assert.ok(bad.includes('beta-mac.yml: missing (channel manifest)'))
+})
+
+// ---- cut-our-losses rule: an upload whose speed collapses is killed and retried -----------------
+const RULE = { minBps: 300 * 1024, windowMs: 30000 }
+const TOTAL = 180e6
+// samples every 2 s at the given bytes/s profile: [[seconds, bytesPerSec], ...]
+const run = (...legs) => { const out = [{ t: 0, bytes: 0 }]; let t = 0, b = 0
+  for (const [secs, bps] of legs) for (let i = 0; i < secs; i += 2) { t += 2000; b += bps * 2; out.push({ t, bytes: Math.min(b, TOTAL) }) }
+  return out }
+
+test('a healthy upload is never cut', () => {
+  const s = run([120, 1.5e6])
+  for (let i = 1; i <= s.length; i++) assert.equal(stalled(s.slice(0, i), TOTAL, RULE), false)
+})
+test('nothing is judged before a full window of history', () => {
+  assert.equal(stalled(run([28, 1000]), TOTAL, RULE), false)
+  assert.equal(stalled(run([32, 1000]), TOTAL, RULE), true)
+})
+test('0.2.61-beta.1: fast start, then ~47 KB/s — cut about 30 s after the collapse, not at 20 min', () => {
+  const s = run([60, 2.2e6], [60, 47 * 1024])
+  const cutAt = s.findIndex((_, i) => stalled(s.slice(0, i + 1), TOTAL, RULE))
+  assert.ok(s[cutAt].t > 60000 && s[cutAt].t <= 60000 + 32000, `cut at ${s[cutAt].t} ms`)
+})
+test('a dead-stopped connection (0 KB/s) is cut', () => {
+  assert.equal(stalled(run([20, 3e6], [34, 0]), TOTAL, RULE), true)
+})
+test('a brief dip that recovers inside the window is tolerated', () => {
+  const s = run([40, 2e6], [10, 0], [20, 2e6])
+  for (let i = 1; i <= s.length; i++) assert.equal(stalled(s.slice(0, i), TOTAL, RULE), false)
+})
+test('once every byte is sent, waiting for GitHub to answer is not a stall', () => {
+  assert.equal(stalled([...run([20, 9e6]), { t: 60000, bytes: TOTAL }, { t: 100000, bytes: TOTAL }], TOTAL, RULE), false)
 })

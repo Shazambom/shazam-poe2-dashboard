@@ -1,6 +1,6 @@
 # BUG — a release goes live before its files do (publish is not atomic)
 
-**Status:** FIX BUILT 2026-09-17, unproven until the next real release (see the last section) · **Severity:** high (can strand production clients on a broken update) ·
+**Status:** FIXED 2026-09-17 — proven on 0.2.61-beta.1 (rollback path still unexercised; see the last section) · **Severity:** high (can strand production clients on a broken update) ·
 **Found:** 2026-09-17 during 0.2.60-beta.1 and stable 0.2.60 · **Owner directive:** "This kind of
 shaky release is bad, it could produce clients in a bad state" — dig in and fix the process.
 
@@ -183,3 +183,21 @@ size-related. `verify --live` passes against the real 0.2.60 and 0.2.60-beta.1 r
 on a real release), and the new CI upload step on a Windows runner. **Cut the next release as a beta
 first and watch these.** Still open: #7 smaller files (Phase 7b), and the upload-slowness root cause
 (only one comparison was made; "GitHub throttling" is a guess).
+
+## Proven on 0.2.61-beta.1 (2026-09-17, 20:20–21:25 UTC)
+
+First real release through the new flow. Draft created before the tag push; Windows CI uploaded its
+four files INTO the draft (no second release); Mac files followed, manifest last; `publish` verified,
+flipped it public, re-checked every public URL → "LIVE and verified". Stable "Latest" stayed
+`desktop-v0.2.60` throughout and nothing was visible to clients until the flip. **Zero exposure**,
+on a day when two of the three big Mac uploads went bad:
+- `.dmg` attempt 1: ~2 MB/s, then ~47 KB/s → killed by the 20-min timeout → attempt 2 landed in ~1 min.
+- `.zip` attempt 1: dead-stopped (0 KB/s) at 65 MB → killed by hand → attempt 2 landed.
+
+**Finding: the slowness is per-connection, not per-day** — a fresh connection is fast. So the wall-clock
+timeout was replaced with a speed watch: the tool now streams the file itself (no `gh release upload`),
+samples bytes-on-the-wire every 2 s, and cuts + retries when the 30-s average drops under 300 KB/s
+(`stalled()` — unit-tested, incl. a replay of the 47 KB/s collapse; exercised live on a throwaway
+draft, where attempt 1 really did crawl at 384 KB/s against a forced floor and attempt 2 ran 7.6 MB/s).
+That would have saved ~30 of this release's 65 minutes. The speed-cut uploader ships with the NEXT
+release (0.2.61-beta.1 itself used the wall-clock version); the rollback branch has still never run.

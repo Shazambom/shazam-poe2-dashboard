@@ -5,8 +5,9 @@
 //   ensure-draft <tag>            create the release as a DRAFT (invisible to electron-updater, never
 //                                 "Latest") unless one already exists for the tag
 //   upload <tag> <files...>       installers first, update manifests (*.yml) LAST; per file: clear a
-//                                 half-created ("starter") asset, upload with a timeout, retry, and
-//                                 trust only the asset's state+size — never gh's exit code
+//                                 half-created ("starter") asset, stream it up while WATCHING THE
+//                                 SPEED — a connection that collapses is cut and retried on a fresh
+//                                 one — and trust only the asset's state+sha256, never an exit code
 //   verify <tag> [--live]         every file named by every channel manifest is on the release,
 //                                 state "uploaded", at the manifest's size; --live also GETs each
 //                                 public download URL for a 200
@@ -16,14 +17,22 @@
 //
 // Needs `gh` (authenticated; GH_TOKEN in CI). Zero npm deps.
 import { spawn } from 'node:child_process'
+import https from 'node:https'
 import { createHash } from 'node:crypto'
 import { createReadStream, statSync } from 'node:fs'
 import { basename } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 export const REPO = 'Shazambom/shazam-poe2-dashboard'
-const UPLOAD_TIMEOUT_MS = Number(process.env.RELEASE_UPLOAD_TIMEOUT_MS || 20 * 60 * 1000)
-const UPLOAD_TRIES = Number(process.env.RELEASE_UPLOAD_TRIES || 3)
+const UPLOAD_TIMEOUT_MS = Number(process.env.RELEASE_UPLOAD_TIMEOUT_MS || 20 * 60 * 1000)   // hard cap per attempt
+const UPLOAD_TRIES = Number(process.env.RELEASE_UPLOAD_TRIES || 6)
+// Cut-our-losses rule (0.2.61-beta.1: one connection sank to ~47 KB/s and burned 20 min; the retry
+// on a fresh connection landed the same 182 MB in about a minute). Healthy is 1.5 MB/s+.
+export const STALL = {
+  minBps: Number(process.env.RELEASE_MIN_KBPS || 300) * 1024,   // slower than this, averaged over…
+  windowMs: Number(process.env.RELEASE_STALL_WINDOW_MS || 30000),  // …this long = a dead connection
+  responseMs: 5 * 60 * 1000,                                    // all bytes sent, GitHub still silent
+}
 
 export const isBeta = (tag) => /-beta/.test(tag)
 export const isManifest = (name) => /\.ya?ml$/i.test(name)
@@ -78,6 +87,18 @@ export function problems(tag, assets, manifests) {
   return [...new Set(bad)]
 }
 
+// Pure: has the upload's speed collapsed? `samples` = [{t, bytes}] (ms, cumulative bytes sent),
+// oldest first. True once a full window of history exists and the average over the last window
+// is under the floor. Never true once every byte is out (then only the response is pending).
+export function stalled(samples, total, { minBps, windowMs } = STALL) {
+  if (samples.length < 2) return false
+  const last = samples[samples.length - 1]
+  if (last.bytes >= total) return false
+  const from = samples.findLast((s) => last.t - s.t >= windowMs)
+  if (!from) return false                                  // not a full window yet
+  return ((last.bytes - from.bytes) * 1000) / (last.t - from.t) < minBps
+}
+
 // ---- gh plumbing -----------------------------------------------------------------------------
 function run(cmd, args, { timeout = 120000 } = {}) {
   return new Promise((resolve) => {
@@ -125,6 +146,54 @@ function sha256(file) {
   })
 }
 
+let _token
+async function token() {
+  if (_token) return _token
+  _token = process.env.GH_TOKEN || process.env.GITHUB_TOKEN || (await gh(['auth', 'token'])).out.trim()
+  if (!_token) throw new Error('no GitHub token (set GH_TOKEN or run `gh auth login`)')
+  return _token
+}
+
+// Stream one file to the release's upload URL, sampling bytes-on-the-wire every 2 s.
+// Resolves {ok, why}: never throws, and never decides success — the caller asks GitHub.
+async function streamUp(rel, file, name, size) {
+  const auth = await token()
+  return new Promise((resolve) => {
+    const url = new URL(rel.upload_url.replace(/\{.*$/, ''))
+    url.searchParams.set('name', name)
+    const req = https.request(url, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${auth}`, 'Content-Type': 'application/octet-stream', 'Content-Length': size,
+                 Accept: 'application/vnd.github+json', 'User-Agent': 'arbiter-release-assets' },
+    })
+    const started = Date.now(), samples = [{ t: started, bytes: 0 }]
+    let done = false, sentAllAt = 0
+    const finish = (ok, why) => { if (done) return; done = true; clearInterval(tick); req.destroy(); src.destroy(); resolve({ ok, why }) }
+    const src = createReadStream(file, { highWaterMark: 256 * 1024 })
+    const tick = setInterval(() => {
+      const now = Date.now(), bytes = Math.max(0, (req.socket?.bytesWritten || 0))
+      samples.push({ t: now, bytes: Math.min(bytes, size) })
+      if (samples.length > 600) samples.shift()
+      if (bytes >= size && !sentAllAt) sentAllAt = now
+      if (stalled(samples, size)) {
+        const from = samples.findLast((s) => now - s.t >= STALL.windowMs)
+        const kbps = Math.round(((bytes - from.bytes) * 1000) / (now - from.t) / 1024)
+        return finish(false, `speed collapsed to ${kbps} KB/s at ${Math.round((bytes / size) * 100)}% — cutting the connection`)
+      }
+      if (sentAllAt && now - sentAllAt > STALL.responseMs) return finish(false, 'all bytes sent but no response')
+      if (now - started > UPLOAD_TIMEOUT_MS) return finish(false, 'hard timeout')
+    }, 2000)
+    req.on('response', (res) => {
+      let body = ''
+      res.on('data', (d) => (body += d))
+      res.on('end', () => finish(res.statusCode === 201, `HTTP ${res.statusCode} ${body.slice(0, 160).replace(/\s+/g, ' ')}`))
+    })
+    req.on('error', (e) => finish(false, `connection error: ${e.message}`))
+    src.on('error', (e) => finish(false, `read error: ${e.message}`))
+    src.pipe(req)
+  })
+}
+
 async function uploadOne(rel, file) {
   const name = basename(file), size = statSync(file).size, digest = await sha256(file)
   // Landed = GitHub holds exactly these bytes (its own sha256 of the asset; size if it reports none).
@@ -134,13 +203,17 @@ async function uploadOne(rel, file) {
     if (landed(old)) { console.log(`  ${name}: already uploaded (${size} bytes)`); return }
     if (old) { console.log(`  ${name}: clearing existing asset (state ${old.state})`); await deleteAsset(old.id) }
     console.log(`  ${name}: uploading ${size} bytes (attempt ${attempt}/${UPLOAD_TRIES})`)
-    const r = await gh(['release', 'upload', rel.tag_name, file, '--repo', REPO], { timeout: UPLOAD_TIMEOUT_MS })
-    // gh's exit code lies in both directions (seen: exit 1 "already exists" on a landed asset,
-    // and a hang that never exits). The asset record is the truth.
+    const t0 = Date.now()
+    const r = await streamUp(rel, file, name, size)
+    // The transfer's own verdict is not trusted (seen: an error reported for an asset that landed,
+    // and a hang that never reported). GitHub's asset record is the truth.
     const now = (await assetsOf(rel.id)).find((a) => a.name === name)
-    if (landed(now)) { console.log(`  ${name}: ok`); return }
-    console.log(`  ${name}: not landed (${r.timedOut ? 'timed out' : `gh exit ${r.code}: ${r.err.trim().split('\n')[0]}`}; asset ${now ? now.state : 'absent'})`)
-    if (attempt < UPLOAD_TRIES) await sleep(15000 * attempt)
+    if (landed(now)) {
+      const secs = Math.max(1, (Date.now() - t0) / 1000)
+      console.log(`  ${name}: ok (${Math.round(secs)}s, ${(size / secs / 1048576).toFixed(1)} MB/s)`); return
+    }
+    console.log(`  ${name}: not landed (${r.why}; asset ${now ? now.state : 'absent'})`)
+    if (attempt < UPLOAD_TRIES) await sleep(5000 * attempt)
   }
   throw new Error(`${name}: upload failed after ${UPLOAD_TRIES} attempts`)
 }

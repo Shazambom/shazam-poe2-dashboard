@@ -156,7 +156,9 @@ exporter's mid-sync guard enforces this): `sshshazambom sudo bash /home/shazam/b
    `docs/bugs/2026-09-17-release-publish-not-atomic.md`). Both halves upload through ONE tool,
    `desktop/scripts/release-assets.mjs`:
    - `upload` — installers first, **manifests (`*.yml`) last**; clears half-created (`starter`)
-     assets; 20-min timeout + 3 tries per file; success = GitHub's own sha256 of the asset equals
+     assets; streams each file itself and **cuts a connection whose speed collapses** (under
+     300 KB/s averaged over 30 s — `RELEASE_MIN_KBPS` / `RELEASE_STALL_WINDOW_MS`) to retry on a
+     fresh one, up to 6 tries (20-min hard cap each); success = GitHub's own sha256 of the asset equals
      the local file (never `gh`'s exit code — it has lied both ways).
    - `publish` — refuses unless every file named by both channel manifests **and the Mac DMG**
      (the Mac in-app update opens the DMG, not the zip) is `uploaded` at the manifest's size; flips
