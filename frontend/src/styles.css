@@ -168,8 +168,18 @@ a { color: var(--live); }
 /* Trade workspace: file tree of searches (left) + embedded trade site (right).
    NOTE: named .trade-ws (NOT .workspace) — .workspace is RoutesView's grid layout. */
 .trade-ws { display: flex; gap: 0; flex: 1; height: calc(100vh - 150px); min-height: 400px; align-items: stretch; }
-.ws-rail { width: 280px; flex: 0 0 280px; display: flex; flex-direction: column;
+.ws-rail { width: 240px; flex: 0 0 240px; display: flex; flex-direction: column; container: rail / inline-size;
   background: var(--surface-1); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+/* Compact rail (WorkspaceView RAIL_MIN 180 … default 240): under 280px the head keeps every button and
+   drops only redundant text — the "Searches" title (the tab already says Workspace) and the EE2 switch's
+   word (its tooltip + aria-label remain). Under 220px rows also drop the age stamp (still in the tooltip). */
+@container rail (max-width: 279px) {
+  .ws-rail-head > b { display: none; }
+  .ws-rail-head .toggle-label { display: none; }
+}
+@container rail (max-width: 219px) {
+  .ws-age { display: none; }
+}
 .ws-divider { width: 8px; flex: 0 0 8px; display: flex; align-items: center; justify-content: center;
   background: none; border: 0; cursor: pointer; color: var(--muted); align-self: stretch; padding: 0; }
 .ws-divider:hover { color: var(--ink); background: var(--line); }
@@ -279,7 +289,7 @@ a { color: var(--live); }
    trailing controls past the rail edge. Rows must be exactly the rail's width; the name is the ONE
    flexible child (min-width: 0 + ellipsis), everything else keeps its size. */
 .ws-tree .ws-row { min-width: 0 !important; }
-.ws-node { display: flex; align-items: center; gap: 6px; height: 100%; padding: 0 6px; border-radius: 6px; font-size: 13px; cursor: pointer; min-width: 0; box-sizing: border-box; }
+.ws-node { display: flex; align-items: center; gap: 4px; height: 100%; padding: 0 4px; border-radius: 6px; font-size: 13px; cursor: pointer; min-width: 0; box-sizing: border-box; }
 .ws-node > * { flex-shrink: 0; }
 /* Workspace row actions never reserve width: an idle row shows name + chips; on hover/focus/active the
    chips yield their space to the actions (no overlay, so backgrounds always match the row). */
@@ -341,7 +351,7 @@ a { color: var(--live); }
 }
 
 /* Live view + ping cards */
-.live-view .ws-rail { width: 340px; flex-basis: 340px; }
+.live-view .ws-rail { width: 260px; flex-basis: 260px; }
 .live-view .ws-main { background: var(--surface-1); padding: 14px 16px; overflow: auto; }
 .live-head { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
 .live-newest { margin-bottom: 18px; }

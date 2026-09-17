@@ -21,7 +21,18 @@ import { useStatus } from '../lib/statusStore.js'
 // First search node in the tree holding this slug (used to reject stale cross-node captures).
 const findBySlug = (nodes, slug) => findWhere(nodes, n => n.kind === 'search' && n.slug === slug)
 
-const RAIL_MIN = 220, RAIL_MAX = 420, RAIL_DEFAULT = 280
+const RAIL_MIN = 180, RAIL_MAX = 420, RAIL_DEFAULT = 240
+// The narrowest the rail head can be without a control leaving it: its visible children (not the
+// flexible spacer) plus gaps, padding and the rail border. NOT scrollWidth — the spacer fills whatever
+// width the head has, so scrollWidth always equals the current width and would pin the rail in place.
+function headMinWidth(head) {
+  if (!head) return 0
+  const cs = getComputedStyle(head)
+  const kids = [...head.children].filter(k => !k.classList.contains('spacer') && k.getBoundingClientRect().width > 0)
+  const gap = parseFloat(cs.columnGap) || 0
+  return Math.ceil(kids.reduce((a, k) => a + k.getBoundingClientRect().width, 0) + gap * Math.max(0, kids.length - 1)
+    + (parseFloat(cs.paddingLeft) || 0) + (parseFloat(cs.paddingRight) || 0) + 2)
+}
 const UNDO_TTL = 10000
 
 // One empty state, shared by the rail and the pane.
@@ -273,18 +284,23 @@ export default function WorkspaceView({ league }) {
   }, [menu, league, selectNode, duplicate, setField, move, requestDelete, clipboardAdd, rerunFromItem, sortChildren, goLiveAll, disarmFolder, inHistory])
 
   // The divider is both the collapse toggle (click) and the rail's resize handle (drag,
-  // 220–420 px, rAF-throttled, persisted on mouseup).
+  // 180–420 px, rAF-throttled, persisted on mouseup).
   const onDividerDown = useCallback((e) => {
     downCollapsed.current = collapsed
     if (collapsed) return
     e.preventDefault()
-    // Never narrower than the rail head's own controls (measured live), nor the 220 px floor.
-    const minW = Math.max(RAIL_MIN, (railHead.current?.scrollWidth || 0) + 2)
     const x0 = e.clientX, w0 = railWidth
     let moved = false, raf = 0, w = w0
+    // Enter the resizing state NOW, not on the first move: the trade webview swallows host mouse events
+    // until .resizing turns its pointer-events off, so a quick rightward drag would otherwise stall.
+    setDragWidth(w0)
     const onMove = (ev) => {
       const dx = ev.clientX - x0
       if (Math.abs(dx) > 3) moved = true
+      // Never narrower than the rail head's own controls, nor the floor. Measured on EVERY move: below
+      // the compact breakpoint (styles.css @container rail) the head drops its text and gets narrower,
+      // so the clamp follows it down instead of pinning the rail at the wide header's width.
+      const minW = Math.max(RAIL_MIN, headMinWidth(railHead.current))
       w = Math.min(RAIL_MAX, Math.max(minW, w0 + dx))
       if (!raf) raf = requestAnimationFrame(() => { raf = 0; setDragWidth(w) })
     }
@@ -383,7 +399,7 @@ export default function WorkspaceView({ league }) {
             <b>Searches</b>
             <span className={`ws-save-dot ${saveState}`} title={saveTitle} aria-label={saveTitle} role="status" />
             <span className="spacer" />
-            {isDesktop && ee2Present && <Toggle checked={historyOn} onChange={v => saveHistoryPrefs({ enabled: v })} label="EE2" title="EE2 history — record every item copied in game under ExiledExchange2 History" />}
+            {isDesktop && ee2Present && <Toggle checked={historyOn} onChange={v => saveHistoryPrefs({ enabled: v })} label="EE2" ariaLabel="EE2 history" title="EE2 history — record every item copied in game under ExiledExchange2 History" />}
             {isDesktop && <button className="ws-icon-btn" title="Add from clipboard (⌘⇧V)" aria-label="Add from clipboard" onClick={() => clipboardAdd()}>⎘</button>}
             <button className="ws-icon-btn" title="New group" aria-label="New group" onClick={newGroup}>📁</button>
             <button className="ws-icon-btn primary" title="New search" aria-label="New search" onClick={() => newSearch(null)}>+</button>
