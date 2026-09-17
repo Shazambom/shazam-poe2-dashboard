@@ -167,14 +167,17 @@ a { color: var(--live); }
 
 /* Trade workspace: file tree of searches (left) + embedded trade site (right).
    NOTE: named .trade-ws (NOT .workspace) — .workspace is RoutesView's grid layout. */
-.trade-ws { display: flex; gap: 12px; flex: 1; height: calc(100vh - 150px); min-height: 400px; align-items: stretch; }
+.trade-ws { display: flex; gap: 0; flex: 1; height: calc(100vh - 150px); min-height: 400px; align-items: stretch; }
 .ws-rail { width: 280px; flex: 0 0 280px; display: flex; flex-direction: column;
   background: var(--surface-1); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
-.ws-divider { width: 16px; flex: 0 0 16px; display: flex; align-items: center; justify-content: center;
-  background: none; border: 0; cursor: pointer; color: var(--muted); align-self: stretch; }
+.ws-divider { width: 8px; flex: 0 0 8px; display: flex; align-items: center; justify-content: center;
+  background: none; border: 0; cursor: pointer; color: var(--muted); align-self: stretch; padding: 0; }
 .ws-divider:hover { color: var(--ink); background: var(--line); }
 .ws-divider:not(.collapsed) { cursor: col-resize; }
-.ws-divider span { font-size: 12px; }
+.ws-divider span { font-size: 11px; opacity: .6; }
+.ws-divider:hover span { opacity: 1; }
+.ws-rail-head { flex-wrap: nowrap; }
+.ws-rail-head > * { flex-shrink: 0; }
 .trade-ws.resizing { user-select: none; cursor: col-resize; }
 .trade-ws.resizing .ws-webview { pointer-events: none; }   /* the guest page would swallow mousemove mid-drag */
 .ws-save-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--gain); flex: 0 0 auto; transition: background .15s var(--ease); }

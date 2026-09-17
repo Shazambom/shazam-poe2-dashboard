@@ -144,6 +144,8 @@ export default function WorkspaceView({ league }) {
   const collapsed = !!layout?.collapsed
   const railWidth = Math.min(RAIL_MAX, Math.max(RAIL_MIN, layout?.railWidth || RAIL_DEFAULT))
   const [dragWidth, setDragWidth] = useState(null)   // live width while the divider is being dragged
+  const railHead = useRef(null)
+  const downCollapsed = useRef(false)   // the rail's state when the divider was pressed (click vs drag disambiguation)
 
   useEffect(() => { if (!loaded) loadWorkspace() }, [loaded])
   useEffect(() => { activeRef.current = activeId }, [activeId])
@@ -272,14 +274,17 @@ export default function WorkspaceView({ league }) {
   // The divider is both the collapse toggle (click) and the rail's resize handle (drag,
   // 220–420 px, rAF-throttled, persisted on mouseup).
   const onDividerDown = useCallback((e) => {
+    downCollapsed.current = collapsed
     if (collapsed) return
     e.preventDefault()
+    // Never narrower than the rail head's own controls (measured live), nor the 220 px floor.
+    const minW = Math.max(RAIL_MIN, (railHead.current?.scrollWidth || 0) + 2)
     const x0 = e.clientX, w0 = railWidth
     let moved = false, raf = 0, w = w0
     const onMove = (ev) => {
       const dx = ev.clientX - x0
       if (Math.abs(dx) > 3) moved = true
-      w = Math.min(RAIL_MAX, Math.max(RAIL_MIN, w0 + dx))
+      w = Math.min(RAIL_MAX, Math.max(minW, w0 + dx))
       if (!raf) raf = requestAnimationFrame(() => { raf = 0; setDragWidth(w) })
     }
     const onUp = () => {
@@ -373,7 +378,7 @@ export default function WorkspaceView({ league }) {
     <div className={`trade-ws ${dragWidth != null ? 'resizing' : ''}`}>
       {!collapsed && (
         <aside className="ws-rail" style={{ width, flexBasis: width }}>
-          <div className="ws-rail-head">
+          <div className="ws-rail-head" ref={railHead}>
             <b>Searches</b>
             <span className={`ws-save-dot ${saveState}`} title={saveTitle} aria-label={saveTitle} role="status" />
             <span className="spacer" />
@@ -416,7 +421,7 @@ export default function WorkspaceView({ league }) {
       {/* Collapse/expand the searches rail (click) or resize it (drag) — control sits on the boundary. */}
       <button className={`ws-divider ${collapsed ? 'collapsed' : ''}`} title={collapsed ? 'Show searches' : 'Hide searches · drag to resize'}
         aria-label={collapsed ? 'Show searches' : 'Hide searches'} aria-expanded={!collapsed}
-        onMouseDown={onDividerDown} onClick={() => { if (collapsed) setLayout({ collapsed: false }) }}>
+        onMouseDown={onDividerDown} onClick={() => { if (downCollapsed.current) setLayout({ collapsed: false }) }}>
         <span>{collapsed ? '»' : '«'}</span>
       </button>
 
