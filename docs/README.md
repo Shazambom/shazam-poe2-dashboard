@@ -4,6 +4,7 @@ Architecture & maintenance docs for Arbiter (the PoE2 economy dashboard).
 
 ## Start here to build
 
+- [`bugs/2026-09-17-release-publish-not-atomic.md`](./bugs/2026-09-17-release-publish-not-atomic.md) — **OPEN BUG**: releases go live before their files do (manifest-before-installer, public-while-half-built, no timeout/verify/rollback); evidence + proposed draft-first fix.
 - [`market-data-sources.md`](./market-data-sources.md) — **where prices come from**: the in-game Currency Exchange hourly digest is the sole source; the trade site's whisper-based Bulk Item Exchange is deprecated, and why.
 - [`dev-notes.md`](./dev-notes.md) — the working loop & hard-won gotchas: the three environments
   (web/desktop-dev/packaged), how to deploy to the web test env (`ops/deploy-web.sh`), the "dev
