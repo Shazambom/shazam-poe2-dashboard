@@ -59,7 +59,9 @@ function ConvertView({ currencies, capital }) {
         <button className="btn primary" disabled={busy} onClick={run}>{busy ? 'Finding…' : 'Find route'}</button>
       </div>
 
-      {res && !best && <p className="muted">No conversion route found between those currencies.</p>}
+      {res && !best && <p className="muted">{res.direct
+        ? 'That amount is too small — it buys less than one of what you want. Try a larger amount.'
+        : 'No conversion route found between those currencies.'}</p>}
 
       {best && (
         <div className="convert-result">

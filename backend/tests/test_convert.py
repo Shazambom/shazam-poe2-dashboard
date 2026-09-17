@@ -184,3 +184,27 @@ def test_convert_endpoint_registered_and_delegates(monkeypatch):
 if __name__ == "__main__":
     import pytest
     raise SystemExit(pytest.main([__file__, "-q"]))
+
+
+def test_a_route_that_delivers_nothing_is_never_a_conversion():
+    """Found driving the packaged app 2026-09-17 (and identical in production 0.2.57): converting
+    4 divine -> exalted returned 'divine > medveds-felling > exalted · out 0 · 100% lost' as BEST,
+    with the real direct market (1,896 exalted) ranked #855. Whole-unit rounding floors a thin
+    detour to 0 output — and 0 output means 0 gold, so its net value (0) beat every real route
+    once gold is priced dear enough that they all net negative. Turning your stack into nothing is
+    not a conversion: such paths are dropped, so the best REAL route wins even when it nets < 0."""
+    s = {"gold_model": {"base_per_order": 0, "per_unit": {}, "per_ref_unit": 0},
+         "reference": "exalted", "league": "Test", "step_overhead_min": 0, "max_steps": 4}
+    g = Graph(s)
+    g.fee_table = {"exalted": 120}            # gold per exalted bought: the direct route is gold-heavy
+
+    def edge(a, b, rate):
+        return Edge(a, b, "digest", rate, [{"rate": rate, "stock": 10_000_000}], age_s=0.0, vol_in_per_h=1000.0)
+
+    g.add(edge("divine", "exalted", 474.0))                                   # direct: 4 -> 1,896
+    g.add(edge("divine", "felling", 0.111)); g.add(edge("felling", "exalted", 34.9))   # 4 -> floor(0.44) = 0 -> 0
+    rv = g.ref_values()
+    res = arbitrage._best_conversions(g, rv, "divine", "exalted", 4, max_steps=4,
+                                      max_gain_pct=1e9, gold_value_per_1k=0.05)       # gold dear: direct nets < 0
+    assert res["best"]["path"] == ["divine", "exalted"] and res["best"]["out"] == 1896
+    assert all(r["out"] > 0 for r in [res["best"]] + res["alternatives"])

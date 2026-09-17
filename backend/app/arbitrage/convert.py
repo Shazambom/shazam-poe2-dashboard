@@ -76,7 +76,9 @@ def _best_conversions(g: Graph, ref_value: dict[str, float], have: str, want: st
         if count > MAX_CANDIDATES:
             break
         r = _convert_path(g, path, amount, ref_value, have, want)
-        if r is not None and r["loss_pct"] >= -max_gain_pct:   # drop phantom-gain arbitrage mirages
+        # out == 0: whole-unit rounding floored the path to nothing — not a conversion. (It also
+        # costs 0 gold, so its net value of 0 used to outrank every real route that nets < 0.)
+        if r is not None and r["out"] > 0 and r["loss_pct"] >= -max_gain_pct:   # + drop phantom-gain mirages
             # net value delivered = value of `want` received - gold charged at the user's price.
             r["net_ref"] = r["out"] * ref_value.get(want, 0.0) - r["gold"] / 1000.0 * gold_ref_per_1k
             seen[r["id"]] = r
