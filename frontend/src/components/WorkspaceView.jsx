@@ -423,8 +423,10 @@ export default function WorkspaceView({ league }) {
       <section className="ws-main">
         {isDesktop ? (
           <>
-            <div className={`ws-webhint ${activeNode ? '' : 'hidden'}`}>
-              <span className="ws-webhint-name" title={navState.url || mountUrl}>{activeNode ? activeNode.name : ''}</span>
+            <div className="ws-webhint">
+              {activeNode
+                ? <span className="ws-webhint-name" title={navState.url || mountUrl}>{activeNode.name}</span>
+                : <span className="ws-webhint-name ws-webhint-empty">Press <button className="ws-inline-add" onClick={() => newSearch(null)} aria-label="New search">+</button> to build a search · Paste a trade URL{isDesktop && historyOn ? EMPTY_HINT_EE2 : '.'}</span>}
               {navState.hint && <span className="ws-chip" title="The site's delivery dropdown could not be set automatically">{navState.hint}</span>}
               {!sessionOk && <span className="ws-chip warn" title="No PoE trade session is connected — the site may show a login page and captures can silently fail. Connect it in Settings → Accounts.">no session</span>}
               {activeNode && (activeNode.slug || activeNode.q
@@ -440,11 +442,6 @@ export default function WorkspaceView({ league }) {
             </div>
             <div className={`ws-progress ${navState.loading ? 'on' : ''}`} aria-hidden="true" />
             <webview key={`${activeId || 'home'}:${wvNonce}`} ref={wv} src={mountUrl} className="ws-webview" allowpopups="true" />
-            {!activeNode && (
-              <div className="ws-overlay">
-                <p>Press <button className="ws-inline-add" onClick={() => newSearch(null)}>+</button> to build a search · Paste a trade URL{isDesktop && historyOn ? EMPTY_HINT_EE2 : '.'}</p>
-              </div>
-            )}
           </>
         ) : (
           <div className="ws-overlay">

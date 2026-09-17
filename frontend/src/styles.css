@@ -284,7 +284,8 @@ a { color: var(--live); }
 .ws-main { flex: 1 1 auto; min-width: 0; min-height: 0; position: relative; display: flex; flex-direction: column;
   border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: #0e0f13; } /* style-ok: near-black behind the embedded webview, intentionally below --bg */
 .ws-webhint { display: flex; align-items: center; gap: 10px; padding: 6px 12px; border-bottom: 1px solid var(--line); font-size: 12px; min-height: 30px; flex: 0 0 auto; }
-.ws-webhint.hidden { visibility: hidden; }
+.ws-webhint-empty { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; white-space: normal; }
+.ws-webhint-empty .ws-inline-add { width: 18px; height: 18px; font-size: 12px; }
 .ws-cap { color: var(--muted); }
 .ws-cap.ok { color: var(--gain); }
 .ws-webview { flex: 1 1 auto; width: 100%; min-height: 0; border: 0; display: flex; }
