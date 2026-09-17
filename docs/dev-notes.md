@@ -171,6 +171,22 @@ CLAUDE.md. The mechanics:
   `main.js` sets only on beta/dev). Add a marker, never a second sender or URL. Report only what
   you need (never secrets / keystrokes / raw clipboard).
 
+## Trading workspace pieces (added 2026-09-17)
+
+- **Vendored EE2 query port** — `desktop/src/vendor/ee2-query` (generated; never hand-edit: the drift test
+  compares every file to `data/MANIFEST.json`). Refresh with `node desktop/scripts/sync-ee2.mjs`
+  (`--src ~/Exiled-Exchange-2` for a local checkout, `--tag vX` to pin, `--offline` to keep the GGG snapshot,
+  `--no-goldens` to skip the EE2-vitest golden run). `publish-github.sh` runs it before the test gate on every
+  release. EE2's vitest needs Node ≥ 20 — the script finds one (Homebrew) if the shell's is older.
+- **Driving the history flow without EE2 installed:** in a dev launch,
+  `window.poe2desktop.dev.ee2Item({ raw, origin: 'ee2' })` pushes a fixture through the real consumer +
+  utilityProcess worker (main refuses it when packaged). Fixtures: `desktop/test/fixtures/ee2/items/*.txt`.
+  The CLI form: `node desktop/src/ee2-history/worker.js --stdin --league "Standard" < item.txt`.
+- **Telemetry markers** added: `ee2` (history-*), `ws` (workspace save/undo/flush), `sales`.
+- **Sales tab** — main fetches Merchant History under policy `trade-history`; the backend's `sales` table
+  (user migration 5) is the ledger. Only `POST /api/sales/ingest` writes it.
+- **Drive scripts:** target workspace rows by `data-id` (never by name — names collide with real searches).
+
 ## Deploying a desktop release (mechanics)
 
 Full runbook: [`release-runbook.md`](./release-runbook.md). Shape: bump `desktop/package.json`,

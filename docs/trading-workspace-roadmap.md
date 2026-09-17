@@ -11,6 +11,17 @@
 > scripts run first) and driven over CDP per `docs/desktop-debugging.md`. Release mechanics are in
 > `docs/release-runbook.md`, not here.
 
+> **Status (2026-09-17, branch `dev`):** implemented end to end — Batch 0 (`11c7ce8`, `3375204`, `fce515a`),
+> Batch 1 (`1273580`), zoom fix (`5b134a7`), Batch 2 (`14e5023`), Batch 3 (`b57f295`), Batch 4 (`97748b1`),
+> Batch 5 (`d9cd789`), Batch 6 (`819a02f`). Every batch was driven on the local desktop app over CDP before
+> its commit; nothing has been shipped (no `desktop-v*` tag, no beta). Deviations from the text below, all
+> deliberate: the vendored EE2 port is one esbuild bundle (not a per-module tree), two extra inert shims
+> (`vue`, `@vueuse/core`) exist because EE2's `common.ts`/`RateLimiter.ts` import Vue, the pure deps are
+> bundled from EE2's lockfile rather than added to `desktop/package.json`, and `sync-ee2.mjs --src` builds
+> from a local checkout for development (releases use a GitHub tag; see `desktop/src/vendor/ee2-query/PROVENANCE.md`).
+> Batch 5 skipped "market price beside a history row". Rarity colours became semantic tokens (`--rarity-*`).
+> A dev-only IPC (`dev:ee2-item`, refused when packaged) feeds fixture items through the real consumer + worker.
+
 ## 1. The model in one paragraph
 
 **The workspace tree is the only truth and the zustand store is its only writer.** Every new search arrives as

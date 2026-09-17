@@ -11,12 +11,13 @@ Architecture & maintenance docs for Arbiter (the PoE2 economy dashboard).
 - [`desktop-debugging.md`](./desktop-debugging.md) — drive the real renderer over CDP before
   claiming a UI change works.
 
-## Trading workspace — next roadmap (planned 2026-09-16, not started)
+## Trading workspace — roadmap (implemented on `dev`, 2026-09-17; not shipped)
 
 - [`trading-workspace-roadmap.md`](./trading-workspace-roadmap.md) — the `/arena`-synthesized plan for the
   ExiledExchange2 History folder (vendored EE2 query port, zero-network `?q=` links, one ingest intent),
   clipboard-add and the QOL catalogue, further EE2 integrations, the zoom fix and UI polish, sequenced into
-  test-gated batches with beta-telemetry verification. Successor to `trading-rework-plan.md`.
+  test-gated batches with beta-telemetry verification. Successor to `trading-rework-plan.md`. The status
+  block at its top lists the commits per batch and the deviations.
 
 ## Strategy ecosystem — build plan & handoff
 
