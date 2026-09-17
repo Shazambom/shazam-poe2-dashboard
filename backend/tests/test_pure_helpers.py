@@ -157,3 +157,13 @@ def test_triples_parses_only_well_formed():
 def test_hour_floor():
     assert digest._hour(3600 * 5 + 1799.9) == 3600 * 5
     assert digest._hour(0) == 0
+
+
+def test_route_query_treats_blank_filters_as_unset():
+    """The Arbitrage filter boxes hold '' when empty. A blank numeric filter in a refresh POST
+    body must mean "unset" (fall back to the saved default), not a 422 the page prints as JSON."""
+    from app.main import RouteQuery
+    q = RouteQuery.model_validate({"min_margin_pct": 0.5, "max_gold": "", "max_fill_hours": "",
+                                   "live_only": "", "sort": "", "limit": "", "start": ""})
+    assert q.to_filters() == {"min_margin_pct": 0.5}
+    assert q.starts() is None

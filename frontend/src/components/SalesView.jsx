@@ -1,6 +1,7 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { api, toast } from '../lib/api.js'
 import { useStatus } from '../lib/statusStore.js'
+import { useSync } from '../lib/syncStore.js'
 import { useWorkspace } from '../lib/workspaceStore.js'
 import { flatten } from '../lib/tree.js'
 import { salesStats, relativeTime, rarityOf } from '../lib/sales.js'
@@ -60,6 +61,11 @@ export default function SalesView({ league }) {
     const t = setInterval(() => { if (document.visibilityState !== 'hidden') refresh(true) }, POLL_MS)
     return () => clearInterval(t)
   }, [sel]) // eslint-disable-line
+
+  // Topbar ⟳ = this tab's own refresh (a manual one: toast included), skipping the mount-time value.
+  const tick = useSync(s => s.tick)
+  const tick0 = useRef(tick)
+  useEffect(() => { if (tick !== tick0.current) { tick0.current = tick; refresh(false) } }, [tick]) // eslint-disable-line
 
   const ref = status?.reference || 'exalted'
   const stats = useMemo(() => salesStats(data.rows, ref, status?.wealth_prices), [data.rows, ref, status?.wealth_prices])

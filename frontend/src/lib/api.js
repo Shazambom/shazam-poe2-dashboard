@@ -25,7 +25,9 @@ const j = async (r) => {
 export const surface = (p, okText) => p
   .then(r => { if (okText) toast(okText); return r })
   .catch(e => { toast(cleanErr(e), false); throw e })
-const qs = (o) => { const p = new URLSearchParams(); Object.entries(o).forEach(([k, v]) => { if (v !== undefined && v !== null && v !== '') p.set(k, v) }); const s = p.toString(); return s ? `?${s}` : '' }
+// Blank = unset, for query strings AND POST bodies (an empty filter box holds '').
+const set = (o) => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined && v !== null && v !== ''))
+const qs = (o) => { const s = new URLSearchParams(set(o)).toString(); return s ? `?${s}` : '' }
 const post = (url, body) => fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: body && JSON.stringify(body) }).then(j)
 const put = (url, body) => fetch(url, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then(j)
 export const api = {
@@ -41,8 +43,8 @@ export const api = {
   recipes: () => fetch('/api/recipes').then(j),
   putRecipes: (recipes) => put('/api/recipes', { recipes }),
   routesStreamUrl: (f) => '/api/routes/stream' + qs(f),
-  refreshTop: (filters, n) => post('/api/routes/refresh-top', { filters, start: filters.start || null, n }),
-  refreshRoute: (id, pairs, filters) => post('/api/routes/refresh', { id, pairs, filters, start: filters.start || null }),
+  refreshTop: (filters, n) => post('/api/routes/refresh-top', { filters: set(filters), start: filters.start || null, n }),
+  refreshRoute: (id, pairs, filters) => post('/api/routes/refresh', { id, pairs, filters: set(filters), start: filters.start || null }),
   leagues: () => fetch('/api/leagues').then(j),
   rateLimits: () => fetch('/api/ratelimits').then(j),
   hold: (window_h, category, numeraire) => fetch('/api/hold' + qs({ window_h, category, numeraire })).then(j),

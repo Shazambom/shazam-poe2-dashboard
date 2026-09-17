@@ -9,7 +9,7 @@ from contextlib import asynccontextmanager
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.concurrency import run_in_threadpool
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from fastapi.responses import RedirectResponse, PlainTextResponse
 
@@ -657,6 +657,12 @@ class RouteQuery(BaseModel):
     sort: str | None = Field(None, pattern=SORT_KEYS)
     limit: int | None = None
     start: str | None = None      # comma-separated start currencies; omitted = all held
+
+    @model_validator(mode="before")
+    @classmethod
+    def _blank_is_unset(cls, data):
+        """An empty filter box arrives as '' — that is "unset", not an unparseable number."""
+        return {k: v for k, v in data.items() if v != ""} if isinstance(data, dict) else data
 
     def to_filters(self) -> dict:
         return {k: v for k, v in self.model_dump(exclude={"start"}).items() if v not in (None, "")}
