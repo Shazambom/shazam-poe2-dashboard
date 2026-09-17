@@ -14,6 +14,19 @@ from ..settings import get_settings
 from dataclasses import dataclass, field
 
 INF = float("inf")
+BAIT_FACTOR = 1.5     # a live offer paying > this × the pair's EXECUTED (digest) rate is bait
+
+
+def credible_offers(offers: list[dict], executed_rate: float | None) -> list[dict]:
+    """The part of a live ladder worth believing. Bulk-exchange price-fixers park absurdly cheap
+    listings they never honour (2026-09-17: Omen of Light listed at 1, 10 and 55 exalted while it
+    TRADED at ~2,261); sorted best-first they are the top of the book and turn into +25,000%
+    loops. The hourly digest is executed volume — the truth — so an offer paying more than
+    BAIT_FACTOR × that rate is dropped. A real edge is a few percent, never a multiple. With no
+    executed rate for the pair there is nothing to judge by: the book is returned as is."""
+    if not executed_rate or executed_rate <= 0:
+        return offers
+    return [o for o in offers if o["rate"] <= executed_rate * BAIT_FACTOR]
 
 
 @dataclass
@@ -85,11 +98,16 @@ class Graph:
         g.fee_table = gamedata.fees()["by_trade"]
         league = s["league"]
         live = orderbook.latest_books(league, s["live_max_age_s"])
+        # Executed rates judge the live books (credible_offers) even when digest EDGES are off.
+        executed = digest.latest_rates(league, s["digest_max_age_h"])
         for (a, b), book in live.items():
-            g.add(Edge(a, b, "live", book["rate"], book["offers"], book["age_s"],
-                       meta={"depth": book["depth"]}))
+            offers = credible_offers(book["offers"], (executed.get((a, b)) or {}).get("rate"))
+            if not offers:
+                continue              # the whole book was bait — the digest edge (if any) stands in
+            g.add(Edge(a, b, "live", offers[0]["rate"], offers, book["age_s"],
+                       meta={"depth": len(offers), "bait_dropped": len(book["offers"]) - len(offers)}))
         if s["allow_digest_edges"]:
-            for (a, b), d in digest.latest_rates(league, s["digest_max_age_h"]).items():
+            for (a, b), d in executed.items():
                 if (a, b) in g.edges:
                     continue
                 g.add(Edge(a, b, "digest", d["rate"], [{"rate": d["rate"], "stock": d["stock"]}],
