@@ -193,7 +193,8 @@ Full runbook: [`release-runbook.md`](./release-runbook.md). Shape: bump `desktop
 commit on `main`, then `cd desktop && ./publish-github.sh` — it runs the test gate, tags + pushes
 (which fires the Windows CI that builds the `.exe`s with the shared `build-*.sh` scripts), builds
 the Mac app, waits on the CI run via `gh run watch`, and uploads both platforms into the same
-release. Then verify:
+**draft** release, which goes public in one verified step at the end
+(`desktop/scripts/release-assets.mjs`: manifests last, retries, go-live check, auto-rollback). Then verify:
 GitHub's "Latest" == your tag, both `latest*.yml` + installers present, and the installer URLs
 resolve `200` (a 404 means the space-free-naming rule was violated — GitHub rewrites spaces to
 dots and the updater can't find the asset). **Shipping requires explicit per-change authorization**

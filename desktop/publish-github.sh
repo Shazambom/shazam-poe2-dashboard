@@ -7,7 +7,11 @@
 #   1. builds the Mac app (skip with --no-build if release/ is already current),
 #   2. WAITS for that tag's Windows CI run to finish — via `gh run watch`, which streams the
 #      run's status and blocks until it completes (nonzero exit on failure). No poll loop.
-#   3. uploads the Mac assets into the release the moment CI is done.
+#   3. uploads the Mac assets into the release the moment CI is done,
+#   4. GOES LIVE in one step: the release is a DRAFT (invisible to every client, never "Latest")
+#      until both platforms' files are verified present; only then is it published, re-checked
+#      through the public URLs, and re-drafted automatically if that check fails.
+#      All of 3-4 is scripts/release-assets.mjs — the same tool Windows CI uploads with.
 #
 # Usage: cd desktop && ./publish-github.sh [--no-build]
 set -euo pipefail
@@ -33,6 +37,10 @@ git diff --cached --quiet || git commit -q -m "chore(ee2-query): sync vendored E
 # "No published versions on GitHub". A bare-semver tag is parseable, so beta clients find it. Stable
 # keeps `desktop-v*` because that path resolves via /releases/latest (literal tag match, no semver).
 case "$VER" in *-beta*) TAG="$VER" ;; *) TAG="desktop-v${VER}" ;; esac
+
+# Create the release as a DRAFT before the tag push, so the CI run it fires finds the draft and
+# uploads into it instead of creating a public release. Idempotent (re-runs reuse what exists).
+node scripts/release-assets.mjs ensure-draft "$TAG"
 
 # Tag + push — this is what fires the Windows CI run. Idempotent: if the tag already exists
 # (locally or on origin) it is left alone, so re-running after a failed upload is safe.
@@ -95,6 +103,8 @@ done
 echo "watching Windows CI run $RID (blocks until it finishes) ..."
 gh run watch "$RID" --repo "$REPO" --exit-status --interval 10
 
-# CI has created the release with the Windows assets; drop the Mac assets into the same release.
-gh release upload "$TAG" "${FILES[@]}" --repo "$REPO" --clobber
-echo "published Mac artifacts to GitHub release $TAG"
+# CI has put the Windows assets in the draft; add the Mac assets (manifest last, retried, each
+# checked against GitHub's own sha256), then the single go-live flip with verify + auto-rollback.
+node scripts/release-assets.mjs upload "$TAG" "${FILES[@]}"
+node scripts/release-assets.mjs publish "$TAG"
+echo "release $TAG is live on both platforms"

@@ -88,20 +88,27 @@ jobs:
           # beta (dev) release, rename to beta.yml so beta clients fetch it and stable's latest.yml is
           # never touched (a beta build must emit ONLY beta.yml).
           if [[ "${{ github.ref_name }}" == *-beta* ]]; then mv -f release/latest.yml release/beta.yml; fi
-      - name: Upload installer to a Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ github.ref_name }}
-          # A `-beta` tag is a DEV channel release: mark it a GitHub pre-release so it's never "Latest"
-          # and stable users (allowPrerelease=false) never pull it. electron-builder emits beta.yml for
-          # a -beta version; the *.yml glob uploads whichever channel manifest was written.
-          prerelease: ${{ contains(github.ref_name, '-beta') }}
-          files: |
-            desktop/release/*.exe
-            desktop/release/*.exe.blockmap
-            desktop/release/*.zip
-            desktop/release/latest.yml
-            desktop/release/beta.yml
+      - name: Upload installer into the DRAFT release
+        # The release stays a draft (invisible to electron-updater, never "Latest") until
+        # desktop/publish-github.sh has added the Mac files, verified both platforms and flipped it
+        # public — so clients never see a manifest whose installer isn't there yet
+        # (docs/bugs/2026-09-17-release-publish-not-atomic.md). Same tool the Mac side uses:
+        # installers first, manifest LAST, stale half-created assets cleared, timeout + retries.
+        if: github.ref_type == 'tag'
+        timeout-minutes: 75
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${{ github.ref_name }}"
+          node desktop/scripts/release-assets.mjs ensure-draft "$TAG"
+          # Only the files this build produced (a beta emits beta.yml, a stable latest.yml).
+          FILES=()
+          for f in desktop/release/*.exe desktop/release/*.exe.blockmap desktop/release/*.zip \
+                   desktop/release/latest.yml desktop/release/beta.yml; do
+            [ -f "$f" ] && FILES+=("$f")
+          done
+          node desktop/scripts/release-assets.mjs upload "$TAG" "${FILES[@]}"
       - name: Also upload as workflow artifact
         uses: actions/upload-artifact@v4
         with:

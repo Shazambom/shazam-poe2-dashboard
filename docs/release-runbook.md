@@ -134,32 +134,54 @@ exporter's mid-sync guard enforces this): `sshshazambom sudo bash /home/shazam/b
    > and no migration**. Adding/altering an actual DB **table/column** does (user → numbered
    > migration; market → new snapshot). See the Database section in CLAUDE.md.
 
-5. **Publish (one command, test-gated, event-driven):**
+5. **Publish (one command, test-gated, event-driven, atomic go-live):**
    ```bash
-   cd desktop && ./publish-github.sh   # tests → tag + push (fires Windows CI) → dist:mac →
-                                       # WAITS on the CI run (gh run watch) → uploads Mac assets
+   cd desktop && ./publish-github.sh   # tests → DRAFT release → tag + push (fires Windows CI) →
+                                       # dist:mac → waits on CI → uploads Mac assets →
+                                       # verifies both platforms → publishes → re-checks → (rollback)
    ```
    `publish-github.sh` first runs `ops/run-tests.sh` (a red test aborts here, before anything
-   remote), then creates the tag (`desktop-v<version>`, or the bare `<version>` for a beta) and
-   pushes `main` + the tag — that push triggers `.github/workflows/release-desktop-win.yml`,
-   which builds the Windows installer + backend/sidecar `.exe` with the SAME
-   `desktop/build-*.sh` scripts and attaches `Arbiter-Setup-<v>.exe` + `latest.yml` to the
-   release. Meanwhile it fetches the seed and runs `dist:mac`, blocks on `gh run watch` until
-   CI finishes, then uploads the Mac assets into the same release. Pass `--no-build` if
-   `release/` already holds the current build. (The `nsis.artifactName` override keeps the
-   installer name space-free so the yml url, the on-disk file and the GitHub asset all match —
-   otherwise GitHub rewrites spaces to dots and the updater 404s.)
+   remote), then creates the release as a **draft** and only then creates the tag
+   (`desktop-v<version>`, or the bare `<version>` for a beta) and pushes `main` + the tag — that
+   push triggers `.github/workflows/release-desktop-win.yml`, which builds the Windows installer +
+   backend/sidecar `.exe` with the SAME `desktop/build-*.sh` scripts and uploads
+   `Arbiter-Setup-<v>.exe` + `latest.yml` **into the draft**. Meanwhile it fetches the seed and runs
+   `dist:mac`, blocks on `gh run watch` until CI finishes, then uploads the Mac assets into the
+   same draft. Pass `--no-build` if `release/` already holds the current build. (The
+   `nsis.artifactName` override keeps the installer name space-free so the yml url, the on-disk
+   file and the GitHub asset all match — otherwise GitHub rewrites spaces to dots and the updater 404s.)
+
+   **Why a draft:** a draft is invisible to electron-updater and never becomes "Latest", so no
+   client can be told about an update whose files aren't there yet (the 0.2.60 incident —
+   `docs/bugs/2026-09-17-release-publish-not-atomic.md`). Both halves upload through ONE tool,
+   `desktop/scripts/release-assets.mjs`:
+   - `upload` — installers first, **manifests (`*.yml`) last**; clears half-created (`starter`)
+     assets; 20-min timeout + 3 tries per file; success = GitHub's own sha256 of the asset equals
+     the local file (never `gh`'s exit code — it has lied both ways).
+   - `publish` — refuses unless every file named by both channel manifests **and the Mac DMG**
+     (the Mac in-app update opens the DMG, not the zip) is `uploaded` at the manifest's size; flips
+     the draft public; re-checks every public URL for a 200; **re-drafts automatically** if that
+     fails, so clients stay on the previous version.
+   A re-run of `publish-github.sh --no-build` after any failure is safe: finished files are skipped.
 
 6. *(folded into step 5.)*
 
-7. **Verify the release went live:**
+7. **Verify the release went live** (step 5 already did this; to re-check any release by hand):
    ```bash
-   gh api repos/Shazambom/shazam-poe2-dashboard/releases/latest -q .tag_name  # == desktop-v<version>
-   gh release view desktop-v<version> --json assets -q '[.assets[].name]'     # both latest*.yml + installers
-   # Naming sanity: the yml url must resolve on GitHub (dash-form, not dots)
-   B=https://github.com/Shazambom/shazam-poe2-dashboard/releases/download/desktop-v<version>
-   curl -s -o /dev/null -w '%{http_code}\n' -L "$B/$(curl -fsSL "$B/latest.yml" | awk '/^path:/{print $2}')"
+   node desktop/scripts/release-assets.mjs verify desktop-v<version> --live   # or <version>-beta.N
+   gh api repos/Shazambom/shazam-poe2-dashboard/releases/latest -q .tag_name  # == desktop-v<version> (stable)
    ```
    The release must be GitHub's "Latest" and carry both `latest-mac.yml` + `latest.yml` plus
-   the installers — that is what the `github` updater provider resolves against. The curl must
-   print `200` (a `404` means the installer name and the yml url disagree).
+   the installers — that is what the `github` updater provider resolves against. A `404` in the
+   live check means the installer name and the yml url disagree.
+
+### If a release goes wrong
+
+- **An upload hangs or 500s** (`Error saving asset`): nothing is exposed — the release is still a
+  draft. Re-run `./publish-github.sh --no-build` (or re-run the failed CI job); the tool deletes the
+  half-created asset and retries. By hand: `gh api repos/<repo>/releases/<id>/assets` → any
+  `state: starter` → `gh api -X DELETE repos/<repo>/releases/assets/<asset-id>`.
+- **A manifest is live without its file** (should be impossible now): **delete the manifest first,
+  fix second.** Removing `latest*.yml` / `beta*.yml` makes clients see "no update" and stay put;
+  or `gh release edit <tag> --draft=true` to pull the whole release. Then upload, `verify`, restore.
+- **Two drafts share a tag** (`ensure-draft` refuses): delete the stray one in the GitHub UI.

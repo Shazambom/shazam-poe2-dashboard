@@ -1,6 +1,6 @@
 # BUG — a release goes live before its files do (publish is not atomic)
 
-**Status:** OPEN · **Severity:** high (can strand production clients on a broken update) ·
+**Status:** FIX BUILT 2026-09-17, unproven until the next real release (see the last section) · **Severity:** high (can strand production clients on a broken update) ·
 **Found:** 2026-09-17 during 0.2.60-beta.1 and stable 0.2.60 · **Owner directive:** "This kind of
 shaky release is bad, it could produce clients in a bad state" — dig in and fix the process.
 
@@ -132,3 +132,54 @@ desktop/release/Arbiter-0.2.60-arm64.dmg --clobber` if it is missing or `starter
 Total Mac production exposure to a manifest with no file: ~13 min (18:28–18:41). Mac production was
 held on 0.2.59 for ~32 min after that (18:41–19:13) — safe, just delayed.
 
+
+**Correction 19:40 UTC — three claims above are wrong (found re-reading the report against the code).**
+- **The Mac update path uses the DMG, not the zip.** `desktop/src/main.js` sets `autoDownload = !IS_MAC`
+  and the Mac flow opens `macDmgUrl(v)` (`…/Arbiter-<v>-arm64.dmg`) in the browser. So "the `.dmg` is
+  fresh installs only" is false, and putting `latest-mac.yml` back at 19:13 re-opened the hole: Mac
+  clients were offered 0.2.60 with a DMG link that 404'd until the DMG landed (~19:13 → ≤19:31).
+  Real Mac exposure ≈ 13 min + up to ~18 min. The verify-before-flip check must cover **every file
+  listed in the manifest plus the DMG**, not just `path:`.
+- **Proposed fix #6 already exists.** The `error` handler calls `updLog('ERROR …')`, so beta update
+  errors are already in `/api/installlog`. Silence in the 17:02–17:53 window means no beta client
+  checked then.
+- **"What a client does" is partly answerable from code:** the same handler classifies any message
+  matching `404` as benign and shows "up to date". A client in the bad window sees nothing and retries
+  in 30 min — not bricked. Still unverified: whether Windows can keep a partial download (sha512 check
+  should reject it). Severity is therefore closer to **medium** than high.
+- DMG final state: `uploaded`, 182102371 bytes, downloaded copy's sha512 == local file. The `gh` command
+  itself exited 1 with `422 ReleaseAsset.name already exists` even though the asset landed — `gh`'s exit
+  code is not a reliable success signal here; only the asset-state check is.
+
+## Fix built (2026-09-17) — what exists now, and what is still unproven
+
+`desktop/scripts/release-assets.mjs` (tests: `desktop/test/release-assets.test.mjs`), used by BOTH
+`publish-github.sh` and the Windows workflow (the `softprops/action-gh-release` step is gone):
+
+| Proposed | Built |
+|---|---|
+| 1 draft-first | `ensure-draft` runs before the tag push; CI uploads into the draft; `publish` is the only go-live |
+| 2 manifests last | `upload` sorts `*.yml` after everything else |
+| 3 verify before the flip | `problems()` — every file named by both channel manifests + the Mac DMG, `uploaded`, manifest size; then public-URL 200s after the flip |
+| 4 self-healing uploads | clears `starter` assets, 20-min timeout, 3 tries, success = GitHub's sha256 `digest` == local file; CI step `timeout-minutes: 75` |
+| 5 rollback | failed live check → re-draft (fallback: delete manifests) |
+| 6 update-error telemetry | already existed (`updLog('ERROR …')`) |
+| 8 runbook | "If a release goes wrong" in `docs/release-runbook.md` |
+
+**Partial-download question (answered from electron-updater 6.8.9 source, `AppUpdater.js`
+`executeDownload`):** the installer downloads to `temp-<name>`, is renamed to its final name only
+after the download task (which checks sha512) succeeds, any error deletes it, and
+`validateDownloadedPath` re-hashes the file before install. A missing or truncated installer can't be
+run. Not reproduced on a live Windows client.
+
+**Exercised for real:** on a throwaway draft (`0.0.1-beta.0`, since deleted; no tag pushed) —
+draft creation + reuse, manifest-last ordering, skip-if-identical, replace-if-different, the
+incomplete-release refusals, and draft invisibility (absent from `releases.atom`, "Latest"
+unchanged). GitHub threw the real `HTTP 500: Error saving asset` + `starter` on a **250 KB** file
+during that test and the tool cleared it and succeeded on try 2 — so the GitHub fault is not
+size-related. `verify --live` passes against the real 0.2.60 and 0.2.60-beta.1 releases.
+
+**NOT yet exercised:** the draft→public flip, the post-flip check, and the rollback (they can only run
+on a real release), and the new CI upload step on a Windows runner. **Cut the next release as a beta
+first and watch these.** Still open: #7 smaller files (Phase 7b), and the upload-slowness root cause
+(only one comparison was made; "GitHub throttling" is a guess).
