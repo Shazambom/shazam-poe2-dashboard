@@ -32,7 +32,7 @@ export default function SettingsView({ currencies, status, onSaved }) {
     live_top_n: num(next.live_top_n, 5), live_min_age_s: num(next.live_min_age_s, 300),
     min_refetch_s: num(next.min_refetch_s, 300), routes_cache_s: num(next.routes_cache_s, 300),
     background_sweep: !!next.background_sweep, batch_pad: !!next.batch_pad,
-    batch_max_have: num(next.batch_max_have, 12),
+    batch_max_have: num(next.batch_max_have, 10),
     rank_weights: next.rank_weights, volume_window_h: num(next.volume_window_h, 24),
     step_overhead_min: num(next.step_overhead_min, 2),
   })
@@ -91,7 +91,7 @@ export default function SettingsView({ currencies, status, onSaved }) {
             <div className="field"><label>Only if the pair's quote is older than (seconds)</label><input type="number" value={s.live_min_age_s} onChange={e => set('live_min_age_s', e.target.value)} /></div>
             <div className="field"><label>Never refetch the same pair sooner than (seconds)</label><input type="number" value={s.min_refetch_s} onChange={e => set('min_refetch_s', e.target.value)} /></div>
             <div className="field"><label>Serve identical route queries from memory for (seconds)</label><input type="number" value={s.routes_cache_s} onChange={e => set('routes_cache_s', e.target.value)} /></div>
-            <div className="field"><label>Haves per exchange request</label><input type="number" min="1" max="20" value={s.batch_max_have} onChange={e => set('batch_max_have', e.target.value)} /></div>
+            <div className="field"><label>Haves per exchange request</label><input type="number" min="1" max="10" title="pathofexile.com rejects more than 10 per request" value={s.batch_max_have} onChange={e => set('batch_max_have', e.target.value)} /></div>
             <div className="check"><Toggle checked={!!s.batch_pad} onChange={v => set('batch_pad', v)} label="Fill spare request slots with likely-useful pairs" /></div>
             <div className="check"><Toggle checked={!!s.background_sweep} onChange={v => set('background_sweep', v)} label="Background sweep of the whole watchlist" /></div>
 

@@ -35,12 +35,14 @@ from .settings import get_settings
 log = logging.getLogger(__name__)
 
 HARD_FLOOR_S = 5      # even a forced refetch of the same pair waits this long
-BATCH_MAX_HAVE = 12   # haves per request; more dilutes the ~100-listing response cap
+BATCH_MAX_HAVE = 10   # haves per request WE want (GGG's cap as of 2026-09-17; it was >= 12 before); more dilutes the ~100-listing response cap.
+                      # GGG enforces its own (unpublished, changeable) cap — see state["have_cap"].
 RESULT_CAP = 100      # practical ceiling of listings the exchange returns per call
 STARVED_DEPTH = 3     # a pair with fewer offers than this, under the cap, gets a solo re-query
 
 state = {"enabled": False, "last_fetch": None, "last_error": None, "pairs_fetched": 0,
-         "requests": 0, "padded": 0, "in_flight": None, "queue": 0, "version": 0, "url_form": "poe2/{league}"}
+         "requests": 0, "padded": 0, "in_flight": None, "queue": 0, "version": 0, "url_form": "poe2/{league}",
+         "have_cap": BATCH_MAX_HAVE}   # learned down from BATCH_MAX_HAVE when the exchange says "Too many"
 
 _queue: asyncio.PriorityQueue = asyncio.PriorityQueue()
 _pending: dict[tuple[str, str], list[asyncio.Future]] = {}
@@ -130,7 +132,10 @@ async def _post(league: str, body: dict, cookie: str):
     r = await exchange_post(league, body, cookie)
     if r.status_code in (401, 403):
         raise PermissionError("exchange rejected the session (reconnect it in Settings)")
-    r.raise_for_status()
+    if r.status_code >= 400:
+        # GGG explains a rejection in the body ({"error": {"code", "message"}}); httpx's
+        # raise_for_status() drops it, which left `last_error` saying only "400 Bad Request".
+        raise RuntimeError(f"exchange HTTP {r.status_code}: {r.text[:300]}")
     state["requests"] += 1
     return r.json()
 
@@ -208,13 +213,25 @@ async def wait_for(futs: list[asyncio.Future], timeout: float) -> dict:
     return {"waited": len(futs), "done": len(done), "timed_out": bool(pending)}
 
 
+def _too_many(exc: Exception) -> bool:
+    """The exchange's 400 for a batch over ITS have-cap: {"error":{"code":2,"message":"Too many
+    items `have` items selected."}} (first seen 2026-09-17, when 12 stopped being accepted)."""
+    return "Too many" in str(exc) and "have" in str(exc)
+
+
+def _lower_cap(n: int) -> int:
+    """Next cap to try after a batch of `n` was rejected: by 2 while large (each probe is a wasted
+    rate-limited request), by 1 once small (don't overshoot a cap of 5 down to 3)."""
+    return max(1, n - 2 if n > 6 else n - 1)
+
+
 def _take_batch(first_have: str, want: str) -> list[str]:
     """Pull every other pending pair that wants `want` into this request (solo re-queries excluded)."""
     haves = [first_have]
     if (first_have, want) in _solo:
         return haves
     for (h, w) in list(_pending):
-        if w == want and h not in haves and (h, w) not in _solo and len(haves) < BATCH_MAX_HAVE:
+        if w == want and h not in haves and (h, w) not in _solo and len(haves) < state["have_cap"]:
             haves.append(h)
     return haves
 
@@ -223,7 +240,7 @@ def _pad(haves: list[str], want: str, league: str, s: dict) -> list[str]:
     """Fill the free slots of a request with the haves that trade into `want` most."""
     if not s.get("batch_pad"):
         return haves
-    cap = int(s.get("batch_max_have") or BATCH_MAX_HAVE)
+    cap = min(int(s.get("batch_max_have") or BATCH_MAX_HAVE), state["have_cap"])
     if len(haves) >= cap:
         return haves
     # 1) pairs that keep appearing in the best loops, 2) pairs the market trades most,
@@ -259,6 +276,7 @@ def _settle(key: tuple[str, str], result) -> None:
 
 
 async def worker() -> None:
+    global _seq
     while True:
         priority, _, _, have, want = await _queue.get()
         state["queue"] = _queue.qsize()
@@ -281,13 +299,21 @@ async def worker() -> None:
         except Exception as exc:
             state["last_error"] = f"{'+'.join(haves)}->{want}: {exc}"
             log.warning("orderbook batch failed %s->%s: %s", haves, want, exc)
-            for h in requested:
-                _settle((h, want), exc)
+            if _too_many(exc) and len(haves) > 1:
+                # Over the exchange's have-cap: learn it and retry the SAME pairs in smaller
+                # batches. Their futures stay pending — callers never see this rejection.
+                state["have_cap"] = _lower_cap(len(haves))
+                log.info("orderbook: exchange have-cap is below %d, now batching %d", len(haves), state["have_cap"])
+                for h in requested:
+                    _seq += 1
+                    _queue.put_nowait((priority, -pairscore.score(h, want), _seq, h, want))
+            else:
+                for h in requested:
+                    _settle((h, want), exc)
         else:
             for h in requested:
                 if h in starved and (h, want) not in _solo:
                     # keep its futures pending and re-queue it alone at the same priority
-                    global _seq
                     _seq += 1
                     _solo.add((h, want))
                     _queue.put_nowait((priority, -pairscore.score(h, want), _seq, h, want))

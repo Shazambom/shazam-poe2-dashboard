@@ -41,7 +41,7 @@ DEFAULTS: dict = {
     # skipping anything cached within min_refetch_s. Free data on a request we're
     # making anyway; requested pairs still get starvation follow-ups, padded ones don't.
     "batch_pad": True,
-    "batch_max_have": 12,
+    "batch_max_have": 10,
     "digest_max_age_h": 6,          # digest rate older than this is ignored
     "allow_digest_edges": True,     # fill missing live pairs with digest VWAP
     "allow_recipe_edges": True,
