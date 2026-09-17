@@ -1,6 +1,6 @@
 {
- "ee2Tag": "local-cca3066",
- "ee2Commit": "cca3066",
+ "ee2Tag": "v0.16.3",
+ "ee2Commit": "68478104b235",
  "modules": [
   "../../../../../shazam-poe2-dashboard/desktop/src/vendor/ee2-query/entry.js",
   "src/assets/data/index.ts",
@@ -37,7 +37,7 @@
   "src/web/price-check/trade/pathofexile-trade.ts",
   "src/web/price-check/trends/getDetailsId.ts"
  ],
- "syncedAt": "2026-09-16T23:41:50.706Z",
+ "syncedAt": "2026-09-17T01:04:06.030Z",
  "files": {
   "vendor/bundle.cjs": {
    "sha256": "266394bdc6d00923e6630775e047af28c48c1c06d6e134d3289a82e39f3933d9",
@@ -88,7 +88,7 @@
    "bytes": 186636
   },
   "data/trade/stats.json": {
-   "sha256": "c6216155650936d455ffbc026b8aa88644cb35a5b9a904a5f50fe4036c95afe8",
+   "sha256": "2acd8fdaec3f049655fd96bd89ca613253d2b2379747fddd1d90d93e74635497",
    "bytes": 853055
   }
  }

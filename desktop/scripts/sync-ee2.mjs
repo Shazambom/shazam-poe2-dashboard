@@ -70,9 +70,10 @@ async function resolveSource() {
 // Installed with the SAME modern node's npm that runs vitest, so platform bindings (rolldown) resolve.
 function ensureDeps(renderer) {
   if (fs.existsSync(path.join(renderer, 'node_modules', '.bin', 'vitest'))) return
+  // npm must run ON the modern node (npm 11 refuses Node 18): put that node first on PATH for the call.
   const node = modernNode()
-  const npm = path.join(path.dirname(node), 'npm')
-  sh(`${JSON.stringify(fs.existsSync(npm) ? npm : 'npm')} install --no-audit --no-fund --ignore-scripts`, renderer)
+  log(`$ npm install (node ${path.dirname(node)})`)
+  execSync('npm install --no-audit --no-fund --ignore-scripts', { cwd: renderer, stdio: 'inherit', env: { ...process.env, PATH: `${path.dirname(node)}:${process.env.PATH || ''}` } })
 }
 
 // 3. Index files the data loader requires (build artifacts, not in the repo).
