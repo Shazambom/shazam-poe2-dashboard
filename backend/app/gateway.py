@@ -153,6 +153,9 @@ POLICIES: dict[str, Policy] = {p.name: p for p in [
     # resolves to "trade" above). Conservative starts; re-derived from headers like the rest.
     Policy("trade-fetch", [Rate(1, Duration.SECOND), Rate(20, Duration.MINUTE)], ("www.pathofexile.com",)),
     Policy("trade-whisper", [Rate(1, Duration.SECOND * 2), Rate(10, Duration.MINUTE)], ("www.pathofexile.com",)),
+    # Merchant History (/api/trade2/history) for the Sales tab: 5 quick GETs produced a 429 in research,
+    # so start very conservative; headers refine it. Polled at most every 10 min while the tab is visible.
+    Policy("trade-history", [Rate(1, Duration.SECOND * 10), Rate(4, Duration.MINUTE)], ("www.pathofexile.com",)),
     # OAuth'd account API and token endpoint.
     Policy("ggg-api", [Rate(1, Duration.SECOND * 2), Rate(20, Duration.MINUTE)], ("api.pathofexile.com",)),
     # Public hourly digest CDN: no headers. Quick enough that a week's backfill

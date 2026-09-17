@@ -38,6 +38,7 @@ const SUB_DESTS = [
   { section: 'Economy', sub: 'market', label: 'Market' },
   { section: 'Trading', sub: 'workspace', label: 'Workspace' },
   { section: 'Trading', sub: 'live', label: 'Live' },
+  { section: 'Trading', sub: 'sales', label: 'Sales' },
 ]
 
 export default function App() {

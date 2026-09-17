@@ -53,6 +53,7 @@ export const api = {
   inflationCross: (item) => fetch('/api/inflation/cross' + qs({ item })).then(j),
   inflationMarketcap: () => fetch('/api/inflation/marketcap').then(j),
   workspace: () => fetch('/api/trading/workspace').then(j),
+  sales: (league) => fetch('/api/sales' + qs({ league })).then(j),
   putWorkspace: (workspace) => put('/api/trading/workspace', { workspace }),
   board: (window_h) => fetch('/api/board' + qs({ window_h })).then(j),
   boardRefresh: (window_h) => post('/api/board/refresh' + qs({ window_h })),

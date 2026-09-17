@@ -3,6 +3,7 @@ import SubTabs from './SubTabs.jsx'
 import { nav } from '../lib/nav.js'
 import WorkspaceView from './WorkspaceView.jsx'
 import LiveView from './LiveView.jsx'
+import SalesView from './SalesView.jsx'
 
 // The Trading tab: Workspace (file tree of searches + the embedded trade site) and Live
 // (pings + one-click travel-to-hideout). The trade site lives INSIDE the workspace — no
@@ -10,6 +11,7 @@ import LiveView from './LiveView.jsx'
 const SUBS = [
   { id: 'workspace', label: 'Workspace' },
   { id: 'live', label: 'Live' },
+  { id: 'sales', label: 'Sales' },
 ]
 
 export default function TradingView({ league }) {
@@ -26,6 +28,7 @@ export default function TradingView({ league }) {
         <WorkspaceView league={league} />
       </div>
       {sub === 'live' && <LiveView league={league} />}
+      {sub === 'sales' && <SalesView league={league} />}
     </div>
   )
 }

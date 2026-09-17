@@ -24,6 +24,13 @@
   --live: #7fb4d9;
   --digest: #b39ddb;
   --recipe: #e0b866;
+  /* Item rarity (content semantics on item cards + sale rows — GGG's colours, muted for the dark surface) */
+  --rarity-normal: #c8c8c8;
+  --rarity-magic: #8888ff;
+  --rarity-rare: #ffff77;
+  --rarity-unique: #af6025;
+  --rarity-gem: #1ba29b;
+  --rarity-currency: #aa9e82;
   --radius: 6px;
   --radius-lg: 12px;
   --shadow-1: 0 1px 2px rgba(0,0,0,.35);
@@ -192,6 +199,38 @@ a { color: var(--live); }
 .ws-webhint-name { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .ws-chip { display: inline-flex; align-items: center; gap: 4px; border-radius: 999px; padding: 1px 8px; font-size: 11px; color: var(--muted); border: 1px solid var(--line); white-space: nowrap; }
 .ws-chip.ok { color: var(--gain); border-color: rgba(111,206,159,.35); }
+/* ---------- Sales tab + item card ---------- */
+.sales-view { display: flex; flex-direction: column; gap: 10px; padding: 4px 2px 40px; }
+.sales-head { display: flex; align-items: center; gap: 10px; }
+.sales-league { background: var(--bg); color: var(--ink); border: 1px solid var(--line-strong); border-radius: var(--radius); padding: 4px 8px; font-size: 13px; }
+.sales-last { font-size: 12px; }
+.sales-list { display: flex; flex-direction: column; gap: 4px; max-width: 860px; }
+.sale-row { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-1); }
+.sale-row.open { border-color: var(--gold-dim); }
+.sale-main { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 10px; padding: 8px 10px; background: none; border: 0; color: var(--ink); cursor: pointer; text-align: left; font-size: 13px; }
+.sale-main:hover { background: rgba(212,172,82,.05); }
+.sale-icon { width: 24px; height: 24px; object-fit: contain; flex: 0 0 24px; }
+.sale-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sale-base { font-size: 12px; }
+.sale-glyph { font-size: 9px; margin-right: 6px; vertical-align: middle; }
+.sale-glyph.normal { color: var(--rarity-normal); } .sale-glyph.magic { color: var(--rarity-magic); } .sale-glyph.rare { color: var(--rarity-rare); } .sale-glyph.unique { color: var(--rarity-unique); } .sale-glyph.gem { color: var(--rarity-gem); } .sale-glyph.currency { color: var(--rarity-currency); }
+.sale-price { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.sale-time { font-size: 11.5px; white-space: nowrap; min-width: 56px; text-align: right; }
+.sale-row > .ws-mini { margin-right: 8px; }
+.sale-card { flex: 1 0 100%; padding: 0 10px 10px; }
+.item-card { border: 1px solid var(--line-strong); border-radius: 10px; background: linear-gradient(165deg, var(--panel-hi) -20%, var(--panel) 45%); box-shadow: var(--shadow-1); padding: 10px 12px; max-width: 520px; font-size: 12.5px; }
+.ic-head { display: flex; align-items: center; gap: 10px; padding-bottom: 8px; border-bottom: 1px solid var(--line); margin-bottom: 6px; }
+.ic-icon { width: 40px; height: 40px; object-fit: contain; }
+.ic-name { font-weight: 700; font-size: 14px; }
+.ic-type { color: var(--ink-2); }
+.item-card.normal .ic-name { color: var(--rarity-normal); } .item-card.magic .ic-name { color: var(--rarity-magic); } .item-card.rare .ic-name { color: var(--rarity-rare); } .item-card.unique .ic-name { color: var(--rarity-unique); } .item-card.gem .ic-name { color: var(--rarity-gem); } .item-card.currency .ic-name { color: var(--rarity-currency); }
+.ic-block { padding: 5px 0; border-bottom: 1px solid var(--line); }
+.ic-block:last-child { border-bottom: 0; }
+.ic-line { color: var(--ink-2); line-height: 1.4; }
+.ic-augmented { color: var(--live); }
+.ic-implicit .ic-line, .ic-explicit .ic-line, .ic-crafted .ic-line, .ic-fractured .ic-line { color: var(--rarity-magic); }
+.ic-rune .ic-line, .ic-enchant .ic-line { color: var(--live); }
+.ic-flags .ic-line { color: var(--loss); }
 .ws-chip.warn { color: var(--afk); border-color: rgba(224,168,58,.45); }
 .ws-age { font-size: 10.5px; color: var(--muted); flex: 0 0 auto; }
 .ws-node.selected:not(.active) { background: rgba(212,172,82,.08); }

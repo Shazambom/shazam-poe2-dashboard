@@ -597,6 +597,29 @@ def rate_hint(body: RateAcquire):
     return {"ok": True}
 
 
+# ------------------------------------------------------------------ sales ledger
+# Trading → Sales (roadmap batch 6): the desktop shell fetches the trade site's Merchant History through
+# the user's own session + the shared rate budget and hands the rows here; the backend is the ledger's
+# only writer (user.sqlite `sales`, migration 5, kept forever). Nothing here talks to pathofexile.com.
+class SalesIngest(BaseModel):
+    league: str
+    result: list[dict]
+
+
+@app.post("/api/sales/ingest")
+def sales_ingest(body: SalesIngest):
+    league = body.league.strip()
+    if not league:
+        raise HTTPException(400, "league required")
+    new = db.sales_upsert(league, body.result)
+    return {"ok": True, "new": new, "total": db.sales_count(league)}
+
+
+@app.get("/api/sales")
+def sales(league: str | None = None):
+    return {"league": league, "rows": db.sales_list(league or None), "leagues": db.sales_leagues()}
+
+
 @app.post("/api/digest/sync")
 async def digest_sync():
     await digest.sync_once()

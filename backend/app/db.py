@@ -394,6 +394,53 @@ def get_capital() -> dict[str, float]:
     return {r["currency"]: r["qty"] for r in rows}
 
 
+# ---------------------------------------------------------------- sales ledger (user data)
+def sales_upsert(league: str, rows: list[dict]) -> int:
+    """Upsert Merchant History rows by (item_id, time); returns how many were NEW. Never deletes."""
+    new = 0
+    with tx() as c:
+        for r in rows:
+            item_id, t = r.get("item_id"), r.get("time")
+            if not item_id or not t:
+                continue
+            price = r.get("price") or {}
+            if not c.execute("SELECT 1 FROM sales WHERE item_id=? AND time=?", (str(item_id), str(t))).fetchone():
+                new += 1
+            c.execute(
+                "INSERT INTO sales(item_id, time, league, price_amount, price_currency, item_json) VALUES(?,?,?,?,?,?) "
+                "ON CONFLICT(item_id, time) DO UPDATE SET price_amount=excluded.price_amount, price_currency=excluded.price_currency, item_json=excluded.item_json",
+                (str(item_id), str(t), league, price.get("amount"), price.get("currency"), json.dumps(r.get("item") or {})),
+            )
+    return new
+
+
+def sales_list(league: str | None = None) -> list[dict]:
+    with q() as c:
+        if league:
+            rows = c.execute("SELECT * FROM sales WHERE league=? ORDER BY time DESC", (league,)).fetchall()
+        else:
+            rows = c.execute("SELECT * FROM sales ORDER BY time DESC").fetchall()
+    out = []
+    for r in rows:
+        try:
+            item = json.loads(r["item_json"])
+        except (TypeError, ValueError):
+            item = {}
+        out.append({"item_id": r["item_id"], "time": r["time"], "league": r["league"],
+                    "price": {"amount": r["price_amount"], "currency": r["price_currency"]} if r["price_currency"] else None, "item": item})
+    return out
+
+
+def sales_leagues() -> list[str]:
+    with q() as c:
+        return [r[0] for r in c.execute("SELECT league FROM sales GROUP BY league ORDER BY MAX(time) DESC").fetchall()]
+
+
+def sales_count(league: str | None = None) -> int:
+    with q() as c:
+        return c.execute("SELECT COUNT(*) FROM sales" + (" WHERE league=?" if league else ""), (league,) if league else ()).fetchone()[0]
+
+
 def set_capital(entries: dict[str, float]) -> None:
     with tx() as c:
         c.execute("DELETE FROM capital")

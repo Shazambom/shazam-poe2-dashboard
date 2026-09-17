@@ -44,6 +44,8 @@ contextBridge.exposeInMainWorld('poe2desktop', {
     ingestAck: (ack) => ipcRenderer.send('trade:ingest-ack', ack),
   },
   ws: { onFlush: sub('ws:flush'), flushed: () => ipcRenderer.send('ws:flushed'), exportFile: (name, text) => ipcRenderer.invoke('ws:export-file', { name, text }) },
+  // Trading → Sales: fetch the trade site's Merchant History for a league (main: session + budget + ledger).
+  sales: { fetch: (league) => ipcRenderer.invoke('sales:fetch', { league }) },
   ee2: {
     setEnabled: (enabled) => ipcRenderer.send('ee2:set-enabled', { enabled }),
     status: () => ipcRenderer.invoke('ee2:status'),

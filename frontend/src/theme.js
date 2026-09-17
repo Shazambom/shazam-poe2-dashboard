@@ -32,6 +32,9 @@ export const color = {
   recipe: '#e0b866',
 }
 
+// Item rarity (item cards / sale rows) — mirrors the --rarity-* tokens in :root.
+export const rarity = { normal: '#c8c8c8', magic: '#8888ff', rare: '#ffff77', unique: '#af6025', gem: '#1ba29b', currency: '#aa9e82' }
+
 // Player-presence tri-state, used by both PingButton (JS) and the `.pb-dot` CSS rules.
 // online reuses --gain; afk/offline are their own status tokens (--afk/--offline in :root).
 export const presence = {

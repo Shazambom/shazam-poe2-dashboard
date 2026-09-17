@@ -209,9 +209,30 @@ def _m4_notifications(conn: sqlite3.Connection) -> None:
     log.info("m4: folded ping_sound/ping_volume into settings.notifications")
 
 
+SALES_DDL = """
+CREATE TABLE IF NOT EXISTS sales (
+    item_id TEXT NOT NULL,
+    time TEXT NOT NULL,
+    league TEXT NOT NULL,
+    price_amount REAL,
+    price_currency TEXT,
+    item_json TEXT NOT NULL,
+    PRIMARY KEY (item_id, time)
+);
+CREATE INDEX IF NOT EXISTS sales_league_time ON sales(league, time DESC);
+"""
+
+
+def _m5_sales(conn: sqlite3.Connection) -> None:
+    """The Sales ledger (trading roadmap batch 6): every Merchant History row the desktop shell fetched,
+    upserted by (item_id, time), kept forever. Idempotent DDL."""
+    conn.executescript(SALES_DDL)
+
+
 USER_MIGRATIONS: list[tuple[int, str, object]] = [
     (1, "initial split from legacy poe2arb.sqlite", _m1_split_from_legacy),
     (2, "derive trading_workspace tree from flat watches", _m2_watches_to_workspace),
     (3, "bake liquidity/volume filter floors into pre-floor settings", _m3_liq_floor),
     (4, "fold ping_sound/ping_volume into settings.notifications", _m4_notifications),
+    (5, "sales ledger table (Merchant History)", _m5_sales),
 ]
