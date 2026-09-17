@@ -61,24 +61,20 @@ export default function CapitalCard({ currencies, status, onSaved }) {
   return (
     <div className="capcard">
       <h2>What you hold <span className="save-state">{state === 'saving' ? 'saving…' : state === 'saved' ? 'saved ✓' : ''}</span></h2>
-      <table className="capital-table">
-        <tbody>
-          {Object.keys(qty).map(c => {
-            const v = valueOf(c)
-            return (
-              <tr key={c}>
-                <td>
-                  <Cur id={c} text />
-                  <div className="cap-sub">{worthLine(v, qty[c], ref, backfilling, wtext)}</div>
-                </td>
-                <td className="num"><input type="number" min="0" step="1" value={qty[c]}
-                  onChange={e => setOne(c, e.target.value)} /></td>
-                <td>{!PRIMARY.includes(c) && <button className="btn small" title="Remove" onClick={() => remove(c)}>×</button>}</td>
-              </tr>
-            )
-          })}
-        </tbody>
-      </table>
+      {/* A grid, not a table: the rail is narrow, and a table's auto layout let a long name or
+          worth line shove the quantity box and × out through the card's edge. Name truncates, the
+          box and × keep fixed columns, the worth line gets the full row width underneath. */}
+      <div className="cap-rows">
+        {Object.keys(qty).map(c => (
+          <div className="cap-row" key={c}>
+            <span className="cap-name"><Cur id={c} text /></span>
+            <input type="number" min="0" step="1" value={qty[c]} aria-label={`${c} held`}
+              onChange={e => setOne(c, e.target.value)} />
+            {PRIMARY.includes(c) ? <span /> : <button className="cap-x" title="Remove" aria-label={`Remove ${c}`} onClick={() => remove(c)}>×</button>}
+            <div className="cap-sub">{worthLine(valueOf(c), qty[c], ref, backfilling, wtext)}</div>
+          </div>
+        ))}
+      </div>
       <div className="row" style={{ marginTop: 6 }}>
         <CurrencyPicker value="" placeholder="Add currency…"
           options={(currencies?.currencies ?? []).filter(c => !(c.id in (qty || {})))}
