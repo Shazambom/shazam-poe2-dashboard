@@ -122,3 +122,13 @@ As of 18:55 UTC 2026-09-17 (when this report was committed):
   `desktop/release/latest-mac.yml`, then check `latest-mac.yml` → zip returns 200.
   If a later commit to this file says "Mac side completed", that was done.
 
+**Update 19:13 UTC — Mac side completed.** The zip re-upload finished after ~40 min (started 18:31).
+Verified before going live: asset `state == "uploaded"`, size 177647335 == local file, download
+returns 200 with that content-length, local sha512 == the manifest's. Only then was `latest-mac.yml`
+re-uploaded; `latest.yml → .exe` and `latest-mac.yml → .zip` both return 200. The `.dmg` (fresh
+installs only; the updater uses the zip) was started afterwards as a separate upload — check it is
+`uploaded` (182102371 bytes) and re-run `gh release upload desktop-v0.2.60
+desktop/release/Arbiter-0.2.60-arm64.dmg --clobber` if it is missing or `starter`.
+Total Mac production exposure to a manifest with no file: ~13 min (18:28–18:41). Mac production was
+held on 0.2.59 for ~32 min after that (18:41–19:13) — safe, just delayed.
+
