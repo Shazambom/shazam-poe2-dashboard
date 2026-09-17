@@ -201,3 +201,24 @@ samples bytes-on-the-wire every 2 s, and cuts + retries when the 30-s average dr
 draft, where attempt 1 really did crawl at 384 KB/s against a forced floor and attempt 2 ran 7.6 MB/s).
 That would have saved ~30 of this release's 65 minutes. The speed-cut uploader ships with the NEXT
 release (0.2.61-beta.1 itself used the wall-clock version); the rollback branch has still never run.
+
+## Still open — the pushed TAG is visible while the release is a draft (found in 0.2.61-beta.1 telemetry)
+
+Beta telemetry, Windows client on 0.2.60-beta.1, at 20:32 and 21:02 UTC (release still a draft):
+`ERROR Cannot find latest.yml in the latest release artifacts (…/releases/download/0.2.61-beta.1/latest.yml): 404`.
+GitHub's `releases.atom` — what electron-updater's prerelease path reads — lists bare **tags**, not
+just releases, so the client saw tag `0.2.61-beta.1` the moment it was pushed and looked for its
+manifest. The `error` handler classifies 404 as benign, so the user saw "up to date" and the client
+retries every 30 min: **harmless, but beta clients can't update or even see the previous beta for the
+whole build+upload** (65 min here; before drafts it was the ~5 min until CI created the release).
+Stable is unaffected (it resolves `/releases/latest`, which ignores tags and drafts).
+**Fix to build:** don't push the tag up front. Trigger the Windows workflow with
+`gh workflow run … -f tag=<tag> -f sha=<sha>` (it already has `workflow_dispatch`), create the draft
+with `--target <sha>`, and let **publishing the draft create the tag** — then tag, release and files
+all appear in the same instant.
+
+**Correction to "We can't see client-side damage" above:** a beta client DID hit the 0.2.60-beta.1
+window — 17:23 UTC `ERROR Cannot download …Arbiter-Setup-0.2.60-beta.1.exe, status 404` — and
+recovered by itself on the next check (17:53 `downloaded 0.2.60-beta.1`). That is the live
+confirmation that a missing installer is survivable on Windows; the earlier "nothing is logged for
+17:02–17:53" was a misread of the log.
