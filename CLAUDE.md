@@ -180,6 +180,20 @@ decide the RIGHT surface for it — most are not a new page:
 - Give something its **own sub-tab only** when it's a genuinely distinct primary workflow
   (as Hold and Arbitrage are).
 
+**⛔ Restraint — cut, don't clutter (owner directive 2026-09-17).** The app must look nice and
+streamlined; nothing on screen may distract the user.
+- **Ruthlessly cut UI that isn't used.** A control that no longer drives anything, a status for a
+  retired feature, a legend nobody acts on — delete it in the same change that made it useless.
+- **Don't propagate logic decisions to the view.** Which algorithm ran, which source won, what was
+  filtered or judged implausible, how a pricing currency was chosen — that is OUR business. Do the
+  work in the backend; give the view the answer, not the reasoning.
+- **Present the information the user requires and nothing more.** Required = the value, its unit,
+  and what it is measured against when that isn't obvious. Provenance, counts, diagnostics and
+  caveats go to docs, logs and beta telemetry — never the screen. Depth belongs one level down
+  (zoomed card / expanded row), not on the base card.
+- A new rule gets a **setting with a sane default**, not an on-screen narration of what it did.
+Full statement in [`docs/ui-styleguide.md`](docs/ui-styleguide.md) → "§0 Restraint".
+
 Rules of thumb: **reuse UI relentlessly** — new data flows into existing components
 (`CardDetail`, board sparkline/graph, chips, capital card) first. Features should cross-link
 and share data through the fewest new surfaces. Think ecosystem, not screens.

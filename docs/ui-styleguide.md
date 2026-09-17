@@ -11,6 +11,36 @@ glow on elevation. Numbers are first-class — this is a trading dashboard.
 
 ---
 
+## 0. Restraint — the first rule (owner directive 2026-09-17)
+
+The app should look **nice and streamlined**. Every element on screen has to earn its place;
+anything that doesn't is a distraction from the numbers the user came for.
+
+- **Ruthlessly cut UI that isn't used.** A control that no longer drives anything, a status for a
+  feature that was retired, a legend for a distinction the user can't act on — delete it, don't
+  grey it out or leave it "for later". When a feature goes, its UI goes in the same change.
+- **Don't clutter the screen.** No search statistics, counts of what was filtered, internal
+  pipeline stages, or explanatory captions by default. If removing an element changes nothing
+  the user does, remove it.
+- **Don't propagate logic decisions to the view.** How a number was produced — which algorithm
+  ran, which data source won, what was dropped as implausible, which rule picked the pricing
+  currency — is OUR business. The view gets the result, not the reasoning. Do the work in the
+  backend and present the answer.
+- **Present the information the user requires, and nothing more.** A value needs its unit and,
+  when it isn't obvious, what it is measured against (a spread is "Spread · Ask · Bid" in a named
+  currency, not a bare percentage). That is *required* information. Provenance, diagnostics and
+  caveats are not — they belong in docs, logs and beta telemetry.
+- **Detail lives one level down.** The base card/row shows the essentials; depth (ask/bid,
+  per-step turnover, fills) belongs in the zoomed card or the expanded row, never at the top level.
+- **A filter is UI the user asked for; a readout is not.** A new rule usually deserves a *setting*
+  with a sane default (so it can be changed) and no on-screen narration of what it did.
+
+Learned the hard way in 0.2.58: a "deep scan: 12 loops, 0 new" summary, a "DEEP" chip, a
+"168 hidden as implausible" counter, an edge-count readout and a live/hourly legend all shipped
+and were all cut. None of them helped the user trade.
+
+---
+
 ## 1. Architecture
 
 - **One hand-authored stylesheet:** `src/styles.css`. No Tailwind, no CSS-in-JS, no CSS
@@ -273,6 +303,9 @@ Use it rarely and always say why.
 
 ## 10. Quick "don'ts"
 
+- ❌ UI that narrates our logic (what ran, what was filtered, where a number came from) → show the
+  result only ([§0 Restraint](#0-restraint--the-first-rule-owner-directive-2026-09-17)).
+- ❌ A control, status or legend that no longer does anything → delete it with the feature.
 - ❌ Raw hex in JSX or a Recharts prop → import from `theme.js`.
 - ❌ A near-duplicate of an existing token → reuse the token.
 - ❌ A new page for a feature → prefer a sub-tab, badge, or inbox entry (see the ecosystem
