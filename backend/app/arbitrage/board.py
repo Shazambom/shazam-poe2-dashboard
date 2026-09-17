@@ -13,6 +13,22 @@ _board_cache: dict = {}
 BOARD_TTL_S = 30.0
 
 
+def counterparts_by_volume(g, rv: dict[str, float]) -> dict[str, list[tuple[float, str]]]:
+    """Per-currency counterpart markets, ranked by traded value/hour (units × ref value) — a
+    fair, direction-symmetric measure of each market's size. THE volume rule: the board's default
+    numeraire and the league arc's fallback numeraire both walk this ranking."""
+    ranked: dict[str, list[tuple[float, str]]] = {}
+    for (a, b), e in g.edges.items():
+        if e.kind == "recipe" or not e.vol_in_per_h:
+            continue
+        volr = e.vol_in_per_h * (rv.get(a) or 0.0)
+        for node, other in ((a, b), (b, a)):
+            ranked.setdefault(node, []).append((volr, other))
+    for lst in ranked.values():
+        lst.sort(reverse=True)
+    return ranked
+
+
 def board(window_h: int = 24) -> dict:
     """Live price board: each watched currency priced in the reference, with the
     buy/sell rates that make up the spread, depth, freshness, and a trend series.
@@ -40,19 +56,7 @@ def _board(window_h: int) -> dict:
     R = s["reference"]
     league = s["league"]
     rv = g.ref_values()
-    # Per-currency counterpart markets, ranked by traded value/hour (units × ref value)
-    # — a fair, direction-symmetric measure of each market's size. Used to pick the
-    # default numeraire: the highest-volume counterpart that still prints a readable
-    # price (see the readability walk below).
-    ranked: dict[str, list[tuple[float, str]]] = {}
-    for (a, b), e in g.edges.items():
-        if e.kind == "recipe" or not e.vol_in_per_h:
-            continue
-        volr = e.vol_in_per_h * (rv.get(a) or 0.0)
-        for node, other in ((a, b), (b, a)):
-            ranked.setdefault(node, []).append((volr, other))
-    for lst in ranked.values():
-        lst.sort(reverse=True)
+    ranked = counterparts_by_volume(g, rv)   # default numeraire: the highest-volume readable counterpart
     hub_ids = centrality.hubs(g, rv, settings_mod.hub_count(s))   # top PageRank → Board "hub" chip (count user-tunable)
     # One-time: seed the board with the market's hub currencies so a fresh board always shows the
     # central markets. Runs once, only once real hubs are known (skips the cold graph), then the

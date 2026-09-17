@@ -25,7 +25,7 @@ function Tile({ r, num, factor, numOptions, onNum, onRemove, onOpen, index = 0 }
   const change = r.change_pct
   const f = factor || 1
   const rp = (v) => (v == null ? null : v / f)               // reprice R-value into `num`
-  const mid = rp(r.mid), buy = rp(r.buy), sell = rp(r.sell), spread = rp(r.spread)
+  const mid = rp(r.mid)
   const trend = r.trend ? r.trend.map(p => ({ t: p.t, v: p.v / f })) : r.trend
   const unit = <Cur id={num} size={14} />
   // Flash the price green/red when its value actually changes (new data landing).
@@ -65,23 +65,9 @@ function Tile({ r, num, factor, numOptions, onNum, onRemove, onOpen, index = 0 }
         {change != null && <span className={`pt-chg ${change >= 0 ? 'gain' : 'loss'}`}>{fmt.pct(change)}</span>}
       </div>
       <Spark points={trend} />
-      {/* Real bid/ask only exists with a live order book; digest gives one mid both
-          ways, so showing buy/sell/spread there would be a fake spread. */}
-      {r.source === 'live' ? (
-        <div className="pt-foot">
-          <span title="what it costs to buy one">buy <b>{buy == null ? '–' : fmt.rate(buy)}</b></span>
-          <span title="what you get selling one">sell <b>{sell == null ? '–' : fmt.rate(sell)}</b></span>
-          {r.spread_pct != null && (
-            <span className="pt-spread" title={`spread ${fmt.rate(spread)} (${r.spread_pct.toFixed(1)}%)`}>
-              <span className="spread-bar" style={{ width: `${Math.max(2, Math.min(46, r.spread_pct * 2))}px` }} />
-              {r.spread_pct.toFixed(1)}%
-            </span>
-          )}
-          {r.depth != null && <span className="muted">{r.depth} offers</span>}
-        </div>
-      ) : (
-        <div className="pt-foot muted">hourly mid{r.age_s != null && <> · {fmt.age(r.age_s)} old</>}</div>
-      )}
+      {/* Ask / bid / spread live in the zoomed card (CardDetail), with their currency — the base
+          card stays a price, a trend and where the price came from. */}
+      <div className="pt-foot muted">{r.source === 'live' ? 'live' : 'hourly mid'}{r.age_s != null && <> · {fmt.age(r.age_s)} old</>}</div>
       {onNum && numOptions.length > 0 && (
         <div className="pt-num-row" onClick={e => e.stopPropagation()}>priced in{' '}
           <select value={num} onChange={e => onNum(r.id, e.target.value)} title="Currency this card is priced in (defaults to its highest-volume market)">

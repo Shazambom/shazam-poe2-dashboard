@@ -83,3 +83,38 @@ def test_project_returns_none_without_enough_history():
 if __name__ == "__main__":
     import pytest
     raise SystemExit(pytest.main([__file__, "-q"]))
+
+
+# ---- an item is never priced in itself: the volume rule picks the numeraire (owner, 2026-09-17)
+META = {291: ("Divine Orb", "currency"), 287: ("Chaos Orb", "currency"), 290: ("Exalted Orb", "currency"),
+        295: ("Mirror of Kalandra", "currency")}
+
+
+def test_numeraire_is_untouched_when_the_item_is_something_else():
+    assert leaguearc.pick_numeraire(287, 291, "Divine Orb", ["Exalted Orb"], META) == (291, "Divine Orb")
+
+
+def test_item_priced_in_itself_moves_to_its_highest_volume_counterpart():
+    """Divine's arc in Divine is a flat 1.0 line. Volume is king: its biggest market is Chaos."""
+    ranked = ["Chaos Orb", "Exalted Orb", "Mirror of Kalandra"]
+    assert leaguearc.pick_numeraire(291, 291, "Divine Orb", ranked, META) == (287, "Chaos Orb")
+
+
+def test_walks_past_counterparts_without_daily_history_and_never_picks_itself():
+    ranked = ["Some Rune With No History", "Divine Orb", "Exalted Orb"]
+    assert leaguearc.pick_numeraire(291, 291, "Divine Orb", ranked, META) == (290, "Exalted Orb")
+
+
+def test_no_usable_counterpart_leaves_it_alone():
+    assert leaguearc.pick_numeraire(291, 291, "Divine Orb", [], META) == (291, "Divine Orb")
+
+
+def test_counterparts_by_volume_ranks_markets_by_traded_value():
+    from app.arbitrage import Edge, Graph
+    from app.arbitrage.board import counterparts_by_volume
+    g = Graph({"reference": "exalted"})
+    for a, b, vol in (("divine", "chaos", 1000.0), ("divine", "exalted", 10.0), ("chaos", "exalted", 5.0)):
+        g.add(Edge(a, b, "digest", 1.0, [{"rate": 1.0, "stock": 1}], vol_in_per_h=vol))
+    ranked = counterparts_by_volume(g, {"divine": 440.0, "chaos": 50.0, "exalted": 1.0})
+    assert [o for _, o in ranked["divine"]] == ["chaos", "exalted"]
+    assert [o for _, o in ranked["exalted"]] == ["divine", "chaos"]

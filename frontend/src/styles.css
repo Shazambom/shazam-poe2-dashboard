@@ -727,8 +727,6 @@ input[type=range] { accent-color: var(--gold); }
 .spark.empty { border-bottom: 1px dashed var(--line); }
 .pt-foot { display: flex; gap: 12px; font-size: 12px; color: var(--muted); align-items: center; flex-wrap: wrap; }
 .pt-foot b { color: var(--ink-2); font-weight: 600; }
-.pt-spread { display: inline-flex; align-items: center; gap: 5px; margin-left: auto; }
-.spread-bar { display: inline-block; height: 5px; background: var(--gold); border-radius: 1px; }
 
 /* loading skeleton — shimmer while the first board load is in flight */
 .price-tile.skeleton { pointer-events: none; }

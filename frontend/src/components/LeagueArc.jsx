@@ -57,7 +57,7 @@ export default function LeagueArcSection({ name }) {
     <>
       <div className="cd-section">League arc
         <span className="muted" style={{ fontWeight: 400 }}>
-          {' · '}day {arc.cur_age}{arc.weighted && arc.resembles ? ` · resembles ${arc.resembles}` : ''}
+          {' · '}day {arc.cur_age}{arc.numeraire !== 'divine' ? ` · in ${arc.numeraire_name}` : ''}{arc.weighted && arc.resembles ? ` · resembles ${arc.resembles}` : ''}
         </span>
       </div>
       <div className="cd-arc"><ArcSpark history={arc.history} arc={arc.arc} /></div>
