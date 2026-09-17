@@ -4,3 +4,6 @@ httpx==0.28.1
 pydantic==2.10.4
 cryptography==44.0.0
 pyrate-limiter==4.5.0
+# negcycle (Bellman-Ford deep scan, arbitrage/deepscan.py). Same pin as requirements-sidecar.txt — numpy is
+# already proven in a frozen onefile binary on Windows there. Optional at runtime: deepscan degrades to nothing.
+numpy==2.5.3

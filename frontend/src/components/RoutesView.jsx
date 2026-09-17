@@ -94,7 +94,7 @@ export default function RoutesView({ capital, status, currencies, onCapitalSaved
   const applyResult = (d) => {
     accRef.current = d.routes
     setRoutes(d.routes)
-    setCounts({ total_candidates: d.total_candidates, total_after_filters: d.total_after_filters })
+    setCounts({ total_candidates: d.total_candidates, total_after_filters: d.total_after_filters, deep_scan: d.deep_scan, implausible: d.implausible, max_credible_margin_pct: d.max_credible_margin_pct })
   }
   const refreshTop = async () => {
     if (!canLive || liveBusy) return
@@ -222,6 +222,16 @@ export default function RoutesView({ capital, status, currencies, onCapitalSaved
           {streaming && <span className="streaming">searching… {routes.length} found</span>}
           {!streaming && counts && <span>{counts.total_after_filters ?? routes.length} of {counts.total_candidates} loops pass{counts.truncated ? ' (search capped)' : ''}</span>}
           {!streaming && banded.active && <span title={`Only loops at least 1 standard deviation above the mean ${banded.metric} of the passing loops are shown, grouped into σ bands.`}>· showing {shown.length} standout (≥1σ {banded.metric})</span>}
+          {!streaming && counts?.implausible > 0 && (
+            <span className="loss" title={`These passed your filters but claim more than +${counts.max_credible_margin_pct}% — that is a data artifact (one odd trade standing in as a thin market's hourly rate, or a bait listing), not an opportunity. Real exchange arbitrage is single-digit percent. Hit refresh to replace hourly averages with live order books.`}>
+              · {counts.implausible} hidden as implausible (&gt;{counts.max_credible_margin_pct}%)
+            </span>
+          )}
+          {!streaming && counts?.deep_scan?.loops > 0 && (
+            <span title="Whole-market Bellman-Ford scan: profitable loops by top-of-book rate, any length. 'New' ones were missed by the step-limited search and are marked DEEP; the rest it had already found. Loops through nothing you hold aren't listed.">
+              · deep scan: {counts.deep_scan.loops} loop{counts.deep_scan.loops === 1 ? '' : 's'}, {counts.deep_scan.added} new{counts.deep_scan.no_holding ? `, ${counts.deep_scan.no_holding} through nothing you hold` : ''}
+            </span>
+          )}
           {meta && <span>· {meta.graph.edges.live} live / {meta.graph.edges.digest} digest / {meta.graph.edges.recipe} recipe edges</span>}
         </div>
 
@@ -256,7 +266,10 @@ export default function RoutesView({ capital, status, currencies, onCapitalSaved
                     </td></tr>
                   )}
                   <tr className="route" aria-expanded={open === r.id} onClick={() => setOpen(open === r.id ? null : r.id)}>
-                    <td className="loop-cell"><Loop r={r} /></td>
+                    <td className="loop-cell">
+                      <Loop r={r} />
+                      {r.deep && <span className="ws-chip ee2 deep-chip" title={`Found by the whole-market scan (Bellman-Ford), not the step-limited search: this loop is ${r.path.length - 1} hops — past your max-steps setting or the search cap. Sized and simulated like every other row.`}>DEEP</span>}
+                    </td>
                     <td className="num">{r.score == null ? <span className="muted">–</span> : r.score.toFixed(3)}</td>
                     <td className="num" title={r.cycle_unit > 1 ? `${r.cycles} cycles × ${r.cycle_unit} per cycle` : `${r.cycles} single-unit cycles`}>
                       {fmt.n(r.start_amount)} <Cur id={r.start} size={16} />

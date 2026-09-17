@@ -503,6 +503,7 @@ tr.std-sep:hover td { background: transparent; }
 td.loop-cell { min-width: 300px; }
 td.mpg { white-space: nowrap; }
 .loop .node { font-weight: 500; }
+.deep-chip { margin-left: 8px; vertical-align: middle; }
 .loop .hop {
   display: inline-flex; align-items: center; gap: 4px; color: var(--muted); font-size: 12px;
   padding: 0 2px;

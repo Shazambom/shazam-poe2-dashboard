@@ -213,6 +213,22 @@ Full table + steps: [`release-runbook.md`](./release-runbook.md) → "Two channe
   (`find_routes/stream_routes`, ranking, the route cache), `convert.py` (`convert`/`_best_conversions`),
   `board.py` (`board()`, `edge_table`); `centrality.py` alongside.
 - **Analytics:** `movers.py`, `holdscore.py`, `inflation.py`/`leaguehistory.py`, `centrality.py`.
+- **Negative-cycle search (2026-09-17):** `negcycle.py` — Bellman-Ford from the Wikipedia pseudocode,
+  twice: `bellman_ford_naive` (line for line; the spec) and `bellman_ford` (numpy, one array pass per
+  round; what runs). Held 1:1 to each other, to a brute-force enumerator, to William Fiset's version
+  (`test_negcycle_fiset.py`) and to networkx's distances (`test_negcycle_networkx.py`, sidecar venv
+  only — networkx's own `find_negative_cycle` fails ~0.25% of inputs, which is why this is not a port).
+  `arbitrage/deepscan.py` feeds its loops through the normal `_route_from`/`simulate` path (rows tagged
+  `deep`). **numpy is now a main-backend dependency** (optional at runtime: the scan degrades to nothing).
+  Beta telemetry: `[deepscan]` lines under `p=sidecar` (numpy ok/missing, loops, ms — no currency names).
+- **Route sanity (2026-09-17):** `graph.credible_offers` drops live offers paying > `BAIT_FACTOR`× the
+  pair's EXECUTED (digest) rate (price-fixer bait: Omen of Light "for 1 exalted"); `routes.
+  MAX_CREDIBLE_MARGIN_PCT` withholds + counts (`implausible`) loops claiming an impossible margin.
+  Known open problem: hourly-digest rates of thin markets are noisy (most edges under ~1k ex/h sit
+  >1.5× off a volume-weighted consensus), so 10–40% digest-only loops still show; live books fix them.
+- **Exchange have-cap:** GGG rejects > 10 `have` per exchange request (was ≥ 12 until 2026-09-17, when
+  every live fetch started failing with a 400). `orderbook.state["have_cap"]` learns the cap down on
+  "Too many items" and re-queues the same pairs; `last_error` now carries GGG's response body.
 - **Data ingest:** `digest.py`, `orderbook.py`, `gamedata.py` (gold fees), `gateway.py` (rate-limited HTTP).
 - **API:** `main.py` (all routes). **Settings:** `settings.py`. **DB:** `db.py`/`config.py`.
 - **Frontend views:** `BoardView`, `HoldView`, `RoutesView`/`ConvertView`, `InflationView`,

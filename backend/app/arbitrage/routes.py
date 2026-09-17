@@ -17,7 +17,7 @@ from .. import cache, db, orderbook, pairscore
 from .. import settings as settings_mod
 from ..currencies import registry
 from ..settings import get_settings
-from . import graph
+from . import deepscan, graph
 from .graph import INF, Edge, Graph, cycle_unit, route_cap, simulate
 
 _route_cache: dict = {}      # search key -> (ts, orderbook version, result); see _cache_get/_cache_put
@@ -59,12 +59,16 @@ def _graph_summary(g: Graph) -> dict:
 
 
 def _result(g: Graph, s: dict, f: dict, ref_value: dict, capital: dict, notional: bool,
-            routes: list[dict], kept: list[dict], limit: int) -> dict:
+            routes: list[dict], kept: list[dict], limit: int, deep: dict | None = None,
+            implausible: int = 0) -> dict:
     """The one search-result shape (served by /api/routes*, cached, and replayed by the stream)."""
     return {
         "routes": kept[:limit], "total_candidates": len(routes), "total_after_filters": len(kept),
         "graph": _graph_summary(g), "reference": s["reference"], "ref_values": ref_value,
         "capital": capital, "notional": notional, "filters": f,
+        "deep_scan": deep or {},     # {loops, added, no_holding} — see deepscan.py
+        "implausible": implausible,  # passed the filters but claimed > MAX_CREDIBLE_MARGIN_PCT
+        "max_credible_margin_pct": MAX_CREDIBLE_MARGIN_PCT,
     }
 
 
@@ -80,6 +84,10 @@ def find_routes(filters: dict | None = None, start_currencies: list[str] | None 
 
 
 MAX_CANDIDATES = 20000   # hard ceiling on simulated cycles per search
+# A loop claiming more than this is a data artifact (a thin market's one odd trade standing in
+# as its hourly "rate", or a bait quote), not an opportunity: real exchange arbitrage is
+# single-digit percent. Withheld from the list and COUNTED in the result (`implausible`).
+MAX_CREDIBLE_MARGIN_PCT = 50.0
 
 
 def _velocity(margin_ref: float, fill_hours: float | None, gold: float,
@@ -205,27 +213,65 @@ def _search_setup(filters: dict | None, start_currencies: list[str] | None):
     return g, s, f, ref_value, capital, starts, notional
 
 
-def _iter_candidates(g: Graph, s: dict, ref_value: dict, capital: dict, starts: list[str], notional: bool):
-    """Yield route dicts as the DFS discovers them, capped at MAX_CANDIDATES."""
-    count = 0
-    for start in starts:
+def _iter_candidates(g: Graph, s: dict, ref_value: dict, capital: dict, starts: list[str], notional: bool,
+                     deep_stats: dict | None = None):
+    """Yield route dicts as the DFS discovers them, capped at MAX_CANDIDATES — then whatever the
+    whole-market deep scan adds (loops past `max_steps` or past the cap), tagged `deep`. Both go
+    through `_route_from`, so a deep loop is sized, simulated, filtered and ranked like any other."""
+    def budget_for(start: str) -> tuple[float, float]:
         held = capital.get(start, 0.0)
-        budget = held * s["max_start_fraction"] if not notional else (1.0 / ref_value.get(start, 1.0) or 1.0) * 10
+        return held, (held * s["max_start_fraction"] if not notional
+                      else (1.0 / ref_value.get(start, 1.0) or 1.0) * 10)
+
+    count = 0
+    seen: set[str] = set()
+    capped = False
+    for start in starts:
+        held, budget = budget_for(start)
         for cyc in g.iter_cycles(start, s["max_steps"]):
             count += 1
             if count > MAX_CANDIDATES:
-                return
+                capped = True
+                break
+            seen.add(_edge_list_id(cyc))
             r = _route_from(g, cyc, start, held, budget, ref_value)
             if r is not None:
                 yield r
+        if capped:
+            break
+
+    stats = {"loops": 0, "added": 0, "no_holding": 0}
+    startable = set(starts)
+    for loop in deepscan.deep_loops(g, ref_value):
+        stats["loops"] += 1
+        entries = [i for i, e in enumerate(loop) if e.src in startable]
+        if not entries:
+            stats["no_holding"] += 1      # profitable, but through nothing the user holds
+        for i in entries:
+            cyc = loop[i:] + loop[:i]     # the same loop, entered at the held currency
+            if _edge_list_id(cyc) in seen:
+                continue
+            seen.add(_edge_list_id(cyc))
+            held, budget = budget_for(cyc[0].src)
+            r = _route_from(g, cyc, cyc[0].src, held, budget, ref_value)
+            if r is not None:
+                r["deep"] = True
+                stats["added"] += 1
+                yield r
+    if deep_stats is not None:
+        deep_stats.update(stats)
 
 
-def _finish(routes: list[dict], f: dict, s: dict) -> tuple[list[dict], int]:
+def _finish(routes: list[dict], f: dict, s: dict) -> tuple[list[dict], int, int]:
+    """(kept, limit, implausible): the loops that pass the user's filters AND are credible,
+    ranked; and how many passed the filters but were withheld as impossible."""
     pairscore.observe(routes)
-    kept = [r for r in routes if _keep(r, f)]
+    passing = [r for r in routes if _keep(r, f)]
+    kept = [r for r in passing if r["margin_pct"] <= MAX_CREDIBLE_MARGIN_PCT]
+    implausible = len(passing) - len(kept)
     _composite_score(kept, s.get("rank_weights", {}))
     kept.sort(key=_sort_key(f.get("sort", "score")), reverse=True)
-    return kept, int(f.get("limit", 100))
+    return kept, int(f.get("limit", 100)), implausible
 
 
 def stream_routes(filters: dict | None = None, start_currencies: list[str] | None = None):
@@ -245,33 +291,38 @@ def stream_routes(filters: dict | None = None, start_currencies: list[str] | Non
         yield "done", {"total_candidates": cached["total_candidates"],
                        "total_after_filters": cached["total_after_filters"], "truncated": False,
                        "scores": {r["id"]: r.get("score") for r in cached["routes"]},
-                       "order": [r["id"] for r in cached["routes"]], "cached": True}
+                       "order": [r["id"] for r in cached["routes"]], "cached": True,
+                       "deep_scan": cached.get("deep_scan", {}), "implausible": cached.get("implausible", 0),
+                       "max_credible_margin_pct": MAX_CREDIBLE_MARGIN_PCT}
         return
     yield "meta", {
         "reference": s["reference"], "capital": capital, "notional": notional,
         "graph": _graph_summary(g), "filters": f,
     }
     routes: list[dict] = []
-    for r in _iter_candidates(g, s, ref_value, capital, starts, notional):
+    deep: dict = {}
+    for r in _iter_candidates(g, s, ref_value, capital, starts, notional, deep):
         routes.append(r)
-        if _keep(r, f):
+        if _keep(r, f) and r["margin_pct"] <= MAX_CREDIBLE_MARGIN_PCT:
             yield "route", r
-    kept, limit = _finish(routes, f, s)
-    result = _result(g, s, f, ref_value, capital, notional, routes, kept, limit)
+    kept, limit, implausible = _finish(routes, f, s)
+    result = _result(g, s, f, ref_value, capital, notional, routes, kept, limit, deep, implausible)
     _cache_put(key, result)
     yield "done", {
         "total_candidates": len(routes), "total_after_filters": len(kept),
         "truncated": len(routes) >= MAX_CANDIDATES,
         "scores": {r["id"]: r["score"] for r in kept[:limit]},
         "order": [r["id"] for r in kept[:limit]],
+        "deep_scan": deep, "implausible": implausible, "max_credible_margin_pct": MAX_CREDIBLE_MARGIN_PCT,
     }
 
 
 def _find_routes(filters: dict | None, start_currencies: list[str] | None) -> dict:
     g, s, f, ref_value, capital, starts, notional = _search_setup(filters, start_currencies)
-    routes = list(_iter_candidates(g, s, ref_value, capital, starts, notional))
-    kept, limit = _finish(routes, f, s)
-    return _result(g, s, f, ref_value, capital, notional, routes, kept, limit)
+    deep: dict = {}
+    routes = list(_iter_candidates(g, s, ref_value, capital, starts, notional, deep))
+    kept, limit, implausible = _finish(routes, f, s)
+    return _result(g, s, f, ref_value, capital, notional, routes, kept, limit, deep, implausible)
 
 
 def _composite_score(routes: list[dict], weights: dict) -> None:
