@@ -1,3 +1,4 @@
-desktop/src/vendor/ee2-query/vendor/** linguist-generated=true -diff
-desktop/src/vendor/ee2-query/data/** linguist-generated=true -diff
-desktop/test/goldens/ee2-query/** linguist-generated=true
+desktop/src/vendor/ee2-query/vendor/** linguist-generated=true -diff -text
+desktop/src/vendor/ee2-query/data/** linguist-generated=true -diff -text
+desktop/test/goldens/ee2-query/** linguist-generated=true -text
+desktop/test/fixtures/ee2/** -text

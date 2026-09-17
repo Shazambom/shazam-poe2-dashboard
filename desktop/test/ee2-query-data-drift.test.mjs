@@ -20,3 +20,10 @@ test('manifest names the EE2 tag and every vendored file hashes as recorded', ()
     assert.equal(createHash('sha256').update(readFileSync(f)).digest('hex'), rec.sha256, `${rel} hash — regenerate with scripts/sync-ee2.mjs, never hand-edit`)
   }
 })
+
+test('vendored data is checked out byte-exact everywhere (no CRLF conversion — the index bins are byte offsets)', () => {
+  const ga = readFileSync(join(V, '..', '..', '..', '..', '.gitattributes'), 'utf8')
+  assert.match(ga, /desktop\/src\/vendor\/ee2-query\/data\/\*\* [^\n]*-text/)
+  assert.match(ga, /desktop\/src\/vendor\/ee2-query\/vendor\/\*\* [^\n]*-text/)
+  for (const f of ['en/items.ndjson', 'en/stats.ndjson']) assert.ok(!readFileSync(join(V, 'data', f)).includes(13), `${f} has a CR byte`)
+})
