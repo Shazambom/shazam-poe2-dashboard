@@ -2,11 +2,12 @@
 # Release lifecycle for the LOCAL (Mac) half of a desktop release — event-driven, no polling.
 #
 # Updates come from GitHub Releases (electron-updater `github` provider). Windows builds in CI
-# (release-desktop-win.yml) on the desktop-v<ver> tag push and uploads its assets to the
+# (release-desktop-win.yml), started by this script, and uploads its assets to the draft
 # release. Mac can't cross-compile, so this script owns the Mac half of the SAME release:
 #   1. builds the Mac app (skip with --no-build if release/ is already current),
-#   2. WAITS for that tag's Windows CI run to finish — via `gh run watch`, which streams the
-#      run's status and blocks until it completes (nonzero exit on failure). No poll loop.
+#   2. starts the Windows CI build (workflow_dispatch — NO tag is pushed; publishing creates it)
+#      and WAITS for it via `gh run watch`, which streams the run's status and blocks until it
+#      completes (nonzero exit on failure). No poll loop.
 #   3. uploads the Mac assets into the release the moment CI is done,
 #   4. GOES LIVE in one step: the release is a DRAFT (invisible to every client, never "Latest")
 #      until both platforms' files are verified present; only then is it published, re-checked
@@ -17,6 +18,8 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 REPO="Shazambom/shazam-poe2-dashboard"
+# Releases are cut from main: CI builds main's head and the published tag lands on it.
+[ "$(git branch --show-current)" = "main" ] || { echo "FATAL: releases are cut from main (on '$(git branch --show-current)')"; exit 1; }
 VER=$(node -p "require('./package.json').version")
 
 # EE2 QUERY PORT SYNC — refresh desktop/src/vendor/ee2-query from EE2's latest release tag, snapshot
@@ -38,17 +41,28 @@ git diff --cached --quiet || git commit -q -m "chore(ee2-query): sync vendored E
 # keeps `desktop-v*` because that path resolves via /releases/latest (literal tag match, no semver).
 case "$VER" in *-beta*) TAG="$VER" ;; *) TAG="desktop-v${VER}" ;; esac
 
-# Create the release as a DRAFT before the tag push, so the CI run it fires finds the draft and
-# uploads into it instead of creating a public release. Idempotent (re-runs reuse what exists).
-node scripts/release-assets.mjs ensure-draft "$TAG"
-
-# Tag + push — this is what fires the Windows CI run. Idempotent: if the tag already exists
-# (locally or on origin) it is left alone, so re-running after a failed upload is safe.
-if ! git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
-  git tag -a "$TAG" -m "Desktop v${VER}"
-fi
+# The commit this release is cut from. main goes up first (CI checks this sha out, and the workflow
+# file itself is read from main); the TAG IS NOT PUSHED — GitHub's releases.atom lists bare tags, so
+# a tag pushed up front makes every beta client chase a manifest that isn't public yet. Publishing
+# the draft (the last step) creates the tag, so tag + release + files appear together.
 git push origin main
-git push origin "$TAG"
+SHA=$(git rev-parse main)
+
+# Create the release as a DRAFT targeting that commit. Idempotent (re-runs reuse/retarget it).
+node scripts/release-assets.mjs ensure-draft "$TAG" "$SHA"
+
+# Start the Windows CI build — unless a previous run of this script already got the Windows files
+# into the draft (its manifest goes up last, so its presence means the Windows half is complete).
+case "$VER" in *-beta*) WIN_YML="beta.yml" ;; *) WIN_YML="latest.yml" ;; esac
+RID=""
+if node scripts/release-assets.mjs has "$TAG" "$WIN_YML"; then
+  echo "Windows files already in the draft — not rebuilding"
+  NEED_CI=0
+else
+  NEED_CI=1
+  T0=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+  gh workflow run release-desktop-win.yml --repo "$REPO" --ref main -f tag="$TAG" -f sha="$SHA"
+fi
 
 if [ "${1:-}" != "--no-build" ]; then
   # Pull the CURRENT market snapshot from the market-seed-latest GitHub release before
@@ -85,26 +99,29 @@ for f in "${FILES[@]}"; do
   [ -f "$f" ] || { echo "missing $f — run 'npm run dist:mac' first (or drop --no-build)"; exit 1; }
 done
 
-# Find the Windows CI run for this tag. A tag-triggered run reports the tag as its headBranch.
-# Brief retry only to let the run register after the tag push — this locates the run id; the
-# actual wait is event-driven below.
-echo "locating Windows CI run for $TAG ..."
-RID=""
-for _ in $(seq 1 30); do
-  RID=$(gh run list --repo "$REPO" --workflow=release-desktop-win.yml --limit 20 \
-        --json databaseId,headBranch,event \
-        -q "map(select(.headBranch==\"$TAG\")) | .[0].databaseId // empty" 2>/dev/null || true)
-  [ -n "$RID" ] && break
-  sleep 4
-done
-[ -n "$RID" ] || { echo "no Windows CI run found for $TAG — was the tag pushed?"; exit 1; }
+if [ "$NEED_CI" = 1 ]; then
+  # Find the run we just dispatched (named after the tag, created after T0). Brief retry only to
+  # let the run register; the actual wait is event-driven below.
+  echo "locating Windows CI run for $TAG ..."
+  for _ in $(seq 1 30); do
+    RID=$(gh run list --repo "$REPO" --workflow=release-desktop-win.yml --event workflow_dispatch --limit 20 \
+          --json databaseId,displayTitle,createdAt \
+          -q "map(select(.displayTitle==\"Windows build $TAG\" and .createdAt>=\"$T0\")) | .[0].databaseId // empty" 2>/dev/null || true)
+    [ -n "$RID" ] && break
+    sleep 4
+  done
+  [ -n "$RID" ] || { echo "no Windows CI run found for $TAG — did the dispatch fail?"; exit 1; }
 
-# Event-driven wait: streams status, blocks until the run finishes, exits nonzero if it failed.
-echo "watching Windows CI run $RID (blocks until it finishes) ..."
-gh run watch "$RID" --repo "$REPO" --exit-status --interval 10
+  # Event-driven wait: streams status, blocks until the run finishes, exits nonzero if it failed.
+  echo "watching Windows CI run $RID (blocks until it finishes) ..."
+  gh run watch "$RID" --repo "$REPO" --exit-status --interval 10
+fi
 
 # CI has put the Windows assets in the draft; add the Mac assets (manifest last, retried, each
 # checked against GitHub's own sha256), then the single go-live flip with verify + auto-rollback.
 node scripts/release-assets.mjs upload "$TAG" "${FILES[@]}"
 node scripts/release-assets.mjs publish "$TAG"
+# Publishing created the tag on GitHub; bring it home and confirm it points at what we built.
+git fetch -q origin "refs/tags/$TAG:refs/tags/$TAG"
+[ "$(git rev-parse "$TAG^{commit}")" = "$SHA" ] || { echo "WARNING: tag $TAG is not at $SHA"; exit 1; }
 echo "release $TAG is live on both platforms"

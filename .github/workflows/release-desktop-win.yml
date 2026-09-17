@@ -1,18 +1,27 @@
 name: Build Windows desktop app
+run-name: Windows build ${{ inputs.tag }}
 
 # The Windows desktop app is FULLY SELF-CONTAINED: it ships its own PyInstaller-built
 # backend + local DB and only ever calls the server for updates. PyInstaller cannot
 # cross-compile, so the Windows backend .exe MUST be built here on a real windows-latest
 # runner; the installer is then attached to the desktop-v<ver> GitHub Release, which is the
 # update channel electron-updater's `github` provider reads.
+# Started ONLY by desktop/publish-github.sh (`gh workflow run … -f tag= -f sha=`), never by a tag
+# push: the tag must not exist until the release goes public. GitHub's releases.atom — what
+# electron-updater's beta path reads — lists bare tags, so a tag pushed up front made every beta
+# client chase a manifest that wasn't public yet for the whole build (0.2.61-beta.1, 65 min).
+# Publishing the draft creates the tag, so tag + release + files appear in the same instant.
 on:
-  push:
-    # Stable: desktop-v<ver>. Beta (dev): bare-semver `<ver>-beta.N` (electron-updater's prerelease
-    # channel path parses the tag as semver, which the desktop-v prefix breaks). See release-runbook.
-    tags:
-      - 'desktop-v*'
-      - '*-beta.*'
   workflow_dispatch:
+    inputs:
+      tag:
+        # Stable: desktop-v<ver>. Beta (dev): bare-semver `<ver>-beta.N` (electron-updater's prerelease
+        # channel path parses the tag as semver, which the desktop-v prefix breaks). See release-runbook.
+        description: 'Release tag the draft was created for (desktop-v<ver> or <ver>-beta.N)'
+        required: true
+      sha:
+        description: 'Commit to build (the draft release targets the same commit)'
+        required: true
 
 permissions:
   contents: write
@@ -22,6 +31,8 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.sha }}
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
@@ -87,21 +98,20 @@ jobs:
           # electron-builder names the manifest latest.yml regardless of the -beta version tag. For a
           # beta (dev) release, rename to beta.yml so beta clients fetch it and stable's latest.yml is
           # never touched (a beta build must emit ONLY beta.yml).
-          if [[ "${{ github.ref_name }}" == *-beta* ]]; then mv -f release/latest.yml release/beta.yml; fi
+          if [[ "${{ inputs.tag }}" == *-beta* ]]; then mv -f release/latest.yml release/beta.yml; fi
       - name: Upload installer into the DRAFT release
         # The release stays a draft (invisible to electron-updater, never "Latest") until
         # desktop/publish-github.sh has added the Mac files, verified both platforms and flipped it
         # public — so clients never see a manifest whose installer isn't there yet
         # (docs/bugs/2026-09-17-release-publish-not-atomic.md). Same tool the Mac side uses:
         # installers first, manifest LAST, stale half-created assets cleared, timeout + retries.
-        if: github.ref_type == 'tag'
         timeout-minutes: 75
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          TAG="${{ github.ref_name }}"
-          node desktop/scripts/release-assets.mjs ensure-draft "$TAG"
+          TAG="${{ inputs.tag }}"
+          node desktop/scripts/release-assets.mjs ensure-draft "$TAG" "${{ inputs.sha }}"
           # Only the files this build produced (a beta emits beta.yml, a stable latest.yml).
           FILES=()
           for f in desktop/release/*.exe desktop/release/*.exe.blockmap desktop/release/*.zip \

@@ -2,8 +2,11 @@
 // Release assets, done safely — the ONE tool both halves of a release use (Windows CI and
 // publish-github.sh), so the two can't drift. Fixes docs/bugs/2026-09-17-release-publish-not-atomic.md:
 //
-//   ensure-draft <tag>            create the release as a DRAFT (invisible to electron-updater, never
-//                                 "Latest") unless one already exists for the tag
+//   ensure-draft <tag> <sha>      create the release as a DRAFT (invisible to electron-updater, never
+//                                 "Latest") targeting <sha>, unless one already exists. The TAG IS
+//                                 NOT PUSHED: publishing the draft creates it, so clients never see
+//                                 a tag without its release (releases.atom lists bare tags)
+//   has <tag> <asset>             exit 0 if that asset is fully uploaded (lets a re-run skip CI)
 //   upload <tag> <files...>       installers first, update manifests (*.yml) LAST; per file: clear a
 //                                 half-created ("starter") asset, stream it up while WATCHING THE
 //                                 SPEED — a connection that collapses is cut and retried on a fresh
@@ -128,10 +131,19 @@ async function assetsOf(id) {
 }
 const deleteAsset = (id) => gh(['api', '-X', 'DELETE', `repos/${REPO}/releases/assets/${id}`])
 
-async function ensureDraft(tag) {
+async function ensureDraft(tag, sha) {
+  if (!/^[0-9a-f]{40}$/.test(sha || '')) throw new Error('ensure-draft needs the full commit sha the tag will point at')
   const have = await findRelease(tag)
-  if (have) { console.log(`release ${tag} exists (${have.draft ? 'draft' : 'PUBLISHED'}, id ${have.id})`); return have }
-  const args = ['release', 'create', tag, '--repo', REPO, '--draft', '--title', tag, '--notes', '', '--target', 'main']
+  if (have) {
+    console.log(`release ${tag} exists (${have.draft ? 'draft' : 'PUBLISHED'}, id ${have.id})`)
+    if (have.draft && have.target_commitish !== sha) {     // a re-run after a new commit: retarget
+      const r = await gh(['release', 'edit', tag, '--repo', REPO, '--target', sha])
+      if (r.code !== 0) throw new Error(`cannot retarget draft: ${r.err.trim()}`)
+      console.log(`  retargeted ${have.target_commitish} → ${sha}`)
+    }
+    return have
+  }
+  const args = ['release', 'create', tag, '--repo', REPO, '--draft', '--title', tag, '--notes', '', '--target', sha]
   if (isBeta(tag)) args.push('--prerelease')
   const r = await gh(args)
   if (r.code !== 0) throw new Error(`cannot create draft: ${r.err.trim()}`)
@@ -283,6 +295,8 @@ async function publish(tag) {
   }
   console.error(`live check FAILED — rolling back (re-drafting ${tag}):\n  ${bad.join('\n  ')}`)
   const back = await setDraft(tag, true)
+  // The flip created the tag; a bare tag is visible to beta clients, so take it back too.
+  await gh(['api', '-X', 'DELETE', `repos/${REPO}/git/refs/tags/${tag}`])
   if (back.code !== 0) {
     // Last resort: pull the manifests so clients see "no update" instead of a dead link.
     const rel = await findRelease(tag)
@@ -293,8 +307,13 @@ async function publish(tag) {
 }
 
 async function main([cmd, tag, ...rest]) {
-  if (!cmd || !tag) { console.error('usage: release-assets.mjs ensure-draft|upload|verify|publish <tag> [files...|--live]'); process.exit(2) }
-  if (cmd === 'ensure-draft') await ensureDraft(tag)
+  if (!cmd || !tag) { console.error('usage: release-assets.mjs ensure-draft <tag> <sha> | has <tag> <asset> | upload <tag> <files...> | verify <tag> [--live] | publish <tag>'); process.exit(2) }
+  if (cmd === 'ensure-draft') await ensureDraft(tag, rest[0])
+  else if (cmd === 'has') {
+    const rel = await findRelease(tag)
+    const a = rel && (await assetsOf(rel.id)).find((x) => x.name === rest[0])
+    process.exit(a && a.state === 'uploaded' ? 0 : 1)
+  }
   else if (cmd === 'upload') await upload(tag, rest)
   else if (cmd === 'verify') {
     const bad = await verify(tag, { live: rest.includes('--live') })
