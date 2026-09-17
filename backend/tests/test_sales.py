@@ -28,7 +28,7 @@ def test_m5_creates_the_table_and_is_idempotent(tmp_path):
     migrations_user._m5_sales(c)
     cols = [r[1] for r in c.execute("PRAGMA table_info(sales)")]
     assert cols == ["item_id", "time", "league", "price_amount", "price_currency", "item_json"]
-    assert migrations_user.USER_MIGRATIONS[-1][0] == 5
+    assert (5, migrations_user._m5_sales) in [(n, fn) for n, _, fn in migrations_user.USER_MIGRATIONS]
 
 
 def test_ingest_is_idempotent_and_filters_by_league():

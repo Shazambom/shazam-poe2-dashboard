@@ -91,7 +91,7 @@ export default function SettingsView({ currencies, status, onSaved }) {
             <div className="field"><label>Only if the pair's quote is older than (seconds)</label><input type="number" value={s.live_min_age_s} onChange={e => set('live_min_age_s', e.target.value)} /></div>
             <div className="field"><label>Never refetch the same pair sooner than (seconds)</label><input type="number" value={s.min_refetch_s} onChange={e => set('min_refetch_s', e.target.value)} /></div>
             <div className="field"><label>Serve identical route queries from memory for (seconds)</label><input type="number" value={s.routes_cache_s} onChange={e => set('routes_cache_s', e.target.value)} /></div>
-            <div className="field"><label>Haves per exchange request</label><input type="number" min="1" max="10" title="pathofexile.com rejects more than 10 per request" value={s.batch_max_have} onChange={e => set('batch_max_have', e.target.value)} /></div>
+            <div className="field"><label>Haves per exchange request</label><input type="number" min="1" max="10" value={s.batch_max_have} onChange={e => set('batch_max_have', e.target.value)} /></div>
             <div className="check"><Toggle checked={!!s.batch_pad} onChange={v => set('batch_pad', v)} label="Fill spare request slots with likely-useful pairs" /></div>
             <div className="check"><Toggle checked={!!s.background_sweep} onChange={v => set('background_sweep', v)} label="Background sweep of the whole watchlist" /></div>
 

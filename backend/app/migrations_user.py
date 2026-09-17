@@ -209,6 +209,28 @@ def _m4_notifications(conn: sqlite3.Connection) -> None:
     log.info("m4: folded ping_sound/ping_volume into settings.notifications")
 
 
+def _m6_liq_floor_200(conn: sqlite3.Connection) -> None:
+    """One-time (owner mandate 2026-09-17): raise the saved per-step liquidity floor to 200 ex.
+    A new default never reaches a filter the user already saved (m3 baked 50 into every install),
+    and liquidity decides whether a loop can be traded at all. Never lowers a higher floor;
+    idempotent on `_liq_floor_v2`, after which the user's own choice sticks."""
+    row = conn.execute("SELECT value FROM kv WHERE key='settings'").fetchone()
+    if not row:
+        return
+    try:
+        s = json.loads(row[0])
+    except (ValueError, TypeError):
+        return
+    if not isinstance(s, dict) or s.get("_liq_floor_v2"):
+        return
+    f = s.setdefault("filters", {})
+    if isinstance(f, dict):
+        f["min_liquidity_ref"] = max(f.get("min_liquidity_ref") or 0.0, 200.0)
+    s["_liq_floor_v2"] = True
+    conn.execute("UPDATE kv SET value=? WHERE key='settings'", (json.dumps(s),))
+    log.info("m6: raised the saved liquidity floor to 200")
+
+
 SALES_DDL = """
 CREATE TABLE IF NOT EXISTS sales (
     item_id TEXT NOT NULL,
@@ -235,4 +257,5 @@ USER_MIGRATIONS: list[tuple[int, str, object]] = [
     (3, "bake liquidity/volume filter floors into pre-floor settings", _m3_liq_floor),
     (4, "fold ping_sound/ping_volume into settings.notifications", _m4_notifications),
     (5, "sales ledger table (Merchant History)", _m5_sales),
+    (6, "raise the saved liquidity filter floor to 200", _m6_liq_floor_200),
 ]

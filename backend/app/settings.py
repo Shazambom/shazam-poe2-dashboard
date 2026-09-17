@@ -76,7 +76,7 @@ DEFAULTS: dict = {
         "min_margin_ref": 0.0,
         "max_gold": 0,
         "min_margin_per_1k_gold": 0.0,
-        "min_liquidity_ref": 50.0,        # per-step min executable capacity (ref value)
+        "min_liquidity_ref": 200.0,        # per-step min executable capacity (ref value)
         "min_volume_ref_per_h": 100.0,    # per-step min executed value/hour
         "max_fill_hours": 24,             # route should fill within a day of trading
         "min_velocity": 0.0,

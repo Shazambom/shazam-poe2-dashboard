@@ -38,7 +38,7 @@ def test_m4_noop_without_legacy_keys(tmp_path):
     c = _conn(tmp_path, {"league": "L"})
     migrations_user._m4_notifications(c)
     assert json.loads(c.execute("SELECT value FROM kv WHERE key='settings'").fetchone()[0]) == {"league": "L"}
-    assert [m[0] for m in migrations_user.USER_MIGRATIONS] == [1, 2, 3, 4, 5]
+    assert [m[0] for m in migrations_user.USER_MIGRATIONS] == [1, 2, 3, 4, 5, 6]
 
 
 def test_merged_settings_deep_merge_partial_notifications():

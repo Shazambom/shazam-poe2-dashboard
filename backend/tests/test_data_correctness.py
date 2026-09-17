@@ -218,3 +218,34 @@ def test_user_db_is_synchronous_full_and_market_normal():
     c = db._conn()
     assert c.execute("PRAGMA main.synchronous").fetchone()[0] == 2      # FULL
     assert c.execute("PRAGMA market.synchronous").fetchone()[0] == 1    # NORMAL
+
+
+def test_m6_raises_the_saved_liquidity_floor_to_200_once(tmp_path):
+    """Owner mandate 2026-09-17: loops need real liquidity — the floor goes 50 -> 200 ex, and it
+    must reach installs whose SAVED filter still says 50 (a new default alone never would)."""
+    c = _user_conn(tmp_path)
+    c.execute("INSERT INTO kv(key, value) VALUES('settings', ?)",
+              (json.dumps({"_liq_floor_v1": True, "filters": {"min_liquidity_ref": 50.0, "min_volume_ref_per_h": 100.0}}),))
+    migrations_user._m6_liq_floor_200(c)
+    s = json.loads(c.execute("SELECT value FROM kv WHERE key='settings'").fetchone()[0])
+    assert s["filters"] == {"min_liquidity_ref": 200.0, "min_volume_ref_per_h": 100.0}
+    assert s["_liq_floor_v2"] is True
+    # idempotent; a user who later chooses another value keeps it; a HIGHER saved floor is never lowered
+    s["filters"]["min_liquidity_ref"] = 120.0
+    c.execute("UPDATE kv SET value=? WHERE key='settings'", (json.dumps(s),))
+    migrations_user._m6_liq_floor_200(c)
+    assert json.loads(c.execute("SELECT value FROM kv WHERE key='settings'").fetchone()[0])["filters"]["min_liquidity_ref"] == 120.0
+
+
+def test_m6_keeps_a_higher_floor_and_is_registered(tmp_path):
+    c = _user_conn(tmp_path)
+    c.execute("INSERT INTO kv(key, value) VALUES('settings', ?)", (json.dumps({"filters": {"min_liquidity_ref": 900}}),))
+    migrations_user._m6_liq_floor_200(c)
+    assert json.loads(c.execute("SELECT value FROM kv WHERE key='settings'").fetchone()[0])["filters"]["min_liquidity_ref"] == 900
+    assert (6, migrations_user._m6_liq_floor_200) in [(n, fn) for n, _, fn in migrations_user.USER_MIGRATIONS]
+
+
+def test_liquidity_floor_default_is_200():
+    from app import arbitrage, settings
+    assert settings.DEFAULTS["filters"]["min_liquidity_ref"] == 200.0
+    assert arbitrage.RECOMMENDED_MIN_LIQUIDITY_REF == 200.0

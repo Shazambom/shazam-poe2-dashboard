@@ -222,10 +222,16 @@ Full table + steps: [`release-runbook.md`](./release-runbook.md) → "Two channe
   `deep`). **numpy is now a main-backend dependency** (optional at runtime: the scan degrades to nothing).
   Beta telemetry: `[deepscan]` lines under `p=sidecar` (numpy ok/missing, loops, ms — no currency names).
 - **Route sanity (2026-09-17):** `graph.credible_offers` drops live offers paying > `BAIT_FACTOR`× the
-  pair's EXECUTED (digest) rate (price-fixer bait: Omen of Light "for 1 exalted"); `routes.
-  MAX_CREDIBLE_MARGIN_PCT` withholds + counts (`implausible`) loops claiming an impossible margin.
-  Known open problem: hourly-digest rates of thin markets are noisy (most edges under ~1k ex/h sit
-  >1.5× off a volume-weighted consensus), so 10–40% digest-only loops still show; live books fix them.
+  pair's EXECUTED (digest) rate (price-fixer bait on the whisper-based trade-site exchange: Omen of
+  Light "for 1 exalted"). **Do NOT cap loop margins:** a 0.2.58-beta.1 experiment hid loops claiming
+  > 50% and the owner rejected it — digest rates are EXECUTED in-game Currency Exchange prices, so a
+  +500% loop through a thin market (3 essences sold for 1 divine each) is a real MAKER opportunity
+  (place the order, wait); `fill_hours` / volume / the liquidity filter are what qualify it, not the
+  margin. The deep scan adds rows silently (no chip, no summary text — the UI speaks for itself).
+- **Liquidity floor = 200 ex (owner mandate 2026-09-17):** `settings.DEFAULTS.filters.min_liquidity_ref`,
+  `routes.RECOMMENDED_MIN_LIQUIDITY_REF`, and user migration 6 (`_liq_floor_v2`) which lifts SAVED filters
+  once — liquidity decides whether a loop can be traded at all. The Arbitrage legend carries no search
+  statistics by design (owner: "let the UI speak for itself").
 - **Exchange have-cap:** GGG rejects > 10 `have` per exchange request (was ≥ 12 until 2026-09-17, when
   every live fetch started failing with a 400). `orderbook.state["have_cap"]` learns the cap down on
   "Too many items" and re-queues the same pairs; `last_error` now carries GGG's response body.
