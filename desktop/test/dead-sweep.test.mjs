@@ -47,5 +47,5 @@ test('an update install never waits on the workspace flush (beta.1 regression: i
   const i = main.indexOf("updLog('install-clicked")
   const block = main.slice(i, i + 700)
   assert.ok(block.includes('_flushedForQuit = true'), 'the install handler bypasses the before-quit flush hold')
-  assert.ok(block.indexOf('_flushedForQuit = true') < block.indexOf('quitAndInstall'))
+  assert.ok(block.indexOf('_flushedForQuit = true') < block.indexOf('quitAndInstall('), 'set before the call')
 })
