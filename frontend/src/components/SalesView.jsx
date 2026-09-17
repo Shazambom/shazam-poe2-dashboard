@@ -77,6 +77,7 @@ export default function SalesView({ league }) {
         {lastFetch && <span className="muted sales-last">{lastFetch.ok ? `fetched ${relativeTime(new Date(lastFetch.at).toISOString())}` : lastFetch.error === 'rate' ? 'rate limited' : lastFetch.error === 'auth' ? 'no session' : 'fetch failed'}</span>}
         {isDesktop ? <RefreshButton busy={busy} onClick={() => refresh(false)} title="Fetch the trade site's Merchant History now" /> : <span className="muted" style={{ fontSize: 12 }}>Fetching runs in the desktop app</span>}
       </div>
+      <div className="sales-body">
       {/* The same holdings editor as the Arbitrage rail — new sales are credited here automatically. */}
       <div className="sales-capital"><CapitalCard key={capKey} currencies={currencies} status={status} onSaved={() => refreshHeader()} /></div>
       {data.rows.length === 0
@@ -102,6 +103,7 @@ export default function SalesView({ league }) {
                 </div>)
             })}
           </div>)}
+      </div>
     </div>
   )
 }

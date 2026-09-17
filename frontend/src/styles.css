@@ -207,8 +207,10 @@ a { color: var(--live); }
 .sales-head { display: flex; align-items: center; gap: 10px; }
 .sales-league { background: var(--bg); color: var(--ink); border: 1px solid var(--line-strong); border-radius: var(--radius); padding: 4px 8px; font-size: 13px; }
 .sales-last { font-size: 12px; }
-.sales-capital { max-width: 860px; }
-.sales-list { display: flex; flex-direction: column; gap: 4px; max-width: 860px; }
+.sales-body { display: flex; gap: 14px; align-items: flex-start; }
+.sales-capital { flex: 0 0 340px; min-width: 0; position: sticky; top: 0; }
+.sales-list { display: flex; flex-direction: column; gap: 4px; flex: 1 1 auto; min-width: 0; max-width: 900px; }
+.sales-body > .empty { flex: 1; }
 .sale-row { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-1); }
 .sale-row.open { border-color: var(--gold-dim); }
 .sale-main { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 10px; padding: 8px 10px; background: none; border: 0; color: var(--ink); cursor: pointer; text-align: left; font-size: 13px; }
