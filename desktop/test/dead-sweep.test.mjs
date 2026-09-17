@@ -42,3 +42,10 @@ test('batch 1 bridges are exposed and the EE2 dev telemetry no longer double-pre
   assert.ok(!t.includes('const tag = `v${appVersion}`'), 'telemetry.js already prefixes the version')
   assert.ok(main.includes("'trade:webview-nav', { url"), 'nav payload carries wcId/phase')
 })
+
+test('an update install never waits on the workspace flush (beta.1 regression: installer aborted while the app lingered)', () => {
+  const i = main.indexOf("updLog('install-clicked")
+  const block = main.slice(i, i + 700)
+  assert.ok(block.includes('_flushedForQuit = true'), 'the install handler bypasses the before-quit flush hold')
+  assert.ok(block.indexOf('_flushedForQuit = true') < block.indexOf('quitAndInstall'))
+})

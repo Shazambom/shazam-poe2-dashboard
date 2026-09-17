@@ -362,6 +362,7 @@ ipcMain.handle('open-trade', (_e, url) => {
 // requires a signed+notarized app), so mac reports the state but the swap needs a
 // Developer ID cert — drop `identity: null` in package.json once one exists.
 let _autoUpdater = null
+let _flushedForQuit = false   // set once the workspace flush ran — or when an update is installing
 let _latestVersion = null
 const IS_MAC = process.platform === 'darwin'
 
@@ -452,6 +453,10 @@ ipcMain.handle('update:install', () => {
   // Silent (isSilent=true) matters: the NSIS self-heal skips its destructive cleanup when
   // silent, so the auto-update no longer nukes the install dir it's upgrading.
   updLog('install-clicked (win silent quitAndInstall)')
+  // An UPDATE quit must not be held by the workspace flush below (the silent installer gives up if the
+  // app is still running): ask the renderer to flush right now, best effort, and let the quit through.
+  _flushedForQuit = true
+  try { win?.webContents.send('ws:flush') } catch {}
   try { stopBackend() } catch {}
   setTimeout(() => {
     try { _autoUpdater?.quitAndInstall(true, true) } catch (e) { updLog(`quitAndInstall-threw ${String(e)}`); _emitUpdate({ phase: 'error', message: String(e) }) }
@@ -641,7 +646,7 @@ ipcMain.handle('clipboard:classify', async () => {
 
 // Give the renderer a beat to flush its debounced workspace save before we go: send ws:flush,
 // wait for ws:flushed (or 1 s), then quit for real.
-let _flushedForQuit = false
+// (`_flushedForQuit` is declared up top so the update handler can set it before quitAndInstall.)
 app.on('before-quit', (e) => {
   if (_flushedForQuit || !win || win.isDestroyed()) return
   e.preventDefault()
