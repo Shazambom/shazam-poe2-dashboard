@@ -43,6 +43,7 @@ contextBridge.exposeInMainWorld('poe2desktop', {
     onIngest: sub('trade:ingest'),
     ingestAck: (ack) => ipcRenderer.send('trade:ingest-ack', ack),
   },
+  ws: { onFlush: sub('ws:flush'), flushed: () => ipcRenderer.send('ws:flushed'), exportFile: (name, text) => ipcRenderer.invoke('ws:export-file', { name, text }) },
   ee2: {
     setEnabled: (enabled) => ipcRenderer.send('ee2:set-enabled', { enabled }),
     status: () => ipcRenderer.invoke('ee2:status'),
@@ -54,7 +55,6 @@ contextBridge.exposeInMainWorld('poe2desktop', {
   // clipboard and returns ONLY the classification. ws: main asks for a flush before quitting.
   diag: { log: (marker, line) => ipcRenderer.invoke('diag:log', { marker, line }) },
   clipboard: { classify: () => ipcRenderer.invoke('clipboard:classify') },
-  ws: { onFlush: sub('ws:flush'), flushed: () => ipcRenderer.send('ws:flushed') },
   // Global focus hotkey config (desktop-only).
   hotkey: {
     get: () => ipcRenderer.invoke('hotkey:get'),

@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { api, cleanErr, toast } from './api.js'
 import { uid } from './session.js'
-import { find as findNode, findWhere, locate, mapNode, removeNode, insertAt } from './tree.js'
+import { find as findNode, findWhere, locate, flatten, mapNode, mapAll, removeNode, insertAt } from './tree.js'
 import { diag } from './diag.js'
 
 // The Trading workspace: a nested filesystem-like tree (folders + search items), plus the
@@ -64,6 +64,18 @@ function trimHistory(rows, prefs, now) {
 }
 
 let pendingIntents = []   // intents that arrived before the document hydrated (applied in order after)
+
+// A portable copy of the curated workspace: the history folder (and its `sys` marker) never travels.
+export function exportWorkspace(tree) {
+  const strip = (ns) => (ns || []).filter(n => !(n.kind === 'folder' && n.sys)).map(n => n.children ? { ...n, children: strip(n.children) } : n)
+  return { version: 2, exportedAt: new Date().toISOString(), tree: strip(tree) }
+}
+const remint = (ns, taken) => (ns || []).map(n => {
+  let id = n.id
+  if (!id || taken.has(id)) id = 'n_' + uid()
+  taken.add(id)
+  return n.children ? { ...n, id, children: remint(n.children, taken) } : { ...n, id }
+})
 
 async function save(get, set) {
   clearTimeout(saveTimer); saveTimer = null
@@ -166,8 +178,10 @@ export const useWorkspace = create((set, get) => ({
       : { tree: [...s.tree, node] })
     persist(get, set); return node.id
   },
-  rename: (id, name) => { if (get().loadError) return; set(s => ({ tree: mapNode(s.tree, id, n => ({ ...n, name, auto: false })) })); persist(get, set) },
-  autoName: (id, name) => { if (get().loadError) return; set(s => ({ tree: mapNode(s.tree, id, n => (n.auto === false ? n : { ...n, name })) })); persist(get, set) },
+  // System folders (the history folder) keep their name; everything else renames and stops auto-naming.
+  rename: (id, name) => { if (get().loadError) return; set(s => ({ tree: mapNode(s.tree, id, n => (n.kind === 'folder' && n.sys ? n : { ...n, name, auto: false })) })); persist(get, set) },
+  // The DOM scraper's name: only for SEARCH rows still marked auto (never a folder, never a renamed/ingested row).
+  autoName: (id, name) => { if (get().loadError) return; set(s => ({ tree: mapNode(s.tree, id, n => (n.kind !== 'search' || n.auto === false ? n : { ...n, name })) })); persist(get, set) },
   setField: (id, patch) => { if (get().loadError) return; set(s => ({ tree: mapNode(s.tree, id, n => ({ ...n, ...patch })) })); persist(get, set) },
   toggleOpen: (id) => { if (get().loadError) return; set(s => ({ tree: mapNode(s.tree, id, n => ({ ...n, open: !n.open })) })); persist(get, set) },
   // A copy of a search right after its source: same query, fresh id, never live/done.
@@ -291,6 +305,77 @@ export const useWorkspace = create((set, get) => ({
     set({ lastHistoryEvent: { type: result, name: node.name, total: findNode(get().tree, fid).children.length, age: bumpedAge, cfgLeague: intent.cfgLeague, league, ...stats, at: now } })
     persist(get, set)
     return { result, id: node.id, pruned: stats.pruned, expired: stats.expired }
+  },
+
+  // Batch 5 QOL — all store-level, all undo-friendly where they destroy anything.
+  // A clipboard/promoted row with both q and slug: forget the site's search id and re-run the query.
+  rerunFromItem: (id) => {
+    const n = findNode(get().tree, id)
+    if (get().loadError || !n || n.kind !== 'search' || !n.q) return false
+    set(s => ({ tree: mapNode(s.tree, id, x => ({ ...x, slug: '' })), activeId: id }))
+    persist(get, set); return true
+  },
+  // Folders first, then A–Z (case-insensitive); `null` sorts the root.
+  sortChildren: (folderId) => {
+    if (get().loadError) return
+    const by = (a, b) => (a.kind === 'folder') === (b.kind === 'folder') ? String(a.name || '').localeCompare(String(b.name || ''), undefined, { sensitivity: 'base' }) : (a.kind === 'folder' ? -1 : 1)
+    set(s => ({ tree: folderId ? mapNode(s.tree, folderId, f => ({ ...f, children: [...(f.children || [])].sort(by) })) : [...s.tree].sort(by) }))
+    persist(get, set)
+  },
+  // Several nodes, one undo slot: returns the remove() records in document order (deepest-first
+  // restore order is handled by restoreMany).
+  removeMany: (ids) => {
+    if (get().loadError) return []
+    const recs = []
+    for (const id of ids) { const w = locate(get().tree, id); if (!w) continue; recs.push({ ...w, order: recs.length }) }
+    if (!recs.length) return []
+    set(s => {
+      let tree = s.tree
+      for (const r of recs) tree = removeNode(tree, r.node.id)
+      const activeId = findNode(tree, s.activeId) ? s.activeId : null
+      return { tree, activeId, openTabs: s.openTabs.filter(t => !ids.includes(t)) }
+    })
+    persist(get, set)
+    return recs
+  },
+  restoreMany: (recs) => { for (const r of [...(recs || [])].sort((a, b) => a.index - b.index)) get().restore(r) },
+  // Arm every search with a slug under a folder (recursively) up to `budget` sockets.
+  armFolder: (folderId, budget) => {
+    const f = findNode(get().tree, folderId)
+    if (get().loadError || !f) return { armed: 0, skipped: 0 }
+    let left = Math.max(0, budget | 0), armed = 0, skipped = 0
+    const ids = new Set()
+    for (const n of flatten(f.children || [], x => x.kind === 'search')) {
+      if (n.armed) continue
+      if (!n.slug) { skipped++; continue }
+      if (left <= 0) { skipped++; continue }
+      ids.add(n.id); left--; armed++
+    }
+    if (ids.size) { set(s => ({ tree: mapAll(s.tree, n => (ids.has(n.id) ? { ...n, armed: true } : n)) })); persist(get, set) }
+    return { armed, skipped }
+  },
+  disarmFolder: (folderId) => {
+    const f = findNode(get().tree, folderId)
+    if (get().loadError || !f) return 0
+    const ids = new Set(flatten(f.children || [], x => x.kind === 'search' && x.armed).map(x => x.id))
+    if (ids.size) { set(s => ({ tree: mapAll(s.tree, n => (ids.has(n.id) ? { ...n, armed: false } : n)) })); persist(get, set) }
+    return ids.size
+  },
+  // Import an exported document: 'merge' appends (ids re-minted on collision), 'replace' swaps the
+  // curated tree and keeps the history folder. Never touches the history rows.
+  importWorkspace: (doc, mode = 'merge') => {
+    if (get().loadError) return { error: 'load-error' }
+    if (!doc || doc.version !== 2 || !Array.isArray(doc.tree)) return { error: 'not a workspace export' }
+    const incoming = exportWorkspace(doc.tree).tree   // a stray sys folder in the file is dropped too
+    const count = flatten(incoming).length
+    set(s => {
+      const history = s.tree.filter(n => n.kind === 'folder' && n.sys)
+      const base = mode === 'replace' ? history : s.tree
+      const taken = new Set(flatten(base).map(n => n.id))
+      return { tree: [...base, ...remint(incoming, taken)], activeId: mode === 'replace' ? null : s.activeId }
+    })
+    persist(get, set)
+    return { added: count }
   },
 
   // Remove history rows older than the retention window (runs after hydrate and hourly).

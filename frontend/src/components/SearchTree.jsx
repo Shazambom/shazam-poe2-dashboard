@@ -29,7 +29,7 @@ function Node({ node, style, dragHandle }) {
   const active = useWorkspace(s => s.activeId) === d.id
   const { onSelect, renderTrailing, onContext } = React.useContext(RowCtx)
   const cls = ['ws-node', isFolder ? 'folder' : 'search', active ? 'active' : '', d.done ? 'done' : '',
-    node.willReceiveDrop ? 'drop-target' : '', node.isDragging ? 'dragging' : '', node.isFocused ? 'focused' : ''].join(' ')
+    node.willReceiveDrop ? 'drop-target' : '', node.isDragging ? 'dragging' : '', node.isFocused ? 'focused' : '', node.isSelected ? 'selected' : ''].join(' ')
   return (
     <div className={cls} style={style} ref={dragHandle} role="treeitem" aria-level={node.level + 1} data-id={d.id}
       aria-expanded={isFolder ? node.isOpen : undefined} aria-selected={active || undefined}
@@ -48,6 +48,7 @@ function Node({ node, style, dragHandle }) {
       )}
       {!isFolder && d.live && <span className="live-badge">live</span>}
       {!isFolder && d.origin === 'ee2' && <span className="ws-chip ee2" title="Captured from an ExiledExchange2 price check">EE2</span>}
+      {!isFolder && d.ts && d.q != null && <span className="ws-age" title={rowTitle(d)}>{relative(d.ts).replace(' ago', '')}</span>}
       {isFolder && d.sys === HISTORY_SYS && <span className="ws-count" title="Entries for the current league">{(d.children || []).length}</span>}
       <span className="spacer" />
       {renderTrailing(d, node)}
@@ -87,7 +88,6 @@ export default function SearchTree({ onSelect = () => {}, renderTrailing = () =>
         <Tree ref={treeRef} data={data} idAccessor="id" childrenAccessor="children"
           width={dims.w} height={dims.h} rowHeight={30} indent={14}
           searchTerm={filter} searchMatch={(node, term) => matchesFilter(node.data, term)}
-          disableMultiSelection
           onMove={({ dragIds, parentId, index }) => dragIds.forEach((id, i) => move(id, parentId, index + i))}
           onRename={({ id, name }) => rename(id, name)}
           onDelete={onDelete ? ({ ids }) => ids.forEach(onDelete) : undefined}

@@ -1,9 +1,52 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { toast } from '../lib/api.js'
 import { isDesktop } from '../lib/session.js'
-import { useWorkspace } from '../lib/workspaceStore.js'
+import { useWorkspace, exportWorkspace } from '../lib/workspaceStore.js'
 import { saveHistoryPrefs, clearHistoryWithUndo } from '../lib/ee2History.js'
 import Toggle from './Toggle.jsx'
+
+// Settings → Trading → Workspace: export the curated searches (history excluded) / import a file.
+function WorkspaceTransfer() {
+  const fileRef = useRef(null)
+  const [mode, setMode] = useState('merge')
+  const doExport = () => {
+    const doc = exportWorkspace(useWorkspace.getState().tree)
+    const text = JSON.stringify(doc, null, 1)
+    const name = `arbiter-searches-${new Date().toISOString().slice(0, 10)}.json`
+    if (window.poe2desktop?.ws?.exportFile) {   // desktop: main writes into Downloads (the sandboxed page can't download a blob)
+      window.poe2desktop.ws.exportFile(name, text).then(p => toast(`Saved ${p}`)).catch(() => toast('Export failed', false))
+      return
+    }
+    const blob = new Blob([text], { type: 'application/json' })
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 5000)
+    toast('Searches exported (history excluded)')
+  }
+  const onFile = (e) => {
+    const f = e.target.files?.[0]; e.target.value = ''
+    if (!f) return
+    f.text().then(t => {
+      let doc; try { doc = JSON.parse(t) } catch { toast('Not a JSON file', false); return }
+      const r = useWorkspace.getState().importWorkspace(doc, mode)
+      if (r.error) toast(r.error, false); else toast(`Imported ${r.added} item${r.added === 1 ? '' : 's'} (${mode})`)
+    })
+  }
+  return (
+    <>
+      <h4 className="settings-sub">Workspace</h4>
+      <div className="set-row">
+        <button className="btn small" onClick={doExport}>Export searches…</button>
+        <button className="btn small" onClick={() => fileRef.current?.click()}>Import…</button>
+        <span className="seg">
+          <button className={`seg-btn ${mode === 'merge' ? 'on' : ''}`} onClick={() => setMode('merge')} title="Add the file's searches next to yours">Merge</button>
+          <button className={`seg-btn ${mode === 'replace' ? 'on' : ''}`} onClick={() => setMode('replace')} title="Replace your curated searches with the file's (the EE2 history folder is kept)">Replace</button>
+        </span>
+        <input ref={fileRef} type="file" accept="application/json,.json" hidden onChange={onFile} aria-label="Import searches file" />
+        <span className="muted" style={{ fontSize: 12 }}>the EE2 history folder never travels</span>
+      </div>
+    </>
+  )
+}
 
 // Settings → Trading → ExiledExchange2 history: the same slider as the workspace rail (one setting),
 // the cap and retention, clear, and a status line from main's consumer.
@@ -61,6 +104,7 @@ export default function TradingSettings() {
   return (
     <section className="settings-section">
       <h3>Trading</h3>
+      <WorkspaceTransfer />
       {isDesktop && <Ee2HistorySettings />}
       {isDesktop ? (
         <div className="set-row">

@@ -530,6 +530,14 @@ function stopEe2Integration() {
 ipcMain.on('ee2:set-enabled', (_e, p) => { _history?.setEnabled(p?.enabled !== false) })
 ipcMain.handle('ee2:status', () => (_history ? _history.status() : { present: false, running: false, configRead: false, leagueId: null, warm: false, enabled: true }))
 ipcMain.on('trade:ingest-ack', (_e, ack) => { if (ack && ack.result === 'dropped') telemetry.installLog('ee2', `ingest-drop reason=${ack.reason || '?'}`) })
+// Settings → Trading → Export searches: the sandboxed renderer cannot download a blob, so main writes the
+// file into the user's Downloads folder (no dialog) and returns the path for the toast.
+ipcMain.handle('ws:export-file', (_e, p) => {
+  const name = String(p?.name || 'arbiter-searches.json').replace(/[^\w.-]+/g, '_')
+  const file = path.join(app.getPath('downloads'), name)
+  fs.writeFileSync(file, String(p?.text || ''))
+  return file
+})
 // DEV ONLY: feed a fixture item through the real consumer + worker without EE2 running (CDP drives).
 ipcMain.handle('dev:ee2-item', (_e, item) => {
   if (app.isPackaged || !_history) return false

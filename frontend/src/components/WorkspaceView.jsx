@@ -10,6 +10,8 @@ import SearchTree from './SearchTree.jsx'
 import ContextMenu from './ContextMenu.jsx'
 import Toggle from './Toggle.jsx'
 import { saveHistoryPrefs, clearHistoryWithUndo } from '../lib/ee2History.js'
+import { usePings } from '../lib/pingStore.js'
+import { useStatus } from '../lib/statusStore.js'
 
 // The Trading workspace: a file-tree of saved searches on the left, the live trade site
 // embedded on the right. Press + → a new entry is created and the trade window opens; you
@@ -125,6 +127,13 @@ export default function WorkspaceView({ league }) {
   const duplicate = useWorkspace(s => s.duplicate)
   const move = useWorkspace(s => s.move)
   const historyOn = useWorkspace(s => s.historyPrefs.enabled)
+  const rerunFromItem = useWorkspace(s => s.rerunFromItem)
+  const sortChildren = useWorkspace(s => s.sortChildren)
+  const removeMany = useWorkspace(s => s.removeMany)
+  const restoreMany = useWorkspace(s => s.restoreMany)
+  const armFolder = useWorkspace(s => s.armFolder)
+  const disarmFolder = useWorkspace(s => s.disarmFolder)
+  const sessionOk = useStatus(s => !!s.status?.session?.connected)
   // Is this node inside the history folder? (its rows are never captured into, and open by q)
   const inHistory = useCallback((id) => { const p = locate(useWorkspace.getState().tree, id)?.parentId; const f = p ? useWorkspace.getState().nodeById(p) : null; return !!(f && f.sys === HISTORY_SYS) }, [])
   const selectNode = useCallback((id) => {
@@ -189,6 +198,22 @@ export default function WorkspaceView({ league }) {
     if (d.kind === 'folder' && (d.children || []).length) setConfirmId(d.id)
     else deleteNode(d.id)
   }, [deleteNode])
+  // Several selected rows (shift/⌘-click) → one batch, one undo slot.
+  const deleteMany = useCallback((ids) => {
+    const recs = removeMany(ids)
+    if (!recs.length) return
+    diag('ws', `ws-undo n=${recs.length}`)
+    bus.emit({ id: 'ws-undo', ttl: UNDO_TTL, node: (
+      <div className="ws-undo">
+        <span className="ws-undo-text">Deleted {recs.length} items</span>
+        <button className="btn small primary" onClick={() => { restoreMany(recs); bus.emit({ id: 'ws-undo', dismiss: true }) }}>Undo</button>
+      </div>) })
+  }, [removeMany, restoreMany])
+  const goLiveAll = useCallback((folderId) => {
+    const eng = usePings.getState().engine
+    const r = armFolder(folderId, Math.max(0, (eng.budgetMax || 20) - (eng.active || 0)))
+    toast(r.armed ? `Armed ${r.armed} search${r.armed === 1 ? '' : 'es'}${r.skipped ? ` · ${r.skipped} skipped (no search yet or over the ${eng.budgetMax || 20}-socket cap)` : ''}` : 'Nothing to arm — run each search once first', !!r.armed)
+  }, [armFolder])
 
   // Keyboard, scoped to the row container (react-arborist owns ↑↓ →← Home/End on its own):
   // Enter open · F2 rename · ⌫ delete (with undo) · ⌘N new search · ⌘⇧N new group · Esc clears the filter.
@@ -199,9 +224,14 @@ export default function WorkspaceView({ league }) {
     if (!node) return
     if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); if (node.data.kind === 'folder') node.toggle(); else selectNode(node.data.id); return }
     if (e.key === 'F2') { e.preventDefault(); e.stopPropagation(); node.edit(); return }
-    if (e.key === 'Backspace' || e.key === 'Delete') { e.preventDefault(); e.stopPropagation(); requestDelete(node.data); return }
+    if (e.key === 'Backspace' || e.key === 'Delete') {
+      e.preventDefault(); e.stopPropagation()
+      const sel = [...(treeApi.current?.selectedIds || [])]
+      if (sel.length > 1) deleteMany(sel); else requestDelete(node.data)
+      return
+    }
     if (e.key === 'Escape' && filter) { e.preventDefault(); setFilter('') }
-  }, [newGroup, newSearch, selectNode, requestDelete, filter, clipboardAdd])
+  }, [newGroup, newSearch, selectNode, requestDelete, deleteMany, filter, clipboardAdd])
 
   // ⌘⇧V anywhere in the app (not inside an input) = add from clipboard.
   useEffect(() => {
@@ -227,14 +257,17 @@ export default function WorkspaceView({ league }) {
       { sep: true },
       ...(isDesktop && d.kind === 'folder' && d.sys !== HISTORY_SYS ? [{ label: 'Add from clipboard here', key: '⌘V', run: () => clipboardAdd(d.id) }] : []),
       ...(d.kind === 'folder' && d.sys === HISTORY_SYS ? [{ label: 'Clear history', danger: true, run: () => clearHistoryWithUndo() }] : []),
-      { label: 'Rename', key: 'F2', run: () => setTimeout(() => node.edit(), 0) },
+      { label: 'Rename', key: 'F2', disabled: d.kind === 'folder' && !!d.sys, run: () => setTimeout(() => node.edit(), 0) },
       { label: 'Duplicate', disabled: !isSearch, run: () => duplicate(d.id) },
+      ...(isSearch && d.q && d.slug && !inHistory(d.id) ? [{ label: 'Re-run from item', run: () => rerunFromItem(d.id) }] : []),
+      ...(d.kind === 'folder' ? [{ label: 'Sort A–Z', run: () => sortChildren(d.id) }] : []),
+      ...(isDesktop && d.kind === 'folder' && d.sys !== HISTORY_SYS ? [{ label: 'Go live: all searches', run: () => goLiveAll(d.id) }, { label: 'Stop all live searches', run: () => { const n = disarmFolder(d.id); toast(n ? `Stopped ${n}` : 'None were live', !!n) } }] : []),
       { label: d.done ? 'Mark not done' : 'Mark done', disabled: !isSearch, run: () => setField(d.id, { done: !d.done }) },
       { label: 'Move to', children: [{ label: 'Top level', run: () => move(d.id, null, 0) }, ...folders.map(f => ({ label: f.name, run: () => move(d.id, f.id, 0) }))] },
       { sep: true },
       { label: 'Delete', key: '⌫', danger: true, run: () => requestDelete(d) },
     ]
-  }, [menu, league, selectNode, duplicate, setField, move, requestDelete, clipboardAdd])
+  }, [menu, league, selectNode, duplicate, setField, move, requestDelete, clipboardAdd, rerunFromItem, sortChildren, goLiveAll, disarmFolder, inHistory])
 
   // The divider is both the collapse toggle (click) and the rail's resize handle (drag,
   // 220–420 px, rAF-throttled, persisted on mouseup).
@@ -372,7 +405,7 @@ export default function WorkspaceView({ league }) {
                       {d.kind === 'folder' && d.sys === HISTORY_SYS && <button className="ws-mini" title="Clear history" aria-label="Clear history" onClick={e => { e.stopPropagation(); clearHistoryWithUndo() }}>🗑</button>}
                       {d.kind === 'folder' && d.sys !== HISTORY_SYS && <button className="ws-mini" title="New search here" aria-label="New search here" onClick={e => { e.stopPropagation(); newSearch(d.id) }}>+</button>}
                       {d.kind === 'search' && <button className={`ws-mini ${d.done ? 'on' : ''}`} title={d.done ? 'Mark not done' : 'Mark done'} aria-label={d.done ? 'Mark not done' : 'Mark done'} aria-pressed={!!d.done} onClick={e => { e.stopPropagation(); setField(d.id, { done: !d.done }) }}>✓</button>}
-                      <button className="ws-mini" title="Rename" aria-label="Rename" onClick={e => { e.stopPropagation(); node.edit() }}>✎</button>
+                      {!(d.kind === 'folder' && d.sys) && <button className="ws-mini" title="Rename" aria-label="Rename" onClick={e => { e.stopPropagation(); node.edit() }}>✎</button>}
                       <button className="ws-mini" title="Delete" aria-label="Delete" onClick={e => { e.stopPropagation(); requestDelete(d) }}>×</button>
                     </>
               )} />
@@ -393,6 +426,7 @@ export default function WorkspaceView({ league }) {
             <div className={`ws-webhint ${activeNode ? '' : 'hidden'}`}>
               <span className="ws-webhint-name" title={navState.url || mountUrl}>{activeNode ? activeNode.name : ''}</span>
               {navState.hint && <span className="ws-chip" title="The site's delivery dropdown could not be set automatically">{navState.hint}</span>}
+              {!sessionOk && <span className="ws-chip warn" title="No PoE trade session is connected — the site may show a login page and captures can silently fail. Connect it in Settings → Accounts.">no session</span>}
               {activeNode && (activeNode.slug || activeNode.q
                 ? <>
                     <span className="ws-chip ok">{activeNode.q ? 'from item' : 'captured'}</span>

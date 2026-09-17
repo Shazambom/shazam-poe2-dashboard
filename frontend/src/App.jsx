@@ -130,6 +130,7 @@ export default function App() {
     { id: 'ws-toggle-rail', label: 'Toggle searches rail', hint: 'Workspace', run: () => { goWorkspace(); const ws = useWorkspace.getState(); ws.setLayout({ collapsed: !ws.layout?.collapsed }) } },
     ...(window.poe2desktop?.clipboard ? [{ id: 'ws-clipboard', label: 'Add from clipboard', hint: 'Workspace · ⌘⇧V', run: () => { goWorkspace(); addFromClipboard(null) } }] : []),
     ...(window.poe2desktop?.ee2 ? [{ id: 'ws-clear-history', label: 'Clear EE2 history', hint: 'Workspace', run: () => { goWorkspace(); clearHistoryWithUndo() } }] : []),
+    { id: 'ws-sort', label: 'Sort searches A–Z', hint: 'Workspace · top level', run: () => { goWorkspace(); useWorkspace.getState().sortChildren(null) } },
   ], [goWorkspace])
 
   const setLeague = async (league) => {

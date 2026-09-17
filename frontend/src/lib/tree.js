@@ -48,6 +48,11 @@ export function mapNode(nodes, id, fn) {
   })
 }
 
+// Map every node (depth-first) through fn; children of a mapped node are still walked.
+export function mapAll(nodes, fn) {
+  return (nodes || []).map(n => { const m = fn(n); return m.children ? { ...m, children: mapAll(m.children, fn) } : m })
+}
+
 export function removeNode(nodes, id) {
   return (nodes || []).filter(n => n.id !== id).map(n =>
     n.children ? { ...n, children: removeNode(n.children, id) } : n)
