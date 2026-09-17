@@ -76,9 +76,12 @@ export default function LiveView({ league }) {
           ? <div className="empty small">No saved searches yet — add some in Workspace.</div>
           : (
             <SearchTree
-              onSelect={() => {}}
+              onSelect={() => {}} compact
               renderTrailing={(d) => {
                 if (d.kind !== 'search') return null
+                // A row that has never been run (an EE2 history row, a fresh entry) has no search id to
+                // subscribe to — say so instead of offering a button that can only toast.
+                if (!d.slug) return <span className="ws-hint-run" title="Open this search in the Workspace once so it has a search id, then it can go live">open once first</span>
                 const { text, title } = liveLabel(d, searchStates[d.id])
                 return (
                   <button className={`btn small ${d.armed ? 'primary' : ''}`} title={title}

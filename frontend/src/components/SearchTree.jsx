@@ -27,7 +27,7 @@ function Node({ node, style, dragHandle }) {
   const d = node.data
   const isFolder = d.kind === 'folder'
   const active = useWorkspace(s => s.activeId) === d.id
-  const { onSelect, renderTrailing, onContext } = React.useContext(RowCtx)
+  const { onSelect, renderTrailing, onContext, compact } = React.useContext(RowCtx)
   const cls = ['ws-node', isFolder ? 'folder' : 'search', active ? 'active' : '', d.done ? 'done' : '',
     node.willReceiveDrop ? 'drop-target' : '', node.isDragging ? 'dragging' : '', node.isFocused ? 'focused' : '', node.isSelected ? 'selected' : ''].join(' ')
   return (
@@ -48,15 +48,15 @@ function Node({ node, style, dragHandle }) {
       )}
       {!isFolder && d.live && <span className="live-badge">live</span>}
       {!isFolder && d.origin === 'ee2' && <span className="ws-chip ee2" title="Captured from an ExiledExchange2 price check">EE2</span>}
-      {!isFolder && d.ts && d.q != null && <span className="ws-age" title={rowTitle(d)}>{relative(d.ts).replace(' ago', '')}</span>}
+      {!isFolder && d.ts && d.q != null && !compact && <span className="ws-age" title={rowTitle(d)}>{relative(d.ts).replace(' ago', '')}</span>}
       {isFolder && d.sys === HISTORY_SYS && <span className="ws-count" title="Entries for the current league">{(d.children || []).length}</span>}
       <span className="spacer" />
-      {renderTrailing(d, node)}
+      {compact ? renderTrailing(d, node) : <span className="ws-trailing">{renderTrailing(d, node)}</span>}
     </div>
   )
 }
 
-export default function SearchTree({ onSelect = () => {}, renderTrailing = () => null, onContext = null, onKey = null, onDelete = null, filter = '', treeRef = null }) {
+export default function SearchTree({ onSelect = () => {}, renderTrailing = () => null, onContext = null, onKey = null, onDelete = null, filter = '', treeRef = null, compact = false }) {
   const tree = useWorkspace(s => s.tree)
   const league = useWorkspace(s => s.league)
   const ee2Present = useWorkspace(s => s.ee2Present)
@@ -87,9 +87,9 @@ export default function SearchTree({ onSelect = () => {}, renderTrailing = () =>
 
   return (
     <div className="ws-tree" ref={wrap} onKeyDownCapture={keyCapture}>
-      <RowCtx.Provider value={{ onSelect, renderTrailing, onContext }}>
+      <RowCtx.Provider value={{ onSelect, renderTrailing, onContext, compact }}>
         <Tree ref={treeRef} data={data} idAccessor="id" childrenAccessor="children"
-          width={dims.w} height={dims.h} rowHeight={30} indent={14}
+          width={dims.w} height={dims.h} rowHeight={30} indent={14} rowClassName="ws-row"
           searchTerm={filter} searchMatch={(node, term) => matchesFilter(node.data, term)}
           onMove={({ dragIds, parentId, index }) => dragIds.forEach((id, i) => move(id, parentId, index + i))}
           onRename={({ id, name }) => rename(id, name)}

@@ -239,6 +239,7 @@ a { color: var(--live); }
 .ic-flags .ic-line { color: var(--loss); }
 .ws-chip.warn { color: var(--afk); border-color: rgba(224,168,58,.45); }
 .ws-age { font-size: 10.5px; color: var(--muted); flex: 0 0 auto; }
+.ws-hint-run { font-size: 10.5px; color: var(--muted); white-space: nowrap; }
 .ws-node.selected:not(.active) { background: rgba(212,172,82,.08); }
 .ws-chip.ee2 { font-size: 9.5px; font-weight: 700; letter-spacing: .05em; padding: 0 5px; color: var(--muted); border-color: var(--line-strong); }
 .ws-count { font-size: 10.5px; color: var(--muted); background: var(--line); border-radius: 999px; padding: 0 6px; min-width: 18px; text-align: center; flex: 0 0 auto; }
@@ -274,13 +275,25 @@ a { color: var(--live); }
 .ws-empty-add { margin: 8px; padding: 10px; width: calc(100% - 16px); background: none; border: 1px dashed var(--line-strong);
   border-radius: 8px; color: var(--muted); cursor: pointer; }
 .ws-empty-add:hover { color: var(--ink); border-color: var(--gold); }
-.ws-node { display: flex; align-items: center; gap: 6px; height: 100%; padding: 0 6px; border-radius: 6px; font-size: 13px; cursor: pointer; }
+/* react-arborist gives every row `min-width: max-content` inline, which lets a long name push the
+   trailing controls past the rail edge. Rows must be exactly the rail's width; the name is the ONE
+   flexible child (min-width: 0 + ellipsis), everything else keeps its size. */
+.ws-tree .ws-row { min-width: 0 !important; }
+.ws-node { display: flex; align-items: center; gap: 6px; height: 100%; padding: 0 6px; border-radius: 6px; font-size: 13px; cursor: pointer; min-width: 0; box-sizing: border-box; }
+.ws-node > * { flex-shrink: 0; }
+/* Workspace row actions never reserve width: an idle row shows name + chips; on hover/focus/active the
+   chips yield their space to the actions (no overlay, so backgrounds always match the row). */
+.ws-trailing { display: none; align-items: center; gap: 2px; }
+.ws-node:hover .ws-trailing, .ws-node:focus-within .ws-trailing, .ws-node.focused .ws-trailing, .ws-node.active .ws-trailing { display: inline-flex; }
+.ws-node:hover .ws-chip.ee2, .ws-node:hover .ws-age, .ws-node.focused .ws-chip.ee2, .ws-node.focused .ws-age, .ws-node.active .ws-chip.ee2, .ws-node.active .ws-age, .ws-node:focus-within .ws-chip.ee2, .ws-node:focus-within .ws-age { display: none; }
+.ws-trailing .ws-mini { opacity: .85; }
 .ws-node:hover { background: var(--line); }
 .ws-node.active { background: rgba(212,172,82,.14); box-shadow: inset 2px 0 0 var(--gold); }
 .ws-node.done .ws-name { text-decoration: line-through; color: var(--muted); }
 .ws-caret { width: 12px; text-align: center; color: var(--muted); user-select: none; flex: 0 0 12px; }
 .ws-icon { font-size: 12px; opacity: .85; flex: 0 0 auto; }
-.ws-name { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); }
+.ws-name { flex: 0 1 auto !important; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); }
+.ws-node .ws-edit { flex: 1 1 auto !important; }
 .ws-edit { flex: 1; min-width: 0; background: var(--bg); border: 1px solid var(--gold); border-radius: 4px; color: var(--ink); padding: 1px 4px; }
 .ws-mini { background: none; border: 0; color: var(--muted); cursor: pointer; padding: 2px 4px; font-size: 12px; opacity: 0; transition: opacity .12s; flex: 0 0 auto; }
 .ws-node:hover .ws-mini, .ws-node.active .ws-mini { opacity: .8; }
