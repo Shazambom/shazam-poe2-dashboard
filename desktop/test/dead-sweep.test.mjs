@@ -49,3 +49,17 @@ test('an update install never waits on the workspace flush (beta.1 regression: i
   assert.ok(block.includes('_flushedForQuit = true'), 'the install handler bypasses the before-quit flush hold')
   assert.ok(block.indexOf('_flushedForQuit = true') < block.indexOf('quitAndInstall('), 'set before the call')
 })
+
+test('nothing on the quit route can hold a quit without the update bypass (the update-install path is sacred)', () => {
+  // Every preventDefault inside a quit-route handler must sit behind the _flushedForQuit gate, which the
+  // install handler sets before quitAndInstall. A new hold without that gate strands users on the old build.
+  const routes = ['before-quit', 'will-quit', 'window-all-closed']
+  for (const r of routes) {
+    let i = 0
+    while ((i = main.indexOf(`app.on('${r}'`, i)) !== -1) {
+      const body = main.slice(i, main.indexOf('\n})', i) + 3)
+      if (body.includes('preventDefault')) assert.ok(body.includes('_flushedForQuit'), `${r} handler holds quit without the update bypass`)
+      i += 10
+    }
+  }
+})
