@@ -153,9 +153,11 @@ POLICIES: dict[str, Policy] = {p.name: p for p in [
     # resolves to "trade" above). Conservative starts; re-derived from headers like the rest.
     Policy("trade-fetch", [Rate(1, Duration.SECOND), Rate(20, Duration.MINUTE)], ("www.pathofexile.com",)),
     Policy("trade-whisper", [Rate(1, Duration.SECOND * 2), Rate(10, Duration.MINUTE)], ("www.pathofexile.com",)),
-    # Merchant History (/api/trade2/history) for the Sales tab: 5 quick GETs produced a 429 in research,
-    # so start very conservative; headers refine it. Polled at most every 10 min while the tab is visible.
-    Policy("trade-history", [Rate(1, Duration.SECOND * 10), Rate(4, Duration.MINUTE)], ("www.pathofexile.com",)),
+    # Merchant History (/api/trade2/history) for the Sales tab. Observed 2026-09-17: a handful of GETs
+    # across two machines on one account → 429 with retry-after ≈ 1 h. The budget is per ACCOUNT, so start
+    # far below anything that could trip it (one per 5 min, six per hour); headers can only loosen it. The
+    # tab polls every 10 min while visible and never on a mere re-open (see SalesView).
+    Policy("trade-history", [Rate(1, Duration.MINUTE * 5), Rate(6, Duration.HOUR)], ("www.pathofexile.com",)),
     # OAuth'd account API and token endpoint.
     Policy("ggg-api", [Rate(1, Duration.SECOND * 2), Rate(20, Duration.MINUTE)], ("api.pathofexile.com",)),
     # Public hourly digest CDN: no headers. Quick enough that a week's backfill

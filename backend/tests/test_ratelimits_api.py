@@ -82,3 +82,11 @@ def test_hint_folds_an_external_request_into_the_budget_without_penalising():
     assert client.post("/api/ratelimits/acquire", json={"policy": "trade-fetch"}).json()["ok"] is False
     assert p.penalty_until == 0.0
     assert client.post("/api/ratelimits/hint", json={"policy": "nope"}).status_code == 404
+
+
+def test_trade_history_policy_starts_very_conservative():
+    """The history endpoint penalises for ~1 h and the budget is shared by every machine on the account."""
+    p = gateway.POLICIES["trade-history"]
+    assert "www.pathofexile.com" in p.hosts
+    slowest = max(r.interval for r in p.rates)
+    assert slowest >= gateway.Duration.MINUTE * 5, "no more than one history fetch per 5 minutes by default"

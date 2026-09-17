@@ -15,6 +15,9 @@ import CapitalCard from './CapitalCard.jsx'
 import { useCurrencies } from '../lib/icons.js'
 
 const POLL_MS = 10 * 60 * 1000
+// Last fetch per league, kept across tab switches: re-opening the tab must NOT spend another request
+// (the history endpoint penalises for ~1 h and the budget is shared by every machine on the account).
+const lastFetchAt = new Map()
 
 // Trading → Sales: the trade site's Merchant History in Arbiter's UI (roadmap batch 6). Main fetches
 // through the user's own session under the shared rate budget and the backend keeps the ledger forever;
@@ -36,6 +39,8 @@ export default function SalesView({ league }) {
 
   const refresh = async (auto = false) => {
     if (!isDesktop || !sel || busy) return
+    if (auto && Date.now() - (lastFetchAt.get(sel) || 0) < POLL_MS) return   // too soon — serve the ledger
+    lastFetchAt.set(sel, Date.now())
     setBusy(true)
     try {
       const r = await window.poe2desktop.sales.fetch(sel)
