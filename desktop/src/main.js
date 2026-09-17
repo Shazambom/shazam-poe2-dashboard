@@ -538,9 +538,10 @@ ipcMain.handle('ws:export-file', (_e, p) => {
   fs.writeFileSync(file, String(p?.text || ''))
   return file
 })
-// DEV ONLY: feed a fixture item through the real consumer + worker without EE2 running (CDP drives).
+// DIAGNOSTIC (dev launch or the beta channel — never a stable build): feed an item's text through the
+// real consumer + worker without EE2 running, so the packaged worker path can be proven over CDP.
 ipcMain.handle('dev:ee2-item', (_e, item) => {
-  if (app.isPackaged || !_history) return false
+  if (!diagTelemetryOn() || !_history) return false
   _history.onItem({ name: '', baseType: '', rarity: '', itemClass: '', origin: 'clipboard', ts: Date.now(), ...(item || {}) })
   return true
 })

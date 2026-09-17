@@ -31,7 +31,7 @@ function createHistoryConsumer({ manager, worker, prefs, send = null, log = () =
     if (lastFailure && now() - lastFailure < RESTART_MIN_MS) return null
     try {
       proc = worker.spawn({ onExit: () => { proc = null; lastFailure = now(); status.warm = false } }); status.warm = true
-      if (typeof proc.warm === 'function') proc.warm().then(r => { if (r) log(`warm ms=${r.ms} items=${r.items} stats=${r.stats}`) }).catch(() => {})
+      if (typeof proc.warm === 'function') proc.warm().then(r => { if (r) log(`warm ms=${r.ms} items=${r.items} stats=${r.stats}`) }).catch(e => log(`warm-fail err="${String(e && e.message || e).slice(0, 160)}"`))
     } catch (e) { lastFailure = now(); proc = null; log(`history-skip reason=worker spawn="${String(e && e.message || e).slice(0, 80)}"`) }
     return proc
   }
@@ -55,7 +55,7 @@ function createHistoryConsumer({ manager, worker, prefs, send = null, log = () =
     try { r = await p.build(raw, pf) } catch (e) {
       const msg = String(e && e.message || e)
       lastFailure = now(); try { p.kill?.() } catch {}; proc = null; status.warm = false
-      log(`history-skip reason=${/timeout/i.test(msg) ? 'timeout' : 'worker'} origin=${origin}`)
+      log(`history-skip reason=${/timeout/i.test(msg) ? 'timeout' : 'worker'} origin=${origin} err="${msg.slice(0, 160)}"`)
       return null
     }
     const id = `i_${now()}_${++seq}`

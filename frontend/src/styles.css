@@ -205,7 +205,6 @@ a { color: var(--live); }
 /* ---------- Sales tab + item card ---------- */
 .sales-view { display: flex; flex-direction: column; gap: 14px; padding: 14px 24px 48px; }
 .sales-head { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-1); }
-.sales-league { background: var(--bg); color: var(--ink); border: 1px solid var(--line-strong); border-radius: var(--radius); padding: 4px 8px; font-size: 13px; }
 .sales-last { font-size: 12px; }
 .sales-body { display: flex; gap: 18px; align-items: flex-start; }
 .sales-capital { flex: 0 0 340px; min-width: 0; position: sticky; top: 0; }

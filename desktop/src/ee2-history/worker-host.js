@@ -8,9 +8,14 @@ const path = require('path')
 const IDLE_EXIT_MS = 10 * 60 * 1000
 const BUILD_TIMEOUT_MS = 3500
 
+// The worker and the vendored port are asarUnpack'ed (package.json): a utility process must run a
+// real file, and the port's data (an ES-module client_strings.mjs, ndjson, index bins) is read from
+// disk. Inside a packaged app __dirname still says app.asar — point at the unpacked twin.
+const unpacked = (p) => p.replace(/app\.asar(?=[\\/])/, 'app.asar.unpacked')
+
 function spawnWorker({ onExit } = {}) {
   const { utilityProcess } = require('electron')
-  const child = utilityProcess.fork(path.join(__dirname, 'worker.js'), [], { serviceName: 'arbiter-ee2-query', stdio: 'ignore' })
+  const child = utilityProcess.fork(unpacked(path.join(__dirname, 'worker.js')), [], { serviceName: 'arbiter-ee2-query', stdio: 'ignore' })
   const pending = new Map()
   let seq = 0, idle = null, ready = null, dead = false
 
@@ -19,7 +24,7 @@ function spawnWorker({ onExit } = {}) {
   child.on('message', (m) => {
     if (!m || typeof m !== 'object') return
     if (m.t === 'ready') { readyResolve?.(m); return }
-    if (m.t === 'error' && m.id == null) { readyReject?.(new Error(m.message || 'init failed')); return }
+    if (m.t === 'error' && m.id == null) { readyReject?.(new Error(`init: ${m.message || 'failed'}`)); return }
     const p = pending.get(m.id); if (!p) return
     pending.delete(m.id); clearTimeout(p.timer)
     if (m.t === 'built') { const { t, id, ...rest } = m; p.resolve(rest) }
@@ -36,7 +41,9 @@ function spawnWorker({ onExit } = {}) {
   }
   const build = async (raw, prefs) => {
     if (dead) throw new Error('worker exited')
-    await warm()
+    // The timeout covers init too: a worker that never reports ready must not hang the caller.
+    const timeout = new Promise((_, rej) => setTimeout(() => rej(new Error('build timeout')), BUILD_TIMEOUT_MS + 5000).unref?.())
+    await Promise.race([warm(), timeout])
     touch()
     const id = ++seq
     return new Promise((resolve, reject) => {
@@ -49,4 +56,4 @@ function spawnWorker({ onExit } = {}) {
   return { build, warm, kill }
 }
 
-module.exports = { spawnWorker, IDLE_EXIT_MS, BUILD_TIMEOUT_MS }
+module.exports = { spawnWorker, unpacked, IDLE_EXIT_MS, BUILD_TIMEOUT_MS }

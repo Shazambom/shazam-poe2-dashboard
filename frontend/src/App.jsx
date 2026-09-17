@@ -126,14 +126,15 @@ export default function App() {
   // ⌘K workspace commands: each lands on Trading → Workspace and mutates the store directly.
   const goWorkspace = React.useCallback(() => { setTab('Trading'); setTimeout(() => nav.openTrading('workspace'), 0) }, [])
   const ee2Present = useWorkspace(s => s.ee2Present)
+  const hasHistoryRows = useWorkspace(s => !!(findWhere(s.tree, n => n.kind === 'folder' && n.sys === HISTORY_SYS)?.children || []).length)
   const wsCommands = React.useMemo(() => [
     { id: 'ws-new-search', label: 'New search', hint: 'Workspace · ⌘N', run: () => { goWorkspace(); const ws = useWorkspace.getState(); ws.setActive(ws.addSearch(null, { type: 'search', slug: '', live: false }, 'New search')) } },
     { id: 'ws-new-group', label: 'New group', hint: 'Workspace · ⌘⇧N', run: () => { goWorkspace(); useWorkspace.getState().addFolder(null) } },
     { id: 'ws-toggle-rail', label: 'Toggle searches rail', hint: 'Workspace', run: () => { goWorkspace(); const ws = useWorkspace.getState(); ws.setLayout({ collapsed: !ws.layout?.collapsed }) } },
     ...(window.poe2desktop?.clipboard ? [{ id: 'ws-clipboard', label: 'Add from clipboard', hint: 'Workspace · ⌘⇧V', run: () => { goWorkspace(); addFromClipboard(null) } }] : []),
-    ...(window.poe2desktop?.ee2 && ee2Present ? [{ id: 'ws-clear-history', label: 'Clear EE2 history', hint: 'Workspace', run: () => { goWorkspace(); clearHistoryWithUndo() } }] : []),
+    ...(window.poe2desktop?.ee2 && (ee2Present || hasHistoryRows) ? [{ id: 'ws-clear-history', label: 'Clear EE2 history', hint: 'Workspace', run: () => { goWorkspace(); clearHistoryWithUndo() } }] : []),
     { id: 'ws-sort', label: 'Sort searches A–Z', hint: 'Workspace · top level', run: () => { goWorkspace(); useWorkspace.getState().sortChildren(null) } },
-  ], [goWorkspace, ee2Present])
+  ], [goWorkspace, ee2Present, hasHistoryRows])
 
   const setLeague = async (league) => {
     if (!league || league === status?.league) return

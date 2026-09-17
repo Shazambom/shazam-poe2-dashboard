@@ -26,13 +26,11 @@ export default function SalesView({ league }) {
   const { raw: currencies } = useCurrencies()
   const tree = useWorkspace(s => s.tree)
   const [capKey, setCapKey] = useState(0)   // remount the capital card after a fetch credited new sales
-  const [sel, setSel] = useState(league || '')
+  const sel = league || ''   // the app's top-bar league — the ledger keeps every league, this shows the current one
   const [data, setData] = useState({ rows: [], leagues: [] })
   const [open, setOpen] = useState(null)
   const [busy, setBusy] = useState(false)
   const [lastFetch, setLastFetch] = useState(null)
-  useEffect(() => { if (league && !sel) setSel(league) }, [league, sel])
-
   const load = (lg) => api.sales(lg).then(setData).catch(() => {})
   useEffect(() => { if (sel) load(sel) }, [sel])
 
@@ -61,16 +59,13 @@ export default function SalesView({ league }) {
   const ref = status?.reference || 'exalted'
   const stats = useMemo(() => salesStats(data.rows, ref, status?.wealth_prices), [data.rows, ref, status?.wealth_prices])
   const byName = useMemo(() => { const m = new Map(); for (const n of flatten(tree, x => x.kind === 'search')) if (n.name) m.set(n.name.toLowerCase(), n.id); return m }, [tree])
-  const leagues = useMemo(() => Array.from(new Set([sel, league, ...(data.leagues || [])].filter(Boolean))), [sel, league, data.leagues])
   const openRow = (r) => { setOpen(o => (o === r ? null : r)); diag('sales', 'sales-open') }
 
   return (
     <div className="sales-view">
       <div className="sales-head">
         <b>Sales</b>
-        <select className="sales-league" value={sel} onChange={e => setSel(e.target.value)} title="League (the ledger keeps every league)">
-          {leagues.map(l => <option key={l} value={l}>{l}</option>)}
-        </select>
+        <span className="ws-chip" title="Follows the top-bar league; the ledger keeps every league">{sel || '—'}</span>
         <span className="ws-chip" title="Sales in the last 24 h / 7 d">{stats.today} today · {stats.week} this week</span>
         <span className="ws-chip" title={stats.unpriced ? `${stats.unpriced} sale${stats.unpriced === 1 ? '' : 's'} in a currency with no known price` : 'Total of every priced sale, in the reference currency'}>total <Wealth v={stats.totalRef} /></span>
         <span className="spacer" />

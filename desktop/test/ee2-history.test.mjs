@@ -3,6 +3,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { EventEmitter } from 'node:events'
+import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 const require = createRequire(import.meta.url)
 const { createHistoryConsumer, NO_WINDOW_BUFFER, RESTART_MIN_MS } = require('../src/ee2-history/index.js')
@@ -70,7 +71,7 @@ test('worker failure: in-flight item skipped, restart at most once per 5 minutes
   let calls = 0
   const h = harness({ build: async () => { calls++; throw new Error('worker died') } })
   h.pkg.emit('item-checked', item()); await new Promise(r => setTimeout(r, 10))
-  assert.ok(h.lines.some(l => l === 'history-skip reason=worker origin=ee2'))
+  assert.ok(h.lines.some(l => l.startsWith('history-skip reason=worker origin=ee2 err="worker died"')))
   assert.equal(h.spawns.length, 1)
   h.pkg.emit('item-checked', item()); await new Promise(r => setTimeout(r, 10))
   assert.equal(h.spawns.length, 1, 'no restart within 5 min')
@@ -104,4 +105,13 @@ test('rate-budget hint: an EE2-originated price check spends one trade-fetch slo
   await new Promise(r => setTimeout(r, 10))
   assert.deepEqual(hints, ['trade-fetch'])
   c.stop()
+})
+
+test('worker-host maps an app.asar path to its unpacked twin (the worker and vendor are asarUnpack\'ed)', async () => {
+  const { unpacked } = require('../src/ee2-history/worker-host.js')
+  assert.equal(unpacked('/Applications/Arbiter.app/Contents/Resources/app.asar/src/ee2-history/worker.js'), '/Applications/Arbiter.app/Contents/Resources/app.asar.unpacked/src/ee2-history/worker.js')
+  assert.equal(unpacked('C:\\Users\\x\\AppData\\Local\\Programs\\Arbiter\\resources\\app.asar\\src\\ee2-history\\worker.js'), 'C:\\Users\\x\\AppData\\Local\\Programs\\Arbiter\\resources\\app.asar.unpacked\\src\\ee2-history\\worker.js')
+  assert.equal(unpacked('/dev/desktop/src/ee2-history/worker.js'), '/dev/desktop/src/ee2-history/worker.js')
+  const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
+  assert.ok(pkg.build.asarUnpack.includes('src/ee2-history/**') && pkg.build.asarUnpack.includes('src/vendor/ee2-query/**'))
 })

@@ -38,7 +38,9 @@
     ],
     "asarUnpack": [
       "**/*.node",
-      "**/node_modules/uiohook-napi/**"
+      "**/node_modules/uiohook-napi/**",
+      "src/ee2-history/**",
+      "src/vendor/ee2-query/**"
     ],
     "publish": [
       {
