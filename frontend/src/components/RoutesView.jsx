@@ -41,7 +41,6 @@ export default function RoutesView({ capital, status, currencies, onCapitalSaved
   const [sort, setSort] = useState({ key: 'score', dir: 'desc' })
   const [err, setErr] = useState(null)
   const [open, setOpen] = useState(null)
-  const autoLive = useSync(s => s.auto)          // global auto-refresh (topbar)
   const tick = useSync(s => s.tick)              // topbar ⟳ → refresh loops
   const esRef = useRef(null)
   const accRef = useRef([])

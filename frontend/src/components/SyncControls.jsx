@@ -2,23 +2,19 @@ import React from 'react'
 import { fmt } from '../lib/api.js'
 import { useSync } from '../lib/syncStore.js'
 import RefreshButton from './RefreshButton.jsx'
-import Toggle from './Toggle.jsx'
 
 // The topbar sync UI, split into two pieces so the live-refresh CONTROLS can sit up top next to the
 // Divine notification orb, while the passive METRICS stay on the second row:
-//   <RefreshControls/> — manual ⟳ (refreshes the mounted live view) + the global auto toggle.
-//   <SyncMetrics/>     — market-data freshness, live-order-book status + queue, and the connect action.
+//   <RefreshControls/> — the manual ⟳ (reloads the mounted view).
+//   <SyncMetrics/>     — market-data freshness and the connect action.
 // Both read the shared sync store / status; nothing is duplicated across views (topbar is the sole home).
 
 export function RefreshControls() {
-  const auto = useSync(s => s.auto)
-  const setAuto = useSync(s => s.setAuto)
   const busy = useSync(s => s.busy)
   const requestRefresh = useSync(s => s.requestRefresh)
   return (
     <div className="refresh-controls">
       <RefreshButton busy={busy} onClick={requestRefresh} title="Refresh" />
-      <Toggle checked={auto} onChange={setAuto} label="auto" />
     </div>
   )
 }

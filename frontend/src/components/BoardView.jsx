@@ -87,7 +87,6 @@ export default function BoardView({ status }) {
   const [err, setErr] = useState(null)
   const [busy, setBusy] = useState(false)
   const winH = useHorizon(s => s.hours)              // app-wide horizon (topbar picker)
-  const auto = useSync(s => s.auto)                  // global auto-refresh toggle (topbar)
   const tick = useSync(s => s.tick)                  // topbar ⟳ pulse → refresh this view
   const setSyncBusy = useSync(s => s.setBusy)        // drive the topbar ⟳ spinner
   const [watchlist, setWatchlist] = useState(null)   // desktop-only board customization
@@ -101,7 +100,6 @@ export default function BoardView({ status }) {
     setNumById(next)
     try { localStorage.setItem('board.num.v1', JSON.stringify(next)) } catch {}
   }
-  const timer = useRef(null)
 
   const load = async () => {
     try { setData(await api.board(winH)); setErr(null) } catch (e) { setErr(String(e.message || e)) }
@@ -142,12 +140,6 @@ export default function BoardView({ status }) {
     if (!isDesktop) return
     ensureSettings().then(s => setWatchlist(s.watchlist || [])).catch(() => {})
   }, [])
-  // Global auto-refresh (topbar toggle) — Board's own 60s cadence, gated on the shared flag.
-  useEffect(() => {
-    if (!auto) return
-    timer.current = setInterval(refresh, 60000)
-    return () => clearInterval(timer.current)
-  }, [auto, winH]) // eslint-disable-line
   // Manual refresh from the topbar ⟳ (bumps the shared tick) refreshes the mounted view.
   useEffect(() => { if (tick > 0) refresh() }, [tick]) // eslint-disable-line
 
