@@ -51,7 +51,7 @@ export default function AccountsPanel({ onChange }) {
 
   return (
     <>
-      <h2>Trade session (live order book)</h2>
+      <h2>Trade session</h2>
       {sess?.connected ? (
         <p className="notice">Connected{sess.label ? ` · ${sess.label}` : ''} · set {ago(sess.set_at)} · last successful fetch {ago(sess.last_ok)}.
           {' '}{sess.source !== 'env' && <button className="btn small" onClick={async () => { await api.disconnectSession(); await load(); onChange?.() }}>Disconnect</button>}
@@ -83,7 +83,7 @@ export default function AccountsPanel({ onChange }) {
       ) : (
         // Web build: the live order book needs the desktop app's native login — don't
         // advertise the browser-extension flow here. Point at the download instead.
-        <p className="hint">The live order book runs in the <b>desktop app</b>, which signs in to pathofexile.com for you —
+        <p className="hint">Live searches and the sales ledger run in the <b>desktop app</b>, which signs in to pathofexile.com for you —
           grab it from the <b>Download</b> button in the top bar. This website is a preview that uses hourly market data.</p>
       )}
 

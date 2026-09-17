@@ -115,12 +115,6 @@ export default function CardDetail({ r, num, factor, numOptions, onNum, prices, 
         </>}
         <LeagueArcSection name={r.name} />
         <div className="cd-grid">
-          {r.source === 'live' && <>
-            {r.spread_pct != null && <div className="cd-stat" title="gap between the ask and the bid, as a share of the price"><span>spread</span><b>{r.spread_pct.toFixed(1)}%</b></div>}
-            <div className="cd-stat" title="what one costs to buy"><span>ask</span><b>{buy == null ? '–' : <>{fmt.rate(buy)} <Cur id={num} size={14} /></>}</b></div>
-            <div className="cd-stat" title="what you get selling one"><span>bid</span><b>{sell == null ? '–' : <>{fmt.rate(sell)} <Cur id={num} size={14} /></>}</b></div>
-            {r.depth != null && <div className="cd-stat"><span>depth</span><b>{r.depth} offers</b></div>}
-          </>}
           {r.medvol != null && <div className="cd-stat"><span>volume</span><b><Wealth v={r.medvol} cur="exalted" suffix={<span className="muted">/day</span>} /></b></div>}
           <div className="cd-stat"><span>source</span><b>{SRC_LABEL[r.source] || 'no data'}</b></div>
           {r.age_s != null && <div className="cd-stat"><span>updated</span><b>{fmt.age(r.age_s)} ago</b></div>}

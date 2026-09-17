@@ -174,7 +174,7 @@ export default function App() {
             ))}
           </nav>
           <span className="tb-spacer" />
-          <RefreshControls connected={!!status?.session?.connected} />
+          <RefreshControls />
           <DivinePingOrb onOpenSignal={(s) => assetModal.open(s.name)} />
         </div>
 

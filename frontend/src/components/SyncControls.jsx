@@ -10,15 +10,14 @@ import Toggle from './Toggle.jsx'
 //   <SyncMetrics/>     — market-data freshness, live-order-book status + queue, and the connect action.
 // Both read the shared sync store / status; nothing is duplicated across views (topbar is the sole home).
 
-export function RefreshControls({ connected }) {
+export function RefreshControls() {
   const auto = useSync(s => s.auto)
   const setAuto = useSync(s => s.setAuto)
   const busy = useSync(s => s.busy)
   const requestRefresh = useSync(s => s.requestRefresh)
   return (
     <div className="refresh-controls">
-      <RefreshButton busy={busy} onClick={requestRefresh} disabled={!connected}
-        title={connected ? 'Refresh live data now' : 'Connect live data to refresh'} />
+      <RefreshButton busy={busy} onClick={requestRefresh} title="Refresh" />
       <Toggle checked={auto} onChange={setAuto} label="auto" />
     </div>
   )
@@ -29,11 +28,6 @@ export function SyncMetrics({ status, bridge, connecting, onConnect, rl }) {
   const backfilling = status?.digest?.backfilling
   // Feed freshness comes from the backend as a state string (it owns the thresholds).
   const digestOk = status?.digest?.state === 'waiting' ? '' : (status?.digest?.state || '')
-  const bookOk = !connected ? 'off' : status?.orderbook?.feed === 'idle' ? '' : (status?.orderbook?.feed || '')
-  const ob = status?.orderbook || {}
-  const queue = ob.queue || 0
-  const inFlight = ob.in_flight || 0
-  const reqs = rl?.policies?.trade?.requests
 
   return (
     <div className="sync-cluster">
@@ -45,28 +39,13 @@ export function SyncMetrics({ status, bridge, connecting, onConnect, rl }) {
           : 'waiting for data'}
       </span>
 
-      {/* live order book: status + queue, or the connect action, or the web note */}
-      {connected ? (
-        <span className="feed" title={status?.orderbook?.last_error || 'Live order book'}>
-          <i className={`dot ${bookOk}`} />
-          {inFlight ? `fetching ${inFlight}`
-            : queue ? `${queue} queued`
-            : ob.last_fetch ? `live ${fmt.age(Date.now() / 1000 - ob.last_fetch)} ago` : 'live: idle'}
-          {(queue || inFlight || reqs) ? (
-            <span className="sync-rl" title="live-fetch rate budget this run">
-              {queue ? ` · queue ${queue}` : ''}{reqs ? ` · ${reqs} req` : ''}
-            </span>
-          ) : null}
-        </span>
-      ) : bridge === 'desktop' ? (
+      {/* The trade-site session powers live searches and the sales ledger (prices come from the
+          hourly Currency Exchange data only — see docs/market-data-sources.md). */}
+      {!connected && bridge === 'desktop' && (
         <button className="btn primary connect-live" disabled={connecting} onClick={onConnect}
-          title="Sign in to pathofexile.com and stream live order books">
-          {connecting ? 'Connecting…' : 'Connect live data'}
+          title="Sign in to pathofexile.com for live searches and the sales ledger">
+          {connecting ? 'Connecting…' : 'Connect'}
         </button>
-      ) : (
-        <span className="feed muted" title="Live order books run in the desktop app">
-          <i className="dot" /> live: desktop app
-        </span>
       )}
     </div>
   )

@@ -34,6 +34,15 @@ from .settings import get_settings
 
 log = logging.getLogger(__name__)
 
+# DEPRECATED 2026-09-17 (owner directive) — see docs/market-data-sources.md. This module queries the
+# trade WEBSITE's Bulk Item Exchange (`POST /api/trade2/exchange`): whisper-based listings, a
+# different venue from the in-game Currency Exchange that the hourly digest, the gold-fee model
+# and every loop describe. Listings there are unfilled asks — bait and lowball bids — and they
+# were overriding executed prices. GGG exposes no live order book for the in-game exchange, so
+# the hourly digest is the SOLE source for prices and loops. With this False nothing is queued or
+# fetched and stored books never reach the graph. `exchange_post` stays in use as the session probe.
+BULK_EXCHANGE_ENABLED = False
+
 HARD_FLOOR_S = 5      # even a forced refetch of the same pair waits this long
 BATCH_MAX_HAVE = 10   # haves per request WE want (GGG's cap as of 2026-09-17; it was >= 12 before); more dilutes the ~100-listing response cap.
                       # GGG enforces its own (unpublished, changeable) cap — see state["have_cap"].
@@ -83,6 +92,8 @@ def cached_at(league: str, have: str, want: str) -> int | None:
 
 
 def latest_books(league: str, max_age_s: int) -> dict[tuple[str, str], dict]:
+    if not BULK_EXCHANGE_ENABLED:
+        return {}
     since = int(time.time()) - max_age_s
     with db.q() as c:
         rows = c.execute("SELECT have, want, fetched_at, offers FROM orderbook WHERE league=? AND fetched_at>=?",
@@ -179,6 +190,8 @@ def request_pairs(pairs: list[tuple[str, str]], priority: int = 1, force: bool =
                   max_age_s: int | None = None) -> list[asyncio.Future]:
     """Queue pairs that need fetching; return futures for those queued (fresh ones are skipped)."""
     global _seq
+    if not BULK_EXCHANGE_ENABLED:
+        return []
     s = get_settings()
     league = s["league"]
     max_age = HARD_FLOOR_S if force else (max_age_s if max_age_s is not None else s["min_refetch_s"])

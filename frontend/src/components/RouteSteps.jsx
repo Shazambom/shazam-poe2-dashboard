@@ -1,7 +1,6 @@
 import React, { useState } from 'react'
 import { fmt } from '../lib/api.js'
 import Cur from './Cur.jsx'
-import RefreshButton from './RefreshButton.jsx'
 import Wealth from './Wealth.jsx'
 
 // Shared route-path renderers, extracted from RoutesView so the Convert tool renders a
@@ -34,7 +33,7 @@ export function Loop({ r }) {
   )
 }
 
-export function Detail({ r, refCur, onRefresh, refreshing, canLive }) {
+export function Detail({ r, refCur }) {
   const [copied, setCopied] = useState(null)
   const copy = async (text, i) => {
     try { await navigator.clipboard.writeText(text); setCopied(i); setTimeout(() => setCopied(null), 1500) } catch {}
@@ -51,10 +50,6 @@ export function Detail({ r, refCur, onRefresh, refreshing, canLive }) {
         {r.profit_per_hour != null && <span>· earns <Wealth v={r.profit_per_hour} cur={refCur} suffix="/h" /></span>}
         {r.score != null && r.score_parts && <span>· score {r.score} (velocity {r.score_parts.velocity}, efficiency {r.score_parts.efficiency}, value {r.score_parts.value}, volume {r.score_parts.volume})</span>}
         <span className="spacer" />
-        {canLive && r.pairs.length > 0 && (
-          <RefreshButton className="small" busy={refreshing} onClick={(e) => { e.stopPropagation(); onRefresh(r) }}
-            title={`Refresh this loop (${r.pairs.length} ${r.pairs.length === 1 ? 'pair' : 'pairs'})`} />
-        )}
       </div>
       <table>
         <thead>

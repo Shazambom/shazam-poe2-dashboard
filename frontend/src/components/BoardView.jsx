@@ -67,7 +67,7 @@ function Tile({ r, num, factor, numOptions, onNum, onRemove, onOpen, index = 0 }
       <Spark points={trend} />
       {/* Ask / bid / spread live in the zoomed card (CardDetail), with their currency — the base
           card stays a price, a trend and where the price came from. */}
-      <div className="pt-foot muted">{r.source === 'live' ? 'live' : 'hourly mid'}{r.age_s != null && <> · {fmt.age(r.age_s)} old</>}</div>
+      <div className="pt-foot muted">hourly mid{r.age_s != null && <> · {fmt.age(r.age_s)} old</>}</div>
       {onNum && numOptions.length > 0 && (
         <div className="pt-num-row" onClick={e => e.stopPropagation()}>priced in{' '}
           <select value={num} onChange={e => onNum(r.id, e.target.value)} title="Currency this card is priced in (defaults to its highest-volume market)">
@@ -101,7 +101,6 @@ export default function BoardView({ status }) {
     setNumById(next)
     try { localStorage.setItem('board.num.v1', JSON.stringify(next)) } catch {}
   }
-  const canLive = !!status?.session?.connected
   const timer = useRef(null)
 
   const load = async () => {
@@ -120,10 +119,10 @@ export default function BoardView({ status }) {
     await saveWatchlist([...(watchlist || []), m.id], `Added ${m.name}`)
   }
   const removeCur = (id) => saveWatchlist((watchlist || []).filter(x => x !== id), 'Removed from board')
-  const refreshLive = async () => {
-    if (!canLive || busy) return
+  const refresh = async () => {
+    if (busy) return
     setBusy(true); setSyncBusy(true)
-    try { setData(await api.boardRefresh(winH)) } catch (e) { setErr(String(e.message || e)) }
+    await load()
     setBusy(false); setSyncBusy(false)
   }
   useEffect(() => { load(); const t = setInterval(load, 30000); return () => clearInterval(t) }, [winH]) // eslint-disable-line
@@ -145,18 +144,16 @@ export default function BoardView({ status }) {
   }, [])
   // Global auto-refresh (topbar toggle) — Board's own 60s cadence, gated on the shared flag.
   useEffect(() => {
-    if (!auto || !canLive) return
-    refreshLive()
-    timer.current = setInterval(refreshLive, 60000)
+    if (!auto) return
+    timer.current = setInterval(refresh, 60000)
     return () => clearInterval(timer.current)
-  }, [auto, canLive, winH]) // eslint-disable-line
+  }, [auto, winH]) // eslint-disable-line
   // Manual refresh from the topbar ⟳ (bumps the shared tick) refreshes the mounted view.
-  useEffect(() => { if (tick > 0) refreshLive() }, [tick]) // eslint-disable-line
+  useEffect(() => { if (tick > 0) refresh() }, [tick]) // eslint-disable-line
 
   const ref = data?.reference ?? 'ref'
   const rows = data?.rows ?? []
   const prices = data?.prices ?? {}
-  const live = useMemo(() => rows.filter(r => r.source === 'live').length, [rows])
   // Currencies a card can be priced in = those with a known reference price, richest first.
   const numOptions = useMemo(() => Object.keys(prices)
     .sort((a, b) => (prices[b] || 0) - (prices[a] || 0))
@@ -257,7 +254,6 @@ export default function BoardView({ status }) {
       <div className="board-bar">
         <h2 style={{ margin: 0 }}>Price board <span className="muted" style={{ fontWeight: 400 }}>· {rows.length} currencies · each priced in its top market · {rangeLabel(winH)}</span></h2>
         <span className="spacer" />
-        <span className="hint">{live} live · {rows.length - live} from hourly data</span>
       </div>
       {isDesktop && watchlist && (
         <div className="board-bar" style={{ marginTop: 4 }}>

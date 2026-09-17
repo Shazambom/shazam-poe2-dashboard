@@ -83,17 +83,9 @@ export default function SettingsView({ currencies, status, onSaved }) {
             <summary>Advanced — route search &amp; fetch policy</summary>
             <div className="field"><label>Maximum steps per loop</label><input type="number" min="2" max="5" value={s.max_steps} onChange={e => set('max_steps', e.target.value)} /></div>
             <div className="field"><label>Fraction of held capital to commit</label><input type="number" min="0.05" max="1" step="0.05" value={s.max_start_fraction} onChange={e => set('max_start_fraction', e.target.value)} /></div>
-            <div className="field"><label>Ignore live quotes older than (seconds)</label><input type="number" value={s.live_max_age_s} onChange={e => set('live_max_age_s', e.target.value)} /></div>
             <div className="field"><label>Ignore market data older than (hours)</label><input type="number" value={s.digest_max_age_h} onChange={e => set('digest_max_age_h', e.target.value)} /></div>
             <div className="field"><label>Cull markets trading less than ({s.reference}/hour)</label><input type="number" min="0" step="0.5" value={s.min_edge_volume_ref_per_h ?? 1} onChange={e => set('min_edge_volume_ref_per_h', e.target.value)} /></div>
-            <div className="field"><label>Cull live markets with fewer listings than</label><input type="number" min="0" value={s.min_edge_depth ?? 2} onChange={e => set('min_edge_depth', e.target.value)} /></div>
-            <div className="field"><label>Refresh pairs behind the top N loops</label><input type="number" min="1" value={s.live_top_n} onChange={e => set('live_top_n', e.target.value)} /></div>
-            <div className="field"><label>Only if the pair's quote is older than (seconds)</label><input type="number" value={s.live_min_age_s} onChange={e => set('live_min_age_s', e.target.value)} /></div>
-            <div className="field"><label>Never refetch the same pair sooner than (seconds)</label><input type="number" value={s.min_refetch_s} onChange={e => set('min_refetch_s', e.target.value)} /></div>
             <div className="field"><label>Serve identical route queries from memory for (seconds)</label><input type="number" value={s.routes_cache_s} onChange={e => set('routes_cache_s', e.target.value)} /></div>
-            <div className="field"><label>Haves per exchange request</label><input type="number" min="1" max="10" value={s.batch_max_have} onChange={e => set('batch_max_have', e.target.value)} /></div>
-            <div className="check"><Toggle checked={!!s.batch_pad} onChange={v => set('batch_pad', v)} label="Fill spare request slots with likely-useful pairs" /></div>
-            <div className="check"><Toggle checked={!!s.background_sweep} onChange={v => set('background_sweep', v)} label="Background sweep of the whole watchlist" /></div>
 
             <h2>Ranking weights</h2>
             <p className="hint">The default sort blends these; velocity (profit per hour per gold) leads.</p>

@@ -20,7 +20,8 @@ test('route scores come from the server (no client scoreAll)', () => {
 test('feed staleness is rendered from the backend state strings', () => {
   const sc = src('components/SyncControls.jsx')
   assert.ok(!sc.includes('feedState') && !sc.includes('2 * 3600'))
-  assert.ok(sc.includes('digest?.state') && sc.includes('orderbook?.feed'))
+  // the order-book feed chip went with the deprecated Bulk Item Exchange (docs/market-data-sources.md)
+  assert.ok(sc.includes('digest?.state') && !sc.includes('orderbook'))
 })
 
 test('anchor vocab comes from the API (no hardcoded anchor lists)', () => {

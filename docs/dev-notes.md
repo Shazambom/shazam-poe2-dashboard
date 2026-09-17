@@ -238,6 +238,10 @@ Full table + steps: [`release-runbook.md`](./release-runbook.md) → "Two channe
   `simulate()` reports `slowest_step_hours` (units in ÷ units/h of that market) and the
   `max_step_minutes` filter (default 45, 0 = off) drops loops whose worst step needs more — turnover
   judged RELATIVE to the trade, because a fixed ex/h floor passes "expensive, trades twice a day".
+- **Price source (owner directive 2026-09-17):** the hourly Currency Exchange digest is the SOLE source for
+  prices, valuations and loops. The trade site's Bulk Item Exchange (`orderbook.py`, whisper listings — a
+  different venue) is DEPRECATED behind `orderbook.BULK_EXCHANGE_ENABLED = False`. Read
+  [`market-data-sources.md`](./market-data-sources.md) before touching pricing.
 - **Exchange have-cap:** GGG rejects > 10 `have` per exchange request (was ≥ 12 until 2026-09-17, when
   every live fetch started failing with a 400). `orderbook.state["have_cap"]` learns the cap down on
   "Too many items" and re-queues the same pairs; `last_error` now carries GGG's response body.

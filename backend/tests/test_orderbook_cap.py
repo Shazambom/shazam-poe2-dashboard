@@ -23,6 +23,7 @@ TOO_MANY = RuntimeError('exchange HTTP 400: {"error":{"code":2,"message":"Too ma
 
 @pytest.fixture(autouse=True)
 def clean(monkeypatch):
+    monkeypatch.setattr(orderbook, "BULK_EXCHANGE_ENABLED", True)   # deprecated module; its mechanics are still pinned
     monkeypatch.setitem(orderbook.state, "have_cap", 12)      # as it was the day GGG lowered theirs
     orderbook._pending.clear(); orderbook._queued_priority.clear(); orderbook._solo.clear()
     while not orderbook._queue.empty():

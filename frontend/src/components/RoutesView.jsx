@@ -14,7 +14,7 @@ const INF = Infinity
 
 const DEFAULT_FILTERS = {
   min_margin_pct: 0.5, min_margin_ref: 0, max_gold: '', min_margin_per_1k_gold: '',
-  min_liquidity_ref: '', min_volume_ref_per_h: '', max_fill_hours: '', max_step_minutes: '', min_velocity: '', live_only: false, exclude_recipes: false, limit: 100, start: '',
+  min_liquidity_ref: '', min_volume_ref_per_h: '', max_fill_hours: '', max_step_minutes: '', min_velocity: '', exclude_recipes: false, limit: 100, start: '',
 }
 
 // Column definitions: [key, label, accessor, defaultDir, title]
@@ -41,18 +41,12 @@ export default function RoutesView({ capital, status, currencies, onCapitalSaved
   const [sort, setSort] = useState({ key: 'score', dir: 'desc' })
   const [err, setErr] = useState(null)
   const [open, setOpen] = useState(null)
-  const [liveBusy, setLiveBusy] = useState(false)
   const autoLive = useSync(s => s.auto)          // global auto-refresh (topbar)
   const tick = useSync(s => s.tick)              // topbar ⟳ → refresh loops
-  const setSyncBusy = useSync(s => s.setBusy)    // drive the topbar ⟳ spinner
-  const [refreshingId, setRefreshingId] = useState(null)
-  const [note, setNote] = useState(null)
-  const [liveN, setLiveN] = useState(5)
   const esRef = useRef(null)
   const accRef = useRef([])
-  const canLive = !!status?.session?.connected
   const filterKey = JSON.stringify([f.min_margin_pct, f.min_margin_ref, f.max_gold, f.min_margin_per_1k_gold,
-    f.min_liquidity_ref, f.min_volume_ref_per_h, f.max_fill_hours, f.max_step_minutes, f.min_velocity, f.live_only, f.exclude_recipes, f.start])
+    f.min_liquidity_ref, f.min_volume_ref_per_h, f.max_fill_hours, f.max_step_minutes, f.min_velocity, f.exclude_recipes, f.start])
 
   const load = () => {
     esRef.current?.close()
@@ -84,49 +78,15 @@ export default function RoutesView({ capital, status, currencies, onCapitalSaved
     })
   }
 
-  useEffect(() => { ensureSettings().then(s => { const g = { ...s.filters }; delete g.sort; ['max_gold','min_margin_per_1k_gold','min_liquidity_ref','min_volume_ref_per_h','max_fill_hours','max_step_minutes','min_velocity'].forEach(k => { if (!g[k]) g[k] = '' }); setF(x => ({ ...x, ...g })); setLiveN(s.live_top_n ?? 5) }).catch(() => {}) }, [])
+  useEffect(() => { ensureSettings().then(s => { const g = { ...s.filters }; delete g.sort; ['max_gold','min_margin_per_1k_gold','min_liquidity_ref','min_volume_ref_per_h','max_fill_hours','max_step_minutes','min_velocity'].forEach(k => { if (!g[k]) g[k] = '' }); setF(x => ({ ...x, ...g }))}).catch(() => {}) }, [])
   useEffect(() => { load(); return () => esRef.current?.close() }, [filterKey]) // eslint-disable-line
   useEffect(() => {
     const t = setInterval(() => { if (document.visibilityState === 'visible' && !streaming) load() }, 120000)
     return () => clearInterval(t)
   }, [filterKey, streaming]) // eslint-disable-line
 
-  const applyResult = (d) => {
-    accRef.current = d.routes
-    setRoutes(d.routes)
-    setCounts({ total_candidates: d.total_candidates, total_after_filters: d.total_after_filters })
-  }
-  const refreshTop = async () => {
-    if (!canLive || liveBusy) return
-    setLiveBusy(true); setSyncBusy(true); setNote(null)
-    try {
-      const d = await api.refreshTop(f, Number(liveN))
-      applyResult(d)
-      const r = d.refresh
-      setNote(r.waited === 0 ? `Top ${r.top_n}: all ${r.pairs_considered} pairs already fresh, nothing fetched.`
-        : `Top ${r.top_n}: fetched ${r.done} of ${r.waited} stale pairs${r.timed_out ? ' (rest still queued)' : ''}.`)
-    } catch (e) { setNote(String(e.message || e)) }
-    setLiveBusy(false); setSyncBusy(false)
-  }
-  const refreshOne = async (r) => {
-    setRefreshingId(r.id); setNote(null)
-    try {
-      const d = await api.refreshRoute(r.id, r.pairs, f)
-      accRef.current = d.routes; setRoutes(d.routes)
-      if (!d.still_passes) setNote(d.route ? `After refresh that loop no longer clears your thresholds (margin now ${fmt.pct(d.route.margin_pct)}).` : 'After refresh that loop no longer exists.')
-      else setNote(`Loop refreshed: ${d.refresh.done} of ${d.refresh.waited} pairs fetched.`)
-    } catch (e) { setNote(String(e.message || e)) }
-    setRefreshingId(null)
-  }
-  // Global auto-refresh (topbar toggle) — Routes' own 2-min cadence, gated on the shared flag.
-  useEffect(() => {
-    if (!autoLive || !canLive) return
-    refreshTop()
-    const t = setInterval(refreshTop, 120000)
-    return () => clearInterval(t)
-  }, [autoLive, canLive, filterKey, liveN]) // eslint-disable-line
-  // Manual refresh from the topbar ⟳ refreshes the top loops (this view is the one mounted).
-  useEffect(() => { if (tick > 0) refreshTop() }, [tick]) // eslint-disable-line
+  // Manual refresh from the topbar ⟳ re-runs the search.
+  useEffect(() => { if (tick > 0) load() }, [tick]) // eslint-disable-line
 
   const set = (k) => (e) => setF(x => ({ ...x, [k]: e.target.type === 'checkbox' ? e.target.checked : e.target.value }))
   const clickSort = (key, defDir) => setSort(s => s.key === key ? { key, dir: s.dir === 'desc' ? 'asc' : 'desc' } : { key, dir: defDir })
@@ -178,7 +138,6 @@ export default function RoutesView({ capital, status, currencies, onCapitalSaved
             {held.map(c => <option key={c} value={c}>{c}</option>)}
           </select>
         </div>
-        <div className="check"><Toggle checked={!!f.live_only} onChange={v => setF(x => ({ ...x, live_only: v }))} label="Live quotes only" /></div>
 
         <details className="adv">
           <summary>More filters</summary>
@@ -197,18 +156,11 @@ export default function RoutesView({ capital, status, currencies, onCapitalSaved
           <div className="field"><label>Show at most</label><input type="number" value={f.limit} onChange={set('limit')} /></div>
         </details>
 
-        <h2>Live quotes</h2>
-        {!canLive ? (
-          <p className="hint">Not connected — loops use hourly market data. Connect a trade session in Settings for real-time order books.</p>
-        ) : (
-          <p className="hint">Refreshing (the top-bar ⟳ or auto toggle) fetches live order books for the top {liveN} loops.{liveBusy ? ' · refreshing…' : ''}</p>
-        )}
       </aside>
 
       <section className="main">
         <ConvertView currencies={currencies} capital={capital} />
         {err && <div className="notice error">Couldn't load routes: {err}</div>}
-        {note && <div className="notice">{note}</div>}
         {backfilling && (
           <div className="notice">Market history is still syncing ({fmt.n(status.digest.behind_h, 0)}h behind). Loops fill in as rates land — no action needed.</div>
         )}
@@ -276,7 +228,7 @@ export default function RoutesView({ capital, status, currencies, onCapitalSaved
                     <td className={`num ${r.fill_hours != null && r.fill_hours > 4 ? 'muted' : ''}`}>{fmt.dur(r.fill_hours)}</td>
                     <td className="num muted">{fmt.age(r.max_age_s)}</td>
                   </tr>
-                  {open === r.id && <tr><td colSpan={12} style={{ padding: 0 }}><Detail r={r} refCur={ref} onRefresh={refreshOne} refreshing={refreshingId === r.id} canLive={canLive} /></td></tr>}
+                  {open === r.id && <tr><td colSpan={12} style={{ padding: 0 }}><Detail r={r} refCur={ref} /></td></tr>}
                 </React.Fragment>
               ))}
             </tbody>
