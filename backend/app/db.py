@@ -395,9 +395,9 @@ def get_capital() -> dict[str, float]:
 
 
 # ---------------------------------------------------------------- sales ledger (user data)
-def sales_upsert(league: str, rows: list[dict]) -> int:
-    """Upsert Merchant History rows by (item_id, time); returns how many were NEW. Never deletes."""
-    new = 0
+def sales_upsert(league: str, rows: list[dict]) -> list[dict]:
+    """Upsert Merchant History rows by (item_id, time); returns the rows that were NEW. Never deletes."""
+    new: list[dict] = []
     with tx() as c:
         for r in rows:
             item_id, t = r.get("item_id"), r.get("time")
@@ -405,13 +405,22 @@ def sales_upsert(league: str, rows: list[dict]) -> int:
                 continue
             price = r.get("price") or {}
             if not c.execute("SELECT 1 FROM sales WHERE item_id=? AND time=?", (str(item_id), str(t))).fetchone():
-                new += 1
+                new.append(r)
             c.execute(
                 "INSERT INTO sales(item_id, time, league, price_amount, price_currency, item_json) VALUES(?,?,?,?,?,?) "
                 "ON CONFLICT(item_id, time) DO UPDATE SET price_amount=excluded.price_amount, price_currency=excluded.price_currency, item_json=excluded.item_json",
                 (str(item_id), str(t), league, price.get("amount"), price.get("currency"), json.dumps(r.get("item") or {})),
             )
     return new
+
+
+def capital_add(currency: str, qty: float) -> None:
+    """Credit a holding in place (a sale just paid out): the row is created when absent."""
+    if not currency or not qty or float(qty) <= 0:
+        return
+    with tx() as c:
+        c.execute("INSERT INTO capital(currency, qty) VALUES(?, ?) ON CONFLICT(currency) DO UPDATE SET qty = qty + excluded.qty",
+                  (currency, float(qty)))
 
 
 def sales_list(league: str | None = None) -> list[dict]:

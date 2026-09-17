@@ -11,6 +11,8 @@ import ItemCard from './ItemCard.jsx'
 import Wealth from './Wealth.jsx'
 import Cur from './Cur.jsx'
 import RefreshButton from './RefreshButton.jsx'
+import CapitalCard from './CapitalCard.jsx'
+import { useCurrencies } from '../lib/icons.js'
 
 const POLL_MS = 10 * 60 * 1000
 
@@ -20,7 +22,10 @@ const POLL_MS = 10 * 60 * 1000
 // TradingView mounts it only while the Sales sub-tab is selected).
 export default function SalesView({ league }) {
   const status = useStatus(s => s.status)
+  const refreshHeader = useStatus(s => s.refresh)
+  const { raw: currencies } = useCurrencies()
   const tree = useWorkspace(s => s.tree)
+  const [capKey, setCapKey] = useState(0)   // remount the capital card after a fetch credited new sales
   const [sel, setSel] = useState(league || '')
   const [data, setData] = useState({ rows: [], leagues: [] })
   const [open, setOpen] = useState(null)
@@ -37,7 +42,11 @@ export default function SalesView({ league }) {
     try {
       const r = await window.poe2desktop.sales.fetch(sel)
       setLastFetch({ at: Date.now(), ...r })
-      if (r.ok) { await load(sel); if (!auto) toast(r.new ? `${r.new} new sale${r.new === 1 ? '' : 's'}` : 'Up to date') }
+      if (r.ok) {
+        await load(sel)
+        if (r.new) { refreshHeader(); setCapKey(k => k + 1) }   // new sales were credited to the holdings
+        if (!auto) toast(r.new ? `${r.new} new sale${r.new === 1 ? '' : 's'} · added to your holdings` : 'Up to date')
+      }
       else if (!auto) toast(r.error === 'rate' ? `Trade site rate limit — try again in ${r.retryAfter || 60}s` : r.error === 'auth' ? 'Connect your PoE session first (Settings → Accounts)' : `Fetch failed: ${r.error}`, false)
     } finally { setBusy(false) }
   }
@@ -68,6 +77,8 @@ export default function SalesView({ league }) {
         {lastFetch && <span className="muted sales-last">{lastFetch.ok ? `fetched ${relativeTime(new Date(lastFetch.at).toISOString())}` : lastFetch.error === 'rate' ? 'rate limited' : lastFetch.error === 'auth' ? 'no session' : 'fetch failed'}</span>}
         {isDesktop ? <RefreshButton busy={busy} onClick={() => refresh(false)} title="Fetch the trade site's Merchant History now" /> : <span className="muted" style={{ fontSize: 12 }}>Fetching runs in the desktop app</span>}
       </div>
+      {/* The same holdings editor as the Arbitrage rail — new sales are credited here automatically. */}
+      <div className="sales-capital"><CapitalCard key={capKey} currencies={currencies} status={status} onSaved={() => refreshHeader()} /></div>
       {data.rows.length === 0
         ? <div className="empty small">No sales recorded for {sel || 'this league'} yet{isDesktop ? ' — press refresh with your PoE session connected.' : '.'}</div>
         : (

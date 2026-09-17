@@ -611,8 +611,18 @@ def sales_ingest(body: SalesIngest):
     league = body.league.strip()
     if not league:
         raise HTTPException(400, "league required")
-    new = db.sales_upsert(league, body.result)
-    return {"ok": True, "new": new, "total": db.sales_count(league)}
+    new_rows = db.sales_upsert(league, body.result)
+    # A sale just paid out: credit its price to the holdings (NEW rows only, so a re-fetch never
+    # double-counts). The trade site never reports refunds, so nothing is ever debited here.
+    credited = 0
+    for r in new_rows:
+        price = r.get("price") or {}
+        if price.get("currency") and price.get("amount"):
+            db.capital_add(str(price["currency"]), float(price["amount"]))
+            credited += 1
+    if credited:
+        arbitrage.invalidate_caches()   # routes are sized from capital
+    return {"ok": True, "new": len(new_rows), "total": db.sales_count(league), "credited": credited}
 
 
 @app.get("/api/sales")
