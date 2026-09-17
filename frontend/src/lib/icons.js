@@ -32,14 +32,37 @@ export function loadIcons() {
   return _promise
 }
 
-// The index is fetched once and kept; a load that came back incomplete (or failed) is re-asked
-// every 30 s until the backend has the real thing, then every subscriber re-renders.
+// The index is fetched once and kept; a load that came back incomplete (or failed) is re-asked with
+// backoff (5 s, doubling to 60 s) until the backend has the real thing, then every subscriber re-renders.
+let _indexDelay = 5000
 function retrySoon() {
   setTimeout(() => {
     const keep = _index
     _index = null; _promise = null
     loadIcons().then(i => { if (!i.list.length && keep?.list.length) _index = keep })
-  }, 30000)
+  }, _indexDelay)
+  _indexDelay = Math.min(_indexDelay * 2, 60000)
+}
+
+// Image loads that fail (CDN hiccup, offline at launch) are retried too — ONE shared timer with
+// backoff (5 s, tripling to 5 min), not one per icon: it bumps an epoch, every <Cur> showing a text
+// fallback remounts its <img>, and the first image that loads resets the backoff.
+let _epoch = 0, _imgDelay = 5000, _imgTimer = null
+const epochSubs = new Set()
+export function iconFailed() {
+  if (_imgTimer) return
+  _imgTimer = setTimeout(() => {
+    _imgTimer = null
+    _epoch += 1
+    _imgDelay = Math.min(_imgDelay * 3, 300000)
+    epochSubs.forEach(fn => { try { fn(_epoch) } catch {} })
+  }, _imgDelay)
+}
+export function iconLoaded() { _imgDelay = 5000 }
+export function useIconEpoch() {
+  const [e, setE] = useState(_epoch)
+  useEffect(() => { epochSubs.add(setE); setE(_epoch); return () => epochSubs.delete(setE) }, [])
+  return e
 }
 
 // The ONE /api/currencies fetch, as a store: `raw` (the payload, incl. anchors + unmapped ids),

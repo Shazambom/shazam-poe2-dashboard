@@ -583,6 +583,13 @@ app.whenReady().then(async () => {
   win.webContents.setWindowOpenHandler(({ url }) => { shell.openExternal(url); return { action: 'deny' } })
   win.webContents.on('did-finish-load', () => { _history?.setSender((ch, p) => { try { win?.webContents.send(ch, p) } catch {} }) })
   win.on('closed', () => { _history?.setSender(null) })
+  // TEMPORARY DEV DIAGNOSTIC (beta/dev only): which link of the icon chain broke — see icondiag.js.
+  if (diagTelemetryOn()) {
+    try {
+      require('./icondiag.js').install({ win: () => win, session: win.webContents.session,
+        backendUrl: () => backendUrl, log: (m) => telemetry.installLog('icons', m) })
+    } catch (e) { console.log('[icondiag] failed:', String(e)) }
+  }
   setupUpdates()
   startEe2Integration()   // self-gates on EE2 presence; dormant if EE2 isn't installed
   try { require('./trade').registerTrade(() => win, () => backendUrl) } catch (e) { console.log('[trade] register failed:', String(e)) }
