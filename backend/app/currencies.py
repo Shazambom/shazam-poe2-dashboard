@@ -17,16 +17,19 @@ Metadata ids are linked to trade ids in this precedence (low → high):
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import re
 import time
 from dataclasses import dataclass, field
 
-from . import db, marketseries, gateway
+from . import db, devtelemetry, marketseries, gateway
 from .config import SEED_DIR, TRADE_STATIC_URL
 
 log = logging.getLogger(__name__)
+
+STATIC_CACHE_KEY = "trade_static_cache"     # operational kv: the last good /data/static (names + icons)
 
 
 @dataclass
@@ -72,16 +75,35 @@ class Registry:
         self._rebuild_links()
 
     # -------------------------------------------------------------- static
-    async def load_static(self) -> None:
-        """Fetch /api/trade2/data/static and merge into the registry."""
+    async def load_static(self) -> bool:
+        """Fetch /api/trade2/data/static and merge into the registry. Names and ICONS come only
+        from here, so one failed fetch at boot must not mean a text-only app: the last good copy
+        is kept in kv_ops (`trade_static_cache`, also rides the market snapshot) and applied when
+        the fetch fails; `keep_static_fresh` retries in the background. True = fetched live."""
         try:
             r = await gateway.request("GET", TRADE_STATIC_URL, policy="trade")
             r.raise_for_status()
             data = r.json()
-        except Exception as exc:  # network is optional; seed still works
+            if not any(g.get("entries") for g in data.get("result", [])):
+                raise ValueError("empty static payload")
+        except Exception as exc:  # network is optional; the cached copy (or the seed) still works
             log.warning("could not load trade static data: %s", exc)
-            return
+            cached = db.kv_get(STATIC_CACHE_KEY) if not self.loaded_at else None
+            devtelemetry.tlog("static", f"fetch failed ({type(exc).__name__}: {str(exc)[:160]}); "
+                                        f"cache={'applied' if cached else 'none' if not self.loaded_at else 'n/a'}")
+            if cached:
+                self._apply_static(cached)
+            return False
+        self._apply_static(data)
+        self.loaded_at = time.time()
+        db.kv_set(STATIC_CACHE_KEY, {"result": [
+            {"id": g.get("id"), "label": g.get("label"),
+             "entries": [{k: e[k] for k in ("id", "text", "image") if e.get(k)} for e in g.get("entries", [])]}
+            for g in data.get("result", [])]})
+        log.info("registry loaded %d trade currencies", len(self.by_id))
+        return True
 
+    def _apply_static(self, data: dict) -> None:
         for group in data.get("result", []):
             cat = group.get("label") or group.get("id")
             for entry in group.get("entries", []):
@@ -93,9 +115,16 @@ class Registry:
                 cur.icon = entry.get("image") or cur.icon
                 cur.category = cur.category or cat
                 self.by_id[tid] = cur
-        self.loaded_at = time.time()
         self._rebuild_links()
-        log.info("registry loaded %d trade currencies", len(self.by_id))
+
+    async def keep_static_fresh(self) -> None:
+        """Until one live fetch has succeeded, keep trying (30 s, doubling to 10 min)."""
+        delay = 30.0
+        while not self.loaded_at:
+            await asyncio.sleep(delay)
+            if await self.load_static():
+                devtelemetry.tlog("static", "recovered on retry")
+            delay = min(delay * 2, 600.0)
 
     def _rebuild_links(self) -> None:
         """Rebuild meta→trade links from all sources in precedence order (later wins):

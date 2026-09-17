@@ -136,14 +136,17 @@ exporter's mid-sync guard enforces this): `sshshazambom sudo bash /home/shazam/b
 
 5. **Publish (one command, test-gated, event-driven, atomic go-live):**
    ```bash
-   cd desktop && ./publish-github.sh   # tests → DRAFT release → tag + push (fires Windows CI) →
+   cd desktop && ./publish-github.sh   # tests → push main → DRAFT release → dispatch Windows CI →
                                        # dist:mac → waits on CI → uploads Mac assets →
                                        # verifies both platforms → publishes → re-checks → (rollback)
    ```
    `publish-github.sh` first runs `ops/run-tests.sh` (a red test aborts here, before anything
-   remote), then creates the release as a **draft** and only then creates the tag
-   (`desktop-v<version>`, or the bare `<version>` for a beta) and pushes `main` + the tag — that
-   push triggers `.github/workflows/release-desktop-win.yml`, which builds the Windows installer +
+   remote), pushes `main`, creates the release as a **draft** targeting that commit, and starts
+   `.github/workflows/release-desktop-win.yml` with `gh workflow run -f tag=… -f sha=…`. **No tag is
+   pushed**: the tag (`desktop-v<version>`, or the bare `<version>` for a beta) is created by GitHub
+   when the draft is published, because `releases.atom` — what beta clients read — lists bare tags,
+   and a tag pushed up front left them chasing an unpublished manifest for the whole build. The
+   workflow is dispatch-only (a tag push no longer starts anything); it builds the Windows installer +
    backend/sidecar `.exe` with the SAME `desktop/build-*.sh` scripts and uploads
    `Arbiter-Setup-<v>.exe` + `latest.yml` **into the draft**. Meanwhile it fetches the seed and runs
    `dist:mac`, blocks on `gh run watch` until CI finishes, then uploads the Mac assets into the

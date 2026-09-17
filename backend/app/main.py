@@ -47,7 +47,7 @@ async def lifespan(app: FastAPI):
         watchdog.guard(parent_pid=int(_parent), stdin_eof=False)
     await registry.load_static()
     sidecar_supervisor.start()          # spawn + supervise the heavy-analytics sidecar (no-op if absent)
-    tasks = [asyncio.create_task(digest.run_forever()), asyncio.create_task(_gold_fee_loop()),
+    tasks = [asyncio.create_task(registry.keep_static_fresh()), asyncio.create_task(digest.run_forever()), asyncio.create_task(_gold_fee_loop()),
              asyncio.create_task(orderbook.worker()), asyncio.create_task(orderbook.sweeper()),
              asyncio.create_task(_league_history_loop()), asyncio.create_task(_analytics_loop())]
     if not session.get_cookie():

@@ -202,7 +202,7 @@ draft, where attempt 1 really did crawl at 384 KB/s against a forced floor and a
 That would have saved ~30 of this release's 65 minutes. The speed-cut uploader ships with the NEXT
 release (0.2.61-beta.1 itself used the wall-clock version); the rollback branch has still never run.
 
-## Still open — the pushed TAG is visible while the release is a draft (found in 0.2.61-beta.1 telemetry)
+## FIXED (see end) — the pushed TAG is visible while the release is a draft (found in 0.2.61-beta.1 telemetry)
 
 Beta telemetry, Windows client on 0.2.60-beta.1, at 20:32 and 21:02 UTC (release still a draft):
 `ERROR Cannot find latest.yml in the latest release artifacts (…/releases/download/0.2.61-beta.1/latest.yml): 404`.
@@ -222,3 +222,16 @@ window — 17:23 UTC `ERROR Cannot download …Arbiter-Setup-0.2.60-beta.1.exe, 
 recovered by itself on the next check (17:53 `downloaded 0.2.60-beta.1`). That is the live
 confirmation that a missing installer is survivable on Windows; the earlier "nothing is logged for
 17:02–17:53" was a misread of the log.
+
+## Tag fix built (2026-09-17, late)
+
+`publish-github.sh` no longer tags: it pushes `main`, creates the draft with `--target <sha>`, and
+starts the (now dispatch-only) workflow with `gh workflow run -f tag= -f sha=`; publishing the draft
+creates the tag, and the script then fetches it and checks it sits on `<sha>`. A rollback deletes the
+tag again. A re-run skips CI when the Windows manifest is already in the draft (`has`).
+**Exercised for real** with a throwaway `0.0.1-beta.0` draft (deleted after): dispatch → CI checked
+out the sha → uploaded 4 files into the draft → no tag on origin, nothing in `releases.atom`. That
+run also caught a bug in the first cut (run lookup by "created after T0" found nothing — this Mac's
+clock is 4 min ahead of GitHub's; now the run id comes from the URL `gh workflow run` prints), and
+saw GitHub 500 twice more (`Error creating asset temp dir`), healed on attempt 2 at ~25 MB/s.
+**Not exercised:** tag creation at the flip and the rollback — first real use is the next beta.

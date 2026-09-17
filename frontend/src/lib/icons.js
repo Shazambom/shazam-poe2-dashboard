@@ -26,9 +26,20 @@ export function loadIcons() {
     }
     _index = { byId, byName, raw: d, list: items }
     subs.forEach(fn => { try { fn(_index) } catch {} })
+    if (!d.loaded_at) retrySoon()       // backend hasn't fetched names/icons yet — it retries, so do we
     return _index
-  }).catch(() => { _index = { byId: new Map(), byName: new Map(), raw: null, list: [] }; return _index })
+  }).catch(() => { _index = { byId: new Map(), byName: new Map(), raw: null, list: [] }; retrySoon(); return _index })
   return _promise
+}
+
+// The index is fetched once and kept; a load that came back incomplete (or failed) is re-asked
+// every 30 s until the backend has the real thing, then every subscriber re-renders.
+function retrySoon() {
+  setTimeout(() => {
+    const keep = _index
+    _index = null; _promise = null
+    loadIcons().then(i => { if (!i.list.length && keep?.list.length) _index = keep })
+  }, 30000)
 }
 
 // The ONE /api/currencies fetch, as a store: `raw` (the payload, incl. anchors + unmapped ids),
@@ -56,10 +67,9 @@ export function lookup({ id, name } = {}) {
 export function useIcons() {
   const [idx, setIdx] = useState(_index)
   useEffect(() => {
-    if (_index) { setIdx(_index); return }
     const fn = (i) => setIdx(i)
-    subs.add(fn)
-    loadIcons()
+    subs.add(fn)                       // always: a later reload (retrySoon) must reach this caller too
+    if (_index) setIdx(_index); else loadIcons()
     return () => subs.delete(fn)
   }, [])
   return idx

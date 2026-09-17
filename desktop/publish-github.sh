@@ -60,8 +60,9 @@ if node scripts/release-assets.mjs has "$TAG" "$WIN_YML"; then
   NEED_CI=0
 else
   NEED_CI=1
-  T0=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-  gh workflow run release-desktop-win.yml --repo "$REPO" --ref main -f tag="$TAG" -f sha="$SHA"
+  # `gh workflow run` prints the new run's URL; its id is the last path segment.
+  RID=$(gh workflow run release-desktop-win.yml --repo "$REPO" --ref main -f tag="$TAG" -f sha="$SHA" \
+        | grep -oE 'actions/runs/[0-9]+' | grep -oE '[0-9]+$' | tail -1 || true)
 fi
 
 if [ "${1:-}" != "--no-build" ]; then
@@ -100,15 +101,15 @@ for f in "${FILES[@]}"; do
 done
 
 if [ "$NEED_CI" = 1 ]; then
-  # Find the run we just dispatched (named after the tag, created after T0). Brief retry only to
-  # let the run register; the actual wait is event-driven below.
-  echo "locating Windows CI run for $TAG ..."
+  # Fallback if gh printed no URL: the newest unfinished run named after this tag. (No timestamp
+  # filter — this Mac's clock was 4 min ahead of GitHub's and "created after T0" matched nothing.)
+  [ -n "$RID" ] || echo "locating Windows CI run for $TAG ..."
   for _ in $(seq 1 30); do
-    RID=$(gh run list --repo "$REPO" --workflow=release-desktop-win.yml --event workflow_dispatch --limit 20 \
-          --json databaseId,displayTitle,createdAt \
-          -q "map(select(.displayTitle==\"Windows build $TAG\" and .createdAt>=\"$T0\")) | .[0].databaseId // empty" 2>/dev/null || true)
     [ -n "$RID" ] && break
-    sleep 4
+    RID=$(gh run list --repo "$REPO" --workflow=release-desktop-win.yml --event workflow_dispatch --limit 20 \
+          --json databaseId,displayTitle,status \
+          -q "map(select(.displayTitle==\"Windows build $TAG\" and .status!=\"completed\")) | .[0].databaseId // empty" 2>/dev/null || true)
+    [ -n "$RID" ] || sleep 4
   done
   [ -n "$RID" ] || { echo "no Windows CI run found for $TAG — did the dispatch fail?"; exit 1; }
 

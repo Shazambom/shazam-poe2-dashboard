@@ -108,8 +108,9 @@ token or on colors pasted into JSX. New colors → add a semantic token to `:roo
   auto-shipped 0.2.41/0.2.42 unprompted; owner objected.)
 - **⛔ BUILDING THE DESKTOP APP TO TEST ≠ SHIPPING.** `dist:mac` / running the app locally / the
   CDP drive-validation are all fine anytime — that's testing, not delivery. **Shipping is only
-  the publish step**: pushing a `desktop-v*` tag (fires Windows CI → creates the GitHub release)
-  and running `publish-github.sh`. Only that step is gated on authorization.
+  the publish step**: running `publish-github.sh` (it dispatches the Windows CI build into a draft
+  release and publishes it, which creates the `desktop-v*` / beta tag) — or pushing such a tag or
+  publishing such a release by hand. Only that step is gated on authorization.
 - **⛔ A "USER CHECK" ON DESKTOP IS ALWAYS THE PACKAGED TEST BUILD (owner directive 2026-09-15).**
   When the owner wants to check a change on the desktop app themselves, give them the real
   **packaged** app — `cd desktop && npm run dist:mac`, then just **launch it in place on this Mac**:

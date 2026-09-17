@@ -190,8 +190,8 @@ CLAUDE.md. The mechanics:
 ## Deploying a desktop release (mechanics)
 
 Full runbook: [`release-runbook.md`](./release-runbook.md). Shape: bump `desktop/package.json`,
-commit on `main`, then `cd desktop && ./publish-github.sh` — it runs the test gate, tags + pushes
-(which fires the Windows CI that builds the `.exe`s with the shared `build-*.sh` scripts), builds
+commit on `main`, then `cd desktop && ./publish-github.sh` — it runs the test gate, pushes `main`,
+dispatches the Windows CI (no tag is pushed — publishing the draft creates it; CI builds the `.exe`s with the shared `build-*.sh` scripts), builds
 the Mac app, waits on the CI run via `gh run watch`, and uploads both platforms into the same
 **draft** release, which goes public in one verified step at the end
 (`desktop/scripts/release-assets.mjs`: manifests last, retries, go-live check, auto-rollback). Then verify:
