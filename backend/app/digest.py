@@ -109,6 +109,22 @@ async def run_forever() -> None:
 
 
 # ------------------------------------------------------------------ queries
+def directed_rates(a: str, b: str, r, age: float) -> dict[tuple[str, str], dict]:
+    """The directed edges one traded hour of the a<->b market supports. An edge a->b hands you b,
+    so someone must have been STANDING there offering b: the receiving side's standing stock
+    (`hi_stock_*`) must be > 0. No sellers → no edge in that direction — traded volume is never a
+    stand-in for stock (Esh's Radiance "for 13 chaos": zero Radiance ever listed for chaos, only
+    chaos bids that a holder occasionally dumps into)."""
+    out: dict[tuple[str, str], dict] = {}
+    if r["hi_stock_b"]:
+        out[(a, b)] = {"rate": r["vol_b"] / r["vol_a"], "stock": r["hi_stock_b"],
+                       "volume_from": r["vol_a"], "volume_to": r["vol_b"], "hour": r["hour"], "age_s": age}
+    if r["hi_stock_a"]:
+        out[(b, a)] = {"rate": r["vol_a"] / r["vol_b"], "stock": r["hi_stock_a"],
+                       "volume_from": r["vol_b"], "volume_to": r["vol_a"], "hour": r["hour"], "age_s": age}
+    return out
+
+
 def latest_rates(league: str, max_age_hours: int = 6) -> dict[tuple[str, str], dict]:
     """Directed rate map {(from, to): {...}} from the most recent hour(s) with data."""
     since = _hour(time.time()) - max_age_hours * 3600
@@ -123,13 +139,9 @@ def latest_rates(league: str, max_age_hours: int = 6) -> dict[tuple[str, str], d
         b = registry.resolve_meta(r["cur_b"])
         if not a or not b or not r["vol_a"] or not r["vol_b"]:
             continue
-        if (a, b) in out:  # newest hour already recorded
+        if (a, b) in out or (b, a) in out:  # newest hour already recorded
             continue
-        age = time.time() - (r["hour"] + 3600)
-        out[(a, b)] = {"rate": r["vol_b"] / r["vol_a"], "stock": r["hi_stock_b"] or r["vol_b"],
-                       "volume_from": r["vol_a"], "volume_to": r["vol_b"], "hour": r["hour"], "age_s": age}
-        out[(b, a)] = {"rate": r["vol_a"] / r["vol_b"], "stock": r["hi_stock_a"] or r["vol_a"],
-                       "volume_from": r["vol_b"], "volume_to": r["vol_a"], "hour": r["hour"], "age_s": age}
+        out.update(directed_rates(a, b, r, time.time() - (r["hour"] + 3600)))
     return out
 
 

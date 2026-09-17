@@ -13,6 +13,7 @@
   "live_only": false,
   "max_fill_hours": 0,
   "max_gold": 0,
+  "max_step_minutes": 0,
   "min_liquidity_ref": 0.0,
   "min_margin_pct": 0.0,
   "min_margin_per_1k_gold": 0.0,
@@ -93,6 +94,7 @@
     "velocity": 0.667,
     "volume": 0.667
    },
+   "slowest_step_hours": 10.0,
    "start": "chaos",
    "start_amount": 100,
    "start_name": "Chaos Orb",
@@ -224,6 +226,7 @@
     "velocity": 1.0,
     "volume": 0.333
    },
+   "slowest_step_hours": 0.5,
    "start": "exalted",
    "start_amount": 50,
    "start_name": "Exalted Orb",
@@ -331,6 +334,7 @@
     "velocity": 0.333,
     "volume": 1.0
    },
+   "slowest_step_hours": 10.0,
    "start": "chaos",
    "start_amount": 100,
    "start_name": "Chaos Orb",

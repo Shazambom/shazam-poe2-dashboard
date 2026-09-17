@@ -14,7 +14,7 @@ const INF = Infinity
 
 const DEFAULT_FILTERS = {
   min_margin_pct: 0.5, min_margin_ref: 0, max_gold: '', min_margin_per_1k_gold: '',
-  min_liquidity_ref: '', min_volume_ref_per_h: '', max_fill_hours: '', min_velocity: '', live_only: false, exclude_recipes: false, limit: 100, start: '',
+  min_liquidity_ref: '', min_volume_ref_per_h: '', max_fill_hours: '', max_step_minutes: '', min_velocity: '', live_only: false, exclude_recipes: false, limit: 100, start: '',
 }
 
 // Column definitions: [key, label, accessor, defaultDir, title]
@@ -52,7 +52,7 @@ export default function RoutesView({ capital, status, currencies, onCapitalSaved
   const accRef = useRef([])
   const canLive = !!status?.session?.connected
   const filterKey = JSON.stringify([f.min_margin_pct, f.min_margin_ref, f.max_gold, f.min_margin_per_1k_gold,
-    f.min_liquidity_ref, f.min_volume_ref_per_h, f.max_fill_hours, f.min_velocity, f.live_only, f.exclude_recipes, f.start])
+    f.min_liquidity_ref, f.min_volume_ref_per_h, f.max_fill_hours, f.max_step_minutes, f.min_velocity, f.live_only, f.exclude_recipes, f.start])
 
   const load = () => {
     esRef.current?.close()
@@ -84,7 +84,7 @@ export default function RoutesView({ capital, status, currencies, onCapitalSaved
     })
   }
 
-  useEffect(() => { ensureSettings().then(s => { const g = { ...s.filters }; delete g.sort; ['max_gold','min_margin_per_1k_gold','min_liquidity_ref','min_volume_ref_per_h','max_fill_hours','min_velocity'].forEach(k => { if (!g[k]) g[k] = '' }); setF(x => ({ ...x, ...g })); setLiveN(s.live_top_n ?? 5) }).catch(() => {}) }, [])
+  useEffect(() => { ensureSettings().then(s => { const g = { ...s.filters }; delete g.sort; ['max_gold','min_margin_per_1k_gold','min_liquidity_ref','min_volume_ref_per_h','max_fill_hours','max_step_minutes','min_velocity'].forEach(k => { if (!g[k]) g[k] = '' }); setF(x => ({ ...x, ...g })); setLiveN(s.live_top_n ?? 5) }).catch(() => {}) }, [])
   useEffect(() => { load(); return () => esRef.current?.close() }, [filterKey]) // eslint-disable-line
   useEffect(() => {
     const t = setInterval(() => { if (document.visibilityState === 'visible' && !streaming) load() }, 120000)
@@ -190,6 +190,8 @@ export default function RoutesView({ capital, status, currencies, onCapitalSaved
           <div className="field"><label>Minimum velocity, {ref}/h per 1k gold</label><input type="number" step="0.01" placeholder="no limit" value={f.min_velocity} onChange={set('min_velocity')} /></div>
           <div className="field"><label>Minimum traded volume, {ref} per hour</label><input type="number" step="1" placeholder="no limit" value={f.min_volume_ref_per_h} onChange={set('min_volume_ref_per_h')} />
             {f.min_volume_ref_per_h !== '' && Number(f.min_volume_ref_per_h) < 100 && <span className="warn-hint">⚠ Below 100/h markets are too thin to trust — expect a bad time.</span>}</div>
+          <div className="field"><label>Maximum minutes per step</label><input type="number" step="5" placeholder="no limit" value={f.max_step_minutes} onChange={set('max_step_minutes')}
+            title="How long the slowest step would take at that market's own trading pace: the units you push in ÷ the units it trades per hour." /></div>
           <div className="field"><label>Maximum estimated fill time, hours</label><input type="number" step="0.5" placeholder="no limit" value={f.max_fill_hours} onChange={set('max_fill_hours')} /></div>
           <div className="check"><Toggle checked={!!f.exclude_recipes} onChange={v => setF(x => ({ ...x, exclude_recipes: v }))} label="Exchange steps only" /></div>
           <div className="field"><label>Show at most</label><input type="number" value={f.limit} onChange={set('limit')} /></div>

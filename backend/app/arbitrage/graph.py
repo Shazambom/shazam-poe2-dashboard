@@ -253,6 +253,7 @@ def simulate(g: Graph, cycle: list[Edge], start_amount: float, ref_value: dict[s
     liquidity_ref = INF
     volume_ref_per_h = INF
     fill_hours = 0.0
+    slowest_step_hours = 0.0     # the worst step's share of its market: units in ÷ units/h traded
     overhead_h = float(g.s.get("step_overhead_min", 0)) / 60
     max_age = 0.0
     all_live = True
@@ -262,6 +263,7 @@ def simulate(g: Graph, cycle: list[Edge], start_amount: float, ref_value: dict[s
             v = e.vol_in_per_h or 0.0
             volume_ref_per_h = min(volume_ref_per_h, v * ref_value.get(e.src, 0.0))
             fill_hours += ((used / v) if v > 0 else INF) + overhead_h
+            slowest_step_hours = max(slowest_step_hours, (used / v) if v > 0 else INF)
         fee = gold_fee(model, e, used, out, ref_value, table)
         gold += fee
         value_ref += used * ref_value.get(e.src, 0.0)
@@ -281,6 +283,7 @@ def simulate(g: Graph, cycle: list[Edge], start_amount: float, ref_value: dict[s
         "liquidity_ref": None if liquidity_ref == INF else liquidity_ref,
         "volume_ref_per_h": None if volume_ref_per_h == INF else volume_ref_per_h,
         "fill_hours": None if fill_hours == INF else fill_hours,
+        "slowest_step_hours": None if slowest_step_hours == INF else slowest_step_hours,
         "max_age_s": max_age, "all_live": all_live,
     }
 

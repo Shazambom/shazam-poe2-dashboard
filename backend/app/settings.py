@@ -79,6 +79,7 @@ DEFAULTS: dict = {
         "min_liquidity_ref": 200.0,        # per-step min executable capacity (ref value)
         "min_volume_ref_per_h": 100.0,    # per-step min executed value/hour
         "max_fill_hours": 24,             # route should fill within a day of trading
+        "max_step_minutes": 45,           # no step may need more than this much of ITS market's turnover
         "min_velocity": 0.0,
         "live_only": False,
         "sort": "score",

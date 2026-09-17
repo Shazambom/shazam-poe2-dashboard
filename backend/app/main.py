@@ -653,6 +653,7 @@ class RouteQuery(BaseModel):
     exclude_recipes: bool | None = None
     min_volume_ref_per_h: float | None = None
     max_fill_hours: float | None = None
+    max_step_minutes: float | None = None
     min_velocity: float | None = None
     sort: str | None = Field(None, pattern=SORT_KEYS)
     limit: int | None = None

@@ -232,6 +232,12 @@ Full table + steps: [`release-runbook.md`](./release-runbook.md) → "Two channe
   `routes.RECOMMENDED_MIN_LIQUIDITY_REF`, and user migration 6 (`_liq_floor_v2`) which lifts SAVED filters
   once — liquidity decides whether a loop can be traded at all. The Arbitrage legend carries no search
   statistics by design (owner: "let the UI speak for itself").
+- **Fillable steps (owner mandate 2026-09-17):** (1) `digest.directed_rates` — a digest edge a->b exists only
+  if the RECEIVING side had standing stock that hour (`hi_stock_*` > 0); traded volume is never a stand-in
+  for stock (Esh's Radiance "for 13 chaos": zero Radiance ever listed for chaos, only bids). (2)
+  `simulate()` reports `slowest_step_hours` (units in ÷ units/h of that market) and the
+  `max_step_minutes` filter (default 45, 0 = off) drops loops whose worst step needs more — turnover
+  judged RELATIVE to the trade, because a fixed ex/h floor passes "expensive, trades twice a day".
 - **Exchange have-cap:** GGG rejects > 10 `have` per exchange request (was ≥ 12 until 2026-09-17, when
   every live fetch started failing with a 400). `orderbook.state["have_cap"]` learns the cap down on
   "Too many items" and re-queues the same pairs; `last_error` now carries GGG's response body.

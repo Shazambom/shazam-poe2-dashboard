@@ -140,6 +140,7 @@ def _route_from(g: Graph, cyc: list[Edge], start: str, held: float, budget: floa
         "liquidity_ref": sim["liquidity_ref"],
         "volume_ref_per_h": sim["volume_ref_per_h"],   # slowest step's executed value/hour
         "fill_hours": sim["fill_hours"],               # sum of commit/turnover per step
+        "slowest_step_hours": sim["slowest_step_hours"],   # worst single step: hours of ITS market's turnover
         "max_age_s": sim["max_age_s"],
         "all_live": sim["all_live"],
         "uses_recipe": any(e.kind == "recipe" for e in cyc),
@@ -173,6 +174,9 @@ def _keep(r: dict, f: dict) -> bool:
     if f.get("min_volume_ref_per_h") and (r["volume_ref_per_h"] or 0) < f["min_volume_ref_per_h"]:
         return False
     if f.get("max_fill_hours") and (r["fill_hours"] is None or r["fill_hours"] > f["max_fill_hours"]):
+        return False
+    if f.get("max_step_minutes") and (r.get("slowest_step_hours") is None
+                                      or r["slowest_step_hours"] * 60 > f["max_step_minutes"]):
         return False
     if f.get("min_velocity") and not r["velocity_inf"] and (r["velocity"] or 0) < f["min_velocity"]:
         return False

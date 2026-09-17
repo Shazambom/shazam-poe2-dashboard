@@ -33,7 +33,8 @@ SETTINGS = {
     "rank_weights": {"velocity": 0.5, "margin_per_1k_gold": 0.2, "margin_ref": 0.2, "volume": 0.1},
     "filters": {"min_margin_pct": 0.0, "min_margin_ref": 0.0, "max_gold": 0, "min_margin_per_1k_gold": 0.0,
                 "min_liquidity_ref": 0.0, "min_volume_ref_per_h": 0.0, "max_fill_hours": 0,
-                "min_velocity": 0.0, "live_only": False, "sort": "score", "limit": 100},
+                "min_velocity": 0.0, "live_only": False, "sort": "score", "limit": 100,
+                "max_step_minutes": 0},   # off: the fixture commits 100 units into 100/h markets on purpose
 }
 
 META = {"chaos": "Metadata/Items/Currency/CurrencyRerollRare",
