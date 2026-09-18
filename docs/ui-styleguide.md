@@ -163,6 +163,26 @@ in `docs/ui-joy-plan.md` §1.3. Rules:
 - Storage: `settings.theme` is truth (user data); `localStorage['arbiter.theme.v1']` is read before
   first paint so the app never flashes the default; the desktop shell mirrors the id for the backdrop.
 
+**Custom themes** (Settings → Appearance → "Custom themes", `components/ThemeBuilder.jsx`). A custom
+theme is the SAME token table a preset declares — colour only, nothing else — built from eight primaries
+(`--bg`, `--panel`, `--ink`, `--gold`, `--gain`, `--loss`, `--live`, `--digest`) with every other token
+derived in OKLCH by `lib/themeDerive.js` using the relationships the presets follow (line = panel mixed
+~12 % toward ink, muted = ink mixed ~39 % toward panel, gold-dim = the accent's hue three-quarters of the
+way to the panel, the wash = the panel's hue saturated, and so on; light mode flips the lightness
+direction). `test/theme-derive.test.mjs` proves the rules reproduce each shipped preset (mean ΔE ≈ 0.02
+per preset) and prints the per-token error. Advanced exposes every derived token as a pin; pins ride
+along with later primary changes as offsets (`rederive`). The linter's WCAG table is applied live with an
+auto-fix that nudges the failing foreground; saving is never blocked. Storage: `settings.custom_themes`
+= `[{ id: "custom-<8 hex>", name, base, colors }]` (user data; `settings.theme` may be a custom id);
+`localStorage['arbiter.theme.custom.v1']` mirrors the active table so `bootTheme()` paints it before
+first render. Painting: `<html data-theme="custom">` plus one inline custom property per token, cleared
+when a preset is chosen; the desktop backdrop comes from the theme's own `--backdrop`
+(`poe2desktop.setTheme('custom', hex)`). Presets are read-only — "New from <preset>" copies the table,
+you edit the copy. **Export → codify:** Export copies a ready-to-paste `:root[data-theme="<slug>"] { … }`
+block in the presets' line order plus JSON; to make a tweaked copy the shipped default, paste it over the
+preset's block in `styles.css`, keep `BACKDROPS` in `desktop/src/main.js` equal to `--backdrop`, and run
+`lint:style`.
+
 ## 3. Typography
 
 - **Family:** `--font` (IBM Plex Sans → Segoe UI → system). Base `14px`, line-height `1.45`.
