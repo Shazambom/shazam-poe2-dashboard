@@ -55,7 +55,7 @@ export default function LeagueArcSection({ name }) {
   const windows = arc.windows || []
   return (
     <>
-      <div className="cd-section">League arc
+      <div className="cd-section" title="Daily poe2scout closes (item ÷ numeraire), aligned by day-of-league">League arc
         <span className="muted" style={{ fontWeight: 400 }}>
           {' · '}day {arc.cur_age}{arc.numeraire !== 'divine' ? ` · in ${arc.numeraire_name}` : ''}{arc.weighted && arc.resembles ? ` · resembles ${arc.resembles}` : ''}
         </span>

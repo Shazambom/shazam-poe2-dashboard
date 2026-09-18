@@ -58,7 +58,7 @@ export default function HoldView() {
         </div>
         {/* Numeraire + Category apply only to Hold, but stay rendered (disabled/dimmed) in the
             Movers view so switching doesn't collapse the bar and jump the layout. */}
-        <div className={`seg ${isMovers ? 'hold-inactive' : ''}`} title="Hard-asset numeraire — what 'holds value' is measured against">
+        <div className={`seg ${isMovers ? 'hold-inactive' : ''}`} title="Hard-asset numeraire — what 'holds value' is measured against. Measured on daily poe2scout closes (item ÷ numeraire), not the hourly exchange.">
           {numeraires.map(({ id: k, name }) => (
             <button key={k} disabled={isMovers} className={`seg-btn ${!isMovers && numeraire === k ? 'on' : ''}`} title={name} onClick={() => setNumeraire(k)}>vs {k[0].toUpperCase() + k.slice(1)}</button>
           ))}

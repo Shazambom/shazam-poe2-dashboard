@@ -62,8 +62,12 @@ def realizable(g: "arbitrage.Graph", ref_value: dict[str, float], currency: str,
       full_fill     — whether the whole stack cleared the book
       path          — the cash-out route as a list of currency ids (None if unrealizable)
     """
-    paper = qty * ref_value[currency] if currency in ref_value else None
     ref = g.s["reference"]
+    # Paper value through the holding's OWN market against the reference when it has one
+    # (price_in), not a multi-hop cross — the cap below compares realizable against this, so a
+    # cross-inflated paper would show fake ghost and a deflated one would truncate realizable.
+    px = g.price_in(currency, ref, ref_value) if currency != ref else 1.0
+    paper = qty * px if px else None
     if cash is None:
         cash = cash_set(g, ref_value)
 
@@ -114,8 +118,9 @@ def capital_rows(caps: dict[str, float], g: "arbitrage.Graph", ref_value: dict[s
     cash = cash_set(g, ref_value)          # hub currencies = cash-like; derived once (PageRank)
     rows = []
     for c, q in caps.items():
-        row = {"currency": c, "name": registry.name(c), "qty": q, "ref_value": ref_value.get(c),
-               "value_ref": (q * ref_value[c]) if c in ref_value else None}
+        px = g.price_in(c, g.s["reference"], ref_value) if c != g.s["reference"] else 1.0
+        row = {"currency": c, "name": registry.name(c), "qty": q, "ref_value": px,
+               "value_ref": (q * px) if px else None}
         liq = realizable(g, ref_value, c, q, cash=cash, gold_value_per_1k=gv)
         row.update(realizable_ref=liq["realizable_ref"], slippage_pct=liq["slippage_pct"],
                    fill_hours=liq["fill_hours"], source=liq["source"], full_fill=liq["full_fill"],

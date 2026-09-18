@@ -213,7 +213,7 @@ function MarketCap({ league }) {
 
   return (
     <div style={{ marginTop: 28 }}>
-      <h2 style={{ margin: 0 }}>Economy size <span className="muted" style={{ fontWeight: 400 }}>· total value traded per day, in Mirrors (all currencies), aligned by day-of-league</span></h2>
+      <h2 style={{ margin: 0 }} title="Σ (daily poe2scout close × volume) ÷ that day's Mirror close — daily data, not the hourly exchange">Economy size <span className="muted" style={{ fontWeight: 400 }}>· total value traded per day, in Mirrors (all currencies), aligned by day-of-league</span></h2>
       {err && <div className="notice error">{err}</div>}
       {data?.building && <div className="notice" style={{ marginTop: 10 }}>Building economy history from poe2scout — check back in a minute.</div>}
       {cur && (

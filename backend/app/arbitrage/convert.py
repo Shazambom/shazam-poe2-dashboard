@@ -26,8 +26,17 @@ def _convert_path(g: Graph, path: list[Edge], amount: float, ref_value: dict[str
         return None
     sim = simulate(g, path, committed, ref_value)
     value_in = committed * ref_value.get(have, 0.0)
+    # Loss is measured against the have↔want MARKET when that pair trades (price_in), and only
+    # against the reference cross when it doesn't: "8 chaos for a divine when the market pays
+    # 8.4" is a 4.5% loss, whatever exalted says about either of them.
+    market = g.price_in(have, want, ref_value)               # want per have
+    got = (sim["end_amount"] / committed) if committed else 0.0
+    loss_pct = ((1.0 - got / market) * 100.0) if market else 0.0
+    loss_ref = value_in * loss_pct / 100.0
+    # The internal sanity cap stays on the reference cross (independent of the pair's own
+    # quotes): a path whose reference value GROWS beyond tolerance is a digest inconsistency.
     value_out = sim["end_amount"] * ref_value.get(want, 0.0)
-    loss_ref = value_in - value_out
+    gain_cross_pct = ((value_out - value_in) / value_in * 100.0) if value_in else 0.0
     out = int(sim["end_amount"])
     gold = sim["gold"]
     return {
@@ -38,7 +47,7 @@ def _convert_path(g: Graph, path: list[Edge], amount: float, ref_value: dict[str
         "steps": sim["steps"],
         "in": committed, "out": out, "end_amount": sim["end_amount"],
         "hops": len(path), "full_fill": committed >= amount - 1e-9,
-        "loss_ref": loss_ref, "loss_pct": (loss_ref / value_in * 100) if value_in else 0.0,
+        "loss_ref": loss_ref, "loss_pct": loss_pct, "gain_cross_pct": gain_cross_pct,
         "gold": gold, "gold_free": gold <= 0,
         # velocity analog: output delivered per 1k gold (gold is a real, precious cost). None
         # when gold-free (ranked in its own tier above paid routes). Also gold-per-output for UI.
@@ -68,7 +77,8 @@ def _best_conversions(g: Graph, ref_value: dict[str, float], have: str, want: st
     tab), so it is rejected here. Set a huge tolerance to disable (tests)."""
     if max_steps is None:
         max_steps = g.s.get("max_steps", 4)
-    gold_ref_per_1k = gold_value_per_1k * (ref_value.get("divine") or 1.0)   # Divine/1k -> ref/1k
+    ref = g.s["reference"]
+    gold_ref_per_1k = gold_value_per_1k * (g.price_in("divine", ref, ref_value) or 1.0)   # Divine/1k -> ref/1k, via the divine↔ref market
     seen: dict[str, dict] = {}
     count = 0
     for path in g.iter_paths(have, want, max_steps):
@@ -78,7 +88,7 @@ def _best_conversions(g: Graph, ref_value: dict[str, float], have: str, want: st
         r = _convert_path(g, path, amount, ref_value, have, want)
         # out == 0: whole-unit rounding floored the path to nothing — not a conversion. (It also
         # costs 0 gold, so its net value of 0 used to outrank every real route that nets < 0.)
-        if r is not None and r["out"] > 0 and r["loss_pct"] >= -max_gain_pct:   # + drop phantom-gain mirages
+        if r is not None and r["out"] > 0 and r["gain_cross_pct"] <= max_gain_pct:   # + drop phantom-gain mirages
             # net value delivered = value of `want` received - gold charged at the user's price.
             r["net_ref"] = r["out"] * ref_value.get(want, 0.0) - r["gold"] / 1000.0 * gold_ref_per_1k
             seen[r["id"]] = r

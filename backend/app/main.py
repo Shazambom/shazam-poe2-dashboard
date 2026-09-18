@@ -627,7 +627,24 @@ def sales_ingest(body: SalesIngest):
 
 @app.get("/api/sales")
 def sales(league: str | None = None):
-    return {"league": league, "rows": db.sales_list(league or None), "leagues": db.sales_leagues()}
+    rows = db.sales_list(league or None)
+    # Reference price for every currency a sale was paid in (through that currency's own market
+    # against the reference), so the client's total counts regal/vaal/annul sales, not just the
+    # four wealth anchors.
+    prices: dict[str, float] = {}
+    try:
+        g = arbitrage.cached_graph()
+        ref = g.s["reference"]
+        rv = g.ref_values()
+        for r in rows:
+            cur = str((r.get("price") or {}).get("currency") or "")
+            if cur and cur not in prices:
+                px = 1.0 if cur == ref else g.price_in(cur, ref, rv)
+                if px:
+                    prices[cur] = px
+    except Exception:
+        log.exception("sales prices")
+    return {"league": league, "rows": rows, "leagues": db.sales_leagues(), "prices": prices}
 
 
 @app.post("/api/digest/sync")

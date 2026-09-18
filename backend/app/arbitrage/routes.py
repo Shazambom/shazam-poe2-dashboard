@@ -118,7 +118,7 @@ def _route_from(g: Graph, cyc: list[Edge], start: str, held: float, budget: floa
     mp1k = (margin_ref / gold * 1000) if gold > 0 else (INF if margin_ref > 0 else 0.0)
     fh = sim["fill_hours"]
     # Gold priced by the user's slider (Divine per 1k gold -> reference per 1 gold).
-    gold_price_ref = settings_mod.gold_value_per_1k(g.s) * (ref_value.get("divine") or 1.0) / 1000.0
+    gold_price_ref = settings_mod.gold_value_per_1k(g.s) * (g.price_in("divine", g.s["reference"], ref_value) or 1.0) / 1000.0   # via the divine↔ref market
     velocity = _velocity(margin_ref, fh, gold, gold_price_ref)
     return {
         "id": _edge_list_id(cyc),

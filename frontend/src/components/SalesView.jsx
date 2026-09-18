@@ -68,7 +68,10 @@ export default function SalesView({ league }) {
   useEffect(() => { if (tick !== tick0.current) { tick0.current = tick; refresh(false) } }, [tick]) // eslint-disable-line
 
   const ref = status?.reference || 'exalted'
-  const stats = useMemo(() => salesStats(data.rows, ref, status?.wealth_prices), [data.rows, ref, status?.wealth_prices])
+  // Prices come with the ledger (every currency a sale was paid in, through its own market);
+  // the four wealth anchors are only the fallback for an old response.
+  const prices = data.prices ?? status?.wealth_prices
+  const stats = useMemo(() => salesStats(data.rows, ref, prices), [data.rows, ref, prices])
   const byName = useMemo(() => { const m = new Map(); for (const n of flatten(tree, x => x.kind === 'search')) if (n.name) m.set(n.name.toLowerCase(), n.id); return m }, [tree])
   const openRow = (r) => { setOpen(o => (o === r ? null : r)); diag('sales', 'sales-open') }
 

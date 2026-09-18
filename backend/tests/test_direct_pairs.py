@@ -90,3 +90,63 @@ def test_asset_modal_pairs_are_keyed_by_the_rows_slug(monkeypatch):
         assert not any(k.startswith("divine>") for k in res["pairs"])
     finally:
         _teardown()
+
+
+def _vol(g, a, b, v):
+    g.edges[(a, b)].vol_in_per_h = v
+
+
+def test_price_in_applies_the_volume_rule(monkeypatch):
+    """The pair's own market wins only when it is at least as liquid as the weaker reference
+    leg; a thin direct market defers to the cross through the liquid reference legs."""
+    g = _graph(monkeypatch)
+    try:
+        rv = g.ref_values()
+        cross = rv["divine"] / rv["chaos"]                    # 5.0
+        # Fixture: every edge 100 units/h. divine→chaos = 100 × 50 ex = 5000 ex/h of volume,
+        # legs: chaos↔ex 1100, ex↔divine 100 → direct (5000) ≥ min(legs) (100) → direct.
+        assert g.price_in("divine", "chaos", rv) == 550.0
+        # Starve the direct market (both directions count): 0.5 + 0.1 ex/h < 100 → the cross wins.
+        _vol(g, "divine", "chaos", 0.01)
+        _vol(g, "chaos", "divine", 0.01)
+        assert abs(g.price_in("divine", "chaos", rv) - cross) < 1e-9
+        # A pair against the reference itself is always its own market (no cross to defer to).
+        assert abs(g.price_in("divine", "exalted", rv) - 50.0) < 1e-9
+        # No market at all → the cross; no reference value either → None.
+        assert g.price_in("regal", "chaos", rv) is None
+        # pair_rates carries the same rule: the starved pair now reports the cross, not 550.
+        assert abs(g.pair_rates(["divine"], ["chaos"])["divine>chaos"] - cross) < 1e-9
+    finally:
+        _teardown()
+
+
+def test_convert_loss_is_measured_against_the_pairs_market(monkeypatch):
+    """`loss_pct` compares what the route delivers with the have↔want market, not with the
+    reference cross; the phantom-gain cap keeps using the cross (`gain_cross_pct`)."""
+    from app import arbitrage as arb
+    g = _graph(monkeypatch)
+    try:
+        out = arb.convert("divine", "chaos", 1)
+        direct = out["direct"]
+        assert direct["path"] == ["divine", "chaos"] and direct["out"] == 550
+        assert abs(direct["loss_pct"]) < 1e-9            # the market itself: at market
+        assert "gain_cross_pct" in direct
+    finally:
+        _teardown()
+
+
+def test_sales_ledger_carries_a_reference_price_for_every_sale_currency(monkeypatch):
+    from app import db as _db
+    g = _graph(monkeypatch)
+    try:
+        monkeypatch.setattr(_db, "sales_list", lambda _l=None: [
+            {"item_id": "a", "time": "2026-09-18T00:00:00Z", "league": "L", "price": {"amount": 3, "currency": "chaos"}, "item": {}},
+            {"item_id": "b", "time": "2026-09-18T00:00:00Z", "league": "L", "price": {"amount": 1, "currency": "divine"}, "item": {}},
+            {"item_id": "c", "time": "2026-09-18T00:00:00Z", "league": "L", "price": {"amount": 2, "currency": "regal"}, "item": {}},
+        ])
+        monkeypatch.setattr(_db, "sales_leagues", lambda: ["L"])
+        res = client.get("/api/sales").json()
+        assert res["prices"]["chaos"] == 10.0 and res["prices"]["divine"] == 50.0
+        assert "regal" not in res["prices"]        # no market, no reference value → stays unpriced
+    finally:
+        _teardown()

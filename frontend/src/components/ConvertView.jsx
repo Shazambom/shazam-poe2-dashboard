@@ -68,7 +68,7 @@ function ConvertView({ currencies, capital }) {
           <div className="row hint">
             <b>{fmt.n(best.in)}</b> <Cur id={have} name={best.path_names?.[0]} size={16} />
             {' → '}<b>{fmt.n(best.out)}</b> <Cur id={want} name={best.path_names?.slice(-1)[0]} size={16} />
-            <span>· {best.loss_pct <= 0.05 ? 'no value lost' : `${fmt.n(best.loss_pct, 1)}% lost`}</span>
+            <span>· {Math.abs(best.loss_pct) <= 0.05 ? 'at market' : best.loss_pct < 0 ? `${fmt.n(-best.loss_pct, 1)}% over market` : `${fmt.n(best.loss_pct, 1)}% under market`}</span>
             {best.gold > 0 && <span>· {fmt.n(best.gold)} gold</span>}
             {beatsDirect != null && beatsDirect > 0 &&
               <span className="gain">· +{fmt.n(beatsDirect)} vs the direct market</span>}
@@ -76,7 +76,7 @@ function ConvertView({ currencies, capital }) {
           <Loop r={best} />
           {direct && best.id !== direct.id && (
             <p className="muted small">Direct market: {fmt.n(direct.out)} {' '}
-              <Cur id={want} size={14} /> ({fmt.n(direct.loss_pct, 1)}% lost).</p>
+              <Cur id={want} size={14} />{direct.loss_pct > 0.05 ? ` (${fmt.n(direct.loss_pct, 1)}% lost to rounding)` : ''}.</p>
           )}
           {res.alternatives?.length > 1 && (
             <details className="convert-alts">

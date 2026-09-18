@@ -156,10 +156,7 @@ class Graph:
     # ------------------------------------------------------------ values
     def direct_rate(self, c: str, n: str) -> float | None:
         """Price of 1 `c` in `n` from the c↔n market itself: the c→n edge's rate, else the
-        inverse of n→c, else None. The display layer prefers this over a cross through the
-        reference (`rv[c] / rv[n]`), because the two can disagree by 10–70% when the triangle
-        c/n/reference doesn't close in the hourly digest — the Divine tile once showed 7.3 chaos
-        while the divine↔chaos market traded at 8.4."""
+        inverse of n→c, else None. See `price_in` for the rule the display layer uses."""
         e = self.edges.get((c, n))
         if e and e.rate > 0:
             return e.rate
@@ -168,15 +165,52 @@ class Graph:
             return 1.0 / e.rate
         return None
 
+    def _market_vol_ref(self, a: str, b: str, rv: dict[str, float]) -> float | None:
+        """Executed volume of the a↔b market per hour, in the reference (both directions
+        summed); None when the pair has no market. Recipes/live edges without a volume count 0."""
+        found, vol = False, 0.0
+        for src, dst in ((a, b), (b, a)):
+            e = self.edges.get((src, dst))
+            if e and e.rate > 0:
+                found = True
+                vol += (e.vol_in_per_h or 0.0) * (rv.get(src) or 0.0)
+        return vol if found else None
+
+    def price_in(self, c: str, n: str, rv: dict[str, float] | None = None) -> float | None:
+        """Price of 1 `c` in `n` — the ONE rule for every displayed conversion (a card in its
+        counterpart, a holding in the reference, gold quoted in Divine, a sale's value).
+
+        The c↔n market's own rate when that market is at least as liquid as the weaker leg of
+        the cross through the reference (c↔ref, n↔ref); otherwise the cross of two reference
+        values. The volume test is what makes this safe: a liquid pair (divine↔chaos) is priced
+        by its own market — the cross was 15% off it — while a thin pair with one stale trade
+        defers to the liquid reference legs. A pair with no market is always the cross."""
+        rv = rv if rv is not None else self.ref_values()
+        direct = self.direct_rate(c, n)
+        if direct is None:
+            a, b = rv.get(c), rv.get(n)
+            return (a / b) if (a and b) else None
+        ref = self.s["reference"]
+        if ref in (c, n):
+            return direct                           # the direct market IS the reference leg
+        legs = [self._market_vol_ref(c, ref, rv), self._market_vol_ref(n, ref, rv)]
+        if any(v is None for v in legs):
+            return direct                           # no cross to defer to
+        if (self._market_vol_ref(c, n, rv) or 0.0) >= min(legs):
+            return direct
+        a, b = rv.get(c), rv.get(n)
+        return (a / b) if (a and b) else direct
+
     def pair_rates(self, currencies, numeraires) -> dict[str, float]:
-        """`{"c>n": direct_rate}` for every (c, n) pair that has its own market. Only pairs
-        with a market are present, so a consumer falls back to the reference cross by key miss."""
+        """`{"c>n": price_in}` for every (c, n) pair that has its own market (volume rule applied).
+        Only pairs with a market are present, so a consumer falls back to the cross by key miss."""
+        rv = self.ref_values()
         out = {}
         for c in currencies:
             for n in numeraires:
-                if n == c:
+                if n == c or self.direct_rate(c, n) is None:
                     continue
-                r = self.direct_rate(c, n)
+                r = self.price_in(c, n, rv)
                 if r:
                     out[f"{c}>{n}"] = r
         return out
