@@ -52,7 +52,12 @@ export default function SettingsView({ currencies, status, onSaved, onReportProb
 
   return (
     <div className="single">
-      <p className="hint save-state" style={{ minHeight: 18 }} aria-live="polite">{state === 'saving' ? 'saving…' : state === 'saved' ? 'saved ✓' : ''}</p>
+      <div className="settings-top">
+        <p className="hint save-state" style={{ minHeight: 18 }} aria-live="polite">{state === 'saving' ? 'saving…' : state === 'saved' ? 'saved ✓' : ''}</p>
+        {window.poe2desktop?.feedback && onReportProblem && (
+          <button className="btn small bug-btn" onClick={onReportProblem}><span aria-hidden="true">🐞</span> Submit a bug</button>
+        )}
+      </div>
       <div className="two-col">
         <div>
           <AccountsPanel onChange={onSaved} />
@@ -130,9 +135,6 @@ export default function SettingsView({ currencies, status, onSaved, onReportProb
           <details className="adv">
             <summary>Diagnostics</summary>
             <BetaChannelToggle />
-            {window.poe2desktop?.feedback && onReportProblem && (
-              <div style={{ marginBottom: 12 }}><button className="btn small" onClick={onReportProblem}>Report a problem…</button></div>
-            )}
             <DiagPanel />
           </details>
         </div>

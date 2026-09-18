@@ -15,9 +15,8 @@ const os = require('os')
 const { DESTS } = require('./dests.js')
 const { installId } = require('./installid.js')
 
-// The invite targets the #bug-reports forum channel. PLACEHOLDER until the owner creates the
-// server (docs/dev-notes.md → Feedback reports) — replace before the feature ships.
-const DISCORD_INVITE = 'https://discord.gg/arbiter-bug-reports-PLACEHOLDER'
+// The invite targets the #bug-reports forum channel of the Arbiter Discord server.
+const DISCORD_INVITE = 'https://discord.gg/xxEDMkfqJg'
 const KEEP_REPORTS = 10
 const THROTTLE_MS = 60_000
 const CROCKFORD = '0123456789ABCDEFGHJKMNPQRSTVWXYZ'   // no I, L, O, U: reads aloud without ambiguity

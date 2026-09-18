@@ -770,6 +770,9 @@ input[type=range] { accent-color: var(--gold); }
 .fb-note { font-size: 12.5px; line-height: 1.45; margin: 6px 0 12px; }
 .fb-note .spin { margin-right: 6px; vertical-align: -1px; }
 .fb-actions { display: flex; gap: 8px; }
+.settings-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.settings-top .save-state { margin: 0; }
+.bug-btn { flex: none; }
 .cd-head { display: flex; align-items: center; gap: 10px; }
 .cd-title { font-size: 19px; font-weight: 700; }
 .cd-price { display: flex; align-items: baseline; gap: 10px; margin: 10px 0 4px; font-size: 34px; font-weight: 700; letter-spacing: -.02em; }
