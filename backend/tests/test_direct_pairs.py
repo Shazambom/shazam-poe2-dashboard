@@ -71,3 +71,22 @@ def test_board_and_asset_carry_pairs(monkeypatch):
             assert c in ids and n in b["prices"] and c != n
     finally:
         _teardown()
+
+
+def test_asset_modal_pairs_are_keyed_by_the_rows_slug(monkeypatch):
+    """The pulse-strip modal row is keyed by poe2scout slug ("divine-orb"); pairs must still
+    find the graph's trade id ("divine") and come back keyed the way the client looks them up."""
+    from app import movers
+    g = _graph(monkeypatch)
+    try:
+        monkeypatch.setattr(movers, "_current_series", lambda: (
+            "GoldenLeague", {1: [(1_700_000_000 + i * 86400, 50.0, 100) for i in range(5)]},
+            {1: ("Divine Orb", "Currency")}))
+        from app import leaguehistory
+        monkeypatch.setattr(leaguehistory, "scout_prices", lambda _l: {"chaos orb": 10.0, "divine orb": 50.0})
+        res = movers.asset_row("Divine Orb", 24)
+        assert res["row"]["id"] == "divine-orb"
+        assert res["pairs"]["divine-orb>chaos"] == 550.0
+        assert not any(k.startswith("divine>") for k in res["pairs"])
+    finally:
+        _teardown()

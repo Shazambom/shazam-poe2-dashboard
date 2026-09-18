@@ -135,9 +135,16 @@ def asset_row(q: str, window_h: int = 24) -> dict | None:
             prices[rid] = px
     # Same direct-market rule as the board: if the asset trades against a numeraire directly,
     # the client shows that market's rate instead of the cross of two Exalted prices.
+    # The row is keyed by poe2scout slug ("divine-orb"); the graph by trade id ("divine"), so
+    # resolve the trade id by display name and key the pairs by the ROW id the client holds.
     try:
         from .arbitrage import graph as _graph
-        pairs = _graph.cached_graph().pair_rates([row["id"]], prices.keys())
+        from .currencies import registry
+        tid = next((i for i, c in registry.by_id.items() if str(c.name).lower() == name.lower()), None)
+        pairs = {}
+        if tid:
+            for k, v in _graph.cached_graph().pair_rates([tid], prices.keys()).items():
+                pairs[f"{row['id']}>{k.split('>', 1)[1]}"] = v
     except Exception:   # the graph is a bonus here; the scout detail never fails without it
         pairs = {}
     return {"row": row, "prices": prices, "pairs": pairs, "reference": "exalted"}
