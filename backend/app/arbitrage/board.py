@@ -137,7 +137,11 @@ def _board(window_h: int) -> dict:
     # so the client can reprice any card into any of them. Reference itself is 1.
     need = {R} | {r["id"] for r in rows} | {r["pref_num"] for r in rows}
     prices = {i: (1.0 if i == R else rv.get(i)) for i in need if i == R or rv.get(i)}
-    return {"reference": R, "league": league, "rows": rows, "prices": prices,
+    # Direct market rates for (card, numeraire) pairs. When a card is priced in a counterpart
+    # that it trades against directly, the client shows THAT market's rate, not the cross of two
+    # reference prices (which ignores the most liquid market on the card).
+    pairs = g.pair_rates([r["id"] for r in rows], prices.keys())
+    return {"reference": R, "league": league, "rows": rows, "prices": prices, "pairs": pairs,
             "session": session.status().get("connected", False)}
 
 

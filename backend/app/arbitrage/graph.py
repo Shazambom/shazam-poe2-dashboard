@@ -154,6 +154,33 @@ class Graph:
         return g
 
     # ------------------------------------------------------------ values
+    def direct_rate(self, c: str, n: str) -> float | None:
+        """Price of 1 `c` in `n` from the c↔n market itself: the c→n edge's rate, else the
+        inverse of n→c, else None. The display layer prefers this over a cross through the
+        reference (`rv[c] / rv[n]`), because the two can disagree by 10–70% when the triangle
+        c/n/reference doesn't close in the hourly digest — the Divine tile once showed 7.3 chaos
+        while the divine↔chaos market traded at 8.4."""
+        e = self.edges.get((c, n))
+        if e and e.rate > 0:
+            return e.rate
+        e = self.edges.get((n, c))
+        if e and e.rate > 0:
+            return 1.0 / e.rate
+        return None
+
+    def pair_rates(self, currencies, numeraires) -> dict[str, float]:
+        """`{"c>n": direct_rate}` for every (c, n) pair that has its own market. Only pairs
+        with a market are present, so a consumer falls back to the reference cross by key miss."""
+        out = {}
+        for c in currencies:
+            for n in numeraires:
+                if n == c:
+                    continue
+                r = self.direct_rate(c, n)
+                if r:
+                    out[f"{c}>{n}"] = r
+        return out
+
     def ref_values(self) -> dict[str, float]:
         """Value of 1 unit of each currency in the reference currency.
 

@@ -7,6 +7,7 @@ import { useCurrencies } from '../lib/icons.js'
 import LeagueArcSection from './LeagueArc.jsx'
 import { useSignals } from '../lib/signalStore.js'
 import { useHorizon } from '../lib/horizonStore.js'
+import { factorFor, valueIn } from '../lib/price.js'
 
 export const SRC_LABEL = { live: 'live order book', digest: 'hourly market data', derived: 'derived via other markets', scout: 'poe2scout', none: 'no data' }
 const SRC_SHORT = { live: 'LIVE', digest: 'HR', derived: '~', scout: 'SC' }
@@ -58,7 +59,7 @@ export function Spark({ points, w = 132, h = 34 }) {
 // The old tile→card morph occasionally measured the origin tile at a near-zero/off rect and
 // overshot to fill the whole screen for a frame ("blowup"). A self-contained enter/exit has
 // no shared-layout math, so that class of glitch can't happen.
-export default function CardDetail({ r, num, factor, numOptions, onNum, prices, onClose, range }) {
+export default function CardDetail({ r, num, factor, numOptions, onNum, prices, pairs, onClose, range }) {
   // Contract: a detail view must state the time range its graph + % cover. Callers pass a
   // label ("3d"/"24h"/…) or the literal "all" to opt into the whole-league view on purpose.
   // Missing range is a bug (an ambiguous, unlabeled graph) — fail loud rather than mislead.
@@ -147,7 +148,7 @@ export default function CardDetail({ r, num, factor, numOptions, onNum, prices, 
           <div className="cd-section">Value in other currencies</div>
           <div className="cd-invalue">
             {inCurs.map(c => (
-              <div key={c} className="cd-vrow"><Cur id={c} text size={16} /><span className="spacer" /><b>{fmt.rate(r.mid / prices[c])}</b></div>
+              <div key={c} className="cd-vrow"><Cur id={c} text size={16} /><span className="spacer" /><b>{fmt.rate(valueIn(r.id, r.mid, c, prices, pairs))}</b></div>
             ))}
           </div>
         </>}
@@ -185,7 +186,7 @@ export function useAssetModal() {
         const n = (num && ap[num] != null) ? num : (ap.divine != null ? 'divine' : (detail.reference || 'exalted'))
         const numOpts = Object.keys(ap).filter(id => id !== r.id).sort((a, b) => (ap[b] || 0) - (ap[a] || 0)).map(id => ({ id, name: nameOf(id) }))
         const close = () => { setDetail(null); setNum(null) }
-        return <CardDetail key="asset" r={r} num={n} factor={ap[n] ?? 1} range={rangeLabel(winH)} numOptions={numOpts} onNum={(id, nn) => setNum(nn)} prices={ap} onClose={close} />
+        return <CardDetail key="asset" r={r} num={n} factor={factorFor(r, n, ap, detail.pairs)} range={rangeLabel(winH)} numOptions={numOpts} onNum={(id, nn) => setNum(nn)} prices={ap} pairs={detail.pairs} onClose={close} />
       })()}
     </AnimatePresence>
   )

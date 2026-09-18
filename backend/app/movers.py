@@ -133,4 +133,11 @@ def asset_row(q: str, window_h: int = 24) -> dict | None:
         px = leaguehistory.scout_lookup(sp, rid)
         if px:
             prices[rid] = px
-    return {"row": row, "prices": prices, "reference": "exalted"}
+    # Same direct-market rule as the board: if the asset trades against a numeraire directly,
+    # the client shows that market's rate instead of the cross of two Exalted prices.
+    try:
+        from .arbitrage import graph as _graph
+        pairs = _graph.cached_graph().pair_rates([row["id"]], prices.keys())
+    except Exception:   # the graph is a bonus here; the scout detail never fails without it
+        pairs = {}
+    return {"row": row, "prices": prices, "pairs": pairs, "reference": "exalted"}

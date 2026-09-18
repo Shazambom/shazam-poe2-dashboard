@@ -10,6 +10,7 @@ import { useStatus, ensureSettings } from '../lib/statusStore.js'
 import CurrencyPicker from './CurrencyPicker.jsx'
 import { useHorizon } from '../lib/horizonStore.js'
 import { useSync } from '../lib/syncStore.js'
+import { factorFor, valueIn } from '../lib/price.js'
 
 
 // A number that is simply THERE on mount and rolls only when its value changes between polls
@@ -148,6 +149,7 @@ export default function BoardView({ status }) {
   const ref = data?.reference ?? 'ref'
   const rows = data?.rows ?? []
   const prices = data?.prices ?? {}
+  const pairs = data?.pairs ?? {}
   // Currencies a card can be priced in = those with a known reference price, richest first.
   const numOptions = useMemo(() => Object.keys(prices)
     .sort((a, b) => (prices[b] || 0) - (prices[a] || 0))
@@ -210,7 +212,7 @@ export default function BoardView({ status }) {
               <span className="pulse-group-label" title="Hubs — the market's most-traded currencies; most trades route through them, so they're easy to buy and sell. Click to expand.">Hubs <span className="pulse-hub">⬢</span></span>
               {hubChips.map(r => {
                 const num = numFor(r)
-                const val = r.mid != null && prices[num] ? r.mid / prices[num] : null
+                const val = valueIn(r.id, r.mid, num, prices, pairs)
                 return (
                   <button key={r.id} className="pulse-chip clickable" title={`${r.name || nameOf(r.id)} — central market · expand chart`}
                     onClick={() => setOpenId(r.id)}>
@@ -269,7 +271,7 @@ export default function BoardView({ status }) {
           <AnimatePresence mode="popLayout">
             {rows.map((r, i) => {
               const num = numFor(r)
-              return <Tile key={r.id} index={i} r={r} num={num} factor={prices[num] ?? 1} numOptions={numOptions}
+              return <Tile key={r.id} index={i} r={r} num={num} factor={factorFor(r, num, prices, pairs)} numOptions={numOptions}
                 onNum={setNum} onRemove={isDesktop && watchlist ? removeCur : null} onOpen={setOpenId} />
             })}
           </AnimatePresence>
@@ -280,8 +282,8 @@ export default function BoardView({ status }) {
           const openRow = rows.find(r => r.id === openId)
           if (!openRow) return null
           const num = numFor(openRow)
-          return <CardDetail key="detail" r={openRow} num={num} factor={prices[num] ?? 1} range={rangeLabel(winH)}
-            numOptions={numOptions} onNum={setNum} prices={prices} onClose={() => setOpenId(null)} />
+          return <CardDetail key="detail" r={openRow} num={num} factor={factorFor(openRow, num, prices, pairs)} range={rangeLabel(winH)}
+            numOptions={numOptions} onNum={setNum} prices={prices} pairs={pairs} onClose={() => setOpenId(null)} />
         })()}
       </AnimatePresence>
       {/* A pulse-strip Hold/Mover item expanded into the SAME detail modal as a board currency. */}
