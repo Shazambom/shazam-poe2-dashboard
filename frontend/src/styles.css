@@ -99,6 +99,11 @@
 :root[data-theme="divinity"] .price-tile::before { background: linear-gradient(90deg, transparent, rgba(255,255,255,.6), transparent); }
 :root[data-theme="divinity"] .topbar { box-shadow: 0 1px 0 rgba(255,255,255,.5) inset, 0 2px 14px rgba(0,0,0,.12); }
 :root[data-theme="divinity"] .cmdk-backdrop, :root[data-theme="divinity"] .detail-backdrop { background: rgba(60,40,20,.35); }
+:root[data-theme="divinity"] body { background:
+    radial-gradient(1100px 460px at 78% -8%, rgba(var(--accent-rgb),.10), transparent 60%),
+    radial-gradient(900px 520px at 8% 0%, rgba(var(--wash-rgb),.08), transparent 55%),
+    radial-gradient(135% 130% at 50% 28%, transparent 56%, rgba(60,40,20,.10)),
+    var(--bg); background-attachment: fixed; }
 /* GGG's currency PNGs carry a baked-in near-black glow at ~13% alpha around each shape — invisible on
    dark surfaces, a grey smudge on parchment. This alpha curve (a' = 3a − 0.6) drops that fog and keeps
    the solid shape, so the icons read as clean cutouts. Replaces the dark drop-shadow, which had the
@@ -138,9 +143,6 @@ a { color: var(--live); }
 .cur-img { filter: drop-shadow(0 1px 2px rgba(0,0,0,.5)); }
 /* gold focus ring on inputs/selects for a cohesive, tactile feel */
 .field input, .field select, .field textarea, .league-select, .cap-row input[type="number"] { transition: border-color .12s var(--ease), box-shadow .12s var(--ease); }
-.field input:focus, .field select:focus, .field textarea:focus, .league-select:focus, .cap-row input:focus {
-  border-color: var(--gold-dim); box-shadow: 0 0 0 3px rgba(var(--accent-rgb),.12); outline: none;
-}
 
 .app { display: grid; grid-template-rows: auto 1fr; height: 100%; overflow-x: hidden; }
 
@@ -478,10 +480,17 @@ a { color: var(--live); }
 /* ---------- forms ---------- */
 .field { display: grid; gap: 4px; margin-bottom: 12px; }
 .field label { color: var(--muted); font-size: 12.5px; }
-.field input, .field select, .field textarea {
+/* EVERY native text control is themed at the element level, so nothing can fall through to Chromium's
+   default chrome (which is dark, whatever the theme). Classed variants (.btn, .league-select, .cmdk-input,
+   .curpick-input, .ws-filter-input, .cap-row, .pt-num-row) override this by specificity. */
+input:not([type="range"]):not([type="file"]):not([type="checkbox"]), select, textarea {
   background: var(--bg); border: 1px solid var(--line-strong); border-radius: var(--radius);
-  padding: 6px 8px; width: 100%;
+  padding: 6px 8px; color: var(--ink);
 }
+input:not([type="range"]):not([type="file"]):focus, select:focus, textarea:focus {
+  border-color: var(--gold-dim); box-shadow: 0 0 0 3px rgba(var(--accent-rgb),.12); outline: none;
+}
+.field input, .field select, .field textarea { width: 100%; }
 /* Number inputs: hide the native up/down spinners — they don't fit the dark theme.
    Values are typed (or driven by sliders); the stepper chrome just looked out of place. */
 input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
