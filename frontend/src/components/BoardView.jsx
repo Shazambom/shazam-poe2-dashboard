@@ -1,5 +1,5 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { motion, AnimatePresence, useSpring, useTransform } from 'motion/react'
+import { motion, AnimatePresence } from 'motion/react'
 import { api, fmt, surface, toast } from '../lib/api.js'
 import { nav } from '../lib/nav.js'
 import { isDesktop } from '../lib/session.js'
@@ -11,16 +11,8 @@ import CurrencyPicker from './CurrencyPicker.jsx'
 import { useHorizon } from '../lib/horizonStore.js'
 import { useSync } from '../lib/syncStore.js'
 import { factorFor, trendIn, valueIn } from '../lib/price.js'
+import AnimatedNumber from '../lib/animatedNumber.js'
 
-
-// A number that is simply THERE on mount and rolls only when its value changes between polls
-// (a count-up from zero on every tab switch read as "loading" when the data was already in hand).
-function AnimatedNumber({ value, format }) {
-  const sv = useSpring(value, { stiffness: 210, damping: 24, restDelta: 0.01 })
-  useEffect(() => { sv.set(value) }, [value, sv])
-  const text = useTransform(sv, v => format(v))
-  return <motion.span>{text}</motion.span>
-}
 
 function Tile({ r, num, factor, prices, pairs, numOptions, onNum, onRemove, onOpen, index = 0 }) {
   const change = r.change_pct
