@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'motion/react'
 import { api, fmt, toast } from '../lib/api.js'
 import Cur from './Cur.jsx'
@@ -88,12 +88,19 @@ export default function CardDetail({ r, num, factor, numOptions, onNum, prices, 
     const h = (e) => { if (e.key === 'Escape') onClose() }
     window.addEventListener('keydown', h); return () => window.removeEventListener('keydown', h)
   }, [onClose])
+  // Focus moves into the dialog on open and back to whatever opened it on close.
+  const closeRef = useRef(null)
+  useEffect(() => {
+    const opener = document.activeElement
+    closeRef.current?.focus()
+    return () => { try { opener?.focus?.() } catch {} }
+  }, [])
   return (
     <motion.div className="detail-backdrop" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose}>
-      <motion.div className={`card-detail src-${r.source || 'none'}`}
+      <motion.div className={`card-detail src-${r.source || 'none'}`} role="dialog" aria-modal="true"
         initial={{ opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.98 }}
         transition={{ duration: 0.18, ease: [0.22, 0.61, 0.36, 1] }} onClick={e => e.stopPropagation()}>
-        <button className="cd-close" onClick={onClose} title="Close (Esc)">×</button>
+        <button ref={closeRef} className="cd-close" onClick={onClose} title="Close (Esc)">×</button>
         <div className="cd-head">
           <span className="cd-title"><Cur id={r.id} name={r.name} text size={24} /></span>
           <span className={`pt-src ${r.source}`} title={srcBadge(r.source).title}>{srcBadge(r.source).label}</span>
@@ -108,19 +115,15 @@ export default function CardDetail({ r, num, factor, numOptions, onNum, prices, 
           <div className="cd-section">⚡ Signal <span className="muted" style={{ fontWeight: 400 }}>· volume-confirmed move forming</span></div>
           <div className="cd-chips">
             <span className="arc-win signal">about to move</span>
-            <span className="cd-chip" title="robust volume z-score at the anomaly — the confirmation Movers lacks">vol ×{Number(signal.vol_z).toFixed(1)}</span>
-            <span className="cd-chip" title="matrix-profile discord distance — how unlike anything this item has done">mp {fmt.rate(signal.mp_dist)}</span>
             <span className="cd-chip" title="price at the anomaly">at {fmt.rate(signal.close)}</span>
           </div>
         </>}
         <LeagueArcSection name={r.name} />
         <div className="cd-grid">
           {r.medvol != null && <div className="cd-stat"><span>volume</span><b><Wealth v={r.medvol} cur="exalted" suffix={<span className="muted">/day</span>} /></b></div>}
-          <div className="cd-stat"><span>source</span><b>{SRC_LABEL[r.source] || 'no data'}</b></div>
           {r.age_s != null && <div className="cd-stat"><span>updated</span><b>{fmt.age(r.age_s)} ago</b></div>}
           {r.hub && <div className="cd-stat" title="A central market — a lot of value routes through it"><span>market</span><b className="cd-hub">⬢ hub</b></div>}
         </div>
-        {r.hub && <div className="cd-hub-note"><span className="cd-hub">⬢</span> A hub is one of the market's most-traded currencies — most trades route through it, so it's easy to buy and sell.</div>}
         {cash && cash.realizable_ref != null && cash.source !== 'cash' && (() => {
           const cref = cash.reference || 'exalted'
           const gh = (cash.value_ref != null) ? cash.value_ref - cash.realizable_ref : null

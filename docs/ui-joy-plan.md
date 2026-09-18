@@ -5,7 +5,7 @@
 > can have multiple themes. Use PoE2 characters as inspiration like the Arbiter of Ash and the Arbiter
 > of Divinity. What pieces of UI can we polish up and refine?"
 >
-> Status: **PLAN — nothing built.** Every file:line below was verified against `dev` at `1c17c78`
+> Status: **BUILT on `dev` 2026-09-18 (awaiting owner review before commit)** — §0 cuts A1–A11, the token sweep + linter + `theme.js` aliases, motion honesty B1–B8, all five presets with the Settings Appearance row / ⌘K commands / Electron backdrop, and C2 (focus in/out of the detail), C3 (keyboard-reachable tile remove), C6 (⌘1–5), C7 (glyphs). Deferred on purpose (keep it simple): A12 tone curation (owner-taste call), C1 the `<CurrencyPicker>` swap inside tiles (needs a small variant), C3's roving tabindex, C5 chart skeletons, C9 the icon placeholder disc, C8 (already global). Originally: Every file:line below was verified against `dev` at `1c17c78`
 > (0.2.62-beta.1) and will drift; treat them as pointers. The styleguide (`docs/ui-styleguide.md`)
 > and CLAUDE.md §0 Restraint remain the contract; this plan only applies them.
 
@@ -356,7 +356,7 @@ check.
   price. Still no second light theme.
 - **Theming `series`, `--rarity-*`, or gain/loss hue** — validated palettes and game semantics.
 - **A blood-*accent* Vaal preset** — blood as the accent collides with `--loss`/`--offline`/the corrupted orb. The shipped Vaal (§1.3 #5) puts blood on `--loss` and the wash and uses corruption magenta as the accent.
-- **Per-token user customisation** — makes the contrast gate meaningless; UI nobody trades with.
+- **Per-token user customisation** — makes the contrast gate meaningless; UI nobody trades with. (Revisited 2026-09-18: if anyone asks, the version that fits is a sixth "Custom" preset with FOUR pickers — background, surface, ink, accent — and everything else derived with contrast auto-corrected. Deferred until a real request.)
 - **A topbar theme switcher; a preview gallery; a View-Transitions cross-fade** — pressed four times
   ever / a page nobody returns to / a 300 ms novelty with a reduced-motion branch to maintain.
 - **Per-theme fonts, textures, boss art, sound packs; UI click sounds** — a costume, not joy.

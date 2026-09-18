@@ -12,10 +12,10 @@ import { useHorizon } from '../lib/horizonStore.js'
 import { useSync } from '../lib/syncStore.js'
 
 
-// A number that counts up on mount, then rolls when its value changes between polls.
-// Fast, stiff spring (~0.5s) so the count-up feels snappy, not a slow loading crawl.
+// A number that is simply THERE on mount and rolls only when its value changes between polls
+// (a count-up from zero on every tab switch read as "loading" when the data was already in hand).
 function AnimatedNumber({ value, format }) {
-  const sv = useSpring(0, { stiffness: 210, damping: 24, restDelta: 0.01 })
+  const sv = useSpring(value, { stiffness: 210, damping: 24, restDelta: 0.01 })
   useEffect(() => { sv.set(value) }, [value, sv])
   const text = useTransform(sv, v => format(v))
   return <motion.span>{text}</motion.span>
@@ -28,21 +28,22 @@ function Tile({ r, num, factor, numOptions, onNum, onRemove, onOpen, index = 0 }
   const mid = rp(r.mid)
   const trend = r.trend ? r.trend.map(p => ({ t: p.t, v: p.v / f })) : r.trend
   const unit = <Cur id={num} size={14} />
-  // Flash the price green/red when its value actually changes (new data landing).
-  const prev = useRef(mid)
+  // Flash the price green/red only when THIS currency's price changes (new data landing) —
+  // compared before repricing, so changing "priced in" or the numeraire moving never flashes.
+  const raw = r.mid
+  const prev = useRef(raw)
   const [flash, setFlash] = useState('')
   useEffect(() => {
-    if (prev.current != null && mid != null && mid !== prev.current) {
-      setFlash(mid > prev.current ? 'up' : 'down')
-      const t = setTimeout(() => setFlash(''), 1000)
-      prev.current = mid
+    if (prev.current != null && raw != null && raw !== prev.current) {
+      setFlash(raw > prev.current ? 'up' : 'down')
+      const t = setTimeout(() => setFlash(''), 600)
+      prev.current = raw
       return () => clearTimeout(t)
     }
-    prev.current = mid
-  }, [mid])
+    prev.current = raw
+  }, [raw])
   return (
     <motion.div
-      layout
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.96 }}
@@ -105,18 +106,19 @@ export default function BoardView({ status }) {
     try { setData(await api.board(winH)); setErr(null) } catch (e) { setErr(String(e.message || e)) }
   }
 
-  const saveWatchlist = async (next, note) => {
+  // The board re-rendering IS the confirmation; only a failure toasts.
+  const saveWatchlist = async (next) => {
     setWatchlist(next)
-    try { await surface(useStatus.getState().saveSettings({ watchlist: next }), note); await load() }
+    try { await surface(useStatus.getState().saveSettings({ watchlist: next })); await load() }
     catch { setWatchlist(watchlist) }   // revert on failure
   }
   const addById = async (id) => {
     const m = opts.find(o => o.id === id)
     if (!m) return
     if ((watchlist || []).includes(m.id)) { toast(`${m.name} is already on the board`, false); return }
-    await saveWatchlist([...(watchlist || []), m.id], `Added ${m.name}`)
+    await saveWatchlist([...(watchlist || []), m.id])
   }
-  const removeCur = (id) => saveWatchlist((watchlist || []).filter(x => x !== id), 'Removed from board')
+  const removeCur = (id) => saveWatchlist((watchlist || []).filter(x => x !== id))
   const refresh = async () => {
     if (busy) return
     setBusy(true); setSyncBusy(true)
@@ -244,18 +246,13 @@ export default function BoardView({ status }) {
         </div>
       )}
       <div className="board-bar">
-        <h2 style={{ margin: 0 }}>Price board <span className="muted" style={{ fontWeight: 400 }}>· {rows.length} currencies · each priced in its top market · {rangeLabel(winH)}</span></h2>
+        <h2 style={{ margin: 0 }}>Price board <span className="muted" style={{ fontWeight: 400 }}>· {rangeLabel(winH)}</span></h2>
         <span className="spacer" />
-      </div>
-      {isDesktop && watchlist && (
-        <div className="board-bar" style={{ marginTop: 4 }}>
-          <span className="hint">Customize your board:</span>
+        {isDesktop && watchlist && (
           <CurrencyPicker value="" placeholder="Add a currency…" onChange={addById}
             options={opts.filter(o => !watchlist.includes(o.id))} />
-          <span className="spacer" />
-          <span className="hint">{watchlist.length} on board · hover a tile’s × to remove</span>
-        </div>
-      )}
+        )}
+      </div>
       {err && <div className="notice error">{err}</div>}
       {data === null && !err && (
         <div className="price-grid">
@@ -266,7 +263,7 @@ export default function BoardView({ status }) {
           ))}
         </div>
       )}
-      {data && rows.length === 0 && !err && <div className="empty">No watched currencies yet — add some to the watchlist in Settings.</div>}
+      {data && rows.length === 0 && !err && <div className="empty">{isDesktop && watchlist ? 'Nothing on the board yet.' : 'No watched currencies yet — add some to the watchlist in Settings.'}</div>}
       {data && rows.length > 0 && (
         <motion.div className="price-grid" layout>
           <AnimatePresence mode="popLayout">

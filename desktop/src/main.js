@@ -24,11 +24,17 @@ const isPoeUrl = (url) => /^https:\/\/([a-z0-9-]+\.)*pathofexile\.com\//i.test(S
 const isAuthUrl = (url) =>
   isPoeUrl(url) || /^https:\/\/([a-z0-9-]+\.)*(steamcommunity|steampowered)\.com\//i.test(String(url))
 const LOCAL_BACKEND_PORT = 8210
-const DEFAULTS = { betaChannel: false }
+const DEFAULTS = { betaChannel: false, theme: 'vault' }
 // DEV ONLY: where an unpackaged launch without a bundled binary finds a backend.
 const DEV_BACKEND_URL = process.env.ARBITER_DEV_BACKEND_URL || telemetry.SHAZAM
 // The two near-black window backdrops (twins of --bg / the trade webview backdrop in styles.css).
-const BACKDROP = { window: '#191b22', trade: '#0c0d10' }   // style-ok: painted before the CSS loads
+// The window backdrop is painted before any CSS loads, so it is keyed by the UI theme preset the
+// renderer last chose (mirrored into desktop-settings.json). Each value is the style-ok twin of that
+// preset's --backdrop token in frontend/src/styles.css; `trade` (behind the embedded trade site) is shared.
+const BACKDROPS = {   // style-ok: painted before the CSS loads
+  vault: '#191b22', ash: '#0f0a08', divinity: '#e9d2ae', sekhemas: '#101012', vaal: '#160d0c',
+}
+const BACKDROP = { get window() { return BACKDROPS[settings.theme] || BACKDROPS.vault }, trade: '#0c0d10' }   // style-ok
 
 const settingsPath = () => path.join(app.getPath('userData'), 'desktop-settings.json')
 let settings = { ...DEFAULTS }
@@ -442,6 +448,15 @@ ipcMain.handle('update:setChannel', (_e, beta) => {
   saveSettings()
   if (_autoUpdater) { _applyChannel(_autoUpdater); _autoUpdater.checkForUpdates().catch(() => {}) }
   return { beta: onBetaChannel(), locked: isBetaVersion() }
+})
+// UI theme preset (colour only): remember it so the next launch paints the right backdrop before
+// CSS, and recolour the current window's gutter now.
+ipcMain.handle('ui:setTheme', (_e, id) => {
+  if (typeof id !== 'string' || !BACKDROPS[id]) return false
+  settings.theme = id
+  saveSettings()
+  try { if (win && !win.isDestroyed()) win.setBackgroundColor(BACKDROP.window) } catch {}
+  return true
 })
 ipcMain.handle('update:install', () => {
   if (IS_MAC) {

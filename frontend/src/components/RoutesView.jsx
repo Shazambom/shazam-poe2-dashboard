@@ -50,18 +50,16 @@ export default function RoutesView({ capital, status, currencies, onCapitalSaved
   const load = () => {
     esRef.current?.close()
     accRef.current = []
-    setRoutes([]); setCounts(null); setErr(null); setStreaming(true)
+    setCounts(null); setErr(null); setStreaming(true)
     const es = new EventSource(api.routesStreamUrl({ ...f, sort: undefined, limit: undefined }))
     esRef.current = es
     // The server scores as it streams (provisional `scores` after each batch, authoritative on
-    // `done`) — one ranking implementation, in the backend.
+    // `done`) — one ranking implementation, in the backend. The table shows the PREVIOUS result
+    // until `done`, then swaps in the new one whole: rows never re-sort under the cursor mid-read.
     const applyScores = (scores) => { if (scores) accRef.current.forEach(r => { if (scores[r.id] != null) r.score = scores[r.id] }) }
     es.addEventListener('meta', e => setMeta(JSON.parse(e.data)))
-    es.addEventListener('routes', e => {
-      accRef.current = accRef.current.concat(JSON.parse(e.data))
-      setRoutes([...accRef.current])
-    })
-    es.addEventListener('scores', e => { applyScores(JSON.parse(e.data)); setRoutes([...accRef.current]) })
+    es.addEventListener('routes', e => { accRef.current = accRef.current.concat(JSON.parse(e.data)) })
+    es.addEventListener('scores', e => applyScores(JSON.parse(e.data)))
     es.addEventListener('done', e => {
       const d = JSON.parse(e.data)
       applyScores(d.scores)
@@ -167,13 +165,10 @@ export default function RoutesView({ capital, status, currencies, onCapitalSaved
           <div className="notice">No capital entered yet, so loops are sized to a notional 10 {ref} from every currency.
             Enter what you hold on the left to size them to your stash.</div>
         )}
-        <div className="legend">
-          <span><i className="k recipe" /> recipe hop: <b className="recipe-glyph">⊖</b> disenchant · <b className="recipe-glyph">⊕</b> combine — no gold</span>
-          <span className="spacer" />
-          {streaming && <span className="streaming">searching… {routes.length} found</span>}
-        </div>
 
-        {!streaming && routes.length === 0 ? (
+        {streaming && routes.length === 0 ? (
+          <table><tbody>{Array.from({ length: 6 }).map((_, i) => <tr key={i}><td colSpan={12}><div className="sk sk-row" /></td></tr>)}</tbody></table>
+        ) : !streaming && routes.length === 0 ? (
           <div className="empty">
             <b>{(counts?.total_candidates ?? 0) === 0 ? 'No loops yet.' : 'No loop clears your thresholds.'}</b><br />
             {(counts?.total_candidates ?? 0) === 0
@@ -186,7 +181,7 @@ export default function RoutesView({ capital, status, currencies, onCapitalSaved
           <table>
             <thead>
               <tr>
-                <th>Loop</th>
+                <th>Loop{streaming && <span className="streaming" aria-label="searching" />}</th>
                 {COLS.map(([key, label, , defDir, title]) => (
                   <th key={key} className={`num sortable ${sort.key === key ? 'sorted' : ''}`} title={title || `Sort by ${label}`}
                     onClick={() => clickSort(key, defDir)}>
@@ -199,9 +194,7 @@ export default function RoutesView({ capital, status, currencies, onCapitalSaved
               {shown.map(({ r, band }, i) => (
                 <React.Fragment key={r.id}>
                   {banded.active && i > 0 && band !== shown[i - 1].band && (
-                    <tr className="std-sep" aria-hidden="true"><td colSpan={12}>
-                      <div className="std-band"><span className="std-lab">≥{band}σ</span><span className="std-bar" /></div>
-                    </td></tr>
+                    <tr className="std-sep" aria-hidden="true"><td colSpan={12}><span className="std-bar" /></td></tr>
                   )}
                   <tr className="route" aria-expanded={open === r.id} onClick={() => setOpen(open === r.id ? null : r.id)}>
                     <td className="loop-cell"><Loop r={r} /></td>

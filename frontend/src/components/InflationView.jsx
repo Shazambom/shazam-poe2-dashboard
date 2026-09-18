@@ -161,11 +161,6 @@ export default function InflationView({ league }) {
         </table>
       </div>
 
-      <p className="hint" style={{ marginTop: 14 }}>
-        Rising index = the currency buys less {data?.anchor_name} than at the start of captured data — i.e. it's inflating.
-        {data?.base_note ? ` ${data.base_note[0].toUpperCase()}${data.base_note.slice(1)}.` : ''}
-        {' '}Mirror and Hinekora trade thinly, so their lines have gaps; Divine is the densest anchor.
-      </p>
 
       <CrossLeague league={league} />
       <MarketCap league={league} />
@@ -240,10 +235,6 @@ function MarketCap({ league }) {
           : rows.length < 2 ? <div className="empty">Economy history is still building — check back shortly.</div>
           : <LeagueAgeChart rows={rows} keys={keys} scale="log" valueFmt={(v) => [`${fmt.n(v, 0)} mir/day`]} />}
       </div>
-      <p className="hint" style={{ marginTop: 10 }}>
-        This is traded throughput — the value that changes hands per day, summed across every currency and priced in Mirrors.
-        It is not a supply-based market cap (total minted supply isn't observable). Log scale. History from poe2scout.
-      </p>
     </div>
   )
 }
@@ -276,10 +267,6 @@ function CrossLeague({ league }) {
           : rows.length < 2 ? <div className="empty">No cross-league history yet.</div>
           : <LeagueAgeChart rows={rows} keys={keys} refLine={100} />}
       </div>
-      <p className="hint" style={{ marginTop: 10 }}>
-        Higher/steeper = faster Exalted inflation at that point in the league. The current league (bold) can be compared
-        against where past leagues sat at the same age. History from poe2scout; day 0 = each league's first recorded day.
-      </p>
     </div>
   )
 }

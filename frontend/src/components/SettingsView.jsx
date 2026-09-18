@@ -10,6 +10,7 @@ import NotificationsPanel from './NotificationsPanel.jsx'
 import CurrencyPicker from './CurrencyPicker.jsx'
 import RefreshButton from './RefreshButton.jsx'
 import Toggle from './Toggle.jsx'
+import { THEMES, useTheme } from '../lib/themeStore.js'
 
 // Everything auto-saves (debounced) — there is no Save button. The league lives
 // in the top bar; essentials are visible; the rest sits behind "Advanced".
@@ -22,15 +23,14 @@ export default function SettingsView({ currencies, status, onSaved }) {
   // The PUT payload: the editable subset, numbers coerced (blank → the default).
   const num = (v, fb) => { const n = Number(v); return Number.isFinite(n) ? n : fb }
   const payload = (next) => ({
-    reference: next.reference, watchlist: next.watchlist, hub_count: num(next.hub_count, 5),
+    reference: next.reference,
     allow_digest_edges: next.allow_digest_edges, allow_recipe_edges: next.allow_recipe_edges,
     max_steps: num(next.max_steps, 3), max_start_fraction: num(next.max_start_fraction, 1),
-    live_max_age_s: num(next.live_max_age_s, 1800), digest_max_age_h: num(next.digest_max_age_h, 6),
-    min_edge_volume_ref_per_h: num(next.min_edge_volume_ref_per_h, 1),
+    live_max_age_s: num(next.live_max_age_s, 1800),
     min_edge_depth: num(next.min_edge_depth, 2),
     gold_model: next.gold_model,
     live_top_n: num(next.live_top_n, 5), live_min_age_s: num(next.live_min_age_s, 300),
-    min_refetch_s: num(next.min_refetch_s, 300), routes_cache_s: num(next.routes_cache_s, 300),
+    min_refetch_s: num(next.min_refetch_s, 300),
     background_sweep: !!next.background_sweep, batch_pad: !!next.batch_pad,
     batch_max_have: num(next.batch_max_have, 10),
     rank_weights: next.rank_weights, volume_window_h: num(next.volume_window_h, 24),
@@ -55,7 +55,7 @@ export default function SettingsView({ currencies, status, onSaved }) {
 
   return (
     <div className="single">
-      <p className="hint save-state" style={{ minHeight: 18 }}>{state === 'saving' ? 'saving…' : state === 'saved' ? 'saved ✓' : 'Changes save automatically.'}</p>
+      <p className="hint save-state" style={{ minHeight: 18 }} aria-live="polite">{state === 'saving' ? 'saving…' : state === 'saved' ? 'saved ✓' : ''}</p>
       <div className="two-col">
         <div>
           <AccountsPanel onChange={onSaved} />
@@ -63,29 +63,21 @@ export default function SettingsView({ currencies, status, onSaved }) {
           <NotificationsPanel />
           <TradingSettings />
 
+          <h2 style={{ marginTop: 28 }}>Appearance</h2>
+          <ThemeRow />
+
           <h2 style={{ marginTop: 28 }}>Market</h2>
           <p className="hint">The league is set from the dropdown in the top bar.</p>
           <div className="field"><label>Reference currency for values</label>
             <CurrencyPicker value={s.reference} onChange={id => set('reference', id)} options={opts} placeholder="reference currency…" />
           </div>
-          <div className="field"><label>Live watchlist (every ordered pair is fetched each sweep)</label>
-            <textarea rows={3} defaultValue={s.watchlist.join(', ')} onBlur={e => set('watchlist', e.target.value.split(/[\s,]+/).filter(Boolean))} />
-            <span className="hint">{s.watchlist.length} currencies. Keep it under ~50 to stay clear of the exchange rate limit.</span>
-          </div>
           <div className="check"><Toggle checked={s.allow_digest_edges} onChange={v => set('allow_digest_edges', v)} label="Fill missing pairs from hourly market data" /></div>
           <div className="check"><Toggle checked={s.allow_recipe_edges} onChange={v => set('allow_recipe_edges', v)} label="Use recipe steps" /></div>
-          <div className="field"><label>Hub currencies to highlight (⬢)</label>
-            <input type="number" min="1" max="12" value={s.hub_count ?? 5} onChange={e => set('hub_count', e.target.value)} />
-            <span className="hint">The most-central markets (by trade volume) — shown as ⬢ on the board and in the Hubs strip.</span>
-          </div>
 
           <details className="adv" style={{ marginTop: 18 }}>
-            <summary>Advanced — route search &amp; fetch policy</summary>
+            <summary>Advanced — route search</summary>
             <div className="field"><label>Maximum steps per loop</label><input type="number" min="2" max="5" value={s.max_steps} onChange={e => set('max_steps', e.target.value)} /></div>
             <div className="field"><label>Fraction of held capital to commit</label><input type="number" min="0.05" max="1" step="0.05" value={s.max_start_fraction} onChange={e => set('max_start_fraction', e.target.value)} /></div>
-            <div className="field"><label>Ignore market data older than (hours)</label><input type="number" value={s.digest_max_age_h} onChange={e => set('digest_max_age_h', e.target.value)} /></div>
-            <div className="field"><label>Cull markets trading less than ({s.reference}/hour)</label><input type="number" min="0" step="0.5" value={s.min_edge_volume_ref_per_h ?? 1} onChange={e => set('min_edge_volume_ref_per_h', e.target.value)} /></div>
-            <div className="field"><label>Serve identical route queries from memory for (seconds)</label><input type="number" value={s.routes_cache_s} onChange={e => set('routes_cache_s', e.target.value)} /></div>
 
             <h2>Ranking weights</h2>
             <p className="hint">The default sort blends these; velocity (profit per hour per gold) leads.</p>
@@ -214,11 +206,21 @@ function DiagPanel() {
       {err && <div className="notice error">{err}</div>}
       {d && (
         <>
-          <p className="hint">league <b>{d.settings?.league}</b> · league_daily rows for it: <b>{d.db_counts?.['league_daily[current_league]'] ?? '–'}</b> · registry {d.registry?.count}.
-            Connectivity: {Object.entries(d.connectivity || {}).map(([k, v]) => <span key={k} style={{ marginRight: 10 }}>{k}=<b className={String(v).startsWith('ERR') ? 'loss' : 'gain'}>{String(v)}</b></span>)}</p>
-          <pre style={{ maxHeight: 260, overflow: 'auto', fontSize: 11, background: 'rgba(0,0,0,.25)', padding: 8, borderRadius: 6 }}>{text}</pre>
+          <p className="hint">{Object.entries(d.connectivity || {}).map(([k, v]) => <span key={k} className="feed" style={{ marginRight: 12 }}><span className={`dot ${String(v).startsWith('ERR') ? 'off' : 'ok'}`} />{k}</span>)}</p>
+          <details className="adv"><summary>Raw report</summary><pre className="diag-pre">{text}</pre></details>
         </>
       )}
+    </div>
+  )
+}
+
+// The theme presets: the same dropdown as every other picker, applied instantly, saved as a setting.
+function ThemeRow() {
+  const id = useTheme(s => s.id)
+  const apply = useTheme(s => s.apply)
+  return (
+    <div className="field"><label>Theme</label>
+      <CurrencyPicker value={id} onChange={apply} options={THEMES} placeholder="theme…" renderIcon={null} />
     </div>
   )
 }

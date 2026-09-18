@@ -26,6 +26,8 @@ contextBridge.exposeInMainWorld('poe2desktop', {
   installUpdate: () => ipcRenderer.invoke('update:install'),
   getChannel: () => ipcRenderer.invoke('update:getChannel'),
   setChannel: (beta) => ipcRenderer.invoke('update:setChannel', beta),
+  // UI theme preset: main remembers it for the pre-CSS window backdrop (colour only).
+  setTheme: (id) => ipcRenderer.invoke('ui:setTheme', String(id)),
 
   // Live-search engine (desktop-only). Renderer sends intents; main runs the WS + fetch
   // + teleport against the user's own logged-in session and pushes pings/state back.

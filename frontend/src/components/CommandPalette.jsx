@@ -65,7 +65,7 @@ export default function CommandPalette({ open, onClose, tabs, onGoTab, subDests 
               {items.slice(0, 60).map((it, i) => (
                 <div key={it.kind + it.id} className={`cmdk-item ${i === sel ? 'sel' : ''}`}
                   onMouseMove={() => setSel(i)} onClick={() => run(it)}>
-                  <span className="cmdk-ic">{it.kind === 'cur' ? <Cur id={it.id} size={16} /> : it.kind === 'league' ? '🏆' : it.kind === 'sub' ? '→' : it.kind === 'ws' ? '🔎' : it.kind === 'cmd' ? '⌘' : '↗'}</span>
+                  <span className="cmdk-ic">{it.kind === 'cur' ? <Cur id={it.id} size={16} /> : it.kind === 'league' ? '◆' : it.kind === 'sub' ? '→' : it.kind === 'ws' ? '⌕' : it.kind === 'cmd' ? '⌘' : '↗'}</span>
                   <span className="cmdk-label">{it.label}</span>
                   <span className="cmdk-hint">{it.hint}</span>
                 </div>

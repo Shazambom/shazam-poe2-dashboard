@@ -1,10 +1,13 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import Cur from './Cur.jsx'
 
+const defaultIcon = (o, size) => <Cur id={o.id} name={o.name} size={size} />
+
 // Searchable currency combobox: shows the selected currency's icon + name; on focus it turns
 // into a type-ahead that progressively filters, listing matches as icons + names (reuses the
 // ⌘K palette's list styling so it matches the app aesthetic). Keyboard: ↑↓ move, ↵ pick, esc close.
-export default function CurrencyPicker({ value, onChange, options = [], placeholder = 'search…' }) {
+// `renderIcon(option)` swaps the per-row icon (default: the currency icon); pass `null` for none.
+export default function CurrencyPicker({ value, onChange, options = [], placeholder = 'search…', renderIcon = defaultIcon }) {
   const [open, setOpen] = useState(false)
   const [q, setQ] = useState('')
   const [sel, setSel] = useState(0)
@@ -36,7 +39,7 @@ export default function CurrencyPicker({ value, onChange, options = [], placehol
   return (
     <div className="curpick" ref={boxRef}>
       <div className={`curpick-box ${open ? 'open' : ''}`} onClick={() => { setOpen(true); inputRef.current?.focus() }}>
-        {selected && !open && <Cur id={selected.id} name={selected.name} size={18} />}
+        {selected && !open && renderIcon && renderIcon(selected, 18)}
         <input ref={inputRef} className="curpick-input"
           value={open ? q : (selected?.name ?? '')}
           placeholder={placeholder}
@@ -50,7 +53,7 @@ export default function CurrencyPicker({ value, onChange, options = [], placehol
           {matches.slice(0, 80).map((o, i) => (
             <div key={o.id} className={`cmdk-item ${i === sel ? 'sel' : ''}`}
               onMouseMove={() => setSel(i)} onMouseDown={e => { e.preventDefault(); choose(o) }}>
-              <span className="cmdk-ic"><Cur id={o.id} name={o.name} size={16} /></span>
+              {renderIcon && <span className="cmdk-ic">{renderIcon(o, 16)}</span>}
               <span className="cmdk-label">{o.name}</span>
             </div>
           ))}

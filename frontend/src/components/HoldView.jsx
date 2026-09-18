@@ -75,6 +75,7 @@ export default function HoldView() {
 
       {/* ---- Hold leaderboard (primary) ---- */}
       {!isMovers && <>
+        {busy && rows.length === 0 && <table><tbody>{Array.from({ length: 6 }).map((_, i) => <tr key={i}><td colSpan={8}><div className="sk sk-row" /></td></tr>)}</tbody></table>}
         {!busy && rows.length === 0 && !data?.building && <div className="empty">No assets scored yet — the backfill may still be running.</div>}
         {rows.length > 0 && (
           <table>
@@ -109,13 +110,6 @@ export default function HoldView() {
             </tbody>
           </table>
         )}
-        <p className="hint" style={{ marginTop: 12 }}>
-          Everything is priced in <b>{numName}</b> (holding value = beating it, not the inflating Exalted). Mirror &amp; Lock trade thinly, so their coverage/confidence is lower than Divine. Hold score = return × confidence;
-          max drawdown is the worst dip you'd have sat through. <b>Predicted</b> averages how each asset moved from this same league-day in past
-          leagues (recency-weighted, ±dispersion) — needs ≥2 past leagues. Low-confidence rows are thin/obscure markets; weight them cautiously.
-          Late-league note: supply-throttled crafting mats (omens, top essences, refined catalysts) tend to hold; bulk-farmed commodities drift down.
-          <br /><span className="muted">Click any row to expand its chart.</span>
-        </p>
       </>}
 
       {/* ---- Positive movers leaderboard (secondary) ---- */}
@@ -143,11 +137,6 @@ export default function HoldView() {
             </tbody>
           </table>
         )}
-        <p className="hint" style={{ marginTop: 12 }}>
-          Biggest <b>upward</b> price swings across the full poe2scout currency universe over {horizon}, priced in the league base (Exalted).
-          A liquidity floor mutes thin-item noise. This is raw market movement — distinct from <b>Hold</b>, which ranks stores of value.
-          <br /><span className="muted">Click any row to expand its chart.</span>
-        </p>
       </>}
 
       {assetModal.node}

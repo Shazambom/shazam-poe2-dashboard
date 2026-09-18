@@ -49,7 +49,6 @@ export default function MarketView({ currencies }) {
               </ResponsiveContainer>
             )}
           </div>
-          <p className="hint">Digest rate is executed volume of {names[pair.b] ?? pair.b} divided by executed volume of {names[pair.a] ?? pair.a} for the hour, i.e. the cleared VWAP.</p>
           {digestSeries.length > 0 && (
             <div className="chart-box" style={{ height: 140, marginTop: 10 }}>
               <ResponsiveContainer>
@@ -88,18 +87,12 @@ export default function MarketView({ currencies }) {
               </tbody>
             </table>
           )}
-          <p className="hint" style={{ marginTop: 6 }}>
-            {byValue
-              ? 'Ranked by traded value in Exalted (volume × exchange-graph value) — comparable across cheap and expensive currencies.'
-              : 'Ranked by how many hours the pair traded; volumes are raw units in each currency.'}
-          </p>
         </div>
       </div>
 
       <h2 style={{ marginTop: 28 }}>Edges in the current graph</h2>
       <div className="row" style={{ marginBottom: 8 }}>
         <input className="btn" placeholder="Filter by currency" value={q} onChange={e => setQ(e.target.value)} style={{ width: 240 }} />
-        <span className="hint">{shown.length} edges</span>
       </div>
       <table>
         <thead><tr><th>From</th><th>To</th><th>Source</th><th className="num">Rate</th><th className="num">Depth</th><th className="num">Capacity (from units)</th><th className="num">Age</th></tr></thead>

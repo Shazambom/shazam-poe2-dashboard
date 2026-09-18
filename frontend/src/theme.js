@@ -1,46 +1,47 @@
 // Arbiter design tokens, for JavaScript consumers.
 //
-// CSS reads these tokens from the `:root` block in styles.css via `var(--x)`. But
-// SVG/canvas libraries (Recharts) take color as plain string PROPS, not CSS — they
-// can't see `var(--muted)`. This module is the sanctioned home for those colors so
-// charts and inline styles reference the SAME palette the stylesheet does, instead
-// of pasting ad-hoc hexes (which is how we ended up with two different "muted" grays).
+// CSS reads the tokens from the `:root` block in styles.css via `var(--x)`. Recharts and
+// inline styles take colour as plain string PROPS — but the browser resolves `var(--x)`
+// in SVG presentation attributes and inline styles too, so this module hands JS consumers
+// the SAME variable the stylesheet uses. Nothing here is a hex copy that can drift, and a
+// theme preset (a `:root[data-theme]` block) re-colours charts and CSS alike at paint time.
 //
-// SINGLE SOURCE OF TRUTH: every hex here MUST equal a token defined in
-// styles.css `:root`. `npm run lint:style` fails the build if they drift apart —
-// so change a color in ONE place (`:root`) and mirror it here, never fork it.
-// See docs/ui-styleguide.md.
+// The one exception is the chart `series` palette, which is chart-only and never themed
+// (validated colorblind-safe once; see below). `npm run lint:style` enforces that this file
+// carries no other hex. See docs/ui-styleguide.md.
+
+const v = (name) => `var(--${name})`
 
 export const color = {
-  bg: '#0f1116',
-  bg2: '#14171e',
-  panel: '#1b1f28',
-  panel2: '#222734',
-  panelHi: '#2a303f',
-  line: '#2b3040',
-  lineStrong: '#3a4152',
-  ink: '#ece8dd',
-  ink2: '#c8c4b8',
-  muted: '#8b91a1',
-  gold: '#d4ac52',
-  gold2: '#e7c56b',
-  goldDim: '#6b5722',
-  gain: '#6fce9f',
-  loss: '#e07a68',
-  live: '#7fb4d9',
-  digest: '#b39ddb',
-  recipe: '#e0b866',
+  bg: v('bg'),
+  bg2: v('bg-2'),
+  panel: v('panel'),
+  panel2: v('panel-2'),
+  panelHi: v('panel-hi'),
+  line: v('line'),
+  lineStrong: v('line-strong'),
+  ink: v('ink'),
+  ink2: v('ink-2'),
+  muted: v('muted'),
+  gold: v('gold'),
+  gold2: v('gold-2'),
+  goldDim: v('gold-dim'),
+  gain: v('gain'),
+  loss: v('loss'),
+  live: v('live'),
+  digest: v('digest'),
+  recipe: v('recipe'),
 }
 
-// Item rarity (item cards / sale rows) — mirrors the --rarity-* tokens in :root.
-export const rarity = { normal: '#c8c8c8', magic: '#8888ff', rare: '#ffff77', unique: '#af6025', gem: '#1ba29b', currency: '#aa9e82' }
+// Item rarity (item cards / sale rows) — the --rarity-* tokens; game semantics, never themed.
+export const rarity = { normal: v('rarity-normal'), magic: v('rarity-magic'), rare: v('rarity-rare'), unique: v('rarity-unique'), gem: v('rarity-gem'), currency: v('rarity-currency') }
 
 // Player-presence tri-state, used by both PingButton (JS) and the `.pb-dot` CSS rules.
-// online reuses --gain; afk/offline are their own status tokens (--afk/--offline in :root).
+// online reuses --gain; afk/offline are their own status tokens (the alert family, never themed).
 export const presence = {
-  online: color.gain,   // #6fce9f
-  afk: '#e0a83a',       // amber   → --afk
-  offline: '#e8615f',   // alert red → --offline (distinct from --loss; see the "red family")
+  online: color.gain,
+  afk: v('afk'),
+  offline: v('offline'),
 }
 
 // Categorical series palette for multi-line/multi-series charts (InflationView).
@@ -52,10 +53,11 @@ export const presence = {
 // floor + CVD/normal ΔE) with the dataviz palette validator. Do NOT hand-edit a value
 // to "match the UI" — re-run the validator if you must change one, or you silently
 // break CVD separation. Registered as chart-scoped in the linter (CHART_EXTRAS).
+// Deliberately NOT themed: a screenshot stays comparable between users on any preset.
 export const series = ['#4a90d9', '#b88a2f', '#3aa568', '#a878e0', '#e8615f', '#12a89a', '#cc7a2f', '#cf68a8']
 
 // Shared Recharts chrome, so every chart's axes/grid/tooltip match the app surfaces
-// (and match the CSS `.chart-tip` custom tooltip: --panel-2 bg, --line-strong border).
+// (and match the CSS `.chart-tip` custom tooltip: --surface-pop bg, --line-strong border).
 export const chart = {
   axis: color.muted,          // axis tick labels  → --muted
   grid: color.line,           // cartesian grid    → --line

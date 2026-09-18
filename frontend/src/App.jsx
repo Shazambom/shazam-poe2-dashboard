@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { motion, AnimatePresence } from 'motion/react'
+import { motion, AnimatePresence, MotionConfig } from 'motion/react'
+import { THEMES, useTheme } from './lib/themeStore.js'
 import { api, fmt, bus, surface } from './lib/api.js'
 import { useStatus, startStatusPolling } from './lib/statusStore.js'
 import { useCurrencies } from './lib/icons.js'
@@ -71,12 +72,22 @@ export default function App() {
     if (t.dismiss) { setToasts(x => x.filter(y => y.id !== id)); return }
     const entry = { ...t, id }
     setToasts(x => [...x.filter(y => y.id !== id).slice(-3), entry])
-    setTimeout(() => setToasts(x => x.filter(y => y !== entry)), t.ttl ?? (t.ok === false ? 6000 : 2200))
+    // The timer pauses while the pointer is over the toast (so a banner's button can't run away)
+    // and resumes on leave; a click on a plain toast dismisses it.
+    let left = t.ttl ?? (t.ok === false ? 6000 : 2200), since = Date.now(), timer = null
+    const remove = () => setToasts(x => x.filter(y => y !== entry))
+    const arm = () => { since = Date.now(); timer = setTimeout(remove, left) }
+    entry.pause = () => { clearTimeout(timer); left = Math.max(400, left - (Date.now() - since)) }
+    entry.resume = arm
+    entry.dismissNow = remove
+    arm()
   }), [])
   // Global ⌘K / Ctrl-K opens the command palette (the fast path to anything).
   useEffect(() => {
     const h = (e) => {
-      if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K')) { e.preventDefault(); setCmdOpen(o => !o) }
+      if (!(e.metaKey || e.ctrlKey) || e.altKey) return
+      if (e.key === 'k' || e.key === 'K') { e.preventDefault(); setCmdOpen(o => !o) }
+      else if (e.key >= '1' && e.key <= '5' && TABS[e.key - 1]) { e.preventDefault(); setTab(TABS[e.key - 1]) }   // ⌘1–5 = the tabs, in order
     }
     window.addEventListener('keydown', h)
     return () => window.removeEventListener('keydown', h)
@@ -134,12 +145,13 @@ export default function App() {
     ...(window.poe2desktop?.clipboard ? [{ id: 'ws-clipboard', label: 'Add from clipboard', hint: 'Workspace · ⌘⇧V', run: () => { goWorkspace(); addFromClipboard(null) } }] : []),
     ...(window.poe2desktop?.ee2 && (ee2Present || hasHistoryRows) ? [{ id: 'ws-clear-history', label: 'Clear EE2 history', hint: 'Workspace', run: () => { goWorkspace(); clearHistoryWithUndo() } }] : []),
     { id: 'ws-sort', label: 'Sort searches A–Z', hint: 'Workspace · top level', run: () => { goWorkspace(); useWorkspace.getState().sortChildren(null) } },
+    ...THEMES.map(t => ({ id: `theme-${t.id}`, label: `Theme: ${t.name}`, hint: 'Appearance', run: () => useTheme.getState().apply(t.id) })),
   ], [goWorkspace, ee2Present, hasHistoryRows])
 
   const setLeague = async (league) => {
     if (!league || league === status?.league) return
     try {
-      await surface(useStatus.getState().saveSettings({ league }), `League set to ${league}`)
+      await surface(useStatus.getState().saveSettings({ league }))
       await refreshHeader()
     } catch {}
   }
@@ -154,7 +166,7 @@ export default function App() {
   const bridge = connectBridge()   // 'desktop' | 'extension' | null
 
   return (
-    <div className="app">
+    <MotionConfig reducedMotion="user"><div className="app">
       <header className="topbar">
         {/* Row 1 — identity + navigation, Divine signal orb pinned to the far corner */}
         <div className="topbar-row">
@@ -225,12 +237,13 @@ export default function App() {
           {toasts.map(t => (
             <motion.div key={t.id} className={`toast ${t.ok === false ? 'error' : ''} ${t.node ? 'custom' : ''}`}
               initial={{ opacity: 0, x: 40, scale: 0.96 }} animate={{ opacity: 1, x: 0, scale: 1 }}
-              exit={{ opacity: 0, x: 40, scale: 0.96 }} transition={{ type: 'spring', stiffness: 420, damping: 30 }}>
+              exit={{ opacity: 0, x: 40, scale: 0.96 }} transition={{ type: 'spring', stiffness: 420, damping: 30 }}
+              onPointerEnter={t.pause} onPointerLeave={t.resume} onClick={t.node ? undefined : t.dismissNow}>
               {t.node ?? <><span className="toast-ic">{t.ok === false ? '⚠' : '✓'}</span>{t.text}</>}
             </motion.div>
           ))}
         </AnimatePresence>
       </div>
-    </div>
+    </div></MotionConfig>
   )
 }

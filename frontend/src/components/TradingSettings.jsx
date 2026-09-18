@@ -60,8 +60,7 @@ function Ee2HistorySettings() {
     return () => { live = false; clearInterval(t) }
   }, [])
   const num = (key, lo, hi) => (e) => { const v = Math.min(hi, Math.max(lo, Math.round(Number(e.target.value) || lo))); saveHistoryPrefs({ [key]: v }) }
-  const line = !status ? '…' : !status.present ? 'ExiledExchange2 not detected'
-    : [`EE2 detected${status.running ? ' · running' : ''}`, status.configRead ? 'config OK' : 'config unreadable — defaults', status.leagueId ? `league ${status.leagueId}` : null, status.warm ? 'builder ready' : 'builder idle'].filter(Boolean).join(' · ')
+  const line = !status ? '' : status.present ? 'ExiledExchange2 connected' : 'ExiledExchange2 not detected'
   return (
     <>
       <h4 className="settings-sub">ExiledExchange2 history</h4>

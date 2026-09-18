@@ -140,6 +140,29 @@ provenance, never as decoration.
 
 ---
 
+### 2.1 Theme presets — colour only (owner directive 2026-09-18)
+
+A **preset** is a `:root[data-theme="x"]` block in `styles.css` that re-assigns the same tokens; picking
+one (Settings → Appearance, or a ⌘K `Theme:` command) sets `<html data-theme>`. Presets: `vault`
+(default, the bare `:root`), `ash`, `divinity` (the one **light** preset), `sekhemas`, `vaal` — palettes
+in `docs/ui-joy-plan.md` §1.3. Rules:
+
+- **A preset changes colours and nothing else.** No layout, spacing, motion, copy or component changes
+  ride on a theme. If something needs to look different per theme, it is a colour token, or it does not
+  happen.
+- Every alpha use of a themed colour is `rgba(var(--accent-rgb), a)` (likewise `--gain-rgb`,
+  `--loss-rgb`, `--live-rgb`, `--digest-rgb`, `--wash-rgb`) — never a literal triplet. A preset that
+  changes `--gold` changes `--accent-rgb` to match; `lint:style` checks both.
+- `theme.js` is `var(--x)` aliases, not hex. Recharts resolves them at paint, so charts follow a theme
+  with no code. The only hex it carries is the chart-only `series` palette (never themed).
+- Never themed: `--afk`/`--offline` (the alert family), `--rarity-*`, `--radius*`, `--shadow-*`,
+  `--ease`, `--font`. The linter refuses a preset that touches them or omits any other token.
+- The linter also asserts WCAG contrast per preset (`--ink` ≥ 7:1, everything text-sized ≥ 4.5:1 on
+  `--panel`), so a new preset is a ~30-line block plus a `BACKDROPS` entry in `desktop/src/main.js`
+  (the pre-CSS window colour), and cannot ship unreadable.
+- Storage: `settings.theme` is truth (user data); `localStorage['arbiter.theme.v1']` is read before
+  first paint so the app never flashes the default; the desktop shell mirrors the id for the backdrop.
+
 ## 3. Typography
 
 - **Family:** `--font` (IBM Plex Sans → Segoe UI → system). Base `14px`, line-height `1.45`.

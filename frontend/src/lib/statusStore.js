@@ -21,6 +21,7 @@ export const useStatus = create((set, get) => ({
   loadSettings: async () => {
     const s = await api.settings()
     set({ settings: s })
+    syncTheme?.(s.theme)
     return s
   },
   saveSettings: async (patch) => {
@@ -29,6 +30,10 @@ export const useStatus = create((set, get) => ({
     return s
   },
 }))
+
+// themeStore registers this so a loaded settings blob paints its theme (no import cycle).
+let syncTheme = null
+export const onSettingsTheme = (fn) => { syncTheme = fn }
 
 // The settings blob, fetched once and then served from the store (kept fresh by saveSettings).
 export const ensureSettings = () => {
