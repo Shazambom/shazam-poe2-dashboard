@@ -21,7 +21,7 @@ export const useStatus = create((set, get) => ({
   loadSettings: async () => {
     const s = await api.settings()
     set({ settings: s })
-    syncTheme?.(s.theme)
+    syncTheme?.(s.theme, s.custom_themes)
     return s
   },
   saveSettings: async (patch) => {
