@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { Tree } from 'react-arborist'
-import { useWorkspace, HISTORY_SYS } from '../lib/workspaceStore.js'
+import { useWorkspace, HISTORY_SYS, initialOpenState } from '../lib/workspaceStore.js'
 import { matchesFilter } from '../lib/tree.js'
 
 const relative = (ts) => {
@@ -68,6 +68,12 @@ export default function SearchTree({ onSelect = () => {}, renderTrailing = () =>
       ? { ...n, children: (n.children || []).filter(c => !c.league || !league || c.league === league) } : n), [tree, league, ee2Present])
   const move = useWorkspace(s => s.move)
   const rename = useWorkspace(s => s.rename)
+  const toggleOpen = useWorkspace(s => s.toggleOpen)
+  const loaded = useWorkspace(s => s.loaded)
+  // Folders open as the store remembers them (arborist would otherwise open every folder on every
+  // mount); the ExiledExchange2 History folder always starts collapsed — it's a log, not the work.
+  // arborist reads this once at mount, so the tree is keyed on `loaded` to mount with the real tree.
+  const initialOpen = useMemo(() => initialOpenState(tree), [loaded]) // eslint-disable-line
   const wrap = useRef(null)
   const [dims, setDims] = useState({ w: 260, h: 480 })
 
@@ -88,9 +94,10 @@ export default function SearchTree({ onSelect = () => {}, renderTrailing = () =>
   return (
     <div className="ws-tree" ref={wrap} onKeyDownCapture={keyCapture}>
       <RowCtx.Provider value={{ onSelect, renderTrailing, onContext, compact }}>
-        <Tree ref={treeRef} data={data} idAccessor="id" childrenAccessor="children"
+        <Tree key={loaded ? 'loaded' : 'loading'} ref={treeRef} data={data} idAccessor="id" childrenAccessor="children"
           width={dims.w} height={dims.h} rowHeight={30} indent={14} rowClassName="ws-row"
           searchTerm={filter} searchMatch={(node, term) => matchesFilter(node.data, term)}
+          openByDefault={false} initialOpenState={initialOpen} onToggle={toggleOpen}
           onMove={({ dragIds, parentId, index }) => dragIds.forEach((id, i) => move(id, parentId, index + i))}
           onRename={({ id, name }) => rename(id, name)}
           onDelete={onDelete ? ({ ids }) => ids.forEach(onDelete) : undefined}

@@ -23,6 +23,14 @@ let armed = false   // don't PUT while hydrating the initial load
 
 // The ExiledExchange2 History folder: found by `sys` at any depth (the user may rename/move it).
 export const HISTORY_SYS = 'ee2-history'
+
+// Which folders start open when the tree mounts: as the store remembers them, except the
+// ExiledExchange2 History folder, which always starts collapsed (it's a log, not the work).
+export function initialOpenState(tree) {
+  const m = {}
+  const walk = (ns) => (ns || []).forEach(n => { if (n.kind === 'folder') { m[n.id] = n.sys === HISTORY_SYS ? false : n.open !== false; walk(n.children) } })
+  walk(tree); return m
+}
 export const HISTORY_NAME = 'ExiledExchange2 History'
 export const HISTORY_CAP = 200       // default rows kept in the history folder (newest first); Settings can change it
 export const HISTORY_RETENTION_DAYS = 14
