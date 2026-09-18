@@ -4,6 +4,7 @@ import CapitalCard from './CapitalCard.jsx'
 import ConvertView from './ConvertView.jsx'
 import Cur from './Cur.jsx'
 import GoldValueSlider from './GoldValueSlider.jsx'
+import ArbitrageAlgorithm from './ArbitrageAlgorithm.jsx'
 import Toggle from './Toggle.jsx'
 import { Detail, Loop } from './RouteSteps.jsx'
 import Wealth from './Wealth.jsx'
@@ -152,6 +153,7 @@ export default function RoutesView({ capital, status, currencies, onCapitalSaved
           <div className="check"><Toggle checked={!!f.exclude_recipes} onChange={v => setF(x => ({ ...x, exclude_recipes: v }))} label="Exchange steps only" /></div>
           <div className="field"><label>Show at most</label><input type="number" value={f.limit} onChange={set('limit')} /></div>
         </details>
+        <ArbitrageAlgorithm onSaved={load} />
 
       </aside>
 

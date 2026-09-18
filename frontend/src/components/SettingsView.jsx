@@ -26,7 +26,6 @@ export default function SettingsView({ currencies, status, onSaved }) {
   const payload = (next) => ({
     reference: next.reference,
     allow_digest_edges: next.allow_digest_edges, allow_recipe_edges: next.allow_recipe_edges,
-    max_steps: num(next.max_steps, 3), max_start_fraction: num(next.max_start_fraction, 1),
     live_max_age_s: num(next.live_max_age_s, 1800),
     min_edge_depth: num(next.min_edge_depth, 2),
     gold_model: next.gold_model,
@@ -34,8 +33,6 @@ export default function SettingsView({ currencies, status, onSaved }) {
     min_refetch_s: num(next.min_refetch_s, 300),
     background_sweep: !!next.background_sweep, batch_pad: !!next.batch_pad,
     batch_max_have: num(next.batch_max_have, 10),
-    rank_weights: next.rank_weights, volume_window_h: num(next.volume_window_h, 24),
-    step_overhead_min: num(next.step_overhead_min, 2),
   })
   const { state, save, arm } = useAutosave(async (next) => {
     await useStatus.getState().saveSettings(payload(next))
@@ -51,7 +48,6 @@ export default function SettingsView({ currencies, status, onSaved }) {
   const opts = currencies?.currencies ?? []
   const set = (k, v) => setS(x => { const n = { ...x, [k]: v }; save(n); return n })
   const setGold = (k, v) => setS(x => { const n = { ...x, gold_model: { ...x.gold_model, [k]: v } }; save(n); return n })
-  const setWeight = (k, v) => setS(x => { const n = { ...x, rank_weights: { ...x.rank_weights, [k]: Number(v) } }; save(n); return n })
   const perUnitText = Object.entries(s.gold_model.per_unit).map(([k, v]) => `${k}=${v}`).join(', ')
 
   return (
@@ -75,23 +71,6 @@ export default function SettingsView({ currencies, status, onSaved }) {
           </div>
           <div className="check"><Toggle checked={s.allow_digest_edges} onChange={v => set('allow_digest_edges', v)} label="Fill missing pairs from hourly market data" /></div>
           <div className="check"><Toggle checked={s.allow_recipe_edges} onChange={v => set('allow_recipe_edges', v)} label="Use recipe steps" /></div>
-
-          <details className="adv" style={{ marginTop: 18 }}>
-            <summary>Advanced — route search</summary>
-            <div className="field"><label>Maximum steps per loop</label><input type="number" min="2" max="5" value={s.max_steps} onChange={e => set('max_steps', e.target.value)} /></div>
-            <div className="field"><label>Fraction of held capital to commit</label><input type="number" min="0.05" max="1" step="0.05" value={s.max_start_fraction} onChange={e => set('max_start_fraction', e.target.value)} /></div>
-
-            <h2>Ranking weights</h2>
-            <p className="hint">The default sort blends these; velocity (profit per hour per gold) leads.</p>
-            <div className="row" style={{ marginBottom: 12 }}>
-              {[['velocity', 'Velocity'], ['margin_per_1k_gold', 'Gold efficiency'], ['margin_ref', 'Margin value'], ['volume', 'Traded volume']].map(([k, l]) => (
-                <div className="field" key={k} style={{ marginBottom: 0, width: 150 }}><label>{l}</label>
-                  <input type="number" step="0.05" min="0" value={s.rank_weights?.[k] ?? 0} onChange={e => setWeight(k, e.target.value)} /></div>
-              ))}
-              <div className="field" style={{ marginBottom: 0, width: 150 }}><label>Minutes per exchange step</label><input type="number" min="0" step="0.5" value={s.step_overhead_min ?? 2} onChange={e => set('step_overhead_min', e.target.value)} /></div>
-              <div className="field" style={{ marginBottom: 0, width: 150 }}><label>Volume window, hours</label><input type="number" min="1" value={s.volume_window_h ?? 24} onChange={e => set('volume_window_h', e.target.value)} /></div>
-            </div>
-          </details>
         </div>
 
         <div>
