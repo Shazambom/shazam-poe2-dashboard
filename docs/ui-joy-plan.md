@@ -133,97 +133,104 @@ surface / accent / gain / loss) above Notifications, plus a ⌘K command per the
 topbar switcher (pressed four times ever, then sits there forever — exactly the control §0 says to
 cut), no gallery, no hover-preview, no animated cross-fade. Instant swap; the app *is* the preview.
 
-### 1.3 The presets
+### 1.3 The presets — built from the owner's reference images (2026-09-18)
 
-Every preset is **dark-first, one accent, tabular figures, same geometry**. Only the ~22 colour tokens
-move. Contrast targets are the linter's (§1.1 #4). Vault stays the default so no existing user is
-surprised by an update.
+> **Hard rule (owner directive 2026-09-18): a preset changes colours and nothing else.** The palette
+> canvas at https://claude.ai/artifact/H3tRSr8ruyXR8NABaySsXG is a *preview of colour* on a mock of
+> the Board — it is not a UI design, and nothing from it may change how a component looks, lays out,
+> moves or reads. The only UI-code changes theming may make are the ones in §1.1 that hook existing
+> colours to the token contract. What varies per theme is a colour table. If a mock and the app
+> disagree on anything but colour, the app wins.
 
-**1. Vault** — today's theme. Slate + gold. `:root`, unchanged.
+**How each palette was derived.** One reference image per theme (the owner's picks: the Pinnacle of
+Flame arena, the Arbiter of Divinity key art, Zarokh's arena, the Vaal temple key art), run through a
+k-means extractor. The image's dominant midtone at its *real* saturation becomes the surfaces; its
+brightest saturated light becomes the accent; its ambient glow becomes the wash; ink is the image's
+light or dark extreme. First attempts that kept grey panels and only tinted the accent read as "Vault,
+tinted" and were rejected. Every text-sized token below holds ≥ 4.5:1 on `--panel` (checked by
+script; the linter in §1.1 #4 will enforce it).
 
-**2. Arbiter of Ash** — *the pinnacle boss: obsidian, cinder, the last heat in a dead forge.* Surfaces
-go warm-black basalt rather than blue-slate; the accent is ember, not gold.
+**1. Vault** — today's theme, `:root`, unchanged. Slate + gold. Default.
 
-| role | token | value | note |
-|---|---|---|---|
-| app bg / inset | `--bg` / `--bg-2` | `#100c0b` / `#17110f` | warm near-black |
-| card / panel | `--panel` / `--panel-hi` | `#211917` / `#35271f` | the 165° card gradient still reads |
-| popover | `--surface-pop` | `#241b18` | |
-| lines | `--line` / `--line-strong` | `#3a2a24` / `#4d382e` | hairlines stay *below* the accent |
-| ink | `--ink` / `--ink-2` / `--muted` | `#f2e6dc` / `#cdb8a9` / `#9a8478` | 13.6 / 8.1 / 4.6 : 1 on `--panel` |
-| accent | `--gold` / `--gold-2` / `--gold-3` / `--gold-dim` | `#e2703a` / `#f0906a` / `#b8481c` / `#5c2a12` | ember; 5.9:1 |
-| on-accent | `--ink-on-gold` | `#1a0c05` | 7.4:1 on `#e2703a` |
-| gain / loss | `--gain` / `--loss` | `#74c79a` / `#e0607e` | **loss rotated to crimson-rose**¹ |
-| provenance | `--live` / `--digest` / `--recipe` | `#86b8d6` / `#c6a2e0` / `#d9b46a` | `--recipe` lightened/cooled off the accent² |
-| backdrop | `--backdrop` | `#1a1412` | Electron twin |
+**2. Arbiter of Ash** — *the Pinnacle of Flame: a baked burnt-ochre floor, black obsidian stone,
+molten amber fire.* Reference clusters: `#793b17` / `#522914` (the floor, 35 %), `#080609` (void, 23 %),
+`#c76337` (fire); 89 % of saturated pixels in 0–30°.
 
-¹ Ash's one real conflict: an ember accent sits ~20–40° from `--loss`, so a red price drop and a
-primary button read as the same family. Loss stays unambiguously red/down (green/red pairing intact)
-but moves toward crimson-rose so "selected" never reads as "lost money". This is the pair to eyeball
-in the CDP drive-through before shipping.
-² `--recipe` `#e0b866` is within ΔE of the ember accent.
-
-**3. Arbiter of Divinity** — *the opposite aspect: cold radiance, ivory, star-light.* Still dark (the
-contract), but the light is blue-white and the accent is pale gold rather than brass.
-
-| `--bg` / `--bg-2` | `#0b0e16` / `#11151f` | deep indigo-black |
+| token | value | note |
 |---|---|---|
-| `--panel` / `--panel-hi` / `--surface-pop` | `#181d2b` / `#283048` / `#1c2231` | |
-| `--line` / `--line-strong` | `#2c3548` / `#3e4a63` | |
-| `--ink` / `--ink-2` / `--muted` | `#f5f3ec` / `#d2d6e0` / `#98a0b6` | 14.2 / 9.4 / 4.8 : 1 |
-| `--gold` … `--gold-dim` | `#e8d8a8` / `#f5ebc9` / `#c2ad72` / `#6d6141` | pale gold, 11.8:1 — the brightest accent of the set |
-| `--ink-on-gold` | `#1b1a12` | 12:1 |
-| `--gain` / `--loss` | `#7fd3b0` / `#e58b83` | both lifted to survive the lighter panels |
-| `--live` / `--digest` / `--recipe` | `#8fc2e8` / `#bda6ef` / `#e3c98a` | live brightened to white-blue |
-| `--backdrop` | `#14181f` | |
+| `--bg` / `--bg-2` | `#0a0707` / `#150d0a` | the black void |
+| `--panel` / `--panel-2` / `--panel-hi` / `--surface-pop` | `#2c1a12` / `#3a2216` / `#4a2816` / `#301c14` | the fire-lit floor, with its chroma (s≈40) |
+| `--line` / `--line-strong` | `#4a2c1d` / `#63402a` | |
+| `--ink` / `--ink-2` / `--muted` | `#f6e6d4` / `#dcbfa6` / `#b0937e` | 13.6 / 9.5 / 5.8 : 1 |
+| `--gold` / `--gold-2` / `--gold-3` / `--gold-dim` | `#ff9a3c` / `#ffc470` / `#c9641e` / `#5c2d10` | molten amber, h28; 7.9:1 |
+| `--ink-on-gold` | `#1f0f04` | 8.8:1 |
+| `--gain` / `--loss` | `#7ccf9a` / `#ef5f55` | loss 5.1:1, ~25° off the accent |
+| `--live` / `--digest` / `--recipe` | `#9cc6dd` / `#c6a2e0` / `#e9c98a` | `--recipe` is the pair to eyeball vs the accent |
+| wash (`--wash-rgb`) / `--backdrop` | `138,61,20` rust / `#0f0a08` | |
 
-Because Divinity's accent is bright, its glows must use lower alphas or the topbar underline blooms —
-note this in the preset block (`--glow-gold` at .10/.26 instead of .14/.40), not in the components.
+**3. Arbiter of Divinity — the one LIGHT theme.** *The Origin Tower at noon: parchment sandstone,
+bronze armour, wings of white-gold fire, amber sky.* A real 0.5.0 pinnacle boss (lightning aspect).
+The owner's call: it is a daylight scene and does not translate to dark; a light preset is
+acceptable because it is not the default and is a user preference. Reference clusters: `#f4dbb5` /
+`#e1b795` / `#c0937a` (sand and light, 34 %), `#29201e` / `#4f3931` (bronze darks), brightest
+`#f6d9b1` h34.
 
-**4. Trial of the Sekhemas** — *sandstone and lapis; the honoured dead under a desert sun.* Warm
-ochre-black surfaces with a **lapis** accent — the preset that proves "the accent is a role, not a
-hue" (gold = hold/brand becomes blue = hold/brand, consistently).
+In light mode one colour cannot be both the text accent and a bright fill, so the *accent proper*
+is a burnt bronze that passes as text, and the wing-fire lives in the tint, the glow and the wash.
 
-| `--bg` / `--panel` / `--panel-hi` | `#0f0d0a` / `#1f1c16` / `#332d22` | sandstone shadow |
+| token | value | note |
 |---|---|---|
-| `--line` / `--line-strong` | `#3a3327` / `#4f462f` | |
-| `--ink` / `--ink-2` / `--muted` | `#f0e9d8` / `#cec5ae` / `#9b9382` | 13.1 / 8.0 / 4.6 : 1 |
-| `--gold` … `--gold-dim` | `#6b9fdc` / `#93bdea` / `#3f6ea8` / `#243a55` | lapis, 6.2:1 |
-| `--ink-on-gold` | `#081119` | 8.9:1 |
-| `--gain` / `--loss` | `#6fce9f` / `#e07a68` | as Vault |
-| `--live` / `--digest` / `--recipe` | **`#7fd0c6` teal** / `#b39ddb` / `#d9b45c` | `--live` moves off blue because the accent took it |
-| `--backdrop` | `#1a1712` | |
+| `--bg` / `--bg-2` | `#efd9b8` / `#e6cba5` | sand |
+| `--panel` / `--panel-2` / `--panel-hi` / `--surface-pop` | `#f7e9cf` / `#ecd8b6` / `#fff6e3` / `#fbf1de` | parchment; `hi` is *lighter* so the card gradient reads sunlit |
+| `--line` / `--line-strong` | `#d3b58c` / `#b8935f` | |
+| `--ink` / `--ink-2` / `--muted` | `#2a1c14` / `#4f3931` / `#7a5f4d` | bronze darks; 13.7 / 8.9 / 4.9 : 1 |
+| `--gold` / `--gold-2` / `--gold-3` | `#9a4f0f` / `#a8560f` / `#7a3d0a` | burnt bronze; 5.0:1 as text; the button gradient stays dark enough for pale ink |
+| `--gold-dim` | `#f3c98a` | **inverted meaning: a bright fire tint**, not a dark fill — rename the token `--accent-soft` in the sweep so the name isn't a lie |
+| `--ink-on-gold` | `#fff3dc` | 5.5:1 on `--gold` |
+| `--gain` / `--loss` / `--afk` | `#1a6e42` / `#b8362a` / `#8a5f10` | darkened to hold ≥ 4.5:1 on light |
+| `--live` / `--digest` / `--recipe` | `#2f6e9a` / `#6a4aa8` / `#8a5a10` | the dusty sky as `--live` |
+| wash / `--backdrop` | `#f3c98a` at .55 + `#f0a040` at .30 / `#e9d2ae` | the amber light is most of the look |
 
-Sekhemas is the provenance stress-test (`--live` vs a blue accent); **ship it after Ash and
-Divinity.**
+Cost: this is a **medium** build, not a 30-line block. The app has dark-only assumptions that need a
+light value: the `.price-tile::before` white sheen, the `.sk` shimmer, `--shadow-1/2`, icon
+drop-shadows, and the near-black `style-ok` backdrops in `desktop/src/main.js`. Each becomes a token
+or a `[data-theme="divinity"]` override — colour only, never a component change.
 
-**5. Vaal** — *stone, blood and corruption.* (Owner steer 2026-09-18: the arena had rejected a Vaal
-preset because it assumed *blood* as the accent, which collides with `--loss`. Reframed, each of the
-three ideas gets the token role it actually fits.) **Stone** is the surfaces and the ink: cold
-jungle-basalt with a faint green cast, bone-white text. **Blood** is not the accent — it is `--loss`
-(a drop *is* blood; the alert-red family stays where it is) and the ambient body wash, so the app sits
-in a dark red glow without any chrome being red. **Corruption** is the one accent: the magenta of a
-Vaal side-area / a corrupted item's glow, ~60° from blood on the hue wheel, so "selected" and "lost"
-never share a family.
+**4. Trial of the Sekhemas** — *Zarokh's arena: near-monochrome violet-grey stone, white-cyan
+temporal light, gold rings, violet orbs.* Only 3 % of the reference's pixels are saturated; the stone
+sits at h280–320 s1–4, the lights split cyan (180–210°) / gold (30°) / violet (240–330°). The set's
+one cool theme.
 
-| role | token | value | note |
-|---|---|---|---|
-| app bg / inset | `--bg` / `--bg-2` | `#0b0c0b` / `#10120f` | near-black stone |
-| card / panel | `--panel` / `--panel-hi` / `--surface-pop` | `#1a1d19` / `#2e332a` / `#1c201b` | basalt, green-grey cast |
-| lines | `--line` / `--line-strong` | `#2f3329` / `#434a3b` | mortar |
-| ink | `--ink` / `--ink-2` / `--muted` | `#e6e2d6` / `#bfb9a8` / `#8f8c7e` | bone; 13.0 / 8.5 / 4.7 : 1 on `--panel` |
-| accent | `--gold` / `--gold-2` / `--gold-3` / `--gold-dim` | `#d95aa8` / `#e878bc` / `#a8327d` / `#4a1a3a` | corruption magenta; 5.1:1 |
-| on-accent | `--ink-on-gold` | `#1d0814` | 9.6:1 on `#d95aa8` |
-| gain / loss | `--gain` / `--loss` | `#7cc79a` / `#e05a5a` | **loss is blood** — the one theme where the loss hue is *the* lore colour |
-| provenance | `--live` / `--digest` / `--recipe` | `#7fb4d9` / **`#9aa3e8` indigo** / `#d9b45c` | `--digest` cooled off violet so it never reads as the accent |
-| wash | `--accent-rgb` / `--wash-rgb` | `217,90,168` / **`120,20,30` blood** | the second body radial (styles.css:46-50) goes blood-dark; glows stay corruption |
-| backdrop | `--backdrop` | `#141613` | Electron twin |
+| token | value | note |
+|---|---|---|
+| `--bg` / `--bg-2` | `#0a0a0c` / `#111114` | |
+| `--panel` / `--panel-2` / `--panel-hi` / `--surface-pop` | `#1d1d22` / `#26262c` / `#33323a` / `#212126` | violet-grey stone |
+| `--line` / `--line-strong` | `#34343c` / `#4a4954` | |
+| `--ink` / `--ink-2` / `--muted` | `#f0ecf2` / `#c9c4cf` / `#928d9a` | 14.4 / 9.8 / 5.2 : 1 |
+| `--gold` / `--gold-2` / `--gold-3` / `--gold-dim` | `#9be3f4` / `#c9f1fa` / `#4fb0c8` / `#1e4652` | white-cyan light, h191; 11.7:1 |
+| `--ink-on-gold` | `#08222a` | 11.5:1 |
+| `--gain` / `--loss` | `#7fd3aa` / `#ee7a7a` | |
+| `--live` / `--digest` / `--recipe` | `#a99bea` violet (the orbs) / `#d7a0c8` / `#e6cf8e` (the gold rings) | accent 191° / live 250° / digest 316° — no two cool chips within 55° |
+| wash / `--backdrop` | `90,74,122` violet / `#101012` | |
 
-Watch items for the CDP drive: corruption accent vs `--digest` (they are the two cool-purple-ish
-hues on screen — the indigo shift is what keeps them apart), and the blood wash must stay *below*
-`--loss` in lightness so a red price chip still pops against it. The `VaalPingOrb` alert
-(`#e83c3c`, not themed) sits inside the blood family here, which is correct: in this theme the
-corrupted orb is native. Ship after Ash and Divinity, alongside Sekhemas. **Five is the cap.**
+**5. Vaal** — *the temple: oxblood carved stone, brass trim, blood-red corruption light, the fleshy
+rose of the eye and tentacles.* Reference clusters: `#341e1b` / `#522924` / `#783530` (stone, 54 %),
+`#a92b2b` / `#d5423d` (the light), `#da8169`; 81 % of saturated pixels at 0°, 17 % at 330°.
+
+| token | value | note |
+|---|---|---|
+| `--bg` / `--bg-2` | `#140b0a` / `#1c100e` | |
+| `--panel` / `--panel-2` / `--panel-hi` / `--surface-pop` | `#2b1614` / `#3a1d1a` / `#4d2521` / `#311916` | oxblood |
+| `--line` / `--line-strong` | `#4a2622` / `#68332c` | |
+| `--ink` / `--ink-2` / `--muted` | `#f7e8de` / `#dcc0b3` / `#ae8b7f` | 14.3 / 10.0 / 5.5 : 1 |
+| `--gold` / `--gold-2` / `--gold-3` / `--gold-dim` | `#f5738a` / `#ff9bb0` / `#c8385e` / `#5a1a2c` | the rose bloom, h349; 6.3:1 |
+| `--ink-on-gold` | `#2a0810` | 6.8:1 |
+| `--gain` / `--loss` | `#82d09c` / `#e65a4d` | **loss is blood**, 4.8:1, ~25° off the accent — the pair to eyeball |
+| `--live` / `--digest` / `--recipe` | `#8fb8d8` / `#c3a2e2` / `#e0a34a` (the brass trim) | |
+| wash / `--backdrop` | `176,42,42` blood, strong / `#160d0c` | |
+
+Five is the cap. Ship order: Ash and Vaal (pure colour blocks), then Sekhemas, then Divinity (the
+light-mode overrides).
 
 ### 1.4 Deliberately NOT themed
 
@@ -243,7 +250,7 @@ corrupted orb is native. Ship after Ash and Divinity, alongside Sekhemas. **Five
   sound packs — that's where theme systems go to die, and it fights the tabular-number density the
   app is built on.
 - **`BACKDROP.trade`**, the embedded pathofexile.com webview, the CDN currency icons.
-- **No light mode.** "Dark-first trading tool" is the contract; Divinity is the brightest allowed.
+- **Light mode, except one.** Dark-first stays the default and the rule; Divinity is the single light preset (owner call, non-default, user preference). No second light theme.
 
 ---
 
@@ -313,8 +320,8 @@ Ordered by group. §0 Restraint cuts first — every one of these *removes* pixe
    screen; B2 stops the app crying wolf; B3 stops the twitch; B4 stops the table fighting you; B5
    stops the toast you want from fleeing.
 
-Then: **Ash + Divinity presets + the Appearance panel** — the visible payoff, cheap once (2) is done.
-Then B6–B8 and C1–C5 as a "feel" pass; Sekhemas and Vaal after, as the provenance stress tests; C6–C9 fold
+Then: **Ash + Vaal presets + the Appearance panel** — the visible payoff, cheap once (2) is done; Sekhemas next; Divinity last (light-mode overrides).
+Then B6–B8 and C1–C5 as a "feel" pass; C6–C9 fold
 into whatever pass touches those files.
 
 **Verification for every step** (per CLAUDE.md): `ops/run-tests.sh` green (the linter is in it),
@@ -344,8 +351,9 @@ check.
   the arena, not a UI change. Reconsider for Board alone, later.
 - **`AnimatedNumber` on every big figure** (capital pill, stat values) — additive motion where a
   number is read, not watched. Fix the mount bug only.
-- **A light / "Divinity daylight" theme** — every glow, gradient, sheen and skeleton assumes dark; a
-  light mode is a second design system, not a preset.
+- **A light theme** — the arena rejected it ("a second design system, not a preset"); overturned by
+  the owner for Divinity alone on 2026-09-18, with the dark-only assumptions listed in §1.3 #3 as the
+  price. Still no second light theme.
 - **Theming `series`, `--rarity-*`, or gain/loss hue** — validated palettes and game semantics.
 - **A blood-*accent* Vaal preset** — blood as the accent collides with `--loss`/`--offline`/the corrupted orb. The shipped Vaal (§1.3 #5) puts blood on `--loss` and the wash and uses corruption magenta as the accent.
 - **Per-token user customisation** — makes the contrast gate meaningless; UI nobody trades with.
@@ -358,6 +366,33 @@ check.
   lived through a beta.
 
 ---
+
+## Palette research record (2026-09-18)
+
+Four researchers pulled official art, wiki and screenshot references per theme and ran a k-means
+extractor; the owner then supplied the four defining images the final palettes are built from (the
+Pinnacle of Flame arena screenshot, the Arbiter of Divinity 0.5.0 key art, a Zarokh arena
+screenshot, the Vaal temple key art). Findings that changed the plan:
+
+- **The Arbiter of Divinity is real** — added in 0.5.0 "Return of the Ancients" (May 2026), fought
+  on the Origin Tower roof, lightning aspect, gilded bronze with white-gold wing fire; the arena is
+  daylight (poe2db `The_Arbiter_of_Divinity`; official 0.5.0 patch notes, forum thread 3932540).
+  The arena's "cold indigo radiance" reading was invented; the palette is warm, and it is now the
+  light theme.
+- **Ash** — the arena floor is baked rust-ochre with real chroma (h14–22, s30–57); environment fire
+  is 25–33°, the boss's flesh glow 11–18°; no blue, violet or green anywhere but the ice mechanic
+  (poe2db `The_Arbiter_of_Ash`; poe-vault and Screen Rant boss guides).
+- **Sekhemas** — the trial is Maraketh (not Faridun); the halls are crimson-sand under brazier light
+  and Zarokh's arena is the one cool room (violet-grey, indigo lightning). The owner chose Zarokh's
+  arena as the reference, so the preset is the cool one; "lapis" appears nowhere in the trial
+  (poe-vault trial guide; mobalytics Zarokh).
+- **Vaal** — corruption light is red (h350–358) with a rose bloom at 330°; Vaal stone is cool
+  blue-grey basalt in interiors and olive sandstone in Utzaal, never green; the Vaal Orb is
+  red-orange; Doryani's machinery is indigo, not copper (pathofexile wiki `Vaal_side_area`,
+  `Corrupted`; poe2db `Vaal_Orb`; maxroll Act 3). The owner's temple key art is oxblood + brass +
+  blood-red, which is what the preset uses.
+- **Method caveat:** every ratio in §1.3 was recomputed by script from the listed hexes, not taken
+  from the researchers. The palette canvas holds the reference images and their clusters.
 
 ## Arena record
 

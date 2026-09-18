@@ -16,7 +16,7 @@ Architecture & maintenance docs for Arbiter (the PoE2 economy dashboard).
 
 ## UI — theme presets + polish (PLAN, 2026-09-18; nothing built)
 
-- [`ui-joy-plan.md`](./ui-joy-plan.md) — `/arena`-synthesized plan: a `:root[data-theme]` preset system (Vault / Arbiter of Ash / Arbiter of Divinity / Trial of the Sekhemas / Vaal) over the existing token contract, the rgba-literal sweep + linter extension it depends on, and a prioritized polish list (§0 cuts first, then motion honesty, then themes). Read with `ui-styleguide.md`.
+- [`ui-joy-plan.md`](./ui-joy-plan.md) — `/arena`-synthesized plan: a `:root[data-theme]` preset system (Vault / Arbiter of Ash / Arbiter of Divinity (light) / Trial of the Sekhemas / Vaal) over the existing token contract — colour only, never layout — with palettes built from the owner's reference images (canvas linked inside), the rgba-literal sweep + linter extension it depends on, and a prioritized polish list (§0 cuts first, then motion honesty, then themes). Read with `ui-styleguide.md`.
 
 ## Trading workspace — roadmap (implemented and shipped, 0.2.56 → 0.2.61)
 
