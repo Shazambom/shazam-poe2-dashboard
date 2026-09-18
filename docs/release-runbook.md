@@ -5,10 +5,12 @@ contract and the deploy section in [`../CLAUDE.md`](../CLAUDE.md).
 
 ## The model
 
-The version lives **only** in `desktop/package.json` (`"version"`). Bumping it and pushing
-a `desktop-v<version>` tag is what drives everything. Both platforms update from **GitHub
-Releases** (electron-builder's `publish` target is `github`); the app reads its manifest
-off the `desktop-v<version>` release GitHub marks "Latest":
+The version lives **only** in `desktop/package.json` (`"version"`). Bumping it and running
+`desktop/publish-github.sh` is what drives everything: the script builds into a **draft**
+release and publishes it once every file is verified — publishing is what creates the
+`desktop-v<version>` tag (no tag is pushed up front; see step 5). Both platforms update from
+**GitHub Releases**; the app reads its manifest off the `desktop-v<version>` release GitHub
+marks "Latest":
 
 - **macOS** reads `latest-mac.yml`
 - **Windows** reads `latest.yml`

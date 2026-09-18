@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { api, toast } from '../lib/api.js'
+import { api, surface, toast } from '../lib/api.js'
 import { useAutosave } from '../lib/hooks.js'
 import { useStatus } from '../lib/statusStore.js'
 import { isDesktop } from '../lib/session.js'

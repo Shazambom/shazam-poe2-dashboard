@@ -8,6 +8,7 @@
   "license": "MIT",
   "scripts": {
     "start": "electron .",
+    "test": "node --test test/",
     "build:frontend": "cd ../frontend && npm run build && rm -rf ../desktop/app-dist && cp -R dist ../desktop/app-dist",
     "build:backend": "./build-backend.sh",
     "build:sidecar": "./build-sidecar.sh",

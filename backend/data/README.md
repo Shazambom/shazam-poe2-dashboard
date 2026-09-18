@@ -16,4 +16,4 @@ Bundled seed data loaded at startup (offline fallbacks; the live sources overrid
 user data is migrated forward (never dropped); market data ships in the snapshot (bump
 `snapshot_version`). Publishing a new snapshot forces **every client to re-seed** — don't do it
 casually. New operational kv keys ride `kv_ops` automatically; user kv keys must be added to
-`_USER_KV` in `db.py`.
+`USER_KV` in `app/datapolicy.py` (the one classification the backend and the seed exporter share).

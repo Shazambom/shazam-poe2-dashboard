@@ -32,8 +32,8 @@ And one for floats: `tol` — an edge relaxes only if it improves by MORE than `
 pseudocode exactly). A reported cycle then sums below `-tol`, so float dust around a
 break-even loop is never reported as profit.
 
-NEEDS NUMPY. The main backend does not bundle it today (only the sidecar does): wiring this
-into a request path means adding numpy to `backend/requirements.txt` and the PyInstaller build.
+NEEDS NUMPY (in `backend/requirements.txt`; `arbitrage/deepscan.py` calls this from the route
+search and degrades to no deep loops if the import fails).
 """
 from __future__ import annotations
 

@@ -11,10 +11,8 @@ flows here," not merely "many thin edges":
                          reuses `Graph.iter_paths` (the exact DFS the route search uses),
                          bounded to the top-K currencies rather than all-pairs.
   * hubs()             — the top-N hub ids the Board lights up.
-  * scores()           — cached {"hub":…, "bridge":…}, memoized per orderbook version like
-                         board(); the read surface Phase 4's propagation priors consume.
 
-Pure over a Graph (no DB) except scores(). NOT networkx: this must stay always-available
+Pure over a Graph (no DB). NOT networkx: this must stay always-available
 and dependency-free so a request can never depend on a heavy import (see CLAUDE.md
 "Heavy analytics"). Computed live from the in-memory graph — nothing is persisted, so it
 touches no DB and needs no snapshot.

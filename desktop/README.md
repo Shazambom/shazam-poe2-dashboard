@@ -42,9 +42,10 @@ packaged build always requires the bundled binary.
 
 ```
 npm run dist:mac          # release/: dmg + zip + latest-mac.yml
-./publish-github.sh       # test gate → tag + push (Windows CI builds the .exe with the same
-                          #   build-*.sh scripts) → builds Mac → waits on CI → uploads both
-                          #   platforms' assets to the GitHub Release (docs/release-runbook.md)
+./publish-github.sh       # test gate → push main → draft release → dispatch Windows CI (same
+                          #   build-*.sh scripts) → build Mac → wait on CI → upload both platforms
+                          #   into the draft, manifests last → verify → publish (creates the tag)
+                          #   (docs/release-runbook.md)
 ```
 
 Anyone running the app checks the latest **GitHub Release**'s `latest*.yml` on launch and

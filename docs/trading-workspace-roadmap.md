@@ -4,7 +4,7 @@
 > (PR1–PR7 shipped: Trading tab, workspace tree, live engine, pings, hotkey, teleport). Synthesized via `/arena`
 > on 2026-09-16 (record at the end) and then settled with the owner over four rounds; **every decision below is
 > final** — nothing is left open. Repo `/Users/ianmoreno/shazam-poe2-dashboard`; EE2 reference checkout
-> `/Users/ianmoreno/Exiled-Exchange-2` (MIT, read-only). **No implementation has started.**
+> `/Users/ianmoreno/Exiled-Exchange-2` (MIT, read-only). **Implemented and shipped — see the status block below.**
 >
 > Conventions: file:line references are to the repos as of 2026-09-16 and will drift — treat them as pointers,
 > not addresses. Test-first (`/tdd`) per batch; every batch is gated by `ops/run-tests.sh` (which the deploy
@@ -14,7 +14,7 @@
 > **Status (2026-09-17, branch `dev`):** implemented end to end — Batch 0 (`11c7ce8`, `3375204`, `fce515a`),
 > Batch 1 (`1273580`), zoom fix (`5b134a7`), Batch 2 (`14e5023`), Batch 3 (`b57f295`), Batch 4 (`97748b1`),
 > Batch 5 (`d9cd789`), Batch 6 (`819a02f`). Every batch was driven on the local desktop app over CDP before
-> its commit; nothing has been shipped (no `desktop-v*` tag, no beta). Deviations from the text below, all
+> its commit; shipped in 0.2.56 → 0.2.61 (betas first, then stable). Deviations from the text below, all
 > deliberate: the vendored EE2 port is one esbuild bundle (not a per-module tree), two extra inert shims
 > (`vue`, `@vueuse/core`) exist because EE2's `common.ts`/`RateLimiter.ts` import Vue, the pure deps are
 > bundled from EE2's lockfile rather than added to `desktop/package.json`, and `sync-ee2.mjs --src` builds

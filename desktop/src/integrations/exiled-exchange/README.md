@@ -89,10 +89,10 @@ hard-fail and never spam OS permission prompts.
 
 ```js
 const { ExiledExchangeIntegration } = require('./integrations/exiled-exchange')
-const { attachLogDemo } = require('./integrations/exiled-exchange/subscribers/log-demo')
 
 const ee2 = new ExiledExchangeIntegration()
-attachLogDemo(ee2)
+// attach subscribers here — the shipped one is desktop/src/ee2-history;
+// subscribers/log-demo.js is the reference example (not attached in production)
 await ee2.start()   // self-gates on EE2 presence
 // ...later...
 ee2.stop()          // stops uiohook + timers cleanly

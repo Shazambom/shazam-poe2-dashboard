@@ -502,11 +502,9 @@ async function startEe2Integration() {
   if (_ee2) return
   try {
     const { ExiledExchangeIntegration } = require('./integrations/exiled-exchange')
-    const { attachLogDemo } = require('./integrations/exiled-exchange/subscribers/log-demo')
     const { attachEe2Telemetry } = require('./dev-ee2-telemetry')   // DEV diagnostic (see CLAUDE.md)
     _ee2 = new ExiledExchangeIntegration()
-    attachLogDemo(_ee2)                       // demo subscriber: logs each hook, no side effects
-    attachEe2Telemetry(_ee2)  // TEMP: report hooks to dev server so we can verify remotely
+    attachEe2Telemetry(_ee2)  // beta/dev only (gated in telemetry.js): report hooks so we can verify remotely
     // The actions layer (roadmap §9): every item-checked → worker → one IngestIntent to the renderer.
     // The package is untouched; this attaches beside it. Telemetry goes through the one gated sender.
     try {
