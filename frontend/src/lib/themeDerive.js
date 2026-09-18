@@ -78,6 +78,13 @@ export function derive(p) {
   // Recipe edges are the warm brass every preset shares — it does not follow the accent (Sekhemas
   // has a cyan accent and gold recipe rings). Lightness flips for a light surface.
   t['--recipe'] = oklchToHex([light ? 0.51 : 0.82, 0.10, 82])
+  // Sensible defaults never violate the linter's floors: the DERIVED text-sized tokens are nudged
+  // away from their surface until they read (a bright ember panel pulls `muted` below 4.5:1 —
+  // the owner's tuned Ash found this). Primaries the user chose are never touched here; those
+  // surface as warnings with Auto-fix instead.
+  t['--ink-2'] = ensureContrast(t['--ink-2'], panel, 4.5)
+  t['--muted'] = ensureContrast(ensureContrast(t['--muted'], panel, 4.5), bg, 4.5)
+  t['--recipe'] = ensureContrast(t['--recipe'], panel, 4.5)
   for (const [trip, col] of Object.entries(TRIPLET_OF)) t[trip] = hexToTriplet(t[col])
   // The ambient body glow takes the surface's own hue, saturated — slate → blue, rust → ember, oxblood → blood.
   const [, , panelH] = hexToOklch(panel)

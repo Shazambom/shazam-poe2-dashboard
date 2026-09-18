@@ -19,8 +19,11 @@ const lintKeys = [...parseThemeBlocks(css).root.keys()].filter(k => !NEVER_THEME
 test('themeCss reads Vault (bare :root) and the four presets', () => {
   assert.deepEqual(Object.keys(tables), ['vault', 'ash', 'divinity', 'sekhemas', 'vaal'])
   assert.deepEqual(keys, lintKeys)
-  assert.equal(tables.vault['--bg'], '#0f1116')
-  assert.equal(tables.ash['--wash-rgb'], '138,61,20')
+  // Spot-check the parser against the stylesheet itself (preset values are the owner's to change).
+  const cssText = readFileSync(new URL('../src/styles.css', import.meta.url), 'utf8')
+  const ashBlock = cssText.match(/:root\[data-theme="ash"\] \{([^}]*)\}/)[1]
+  assert.equal(tables.ash['--wash-rgb'], ashBlock.match(/--wash-rgb:\s*([^;]+);/)[1].trim())
+  assert.equal(tables.vault['--bg'], cssText.match(/:root \{[^}]*?--bg:\s*(#[0-9a-f]{6})/i)[1])
 })
 
 test('exportCss re-parses to exactly the linter key set, in the presets\' order', () => {

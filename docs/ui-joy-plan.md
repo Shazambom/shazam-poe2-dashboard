@@ -156,6 +156,11 @@ script; the linter in §1.1 #4 will enforce it).
 molten amber fire.* Reference clusters: `#793b17` / `#522914` (the floor, 35 %), `#080609` (void, 23 %),
 `#c76337` (fire); 89 % of saturated pixels in 0–30°.
 
+**Superseded 2026-09-18:** the owner retuned Ash in the custom theme builder and it was codified as
+the shipped preset — night-navy stone (`--bg #131425`), ember-orange panels (`--panel #993905`),
+white-hot ink, sulphur accent (`--gold #ffea05`), backdrop `#331f24`. The block in `styles.css` is
+the source of truth; the table below is the original derivation from the reference image.
+
 | token | value | note |
 |---|---|---|
 | `--bg` / `--bg-2` | `#0a0707` / `#150d0a` | the black void |

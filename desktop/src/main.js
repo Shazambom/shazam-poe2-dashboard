@@ -32,7 +32,7 @@ const DEV_BACKEND_URL = process.env.ARBITER_DEV_BACKEND_URL || telemetry.SHAZAM
 // renderer last chose (mirrored into desktop-settings.json). Each value is the style-ok twin of that
 // preset's --backdrop token in frontend/src/styles.css; `trade` (behind the embedded trade site) is shared.
 const BACKDROPS = {   // style-ok: painted before the CSS loads
-  vault: '#191b22', ash: '#0f0a08', divinity: '#e9d2ae', sekhemas: '#101012', vaal: '#160d0c',
+  vault: '#191b22', ash: '#331f24', divinity: '#e9d2ae', sekhemas: '#101012', vaal: '#160d0c',
 }
 const BACKDROP_HEX = /^#[0-9a-f]{6}$/i
 // A custom theme (built in Settings → Appearance) carries its own --backdrop; the renderer hands it over

@@ -53,15 +53,15 @@
 /* ---- Theme presets: COLOUR ONLY. Each block re-assigns every themed token (lint:style checks the set,
    the *-rgb triplets and WCAG contrast). Picked in Settings → Appearance; painted as <html data-theme>.
    Palettes derive from the owner's reference images — docs/ui-joy-plan.md §1.3. ---- */
-/* the Pinnacle of Flame: black stone, the fire-lit rust floor, molten amber */
+/* the Pinnacle of Flame — owner-tuned 2026-09-18 in the custom theme builder: night-navy stone, ember-orange panels, white-hot ink, sulphur accent */
 :root[data-theme="ash"] {
-  --bg: #0a0707; --bg-2: #150d0a; --panel: #2c1a12; --panel-2: #3a2216; --panel-hi: #4a2816; --surface-1: #110b09; --surface-pop: #301c14;
-  --line: #4a2c1d; --line-strong: #63402a; --line-hover: #7a5236;
-  --ink: #f6e6d4; --ink-2: #dcbfa6; --muted: #b0937e;
-  --gold: #ff9a3c; --gold-2: #ffc470; --gold-dim: #5c2d10; --gold-3: #c9641e; --ink-on-gold: #1f0f04;
-  --gain: #7ccf9a; --loss: #ef5f55; --live: #9cc6dd; --digest: #c6a2e0; --recipe: #e9c98a;
-  --accent-rgb: 255,154,60; --gain-rgb: 124,207,154; --loss-rgb: 239,95,85; --live-rgb: 156,198,221; --digest-rgb: 198,162,224; --wash-rgb: 138,61,20;
-  --backdrop: #0f0a08;
+  --bg: #131425; --bg-2: #211b29; --panel: #993905; --panel-2: #a74106; --panel-hi: #b54807; --surface-1: #3f2222; --surface-pop: #9f3c07;
+  --line: #ae3e13; --line-strong: #be5115; --line-hover: #cb5d20;
+  --ink: #ffffff; --ink-2: #f9dabf; --muted: #f2d8c5;
+  --gold: #ffea05; --gold-2: #fefde1; --gold-dim: #83772f; --gold-3: #cfb026; --ink-on-gold: #2a2224;
+  --gain: #a1f5be; --loss: #ffdad4; --live: #c0e8ff; --digest: #efdbff; --recipe: #ffdf9f;
+  --accent-rgb: 255,234,5; --gain-rgb: 161,245,190; --loss-rgb: 255,218,212; --live-rgb: 192,232,255; --digest-rgb: 239,219,255; --wash-rgb: 141,59,21;
+  --backdrop: #331f24;
 }
 /* the Origin Tower at noon — the ONE light preset: parchment sand, bronze ink; --gold-dim is a bright fire TINT here, not a dark fill */
 :root[data-theme="divinity"] {
