@@ -13,6 +13,15 @@ const fs = require('fs')
 const http = require('http')
 const path = require('path')
 const telemetry = require('./telemetry.js')
+const { makeRing } = require('./feedback/ring.js')
+
+// Log rings for "Report a problem" (local only — a report is a file the user drags into Discord):
+// every console.log line of this process, the updater's lines, and the backend's output tail.
+const mainRing = makeRing(200)
+const updRing = makeRing(40)
+let bkBuf = ''   // rolling tail of backend stdout/stderr (crash telemetry posts the last 3000 chars)
+{ const orig = console.log; console.log = (...a) => { mainRing.push(a.map(x => (typeof x === 'string' ? x : String(x))).join(' ')); orig(...a) } }
+const feedbackSources = () => ({ main: mainRing.lines(), backend: bkBuf, updater: updRing.lines() })
 
 const POE = 'https://www.pathofexile.com'
 // One trust-boundary check for "is this a pathofexile.com URL", shared by the
@@ -132,8 +141,7 @@ async function startBackend() {
       stdio: ['ignore', 'pipe', 'pipe'],
     })
     // DEV DIAGNOSTIC: keep a rolling tail of backend output so a crash/hang on Windows is visible.
-    let bkBuf = ''
-    const capture = (d) => { bkBuf = (bkBuf + String(d)).slice(-6000); console.log('[backend]', String(d).trimEnd()) }
+    const capture = (d) => { bkBuf = (bkBuf + String(d)).slice(-65536); console.log('[backend]', String(d).trimEnd()) }
     backendProc.stdout.on('data', capture)
     backendProc.stderr.on('data', capture)
     backendProc.on('error', e => bkLog(`proc-error ${String(e && e.message || e)}`))
@@ -385,7 +393,7 @@ function _emitUpdate(state) {
   try { win?.webContents.send('update:status', state) } catch {}
 }
 
-const updLog = (m) => telemetry.installLog('update', m)   // updater diagnostics (beta/dev only, like all telemetry)
+const updLog = (m) => { updRing.push(m); telemetry.installLog('update', m) }   // updater diagnostics (beta/dev only, like all telemetry)
 
 // Unsigned macOS builds can't hot-swap via Squirrel.Mac (it requires a signed+notarized
 // app), so quitAndInstall would just quit WITHOUT installing — which read as "the app
@@ -617,6 +625,17 @@ app.whenReady().then(async () => {
   setupUpdates()
   startEe2Integration()   // self-gates on EE2 presence; dormant if EE2 isn't installed
   try { require('./trade').registerTrade(() => win, () => backendUrl) } catch (e) { console.log('[trade] register failed:', String(e)) }
+  // "Report a problem": one sealed file on disk the user drags into Discord. No new outbound call.
+  try {
+    const fb = require('./feedback')
+    fb.registerFeedback({
+      ipcMain, BrowserWindow, session: win.webContents.session, win, uiUrl, backendUrl, userData: app.getPath('userData'),
+      version: app.getVersion(), channel: onBetaChannel() ? 'beta' : 'stable', theme: () => settings.theme,
+      sources: feedbackSources, shell, icon: require('electron').nativeImage.createFromPath(path.join(__dirname, 'feedback', 'drag-icon.png')),
+      sweep: (o) => require('./feedback/snap.js').sweepScreens({ ...o, backgroundColor: BACKDROP.window }),
+      bundle: require('./feedback/bundle.js').buildBundle, sealFn: require('./feedback/seal.js').seal,
+    })
+  } catch (e) { console.log('[feedback] register failed:', String(e)) }
   try {
     const { registerHotkey } = require('./trade/hotkey.js')
     const combo = settings.focusHotkey || 'CommandOrControl+G'

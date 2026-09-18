@@ -115,10 +115,12 @@ Threading a new user setting all the way through (as `hub_count` did):
 
 ## Testing & validation
 
-- **The one test gate:** `./ops/run-tests.sh` (backend pytest, frontend + desktop `node --test`,
-  the workspace fuzz, the style lint). The deploy scripts run it first; run it yourself before
-  every commit. Setup once: `python3.12 -m venv .venv-test && source .venv-test/bin/activate &&
-  pip install -r backend/requirements.txt pytest`.
+- **The one test gate:** `./ops/run-tests.sh` (backend pytest, the feedback bot + opener pytest,
+  frontend + desktop `node --test`, the workspace fuzz, the style lint). The deploy scripts run it
+  first; run it yourself before every commit. Setup once: `python3.12 -m venv .venv-test && source
+  .venv-test/bin/activate && pip install -r backend/requirements.txt pytest Pillow hypothesis discord.py`.
+  The opener fuzz runs ~70 examples per test in the gate; `cd ops/feedback-bot && pytest tests
+  --hypothesis-profile=long` for a real soak (3000 each, ~90 s).
 - **Backend tests** are pure over a synthetic `arbitrage.Graph` — no DB needed (see
   `test_convert.py`, `test_centrality.py`). Prefer extracting a pure helper and testing that over
   trying to test `board()`/endpoints directly. `tests/golden/*.json` pin the arbitrage core's
@@ -170,6 +172,57 @@ CLAUDE.md. The mechanics:
   `backend/app/devtelemetry.py` (`tlog(tag, msg)`, gated by `ARBITER_TELEMETRY=1`, which
   `main.js` sets only on beta/dev). Add a marker, never a second sender or URL. Report only what
   you need (never secrets / keystrokes / raw clipboard).
+
+## Feedback reports ("Report a problem")
+
+The design and the threat model: [`feedback-implementation-plan.md`](feedback-implementation-plan.md).
+The shape: the app packages ONE sealed file (`arbiter-report-<ID>.arb`: state + logs + a picture of
+every screen, X25519→HKDF→AES-GCM to the owner's public key), the user drags it into the Discord
+`#bug-reports` forum, and a listener bot on shazam opens it. No drop point, no credential in the
+app, no new outbound call (the invite opens in the OS browser); nothing can bill.
+
+- **Code:** `desktop/src/feedback/` (`seal.js`, `redact.js`, `ring.js`, `bundle.js`, `snap.js`,
+  `index.js`, `dests.js`), `desktop/src/preload-snap.js`, `frontend/src/components/FeedbackDialog.jsx`,
+  `frontend/src/lib/{dests,errorRing}.js`; owner side `ops/feedback-bot/` (`bot/bot.py`,
+  `bot/arbseal.py`, `opener/{opener,cell,dests}.py`, two Dockerfiles, the compose block).
+- **Entry points:** ⌘K → *Report a problem…*; Settings → Diagnostics → *Report a problem…*. Files
+  land in `<userData>/reports/` (the last 10 kept). One packaging per minute.
+- **`?snap=1` mode:** the sweep loads the UI in a hidden second window with `preload-snap.js` (no
+  IPC writer reachable) and a session filter that cancels any non-GET `/api` request from it. Under
+  `SNAP` the app skips polling, notifications, toasts, hotkeys, the trade `<webview>` and workspace
+  persistence; `window.__arbiterSnap({section, sub})` switches the screen and resolves once status
+  is loaded and the screen's own fetches have gone quiet. Drive it yourself: open the dev app with
+  `?snap=1` in `scripts/console.mjs` and expect no renderer exception.
+- **Three copies of the screen list must never drift** — `frontend/src/lib/dests.js` (the UI),
+  `desktop/src/feedback/dests.js` (the sweep), `ops/feedback-bot/opener/dests.py` (the opener's
+  allow-list): `desktop/test/feedback-dests-sync.test.mjs` + `tests/test_cell.py` pin them.
+- **Keys (done 2026-09-18, key id 1):** minted on shazam INSIDE the bot image, so the private half
+  never exists anywhere else and nobody on the Mac side ever reads it:
+  `docker run --rm -u 10001 -w /keys -v /etc/arbiter/keys:/keys -e PYTHONPATH=/app:/app/bot
+  shazam-poe2-dashboard-feedback-bot python -m arbseal keygen <keyId>` (dir `/etc/arbiter/keys`,
+  0700, owned by uid 10001 = the bot). It writes `feedback-key-<id>.pem` (0600, refuses to
+  overwrite) and `feedback-key-<id>.pub`. Copy ONLY the `.pub` into the repo as
+  `desktop/src/feedback/owner-key.pub` — `seal.js` reads it at load, `feedback-seal.test.mjs` checks
+  it is 32 bytes, differs from the test key, and appears nowhere in code. Rotation: bump `KEY_ID` in
+  `seal.js` + `arbseal.py`, keygen the new id, replace the `.pub`, keep the old PEM in `/etc/arbiter/keys`.
+- **Discord (once):** a server with a forum channel `#bug-reports`; an invite that targets that
+  channel → `DISCORD_INVITE` in `desktop/src/feedback/index.js` (placeholder until then). A bot
+  application with *View Channel*, *Read Message History*, *Send Messages in Threads*, *Add
+  Reactions*, and the **Message Content** intent (needed to see attachments). Token →
+  `/etc/arbiter/discord-token` (root-owned, 0600); the forum channel id → `FEEDBACK_FORUM_ID` in
+  shazam's `.env`.
+- **Deploy:** `./ops/deploy-web.sh bot` (test gate → rsync `ops/feedback-bot/` + compose → builds and
+  starts `feedback-opener`, and `feedback-bot` too once `/etc/arbiter/discord-token` exists on the box;
+  pre-creates `feedback-inbox/` owned by uid 10001). Verified 2026-09-18: a report from the Mac app
+  handled by the bot container against the live opener on shazam → ✅ + all 10 screens in the inbox;
+  a tampered file → ⚠️ + `quarantine/`. The opener runs with `network_mode: none`, read-only root, no
+  capabilities, pids/mem/cpu limits, and spawns a fresh child per report under rlimits (RLIMIT_AS
+  512 MB, CPU 20 s, FSIZE 64 MB, NPROC 0, NOFILE 16, 30 s wall clock). `RLIMIT_AS` is a Linux
+  guarantee — macOS ignores it, so that one sandbox test skips on a Mac.
+- **Reading a report:** `~/feedback-inbox/<shortId>/index.html` (screens + logs + state, every
+  string escaped, CSP `default-src 'none'`), `report.json`, `logs/*.txt`, `screens/NN-<screen>.jpg`
+  (re-encoded pixels — never the reporter's bytes). Unreadable files → `quarantine/<threadId>.arb`,
+  the raw sealed bytes; `state.json` holds the last thread id for catch-up.
 
 ## Trading workspace pieces (added 2026-09-17)
 

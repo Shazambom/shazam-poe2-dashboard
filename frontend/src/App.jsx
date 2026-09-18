@@ -20,6 +20,7 @@ import { useWorkspace, HISTORY_SYS } from './lib/workspaceStore.js'
 import { addFromClipboard } from './lib/clipboardAdd.js'
 import { useEe2History, clearHistoryWithUndo } from './lib/ee2History.js'
 import { findWhere } from './lib/tree.js'
+import { SUB_DESTS, SNAP, settle } from './lib/dests.js'
 import BoardView from './components/BoardView.jsx'
 import StrategyView from './components/StrategyView.jsx'
 import EconomyView from './components/EconomyView.jsx'
@@ -29,19 +30,9 @@ import SettingsView from './components/SettingsView.jsx'
 import DownloadApp from './components/DownloadApp.jsx'
 import UpdateStatus from './components/UpdateStatus.jsx'
 import BrandOrb from './components/BrandOrb.jsx'
+import FeedbackDialog from './components/FeedbackDialog.jsx'
 
 const TABS = ['Board', 'Strategy', 'Economy', 'Trading', 'Settings']
-// Sub-views inside the consolidated tabs, surfaced in ⌘K so they stay one keystroke away.
-const SUB_DESTS = [
-  { section: 'Strategy', sub: 'hold', label: 'Hold' },
-  { section: 'Strategy', sub: 'arbitrage', label: 'Arbitrage' },
-  { section: 'Economy', sub: 'inflation', label: 'Inflation' },
-  { section: 'Economy', sub: 'market', label: 'Market' },
-  { section: 'Trading', sub: 'workspace', label: 'Workspace' },
-  { section: 'Trading', sub: 'live', label: 'Live' },
-  { section: 'Trading', sub: 'sales', label: 'Sales' },
-]
-
 export default function App() {
   const [tab, setTab] = useState('Board')
   const status = useStatus(s => s.status)
@@ -54,6 +45,7 @@ export default function App() {
   const [connecting, setConnecting] = useState(false)
   const [appVersion, setAppVersion] = useState(null)
   const [cmdOpen, setCmdOpen] = useState(false)
+  const [feedbackOpen, setFeedbackOpen] = useState(false)   // "Report a problem" (desktop only)
   const [arcCtx, setArcCtx] = useState(null)   // league-level arc anchor for the topbar day chip
   const assetModal = useAssetModal()           // global CardDetail — signals open into it
   const toastId = useRef(0)
@@ -68,6 +60,7 @@ export default function App() {
   // The ONE toast stack. A toast with an `id` replaces an earlier one with the same id (the live
   // ping banner: newest ping on top); `{id, dismiss:true}` removes it; `node` renders custom content.
   useEffect(() => bus.on(t => {
+    if (SNAP) return
     const id = t.id ?? `t${++toastId.current}`
     if (t.dismiss) { setToasts(x => x.filter(y => y.id !== id)); return }
     const entry = { ...t, id }
@@ -84,6 +77,7 @@ export default function App() {
   }), [])
   // Global ⌘K / Ctrl-K opens the command palette (the fast path to anything).
   useEffect(() => {
+    if (SNAP) return
     const h = (e) => {
       if (!(e.metaKey || e.ctrlKey) || e.altKey) return
       if (e.key === 'k' || e.key === 'K') { e.preventDefault(); setCmdOpen(o => !o) }
@@ -97,10 +91,10 @@ export default function App() {
   // in the fired set pings — sound, OS notification, and a banner in the toast stack whose Open
   // action lands on the SAME CardDetail the orb opens. Phase 3: poll the league-arc anchor for the
   // topbar day chip. Both re-key on league change; both degrade silently when the sidecar is idle.
-  useEffect(() => startSignalPolling(), [status?.league])
+  useEffect(() => (SNAP ? undefined : startSignalPolling()), [status?.league])
   const lastNew = useSignals(s => s.lastNew)
   useEffect(() => {
-    if (!lastNew?.signals?.length) return
+    if (SNAP || !lastNew?.signals?.length) return
     const names = lastNew.signals.map(s => s.name)
     const title = `${names.length} new market signal${names.length === 1 ? '' : 's'}`
     const openFirst = () => assetModal.open(names[0])   // the card is app-global: open it where the user is
@@ -124,6 +118,8 @@ export default function App() {
 
   // Jump to Trading → Live (used by the ping banner, the VaalPingOrb, and the hotkey).
   const goLive = React.useCallback(() => { nav.openTrading('live'); setTab('Trading') }, [])
+  // (The hidden feedback window, `?snap=1`, gets a preload without `trade`, so the three desktop
+  // hooks below no-op there by construction; it photographs, nothing else.)
   useLiveWiring(goLive)
   useLiveSync(status?.league ?? '')   // keep the live engine reconciled to the DB's armed searches
   useEe2History()                     // ExiledExchange2 History: main's item intents → the workspace store
@@ -147,6 +143,7 @@ export default function App() {
     ...(window.poe2desktop?.ee2 && (ee2Present || hasHistoryRows) ? [{ id: 'ws-clear-history', label: 'Clear EE2 history', hint: 'Workspace', run: () => { goWorkspace(); clearHistoryWithUndo() } }] : []),
     { id: 'ws-sort', label: 'Sort searches A–Z', hint: 'Workspace · top level', run: () => { goWorkspace(); useWorkspace.getState().sortChildren(null) } },
     ...[...THEMES, ...customThemes].map(t => ({ id: `theme-${t.id}`, label: `Theme: ${t.name}`, hint: 'Appearance', run: () => useTheme.getState().apply(t.id) })),
+    ...(window.poe2desktop?.feedback ? [{ id: 'send-feedback', label: 'Report a problem…', hint: 'Help', run: () => setFeedbackOpen(true) }] : []),
   ], [goWorkspace, ee2Present, hasHistoryRows, customThemes])
 
   const setLeague = async (league) => {
@@ -161,6 +158,23 @@ export default function App() {
     setConnecting(true)
     try { await connectSessionWithToast(refreshHeader) } finally { setConnecting(false) }
   }
+
+  // `?snap=1`: main's feedback sweep drives the screens through this; resolves after the tab and
+  // sub-view are set, status has loaded, the screen's own fetches have gone quiet and two frames
+  // have painted.
+  useEffect(() => {
+    if (!SNAP) return
+    window.__arbiterSnap = async ({ section, sub }) => {
+      setTab(section)
+      if (sub) setTimeout(() => (section === 'Trading' ? nav.openTrading(sub) : nav.openSub(section, sub)), 0)
+      await new Promise(res => { const tick = () => (useStatus.getState().status ? res() : setTimeout(tick, 50)); tick() })
+      await new Promise(res => setTimeout(res, 100))   // let the view mount and fire its loads
+      await settle()
+      await new Promise(res => requestAnimationFrame(() => requestAnimationFrame(res)))
+      return true
+    }
+    return () => { delete window.__arbiterSnap }
+  }, [])
 
   const ref = capital?.reference ?? 'ref'
   const league = status?.league ?? ''
@@ -219,7 +233,7 @@ export default function App() {
       {tab === 'Strategy' && <StrategyView key={league} league={league} capital={capital} status={status} currencies={currencies} onCapitalSaved={refreshHeader} />}
       {tab === 'Economy' && <EconomyView key={league} league={league} currencies={currencies} />}
       {tab === 'Trading' && <TradingView league={league} />}
-      {tab === 'Settings' && <SettingsView currencies={currencies} status={status} onSaved={refreshHeader} />}
+      {tab === 'Settings' && <SettingsView currencies={currencies} status={status} onSaved={refreshHeader} onReportProblem={() => setFeedbackOpen(true)} />}
 
       <CommandPalette
         open={cmdOpen} onClose={() => setCmdOpen(false)}
@@ -232,6 +246,7 @@ export default function App() {
       />
 
       {assetModal.node}
+      <AnimatePresence>{feedbackOpen && <FeedbackDialog onClose={() => setFeedbackOpen(false)} />}</AnimatePresence>
 
       <div className="toasts">
         <AnimatePresence>

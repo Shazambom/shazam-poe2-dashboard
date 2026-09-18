@@ -1,6 +1,16 @@
 # Send feedback — implementation plan
 
-Status: PLAN (2026-09-18). Owner-steered after a four-candidate arena (synthesis note at the end).
+Status: BUILT (2026-09-18) — steps 1–9 landed behind `ops/run-tests.sh`; the desktop side was
+driven end to end on this Mac (a report packaged in ~5–13 s, all 10 screens real, zero writes from
+the snap window). Owner-steered after a four-candidate arena (synthesis note at the end).
+Owner side verified on shazam the same day: keypair minted in the bot image (key id 1, public half
+shipped as `desktop/src/feedback/owner-key.pub`), the opener deployed hardened, a real report → ✅ and
+a tampered one → ⚠️/quarantine. **Still needed before the feature ships:** the Discord server +
+invite → `DISCORD_INVITE`, the bot token → `/etc/arbiter/discord-token`, `FEEDBACK_FORUM_ID` in
+shazam's `.env`, then `./ops/deploy-web.sh bot` again (docs/dev-notes.md → "Feedback reports"). Deviations
+from the plan below: the offscreen-`paint` fallback (6.4a) was not built — `stayHidden` captures
+worked on macOS; a screen is photographed once its fetches go quiet (not after two frames); the
+desktop keeps a CommonJS twin of `dests.js` (Electron's main process cannot require the ESM file).
 Supersedes the mechanics in `docs/feedback-system-design.md`; that doc keeps the problem
 statement and threat framing, this one is what gets built.
 

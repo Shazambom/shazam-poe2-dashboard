@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useWorkspace, loadWorkspace, HISTORY_SYS } from '../lib/workspaceStore.js'
 import { tradeUrl, tradeHome, queryUrl, parseTradeUrl, openTrade, isDesktop } from '../lib/session.js'
 import { shouldAcceptNav } from '../lib/webview.js'
+import { SNAP } from '../lib/dests.js'
 import { addFromClipboard } from '../lib/clipboardAdd.js'
 import { findWhere, flatten, locate } from '../lib/tree.js'
 import { bus, toast } from '../lib/api.js'
@@ -463,7 +464,7 @@ export default function WorkspaceView({ league }) {
               <button className="ws-mini on" title="Reload" aria-label="Reload" onClick={() => setWvNonce(n => n + 1)}>↻</button>
             </div>
             <div className={`ws-progress ${navState.loading ? 'on' : ''}`} aria-hidden="true" />
-            <webview key={`${activeId || 'home'}:${wvNonce}`} ref={wv} src={mountUrl} className="ws-webview" allowpopups="true" />
+            {!SNAP && <webview key={`${activeId || 'home'}:${wvNonce}`} ref={wv} src={mountUrl} className="ws-webview" allowpopups="true" />}
           </>
         ) : (
           <div className="ws-overlay">

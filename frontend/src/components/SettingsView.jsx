@@ -15,7 +15,7 @@ import ThemeBuilder from './ThemeBuilder.jsx'
 
 // Everything auto-saves (debounced) — there is no Save button. The league lives
 // in the top bar; essentials are visible; the rest sits behind "Advanced".
-export default function SettingsView({ currencies, status, onSaved }) {
+export default function SettingsView({ currencies, status, onSaved, onReportProblem }) {
   const [s, setS] = useState(null)
   const [mapTo, setMapTo] = useState({})
   const [fees, setFees] = useState(null)
@@ -130,6 +130,9 @@ export default function SettingsView({ currencies, status, onSaved }) {
           <details className="adv">
             <summary>Diagnostics</summary>
             <BetaChannelToggle />
+            {window.poe2desktop?.feedback && onReportProblem && (
+              <div style={{ marginBottom: 12 }}><button className="btn small" onClick={onReportProblem}>Report a problem…</button></div>
+            )}
             <DiagPanel />
           </details>
         </div>

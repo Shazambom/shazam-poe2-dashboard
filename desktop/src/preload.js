@@ -60,6 +60,13 @@ contextBridge.exposeInMainWorld('poe2desktop', {
   // clipboard and returns ONLY the classification. ws: main asks for a flush before quitting.
   diag: { log: (marker, line) => ipcRenderer.invoke('diag:log', { marker, line }) },
   clipboard: { classify: () => ipcRenderer.invoke('clipboard:classify') },
+  // "Report a problem": package one sealed report file, drag it out of the window, reveal it, open Discord.
+  feedback: {
+    package: () => ipcRenderer.invoke('feedback:package'),
+    drag: (shortId) => ipcRenderer.invoke('feedback:drag', { shortId }),
+    reveal: (shortId) => ipcRenderer.invoke('feedback:reveal', { shortId }),
+    discord: () => ipcRenderer.invoke('feedback:discord'),
+  },
   // Global focus hotkey config (desktop-only).
   hotkey: {
     get: () => ipcRenderer.invoke('hotkey:get'),

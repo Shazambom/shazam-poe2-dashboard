@@ -17,3 +17,45 @@ services:
       - backend
     ports:
       - "${DASHBOARD_PORT:-8080}:80"
+
+  # Feedback reports (docs/feedback-implementation-plan.md): the Discord listener and the opener cell,
+  # sharing one spool volume. No ports, no Docker socket. Secrets live in /etc/arbiter on the host,
+  # root-owned, mounted read-only into the bot only. Deploy: ./ops/deploy-web.sh bot
+  feedback-bot:
+    build:
+      context: ./ops/feedback-bot
+      dockerfile: Dockerfile.bot
+    restart: unless-stopped
+    environment:
+      DISCORD_TOKEN_FILE: /secrets/discord-token
+      FORUM_CHANNEL_ID: ${FEEDBACK_FORUM_ID:-0}
+      KEY_DIR: /keys
+      SPOOL: /spool
+      INBOX: /inbox
+    volumes:
+      - /etc/arbiter/discord-token:/secrets/discord-token:ro
+      - /etc/arbiter/keys:/keys:ro
+      - feedback-spool:/spool
+      - ${FEEDBACK_INBOX:-./feedback-inbox}:/inbox
+
+  feedback-opener:
+    build:
+      context: ./ops/feedback-bot
+      dockerfile: Dockerfile.opener
+    restart: unless-stopped
+    network_mode: none
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges]
+    pids_limit: 32
+    mem_limit: 768m
+    cpus: 1
+    environment:
+      SPOOL: /spool
+    volumes:
+      - feedback-spool:/spool
+    tmpfs:
+      - /tmp
+
+volumes:
+  feedback-spool:

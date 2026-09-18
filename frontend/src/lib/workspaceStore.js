@@ -3,6 +3,7 @@ import { api, cleanErr, toast } from './api.js'
 import { uid } from './session.js'
 import { find as findNode, findWhere, locate, flatten, mapNode, mapAll, removeNode, insertAt } from './tree.js'
 import { diag } from './diag.js'
+import { SNAP } from './dests.js'
 
 // The Trading workspace: a nested filesystem-like tree (folders + search items), plus the
 // persisted `layout`/`openTabs` fields (kept in the document for forward compatibility).
@@ -102,7 +103,7 @@ async function save(get, set) {
 }
 
 function persist(get, set) {
-  if (!armed || get().loadError) return
+  if (SNAP || !armed || get().loadError) return   // the feedback snap window never writes
   set({ saveState: 'dirty' })
   clearTimeout(saveTimer)
   saveTimer = setTimeout(() => save(get, set), DEBOUNCE)

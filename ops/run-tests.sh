@@ -16,6 +16,9 @@ if [ -x ".venv-test/bin/python" ]; then PY="$ROOT/.venv-test/bin/python"; else P
 echo "== backend: pytest"
 ( cd backend && DATA_DIR="$(mktemp -d)" MARKET_SEED= "$PY" -m pytest tests -q -p no:cacheprovider )
 
+echo "== feedback bot + opener: pytest"
+( cd ops/feedback-bot && "$PY" -m pytest tests -q -p no:cacheprovider )
+
 echo "== frontend: node tests"
 node --test frontend/test/
 node frontend/test/workspace-store.fuzzy.mjs

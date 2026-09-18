@@ -1,12 +1,10 @@
 # In-app feedback reports — design
 
-Status: PROPOSAL (2026-09-18). Nothing built yet. **Mechanics superseded by
-[`feedback-implementation-plan.md`](feedback-implementation-plan.md)** (arena-synthesized): the sink
-is a Worker → Discord attachment rather than R2 (R2 needs the checkout/card flow), the Ed25519
-install key / manifest hash / HMAC gate are cut in favour of GCM + a sealed `installId` + a static
-rotatable token, and the WAF rate-limit rule below is replaced by the Workers Rate Limiting binding
-(WAF rules are zone-scoped and do not apply to `workers.dev`). §1–§3 and §8 remain the problem
-statement and threat framing.
+Status: SUPERSEDED (2026-09-18) by [`feedback-implementation-plan.md`](feedback-implementation-plan.md),
+which is what was built: no drop point at all — the app writes one sealed file, the user drags it
+into a Discord forum post, and a listener bot on shazam opens it. §1–§3 and §8 below remain the
+problem statement and threat framing; the mechanics (Worker, R2, Ed25519, HMAC gate, WAF rule) are
+historical.
 
 The user types what went wrong; the app silently packs a snapshot of itself (state JSON,
 logs, a screenshot of every screen), encrypts it so only the owner can read it, signs it,

@@ -1,0 +1,13 @@
+# The untrusted cell: no network, no token, no key, read-only root, no capabilities (compose sets
+# those); the only dependency is Pillow. Every report is parsed by a fresh child under rlimits.
+FROM python:3.12-slim
+RUN useradd -r -u 10001 opener   # same uid as the bot: they share the spool volume; isolation is the container, not the uid
+WORKDIR /app
+# The shared spool (a named volume seeded from the image's ownership) must be writable by uid 10001.
+RUN mkdir -p /spool/in /spool/out && chown -R 10001 /spool
+COPY requirements-opener.txt .
+RUN pip install --no-cache-dir -r requirements-opener.txt
+COPY opener/ ./opener/
+ENV PYTHONPATH=/app PYTHONUNBUFFERED=1
+USER opener
+CMD ["python", "-m", "opener.opener"]
