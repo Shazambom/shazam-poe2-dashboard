@@ -14,6 +14,10 @@ Architecture & maintenance docs for Arbiter (the PoE2 economy dashboard).
 - [`desktop-debugging.md`](./desktop-debugging.md) — drive the real renderer over CDP before
   claiming a UI change works.
 
+## UI — theme presets + polish (PLAN, 2026-09-18; nothing built)
+
+- [`ui-joy-plan.md`](./ui-joy-plan.md) — `/arena`-synthesized plan: a `:root[data-theme]` preset system (Vault / Arbiter of Ash / Arbiter of Divinity / Trial of the Sekhemas) over the existing token contract, the rgba-literal sweep + linter extension it depends on, and a prioritized polish list (§0 cuts first, then motion honesty, then themes). Read with `ui-styleguide.md`.
+
 ## Trading workspace — roadmap (implemented and shipped, 0.2.56 → 0.2.61)
 
 - [`trading-workspace-roadmap.md`](./trading-workspace-roadmap.md) — the `/arena`-synthesized plan for the
