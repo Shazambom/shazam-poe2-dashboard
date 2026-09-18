@@ -101,11 +101,13 @@ def _board(window_h: int) -> dict:
         # Default numeraire: the highest-VOLUME counterpart whose price stays readable.
         # Cheap currencies' biggest market is often Divine (huge value moves even on
         # modest flow), which would print a useless micro-price (Regal = 0.0034 div) — so
-        # walk down the volume ranking and take the first counterpart whose price is at
-        # least MIN_READABLE of it. Divine keeps its Chaos market, Annul keeps Divine
-        # (0.5 div is legible), but Regal/Chaos/Vaal drop to Exalted. Currencies with no
+        # walk down the volume ranking and take the first counterpart the card is worth at
+        # least ONE of. That is how prices are quoted by hand: a card is never shown in a
+        # currency worth more than the card (a 0.5 floor once put Chaos "in Omen of Abyssal
+        # Echoes" at 0.43 the hour that omen out-traded Exalted). Divine keeps its Chaos
+        # market, omens keep Divine, Regal/Chaos/Vaal drop to Exalted. Currencies with no
         # liquid, readable market (poe2scout-only, or thin digest) tier by value instead.
-        MIN_READABLE = 0.5   # numeraire units per 1 of the currency; below this, step down
+        MIN_READABLE = 1.0   # numeraire units per 1 of the currency; below this, step down
         pref, seen = None, set()
         for _volr, other in ranked.get(c, ()):
             if other == c or other in seen:

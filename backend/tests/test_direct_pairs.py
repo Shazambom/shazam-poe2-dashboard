@@ -150,3 +150,20 @@ def test_sales_ledger_carries_a_reference_price_for_every_sale_currency(monkeypa
         assert "regal" not in res["prices"]        # no market, no reference value → stays unpriced
     finally:
         _teardown()
+
+
+def test_a_card_is_never_priced_in_a_currency_worth_more_than_itself(monkeypatch):
+    """The readability floor is 1.0: chaos (10 ex) is not shown "in divine" (0.2) even though
+    divine is its biggest market; it steps down to exalted (10). Divine keeps chaos (550)."""
+    g = _graph(monkeypatch)
+    try:
+        b = client.get("/api/board?range=24h").json()
+        pref = {r["id"]: r["pref_num"] for r in b["rows"]}
+        assert pref["chaos"] == "exalted"
+        assert pref["divine"] == "chaos"
+        for r in b["rows"]:
+            n = r["pref_num"]
+            if r["mid"] and b["prices"].get(n) and n != b["reference"]:
+                assert r["mid"] / b["prices"][n] >= 1.0, f"{r['id']} shown in {n} at {r['mid'] / b['prices'][n]:.3f}"
+    finally:
+        _teardown()

@@ -16,8 +16,8 @@ const { keys, tables } = presetTables(css)
 // The linter's reading of the themed set: every :root token minus NEVER_THEMED.
 const lintKeys = [...parseThemeBlocks(css).root.keys()].filter(k => !NEVER_THEMED.has(k))
 
-test('themeCss reads Vault (bare :root) and the four presets', () => {
-  assert.deepEqual(Object.keys(tables), ['vault', 'ash', 'divinity', 'sekhemas', 'vaal'])
+test('themeCss reads Vault (bare :root) and every preset block', () => {
+  assert.deepEqual(Object.keys(tables), ['vault', 'ash', 'divinity', 'sekhemas', 'vaal', 'azmeri'])
   assert.deepEqual(keys, lintKeys)
   // Spot-check the parser against the stylesheet itself (preset values are the owner's to change).
   const cssText = readFileSync(new URL('../src/styles.css', import.meta.url), 'utf8')

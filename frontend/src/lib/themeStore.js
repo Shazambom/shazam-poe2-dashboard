@@ -16,6 +16,7 @@ export const THEMES = [
   { id: 'divinity', name: 'Arbiter of Divinity' },
   { id: 'sekhemas', name: 'Trial of the Sekhemas' },
   { id: 'vaal', name: 'Vaal' },
+  { id: 'azmeri', name: 'Azmeri' },
 ]
 export const DEFAULT_THEME = 'vault'
 const KEY = 'arbiter.theme.v1'

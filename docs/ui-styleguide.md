@@ -144,7 +144,7 @@ provenance, never as decoration.
 
 A **preset** is a `:root[data-theme="x"]` block in `styles.css` that re-assigns the same tokens; picking
 one (Settings → Appearance, or a ⌘K `Theme:` command) sets `<html data-theme>`. Presets: `vault`
-(default, the bare `:root`), `ash`, `divinity` (the one **light** preset), `sekhemas`, `vaal` — palettes
+(default, the bare `:root`), `ash`, `divinity` (the one **light** preset), `sekhemas`, `vaal`, `azmeri` (owner-built in the custom theme builder, codified 2026-09-18) — palettes
 in `docs/ui-joy-plan.md` §1.3. Rules:
 
 - **A preset changes colours and nothing else.** No layout, spacing, motion, copy or component changes

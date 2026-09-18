@@ -28,7 +28,10 @@ test('the derivation key set is exactly the themed token set the linter expects'
 
 test('deriving from each preset\'s primaries reproduces its derived tokens (error table below)', () => {
   const rows = []
-  for (const [id, t] of Object.entries(tables)) {
+  // The benchmark is the hand-made presets. Owner-built presets (codified from the builder, with
+  // pinned Advanced tokens such as Azmeri's dusty-rose --gold-2) are not a formula's job to reproduce.
+  const HAND_MADE = new Set(['vault', 'ash', 'divinity', 'sekhemas', 'vaal'])
+  for (const [id, t] of Object.entries(tables).filter(([id]) => HAND_MADE.has(id))) {
     const d = D.derive(D.primariesOf(t))
     for (const k of D.PRIMARY_KEYS) assert.equal(d[k], t[k], `${id} ${k} primary passes through`)
     for (const k of MIRRORS) assert.equal(d[k], t[k], `${id} ${k} mirror`)

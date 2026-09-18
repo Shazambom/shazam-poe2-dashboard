@@ -93,6 +93,17 @@
   --accent-rgb: 245,115,138; --gain-rgb: 130,208,156; --loss-rgb: 230,90,77; --live-rgb: 143,184,216; --digest-rgb: 195,162,226; --wash-rgb: 176,42,42;
   --backdrop: #160d0c;
 }
+/* Azmeri — owner-built 2026-09-18 in the custom theme builder: night-navy stone, bronze panels, white ink,
+   pale-gold accent; panel/accent/gain/loss lifted to the preset contrast floors before codifying */
+:root[data-theme="azmeri"] {
+  --bg: #051e39; --bg-2: #0b2342; --panel: #71541f; --panel-2: #7a5d31; --panel-hi: #856840; --surface-1: #343737; --surface-pop: #745824;
+  --line: #80633a; --line-strong: #8f704a; --line-hover: #9d8057;
+  --ink: #ffffff; --ink-2: #e7e2d7; --muted: #dbceb9;
+  --gold: #f1cc8c; --gold-2: #c58986; --gold-dim: #9a742b; --gold-3: #7d5642; --ink-on-gold: #142940;
+  --gain: #98e2a8; --loss: #ffc3bd; --live: #fbfeff; --digest: #fefdff; --recipe: #f1ca86;
+  --accent-rgb: 241,204,140; --gain-rgb: 152,226,168; --loss-rgb: 255,195,189; --live-rgb: 251,254,255; --digest-rgb: 254,253,255; --wash-rgb: 149,115,45;
+  --backdrop: #2f3640;
+}
 /* The light preset: the few translucent-white fills that give depth on dark surfaces become translucent-black. */
 :root[data-theme="divinity"] .sk { background: linear-gradient(100deg, rgba(0,0,0,.04) 30%, rgba(0,0,0,.09) 50%, rgba(0,0,0,.04) 70%); background-size: 220% 100%; }
 :root[data-theme="divinity"] .pulse-rank, :root[data-theme="divinity"] .cd-stat, :root[data-theme="divinity"] .pt-src, :root[data-theme="divinity"] .pulse-group { background-color: rgba(0,0,0,.05); }
