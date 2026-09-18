@@ -138,6 +138,7 @@ export default function App() {
   const goWorkspace = React.useCallback(() => { setTab('Trading'); setTimeout(() => nav.openTrading('workspace'), 0) }, [])
   const ee2Present = useWorkspace(s => s.ee2Present)
   const hasHistoryRows = useWorkspace(s => !!(findWhere(s.tree, n => n.kind === 'folder' && n.sys === HISTORY_SYS)?.children || []).length)
+  const customThemes = useTheme(s => s.customs)
   const wsCommands = React.useMemo(() => [
     { id: 'ws-new-search', label: 'New search', hint: 'Workspace · ⌘N', run: () => { goWorkspace(); const ws = useWorkspace.getState(); ws.setActive(ws.addSearch(null, { type: 'search', slug: '', live: false }, 'New search')) } },
     { id: 'ws-new-group', label: 'New group', hint: 'Workspace · ⌘⇧N', run: () => { goWorkspace(); useWorkspace.getState().addFolder(null) } },
@@ -145,8 +146,8 @@ export default function App() {
     ...(window.poe2desktop?.clipboard ? [{ id: 'ws-clipboard', label: 'Add from clipboard', hint: 'Workspace · ⌘⇧V', run: () => { goWorkspace(); addFromClipboard(null) } }] : []),
     ...(window.poe2desktop?.ee2 && (ee2Present || hasHistoryRows) ? [{ id: 'ws-clear-history', label: 'Clear EE2 history', hint: 'Workspace', run: () => { goWorkspace(); clearHistoryWithUndo() } }] : []),
     { id: 'ws-sort', label: 'Sort searches A–Z', hint: 'Workspace · top level', run: () => { goWorkspace(); useWorkspace.getState().sortChildren(null) } },
-    ...THEMES.map(t => ({ id: `theme-${t.id}`, label: `Theme: ${t.name}`, hint: 'Appearance', run: () => useTheme.getState().apply(t.id) })),
-  ], [goWorkspace, ee2Present, hasHistoryRows])
+    ...[...THEMES, ...customThemes].map(t => ({ id: `theme-${t.id}`, label: `Theme: ${t.name}`, hint: 'Appearance', run: () => useTheme.getState().apply(t.id) })),
+  ], [goWorkspace, ee2Present, hasHistoryRows, customThemes])
 
   const setLeague = async (league) => {
     if (!league || league === status?.league) return
