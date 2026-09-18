@@ -195,12 +195,35 @@ hue" (gold = hold/brand becomes blue = hold/brand, consistently).
 | `--backdrop` | `#1a1712` | |
 
 Sekhemas is the provenance stress-test (`--live` vs a blue accent); **ship it after Ash and
-Divinity.** Four is the cap.
+Divinity.**
 
-**Rejected preset — Vaal.** Both its canonical accents are taken: jade collides with `--gain`,
-blood-red with `--loss` / `--offline` / the corrupted orb `#e83c3c` / `.btn.teleport.hot`. A theme
-whose accent can be mistaken for "you lost money" is a bug wearing lore. The Vaal keeps its home: the
-`VaalPingOrb` alert, untouched.
+**5. Vaal** — *stone, blood and corruption.* (Owner steer 2026-09-18: the arena had rejected a Vaal
+preset because it assumed *blood* as the accent, which collides with `--loss`. Reframed, each of the
+three ideas gets the token role it actually fits.) **Stone** is the surfaces and the ink: cold
+jungle-basalt with a faint green cast, bone-white text. **Blood** is not the accent — it is `--loss`
+(a drop *is* blood; the alert-red family stays where it is) and the ambient body wash, so the app sits
+in a dark red glow without any chrome being red. **Corruption** is the one accent: the magenta of a
+Vaal side-area / a corrupted item's glow, ~60° from blood on the hue wheel, so "selected" and "lost"
+never share a family.
+
+| role | token | value | note |
+|---|---|---|---|
+| app bg / inset | `--bg` / `--bg-2` | `#0b0c0b` / `#10120f` | near-black stone |
+| card / panel | `--panel` / `--panel-hi` / `--surface-pop` | `#1a1d19` / `#2e332a` / `#1c201b` | basalt, green-grey cast |
+| lines | `--line` / `--line-strong` | `#2f3329` / `#434a3b` | mortar |
+| ink | `--ink` / `--ink-2` / `--muted` | `#e6e2d6` / `#bfb9a8` / `#8f8c7e` | bone; 13.0 / 8.5 / 4.7 : 1 on `--panel` |
+| accent | `--gold` / `--gold-2` / `--gold-3` / `--gold-dim` | `#d95aa8` / `#e878bc` / `#a8327d` / `#4a1a3a` | corruption magenta; 5.1:1 |
+| on-accent | `--ink-on-gold` | `#1d0814` | 9.6:1 on `#d95aa8` |
+| gain / loss | `--gain` / `--loss` | `#7cc79a` / `#e05a5a` | **loss is blood** — the one theme where the loss hue is *the* lore colour |
+| provenance | `--live` / `--digest` / `--recipe` | `#7fb4d9` / **`#9aa3e8` indigo** / `#d9b45c` | `--digest` cooled off violet so it never reads as the accent |
+| wash | `--accent-rgb` / `--wash-rgb` | `217,90,168` / **`120,20,30` blood** | the second body radial (styles.css:46-50) goes blood-dark; glows stay corruption |
+| backdrop | `--backdrop` | `#141613` | Electron twin |
+
+Watch items for the CDP drive: corruption accent vs `--digest` (they are the two cool-purple-ish
+hues on screen — the indigo shift is what keeps them apart), and the blood wash must stay *below*
+`--loss` in lightness so a red price chip still pops against it. The `VaalPingOrb` alert
+(`#e83c3c`, not themed) sits inside the blood family here, which is correct: in this theme the
+corrupted orb is native. Ship after Ash and Divinity, alongside Sekhemas. **Five is the cap.**
 
 ### 1.4 Deliberately NOT themed
 
@@ -291,7 +314,7 @@ Ordered by group. §0 Restraint cuts first — every one of these *removes* pixe
    stops the toast you want from fleeing.
 
 Then: **Ash + Divinity presets + the Appearance panel** — the visible payoff, cheap once (2) is done.
-Then B6–B8 and C1–C5 as a "feel" pass; Sekhemas after, as the provenance stress test; C6–C9 fold
+Then B6–B8 and C1–C5 as a "feel" pass; Sekhemas and Vaal after, as the provenance stress tests; C6–C9 fold
 into whatever pass touches those files.
 
 **Verification for every step** (per CLAUDE.md): `ops/run-tests.sh` green (the linter is in it),
@@ -324,7 +347,7 @@ check.
 - **A light / "Divinity daylight" theme** — every glow, gradient, sheen and skeleton assumes dark; a
   light mode is a second design system, not a preset.
 - **Theming `series`, `--rarity-*`, or gain/loss hue** — validated palettes and game semantics.
-- **A Vaal preset** — see §1.3.
+- **A blood-*accent* Vaal preset** — blood as the accent collides with `--loss`/`--offline`/the corrupted orb. The shipped Vaal (§1.3 #5) puts blood on `--loss` and the wash and uses corruption magenta as the accent.
 - **Per-token user customisation** — makes the contrast gate meaningless; UI nobody trades with.
 - **A topbar theme switcher; a preview gallery; a View-Transitions cross-fade** — pressed four times
   ever / a page nobody returns to / a 300 ms novelty with a reduced-motion branch to maintain.
@@ -348,11 +371,11 @@ finite update-chip pulse, emoji → glyphs, the `Cur` placeholder disc, Divinity
 from candidate 2 — freeze the route sort while streaming, `useReducedMotion()` on the `motion`
 springs, the focus trap's return-focus, the `small` CurrencyPicker variant; from candidate 3 — the
 WCAG contrast assertion in the linter, `⌘1–5` / `?`, the tone curation with the `merge()` safety
-check, the Vaal rejection wording. **Rejected from candidates** as listed in §4. **Dropouts:** none.
+check, the original Vaal rejection (since overturned by the owner's stone/blood/corruption reframe — see §1.3 #5). **Rejected from candidates** as listed in §4. **Dropouts:** none.
 **Factual corrections made during synthesis:** gold literal count is 26 lines (candidates said
 26/32/28/28); gain 7 / loss 3 (not 10/4); candidate 2's `ws-chip.ee2` does not exist; candidate 3's
 "charts read `color.x` at render" is false; candidate 1's presets would have failed linter check 2
 as written. **Convergence** (settled, not re-litigated): the literal sweep before any preset;
 `:root[data-theme]` blocks; three-tier storage; never theme series/rarity/alert-red/non-colour; no
-light theme; no Vaal; no UI sounds; the same nine §0 cuts; the `AnimatedNumber` mount bug; the
+light theme; no UI sounds; the same nine §0 cuts; the `AnimatedNumber` mount bug; the
 `<CurrencyPicker>` swap.
