@@ -34,7 +34,11 @@ const DEV_BACKEND_URL = process.env.ARBITER_DEV_BACKEND_URL || telemetry.SHAZAM
 const BACKDROPS = {   // style-ok: painted before the CSS loads
   vault: '#191b22', ash: '#0f0a08', divinity: '#e9d2ae', sekhemas: '#101012', vaal: '#160d0c',
 }
-const BACKDROP = { get window() { return BACKDROPS[settings.theme] || BACKDROPS.vault }, trade: '#0c0d10' }   // style-ok
+const BACKDROP_HEX = /^#[0-9a-f]{6}$/i
+// A custom theme (built in Settings → Appearance) carries its own --backdrop; the renderer hands it over
+// with the 'custom' id and it is remembered next to the theme id.
+const windowBackdrop = (s) => (s.theme === 'custom' && BACKDROP_HEX.test(s.customBackdrop || '') ? s.customBackdrop : BACKDROPS[s.theme] || BACKDROPS.vault)
+const BACKDROP = { get window() { return windowBackdrop(settings) }, trade: '#0c0d10' }   // style-ok
 
 const settingsPath = () => path.join(app.getPath('userData'), 'desktop-settings.json')
 let settings = { ...DEFAULTS }
@@ -449,10 +453,12 @@ ipcMain.handle('update:setChannel', (_e, beta) => {
   if (_autoUpdater) { _applyChannel(_autoUpdater); _autoUpdater.checkForUpdates().catch(() => {}) }
   return { beta: onBetaChannel(), locked: isBetaVersion() }
 })
-// UI theme preset (colour only): remember it so the next launch paints the right backdrop before
-// CSS, and recolour the current window's gutter now.
-ipcMain.handle('ui:setTheme', (_e, id) => {
-  if (typeof id !== 'string' || !BACKDROPS[id]) return false
+// UI theme (colour only): remember it so the next launch paints the right backdrop before CSS, and
+// recolour the current window's gutter now. Presets are keyed into BACKDROPS; a custom theme brings its hex.
+ipcMain.handle('ui:setTheme', (_e, id, backdrop) => {
+  if (typeof id !== 'string') return false
+  if (id === 'custom') { if (!BACKDROP_HEX.test(String(backdrop || ''))) return false; settings.customBackdrop = String(backdrop).toLowerCase() }
+  else if (!BACKDROPS[id]) return false
   settings.theme = id
   saveSettings()
   try { if (win && !win.isDestroyed()) win.setBackgroundColor(BACKDROP.window) } catch {}

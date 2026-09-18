@@ -11,6 +11,7 @@ import CurrencyPicker from './CurrencyPicker.jsx'
 import RefreshButton from './RefreshButton.jsx'
 import Toggle from './Toggle.jsx'
 import { THEMES, useTheme } from '../lib/themeStore.js'
+import ThemeBuilder from './ThemeBuilder.jsx'
 
 // Everything auto-saves (debounced) — there is no Save button. The league lives
 // in the top bar; essentials are visible; the rest sits behind "Advanced".
@@ -65,6 +66,7 @@ export default function SettingsView({ currencies, status, onSaved }) {
 
           <h2 style={{ marginTop: 28 }}>Appearance</h2>
           <ThemeRow />
+          <ThemeBuilder />
 
           <h2 style={{ marginTop: 28 }}>Market</h2>
           <p className="hint">The league is set from the dropdown in the top bar.</p>
@@ -214,13 +216,16 @@ function DiagPanel() {
   )
 }
 
-// The theme presets: the same dropdown as every other picker, applied instantly, saved as a setting.
+// The theme presets + the user's custom themes (listed after, marked ·): the same dropdown as every
+// other picker, applied instantly, saved as a setting.
 function ThemeRow() {
   const id = useTheme(s => s.id)
   const apply = useTheme(s => s.apply)
+  const customs = useTheme(s => s.customs)
+  const options = [...THEMES, ...customs.map(t => ({ id: t.id, name: `${t.name} ·` }))]
   return (
     <div className="field"><label>Theme</label>
-      <CurrencyPicker value={id} onChange={apply} options={THEMES} placeholder="theme…" renderIcon={null} />
+      <CurrencyPicker value={id} onChange={apply} options={options} placeholder="theme…" renderIcon={null} />
     </div>
   )
 }

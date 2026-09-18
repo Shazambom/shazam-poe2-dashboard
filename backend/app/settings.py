@@ -18,6 +18,10 @@ DEFAULTS: dict = {
     "hub_count": 5,
     # UI colour preset (frontend/src/styles.css `:root[data-theme]` blocks). Colour only.
     "theme": "vault",
+    # Custom themes built in Settings → Appearance: [{id: "custom-<8 hex>", name, base, colors: {"--bg": "#…", …}}].
+    # The same token table a preset in styles.css defines (colour only). `theme` may hold a custom id.
+    # A list, so a PUT replaces it wholesale (no per-row merge).
+    "custom_themes": [],
     # Gold fee model. Per-unit fees come from the game's CurrencyExchange table
     # (GoldPurchaseFee), fetched automatically. `per_unit` is only for manual
     # overrides; `per_ref_unit` is the fallback for items missing from the table.
