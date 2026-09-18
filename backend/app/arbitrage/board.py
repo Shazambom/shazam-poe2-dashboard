@@ -51,7 +51,7 @@ def board(window_h: int = 24, nums: dict[str, str] | None = None) -> dict:
     key = (s0["league"], s0["reference"], tuple(s0["watchlist"]), window_h, s0.get("hub_count"),
            tuple(sorted(nums.items())))
     return cache.memo(_board_cache, key, BOARD_TTL_S, lambda: _board(window_h, nums),
-                      version=orderbook.state["version"])
+                      version=orderbook.state["version"], max_entries=32)   # one per pick set, bounded
 
 
 def _board(window_h: int, nums: dict[str, str]) -> dict:
@@ -73,15 +73,7 @@ def _board(window_h: int, nums: dict[str, str]) -> dict:
     scout_hist = leaguehistory.scout_history(league)   # poe2scout daily trend, by name/slug
     rows = []
     for c in [x for x in s["watchlist"] if x != R]:
-        buy_edge = g.edges.get((R, c))     # c per R  -> price to BUY c = 1/rate
-        sell_edge = g.edges.get((c, R))    # R per c  -> price to SELL c = rate
-        buy = (1.0 / buy_edge.rate) if buy_edge and buy_edge.rate > 0 else None
-        sell = sell_edge.rate if sell_edge else None
         mid = rv.get(c)     # includes the poe2scout fallback threaded through ref_values
-        edges = [e for e in (buy_edge, sell_edge) if e]
-        depth = next((len(e.ladder) for e in (sell_edge, buy_edge) if e and e.kind == "live"), None)
-        spread = (buy - sell) if (buy is not None and sell is not None) else None
-        spread_pct = (spread / mid * 100) if (spread is not None and mid) else None
         # Default numeraire: the highest-VOLUME counterpart whose price stays readable.
         # Cheap currencies' biggest market is often Divine (huge value moves even on
         # modest flow), which would print a useless micro-price (Regal = 0.0034 div) — so
@@ -120,23 +112,41 @@ def _board(window_h: int, nums: dict[str, str]) -> dict:
         # real market moved −12%. Otherwise the reference market's history (hourly digest), else
         # poe2scout dailies. `trend_num` says which currency the points are in, so the client
         # can reprice them into any numeraire.
+        # The numeraire the card is shown in: the client's pick, with the client's own
+        # fallbacks (BoardView.numFor) so the two never disagree about which market is drawn.
         shown = nums.get(c, pref)
-        if shown == c or not rv.get(shown):
-            shown = pref
-        # Source label + freshness describe the market the card is SHOWN in (its own market
-        # with `shown` when that is what prices it, else the reference market): live/digest
-        # exchange data; a currency the exchange graph doesn't cover is priced from poe2scout
-        # ("scout"); anything else valued only via multi-hop is "derived".
-        shown_edges = [e for e in (g.edges.get((shown, c)), g.edges.get((c, shown))) if e]
-        src_edges = shown_edges if (shown != R and g.price_in(c, shown, rv) == g.direct_rate(c, shown)) else edges
-        kinds = {e.kind for e in src_edges}
+        if shown == c:
+            shown = "divine" if (c != "divine" and rv.get("divine")) else R
+        if not rv.get(shown):
+            shown = R
+        # ONE decision for the whole row: does the card's own market with `shown` price it
+        # (the volume rule in price_in)? Then bid/ask/spread, depth, source, freshness and the
+        # trend all describe THAT market; otherwise they all describe the reference market.
+        direct = g.direct_rate(c, shown)
+        own_market = shown != R and direct is not None and g.price_in(c, shown, rv) == direct
+        mkt = shown if own_market else R
+        buy_edge = g.edges.get((mkt, c))     # c per mkt -> price to BUY c = 1/rate
+        sell_edge = g.edges.get((c, mkt))    # mkt per c -> price to SELL c = rate
+        # bid/ask travel in reference units like mid (the client's contract: value / factor is
+        # the shown price). In the card's own market they are scaled by mid/direct — exactly the
+        # client's factor — so the card shows that market's bid/ask, not a reference cross.
+        to_ref = (mid / direct) if (own_market and mid and direct) else 1.0
+        buy = (to_ref / buy_edge.rate) if buy_edge and buy_edge.rate > 0 else None
+        sell = (sell_edge.rate * to_ref) if sell_edge else None
+        edges = [e for e in (buy_edge, sell_edge) if e]
+        depth = next((len(e.ladder) for e in (sell_edge, buy_edge) if e and e.kind == "live"), None)
+        spread = (buy - sell) if (buy is not None and sell is not None) else None
+        spread_pct = (spread / mid * 100) if (spread is not None and mid) else None
+        # Source label + freshness: live/digest exchange data; a currency the exchange graph
+        # doesn't cover is priced from poe2scout ("scout"); anything else valued only via
+        # multi-hop is "derived".
+        kinds = {e.kind for e in edges}
         in_scout = bool(leaguehistory.scout_lookup(scout, c))
         source = ("live" if "live" in kinds else "digest" if "digest" in kinds
                   else "scout" if (not kinds and in_scout) else ("derived" if mid is not None else None))
-        age = min((e.age_s for e in src_edges), default=None)
+        age = min((e.age_s for e in edges), default=None)
         trend, trend_num = [], R
-        direct = g.direct_rate(c, shown)
-        if shown != R and direct is not None and g.price_in(c, shown, rv) == direct:
+        if own_market:
             hist = digest.pair_history(league, c, shown, window_h)   # rate = shown per c
             trend = [{"t": h["hour"], "v": h["rate"]} for h in hist]
             trend_num = shown
@@ -149,6 +159,7 @@ def _board(window_h: int, nums: dict[str, str]) -> dict:
             if sh:
                 cutoff = sh[-1]["t"] - window_h * 3600
                 trend = [p for p in sh if p["t"] >= cutoff] or sh[-2:]
+                trend_num = "exalted"          # poe2scout closes are Exalted whatever the reference
         # change over the window = latest vs the point at (or nearest before) the window start.
         change_pct = marketseries.change_over(trend, window_h * 3600)[1]
         rows.append({
@@ -162,6 +173,11 @@ def _board(window_h: int, nums: dict[str, str]) -> dict:
     # so the client can reprice any card into any of them. Reference itself is 1.
     need = {R} | {r["id"] for r in rows} | {r["pref_num"] for r in rows} | {r["trend_num"] for r in rows}
     prices = {i: (1.0 if i == R else rv.get(i)) for i in need if i == R or rv.get(i)}
+    if "exalted" not in prices and R != "exalted":
+        # A scout-only card's trend is in Exalted (dailies) — the client needs its reference price.
+        ex = g.price_in("exalted", R, rv)
+        if ex:
+            prices["exalted"] = ex
     # Direct market rates for (card, numeraire) pairs. When a card is priced in a counterpart
     # that it trades against directly, the client shows THAT market's rate, not the cross of two
     # reference prices (which ignores the most liquid market on the card).

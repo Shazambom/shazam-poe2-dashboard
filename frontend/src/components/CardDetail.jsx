@@ -182,9 +182,14 @@ export function useAssetModal() {
   }
   // A different numeraire is a different series (the dailies divided by THAT currency's
   // dailies), so the modal refetches rather than rescaling the line by today's rate.
+  const reqRef = useRef(0)
   const repriceTo = async (nn) => {
+    const id = ++reqRef.current, was = num
     setNum(nn)
-    try { setDetail(await api.asset(detail.row.name, winH, nn)) } catch {}
+    try {
+      const next = await api.asset(detail.row.name, winH, nn)
+      if (id === reqRef.current) setDetail(next)       // a later pick already landed: drop this one
+    } catch { if (id === reqRef.current) setNum(was) }  // the number stays with the series it has
   }
   const node = (
     <AnimatePresence>

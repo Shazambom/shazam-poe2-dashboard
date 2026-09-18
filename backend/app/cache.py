@@ -35,10 +35,11 @@ def put(store: dict, key: Hashable, value: Any, version: Any = None, max_entries
     return value
 
 
-def memo(store: dict, key: Hashable, ttl_s: float, build: Callable[[], Any], version: Any = None) -> Any:
+def memo(store: dict, key: Hashable, ttl_s: float, build: Callable[[], Any], version: Any = None,
+         max_entries: int | None = None) -> Any:
     value = get(store, key, ttl_s, version)
     if value is _MISS:
-        value = put(store, key, build(), version)
+        value = put(store, key, build(), version, max_entries)
     return value
 
 

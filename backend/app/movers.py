@@ -95,7 +95,16 @@ def top_movers(window_h: int = 24, n: int = 3, min_value_ex: float = MIN_VALUE_E
             "count": len(out), "assets": out[:n]}
 
 
-_ANCHORS = ("divine", "chaos", "exalted", "mirror")
+def _carry_forward(anchor_pts, days) -> dict:
+    """{day: close} for each of `days`, using the anchor's close that day or its latest earlier one."""
+    out, j, last = {}, 0, None
+    for t in days:
+        while j < len(anchor_pts) and anchor_pts[j][0] <= t:
+            last = anchor_pts[j][1]
+            j += 1
+        if last:
+            out[t] = last
+    return out
 
 
 def asset_row(q: str, window_h: int = 24, num: str | None = None) -> dict | None:
@@ -115,31 +124,32 @@ def asset_row(q: str, window_h: int = 24, num: str | None = None) -> dict | None
     pts = series[iid]
     name, cat = meta[iid]
     last_t = pts[-1][0]
-    # Daily closes (Exalted) of the anchor numeraires, keyed by day, from the same table.
+    # Daily closes (Exalted) of the anchor numeraires from the same table (marketseries.ANCHORS,
+    # the one anchor vocabulary — Hold's numeraires included). A day the anchor has no close for
+    # carries its latest earlier close, so a late backfill never drops a numeraire.
+    # Keyed by REGISTRY trade id ("hinekoras-lock", not the anchor slug "lock") — that is
+    # what the client's Cur icons/names and its "priced in" list resolve.
     from .currencies import registry
-    anchor_series = {}
-    for rid in _ANCHORS:
-        aname = str(registry.name(rid)).lower()
-        aid = next((k for k, (n, _c) in meta.items() if n.lower() == aname), None)
-        if aid in series:
-            anchor_series[rid] = {p[0]: p[1] for p in series[aid]}
-    anchor_series["exalted"] = None                 # the base itself: 1 per day
-    # Reference (Exalted per unit) prices of the anchors on the latest day, so the client can
-    # show "value in other currencies" and reprice the card among them.
+    anchor_series: dict[str, dict | None] = {"exalted": None}        # the base itself: 1 per day
+    for key, anchor in marketseries.ANCHORS.items():
+        rid = registry.resolve_meta(anchor.metadata_id) or key
+        if anchor.item_id in series and anchor.item_id != iid:
+            anchor_series[rid] = _carry_forward(series[anchor.item_id], [p[0] for p in pts])
+    if num in marketseries.ANCHORS:                                  # Hold passes the anchor slug
+        num = registry.resolve_meta(marketseries.ANCHORS[num].metadata_id) or num
+    # Reference (Exalted per unit) prices of the anchors on the asset's latest day, so the
+    # client can show "value in other currencies" and reprice the card among them.
     prices = {"exalted": 1.0}
     for rid, days in anchor_series.items():
         if days and days.get(last_t):
             prices[rid] = days[last_t]
     row_id = _slug(name)
     # The numeraire the card is shown in: the client's pick if it is priced, else Divine when
-    # the asset is worth at least one (the board's readability rule), else Exalted.
-    # Never against itself (the row is slug-keyed, "divine-orb"; the anchors are trade ids).
-    itself = next((rid for rid in _ANCHORS if str(registry.name(rid)).lower() == name.lower()), None)
+    # the asset is worth at least one (the board's readability rule), else Exalted. Never
+    # against itself (the anchors were skipped for the asset's own item id above).
     pref = "divine" if (prices.get("divine") and pts[-1][1] / prices["divine"] >= 1.0) else "exalted"
-    if num in prices and num != itself:
+    if num in prices:
         pref = num
-    if pref == itself:
-        pref = "exalted" if itself != "exalted" else "divine"
     days_n = anchor_series.get(pref)
     in_num = pts if days_n is None else [(t, v / days_n[t], val) for t, v, val in pts if days_n.get(t)]
     if len(in_num) < 2:

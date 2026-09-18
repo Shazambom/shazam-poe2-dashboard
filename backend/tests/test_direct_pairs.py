@@ -85,9 +85,9 @@ def test_asset_modal_is_one_source_in_the_shown_numeraire(monkeypatch):
         div = [400.0, 420.0, 450.0, 480.0, 500.0]              # divine +25% in exalted
         monkeypatch.setattr(movers, "_current_series", lambda: (
             "GoldenLeague",
-            {1: [(t, d, 1_000_000) for t, d in zip(days, div)],
+            {291: [(t, d, 1_000_000) for t, d in zip(days, div)],           # marketseries.ANCHORS id
              2: [(t, 2 * d, 200_000) for t, d in zip(days, div)]},   # the omen: always 2 divine
-            {1: ("Divine Orb", "Currency"), 2: ("Omen of Light", "Omen")}))
+            {291: ("Divine Orb", "Currency"), 2: ("Omen of Light", "Omen")}))
         res = movers.asset_row("Omen of Light", 24 * 7)
         row = res["row"]
         assert row["pref_num"] == "divine" and row["trend_num"] == "divine"
@@ -101,6 +101,15 @@ def test_asset_modal_is_one_source_in_the_shown_numeraire(monkeypatch):
         # Divine itself is never shown in Divine: it drops to Exalted.
         d = movers.asset_row("Divine Orb", 24 * 7)["row"]
         assert d["id"] == "divine-orb" and d["pref_num"] == "exalted"
+        # An anchor missing the asset's latest day carries its previous close forward.
+        monkeypatch.setattr(movers, "_current_series", lambda: (
+            "GoldenLeague",
+            {291: [(t, d, 1_000_000) for t, d in zip(days[:-1], div[:-1])],
+             2: [(t, 2 * d, 200_000) for t, d in zip(days, div)]},
+            {291: ("Divine Orb", "Currency"), 2: ("Omen of Light", "Omen")}))
+        late = movers.asset_row("Omen of Light", 24 * 7)
+        assert late["prices"]["divine"] == 480.0 and late["row"]["pref_num"] == "divine"
+        assert abs(late["row"]["trend"][-1]["v"] - 1000 / 480) < 1e-9
     finally:
         _teardown()
 
@@ -239,5 +248,22 @@ def test_a_priced_in_pick_moves_the_trend_to_that_market(monkeypatch):
         # A pick the board can't price (or the card itself) falls back to the default market.
         by = {r["id"]: r for r in client.get("/api/board?range=24h&nums=divine:divine,chaos:nope").json()["rows"]}
         assert by["divine"]["trend_num"] == "chaos"
+    finally:
+        _teardown()
+
+
+def test_bid_ask_depth_and_source_describe_the_shown_market(monkeypatch):
+    """Once the card's own market prices it, its bid/ask/spread come from THAT market's
+    edges (scaled into reference units by the client's factor, so `value / factor` is the
+    market's own bid/ask), not from the reference market."""
+    g = _graph(monkeypatch)
+    try:
+        b = client.get("/api/board?range=24h").json()
+        d = {r["id"]: r for r in b["rows"]}["divine"]
+        assert d["pref_num"] == "chaos" and d["trend_num"] in ("chaos", "exalted")
+        factor = d["mid"] / b["pairs"]["divine>chaos"]           # what the client divides by
+        assert abs(d["sell"] / factor - 550.0) < 1e-9             # the divine→chaos edge
+        assert abs(d["buy"] / factor - 1 / 0.0015) < 1e-9         # the chaos→divine edge
+        assert d["source"] == "live"                               # the divine→chaos edge is the live one in the fixture
     finally:
         _teardown()
