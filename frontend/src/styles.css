@@ -773,6 +773,9 @@ input[type=range] { accent-color: var(--gold); }
 .settings-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .settings-top .save-state { margin: 0; }
 .bug-btn { flex: none; }
+/* top bar: the Discord mark is the button */
+.discord-btn { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 24px; border: 1px solid var(--line); border-radius: 7px; color: var(--muted); background: transparent; transition: color .15s, border-color .15s; }
+.discord-btn:hover { color: var(--ink); border-color: var(--line-strong); }
 .cd-head { display: flex; align-items: center; gap: 10px; }
 .cd-title { font-size: 19px; font-weight: 700; }
 .cd-price { display: flex; align-items: baseline; gap: 10px; margin: 10px 0 4px; font-size: 34px; font-weight: 700; letter-spacing: -.02em; }

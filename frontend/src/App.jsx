@@ -31,6 +31,7 @@ import DownloadApp from './components/DownloadApp.jsx'
 import UpdateStatus from './components/UpdateStatus.jsx'
 import BrandOrb from './components/BrandOrb.jsx'
 import FeedbackDialog from './components/FeedbackDialog.jsx'
+import DiscordLink from './components/DiscordLink.jsx'
 
 const TABS = ['Board', 'Strategy', 'Economy', 'Trading', 'Settings']
 export default function App() {
@@ -224,6 +225,7 @@ export default function App() {
           <span className="capital-pill">
             capital <b><Wealth v={capital?.total_ref} cur={ref} /></b></span>
           {status?.oauth?.logged_in && <span className="muted oauth-user">{status.oauth.username}</span>}
+          <DiscordLink />
           <UpdateStatus version={appVersion} />
           <DownloadApp />
         </div>
