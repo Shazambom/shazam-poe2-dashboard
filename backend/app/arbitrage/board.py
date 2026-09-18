@@ -29,12 +29,14 @@ def counterparts_by_volume(g, rv: dict[str, float]) -> dict[str, list[tuple[floa
     return ranked
 
 
-def board(window_h: int = 24) -> dict:
+def board(window_h: int = 24, nums: dict[str, str] | None = None) -> dict:
     """Live price board: each watched currency priced in the reference, with the
     buy/sell rates that make up the spread, depth, freshness, and a trend series.
 
     `window_h` is the trend/%-change horizon (24h, 3d, 7d, 14d from the UI): the sparkline
-    spans it and change_pct is measured over it.
+    spans it and change_pct is measured over it. `nums` is the client's per-card "priced in"
+    picks (`{currency: numeraire}`): a card's trend and % are the history of the market it is
+    SHOWN in, so a pick that changes the market changes the line with it.
 
     Prices are R-per-unit (reference currency per 1 of the currency), so bigger = more
     valuable — the natural way to read a price. buy = what it costs you to acquire one
@@ -45,12 +47,14 @@ def board(window_h: int = 24) -> dict:
     (invalidated when a new live book lands, via orderbook.state["version"])."""
     s0 = get_settings()
     window_h = max(1, int(window_h or 24))
-    key = (s0["league"], s0["reference"], tuple(s0["watchlist"]), window_h, s0.get("hub_count"))
-    return cache.memo(_board_cache, key, BOARD_TTL_S, lambda: _board(window_h),
+    nums = {str(k): str(v) for k, v in (nums or {}).items() if k != v}
+    key = (s0["league"], s0["reference"], tuple(s0["watchlist"]), window_h, s0.get("hub_count"),
+           tuple(sorted(nums.items())))
+    return cache.memo(_board_cache, key, BOARD_TTL_S, lambda: _board(window_h, nums),
                       version=orderbook.state["version"])
 
 
-def _board(window_h: int) -> dict:
+def _board(window_h: int, nums: dict[str, str]) -> dict:
     g = graph.cached_graph()
     s = g.s
     R = s["reference"]
@@ -75,29 +79,9 @@ def _board(window_h: int) -> dict:
         sell = sell_edge.rate if sell_edge else None
         mid = rv.get(c)     # includes the poe2scout fallback threaded through ref_values
         edges = [e for e in (buy_edge, sell_edge) if e]
-        kinds = {e.kind for e in edges}
-        # Source label: prefer live/digest exchange data; a currency the exchange graph
-        # doesn't cover is priced from poe2scout ("scout"); anything else valued only
-        # via multi-hop is "derived".
-        in_scout = bool(leaguehistory.scout_lookup(scout, c))
-        source = ("live" if "live" in kinds else "digest" if "digest" in kinds
-                  else "scout" if (not kinds and in_scout) else ("derived" if mid is not None else None))
-        from_scout = source == "scout"
-        age = min((e.age_s for e in edges), default=None)
         depth = next((len(e.ladder) for e in (sell_edge, buy_edge) if e and e.kind == "live"), None)
         spread = (buy - sell) if (buy is not None and sell is not None) else None
         spread_pct = (spread / mid * 100) if (spread is not None and mid) else None
-        # Trend + %-change over the selected window (24h/3d/7d/14d). Digest is hourly;
-        # poe2scout fallback is daily.
-        hist = digest.pair_history(league, c, R, window_h)   # rate = R per c = price of c in R
-        trend = [{"t": h["hour"], "v": h["rate"]} for h in hist]
-        if len(trend) < 2:   # not on the exchange digest → draw from poe2scout dailies
-            sh = leaguehistory.scout_lookup(scout_hist, c)
-            if sh:
-                cutoff = sh[-1]["t"] - window_h * 3600
-                trend = [p for p in sh if p["t"] >= cutoff] or sh[-2:]
-        # change over the window = latest vs the point at (or nearest before) the window start.
-        change_pct = marketseries.change_over(trend, window_h * 3600)[1]
         # Default numeraire: the highest-VOLUME counterpart whose price stays readable.
         # Cheap currencies' biggest market is often Divine (huge value moves even on
         # modest flow), which would print a useless micro-price (Regal = 0.0034 div) — so
@@ -128,16 +112,55 @@ def _board(window_h: int) -> dict:
         # Universal rule: NOTHING is ever priced against itself (a 1:1 is useless).
         if pref == c:
             pref = "divine" if (c != "divine" and rv.get("divine")) else R
+        # Trend + %-change over the selected window (24h/3d/7d/14d), from the SAME market the
+        # card's price comes from. When the volume rule prices the card by its own market with
+        # the numeraire it is shown in (the user's pick, else `pref`; omens in Divine: thousands
+        # of trades an hour), the line and the % are that market's history — the omen↔reference
+        # market trades a handful of times an hour and once drew a −29% line under a card whose
+        # real market moved −12%. Otherwise the reference market's history (hourly digest), else
+        # poe2scout dailies. `trend_num` says which currency the points are in, so the client
+        # can reprice them into any numeraire.
+        shown = nums.get(c, pref)
+        if shown == c or not rv.get(shown):
+            shown = pref
+        # Source label + freshness describe the market the card is SHOWN in (its own market
+        # with `shown` when that is what prices it, else the reference market): live/digest
+        # exchange data; a currency the exchange graph doesn't cover is priced from poe2scout
+        # ("scout"); anything else valued only via multi-hop is "derived".
+        shown_edges = [e for e in (g.edges.get((shown, c)), g.edges.get((c, shown))) if e]
+        src_edges = shown_edges if (shown != R and g.price_in(c, shown, rv) == g.direct_rate(c, shown)) else edges
+        kinds = {e.kind for e in src_edges}
+        in_scout = bool(leaguehistory.scout_lookup(scout, c))
+        source = ("live" if "live" in kinds else "digest" if "digest" in kinds
+                  else "scout" if (not kinds and in_scout) else ("derived" if mid is not None else None))
+        age = min((e.age_s for e in src_edges), default=None)
+        trend, trend_num = [], R
+        direct = g.direct_rate(c, shown)
+        if shown != R and direct is not None and g.price_in(c, shown, rv) == direct:
+            hist = digest.pair_history(league, c, shown, window_h)   # rate = shown per c
+            trend = [{"t": h["hour"], "v": h["rate"]} for h in hist]
+            trend_num = shown
+        if len(trend) < 2:
+            hist = digest.pair_history(league, c, R, window_h)   # rate = R per c = price of c in R
+            trend = [{"t": h["hour"], "v": h["rate"]} for h in hist]
+            trend_num = R
+        if len(trend) < 2:   # not on the exchange digest → draw from poe2scout dailies
+            sh = leaguehistory.scout_lookup(scout_hist, c)
+            if sh:
+                cutoff = sh[-1]["t"] - window_h * 3600
+                trend = [p for p in sh if p["t"] >= cutoff] or sh[-2:]
+        # change over the window = latest vs the point at (or nearest before) the window start.
+        change_pct = marketseries.change_over(trend, window_h * 3600)[1]
         rows.append({
             "id": c, "name": registry.name(c), "mid": mid, "buy": buy, "sell": sell,
             "spread": spread, "spread_pct": spread_pct, "source": source, "age_s": age,
-            "depth": depth, "trend": trend, "change_pct": change_pct, "pref_num": pref,
-            "hub": c in hub_ids,
+            "depth": depth, "trend": trend, "trend_num": trend_num, "change_pct": change_pct,
+            "pref_num": pref, "hub": c in hub_ids,
         })
     rows.sort(key=lambda r: (r["mid"] is None, -(r["mid"] or 0)))   # most valuable first
     # Reference-currency price (R per unit) for every currency usable as a numeraire,
     # so the client can reprice any card into any of them. Reference itself is 1.
-    need = {R} | {r["id"] for r in rows} | {r["pref_num"] for r in rows}
+    need = {R} | {r["id"] for r in rows} | {r["pref_num"] for r in rows} | {r["trend_num"] for r in rows}
     prices = {i: (1.0 if i == R else rv.get(i)) for i in need if i == R or rv.get(i)}
     # Direct market rates for (card, numeraire) pairs. When a card is priced in a counterpart
     # that it trades against directly, the client shows THAT market's rate, not the cross of two

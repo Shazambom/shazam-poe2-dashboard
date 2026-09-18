@@ -405,9 +405,14 @@ def anchor_prices() -> dict[str, float]:
     display-layer wealth rule: ex under the hood, chaos/divine on screen when the amount is
     large). Reads the cached graph, so it is cheap enough to ride the 30s status poll."""
     s = get_settings()
-    rv = cached_graph().ref_values()
+    g = cached_graph()
+    rv = g.ref_values()
     out = {s["reference"]: 1.0}
+    # The same rule every valued amount uses (price_in against the reference) — a holding of
+    # 1000 divine valued by price_in and re-denominated by the best-of-both-sides ref_value
+    # read "≈988 divine".
     for tid in ("exalted", "chaos", "divine", "mirror"):
-        if rv.get(tid):
-            out[tid] = float(rv[tid])
+        px = g.price_in(tid, s["reference"], rv) if tid != s["reference"] else 1.0
+        if px:
+            out[tid] = float(px)
     return out

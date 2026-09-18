@@ -7,7 +7,7 @@ import { useCurrencies } from '../lib/icons.js'
 import LeagueArcSection from './LeagueArc.jsx'
 import { useSignals } from '../lib/signalStore.js'
 import { useHorizon } from '../lib/horizonStore.js'
-import { factorFor, valueIn } from '../lib/price.js'
+import { factorFor, trendIn, valueIn } from '../lib/price.js'
 
 export const SRC_LABEL = { live: 'live order book', digest: 'hourly market data', derived: 'derived via other markets', scout: 'poe2scout', none: 'no data' }
 const SRC_SHORT = { live: 'LIVE', digest: 'HR', derived: '~', scout: 'SC' }
@@ -67,7 +67,7 @@ export default function CardDetail({ r, num, factor, numOptions, onNum, prices, 
   const f = factor || 1
   const rp = (v) => (v == null ? null : v / f)
   const mid = rp(r.mid), buy = rp(r.buy), sell = rp(r.sell)
-  const trend = r.trend ? r.trend.map(p => ({ t: p.t, v: p.v / f })) : r.trend
+  const trend = trendIn(r, num, f, prices, pairs)
   const change = r.change_pct
   const inCurs = Object.keys(prices).filter(c => c !== r.id && prices[c]).sort((a, b) => prices[b] - prices[a]).slice(0, 8)
   // Phase 4: if this item currently has a fired 'about to move' signal, explain why it fired.
@@ -116,7 +116,7 @@ export default function CardDetail({ r, num, factor, numOptions, onNum, prices, 
           <div className="cd-section">⚡ Signal <span className="muted" style={{ fontWeight: 400 }}>· volume-confirmed move forming</span></div>
           <div className="cd-chips">
             <span className="arc-win signal">about to move</span>
-            <span className="cd-chip" title="price at the anomaly">at {fmt.rate(signal.close)}</span>
+            <span className="cd-chip" title="price at the anomaly">at {fmt.rate(rp(signal.close))} <Cur id={num} size={12} /></span>
           </div>
         </>}
         <LeagueArcSection name={r.name} />
@@ -173,20 +173,28 @@ export function useAssetModal() {
   const [num, setNum] = useState(null)              // numeraire override inside the modal (not persisted)
   const [winH, setWinH] = useState(24)              // the window this detail was opened for (for the range label)
   const { nameOf } = useCurrencies()
-  const open = async (name) => {
+  // `inNum`: the numeraire the caller's list measured in (Hold's score, Movers' % in the league
+  // base), so the modal's % is the number the user just clicked.
+  const open = async (name, inNum = null) => {
     const w = useHorizon.getState().hours   // the app-wide horizon at open time
-    try { setWinH(w); setDetail(await api.asset(name, w)); setNum(null) }
+    try { setWinH(w); setDetail(await api.asset(name, w, inNum)); setNum(inNum) }
     catch { toast('No price history for that item yet', false) }
+  }
+  // A different numeraire is a different series (the dailies divided by THAT currency's
+  // dailies), so the modal refetches rather than rescaling the line by today's rate.
+  const repriceTo = async (nn) => {
+    setNum(nn)
+    try { setDetail(await api.asset(detail.row.name, winH, nn)) } catch {}
   }
   const node = (
     <AnimatePresence>
       {detail && (() => {
         const r = detail.row
         const ap = detail.prices || {}
-        const n = (num && ap[num] != null) ? num : (ap.divine != null ? 'divine' : (detail.reference || 'exalted'))
+        const n = (num && ap[num] != null) ? num : (r.pref_num && ap[r.pref_num] != null ? r.pref_num : (detail.reference || 'exalted'))
         const numOpts = Object.keys(ap).filter(id => id !== r.id).sort((a, b) => (ap[b] || 0) - (ap[a] || 0)).map(id => ({ id, name: nameOf(id) }))
         const close = () => { setDetail(null); setNum(null) }
-        return <CardDetail key="asset" r={r} num={n} factor={factorFor(r, n, ap, detail.pairs)} range={rangeLabel(winH)} numOptions={numOpts} onNum={(id, nn) => setNum(nn)} prices={ap} pairs={detail.pairs} onClose={close} />
+        return <CardDetail key="asset" r={r} num={n} factor={factorFor(r, n, ap, detail.pairs)} range={rangeLabel(winH)} numOptions={numOpts} onNum={(id, nn) => repriceTo(nn)} prices={ap} pairs={detail.pairs} onClose={close} />
       })()}
     </AnimatePresence>
   )

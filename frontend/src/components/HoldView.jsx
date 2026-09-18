@@ -25,7 +25,7 @@ export default function HoldView() {
   const [category, setCategory] = useState('all')
   const [numeraire, setNumeraire] = useState('divine')
   const assetModal = useAssetModal()          // click any row → the SAME zoom modal the Board uses
-  const zoom = (name) => assetModal.open(name)
+  const zoom = (name) => assetModal.open(name, numeraire)
 
   const hold = useApi(() => api.hold(hours, category, numeraire), [hours, category, numeraire])
   // Positive-movers board (secondary view): full-universe upward swings over the same window.

@@ -95,9 +95,17 @@ def top_movers(window_h: int = 24, n: int = 3, min_value_ex: float = MIN_VALUE_E
             "count": len(out), "assets": out[:n]}
 
 
-def asset_row(q: str, window_h: int = 24) -> dict | None:
-    """A single asset's CardDetail-shaped detail for the Board's expand modal, priced in
-    the league base (Exalted = the board reference). `q` is a name or slug."""
+_ANCHORS = ("divine", "chaos", "exalted", "mirror")
+
+
+def asset_row(q: str, window_h: int = 24, num: str | None = None) -> dict | None:
+    """A single asset's CardDetail-shaped detail for the Board's expand modal. `q` is a name
+    or slug. ONE source: the poe2scout daily closes. The number, the line and the % are all
+    that series expressed in the numeraire the card is shown in (`num`, else Divine when the
+    asset is worth at least one, else Exalted) — divided day by day by the numeraire's OWN
+    daily close, so a card priced in Divine moves the way it moved against Divine. (Mixing an
+    exchange rate into the headline while the % stayed in Exalted printed +29% on assets that
+    were flat in Divine.)"""
     wd = _win_days(window_h)
     cur_name, series, meta = _current_series()
     ql = q.strip().lower()
@@ -107,44 +115,51 @@ def asset_row(q: str, window_h: int = 24) -> dict | None:
     pts = series[iid]
     name, cat = meta[iid]
     last_t = pts[-1][0]
+    # Daily closes (Exalted) of the anchor numeraires, keyed by day, from the same table.
+    from .currencies import registry
+    anchor_series = {}
+    for rid in _ANCHORS:
+        aname = str(registry.name(rid)).lower()
+        aid = next((k for k, (n, _c) in meta.items() if n.lower() == aname), None)
+        if aid in series:
+            anchor_series[rid] = {p[0]: p[1] for p in series[aid]}
+    anchor_series["exalted"] = None                 # the base itself: 1 per day
+    # Reference (Exalted per unit) prices of the anchors on the latest day, so the client can
+    # show "value in other currencies" and reprice the card among them.
+    prices = {"exalted": 1.0}
+    for rid, days in anchor_series.items():
+        if days and days.get(last_t):
+            prices[rid] = days[last_t]
+    row_id = _slug(name)
+    # The numeraire the card is shown in: the client's pick if it is priced, else Divine when
+    # the asset is worth at least one (the board's readability rule), else Exalted.
+    # Never against itself (the row is slug-keyed, "divine-orb"; the anchors are trade ids).
+    itself = next((rid for rid in _ANCHORS if str(registry.name(rid)).lower() == name.lower()), None)
+    pref = "divine" if (prices.get("divine") and pts[-1][1] / prices["divine"] >= 1.0) else "exalted"
+    if num in prices and num != itself:
+        pref = num
+    if pref == itself:
+        pref = "exalted" if itself != "exalted" else "divine"
+    days_n = anchor_series.get(pref)
+    in_num = pts if days_n is None else [(t, v / days_n[t], val) for t, v, val in pts if days_n.get(t)]
+    if len(in_num) < 2:
+        in_num, pref = pts, "exalted"
     # Scope the detail graph to the SELECTED window so the line matches the headline % (a
     # full-league graph made a 3-day +557% trough-bounce look flat). Start at the exact base
     # point change_pct measures from — the newest point at/before the window start — so the
     # first plotted value IS the % denominator and the graph rises by change_pct across the
     # window. Falls back to the whole series if there's no point before the window start.
-    start = last_t - wd * _DAY
-    base, ch = marketseries.change_over(pts, wd * _DAY, t=lambda p: p[0], v=lambda p: p[1])
-    win_pts = [base] + [p for p in pts if p[0] > start]
+    start = in_num[-1][0] - wd * _DAY
+    base, ch = marketseries.change_over(in_num, wd * _DAY, t=lambda p: p[0], v=lambda p: p[1])
+    win_pts = [base] + [p for p in in_num if p[0] > start]
     if len(win_pts) < 2:                       # degenerate (e.g. brand-new item): show a bit more
-        win_pts = pts[-2:] if len(pts) >= 2 else pts
+        win_pts = in_num[-2:] if len(in_num) >= 2 else in_num
     trend = [{"t": p[0], "v": p[1]} for p in win_pts]
-    row = {"id": _slug(name), "name": name, "category": cat,
+    row = {"id": row_id, "name": name, "category": cat,
+           # mid stays Exalted per unit (the client's contract: mid / prices[num] = the shown
+           # price), and it equals the last trend point × prices[pref] by construction.
            "mid": pts[-1][1], "buy": None, "sell": None, "spread": None, "spread_pct": None,
            "source": "scout", "age_s": max(0, int(time.time()) - last_t), "depth": None,
-           "trend": trend, "change_pct": round(ch, 1) if ch is not None else None,
-           "medvol": round(statistics.median(p[2] for p in pts)), "pref_num": "divine"}
-    # Reference-currency (Exalted per unit) prices for the hard numeraires, keyed by the
-    # REGISTRY ids the client's Cur/board use ("divine", not poe2scout's "divine-orb"), so
-    # CardDetail can reprice into them and show "value in other currencies".
-    from . import leaguehistory
-    sp = leaguehistory.scout_prices(cur_name)
-    prices = {"exalted": 1.0}
-    for rid in ("divine", "chaos", "mirror"):
-        px = leaguehistory.scout_lookup(sp, rid)
-        if px:
-            prices[rid] = px
-    # Same direct-market rule as the board: if the asset trades against a numeraire directly,
-    # the client shows that market's rate instead of the cross of two Exalted prices.
-    # The row is keyed by poe2scout slug ("divine-orb"); the graph by trade id ("divine"), so
-    # resolve the trade id by display name and key the pairs by the ROW id the client holds.
-    try:
-        from .arbitrage import graph as _graph
-        from .currencies import registry
-        tid = next((i for i, c in registry.by_id.items() if str(c.name).lower() == name.lower()), None)
-        pairs = {}
-        if tid:
-            for k, v in _graph.cached_graph().pair_rates([tid], prices.keys()).items():
-                pairs[f"{row['id']}>{k.split('>', 1)[1]}"] = v
-    except Exception:   # the graph is a bonus here; the scout detail never fails without it
-        pairs = {}
-    return {"row": row, "prices": prices, "pairs": pairs, "reference": "exalted"}
+           "trend": trend, "trend_num": pref, "change_pct": round(ch, 1) if ch is not None else None,
+           "medvol": round(statistics.median(p[2] for p in pts)), "pref_num": pref}
+    return {"row": row, "prices": prices, "pairs": {}, "reference": "exalted"}

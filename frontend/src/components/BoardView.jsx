@@ -10,7 +10,7 @@ import { useStatus, ensureSettings } from '../lib/statusStore.js'
 import CurrencyPicker from './CurrencyPicker.jsx'
 import { useHorizon } from '../lib/horizonStore.js'
 import { useSync } from '../lib/syncStore.js'
-import { factorFor, valueIn } from '../lib/price.js'
+import { factorFor, trendIn, valueIn } from '../lib/price.js'
 
 
 // A number that is simply THERE on mount and rolls only when its value changes between polls
@@ -22,12 +22,12 @@ function AnimatedNumber({ value, format }) {
   return <motion.span>{text}</motion.span>
 }
 
-function Tile({ r, num, factor, numOptions, onNum, onRemove, onOpen, index = 0 }) {
+function Tile({ r, num, factor, prices, pairs, numOptions, onNum, onRemove, onOpen, index = 0 }) {
   const change = r.change_pct
   const f = factor || 1
   const rp = (v) => (v == null ? null : v / f)               // reprice R-value into `num`
   const mid = rp(r.mid)
-  const trend = r.trend ? r.trend.map(p => ({ t: p.t, v: p.v / f })) : r.trend
+  const trend = trendIn(r, num, f, prices, pairs)
   const unit = <Cur id={num} size={14} />
   // Flash the price green/red only when THIS currency's price changes (new data landing) —
   // compared before repricing, so changing "priced in" or the numeraire moving never flashes.
@@ -69,7 +69,7 @@ function Tile({ r, num, factor, numOptions, onNum, onRemove, onOpen, index = 0 }
       <Spark points={trend} />
       {/* Ask / bid / spread live in the zoomed card (CardDetail), with their currency — the base
           card stays a price, a trend and where the price came from. */}
-      <div className="pt-foot muted">hourly mid{r.age_s != null && <> · {fmt.age(r.age_s)} old</>}</div>
+      <div className="pt-foot muted">{r.source === 'scout' ? 'daily close' : 'hourly mid'}{r.age_s != null && <> · {fmt.age(r.age_s)} old</>}</div>
       {onNum && numOptions.length > 0 && (
         <div className="pt-num-row" onClick={e => e.stopPropagation()}>priced in{' '}
           <select value={num} onChange={e => onNum(r.id, e.target.value)} title="Currency this card is priced in (defaults to its highest-volume market)">
@@ -103,8 +103,10 @@ export default function BoardView({ status }) {
     try { localStorage.setItem('board.num.v1', JSON.stringify(next)) } catch {}
   }
 
+  // The picks ride along so each card's trend is the history of the market it is shown in.
+  const numsParam = useMemo(() => Object.entries(numById).map(([c, n]) => `${c}:${n}`).join(','), [numById])
   const load = async () => {
-    try { setData(await api.board(winH)); setErr(null) } catch (e) { setErr(String(e.message || e)) }
+    try { setData(await api.board(winH, numsParam)); setErr(null) } catch (e) { setErr(String(e.message || e)) }
   }
 
   // The board re-rendering IS the confirmation; only a failure toasts.
@@ -126,7 +128,7 @@ export default function BoardView({ status }) {
     await load()
     setBusy(false); setSyncBusy(false)
   }
-  useEffect(() => { load(); const t = setInterval(load, 30000); return () => clearInterval(t) }, [winH]) // eslint-disable-line
+  useEffect(() => { load(); const t = setInterval(load, 30000); return () => clearInterval(t) }, [winH, numsParam]) // eslint-disable-line
   // command palette → open a currency's detail here
   useEffect(() => nav.on(e => { if (e.type === 'openCurrency') setOpenId(e.id) }), [])
   // Hold leaderboard powers the pulse strip's top-3 holds + the full-universe top mover.
@@ -138,7 +140,7 @@ export default function BoardView({ status }) {
   }, [winH])
   // Expand a pulse-strip item into the shared detail modal (enlarged graph + volume + change
   // over time), identical to clicking a board currency — via /api/asset (daily data).
-  const openAsset = (name) => assetModal.open(name)
+  const openAsset = (name, inNum) => assetModal.open(name, inNum)
   useEffect(() => {
     if (!isDesktop) return
     ensureSettings().then(s => setWatchlist(s.watchlist || [])).catch(() => {})
@@ -227,7 +229,7 @@ export default function BoardView({ status }) {
               <span className="pulse-group-label" title="Top stores of value vs Divine (hold score). Click to expand its chart.">Hold</span>
               {pulse.holds.map((a, i) => (
                 <button key={a.id} className="pulse-chip clickable" title={`#${i + 1} to hold · ${a.name} — expand chart`}
-                  onClick={() => openAsset(a.name)}>
+                  onClick={() => openAsset(a.name, 'divine')}>
                   <span className="pulse-rank">{i + 1}</span><Cur name={a.name} size={16} />
                   <span className={`pulse-v ${a.ret_pct >= 0 ? 'gain' : 'loss'}`}>{fmt.pct(a.ret_pct)}</span></button>
               ))}
@@ -238,7 +240,7 @@ export default function BoardView({ status }) {
               <span className="pulse-group-label" title="Biggest % moves across all currencies over the window. Click to expand its chart.">Movers</span>
               {pulse.movers.map((a, i) => (
                 <button key={a.id} className="pulse-chip clickable" title={`#${i + 1} biggest move across all currencies · ${a.name} — expand chart`}
-                  onClick={() => openAsset(a.name)}>
+                  onClick={() => openAsset(a.name, 'exalted')}>
                   <span className="pulse-rank">{i + 1}</span><Cur name={a.name} size={16} />
                   <span className={`pulse-v ${a.change_pct >= 0 ? 'gain' : 'loss'}`}>{fmt.pct(a.change_pct)}</span></button>
               ))}
@@ -271,7 +273,7 @@ export default function BoardView({ status }) {
           <AnimatePresence mode="popLayout">
             {rows.map((r, i) => {
               const num = numFor(r)
-              return <Tile key={r.id} index={i} r={r} num={num} factor={factorFor(r, num, prices, pairs)} numOptions={numOptions}
+              return <Tile key={r.id} index={i} r={r} num={num} factor={factorFor(r, num, prices, pairs)} prices={prices} pairs={pairs} numOptions={numOptions}
                 onNum={setNum} onRemove={isDesktop && watchlist ? removeCur : null} onOpen={setOpenId} />
             })}
           </AnimatePresence>

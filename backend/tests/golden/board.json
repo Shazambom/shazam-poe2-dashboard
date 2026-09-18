@@ -50,7 +50,8 @@
      "t": 1799996400,
      "v": 50.0
     }
-   ]
+   ],
+   "trend_num": "exalted"
   },
   {
    "age_s": 0.0,
@@ -91,7 +92,8 @@
      "t": 1799996400,
      "v": 10.0
     }
-   ]
+   ],
+   "trend_num": "exalted"
   },
   {
    "age_s": null,
@@ -107,7 +109,8 @@
    "source": null,
    "spread": null,
    "spread_pct": null,
-   "trend": []
+   "trend": [],
+   "trend_num": "exalted"
   }
  ],
  "session": false
