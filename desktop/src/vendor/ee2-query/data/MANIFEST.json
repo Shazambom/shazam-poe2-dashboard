@@ -37,7 +37,7 @@
   "src/web/price-check/trade/pathofexile-trade.ts",
   "src/web/price-check/trends/getDetailsId.ts"
  ],
- "syncedAt": "2026-09-18T02:52:22.894Z",
+ "syncedAt": "2026-09-18T03:29:36.919Z",
  "files": {
   "vendor/bundle.cjs": {
    "sha256": "266394bdc6d00923e6630775e047af28c48c1c06d6e134d3289a82e39f3933d9",
@@ -88,7 +88,7 @@
    "bytes": 186636
   },
   "data/trade/stats.json": {
-   "sha256": "44fe6afabd87940bee35d1fbcc9937180a95171b1c0f9b8efcbf056095a5f6cb",
+   "sha256": "54fdba9403a2ee4e40ded09459ea2d5165f31db444d885487fbf661c5a0314de",
    "bytes": 853055
   }
  }
