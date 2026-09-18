@@ -129,7 +129,10 @@ async function startBackend() {
     backendProc.on('error', e => bkLog(`proc-error ${String(e && e.message || e)}`))
     backendProc.on('exit', (code, signal) => {
       console.log('[backend] exited', code, signal)
-      bkLog(`EXITED code=${code} signal=${signal}\n--- output tail ---\n${bkBuf.slice(-3000)}`)
+      // The output tail is for crashes. On an exit we asked for (quit / update install) it is only
+      // access-log noise — it was half of every telemetry window — so post the one line without it.
+      if (backendStopping) bkLog(`EXITED code=${code} signal=${signal} (requested)`)
+      else bkLog(`EXITED code=${code} signal=${signal}\n--- output tail ---\n${bkBuf.slice(-3000)}`)
       backendProc = null
     })
     const t0 = Date.now()
@@ -168,8 +171,10 @@ async function startBackend() {
   backendKind = 'local'
 }
 
+let backendStopping = false    // set by stopBackend(): the exit that follows is expected, not a crash
 function stopBackend() {
   if (!backendProc) return
+  backendStopping = true
   const pid = backendProc.pid
   // Kill the whole backend tree. On Windows a plain .kill() can leave the child
   // running, which then locks the install dir and breaks the next update — so force

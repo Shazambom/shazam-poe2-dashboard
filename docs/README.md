@@ -4,6 +4,7 @@ Architecture & maintenance docs for Arbiter (the PoE2 economy dashboard).
 
 ## Start here to build
 
+- [`bugs/2026-09-18-ee2-history-drops-after-idle.md`](./bugs/2026-09-18-ee2-history-drops-after-idle.md) — **OPEN**: the EE2 query worker's planned 10-minute idle exit is counted as a crash, so the 5-minute restart throttle silently drops every price check after a 10–15 min pause. Diagnosed from beta telemetry; fix proposed, not built.
 - [`bugs/2026-09-17-release-publish-not-atomic.md`](./bugs/2026-09-17-release-publish-not-atomic.md) — **CLOSED**: releases went live before their files did; fixed by the draft-first, no-tag, manifests-last, speed-cut, verify-then-flip flow in `desktop/scripts/release-assets.mjs` (proven on 0.2.61). Resolution at the top, investigation log below.
 - [`market-data-sources.md`](./market-data-sources.md) — **where prices come from**: the in-game Currency Exchange hourly digest is the sole source; the trade site's whisper-based Bulk Item Exchange is deprecated, and why.
 - [`dev-notes.md`](./dev-notes.md) — the working loop & hard-won gotchas: the three environments
