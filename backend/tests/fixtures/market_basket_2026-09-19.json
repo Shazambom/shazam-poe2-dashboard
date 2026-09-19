@@ -1,0 +1,1095 @@
+{
+ "basket": [
+  "preserved-cranium",
+  "fracturing-orb",
+  "omen-of-whittling",
+  "omen-of-light",
+  "perfect-chaos-orb",
+  "annul",
+  "essence-of-delirium",
+  "omen-of-sinistral-erasure",
+  "ancient-jawbone",
+  "simulacrum"
+ ],
+ "bridges": [
+  "origin-core",
+  "omen-of-dextral-annulment",
+  "greater-chaos-orb",
+  "perfect-vision-rune",
+  "breachlords-amalgam"
+ ],
+ "edges": [
+  {
+   "age_s": 2897,
+   "dst": "chaos",
+   "rate": 63.46976744186046,
+   "src": "ancient-jawbone",
+   "stock": 12557,
+   "vol_in_per_h": 516.1666666666666
+  },
+  {
+   "age_s": 2897,
+   "dst": "divine",
+   "rate": 7.642212189616253,
+   "src": "ancient-jawbone",
+   "stock": 13974,
+   "vol_in_per_h": 1116.2083333333333
+  },
+  {
+   "age_s": 2897,
+   "dst": "exalted",
+   "rate": 2340.0,
+   "src": "ancient-jawbone",
+   "stock": 25703,
+   "vol_in_per_h": 5.666666666666667
+  },
+  {
+   "age_s": 6497,
+   "dst": "greater-chaos-orb",
+   "rate": 3.0,
+   "src": "ancient-jawbone",
+   "stock": 42,
+   "vol_in_per_h": 0.125
+  },
+  {
+   "age_s": 2897,
+   "dst": "chaos",
+   "rate": 6.278417735274941,
+   "src": "annul",
+   "stock": 61322,
+   "vol_in_per_h": 10314.208333333334
+  },
+  {
+   "age_s": 2897,
+   "dst": "divine",
+   "rate": 0.7478765817299359,
+   "src": "annul",
+   "stock": 27499,
+   "vol_in_per_h": 24834.666666666668
+  },
+  {
+   "age_s": 2897,
+   "dst": "exalted",
+   "rate": 282.7496740547588,
+   "src": "annul",
+   "stock": 174377,
+   "vol_in_per_h": 866.7083333333334
+  },
+  {
+   "age_s": 2897,
+   "dst": "fracturing-orb",
+   "rate": 0.07142857142857142,
+   "src": "annul",
+   "stock": 4,
+   "vol_in_per_h": 14.583333333333334
+  },
+  {
+   "age_s": 2897,
+   "dst": "greater-chaos-orb",
+   "rate": 2.8518518518518516,
+   "src": "annul",
+   "stock": 57,
+   "vol_in_per_h": 16.166666666666668
+  },
+  {
+   "age_s": 6497,
+   "dst": "omen-of-light",
+   "rate": 0.1,
+   "src": "annul",
+   "stock": 6,
+   "vol_in_per_h": 11.416666666666666
+  },
+  {
+   "age_s": 17297,
+   "dst": "omen-of-whittling",
+   "rate": 0.07142857142857142,
+   "src": "annul",
+   "stock": 8,
+   "vol_in_per_h": 13.0
+  },
+  {
+   "age_s": 2897,
+   "dst": "perfect-chaos-orb",
+   "rate": 0.16666666666666666,
+   "src": "annul",
+   "stock": 2,
+   "vol_in_per_h": 16.625
+  },
+  {
+   "age_s": 20897,
+   "dst": "preserved-cranium",
+   "rate": 0.16666666666666666,
+   "src": "annul",
+   "stock": 1,
+   "vol_in_per_h": 0.5
+  },
+  {
+   "age_s": 10097,
+   "dst": "simulacrum",
+   "rate": 0.16666666666666666,
+   "src": "annul",
+   "stock": 4,
+   "vol_in_per_h": 4.25
+  },
+  {
+   "age_s": 2897,
+   "dst": "chaos",
+   "rate": 85.0,
+   "src": "breachlords-amalgam",
+   "stock": 1453,
+   "vol_in_per_h": 3.625
+  },
+  {
+   "age_s": 2897,
+   "dst": "divine",
+   "rate": 18.0,
+   "src": "breachlords-amalgam",
+   "stock": 406,
+   "vol_in_per_h": 18.25
+  },
+  {
+   "age_s": 2897,
+   "dst": "ancient-jawbone",
+   "rate": 0.015755532756851823,
+   "src": "chaos",
+   "stock": 149,
+   "vol_in_per_h": 31419.25
+  },
+  {
+   "age_s": 2897,
+   "dst": "annul",
+   "rate": 0.1592757988022294,
+   "src": "chaos",
+   "stock": 8564,
+   "vol_in_per_h": 65058.75
+  },
+  {
+   "age_s": 2897,
+   "dst": "divine",
+   "rate": 0.11743201548405559,
+   "src": "chaos",
+   "stock": 68827,
+   "vol_in_per_h": 1610515.7916666667
+  },
+  {
+   "age_s": 2897,
+   "dst": "essence-of-delirium",
+   "rate": 0.1791044776119403,
+   "src": "chaos",
+   "stock": 147,
+   "vol_in_per_h": 692.125
+  },
+  {
+   "age_s": 2897,
+   "dst": "exalted",
+   "rate": 57.27286585365854,
+   "src": "chaos",
+   "stock": 211008,
+   "vol_in_per_h": 13204.625
+  },
+  {
+   "age_s": 2897,
+   "dst": "fracturing-orb",
+   "rate": 0.012475508816825943,
+   "src": "chaos",
+   "stock": 146,
+   "vol_in_per_h": 58482.333333333336
+  },
+  {
+   "age_s": 2897,
+   "dst": "greater-chaos-orb",
+   "rate": 0.3411683638312534,
+   "src": "chaos",
+   "stock": 15516,
+   "vol_in_per_h": 26624.166666666668
+  },
+  {
+   "age_s": 2897,
+   "dst": "omen-of-dextral-annulment",
+   "rate": 0.015035188739603326,
+   "src": "chaos",
+   "stock": 169,
+   "vol_in_per_h": 28306.958333333332
+  },
+  {
+   "age_s": 2897,
+   "dst": "omen-of-light",
+   "rate": 0.02133230892256552,
+   "src": "chaos",
+   "stock": 505,
+   "vol_in_per_h": 128979.95833333333
+  },
+  {
+   "age_s": 2897,
+   "dst": "omen-of-sinistral-erasure",
+   "rate": 0.008397695231089861,
+   "src": "chaos",
+   "stock": 129,
+   "vol_in_per_h": 43182.125
+  },
+  {
+   "age_s": 2897,
+   "dst": "omen-of-whittling",
+   "rate": 0.013233630855899663,
+   "src": "chaos",
+   "stock": 374,
+   "vol_in_per_h": 145091.625
+  },
+  {
+   "age_s": 2897,
+   "dst": "origin-core",
+   "rate": 0.015264586160108548,
+   "src": "chaos",
+   "stock": 106,
+   "vol_in_per_h": 4036.2083333333335
+  },
+  {
+   "age_s": 2897,
+   "dst": "perfect-chaos-orb",
+   "rate": 0.020370200257211098,
+   "src": "chaos",
+   "stock": 180,
+   "vol_in_per_h": 48401.625
+  },
+  {
+   "age_s": 2897,
+   "dst": "perfect-vision-rune",
+   "rate": 0.07103825136612021,
+   "src": "chaos",
+   "stock": 108,
+   "vol_in_per_h": 209.0
+  },
+  {
+   "age_s": 2897,
+   "dst": "preserved-cranium",
+   "rate": 0.007894586569209685,
+   "src": "chaos",
+   "stock": 241,
+   "vol_in_per_h": 76768.66666666667
+  },
+  {
+   "age_s": 2897,
+   "dst": "simulacrum",
+   "rate": 0.035695589582515376,
+   "src": "chaos",
+   "stock": 666,
+   "vol_in_per_h": 35765.333333333336
+  },
+  {
+   "age_s": 2897,
+   "dst": "uhtreds-crest-of-the-chalice",
+   "rate": 1.0,
+   "src": "chaos",
+   "stock": 252,
+   "vol_in_per_h": 13.416666666666666
+  },
+  {
+   "age_s": 2897,
+   "dst": "ancient-jawbone",
+   "rate": 0.1308521636390489,
+   "src": "divine",
+   "stock": 1068,
+   "vol_in_per_h": 8026.083333333333
+  },
+  {
+   "age_s": 2897,
+   "dst": "annul",
+   "rate": 1.3371190172673542,
+   "src": "divine",
+   "stock": 43255,
+   "vol_in_per_h": 18733.291666666668
+  },
+  {
+   "age_s": 2897,
+   "dst": "breachlords-amalgam",
+   "rate": 0.05555555555555555,
+   "src": "divine",
+   "stock": 22,
+   "vol_in_per_h": 233.125
+  },
+  {
+   "age_s": 2897,
+   "dst": "chaos",
+   "rate": 8.515565332656458,
+   "src": "divine",
+   "stock": 410258,
+   "vol_in_per_h": 188773.5
+  },
+  {
+   "age_s": 2897,
+   "dst": "essence-of-delirium",
+   "rate": 1.8181818181818181,
+   "src": "divine",
+   "stock": 788,
+   "vol_in_per_h": 63.333333333333336
+  },
+  {
+   "age_s": 2897,
+   "dst": "exalted",
+   "rate": 463.24112547030916,
+   "src": "divine",
+   "stock": 683781,
+   "vol_in_per_h": 7373.375
+  },
+  {
+   "age_s": 2897,
+   "dst": "fracturing-orb",
+   "rate": 0.10309278350515463,
+   "src": "divine",
+   "stock": 2613,
+   "vol_in_per_h": 14610.291666666666
+  },
+  {
+   "age_s": 2897,
+   "dst": "greater-chaos-orb",
+   "rate": 2.838498789346247,
+   "src": "divine",
+   "stock": 8293,
+   "vol_in_per_h": 4377.666666666667
+  },
+  {
+   "age_s": 6497,
+   "dst": "lesser-essence-of-battle",
+   "rate": 0.018413597733711047,
+   "src": "divine",
+   "stock": 27,
+   "vol_in_per_h": 121.33333333333333
+  },
+  {
+   "age_s": 2897,
+   "dst": "mirror",
+   "rate": 0.0002620283489718507,
+   "src": "divine",
+   "stock": 54,
+   "vol_in_per_h": 79342.375
+  },
+  {
+   "age_s": 2897,
+   "dst": "omen-of-dextral-annulment",
+   "rate": 0.11658673722507028,
+   "src": "divine",
+   "stock": 2463,
+   "vol_in_per_h": 6688.5
+  },
+  {
+   "age_s": 2897,
+   "dst": "omen-of-light",
+   "rate": 0.1740840533927963,
+   "src": "divine",
+   "stock": 9873,
+   "vol_in_per_h": 36227.375
+  },
+  {
+   "age_s": 2897,
+   "dst": "omen-of-sinistral-erasure",
+   "rate": 0.0694320811821257,
+   "src": "divine",
+   "stock": 1028,
+   "vol_in_per_h": 13172.541666666666
+  },
+  {
+   "age_s": 2897,
+   "dst": "omen-of-whittling",
+   "rate": 0.10684670805201867,
+   "src": "divine",
+   "stock": 7765,
+   "vol_in_per_h": 44651.416666666664
+  },
+  {
+   "age_s": 2897,
+   "dst": "origin-core",
+   "rate": 0.12560581583198707,
+   "src": "divine",
+   "stock": 1077,
+   "vol_in_per_h": 3448.6666666666665
+  },
+  {
+   "age_s": 2897,
+   "dst": "perfect-chaos-orb",
+   "rate": 0.17096073257799163,
+   "src": "divine",
+   "stock": 2859,
+   "vol_in_per_h": 14789.75
+  },
+  {
+   "age_s": 2897,
+   "dst": "perfect-vision-rune",
+   "rate": 0.5675675675675675,
+   "src": "divine",
+   "stock": 518,
+   "vol_in_per_h": 24.625
+  },
+  {
+   "age_s": 2897,
+   "dst": "preserved-cranium",
+   "rate": 0.06365098512263771,
+   "src": "divine",
+   "stock": 3070,
+   "vol_in_per_h": 27364.208333333332
+  },
+  {
+   "age_s": 2897,
+   "dst": "simulacrum",
+   "rate": 0.3036675639300135,
+   "src": "divine",
+   "stock": 4605,
+   "vol_in_per_h": 6803.5
+  },
+  {
+   "age_s": 2897,
+   "dst": "uhtreds-crest-of-the-chalice",
+   "rate": 0.25,
+   "src": "divine",
+   "stock": 52,
+   "vol_in_per_h": 2.1666666666666665
+  },
+  {
+   "age_s": 2897,
+   "dst": "chaos",
+   "rate": 5.583333333333333,
+   "src": "essence-of-delirium",
+   "stock": 1190,
+   "vol_in_per_h": 125.20833333333333
+  },
+  {
+   "age_s": 2897,
+   "dst": "divine",
+   "rate": 0.55,
+   "src": "essence-of-delirium",
+   "stock": 78,
+   "vol_in_per_h": 64.20833333333333
+  },
+  {
+   "age_s": 2897,
+   "dst": "exalted",
+   "rate": 199.83333333333334,
+   "src": "essence-of-delirium",
+   "stock": 58509,
+   "vol_in_per_h": 44.208333333333336
+  },
+  {
+   "age_s": 2897,
+   "dst": "ancient-jawbone",
+   "rate": 0.00042735042735042735,
+   "src": "exalted",
+   "stock": 6,
+   "vol_in_per_h": 12755.125
+  },
+  {
+   "age_s": 2897,
+   "dst": "annul",
+   "rate": 0.0035366972688581585,
+   "src": "exalted",
+   "stock": 232,
+   "vol_in_per_h": 251947.04166666666
+  },
+  {
+   "age_s": 2897,
+   "dst": "chaos",
+   "rate": 0.01746027521226478,
+   "src": "exalted",
+   "stock": 3922,
+   "vol_in_per_h": 756625.625
+  },
+  {
+   "age_s": 2897,
+   "dst": "divine",
+   "rate": 0.00215870298429299,
+   "src": "exalted",
+   "stock": 893,
+   "vol_in_per_h": 3356147.375
+  },
+  {
+   "age_s": 2897,
+   "dst": "essence-of-delirium",
+   "rate": 0.0050041701417848205,
+   "src": "exalted",
+   "stock": 48,
+   "vol_in_per_h": 8716.958333333334
+  },
+  {
+   "age_s": 2897,
+   "dst": "greater-chaos-orb",
+   "rate": 0.007840597845585726,
+   "src": "exalted",
+   "stock": 271,
+   "vol_in_per_h": 133715.75
+  },
+  {
+   "age_s": 2897,
+   "dst": "omen-of-dextral-annulment",
+   "rate": 0.0004,
+   "src": "exalted",
+   "stock": 2,
+   "vol_in_per_h": 4493.791666666667
+  },
+  {
+   "age_s": 2897,
+   "dst": "omen-of-light",
+   "rate": 0.0006927430936892794,
+   "src": "exalted",
+   "stock": 13,
+   "vol_in_per_h": 81801.41666666667
+  },
+  {
+   "age_s": 2897,
+   "dst": "omen-of-sinistral-erasure",
+   "rate": 0.00024752475247524753,
+   "src": "exalted",
+   "stock": 1,
+   "vol_in_per_h": 7265.333333333333
+  },
+  {
+   "age_s": 2897,
+   "dst": "omen-of-whittling",
+   "rate": 0.00030855732309380144,
+   "src": "exalted",
+   "stock": 12,
+   "vol_in_per_h": 33051.916666666664
+  },
+  {
+   "age_s": 2897,
+   "dst": "perfect-chaos-orb",
+   "rate": 0.00047154982709839675,
+   "src": "exalted",
+   "stock": 37,
+   "vol_in_per_h": 36182.458333333336
+  },
+  {
+   "age_s": 2897,
+   "dst": "preserved-cranium",
+   "rate": 0.00027382881135476803,
+   "src": "exalted",
+   "stock": 12,
+   "vol_in_per_h": 38544.458333333336
+  },
+  {
+   "age_s": 2897,
+   "dst": "simulacrum",
+   "rate": 0.0007656967840735069,
+   "src": "exalted",
+   "stock": 94,
+   "vol_in_per_h": 29273.916666666668
+  },
+  {
+   "age_s": 2897,
+   "dst": "uhtreds-crest-of-the-chalice",
+   "rate": 0.2481012658227848,
+   "src": "exalted",
+   "stock": 380,
+   "vol_in_per_h": 388.25
+  },
+  {
+   "age_s": 2897,
+   "dst": "annul",
+   "rate": 14.0,
+   "src": "fracturing-orb",
+   "stock": 17,
+   "vol_in_per_h": 1.125
+  },
+  {
+   "age_s": 2897,
+   "dst": "chaos",
+   "rate": 80.15705128205128,
+   "src": "fracturing-orb",
+   "stock": 8597,
+   "vol_in_per_h": 780.6666666666666
+  },
+  {
+   "age_s": 2897,
+   "dst": "divine",
+   "rate": 9.7,
+   "src": "fracturing-orb",
+   "stock": 36148,
+   "vol_in_per_h": 1632.0
+  },
+  {
+   "age_s": 2897,
+   "dst": "exalted",
+   "rate": 2556.5,
+   "src": "fracturing-orb",
+   "stock": 2349,
+   "vol_in_per_h": 4.791666666666667
+  },
+  {
+   "age_s": 6497,
+   "dst": "ancient-jawbone",
+   "rate": 0.3333333333333333,
+   "src": "greater-chaos-orb",
+   "stock": 1,
+   "vol_in_per_h": 0.375
+  },
+  {
+   "age_s": 2897,
+   "dst": "annul",
+   "rate": 0.35064935064935066,
+   "src": "greater-chaos-orb",
+   "stock": 40,
+   "vol_in_per_h": 50.958333333333336
+  },
+  {
+   "age_s": 2897,
+   "dst": "chaos",
+   "rate": 2.9311041292639137,
+   "src": "greater-chaos-orb",
+   "stock": 31341,
+   "vol_in_per_h": 9103.833333333334
+  },
+  {
+   "age_s": 2897,
+   "dst": "divine",
+   "rate": 0.35229889959907873,
+   "src": "greater-chaos-orb",
+   "stock": 12208,
+   "vol_in_per_h": 12519.916666666666
+  },
+  {
+   "age_s": 2897,
+   "dst": "exalted",
+   "rate": 127.54129464285714,
+   "src": "greater-chaos-orb",
+   "stock": 112252,
+   "vol_in_per_h": 1000.7083333333334
+  },
+  {
+   "age_s": 13697,
+   "dst": "omen-of-light",
+   "rate": 0.05,
+   "src": "greater-chaos-orb",
+   "stock": 16,
+   "vol_in_per_h": 36.25
+  },
+  {
+   "age_s": 2897,
+   "dst": "omen-of-whittling",
+   "rate": 0.034482758620689655,
+   "src": "greater-chaos-orb",
+   "stock": 6,
+   "vol_in_per_h": 28.625
+  },
+  {
+   "age_s": 6497,
+   "dst": "perfect-chaos-orb",
+   "rate": 0.07142857142857142,
+   "src": "greater-chaos-orb",
+   "stock": 10,
+   "vol_in_per_h": 33.5
+  },
+  {
+   "age_s": 17297,
+   "dst": "preserved-cranium",
+   "rate": 0.047619047619047616,
+   "src": "greater-chaos-orb",
+   "stock": 6,
+   "vol_in_per_h": 7.0
+  },
+  {
+   "age_s": 2897,
+   "dst": "simulacrum",
+   "rate": 0.1111111111111111,
+   "src": "greater-chaos-orb",
+   "stock": 1,
+   "vol_in_per_h": 0.75
+  },
+  {
+   "age_s": 6497,
+   "dst": "exalted",
+   "rate": 1.0,
+   "src": "lesser-essence-of-battle",
+   "stock": 1,
+   "vol_in_per_h": 1.2916666666666667
+  },
+  {
+   "age_s": 2897,
+   "dst": "divine",
+   "rate": 3816.3809523809523,
+   "src": "mirror",
+   "stock": 60185,
+   "vol_in_per_h": 20.625
+  },
+  {
+   "age_s": 2897,
+   "dst": "chaos",
+   "rate": 66.51063829787235,
+   "src": "omen-of-dextral-annulment",
+   "stock": 3553,
+   "vol_in_per_h": 391.7083333333333
+  },
+  {
+   "age_s": 2897,
+   "dst": "divine",
+   "rate": 8.577304964539007,
+   "src": "omen-of-dextral-annulment",
+   "stock": 22591,
+   "vol_in_per_h": 775.0833333333334
+  },
+  {
+   "age_s": 2897,
+   "dst": "exalted",
+   "rate": 2500.0,
+   "src": "omen-of-dextral-annulment",
+   "stock": 17026,
+   "vol_in_per_h": 1.9583333333333333
+  },
+  {
+   "age_s": 6497,
+   "dst": "annul",
+   "rate": 10.0,
+   "src": "omen-of-light",
+   "stock": 10,
+   "vol_in_per_h": 1.375
+  },
+  {
+   "age_s": 2897,
+   "dst": "chaos",
+   "rate": 46.877251010657844,
+   "src": "omen-of-light",
+   "stock": 100087,
+   "vol_in_per_h": 2681.0416666666665
+  },
+  {
+   "age_s": 2897,
+   "dst": "divine",
+   "rate": 5.7443515388720865,
+   "src": "omen-of-light",
+   "stock": 57086,
+   "vol_in_per_h": 6367.0
+  },
+  {
+   "age_s": 2897,
+   "dst": "exalted",
+   "rate": 1443.5365853658536,
+   "src": "omen-of-light",
+   "stock": 19757,
+   "vol_in_per_h": 38.958333333333336
+  },
+  {
+   "age_s": 13697,
+   "dst": "greater-chaos-orb",
+   "rate": 20.0,
+   "src": "omen-of-light",
+   "stock": 215,
+   "vol_in_per_h": 2.0
+  },
+  {
+   "age_s": 6497,
+   "dst": "annul",
+   "rate": 20.0,
+   "src": "omen-of-sinistral-erasure",
+   "stock": 2,
+   "vol_in_per_h": 0.041666666666666664
+  },
+  {
+   "age_s": 2897,
+   "dst": "chaos",
+   "rate": 119.08029197080292,
+   "src": "omen-of-sinistral-erasure",
+   "stock": 9048,
+   "vol_in_per_h": 357.2916666666667
+  },
+  {
+   "age_s": 2897,
+   "dst": "divine",
+   "rate": 14.402564102564103,
+   "src": "omen-of-sinistral-erasure",
+   "stock": 9054,
+   "vol_in_per_h": 910.375
+  },
+  {
+   "age_s": 2897,
+   "dst": "exalted",
+   "rate": 4040.0,
+   "src": "omen-of-sinistral-erasure",
+   "stock": 42406,
+   "vol_in_per_h": 1.75
+  },
+  {
+   "age_s": 17297,
+   "dst": "annul",
+   "rate": 14.0,
+   "src": "omen-of-whittling",
+   "stock": 10,
+   "vol_in_per_h": 1.0
+  },
+  {
+   "age_s": 2897,
+   "dst": "chaos",
+   "rate": 75.56505171475231,
+   "src": "omen-of-whittling",
+   "stock": 76070,
+   "vol_in_per_h": 1812.25
+  },
+  {
+   "age_s": 2897,
+   "dst": "divine",
+   "rate": 9.359202714164546,
+   "src": "omen-of-whittling",
+   "stock": 38764,
+   "vol_in_per_h": 4696.166666666667
+  },
+  {
+   "age_s": 2897,
+   "dst": "exalted",
+   "rate": 3240.8888888888887,
+   "src": "omen-of-whittling",
+   "stock": 99847,
+   "vol_in_per_h": 10.0
+  },
+  {
+   "age_s": 2897,
+   "dst": "greater-chaos-orb",
+   "rate": 29.0,
+   "src": "omen-of-whittling",
+   "stock": 272,
+   "vol_in_per_h": 1.125
+  },
+  {
+   "age_s": 2897,
+   "dst": "chaos",
+   "rate": 65.5111111111111,
+   "src": "origin-core",
+   "stock": 762,
+   "vol_in_per_h": 58.416666666666664
+  },
+  {
+   "age_s": 2897,
+   "dst": "divine",
+   "rate": 7.961414790996785,
+   "src": "origin-core",
+   "stock": 2887,
+   "vol_in_per_h": 432.4166666666667
+  },
+  {
+   "age_s": 2897,
+   "dst": "annul",
+   "rate": 6.0,
+   "src": "perfect-chaos-orb",
+   "stock": 39,
+   "vol_in_per_h": 2.3333333333333335
+  },
+  {
+   "age_s": 2897,
+   "dst": "chaos",
+   "rate": 49.0913190529876,
+   "src": "perfect-chaos-orb",
+   "stock": 14885,
+   "vol_in_per_h": 1020.0
+  },
+  {
+   "age_s": 2897,
+   "dst": "divine",
+   "rate": 5.849296413980935,
+   "src": "perfect-chaos-orb",
+   "stock": 26129,
+   "vol_in_per_h": 2604.125
+  },
+  {
+   "age_s": 2897,
+   "dst": "exalted",
+   "rate": 2120.6666666666665,
+   "src": "perfect-chaos-orb",
+   "stock": 57498,
+   "vol_in_per_h": 17.791666666666668
+  },
+  {
+   "age_s": 2897,
+   "dst": "fracturing-orb",
+   "rate": 0.4,
+   "src": "perfect-chaos-orb",
+   "stock": 2,
+   "vol_in_per_h": 0.4166666666666667
+  },
+  {
+   "age_s": 6497,
+   "dst": "greater-chaos-orb",
+   "rate": 14.0,
+   "src": "perfect-chaos-orb",
+   "stock": 101,
+   "vol_in_per_h": 1.9583333333333333
+  },
+  {
+   "age_s": 6497,
+   "dst": "omen-of-light",
+   "rate": 1.0,
+   "src": "perfect-chaos-orb",
+   "stock": 1,
+   "vol_in_per_h": 0.125
+  },
+  {
+   "age_s": 2897,
+   "dst": "chaos",
+   "rate": 14.076923076923077,
+   "src": "perfect-vision-rune",
+   "stock": 74,
+   "vol_in_per_h": 13.625
+  },
+  {
+   "age_s": 2897,
+   "dst": "divine",
+   "rate": 1.7619047619047619,
+   "src": "perfect-vision-rune",
+   "stock": 17,
+   "vol_in_per_h": 15.041666666666666
+  },
+  {
+   "age_s": 20897,
+   "dst": "exalted",
+   "rate": 999.0,
+   "src": "perfect-vision-rune",
+   "stock": 2551,
+   "vol_in_per_h": 0.25
+  },
+  {
+   "age_s": 20897,
+   "dst": "annul",
+   "rate": 6.0,
+   "src": "preserved-cranium",
+   "stock": 32,
+   "vol_in_per_h": 0.08333333333333333
+  },
+  {
+   "age_s": 2897,
+   "dst": "chaos",
+   "rate": 126.66907775768536,
+   "src": "preserved-cranium",
+   "stock": 16357,
+   "vol_in_per_h": 513.4166666666666
+  },
+  {
+   "age_s": 2897,
+   "dst": "divine",
+   "rate": 15.71067593177511,
+   "src": "preserved-cranium",
+   "stock": 23340,
+   "vol_in_per_h": 1535.4166666666667
+  },
+  {
+   "age_s": 2897,
+   "dst": "exalted",
+   "rate": 3651.9166666666665,
+   "src": "preserved-cranium",
+   "stock": 50999,
+   "vol_in_per_h": 8.375
+  },
+  {
+   "age_s": 17297,
+   "dst": "greater-chaos-orb",
+   "rate": 21.0,
+   "src": "preserved-cranium",
+   "stock": 187,
+   "vol_in_per_h": 0.3333333333333333
+  },
+  {
+   "age_s": 2897,
+   "dst": "chaos",
+   "rate": 28.01466544454629,
+   "src": "simulacrum",
+   "stock": 16331,
+   "vol_in_per_h": 1253.75
+  },
+  {
+   "age_s": 2897,
+   "dst": "divine",
+   "rate": 3.2930747922437673,
+   "src": "simulacrum",
+   "stock": 11018,
+   "vol_in_per_h": 2028.4583333333333
+  },
+  {
+   "age_s": 2897,
+   "dst": "exalted",
+   "rate": 1306.0,
+   "src": "simulacrum",
+   "stock": 120627,
+   "vol_in_per_h": 21.625
+  },
+  {
+   "age_s": 2897,
+   "dst": "exalted",
+   "rate": 4.030612244897959,
+   "src": "uhtreds-crest-of-the-chalice",
+   "stock": 84,
+   "vol_in_per_h": 143.75
+  }
+ ],
+ "fees_by_trade": {
+  "ancient-jawbone": 1500,
+  "annul": 1000,
+  "breachlords-amalgam": 1000,
+  "chaos": 160,
+  "divine": 800,
+  "essence-of-delirium": 1000,
+  "exalted": 120,
+  "fracturing-orb": 1000,
+  "greater-chaos-orb": 500,
+  "lesser-essence-of-battle": 80,
+  "mirror": 25000,
+  "omen-of-dextral-annulment": 1000,
+  "omen-of-light": 1000,
+  "omen-of-sinistral-erasure": 1000,
+  "omen-of-whittling": 800,
+  "origin-core": 1000,
+  "perfect-chaos-orb": 1500,
+  "perfect-vision-rune": 1500,
+  "preserved-cranium": 540,
+  "simulacrum": 1000,
+  "uhtreds-crest-of-the-chalice": 1000
+ },
+ "garbage": [
+  "lesser-essence-of-battle",
+  "uhtreds-crest-of-the-chalice"
+ ],
+ "gold_value_per_1k": 0.05,
+ "hubs": [
+  "exalted",
+  "divine",
+  "chaos",
+  "mirror"
+ ],
+ "in_game_divine": {
+  "preserved-cranium": {
+   "ask": 15.5,
+   "bid": 16.0
+  }
+ },
+ "league": "Forbidden Rites",
+ "note": "Snapshot of the Forbidden Rites exchange digest, 2026-09-19 ~02:40 UTC, from the owner's market.sqlite. Owner-observed in-game: Preserved Cranium ask 15.5 / bid 16 Divine. The basket is valuable non-Divine assets; the two 'garbage' currencies carry real one-hour fat-finger trades against Divine.",
+ "reference": "exalted",
+ "scout_ex": {
+  "ancient-jawbone": 3556.4266108983534,
+  "annul": 372.01014747227964,
+  "breachlords-amalgam": null,
+  "chaos": 57.93781031190325,
+  "divine": 490.7819179436391,
+  "essence-of-delirium": 259.53407425794063,
+  "exalted": null,
+  "fracturing-orb": 4250.726388766585,
+  "greater-chaos-orb": 169.53482689318574,
+  "lesser-essence-of-battle": 47.185663864467685,
+  "mirror": 1818156.146346427,
+  "omen-of-dextral-annulment": 4052.7346613260443,
+  "omen-of-light": 2707.6011937558046,
+  "omen-of-sinistral-erasure": 7255.846352308027,
+  "omen-of-whittling": 4517.765378490632,
+  "origin-core": 3901.4562503649754,
+  "perfect-chaos-orb": 2775.874116184331,
+  "perfect-vision-rune": 851.0300979905198,
+  "preserved-cranium": 9141.093913283405,
+  "simulacrum": 1688.5846722625872,
+  "uhtreds-crest-of-the-chalice": null
+ },
+ "settings": {
+  "gold_model": {
+   "base_per_order": 0,
+   "fee_side": "buy",
+   "per_ref_unit": 10,
+   "per_unit": {}
+  },
+  "hub_count": 5,
+  "league": "Forbidden Rites",
+  "max_steps": 3,
+  "reference": "exalted",
+  "step_overhead_min": 2
+ },
+ "taken_at": 1789800497
+}

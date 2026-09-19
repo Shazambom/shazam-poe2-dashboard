@@ -137,9 +137,13 @@ def _predict(item_id, N, delta, past, weights=None, min_leagues=MIN_PRED_LEAGUES
         s = per.get(item_id)
         if not s:
             continue
-        p0, p1 = _nearest(s, N), _nearest(s, N + delta)
-        if p0 and p1 and p0[0] > 0:
-            fwd.append((rank, lg, math.log(p1[0] / p0[0])))
+        # Both ends smoothed like the current league's (_smooth): a past league's thin daily close
+        # is noise — a Cranium at 0.07 → 0.04 div one day read as −43% and dragged the forecast
+        # negative while its neighbours were flat.
+        if _nearest(s, N) and _nearest(s, N + delta):
+            p0, p1 = _smooth(s, N), _smooth(s, N + delta)
+            if p0 > 0:
+                fwd.append((rank, lg, math.log(p1 / p0)))
     if len(fwd) < min_leagues:
         return None
     wts = [max(0.0, weights.get(lg, 0.0)) for _r, lg, _f in fwd] if weights else None
@@ -159,7 +163,8 @@ def build_context(num_id: int):
     (cur_name, cur_per, past, meta) where past = [(league, per), ...]. Memoized 5 min per
     (league setting, numeraire) — the topbar arc chip and every /api/arc open hit this."""
     preferred = get_settings()["league"]
-    return cache.memo(_ctx_cache, (preferred, num_id), _CTX_TTL, lambda: _build_context(preferred, num_id))
+    return cache.memo(_ctx_cache, (preferred, num_id), _CTX_TTL,
+                      lambda: _build_context(preferred, num_id), max_entries=8)
 
 
 def _build_context(preferred: str, num_id: int):
@@ -174,6 +179,8 @@ def _build_context(preferred: str, num_id: int):
     built, day0s = {}, {}
     for lg, rws in by_league.items():
         built[lg], day0s[lg] = _build_league(rws, num_id)
+    if cur_name is None:                      # the selected league has no stored dailies
+        return None, {}, [], meta
     cur = built.get(cur_name, {})
     past = sorted(((lg, built[lg]) for lg in built if lg != cur_name), key=lambda x: day0s[x[0]] or "", reverse=True)
     return cur_name, cur, past, meta
@@ -210,6 +217,16 @@ def _leaderboard(horizon: str, category: str, numeraire: str, num_id: int, num_n
     hz = HORIZON_DAYS[horizon]
     delta = hz
 
+    # The return over the horizon is the exchange's HOURLY card in the numeraire wherever the
+    # exchange trades the asset (the same card and % the zoom opens), else the daily closes. The
+    # daily series still carries the drawdown, liquidity, confidence and the league-day the
+    # cross-league prediction is read from (past leagues only exist as dailies).
+    from . import movers
+    from .currencies import registry
+    anchor = marketseries.ANCHORS[numeraire]
+    num_tid = registry.resolve_meta(anchor.metadata_id) or numeraire
+    hourly = movers.exchange_cards(
+        [meta.get(iid, (str(iid), "?"))[0] for iid in cur if iid != num_id], hz * 24, num_tid)
     assets = []
     for iid, series in cur.items():
         if iid == num_id:                       # the numeraire itself (return ≈ 0 by construction)
@@ -220,6 +237,12 @@ def _leaderboard(horizon: str, category: str, numeraire: str, num_id: int, num_n
         m = _metrics(series, hz)
         if not m:
             continue
+        card = hourly.get(name)
+        # ...only when that card's line really is in this numeraire. A thin asset whose card fell
+        # back to the reference (or to poe2scout dailies) would otherwise contribute a vs-Exalted
+        # return to a board labelled "vs Divine", and Exalted inflates over a league.
+        if card and card["change_pct"] is not None and card["trend_num"] == num_tid:
+            m["ret"] = card["change_pct"] / 100.0
         pr = _predict(iid, m["cur_age"], delta, past, weights)
         assets.append({
             "id": iid, "name": name, "category": cat,

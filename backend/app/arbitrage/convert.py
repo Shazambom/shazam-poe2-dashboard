@@ -26,10 +26,11 @@ def _convert_path(g: Graph, path: list[Edge], amount: float, ref_value: dict[str
         return None
     sim = simulate(g, path, committed, ref_value)
     value_in = committed * ref_value.get(have, 0.0)
-    # Loss is measured against the have↔want MARKET when that pair trades (price_in), and only
-    # against the reference cross when it doesn't: "8 chaos for a divine when the market pays
-    # 8.4" is a 4.5% loss, whatever exalted says about either of them.
-    market = g.price_in(have, want, ref_value)               # want per have
+    # Loss is measured against what `have` is worth in `want` — a ratio of the one value table,
+    # which for a traded pair IS the market that prices it: "8 chaos for a divine when the market
+    # pays 8.4" is a 4.5% loss, whatever a thin exalted market says about either of them.
+    hv, wv = ref_value.get(have), ref_value.get(want)
+    market = (hv / wv) if (hv and wv) else None              # want per have
     got = (sim["end_amount"] / committed) if committed else 0.0
     loss_pct = ((1.0 - got / market) * 100.0) if market else 0.0
     loss_ref = value_in * loss_pct / 100.0
@@ -78,7 +79,7 @@ def _best_conversions(g: Graph, ref_value: dict[str, float], have: str, want: st
     if max_steps is None:
         max_steps = g.s.get("max_steps", 4)
     ref = g.s["reference"]
-    gold_ref_per_1k = gold_value_per_1k * (g.price_in("divine", ref, ref_value) or 1.0)   # Divine/1k -> ref/1k, via the divine↔ref market
+    gold_ref_per_1k = gold_value_per_1k * (ref_value.get("divine") or 1.0)   # Divine/1k -> ref/1k, at the one value table
     seen: dict[str, dict] = {}
     count = 0
     for path in g.iter_paths(have, want, max_steps):
@@ -113,7 +114,7 @@ def convert(have: str, want: str, amount: float | None = None, max_steps: int | 
     """Cheapest way to turn `have` into `want` across the live exchange graph (open path, not a
     loop). `amount` defaults to the user's held `have`. Rides the cached graph — read-only."""
     g = graph.cached_graph()
-    ref_value = g.ref_values()
+    ref_value = g.values()
     if amount is None:
         amount = db.get_capital().get(have, 0.0) or 1.0
     gv = settings_mod.gold_value_per_1k(g.s)

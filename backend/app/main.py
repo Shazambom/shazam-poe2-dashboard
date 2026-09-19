@@ -216,7 +216,7 @@ def map_currency(body: MetaOverride):
 def capital():
     """Holdings at paper value AND at what they would realize (Ghost Wealth) — see liquidity."""
     g = arbitrage.cached_graph()
-    return liquidity.capital_rows(db.get_capital(), g, g.ref_values())
+    return liquidity.capital_rows(db.get_capital(), g, g.values())
 
 
 class CapitalBody(BaseModel):
@@ -418,6 +418,21 @@ async def inflation_cross(item: int = leaguehistory.DEFAULT_ITEM):
     return res
 
 
+_backfill_asked: dict[str, float] = {}      # league -> when we last kicked a full crawl for it
+BACKFILL_RETRY_S = 1800
+
+
+def _ask_backfill(league: str | None) -> bool:
+    """Kick a full poe2scout crawl for an empty board, at most every BACKFILL_RETRY_S per league.
+    A league the site has no data for returns nothing however often we crawl, and the Board polls
+    this endpoint every 30s — without the cooldown that is a permanent crawl loop."""
+    now = time.time()
+    if now - _backfill_asked.get(league or "", 0.0) < BACKFILL_RETRY_S:
+        return False
+    _backfill_asked[league or ""] = now
+    return True
+
+
 @app.get("/api/hold")
 async def hold(window_h: int | None = None, horizon: str | None = None, category: str = "all",
                numeraire: str = "divine"):
@@ -427,8 +442,10 @@ async def hold(window_h: int | None = None, horizon: str | None = None, category
     hz = holdscore.horizon_for(window_h, horizon)
     res = await run_in_threadpool(holdscore.leaderboard, hz, category, numeraire)
     if not res["assets"]:
-        _spawn(leaguehistory.backfill(full=True))
-        return {**res, "building": True}
+        building = _ask_backfill(get_settings()["league"])
+        if building:
+            _spawn(leaguehistory.backfill(full=True))
+        return {**res, "building": building}
     return res
 
 
@@ -501,8 +518,10 @@ async def inflation_marketcap():
     stored full-currency backfill; if that hasn't run yet, kick it in the background."""
     res = await run_in_threadpool(leaguehistory.marketcap)
     if not res["leagues"]:
-        _spawn(leaguehistory.backfill(full=True))
-        return {**res, "building": True}
+        building = _ask_backfill("__marketcap__")
+        if building:
+            _spawn(leaguehistory.backfill(full=True))
+        return {**res, "building": building}
     return res
 
 
@@ -543,7 +562,7 @@ def market_top(hours: int = 24, limit: int = 40, by: str = "activity"):
     `by=value` ranks on traded VALUE normalized to Exalted (volume × the exchange graph's ref-value),
     consistent with the rest of the app. Each row carries both raw volumes and the traded value."""
     return digest.top_markets_valued(get_settings()["league"], hours, limit, by,
-                                     arbitrage.cached_graph().ref_values())
+                                     arbitrage.cached_graph().values())
 
 
 @app.get("/api/market/history")
@@ -639,18 +658,17 @@ def sales_ingest(body: SalesIngest):
 @app.get("/api/sales")
 def sales(league: str | None = None):
     rows = db.sales_list(league or None)
-    # Reference price for every currency a sale was paid in (through that currency's own market
-    # against the reference), so the client's total counts regal/vaal/annul sales, not just the
-    # four wealth anchors.
+    # Reference price for every currency a sale was paid in (the one value table, Graph.values),
+    # so the client's total counts regal/vaal/annul sales, not just the four wealth anchors.
     prices: dict[str, float] = {}
     try:
         g = arbitrage.cached_graph()
         ref = g.s["reference"]
-        rv = g.ref_values()
+        V = g.values()
         for r in rows:
             cur = str((r.get("price") or {}).get("currency") or "")
             if cur and cur not in prices:
-                px = 1.0 if cur == ref else g.price_in(cur, ref, rv)
+                px = 1.0 if cur == ref else V.get(cur)
                 if px:
                     prices[cur] = px
     except Exception:

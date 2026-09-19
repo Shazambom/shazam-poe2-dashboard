@@ -14,12 +14,12 @@ import { factorFor, trendIn, valueIn } from '../lib/price.js'
 import AnimatedNumber from '../lib/animatedNumber.js'
 
 
-function Tile({ r, num, factor, prices, pairs, numOptions, onNum, onRemove, onOpen, index = 0 }) {
+function Tile({ r, num, factor, prices, numOptions, onNum, onRemove, onOpen, index = 0 }) {
   const change = r.change_pct
   const f = factor || 1
   const rp = (v) => (v == null ? null : v / f)               // reprice R-value into `num`
   const mid = rp(r.mid)
-  const trend = trendIn(r, num, f, prices, pairs)
+  const trend = trendIn(r, num, f, prices)
   const unit = <Cur id={num} size={14} />
   // Flash the price green/red only when THIS currency's price changes (new data landing) —
   // compared before repricing, so changing "priced in" or the numeraire moving never flashes.
@@ -127,11 +127,18 @@ export default function BoardView({ status }) {
   useEffect(() => {
     // Holds = top stores of value (divine-denominated hold score). Movers = biggest |% change|
     // over the SAME window as the board, full universe — a genuinely different ranking.
-    api.hold(winH, 'all', 'divine').then(setHold).catch(() => setHold(null))
-    api.movers(winH, 3).then(setMovers).catch(() => setMovers(null))
-  }, [winH])
+    const load = () => {
+      api.hold(winH, 'all', 'divine').then(setHold).catch(() => setHold(null))
+      api.movers(winH, 3).then(setMovers).catch(() => setMovers(null))
+    }
+    load()
+    // Same refresh as the tiles beside them — chips that only reloaded on a window change sat
+    // stale next to a board that polls.
+    const t = setInterval(load, 30000)
+    return () => clearInterval(t)
+  }, [winH, tick])
   // Expand a pulse-strip item into the shared detail modal (enlarged graph + volume + change
-  // over time), identical to clicking a board currency — via /api/asset (daily data).
+  // over time), identical to clicking a board currency — via /api/asset (the hourly exchange card).
   const openAsset = (name, inNum) => assetModal.open(name, inNum)
   useEffect(() => {
     if (!isDesktop) return
@@ -143,7 +150,6 @@ export default function BoardView({ status }) {
   const ref = data?.reference ?? 'ref'
   const rows = data?.rows ?? []
   const prices = data?.prices ?? {}
-  const pairs = data?.pairs ?? {}
   // Currencies a card can be priced in = those with a known reference price, richest first.
   const numOptions = useMemo(() => Object.keys(prices)
     .sort((a, b) => (prices[b] || 0) - (prices[a] || 0))
@@ -206,7 +212,7 @@ export default function BoardView({ status }) {
               <span className="pulse-group-label" title="Hubs — the market's most-traded currencies; most trades route through them, so they're easy to buy and sell. Click to expand.">Hubs <span className="pulse-hub">⬢</span></span>
               {hubChips.map(r => {
                 const num = numFor(r)
-                const val = valueIn(r.id, r.mid, num, prices, pairs)
+                const val = valueIn(r.id, r.mid, num, prices)
                 return (
                   <button key={r.id} className="pulse-chip clickable" title={`${r.name || nameOf(r.id)} — central market · expand chart`}
                     onClick={() => setOpenId(r.id)}>
@@ -232,7 +238,7 @@ export default function BoardView({ status }) {
               <span className="pulse-group-label" title="Biggest % moves across all currencies over the window. Click to expand its chart.">Movers</span>
               {pulse.movers.map((a, i) => (
                 <button key={a.id} className="pulse-chip clickable" title={`#${i + 1} biggest move across all currencies · ${a.name} — expand chart`}
-                  onClick={() => openAsset(a.name, 'exalted')}>
+                  onClick={() => openAsset(a.name, a.num)}>
                   <span className="pulse-rank">{i + 1}</span><Cur name={a.name} size={16} />
                   <span className={`pulse-v ${a.change_pct >= 0 ? 'gain' : 'loss'}`}>{fmt.pct(a.change_pct)}</span></button>
               ))}
@@ -265,7 +271,7 @@ export default function BoardView({ status }) {
           <AnimatePresence mode="popLayout">
             {rows.map((r, i) => {
               const num = numFor(r)
-              return <Tile key={r.id} index={i} r={r} num={num} factor={factorFor(r, num, prices, pairs)} prices={prices} pairs={pairs} numOptions={numOptions}
+              return <Tile key={r.id} index={i} r={r} num={num} factor={factorFor(r, num, prices)} prices={prices} numOptions={numOptions}
                 onNum={setNum} onRemove={isDesktop && watchlist ? removeCur : null} onOpen={setOpenId} />
             })}
           </AnimatePresence>
@@ -276,8 +282,8 @@ export default function BoardView({ status }) {
           const openRow = rows.find(r => r.id === openId)
           if (!openRow) return null
           const num = numFor(openRow)
-          return <CardDetail key="detail" r={openRow} num={num} factor={factorFor(openRow, num, prices, pairs)} range={rangeLabel(winH)}
-            numOptions={numOptions} onNum={setNum} prices={prices} pairs={pairs} onClose={() => setOpenId(null)} />
+          return <CardDetail key="detail" r={openRow} num={num} factor={factorFor(openRow, num, prices)} range={rangeLabel(winH)}
+            numOptions={numOptions} onNum={setNum} prices={prices} onClose={() => setOpenId(null)} />
         })()}
       </AnimatePresence>
       {/* A pulse-strip Hold/Mover item expanded into the SAME detail modal as a board currency. */}

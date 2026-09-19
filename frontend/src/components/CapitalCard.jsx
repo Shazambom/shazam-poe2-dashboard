@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react'
 import { api, fmt, surface } from '../lib/api.js'
 import { useAutosave } from '../lib/hooks.js'
+import { useStatus } from '../lib/statusStore.js'
+import { useSync } from '../lib/syncStore.js'
 import Cur from './Cur.jsx'
 import CurrencyPicker from './CurrencyPicker.jsx'
 import Wealth, { useWealthText } from './Wealth.jsx'
@@ -31,23 +33,31 @@ function worthLine(v, qtyStr, ref, backfilling, wtext) {
 // (debounced via the shared useAutosave hook) — no Save button, no separate page.
 export default function CapitalCard({ currencies, status, onSaved }) {
   const [qty, setQty] = useState(null)          // { currency: "string qty" } as typed
-  const [data, setData] = useState(null)        // last server valuation
 
+  // The valuation comes from the ONE capital fetch the app already makes (statusStore polls it
+  // every 30s and refreshes it after a gold-price change), so the card re-prices with everything
+  // else instead of fetching its own copy on a different schedule. A save's response wins over a
+  // poll that lands after it (`saved`), so a refresh never rolls the numbers back.
+  const shared = useStatus(s => s.capital)
+  const [saved, setSaved] = useState(null)
+  const data = saved ?? shared
   const { state, save, arm } = useAutosave(async (rows) => {
     const entries = {}
     Object.entries(rows).forEach(([c, v]) => { const n = Number(v); if (Number.isFinite(n) && n > 0) entries[c] = n })
     const d = await surface(api.putCapital(entries))
-    setData(d); onSaved?.()
+    setSaved(d); useStatus.setState({ capital: d }); onSaved?.()
   })
 
+  // Quantities are seeded once, from whichever copy arrives first, and then owned by the input:
+  // a refresh must never overwrite what you are typing.
   useEffect(() => {
-    api.capital().then(d => {
-      setData(d)
-      const r = Object.fromEntries(PRIMARY.map(p => [p, 0]))
-      d.rows.forEach(x => { r[x.currency] = x.qty })
-      setQty(r); arm()
-    }).catch(() => { setQty(Object.fromEntries(PRIMARY.map(p => [p, 0]))); arm() })
-  }, []) // eslint-disable-line
+    if (qty || !shared) return
+    const r = Object.fromEntries(PRIMARY.map(p => [p, 0]))
+    shared.rows.forEach(x => { r[x.currency] = x.qty })
+    setQty(r); arm()
+  }, [shared]) // eslint-disable-line
+  const tick = useSync(s => s.tick)
+  useEffect(() => { if (tick > 0) setSaved(null) }, [tick])   // ⟳: trust the shared copy again
 
   const setOne = (c, v) => setQty(r => { const n = { ...r, [c]: v }; save(n); return n })
   const remove = (c) => setQty(r => { const n = { ...r }; delete n[c]; save(n); return n })

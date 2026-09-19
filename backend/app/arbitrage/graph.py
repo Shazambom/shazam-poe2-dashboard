@@ -7,6 +7,7 @@ rounding and the gold fee model; route_cap/cycle_unit size a path by its liquidi
 """
 from __future__ import annotations
 
+import heapq
 import math
 from .. import cache, digest, gamedata, leaguehistory, orderbook, recipes
 from ..currencies import registry
@@ -14,6 +15,9 @@ from ..settings import get_settings
 from dataclasses import dataclass, field
 
 INF = float("inf")
+# Graph.values: the most two sides of one market may disagree (each valued independently) and
+# still price it. Thin-but-honest markets run ~2-3× apart; fat-fingers thousands.
+SIDE_MISMATCH = 10.0
 BAIT_FACTOR = 1.5     # a live offer paying > this × the pair's EXECUTED (digest) rate is bait
 
 
@@ -84,10 +88,14 @@ class Graph:
         self.adj: dict[str, list[Edge]] = {}
         self.sources = {"live": 0, "digest": 0, "recipe": 0}
         self.fee_table: dict[str, int] = {}
+        self._values: dict[str, float] | None = None     # Graph.values(), once per build
+        self.priced_by: dict[str, str] = {}              # currency -> the counterpart that prices it
 
     def add(self, e: Edge) -> None:
         self.edges[(e.src, e.dst)] = e
         self.adj.setdefault(e.src, []).append(e)
+        self._values = None
+        self.priced_by = {}          # the parent map belongs to the table it was built with
         self.sources[e.kind] += 1
 
     # ------------------------------------------------------------ build
@@ -142,6 +150,7 @@ class Graph:
                 g.sources[g.edges[k].kind] -= 1
                 del g.edges[k]
             if dropped:
+                g._values, g.priced_by = None, {}
                 g.adj = {}
                 for e in g.edges.values():
                     g.adj.setdefault(e.src, []).append(e)
@@ -156,7 +165,7 @@ class Graph:
     # ------------------------------------------------------------ values
     def direct_rate(self, c: str, n: str) -> float | None:
         """Price of 1 `c` in `n` from the c↔n market itself: the c→n edge's rate, else the
-        inverse of n→c, else None. See `price_in` for the rule the display layer uses."""
+        inverse of n→c, else None. Whether that market PRICES c is values()'s answer (priced_by)."""
         e = self.edges.get((c, n))
         if e and e.rate > 0:
             return e.rate
@@ -165,58 +174,150 @@ class Graph:
             return 1.0 / e.rate
         return None
 
-    def _market_vol_ref(self, a: str, b: str, rv: dict[str, float]) -> float | None:
-        """Executed volume of the a↔b market per hour, in the reference (both directions
-        summed); None when the pair has no market. Recipes/live edges without a volume count 0."""
-        found, vol = False, 0.0
-        for src, dst in ((a, b), (b, a)):
-            e = self.edges.get((src, dst))
-            if e and e.rate > 0:
-                found = True
-                vol += (e.vol_in_per_h or 0.0) * (rv.get(src) or 0.0)
-        return vol if found else None
+    def values(self) -> dict[str, float]:
+        """THE value of 1 unit of each currency in the reference — the one table every screen
+        prices from (Board, zoomed card, Capital and its cash-out, wealth, Hold, Movers).
 
-    def price_in(self, c: str, n: str, rv: dict[str, float] | None = None) -> float | None:
-        """Price of 1 `c` in `n` — the ONE rule for every displayed conversion (a card in its
-        counterpart, a holding in the reference, gold quoted in Divine, a sale's value).
+        The volume rule, applied once for the whole market: each currency is valued through its
+        DEEPEST chain of markets from the reference — a widest path, where a market's width is the
+        value it trades per hour and a chain is as wide as its thinnest market. A Preserved Cranium
+        is priced through Divine (~11M ex/h), not its direct Exalted market (~30k ex/h, half the
+        price). A market is only as deep as its thinner SIDE: both sides are valued (the settled
+        side at its value, the other at the pessimistic floor), and a market whose sides disagree by more
+        than SIDE_MISMATCH× is not a price at all — a one-hour fat-finger moved ~56k ex of Divine
+        for ~2 ex of Lesser Essence of Battle (a thin-but-honest market, like the cranium's
+        Exalted one, is off by ~2-3×). Each hop uses the market's own rate
+        (`direct_rate`), so a card in the market that prices it shows exactly that market.
 
-        The c↔n market's own rate when that market is at least as liquid as the weaker leg of
-        the cross through the reference (c↔ref, n↔ref); otherwise the cross of two reference
-        values. The volume test is what makes this safe: a liquid pair (divine↔chaos) is priced
-        by its own market — the cross was 15% off it — while a thin pair with one stale trade
-        defers to the liquid reference legs. A pair with no market is always the cross."""
-        rv = rv if rv is not None else self.ref_values()
-        direct = self.direct_rate(c, n)
-        if direct is None:
-            a, b = rv.get(c), rv.get(n)
-            return (a / b) if (a and b) else None
+        Currencies with no market at all fall back to `ref_values` (the poe2scout fallback).
+        EVERYTHING prices from here — the Board, cards, Capital, cash-out, wealth, Hold, Movers,
+        Convert and the Arbitrage routes — so no two screens can disagree about what a thing is
+        worth."""
+        if self._values is None:
+            self._values = self._widest_values()
+        return self._values
+
+    def _widest_values(self) -> dict[str, float]:
         ref = self.s["reference"]
-        if ref in (c, n):
-            return direct                           # the direct market IS the reference leg
-        legs = [self._market_vol_ref(c, ref, rv), self._market_vol_ref(n, ref, rv)]
-        if any(v is None for v in legs):
-            return direct                           # no cross to defer to
-        if (self._market_vol_ref(c, n, rv) or 0.0) >= min(legs):
-            return direct
-        a, b = rv.get(c), rv.get(n)
-        return (a / b) if (a and b) else direct
+        naive = self._floor_values()
+        nbrs: dict[str, set[str]] = {}
+        for (a, b), e in self.edges.items():
+            if e.kind != "recipe" and e.rate > 0:
+                nbrs.setdefault(a, set()).add(b)
+                nbrs.setdefault(b, set()).add(a)
 
-    def pair_rates(self, currencies, numeraires) -> dict[str, float]:
-        """`{"c>n": price_in}` for every (c, n) pair that has its own market (volume rule applied).
-        Only pairs with a market are present, so a consumer falls back to the cross by key miss."""
-        rv = self.ref_values()
-        out = {}
-        for c in currencies:
-            for n in numeraires:
-                if n == c or self.direct_rate(c, n) is None:
+        def market(a: str, b: str):
+            """The a->b EXCHANGE edge (never a vendor recipe: a recipe is a fixed rate nobody
+            trades at, and pricing a shard off one read it at half its market price)."""
+            e = self.edges.get((a, b))
+            return e if (e and e.kind != "recipe" and e.rate > 0) else None
+
+        def market_rate(a: str, b: str) -> float:
+            """b per a from the a<->b market itself, either direction, recipes ignored."""
+            e = market(a, b)
+            if e:
+                return e.rate
+            e = market(b, a)
+            return (1.0 / e.rate) if e else 0.0
+
+        def units(u: str, v: str) -> tuple[float, float]:
+            """(units of u, units of v) traded per hour in the u<->v market, each direction
+            converted at the market's own rate."""
+            uv, vu = market(u, v), market(v, u)
+            vol_uv = (uv.vol_in_per_h or 0.0) if uv else 0.0      # u sold per hour
+            vol_vu = (vu.vol_in_per_h or 0.0) if vu else 0.0      # v sold per hour
+            v_per_u = market_rate(u, v)
+            u_per_v = (1.0 / v_per_u) if v_per_u else 0.0
+            return vol_uv + vol_vu * u_per_v, vol_vu + vol_uv * v_per_u
+
+        scout_px = self._scout_values()
+        vals: dict[str, float] = {ref: 1.0}
+        priced_by: dict[str, str] = {}
+        width: dict[str, float] = {ref: INF}
+        heap = [(-INF, ref)]
+        done: set[str] = set()
+        while heap:
+            w, u = heapq.heappop(heap)
+            if u in done:
+                continue
+            done.add(u)
+            for v in nbrs.get(u, ()):
+                if v in done:
                     continue
-                r = self.price_in(c, n, rv)
-                if r:
-                    out[f"{c}>{n}"] = r
+                px = market_rate(v, u)                             # u per v
+                if not px:
+                    continue
+                uu, vv = units(u, v)
+                # Size the far side on evidence this market cannot fabricate: its own floor price
+                # AND poe2scout's close. A currency whose ONLY market is a fat-finger had a floor
+                # derived from that very trade, so both sides agreed and the test passed it.
+                other = [x for x in (naive.get(v), scout_px.get(v)) if x]
+                side_u, side_v = uu * vals[u], vv * (min(other) if other else 0.0)
+                if not side_u or not side_v or max(side_u, side_v) > SIDE_MISMATCH * min(side_u, side_v):
+                    continue                                       # the sides disagree: not a price
+                cand = min(-w, side_u, side_v)
+                if cand > width.get(v, 0.0):
+                    width[v] = cand
+                    vals[v] = vals[u] * px
+                    priced_by[v] = u                               # the market this price came from
+                    heapq.heappush(heap, (-cand, v))
+        self.priced_by = priced_by
+        # Whatever no market priced: poe2scout's close first (an independent source), then
+        # ref_values. A currency whose every market failed the side test must NOT come back at the
+        # price those same markets implied.
+        for c, x in scout_px.items():
+            vals.setdefault(c, x)
+        for c, x in self.ref_values().items():
+            vals.setdefault(c, x)
+        return vals
+
+    def _scout_values(self) -> dict[str, float]:
+        """poe2scout's latest close per currency, in the reference — evidence from outside the
+        exchange, used to size the far side of a market and to price what no market priced."""
+        scout = leaguehistory.scout_prices(self.s["league"])       # never raises (logs + {} on failure)
+        if not scout:
+            return {}
+        ex = self.direct_rate("exalted", self.s["reference"]) if self.s["reference"] != "exalted" else 1.0
+        out: dict[str, float] = {}
+        for cid in registry.by_id:
+            px = leaguehistory.scout_lookup(scout, cid)
+            if px and ex:
+                out[cid] = px * ex
         return out
 
+    def _floor_values(self) -> dict[str, float]:
+        """A deliberately PESSIMISTIC value per currency: the same levelled walk as `ref_values`
+        but keeping the LOWEST price each market implies. `values()` uses it only to size the far
+        side of a market, because the optimistic table is itself inflated by the very trades the
+        side test exists to catch (2,900 Divine for 53 Lesser Essences of Battle made the essence
+        look like it was worth 54 Divine on both sides)."""
+        low: dict[tuple[str, str], float] = {}
+        for (a, b), e in self.edges.items():
+            if e.kind != "recipe" and e.rate > 0:
+                low[(a, b)] = min(low.get((a, b), e.rate), e.rate)
+                low[(b, a)] = min(low.get((b, a), 1.0 / e.rate), 1.0 / e.rate)
+        hops: dict[str, list[tuple[str, float]]] = {}
+        for (a, b), r in low.items():
+            hops.setdefault(a, []).append((b, r))
+        vals: dict[str, float] = {self.s["reference"]: 1.0}
+        for _ in range(6):
+            level: dict[str, float] = {}
+            for n, out in hops.items():
+                if n in vals:
+                    continue
+                for dst, r in out:
+                    v = vals.get(dst)
+                    if v is not None and (n not in level or r * v < level[n]):
+                        level[n] = r * v
+            if not level:
+                break
+            vals.update(level)
+        return vals
+
     def ref_values(self) -> dict[str, float]:
-        """Value of 1 unit of each currency in the reference currency.
+        """Naive value of 1 unit of each currency in the reference — INTERNAL to `values()`, which
+        is the app's value table. It prices the far side of each market while the widest path is
+        being built, and prices whatever has no market at all.
 
         Levelled BFS from the reference: direct markets first, then 2..6 hops,
         taking the best rate at the first level a currency becomes reachable.
@@ -406,13 +507,12 @@ def anchor_prices() -> dict[str, float]:
     large). Reads the cached graph, so it is cheap enough to ride the 30s status poll."""
     s = get_settings()
     g = cached_graph()
-    rv = g.ref_values()
+    V = g.values()
     out = {s["reference"]: 1.0}
-    # The same rule every valued amount uses (price_in against the reference) — a holding of
-    # 1000 divine valued by price_in and re-denominated by the best-of-both-sides ref_value
-    # read "≈988 divine".
+    # The one value table every priced amount uses (Graph.values) — a holding valued by one rule
+    # and re-denominated by another once read "1000 divine ≈ 988 divine".
     for tid in ("exalted", "chaos", "divine", "mirror"):
-        px = g.price_in(tid, s["reference"], rv) if tid != s["reference"] else 1.0
+        px = V.get(tid)
         if px:
             out[tid] = float(px)
     return out

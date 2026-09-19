@@ -101,8 +101,14 @@ def _resolve_item(meta: dict, item) -> tuple[int | None, str]:
     except (ValueError, TypeError):
         pass
     want = str(item).strip().lower()
+    from .currencies import registry
+    from .leaguehistory import _slug
+    names = {want}
+    cur = registry.by_id.get(want)                 # a trade id ("chaos") names its item
+    if cur:
+        names.add(cur.name.lower())
     for iid, (name, _cat) in meta.items():
-        if name.lower() == want:
+        if name.lower() in names or _slug(name) == want:
             return iid, name
     return None, str(item)
 
@@ -132,15 +138,22 @@ def _counterpart_names(item_name: str) -> list[str]:
     if slug is None:
         return []
     g = arbitrage.cached_graph()
-    return [registry.name(other) for _volr, other in counterparts_by_volume(g, g.ref_values()).get(slug, [])]
+    return [registry.name(other) for _volr, other in counterparts_by_volume(g, g.values()).get(slug, [])]
 
 
 def arc_for(item, numeraire: str = "divine") -> dict:
     """Read-only league arc for `item` priced in `numeraire`. Degrades gracefully: no data → empty
     arc; sidecar down → recency-weighted (weighted=False, resembles=None)."""
-    if numeraire not in holdscore.NUMERAIRES:
-        numeraire = "divine"
-    num_id, num_name = holdscore.NUMERAIRES[numeraire]
+    # The arc is priced in whatever the CARD is shown in (the volume rule picked it), not always
+    # Divine: an omen's arc against Divine answered a question nobody asked on a card reading in
+    # Chaos. Any currency with daily history can be the numeraire; anchors keep their short slugs.
+    num_id, num_name = holdscore.NUMERAIRES.get(numeraire, (None, None))
+    if num_id is None:
+        _cur, _c, _p, meta0 = holdscore.build_context(holdscore.NUMERAIRES["divine"][0])
+        num_id, num_name = _resolve_item(meta0, numeraire)
+        if num_id is None:
+            numeraire = "divine"
+            num_id, num_name = holdscore.NUMERAIRES["divine"]
     cur_name, cur, past, meta = holdscore.build_context(num_id)
     item_id, item_name = _resolve_item(meta, item)
     if item_id is not None and item_id == num_id:

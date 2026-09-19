@@ -52,14 +52,14 @@ def test_series_for_league_shapes_points():
     assert all(len(p) == 3 for p in series[1])
 
 
-def test_pick_league_prefers_selected_then_falls_back():
+def test_pick_league_serves_the_selected_league_or_nothing():
+    """No silent fallback: a league with no stored data serves nothing rather than quietly
+    answering about a different economy than the Board (owner directive 2026-09-19)."""
     c = _db()
     rows = marketseries.read_rows(c)                 # all leagues, ORDER BY league, day
     assert marketseries.pick_league(rows, "Std", []) == "Std"
-    # preferred league has no data -> newest current league that does
-    assert marketseries.pick_league(rows, "Nope", current_leagues=["Std"]) == "Std"
-    # preferred absent, no current match -> the league with the latest day-0
-    assert marketseries.pick_league(rows, "Nope", current_leagues=[]) in {"Std", "Old"}
+    assert marketseries.pick_league(rows, "Nope", current_leagues=["Std"]) is None
+    assert marketseries.pick_league(rows, "Nope", current_leagues=[]) is None
 
 
 if __name__ == "__main__":

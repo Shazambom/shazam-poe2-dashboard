@@ -58,7 +58,7 @@ export default function HoldView() {
         </div>
         {/* Numeraire + Category apply only to Hold, but stay rendered (disabled/dimmed) in the
             Movers view so switching doesn't collapse the bar and jump the layout. */}
-        <div className={`seg ${isMovers ? 'hold-inactive' : ''}`} title="Hard-asset numeraire — what 'holds value' is measured against. Measured on daily poe2scout closes (item ÷ numeraire), not the hourly exchange.">
+        <div className={`seg ${isMovers ? 'hold-inactive' : ''}`} title="Hard-asset numeraire — what 'holds value' is measured against.">
           {numeraires.map(({ id: k, name }) => (
             <button key={k} disabled={isMovers} className={`seg-btn ${!isMovers && numeraire === k ? 'on' : ''}`} title={name} onClick={() => setNumeraire(k)}>vs {k[0].toUpperCase() + k.slice(1)}</button>
           ))}
@@ -120,13 +120,13 @@ export default function HoldView() {
             <thead>
               <tr>
                 <th>#</th><th>Asset</th><th>Category</th>
-                <th className="num" title={`% change over ${horizon}, in the league base (Exalted)`}>Change</th>
+                <th className="num" title={`% change over ${horizon}`}>Change</th>
                 <th className="num" title="Median daily traded value (Exalted/day) — liquidity">Volume</th>
               </tr>
             </thead>
             <tbody>
               {mvRows.map((r, i) => (
-                <tr key={r.id} className="route" title={`Expand ${r.name}`} onClick={() => zoom(r.name)}>
+                <tr key={r.id} className="route" title={`Expand ${r.name}`} onClick={() => assetModal.open(r.name, r.num)}>
                   <td className="muted">{i + 1}</td>
                   <td><Cur name={r.name} text /></td>
                   <td className="muted">{r.category}</td>

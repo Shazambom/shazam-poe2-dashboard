@@ -68,17 +68,13 @@ def change_over(pts: list, window_s: float, t=lambda p: p["t"], v=lambda p: p["v
 
 
 def pick_league(rows: list, preferred: str, current_leagues=()) -> str | None:
-    """Which league's series to serve: the user's `preferred` if it has data, else the newest
-    of the game's currently-live leagues (`current_leagues`, the lh_current kv) that does, else
-    the league with the latest first day. `rows` must be ORDER BY league, day."""
-    day0s: dict = {}
-    for r in rows:
-        day0s.setdefault(r[0], r[2])          # first day seen per league = its day-0
-    if preferred in day0s:
-        return preferred
-    cur = set(current_leagues or ())
-    return next((l for l in day0s if l in cur), None) or (
-        max(day0s, key=lambda l: day0s[l] or "") if day0s else None)
+    """Which league's series to serve: the league the user selected, or NOTHING.
+
+    There is no fallback on purpose (owner directive 2026-09-19). Quietly serving another
+    league's prices is worse than showing nothing: Hold, Movers and the league arc would answer
+    about a different economy than the Board, with no way to tell from the screen. `rows` must be
+    ORDER BY league, day; `current_leagues` is unused and kept for callers."""
+    return preferred if any(r[0] == preferred for r in rows) else None
 
 
 def build_series(rows: list, league: str) -> dict:

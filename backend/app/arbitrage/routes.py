@@ -118,7 +118,7 @@ def _route_from(g: Graph, cyc: list[Edge], start: str, held: float, budget: floa
     mp1k = (margin_ref / gold * 1000) if gold > 0 else (INF if margin_ref > 0 else 0.0)
     fh = sim["fill_hours"]
     # Gold priced by the user's slider (Divine per 1k gold -> reference per 1 gold).
-    gold_price_ref = settings_mod.gold_value_per_1k(g.s) * (g.price_in("divine", g.s["reference"], ref_value) or 1.0) / 1000.0   # via the divine↔ref market
+    gold_price_ref = settings_mod.gold_value_per_1k(g.s) * (ref_value.get("divine") or 1.0) / 1000.0   # at the one value table
     velocity = _velocity(margin_ref, fh, gold, gold_price_ref)
     return {
         "id": _edge_list_id(cyc),
@@ -201,7 +201,7 @@ def _search_setup(filters: dict | None, start_currencies: list[str] | None):
     g = graph.cached_graph()
     s = g.s
     f = {**s["filters"], **(filters or {})}
-    ref_value = g.ref_values()
+    ref_value = g.values()
     capital = db.get_capital()
     starts = start_currencies or [c for c, q in capital.items() if q > 0]
     notional = not starts

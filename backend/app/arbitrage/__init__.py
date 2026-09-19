@@ -7,7 +7,7 @@ routes (search, ranking, the route cache), convert (open-path conversion), board
 from __future__ import annotations
 
 from . import board as _board_mod, graph as _graph_mod, routes as _routes_mod
-from .board import BOARD_TTL_S, board, board_pairs, edge_table
+from .board import BOARD_TTL_S, asset, board, cards, board_pairs, edge_table
 from .convert import GOLD_VALUE_DIVINE_PER_1K, _best_conversions, _convert_path, convert
 from .graph import (GRAPH_TTL_S, INF, Edge, Graph, anchor_prices, cached_graph, cycle_unit, gold_fee,
                     route_cap, simulate)

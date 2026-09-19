@@ -5,8 +5,8 @@ import Cur from './Cur.jsx'
 
 // How much a Divine is worth in gold shifts across a league, so the player sets it. The slider
 // axis is gold-per-Divine on a log scale from 1k → 1M; the stored setting is its inverse,
-// gold_value_per_1k (Divine per 1000 gold), which feeds Convert's net-value ranking AND
-// Arbitrage velocity. The thumb is the Divine icon for a bit of flair.
+// gold_value_per_1k (Divine per 1000 gold), which feeds Convert's net-value ranking, Arbitrage
+// velocity AND the cash-out (ghost) figures. The thumb is the Divine icon for a bit of flair.
 const GPD_MIN = 20_000       // gold per Divine — gold precious end
 const GPD_MAX = 10_000_000   // gold per Divine — gold cheap end
 const LOG_MIN = Math.log10(GPD_MIN)
@@ -29,7 +29,9 @@ export default function GoldValueSlider({ onCommit }) {
     setGpd(nextGpd)
     clearTimeout(timer.current)
     timer.current = setTimeout(() => {
-      useStatus.getState().saveSettings({ gold_value_per_1k: 1000 / nextGpd }).then(() => onCommit?.()).catch(() => {})
+      useStatus.getState().saveSettings({ gold_value_per_1k: 1000 / nextGpd })
+        .then(() => { onCommit?.(); useStatus.getState().refresh() })   // cash-out (ghost) is net of gold too
+        .catch(() => {})
     }, 350)                                    // debounce: persist + re-rank routes after the drag settles
   }
 

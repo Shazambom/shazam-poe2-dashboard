@@ -4,7 +4,7 @@ import { useApi } from '../lib/hooks.js'
 
 // Phase 3 — the league-arc overlay inside CardDetail: the item's price history so far ('you are
 // here at day N'), a forward projected band, and buy/sell window chips, DTW-weighted toward the
-// past league the current run resembles. Priced in Divine (the app's held-value numeraire). Reads
+// past league the current run resembles. Priced in whatever the card is shown in. Reads
 // /api/arc; renders nothing when there's no projection (young data / no history) so it's additive.
 
 // The arc chart: solid history (colored by direction, matching Spark) → dashed gold projection with
@@ -48,8 +48,9 @@ function ArcSpark({ history, arc, w = 560, h = 150 }) {
   )
 }
 
-export default function LeagueArcSection({ name }) {
-  const { data: arc } = useApi(() => api.arc(name, 'divine'), [name])
+export default function LeagueArcSection({ name, num }) {
+  // Priced in what the card is shown in (the volume rule's pick), not always Divine.
+  const { data: arc } = useApi(() => api.arc(name, num || 'divine'), [name, num])
   if (!arc || !(arc.arc && arc.arc.length) || !(arc.history && arc.history.length >= 2)) return null
 
   const windows = arc.windows || []
@@ -57,7 +58,7 @@ export default function LeagueArcSection({ name }) {
     <>
       <div className="cd-section" title="Daily poe2scout closes (item ÷ numeraire), aligned by day-of-league">League arc
         <span className="muted" style={{ fontWeight: 400 }}>
-          {' · '}day {arc.cur_age}{arc.numeraire !== 'divine' ? ` · in ${arc.numeraire_name}` : ''}{arc.weighted && arc.resembles ? ` · resembles ${arc.resembles}` : ''}
+          {' · '}day {arc.cur_age}{` · in ${arc.numeraire_name}`}{arc.weighted && arc.resembles ? ` · resembles ${arc.resembles}` : ''}
         </span>
       </div>
       <div className="cd-arc"><ArcSpark history={arc.history} arc={arc.arc} /></div>

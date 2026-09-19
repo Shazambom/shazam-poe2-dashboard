@@ -1,9 +1,5 @@
 {
  "league": "GoldenLeague",
- "pairs": {
-  "chaos>exalted": 10.0,
-  "divine>exalted": 50.0
- },
  "prices": {
   "chaos": 10.0,
   "divine": 50.0,

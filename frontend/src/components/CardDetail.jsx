@@ -7,6 +7,7 @@ import { useCurrencies } from '../lib/icons.js'
 import LeagueArcSection from './LeagueArc.jsx'
 import { useSignals } from '../lib/signalStore.js'
 import { useHorizon } from '../lib/horizonStore.js'
+import { useStatus } from '../lib/statusStore.js'
 import { factorFor, trendIn, valueIn } from '../lib/price.js'
 
 export const SRC_LABEL = { live: 'live order book', digest: 'hourly market data', derived: 'derived via other markets', scout: 'poe2scout', none: 'no data' }
@@ -59,7 +60,7 @@ export function Spark({ points, w = 132, h = 34 }) {
 // The old tile→card morph occasionally measured the origin tile at a near-zero/off rect and
 // overshot to fill the whole screen for a frame ("blowup"). A self-contained enter/exit has
 // no shared-layout math, so that class of glitch can't happen.
-export default function CardDetail({ r, num, factor, numOptions, onNum, prices, pairs, onClose, range }) {
+export default function CardDetail({ r, num, factor, numOptions, onNum, prices, onClose, range }) {
   // Contract: a detail view must state the time range its graph + % cover. Callers pass a
   // label ("3d"/"24h"/…) or the literal "all" to opt into the whole-league view on purpose.
   // Missing range is a bug (an ambiguous, unlabeled graph) — fail loud rather than mislead.
@@ -67,7 +68,7 @@ export default function CardDetail({ r, num, factor, numOptions, onNum, prices, 
   const f = factor || 1
   const rp = (v) => (v == null ? null : v / f)
   const mid = rp(r.mid), buy = rp(r.buy), sell = rp(r.sell)
-  const trend = trendIn(r, num, f, prices, pairs)
+  const trend = trendIn(r, num, f, prices)
   const change = r.change_pct
   const inCurs = Object.keys(prices).filter(c => c !== r.id && prices[c]).sort((a, b) => prices[b] - prices[a]).slice(0, 8)
   // Phase 4: if this item currently has a fired 'about to move' signal, explain why it fired.
@@ -75,16 +76,13 @@ export default function CardDetail({ r, num, factor, numOptions, onNum, prices, 
   const signal = useSignals(s => s.byName[r.name])
   // Ghost Wealth: if the user HOLDS this currency, show what the stack would actually cash out to.
   // Pulls the enriched capital row (realizable/ghost/slippage/fill) — no bespoke endpoint.
-  const [cash, setCash] = useState(null)
-  useEffect(() => {
-    let live = true
-    api.capital().then(d => {
-      if (!live) return
-      const row = d.rows.find(x => x.currency === r.id && Number(x.qty) > 0)
-      if (row) setCash({ ...row, reference: d.reference })
-    }).catch(() => {})
-    return () => { live = false }
-  }, [r.id])
+  // From the app's one capital fetch (statusStore), so the cash-out here, the Capital card and
+  // the topbar total are always the same numbers priced at the same gold price.
+  const capital = useStatus(s => s.capital)
+  const cash = useMemo(() => {
+    const row = capital?.rows.find(x => x.currency === r.id && Number(x.qty) > 0)
+    return row ? { ...row, reference: capital.reference } : null
+  }, [capital, r.id])
   useEffect(() => {
     const h = (e) => { if (e.key === 'Escape') onClose() }
     window.addEventListener('keydown', h); return () => window.removeEventListener('keydown', h)
@@ -119,7 +117,7 @@ export default function CardDetail({ r, num, factor, numOptions, onNum, prices, 
             <span className="cd-chip" title="price at the anomaly">at {fmt.rate(rp(signal.close))} <Cur id={num} size={12} /></span>
           </div>
         </>}
-        <LeagueArcSection name={r.name} />
+        <LeagueArcSection name={r.name} num={num} />
         <div className="cd-grid">
           {r.medvol != null && <div className="cd-stat"><span>volume</span><b><Wealth v={r.medvol} cur="exalted" suffix={<span className="muted">/day</span>} /></b></div>}
           {r.age_s != null && <div className="cd-stat"><span>updated</span><b>{fmt.age(r.age_s)} ago</b></div>}
@@ -148,7 +146,7 @@ export default function CardDetail({ r, num, factor, numOptions, onNum, prices, 
           <div className="cd-section">Value in other currencies</div>
           <div className="cd-invalue">
             {inCurs.map(c => (
-              <div key={c} className="cd-vrow"><Cur id={c} text size={16} /><span className="spacer" /><b>{fmt.rate(valueIn(r.id, r.mid, c, prices, pairs))}</b></div>
+              <div key={c} className="cd-vrow"><Cur id={c} text size={16} /><span className="spacer" /><b>{fmt.rate(valueIn(r.id, r.mid, c, prices))}</b></div>
             ))}
           </div>
         </>}
@@ -165,7 +163,7 @@ export default function CardDetail({ r, num, factor, numOptions, onNum, prices, 
 }
 
 // Reusable "zoom into any asset by name" modal — the SAME card→detail morph the Board uses,
-// backed by /api/asset (poe2scout daily data). Any leaderboard (Board pulse strip, Hold,
+// backed by /api/asset (the hourly exchange card; poe2scout dailies for what the exchange doesn't trade). Any leaderboard (Board pulse strip, Hold,
 // Movers) calls `open(name, winH)` to expand a currency; drop `node` into the tree once.
 // Keeps every list's click-to-zoom identical instead of each view reinventing a modal.
 export function useAssetModal() {
@@ -180,8 +178,8 @@ export function useAssetModal() {
     try { setWinH(w); setDetail(await api.asset(name, w, inNum)); setNum(inNum) }
     catch { toast('No price history for that item yet', false) }
   }
-  // A different numeraire is a different series (the dailies divided by THAT currency's
-  // dailies), so the modal refetches rather than rescaling the line by today's rate.
+  // A different numeraire is a different series (the line re-expressed in THAT currency),
+  // so the modal refetches rather than rescaling the line by today's rate.
   const reqRef = useRef(0)
   const repriceTo = async (nn) => {
     const id = ++reqRef.current, was = num
@@ -199,7 +197,7 @@ export function useAssetModal() {
         const n = (num && ap[num] != null) ? num : (r.pref_num && ap[r.pref_num] != null ? r.pref_num : (detail.reference || 'exalted'))
         const numOpts = Object.keys(ap).filter(id => id !== r.id).sort((a, b) => (ap[b] || 0) - (ap[a] || 0)).map(id => ({ id, name: nameOf(id) }))
         const close = () => { setDetail(null); setNum(null) }
-        return <CardDetail key="asset" r={r} num={n} factor={factorFor(r, n, ap, detail.pairs)} range={rangeLabel(winH)} numOptions={numOpts} onNum={(id, nn) => repriceTo(nn)} prices={ap} pairs={detail.pairs} onClose={close} />
+        return <CardDetail key="asset" r={r} num={n} factor={factorFor(r, n, ap)} range={rangeLabel(winH)} numOptions={numOpts} onNum={(id, nn) => repriceTo(nn)} prices={ap} onClose={close} />
       })()}
     </AnimatePresence>
   )

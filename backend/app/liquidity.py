@@ -10,13 +10,25 @@ This is almost pure reuse of the Convert machinery: cashing out X is just the be
 of the full stack `X -> reference`. So it rides `arbitrage._best_conversions` /`simulate()` /
 `Edge.fill` — the same tested ladder walk — rather than re-deriving fills or gold.
 
-Pure over (graph, ref_value): no DB, no network, no sidecar. `liquidity` imports `arbitrage`;
+`ref_value` is THE value table (`Graph.values()`) — the same one the Board, cards and wealth use,
+so a holding's paper value is the price shown everywhere else. Pure over (graph, ref_value): no
+DB, no network, no sidecar. `liquidity` imports `arbitrage`;
 `arbitrage` never imports `liquidity` (no cycle).
 """
 from __future__ import annotations
 
+import math
+
 from . import arbitrage, centrality, settings
 from .currencies import registry
+
+
+# Two real hub markets of one holding disagree by a few % (a cranium's Chaos and Divine markets,
+# VWAP hours, spreads), so an honest one-hop sale can read as a small "gain" against the holding's
+# price. The convert ranker's 2% phantom-gain cap would throw those sales out; cash-out tolerates
+# this much instead, caps every sale at paper, and only ever passes through CASH markets — a
+# detour through a thin non-cash market (the stale "gains" this cap exists for) is arbitrage.
+CROSS_TOLERANCE_PCT = 10.0
 
 
 def cash_set(g: "arbitrage.Graph", ref_value: dict[str, float]) -> set[str]:
@@ -26,6 +38,32 @@ def cash_set(g: "arbitrage.Graph", ref_value: dict[str, float]) -> set[str]:
     at paper. Derived, not hardcoded — it tracks the `hub_count` setting and the live market,
     so as the economy shifts (or the user retunes the threshold) the cash set follows."""
     return centrality.hubs(g, ref_value, settings.hub_count(g.s))
+
+
+def _whole_units_out(cand: dict) -> int:
+    """What a path delivers when every hop pays out WHOLE units (you can't receive 15.71 Divine
+    for a cranium — you get 15, and sell those). The convert simulation floors only the end, so a
+    detour through a fractional middle leg can look like it beats the direct sale."""
+    amt = float(cand["in"])                     # the committed stack (a thin book strands the rest)
+    for st in cand["steps"]:
+        amt = math.floor(amt * st["out"] / st["in"] + 1e-9) if st["in"] else 0
+    return int(amt)
+
+
+def _liquid(g: "arbitrage.Graph", cand: dict) -> bool:
+    """Whether a cash-out path goes through markets that actually trade: every leg clears the
+    route filters' minimum traded value per hour and the stack fills within their maximum hours
+    (the same guards Arbitrage applies; unset = no guard). Liquid paths are PREFERRED over
+    illiquid ones rather than the only ones allowed — a holding too big for its market still has
+    an honest answer (a long fill time and a ghost), and reporting "no market data" for it was
+    wrong: there is market data."""
+    f = g.s.get("filters") or {}
+    min_vol, max_fill = f.get("min_volume_ref_per_h") or 0.0, f.get("max_fill_hours") or 0.0
+    if min_vol and (cand["volume_ref_per_h"] or 0.0) < min_vol:
+        return False
+    if max_fill and (cand["fill_hours"] is None or cand["fill_hours"] > max_fill):
+        return False
+    return True
 
 
 def _source(kinds: list[str]) -> str:
@@ -63,13 +101,10 @@ def realizable(g: "arbitrage.Graph", ref_value: dict[str, float], currency: str,
       path          — the cash-out route as a list of currency ids (None if unrealizable)
     """
     ref = g.s["reference"]
-    # Paper value through the holding's OWN market against the reference when it has one
-    # (price_in), not a multi-hop cross — the cap below compares realizable against this, so a
-    # cross-inflated paper would show fake ghost and a deflated one would truncate realizable.
-    px = g.price_in(currency, ref, ref_value) if currency != ref else 1.0
-    paper = qty * px if px else None
     if cash is None:
         cash = cash_set(g, ref_value)
+    px = 1.0 if currency == ref else ref_value.get(currency)
+    paper = qty * px if px else None
 
     # Cash-like holdings are realizable wealth already — no conversion, no gold, no ghost. (If
     # somehow unpriced — an empty market — we can't claim a value, so realize to null not qty.)
@@ -82,22 +117,33 @@ def realizable(g: "arbitrage.Graph", ref_value: dict[str, float], currency: str,
                 "slippage_pct": 0.0, "fill_hours": 0.0, "source": "cash",
                 "full_fill": True, "path": [currency]}
 
-    # Sell into whichever cash currency (or the reference) nets the most, valued in the reference.
-    # net_ref is reference-denominated for every target, so comparing across targets is fair.
-    best = None
+    # Sell into whichever cash currency (or the reference) nets the most VALUE, through liquid
+    # cash markets only, valued by the same table as paper (net of the gold the path charges).
+    rv = ref_value
+    best = best_value = best_key = None
     for target in dict.fromkeys((*sorted(cash), ref)):
         if target == currency:
             continue
-        cand = arbitrage._best_conversions(g, ref_value, currency, target, float(qty),
-                                           gold_value_per_1k=gold_value_per_1k)["best"]
-        if cand is not None and (best is None or cand["net_ref"] > best["net_ref"]):
-            best = cand
+        res = arbitrage._best_conversions(g, rv, currency, target, float(qty),
+                                          max_gain_pct=CROSS_TOLERANCE_PCT,
+                                          gold_value_per_1k=gold_value_per_1k)
+        worth = 1.0 if target == ref else (ref_value.get(target) or 0.0)
+        for cand in ([res["best"]] if res["best"] else []) + res["alternatives"]:
+            if any(n not in cash and n != ref for n in cand["path"][1:-1]):
+                continue                                   # a detour through a non-cash market is arbitrage
+            gold_ref = cand["out"] * rv.get(target, 0.0) - cand["net_ref"]
+            # Ranked on what it really delivers. Clamping to paper here first made every candidate
+            # at or above paper tie, and hop count alone then chose the route we display.
+            value = _whole_units_out(cand) * worth - gold_ref
+            key = (_liquid(g, cand), cand["full_fill"], value, -cand["hops"])
+            if best is None or key > best_key:
+                best, best_value, best_key = cand, value, key
     if best is None:                                       # no exchange market to measure against
         return {"paper_ref": paper, "realizable_ref": None, "ghost_ref": None,
                 "slippage_pct": None, "fill_hours": None, "source": "none",
                 "full_fill": False, "path": None}
 
-    realizable_ref = best["net_ref"]                       # already reference-denominated, net of gold
+    realizable_ref = best_value                            # reference-denominated, net of gold
     # You can't realize MORE than paper by cashing out — any apparent surplus is a cross-rate
     # inconsistency (the convert ranker tolerates ±max_gain_pct of noise) i.e. disguised
     # arbitrage, which belongs in the Arbitrage tab, not a "what can I cash out" number. Cap at
@@ -106,7 +152,7 @@ def realizable(g: "arbitrage.Graph", ref_value: dict[str, float], currency: str,
         realizable_ref = min(realizable_ref, paper)
     ghost = (paper - realizable_ref) if paper is not None else None
     return {"paper_ref": paper, "realizable_ref": realizable_ref, "ghost_ref": ghost,
-            "slippage_pct": best["loss_pct"], "fill_hours": best["fill_hours"],
+            "slippage_pct": max(0.0, best["loss_pct"]), "fill_hours": best["fill_hours"],
             "source": _source(best["kinds"]), "full_fill": best["full_fill"],
             "path": best["path"]}
 
@@ -118,7 +164,7 @@ def capital_rows(caps: dict[str, float], g: "arbitrage.Graph", ref_value: dict[s
     cash = cash_set(g, ref_value)          # hub currencies = cash-like; derived once (PageRank)
     rows = []
     for c, q in caps.items():
-        px = g.price_in(c, g.s["reference"], ref_value) if c != g.s["reference"] else 1.0
+        px = 1.0 if c == g.s["reference"] else ref_value.get(c)
         row = {"currency": c, "name": registry.name(c), "qty": q, "ref_value": px,
                "value_ref": (q * px) if px else None}
         liq = realizable(g, ref_value, c, q, cash=cash, gold_value_per_1k=gv)

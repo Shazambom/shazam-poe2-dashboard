@@ -169,6 +169,37 @@ def pair_history(league: str, a: str, b: str, hours: int = 168) -> list[dict]:
     return series
 
 
+def window_history(league: str, hours: int = 168):
+    """`pair_history` for MANY pairs over one window: the window's rows are read ONCE (one index
+    range scan) and grouped by market, and the returned `history(a, b)` answers any pair from
+    memory exactly as `pair_history(league, a, b, hours)` would. Per-pair queries cost a table
+    lookup for every row in the window (the (league, hour) index doesn't carry the pair), which
+    made carding hundreds of assets (Hold, Movers) take tens of seconds."""
+    since = _hour(time.time()) - hours * 3600
+    with db.q() as c:
+        rows = c.execute("SELECT hour, cur_a, cur_b, vol_a, vol_b FROM digest_markets WHERE league=? AND hour>=?",
+                         (league, since)).fetchall()
+    by_pair: dict[tuple[str, str], list] = {}
+    for r in rows:
+        by_pair.setdefault((r["cur_a"], r["cur_b"]), []).append(r)
+
+    def history(a: str, b: str, _hours: int | None = None) -> list[dict]:
+        metas_a, metas_b = registry.metas(a), registry.metas(b)
+        found = []
+        for ma in metas_a:
+            for mb in metas_b:
+                found += [(r, False) for r in by_pair.get((ma, mb), ())]
+                found += [(r, True) for r in by_pair.get((mb, ma), ())]
+        series = []
+        for r, flipped in sorted(found, key=lambda x: x[0]["hour"]):
+            va, vb = (r["vol_b"], r["vol_a"]) if flipped else (r["vol_a"], r["vol_b"])
+            if not va or not vb:
+                continue
+            series.append({"hour": r["hour"], "rate": vb / va, "volume_a": va, "volume_b": vb})
+        return series
+    return history
+
+
 _volume_cache: dict[tuple[str, int], tuple[float, dict]] = {}
 
 
