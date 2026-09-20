@@ -65,15 +65,30 @@ Per GGG's [developer docs](https://www.pathofexile.com/developer/docs/reference)
 
 ## Known limits of hourly data, and the rules that contain them
 
-Thin markets are noisy (one fat-finger trade can be "the rate" for up to `digest_max_age_h`). The
-guards, all in the route search:
+Thin markets are noisy: one fat-finger trade used to be "the rate" for up to `digest_max_age_h`.
+
+**The rate itself is now the window, not the newest hour** (`digest.window_rates`, 2026-09-20). Each
+market's hours over the last 48 are weighted by what they traded and halved every 12 hours. A quiet
+market gets 13% of its hours with a single trade behind them, and `traded_bounds` is blind there —
+one hour means `lo == hi`, which reads as a perfectly steady market. Measured against what each
+market actually traded over the following 24 hours, this cut rates that miss by 2x from 5.2% of
+active market-hours to 3.8%, and by 5x from 0.7% to 0.3%. A busy market is unmoved: its own recent
+hours already carry nearly all the weight. Because the result is a weighted mediant of hours the
+market really traded at, it can never leave the range they span — `tests/test_window_rates.py` holds
+that over every market in the owner's DB.
+
+The remaining guards, all in the route search:
 - **Sellers must exist** (`digest.directed_rates`) — no standing stock on the receiving side, no edge.
 - **Turnover relative to the trade** (`max_step_minutes`, default 45) — no step may need more than
   45 minutes of its own market's turnover.
 - **Liquidity floor** (`min_liquidity_ref`, default 200 ex) and **value floor** (`min_volume_ref_per_h`).
 - High margins are NOT capped: a +500% loop through a thin market is a real maker opportunity
   (place the order, wait) — the guards above qualify it, not the margin.
-- Better still, not built: a volume-weighted rate over several hours for thin pairs (vaal-street's approach).
+- Still open: pricing a thin pair THROUGH a liquid one (A↔hub × hub↔B) rather than directly. It is
+  what poe.ninja does (`maxVolumeCurrency`: every currency quoted against its deepest counterpart)
+  and what poe2scout does (base → bridge → everything else), and `Graph.ref_values()` already has
+  the topology. Measurement was attempted 2026-09-20 and the results were not credible — treat it
+  as unproven, not rejected.
 
 ## What is deprecated, and what still uses the trade-site session
 

@@ -145,7 +145,7 @@ def traded_bounds(rows) -> dict[tuple[str, str], tuple[float, float]]:
 
 
 def directed_rates(a: str, b: str, r, age: float, bounds: tuple[float, float] | None = None,
-                   wide_spread: float | None = None) -> dict[tuple[str, str], dict]:
+                   wide_spread: float | None = None, rate: float | None = None) -> dict[tuple[str, str], dict]:
     """The directed edges one traded hour of the a<->b market supports. An edge a->b hands you b,
     so someone must have been STANDING there offering b: the receiving side's standing stock
     (`hi_stock_*`) must be > 0. No sellers → no edge in that direction — traded volume is never a
@@ -157,12 +157,20 @@ def directed_rates(a: str, b: str, r, age: float, bounds: tuple[float, float] | 
     average is a price nobody will give you: you buy at the dearest and sell at the cheapest,
     never in the middle (owner, 2026-09-19 — a Tecrod's Gaze that sells for 12 divine was offered
     at 471 exalted because one sparse hour traded 2 of them for 175 ex). A market that repeats its
-    price keeps that price."""
+    price keeps that price.
+
+    `rate` is that market's `a` per `b` across the whole window (`window_rates`) and is what an
+    ACTIVE market is priced at; without it the newest hour alone sets the price, which for a quiet
+    market is one or two trades. The two mechanisms divide the space: `wide_spread` is the >2x
+    trip-wire that gives up on a market, `rate` is the denoiser underneath it. Both directions come
+    from the ONE number rather than from two divisions, so their product stays within a single
+    rounding step of 1 — a market that traded against itself would be a free two-hop loop."""
     lo, hi = bounds or (0.0, 0.0)
     wide = settings.wide_spread(settings.get_settings()) if wide_spread is None else wide_spread
     inactive = bool(lo > 0 and hi > 0 and wide > 0 and hi / lo >= wide)
-    to_b = (1.0 / hi) if inactive else (r["vol_b"] / r["vol_a"])     # b per a — you pay the dearest
-    to_a = lo if inactive else (r["vol_a"] / r["vol_b"])             # a per b — you take the cheapest
+    px = rate if rate else (r["vol_a"] / r["vol_b"])                 # a per b
+    to_b = (1.0 / hi) if inactive else (1.0 / px)                    # b per a — you pay the dearest
+    to_a = lo if inactive else px                                    # a per b — you take the cheapest
     out: dict[tuple[str, str], dict] = {}
     if r["hi_stock_b"]:
         out[(a, b)] = {"rate": to_b, "stock": r["hi_stock_b"], "inactive": inactive,
@@ -182,6 +190,7 @@ def latest_rates(league: str, max_age_hours: int = 6) -> dict[tuple[str, str], d
             (league, since),
         ).fetchall()
     bounds = traded_bounds(rows)            # how far the executed hours ran, per market
+    priced = window_rates(league)           # what each market traded at across the longer window
     wide = settings.wide_spread(settings.get_settings())
     out: dict[tuple[str, str], dict] = {}
     for r in rows:
@@ -192,8 +201,63 @@ def latest_rates(league: str, max_age_hours: int = 6) -> dict[tuple[str, str], d
         if (a, b) in out or (b, a) in out:  # newest hour already recorded
             continue
         out.update(directed_rates(a, b, r, time.time() - (r["hour"] + 3600),
-                                  bounds.get((r["cur_a"], r["cur_b"])), wide))
+                                  bounds.get((r["cur_a"], r["cur_b"])), wide,
+                                  priced.get((r["cur_a"], r["cur_b"]))))
     return out
+
+
+# ------------------------------------------------------------------ what a market is priced at
+# A quiet market trades once or twice a day, so in 13% of market-hours the window above holds
+# exactly ONE traded hour — and 87% of those move 1-2 units, where a single misclick becomes the
+# price for hours. `traded_bounds` cannot catch it: one hour means lo == hi, which reads as a
+# perfectly steady market. Pricing from a longer window instead, each hour weighted by what it
+# traded and halved every RATE_HALF_LIFE_H, cut rates that miss the next day's executed average by
+# 2x from 5.2% of active market-hours to 3.8%, and by 5x from 0.7% to 0.3% (197,398 market-hours
+# of the owner's DB, 2026-09-20). A busy market does not move: its own recent hours already carry
+# nearly all the weight, which is what makes one rule safe for every market.
+#
+# The result is a weighted MEDIANT of hours the market really traded at, so it can never fall
+# outside them — we cannot print a price nobody paid. `tests/test_window_rates.py` holds that, and
+# the exactness of the summation, over every market in the production DB.
+RATE_HALF_LIFE_H = 12.0
+RATE_WINDOW_H = 48                  # 4 half-lives; older hours are worth under 6% of the newest
+
+_rate_cache: dict[tuple[str, int], tuple[float, object, dict]] = {}
+
+
+def window_rates(league: str, hours: int = RATE_WINDOW_H) -> dict[tuple[str, str], float]:
+    """`cur_a` per `cur_b` for every market that traded in the window, keyed on the raw metadata
+    ids `traded_bounds` uses. Rebuilt only when a new digest hour lands — `latest_rates` runs on
+    every graph build, and the graph is rebuilt every few seconds."""
+    return cache.memo(_rate_cache, (league, hours), 86_400.0,
+                      lambda: _window_rates(league, hours),
+                      version=state["last_hour"], max_entries=8)
+
+
+def _window_rates(league: str, hours: int) -> dict[tuple[str, str], float]:
+    now = _hour(time.time())
+    with db.q() as c:
+        rows = c.execute("SELECT hour, cur_a, cur_b, vol_a, vol_b FROM digest_markets "
+                         "WHERE league=? AND hour>=?" + TRADED_ONLY,
+                         (league, now - hours * 3600)).fetchall()
+    return _fold_rates(rows, now)
+
+
+def _fold_rates(rows, now: int) -> dict[tuple[str, str], float]:
+    """Fold traded hours into one `cur_a` per `cur_b` per market. Pure over the rows, so a test
+    can push the whole production DB through it and check the answer against exact summation."""
+    acc: dict[tuple[str, str], list[float]] = {}
+    for r in rows:
+        va, vb = r["vol_a"], r["vol_b"]
+        if not va or not vb:                # a side with no volume has no rate to contribute
+            continue
+        w = 2.0 ** (-((now - r["hour"]) / 3600.0) / RATE_HALF_LIFE_H)
+        e = acc.get((r["cur_a"], r["cur_b"]))
+        if e is None:
+            e = acc[(r["cur_a"], r["cur_b"])] = [0.0, 0.0]
+        e[0] += w * va
+        e[1] += w * vb
+    return {k: a / b for k, (a, b) in acc.items() if b > 0}
 
 
 # An hour with no volume on a side has no rate, so the history readers below pass over it. Asking

@@ -1,7 +1,7 @@
 [
  {
   "age_s": 0.0,
-  "capacity_in": 500.0,
+  "capacity_in": 511.65936185433594,
   "capacity_ref": 5000.0,
   "depth": 1,
   "from": "chaos",
@@ -12,13 +12,13 @@
    "inactive": false,
    "volume": 10000
   },
-  "rate": 10.0,
+  "rate": 9.772126482508195,
   "to": "exalted",
   "to_name": "Exalted Orb"
  },
  {
   "age_s": 0.0,
-  "capacity_in": 400.0,
+  "capacity_in": 390.8850593003277,
   "capacity_ref": 20000.0,
   "depth": 1,
   "from": "divine",
@@ -29,14 +29,14 @@
    "inactive": false,
    "volume": 50000
   },
-  "rate": 50.0,
+  "rate": 51.16593618543361,
   "to": "exalted",
   "to_name": "Exalted Orb"
  },
  {
   "age_s": 0.0,
-  "capacity_in": 5000.0,
-  "capacity_ref": 5000.0,
+  "capacity_in": 4886.063241254098,
+  "capacity_ref": 4886.063241254098,
   "depth": 1,
   "from": "exalted",
   "from_name": "Exalted Orb",
@@ -46,14 +46,14 @@
    "inactive": false,
    "volume": 1000
   },
-  "rate": 0.1,
+  "rate": 0.10233187237086719,
   "to": "chaos",
   "to_name": "Chaos Orb"
  },
  {
   "age_s": 0.0,
-  "capacity_in": 20000.0,
-  "capacity_ref": 20000.0,
+  "capacity_in": 20466.37447417344,
+  "capacity_ref": 20466.37447417344,
   "depth": 1,
   "from": "exalted",
   "from_name": "Exalted Orb",
@@ -63,7 +63,7 @@
    "inactive": false,
    "volume": 1000
   },
-  "rate": 0.02,
+  "rate": 0.019544252965016388,
   "to": "divine",
   "to_name": "Divine Orb"
  }

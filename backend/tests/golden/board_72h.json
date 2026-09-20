@@ -1,26 +1,26 @@
 {
  "league": "GoldenLeague",
  "prices": {
-  "chaos": 10.0,
-  "divine": 50.0,
+  "chaos": 9.772126482508195,
+  "divine": 51.16593618543361,
   "exalted": 1.0
  },
  "reference": "exalted",
  "rows": [
   {
    "age_s": 0.0,
-   "buy": 50.0,
+   "buy": 51.1659361854336,
    "change_pct": -4.761904761904762,
    "depth": null,
    "hub": true,
    "id": "divine",
-   "mid": 50.0,
+   "mid": 51.16593618543361,
    "name": "Divine Orb",
    "pref_num": "exalted",
-   "sell": 50.0,
+   "sell": 51.16593618543361,
    "source": "digest",
-   "spread": 0.0,
-   "spread_pct": 0.0,
+   "spread": -7.105427357601002e-15,
+   "spread_pct": -1.3887026970150194e-14,
    "trend": [
     {
      "t": 1799978400,
@@ -51,15 +51,15 @@
   },
   {
    "age_s": 0.0,
-   "buy": 10.0,
+   "buy": 9.772126482508195,
    "change_pct": 5.000000000000001,
    "depth": null,
    "hub": false,
    "id": "chaos",
-   "mid": 10.0,
+   "mid": 9.772126482508195,
    "name": "Chaos Orb",
    "pref_num": "exalted",
-   "sell": 10.0,
+   "sell": 9.772126482508195,
    "source": "digest",
    "spread": 0.0,
    "spread_pct": 0.0,
