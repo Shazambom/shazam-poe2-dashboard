@@ -79,7 +79,7 @@ export function Detail({ r, refCur }) {
                       <span className="whisper" title={f.whisper}>{f.account ? `${f.account}: ` : ''}{f.whisper}</span>
                       <button className="btn small" onClick={() => copy(f.whisper, i)}>{copied === i ? 'Copied' : 'Copy'}</button>
                     </span>
-                  ) : <span className="muted">{s.kind === 'digest' ? 'hourly VWAP, place at market' : '–'}</span>}
+                  ) : <span className="muted">{s.kind === 'digest' ? 'exchange rate, place at market' : '–'}</span>}
                 </td>
               </tr>
             )

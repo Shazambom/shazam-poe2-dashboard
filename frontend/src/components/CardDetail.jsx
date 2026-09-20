@@ -120,7 +120,7 @@ export default function CardDetail({ r, num, factor, numOptions, onNum, prices, 
         <LeagueArcSection name={r.name} num={num} />
         <div className="cd-grid">
           {r.medvol != null && <div className="cd-stat"><span>volume</span><b><Wealth v={r.medvol} cur="exalted" suffix={<span className="muted">/day</span>} /></b></div>}
-          {r.age_s != null && <div className="cd-stat"><span>updated</span><b>{fmt.age(r.age_s)} ago</b></div>}
+          {r.age_s != null && <div className="cd-stat"><span>last traded</span><b>{fmt.age(r.age_s)} ago</b></div>}
           {r.hub && <div className="cd-stat" title="A central market — a lot of value routes through it"><span>market</span><b className="cd-hub">⬢ hub</b></div>}
         </div>
         {cash && cash.realizable_ref != null && cash.source !== 'cash' && (() => {

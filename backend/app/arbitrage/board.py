@@ -96,7 +96,8 @@ def cards(ids, window_h: int = 24, picks: dict[str, str] | None = None) -> dict[
     picks = picks or {}
     ids = [c for c in dict.fromkeys(ids) if c != R and rv.get(c)]
     # One card: its own queries. Many: read the window once (digest.window_history).
-    history = digest.window_history(league, window_h) if len(ids) > 1 else None
+    shared = digest.window_history(league, window_h + RATE_WARMUP_H) if len(ids) > 1 else None
+    history = _priced_history(league, window_h, shared)
     return {c: _row(g, rv, ranked, hub_ids, c, picks.get(c) if picks.get(c) != c else None, window_h,
                     scout, scout_hist, history)
             for c in ids}
@@ -129,6 +130,64 @@ def _align(a: list[dict], b: list[dict], op) -> list[dict]:
         if last and p["hour"] - last_h <= CARRY_MAX_H * 3600:
             out.append({"hour": p["hour"], "rate": op(p["rate"], last)})
     return out
+
+
+def _fold_series(series: list[dict]) -> list[dict]:
+    """A market's per-hour series folded into its PRICE at each hour: the same volume-weighted,
+    decayed rate `digest.window_rates` gives the number, evaluated at every point instead of only
+    at the newest one. Carried forward as a running sum, so it costs one pass.
+
+    Without it the line is what each hour printed, and a quiet market's hour is one or two trades:
+    Divine <-> Distilled Emotion (2026-09-20) traded a single unit at 0.01 for seven hours and then
+    one at 1.00, so the number read 0.01 under a line ending at a hundred times that. Each point is
+    a weighted mediant of hours the market really traded at, so the line can no more draw a price
+    nobody paid than the number can.
+
+    `/api/market/history` deliberately does NOT go through here — that page is the record of what
+    executed, and folding it would erase the trades it exists to show."""
+    if not series or series[0].get("volume_a") is None:
+        return series            # a caller's own rate-only series: nothing to weight by, so as-is
+    out, na, nb, prev = [], 0.0, 0.0, None
+    for p in series:
+        va, vb = p.get("volume_a"), p.get("volume_b")
+        if not va or not vb:     # `pair_history` never emits these; belt and braces
+            continue
+        if prev is not None:
+            decay = 2.0 ** (-((p["hour"] - prev) / 3600.0) / digest.RATE_HALF_LIFE_H)
+            na *= decay
+            nb *= decay
+        prev = p["hour"]
+        na += va
+        nb += vb
+        if na > 0:
+            out.append({**p, "rate": nb / na})
+    return out
+
+
+# A point at the LEFT edge of the window needs the hours before it, or the start of a 24h line
+# would be folded from one or two hours while its right-hand end had two days behind it — a line
+# that droops at the left for no reason. Read a window's worth of warm-up, draw only the window.
+RATE_WARMUP_H = int(digest.RATE_WINDOW_H)
+
+
+def _priced_history(league: str, window_h: int, shared=None):
+    """`history(a, b, h)` giving the PRICE of b in a at each hour (`_fold_series`), rather than
+    what that hour printed. `shared` is the batch reader (`digest.window_history`) when one card's
+    worth of queries would be repeated across hundreds of assets."""
+    span = window_h + RATE_WARMUP_H
+    base = shared if shared is not None else (
+        lambda a, b, _h: digest.pair_history(league, a, b, span))   # noqa: E731
+
+    def history(a, b, h):
+        folded = _fold_series(base(a, b, span))
+        if not folded:
+            return folded
+        # Trim the warm-up relative to the series' own newest hour, not the clock: `change_over`
+        # measures back from the last point too, and a market whose last trade is hours old should
+        # draw its own last `h` hours rather than an empty chart.
+        cutoff = folded[-1]["hour"] - h * 3600
+        return [p for p in folded if p["hour"] >= cutoff]
+    return history
 
 
 def _series(g, c: str, n: str, window_h: int, history, seen=()) -> list[dict]:
@@ -177,8 +236,8 @@ def _row(g, rv: dict[str, float], ranked, hub_ids, c: str, pick: str | None, win
     s = g.s
     R = s["reference"]
     league = s["league"]
-    if history is None:                          # hourly b-per-a series for the window
-        history = lambda a, b, h: digest.pair_history(league, a, b, h)   # noqa: E731
+    if history is None:                          # the price of b in a, hour by hour
+        history = _priced_history(league, window_h)
     mid = rv.get(c)     # includes the poe2scout fallback threaded through ref_values
     # Default numeraire: the highest-VOLUME counterpart whose price stays readable.
     # Cheap currencies' biggest market is often Divine (huge value moves even on
