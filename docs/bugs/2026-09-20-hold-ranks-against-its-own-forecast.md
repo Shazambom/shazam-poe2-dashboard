@@ -1,8 +1,8 @@
 # BUG — the Hold board ranks assets against its own forecast, and rewards the worst losers
 
-**Status:** FIXED (uncommitted, 2026-09-20) — the score, floor and cap below are implemented in
-`backend/app/holdscore.py` behind `backend/tests/test_hold_score.py` and driven in the packaged app. The three
-items under "Still open" are deliberately NOT part of it. · **Severity:** medium-high — the board's title is an instruction ("What to hold") and
+**Status:** FIXED — shipped in `0.3.2` (beta `0.3.2-beta.3`, validated by the owner; telemetry clean on
+win32 + darwin). The score, floor and cap below live in `backend/app/holdscore.py` behind
+`backend/tests/test_hold_score.py`. The three items under "Still open" are deliberately NOT part of it. · **Severity:** medium-high — the board's title is an instruction ("What to hold") and
 its sort order is a signal the literature says has the *opposite* sign at this horizon; separately, the bottom
 half of the board is ordered close to backwards · **Found:** 2026-09-20, owner reported "it's displaying some
 currencies we're actually predicting will go down" · **Affects:** every build since `b11d32b` (Hold shipped);
