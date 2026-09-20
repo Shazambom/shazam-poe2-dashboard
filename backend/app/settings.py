@@ -71,6 +71,10 @@ DEFAULTS: dict = {
     # league, so a slider (Arbitrage page, range 100k–10M gold/Divine) tunes this; it feeds
     # Convert's net-value ranking and Arbitrage velocity. Default 0.01 == 1 Divine ≈ 100k gold.
     "gold_value_per_1k": 0.01,
+    # Hold's stability dial (slider on the Hold page). 0 = rank on trailing return alone;
+    # higher = favour the steadier asset. Default 2.0 is the backtested setting — see
+    # docs/bugs/2026-09-20-hold-ranks-against-its-own-forecast.md.
+    "hold_caution": 2.0,
     # Notifications, per family (live trade pings, market signals) and per channel. In-app banner
     # and sound on by default; OS notifications opt-in. `volume` is the shared ping volume.
     "notifications": {
@@ -127,6 +131,13 @@ HUB_N = 5                         # fallback hub count (centrality.HUB_N mirrors
 
 def gold_value_per_1k(s: dict) -> float:
     return float(s.get("gold_value_per_1k") or GOLD_VALUE_DIVINE_PER_1K)
+
+
+def hold_caution(s: dict) -> float:
+    """Hold's drawdown weight. Clamped by `holdscore.clamp_k`, which owns the range."""
+    from .holdscore import clamp_k
+    v = s.get("hold_caution")
+    return clamp_k(DEFAULTS["hold_caution"] if v is None else v)
 
 
 def wide_spread(s: dict) -> float:

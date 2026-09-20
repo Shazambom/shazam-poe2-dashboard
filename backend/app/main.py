@@ -435,12 +435,14 @@ def _ask_backfill(league: str | None) -> bool:
 
 @app.get("/api/hold")
 async def hold(window_h: int | None = None, horizon: str | None = None, category: str = "all",
-               numeraire: str = "divine"):
+               numeraire: str = "divine", k: float | None = None):
     """Store-of-value leaderboard over the app-wide window (`window_h`, clamped to 7d — hold
     scores are tuned to a week; `horizon=1d|3d|7d` is the legacy spelling). Served from the
     stored full-currency backfill; kicks the background crawl if nothing's stored yet."""
     hz = holdscore.horizon_for(window_h, horizon)
-    res = await run_in_threadpool(holdscore.leaderboard, hz, category, numeraire)
+    # `k` = the Hold page's CAUTION slider (0 = return alone, higher = favour the steadier
+    # asset); omitted it falls back to the `hold_caution` setting.
+    res = await run_in_threadpool(holdscore.leaderboard, hz, category, numeraire, k)
     if not res["assets"]:
         building = _ask_backfill(get_settings()["league"])
         if building:

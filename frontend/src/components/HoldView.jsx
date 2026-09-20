@@ -5,6 +5,7 @@ import Cur from './Cur.jsx'
 import Wealth from './Wealth.jsx'
 import { useAssetModal } from './CardDetail.jsx'
 import { useHorizon } from '../lib/horizonStore.js'
+import CautionSlider from './CautionSlider.jsx'
 
 // "What to hold" leaderboard: assets ranked by how well they retain/gain value in
 // Divine over a horizon, with a cross-league forward-return prediction. Surfaces the
@@ -24,10 +25,11 @@ export default function HoldView() {
   const hours = useHorizon(s => s.hours)      // app-wide horizon (topbar)
   const [category, setCategory] = useState('all')
   const [numeraire, setNumeraire] = useState('divine')
+  const [k, setK] = useState(null)             // stability dial; null = use the saved setting
   const assetModal = useAssetModal()          // click any row → the SAME zoom modal the Board uses
   const zoom = (name) => assetModal.open(name, numeraire)
 
-  const hold = useApi(() => api.hold(hours, category, numeraire), [hours, category, numeraire])
+  const hold = useApi(() => api.hold(hours, category, numeraire, k), [hours, category, numeraire, k])
   // Positive-movers board (secondary view): full-universe upward swings over the same window.
   const mv = useApi(() => view === 'movers' ? api.movers(hours, MOVERS_N, 'up') : Promise.resolve(null), [view, hours])
   const data = hold.data, movers = mv.data
@@ -63,6 +65,7 @@ export default function HoldView() {
             <button key={k} disabled={isMovers} className={`seg-btn ${!isMovers && numeraire === k ? 'on' : ''}`} title={name} onClick={() => setNumeraire(k)}>vs {k[0].toUpperCase() + k.slice(1)}</button>
           ))}
         </div>
+        {!isMovers && <CautionSlider value={data?.k} range={data?.k_range} onChange={setK} />}
         <label className={`hint ${isMovers ? 'hold-inactive' : ''}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>Category
           <select className="league-select" value={category} disabled={isMovers} onChange={e => setCategory(e.target.value)}>
             {cats.map(c => <option key={c} value={c}>{c}</option>)}

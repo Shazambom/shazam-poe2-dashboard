@@ -39,6 +39,26 @@ def horizon_for(window_h: int | None = None, horizon: str | None = None) -> str:
         return max((h for h, d in HORIZON_DAYS.items() if d <= days), key=HORIZON_DAYS.get)
     return "3d"
 SHRINK_K = 8            # data-count shrinkage: confidence = n/(n+K)
+# --- ranking contract (measured 2026-09-20; see docs/bugs/2026-09-20-hold-ranks-against-its-own-forecast.md)
+# The score is SIGN-SAFE: it composes in log-space over strictly positive factors, so a worse
+# drawdown always lowers it. The old `ret * conf * stab` multiplied a SIGNED return by factors in
+# [0,1], which reverses a penalty below zero — a deeper crash made the score less negative and
+# ranked it HIGHER (61% of negative-return pairs were inverted on the owner's DB).
+CAUTION_K = 2.0            # drawdown weight. Backtested: k=2 reproduces the old crash rate (5%) and
+                        # blue-chip mix with better drawdowns; safety saturates at k=3.
+# k is a USER DIAL (owner directive 2026-09-20): a CAUTION slider on the Hold page, persisted as the
+# `hold_caution` setting. 0 = rank on return alone; higher = favour the steadier asset. Capped
+# at 6 because the backtest shows drawdown flat at -14.0% from k=3 up, so beyond that the dial
+# costs return and buys nothing. Monotonicity holds at EVERY position, so the slider can change
+# what the board prefers but can never reintroduce the sign bug.
+CAUTION_RANGE = (0.0, 6.0)
+MDD_CAP = -0.40         # exclude anything that fell worse than this. Tightest cap that still
+                        # spares Mirror/Hinekora (at -35% they drop out 25%/27% of early days).
+MIN_DAYS = 4            # a score needs at least this many days behind it
+VALUE_PERCENTILE = 0.50  # keep the top half of the DAY's traded value — RELATIVE, because the
+                        # value scale shifts ~14x between leagues and an absolute floor is either
+                        # unreachable or arbitrary. A relative cut can never empty the board.
+_EPS = 1e-12            # keeps log() finite at a total loss without disturbing any real ordering
 VALUE_FLOOR = 30_000_000.0   # median daily traded VALUE (exalted) for full liquidity confidence.
 # The board answers "what's a good place to park currency to beat inflation" — so a hold must
 # be liquid *in value* (you can park real wealth), which is why the floor is on exalted/day,
@@ -123,6 +143,61 @@ def _metrics(series: dict[int, tuple[float, float]], hz_days: int):
             "conf": depth * liq, "stab": stab, "cur_age": last_age}
 
 
+def clamp_k(v) -> float:
+    """The dial arrives from a slider over HTTP, so treat it as hostile: anything unreadable
+    falls back to the default and anything out of range clamps into it."""
+    try:
+        k = float(v)
+    except (TypeError, ValueError):
+        return CAUTION_K
+    if math.isnan(k):
+        return CAUTION_K
+    lo, hi = CAUTION_RANGE
+    return min(max(k, lo), hi)
+
+
+def hold_score(m: dict, k: float | None = None) -> float:
+    """The ranking score: `log(1 + ret) + k * log(1 + mdd)` (k defaults to CAUTION_K).
+
+    Both terms are logs of strictly positive quantities — growth (what 1 unit became) and
+    steadiness (what 1 unit was worth at the trough relative to its peak) — so the score is
+    monotone in BOTH axes on either side of zero, at every k. A deeper drawdown always costs,
+    whether the asset gained or lost. Reads `mdd` rather than the clamped `stab` so ordering
+    survives among assets that all crashed hard."""
+    return (math.log(max(_EPS, 1.0 + m["ret"]))
+            + (CAUTION_K if k is None else k) * math.log(max(_EPS, 1.0 + m["mdd"])))
+
+
+def value_cut(rows) -> float:
+    """The day's traded-value threshold: the VALUE_PERCENTILE quantile over `rows`. Relative, so
+    it means the same thing on league-day 2 as on day 60 and across leagues."""
+    vals = sorted(r["valvol"] for r in rows)
+    if not vals:
+        return 0.0
+    return vals[min(len(vals) - 1, int(VALUE_PERCENTILE * len(vals)))]
+
+
+def eligible(m: dict, cut: float) -> bool:
+    """Can this asset be ranked at all? Enough traded value to actually park wealth in, enough
+    days to have measured it, and it hasn't already fallen off a cliff. Value (not unit count)
+    is what clears the floor, so a rare-but-precious asset qualifies on its own terms."""
+    return m["valvol"] >= cut and m["n"] >= MIN_DAYS and m["mdd"] >= MDD_CAP
+
+
+def _rank(entries, k: float, cut: float | None = None):
+    """[(iid, name, cat, metrics)] → the ones worth ranking, best first.
+
+    Eligibility is a HARD gate, not a weight: an asset either trades enough value to park wealth
+    in, has enough days behind it and hasn't already fallen off a cliff — or it is not an answer
+    to "what should I hold" at all. `cut` is the day's value threshold; computed over `entries`
+    when the caller doesn't pass the whole-universe one."""
+    if cut is None:
+        cut = value_cut([e[3] for e in entries])
+    keep = [e for e in entries if eligible(e[3], cut)]
+    keep.sort(key=lambda e: -hold_score(e[3], k))
+    return keep
+
+
 def _predict(item_id, N, delta, past, weights=None, min_leagues=MIN_PRED_LEAGUES):
     """Forward Δ-day return from day N averaged across past leagues.
 
@@ -201,17 +276,21 @@ def _arc_weights(cur_name: str) -> dict | None:
     return None
 
 
-def leaderboard(horizon: str = "3d", category: str = "all", numeraire: str = "divine") -> dict:
+def leaderboard(horizon: str = "3d", category: str = "all", numeraire: str = "divine",
+                k: float | None = None) -> dict:
     if horizon not in HORIZON_DAYS:
         horizon = "3d"
     if numeraire not in NUMERAIRES:
         numeraire = "divine"
     num_id, num_name = NUMERAIRES[numeraire]
-    return cache.memo(_cache, f"{horizon}|{category}|{numeraire}", _TTL,
-                      lambda: _leaderboard(horizon, category, numeraire, num_id, num_name))
+    # The dial is part of the cache key: without it the slider would appear dead for the TTL.
+    k = clamp_k(get_settings().get("hold_caution") if k is None else k)
+    return cache.memo(_cache, f"{horizon}|{category}|{numeraire}|{k:g}", _TTL,
+                      lambda: _leaderboard(horizon, category, numeraire, num_id, num_name, k))
 
 
-def _leaderboard(horizon: str, category: str, numeraire: str, num_id: int, num_name: str) -> dict:
+def _leaderboard(horizon: str, category: str, numeraire: str, num_id: int, num_name: str,
+                 k: float = CAUTION_K) -> dict:
     cur_name, cur, past, meta = build_context(num_id)
     weights = _arc_weights(cur_name)        # Phase 3: DTW-weight the forward prediction when available
     hz = HORIZON_DAYS[horizon]
@@ -227,13 +306,13 @@ def _leaderboard(horizon: str, category: str, numeraire: str, num_id: int, num_n
     num_tid = registry.resolve_meta(anchor.metadata_id) or numeraire
     hourly = movers.exchange_cards(
         [meta.get(iid, (str(iid), "?"))[0] for iid in cur if iid != num_id], hz * 24, num_tid)
-    assets = []
+    # Score the WHOLE universe first: the value floor is relative to the day, so it must be read
+    # off every asset that traded, not off whichever category is being viewed.
+    entries = []
     for iid, series in cur.items():
         if iid == num_id:                       # the numeraire itself (return ≈ 0 by construction)
             continue
         name, cat = meta.get(iid, (str(iid), "?"))
-        if category != "all" and cat != category:
-            continue
         m = _metrics(series, hz)
         if not m:
             continue
@@ -243,22 +322,29 @@ def _leaderboard(horizon: str, category: str, numeraire: str, num_id: int, num_n
         # return to a board labelled "vs Divine", and Exalted inflates over a league.
         if card and card["change_pct"] is not None and card["trend_num"] == num_tid:
             m["ret"] = card["change_pct"] / 100.0
+        entries.append((iid, name, cat, m))
+
+    cut = value_cut([e[3] for e in entries])    # the day's threshold, over everything
+    cats = sorted({cat for _i, _n, cat, _m in entries})   # dropdown reads the full universe
+    if category != "all":
+        entries = [e for e in entries if e[2] == category]
+
+    assets = []
+    for iid, name, cat, m in _rank(entries, k, cut):
         pr = _predict(iid, m["cur_age"], delta, past, weights)
         assets.append({
             "id": iid, "name": name, "category": cat,
             "ret_pct": round(m["ret"] * 100, 1), "mdd_pct": round(m["mdd"] * 100, 1),
-            # hold = appreciation × (how confident/liquid) × (how stable) — a store-of-value
-            # score, not a chase-the-biggest-mover score.
-            "hold": round(m["ret"] * m["conf"] * m["stab"], 4), "days": m["n"], "medvol": round(m["valvol"]),
+            # log(1 + return) + k*log(1 + drawdown) — sign-safe, so a deeper crash always costs.
+            "hold": round(hold_score(m, k), 4), "days": m["n"], "medvol": round(m["valvol"]),
             "confidence": round(m["conf"], 2),
             "pred_pct": round(pr["pred"] * 100, 1) if pr else None,
             "pred_band_pct": round(pr["band"] * 100, 1) if pr else None,
             "pred_leagues": pr["n_leagues"] if pr else 0,
         })
-    assets.sort(key=lambda x: -x["hold"])
-    cats = sorted({a["category"] for a in assets})
     return {"league": cur_name, "horizon": horizon, "delta_days": delta, "window_h": delta * 24,
             "pred_weighted": weights is not None,   # Phase 3: forward pred is DTW-weighted vs recency
             "numeraire": numeraire, "numeraire_name": num_name,
-            "numeraires": [{"id": k, "name": v[1]} for k, v in NUMERAIRES.items()],
-            "categories": ["all"] + cats, "count": len(assets), "assets": assets}
+            "numeraires": [{"id": nk, "name": nv[1]} for nk, nv in NUMERAIRES.items()],
+            "categories": ["all"] + cats, "count": len(assets), "assets": assets,
+            "k": k, "k_range": list(CAUTION_RANGE)}
