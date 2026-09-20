@@ -76,11 +76,15 @@ def _synthetic_graph() -> Graph:
     def edge(a, b, rate, stock, kind="live"):
         return Edge(a, b, kind, rate, [{"rate": rate, "stock": stock}], age_s=10.0)
 
-    g.add(edge("chaos", "exalted", 10.0, 5000))
-    g.add(edge("exalted", "chaos", 0.12, 600))       # 1.2x round trip — a real loop
-    g.add(edge("exalted", "divine", 0.02, 100))
-    g.add(edge("divine", "chaos", 550.0, 20000))     # chaos→ex→div→chaos: 10*0.02*550 = 1.1x
-    g.add(edge("chaos", "divine", 0.0015, 10, kind="digest"))
+    # The markets AGREE about what things are worth (1 chaos ≈ 10 ex, 1 divine ≈ 500 ex ≈ 50
+    # chaos) and the profit lives in the gaps between them, which is how a real exchange looks.
+    # They used to contradict each other 110x (divine 50 ex against exalted, 5,500 ex against
+    # chaos), so whichever market the volume rule picked, the other read as a ±10,000% phantom.
+    g.add(edge("chaos", "exalted", 10.0, 5000))      # 1 chaos -> 10 ex
+    g.add(edge("exalted", "chaos", 0.11, 600))       # 1 ex -> 0.11 chaos: 1.1x round trip, a real loop
+    g.add(edge("exalted", "divine", 0.002, 100))     # 1 divine = 500 ex
+    g.add(edge("divine", "chaos", 50.0, 20000))      # 1 divine = 50 chaos = 500 ex
+    g.add(edge("chaos", "divine", 0.022, 10, kind="digest"))   # 45.5 chaos/divine: div->chaos->div = 1.1x
     for e in g.edges.values():
         e.vol_in_per_h = 100.0
     return g

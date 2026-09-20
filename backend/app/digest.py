@@ -16,7 +16,7 @@ import time
 
 import httpx
 
-from . import cache, db, gateway
+from . import cache, db, gateway, settings
 from .datapolicy import MARKET_RETENTION_DAYS
 from .config import DIGEST_BACKFILL_HOURS, DIGEST_POLL_SECONDS, GGG_DIGEST_URL
 from .currencies import registry
@@ -109,18 +109,49 @@ async def run_forever() -> None:
 
 
 # ------------------------------------------------------------------ queries
-def directed_rates(a: str, b: str, r, age: float) -> dict[tuple[str, str], dict]:
+def traded_bounds(rows) -> dict[tuple[str, str], tuple[float, float]]:
+    """(cheapest, dearest) `cur_a` per `cur_b` that actually EXECUTED in each market across the
+    window — one observation per traded hour.
+
+    Not the digest's ratio columns: those are what was LISTED, and the book is full of bait (the
+    divine<->exalted market carries a 1:1 listing beside the real 1:500, which reads as a 500x
+    spread and would price a Divine at 3 Exalted). What people paid is solid: an active market
+    repeats it hour after hour, an inactive one wanders by orders of magnitude."""
+    out: dict[tuple[str, str], tuple[float, float]] = {}
+    for r in rows:
+        if not r["vol_a"] or not r["vol_b"]:
+            continue
+        px = r["vol_a"] / r["vol_b"]                        # a per b, what this hour traded at
+        prev = out.get((r["cur_a"], r["cur_b"]))
+        out[(r["cur_a"], r["cur_b"])] = (min(px, prev[0]), max(px, prev[1])) if prev else (px, px)
+    return out
+
+
+def directed_rates(a: str, b: str, r, age: float, bounds: tuple[float, float] | None = None,
+                   wide_spread: float | None = None) -> dict[tuple[str, str], dict]:
     """The directed edges one traded hour of the a<->b market supports. An edge a->b hands you b,
     so someone must have been STANDING there offering b: the receiving side's standing stock
     (`hi_stock_*`) must be > 0. No sellers → no edge in that direction — traded volume is never a
     stand-in for stock (Esh's Radiance "for 13 chaos": zero Radiance ever listed for chaos, only
-    chaos bids that a holder occasionally dumps into)."""
+    chaos bids that a holder occasionally dumps into).
+
+    `bounds` is (cheapest, dearest) `a` per `b` traded across the window (`traded_bounds`). When
+    they are `wide_spread` apart this market is INACTIVE — nobody quotes it — and its executed
+    average is a price nobody will give you: you buy at the dearest and sell at the cheapest,
+    never in the middle (owner, 2026-09-19 — a Tecrod's Gaze that sells for 12 divine was offered
+    at 471 exalted because one sparse hour traded 2 of them for 175 ex). A market that repeats its
+    price keeps that price."""
+    lo, hi = bounds or (0.0, 0.0)
+    wide = settings.wide_spread(settings.get_settings()) if wide_spread is None else wide_spread
+    inactive = bool(lo > 0 and hi > 0 and wide > 0 and hi / lo >= wide)
+    to_b = (1.0 / hi) if inactive else (r["vol_b"] / r["vol_a"])     # b per a — you pay the dearest
+    to_a = lo if inactive else (r["vol_a"] / r["vol_b"])             # a per b — you take the cheapest
     out: dict[tuple[str, str], dict] = {}
     if r["hi_stock_b"]:
-        out[(a, b)] = {"rate": r["vol_b"] / r["vol_a"], "stock": r["hi_stock_b"],
+        out[(a, b)] = {"rate": to_b, "stock": r["hi_stock_b"], "inactive": inactive,
                        "volume_from": r["vol_a"], "volume_to": r["vol_b"], "hour": r["hour"], "age_s": age}
     if r["hi_stock_a"]:
-        out[(b, a)] = {"rate": r["vol_a"] / r["vol_b"], "stock": r["hi_stock_a"],
+        out[(b, a)] = {"rate": to_a, "stock": r["hi_stock_a"], "inactive": inactive,
                        "volume_from": r["vol_b"], "volume_to": r["vol_a"], "hour": r["hour"], "age_s": age}
     return out
 
@@ -133,6 +164,8 @@ def latest_rates(league: str, max_age_hours: int = 6) -> dict[tuple[str, str], d
             """SELECT * FROM digest_markets WHERE league=? AND hour>=? ORDER BY hour DESC""",
             (league, since),
         ).fetchall()
+    bounds = traded_bounds(rows)            # how far the executed hours ran, per market
+    wide = settings.wide_spread(settings.get_settings())
     out: dict[tuple[str, str], dict] = {}
     for r in rows:
         a = registry.resolve_meta(r["cur_a"])
@@ -141,7 +174,8 @@ def latest_rates(league: str, max_age_hours: int = 6) -> dict[tuple[str, str], d
             continue
         if (a, b) in out or (b, a) in out:  # newest hour already recorded
             continue
-        out.update(directed_rates(a, b, r, time.time() - (r["hour"] + 3600)))
+        out.update(directed_rates(a, b, r, time.time() - (r["hour"] + 3600),
+                                  bounds.get((r["cur_a"], r["cur_b"])), wide))
     return out
 
 

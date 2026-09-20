@@ -61,6 +61,11 @@ DEFAULTS: dict = {
     # Lead term: velocity = margin_ref / (fill_hours × gold) — profit per hour per gold.
     "rank_weights": {"velocity": 0.5, "margin_per_1k_gold": 0.2, "margin_ref": 0.2, "volume": 0.1},
     "volume_window_h": 24,
+    # A market whose traded prices over the window disagree by this much is INACTIVE: nobody
+    # quotes it continuously, so you buy at its dearest and sell at its cheapest rather than in
+    # the middle (digest.directed_rates). Tunable on the Arbitrage page; 0 turns it off. Every
+    # actively traded market measured under 1.4x on 2026-09-19; the median market was 1.25x.
+    "wide_spread": 2.0,
     "step_overhead_min": 2.0,       # minutes per exchange step to place and collect an order
     # Price of gold for ranking, in Divine per 1000 gold. Gold's real worth shifts across a
     # league, so a slider (Arbitrage page, range 100k–10M gold/Divine) tunes this; it feeds
@@ -122,6 +127,12 @@ HUB_N = 5                         # fallback hub count (centrality.HUB_N mirrors
 
 def gold_value_per_1k(s: dict) -> float:
     return float(s.get("gold_value_per_1k") or GOLD_VALUE_DIVINE_PER_1K)
+
+
+def wide_spread(s: dict) -> float:
+    """How far apart a market's traded prices may run before it counts as inactive (0 = never)."""
+    v = s.get("wide_spread")
+    return float(v) if v is not None else 2.0
 
 
 def hub_count(s: dict) -> int:

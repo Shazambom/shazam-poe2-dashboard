@@ -1,0 +1,156 @@
+{
+ "note": "Owner report 2026-09-19: a route offered to buy Tecrod's Gaze for 471 exalted when it sells for ~12 divine. Six hours of its real markets: the divine market trades steadily, the exalted market's traded hours run 87 to 3,114 ex per gaze \u2014 nobody quotes it, so its executed average is not a price anyone will give you.",
+ "league": "Forbidden Rites",
+ "hours": {
+  "exalted": [
+   {
+    "hour": 1789840800,
+    "gaze_is_a": false,
+    "vol_a": 3003,
+    "vol_b": 1,
+    "hi_stock_a": 21561,
+    "hi_stock_b": 0
+   },
+   {
+    "hour": 1789844400,
+    "gaze_is_a": false,
+    "vol_a": 6228,
+    "vol_b": 2,
+    "hi_stock_a": 21786,
+    "hi_stock_b": 0
+   },
+   {
+    "hour": 1789848000,
+    "gaze_is_a": false,
+    "vol_a": 0,
+    "vol_b": 0,
+    "hi_stock_a": 15559,
+    "hi_stock_b": 0
+   },
+   {
+    "hour": 1789851600,
+    "gaze_is_a": false,
+    "vol_a": 3113,
+    "vol_b": 1,
+    "hi_stock_a": 15560,
+    "hi_stock_b": 4
+   },
+   {
+    "hour": 1789855200,
+    "gaze_is_a": false,
+    "vol_a": 24805,
+    "vol_b": 11,
+    "hi_stock_a": 12798,
+    "hi_stock_b": 9
+   },
+   {
+    "hour": 1789858800,
+    "gaze_is_a": false,
+    "vol_a": 175,
+    "vol_b": 2,
+    "hi_stock_a": 1190,
+    "hi_stock_b": 6
+   }
+  ],
+  "divine": [
+   {
+    "hour": 1789840800,
+    "gaze_is_a": false,
+    "vol_a": 837,
+    "vol_b": 73,
+    "hi_stock_a": 1075,
+    "hi_stock_b": 116
+   },
+   {
+    "hour": 1789844400,
+    "gaze_is_a": false,
+    "vol_a": 511,
+    "vol_b": 44,
+    "hi_stock_a": 936,
+    "hi_stock_b": 92
+   },
+   {
+    "hour": 1789848000,
+    "gaze_is_a": false,
+    "vol_a": 824,
+    "vol_b": 69,
+    "hi_stock_a": 1142,
+    "hi_stock_b": 93
+   },
+   {
+    "hour": 1789851600,
+    "gaze_is_a": false,
+    "vol_a": 522,
+    "vol_b": 43,
+    "hi_stock_a": 1186,
+    "hi_stock_b": 91
+   },
+   {
+    "hour": 1789855200,
+    "gaze_is_a": false,
+    "vol_a": 478,
+    "vol_b": 39,
+    "hi_stock_a": 1187,
+    "hi_stock_b": 95
+   },
+   {
+    "hour": 1789858800,
+    "gaze_is_a": false,
+    "vol_a": 531,
+    "vol_b": 44,
+    "hi_stock_a": 1011,
+    "hi_stock_b": 97
+   }
+  ],
+  "chaos": [
+   {
+    "hour": 1789840800,
+    "gaze_is_a": false,
+    "vol_a": 1916,
+    "vol_b": 19,
+    "hi_stock_a": 2367,
+    "hi_stock_b": 14
+   },
+   {
+    "hour": 1789844400,
+    "gaze_is_a": false,
+    "vol_a": 1934,
+    "vol_b": 19,
+    "hi_stock_a": 2418,
+    "hi_stock_b": 15
+   },
+   {
+    "hour": 1789848000,
+    "gaze_is_a": false,
+    "vol_a": 1681,
+    "vol_b": 16,
+    "hi_stock_a": 2326,
+    "hi_stock_b": 13
+   },
+   {
+    "hour": 1789851600,
+    "gaze_is_a": false,
+    "vol_a": 1245,
+    "vol_b": 12,
+    "hi_stock_a": 2444,
+    "hi_stock_b": 10
+   },
+   {
+    "hour": 1789855200,
+    "gaze_is_a": false,
+    "vol_a": 1256,
+    "vol_b": 12,
+    "hi_stock_a": 2814,
+    "hi_stock_b": 13
+   },
+   {
+    "hour": 1789858800,
+    "gaze_is_a": false,
+    "vol_a": 1377,
+    "vol_b": 13,
+    "hi_stock_a": 2625,
+    "hi_stock_b": 17
+   }
+  ]
+ }
+}

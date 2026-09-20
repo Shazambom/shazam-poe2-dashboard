@@ -93,3 +93,30 @@ def test_keep_drops_a_loop_whose_slowest_step_exceeds_the_limit():
 
 def test_default_is_45_minutes():
     assert settings.DEFAULTS["filters"]["max_step_minutes"] == 45
+
+
+# ---------------------------------------------------------------- 3. an inactive market trades at its ask
+def test_a_wide_ask_bid_gap_is_priced_at_the_ask_not_the_average(monkeypatch):
+    """Owner, 2026-09-19: Tecrod's Gaze sells for ~12 divine, yet a route offered to buy one for
+    471 exalted. Its exalted market is inactive — over one window its ratios ran 75 … 3,113 ex per
+    gaze — and one sparse hour (175 ex for 2) set the executed average at 87.5. Nobody sells a 12d
+    item under the ask, so averaging the two sides is a lie: a market whose ask is far above its
+    bid is priced at the ASK when you are buying and at the BID when you are selling. A tight
+    market (the gaze's divine market ran 10 … 14) keeps its executed rate."""
+    wide = _row(vol_a=175, vol_b=2, hi_stock_a=1190, hi_stock_b=6,
+                lo_ratio_a=75, hi_ratio_a=3113, lo_ratio_b=1, hi_ratio_b=1)     # exalted(a) per gaze(b)
+    out = digest.directed_rates("exalted", "gaze", wide, age=60.0, bounds=(87.5, 3113.0))
+    assert abs(out[("exalted", "gaze")]["rate"] - 1 / 3113) < 1e-12   # buying a gaze costs the ask
+    assert abs(out[("gaze", "exalted")]["rate"] - 87.5) < 1e-9      # selling one pays the cheapest
+    assert out[("exalted", "gaze")]["inactive"] is True
+
+    tight = _row(vol_a=531, vol_b=44, hi_stock_a=1011, hi_stock_b=97,
+                 lo_ratio_a=11, hi_ratio_a=13, lo_ratio_b=1, hi_ratio_b=1)      # divine(a) per gaze(b)
+    out = digest.directed_rates("divine", "gaze", tight, age=60.0, bounds=(11.8, 12.3))
+    assert abs(out[("divine", "gaze")]["rate"] - 44 / 531) < 1e-12    # the executed rate, as before
+    assert abs(out[("gaze", "divine")]["rate"] - 531 / 44) < 1e-12
+    assert not out[("divine", "gaze")].get("inactive")
+
+    # no ratio data at all (older rows, synthetic fixtures) → unchanged behaviour
+    out = digest.directed_rates("a", "b", _row(), age=60.0, bounds=None)
+    assert out[("a", "b")]["rate"] == 13.0

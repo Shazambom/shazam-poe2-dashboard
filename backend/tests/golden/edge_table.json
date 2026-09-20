@@ -9,6 +9,7 @@
   "kind": "digest",
   "meta": {
    "hour": 1799996400,
+   "inactive": false,
    "volume": 10000
   },
   "rate": 10.0,
@@ -25,6 +26,7 @@
   "kind": "digest",
   "meta": {
    "hour": 1799996400,
+   "inactive": false,
    "volume": 50000
   },
   "rate": 50.0,
@@ -41,6 +43,7 @@
   "kind": "digest",
   "meta": {
    "hour": 1799996400,
+   "inactive": false,
    "volume": 1000
   },
   "rate": 0.1,
@@ -57,6 +60,7 @@
   "kind": "digest",
   "meta": {
    "hour": 1799996400,
+   "inactive": false,
    "volume": 1000
   },
   "rate": 0.02,

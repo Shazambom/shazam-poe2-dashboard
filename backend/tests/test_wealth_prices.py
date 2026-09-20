@@ -25,6 +25,8 @@ def test_anchor_prices_reads_the_cached_graph(monkeypatch):
     monkeypatch.setattr(arbitrage.graph, "cached_graph", lambda: g)
     monkeypatch.setattr(arbitrage, "cached_graph", lambda: g)
     p = arbitrage.anchor_prices()
-    assert p["exalted"] == 1.0 and p["divine"] == g.ref_values()["divine"] and p["chaos"] == g.ref_values()["chaos"]
+    # the anchors are read off the graph's ONE value table (Graph.values), never a second source
+    V = g.values()
+    assert p["exalted"] == 1.0 and p["divine"] == V["divine"] and p["chaos"] == V["chaos"]
     db.kv_set("settings", {})
     arbitrage.invalidate_caches()

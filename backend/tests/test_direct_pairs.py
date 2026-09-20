@@ -123,10 +123,13 @@ def test_a_deep_market_takes_over_when_it_becomes_the_deepest(monkeypatch):
 
 
 def test_a_one_sided_fat_finger_is_not_a_price(monkeypatch):
-    """A market is only as deep as its thinner side: someone moving 2,000 Divine an hour for a
-    handful of Regals is deep in Divine and nothing in Regals, so Regal keeps its own price."""
+    """Someone moving 2,000 Divine an hour for a handful of Regals is deep in Divine and nothing
+    in Regals. poe2scout says a Regal is worth ~2 exalted, and a market that disagrees with the
+    outside world by four orders of magnitude does not get to price it."""
+    from app import leaguehistory
     g = _graph(monkeypatch)
     try:
+        monkeypatch.setattr(type(g), "_scout_values", lambda self: {"regal": 2.0}, raising=False)
         g.add(_edge("divine", "regal", 0.02, 50, kind="digest", vol=2_000))   # 1 regal = 50 divine?!
         assert abs(g.values()["regal"] - 2.0) < 1e-9
     finally:
@@ -435,4 +438,46 @@ def test_a_daily_only_mover_agrees_with_the_card_it_opens(monkeypatch):
         assert abs(card["change_pct"] - row["change_pct"]) < 0.6, (row["change_pct"], card["change_pct"])
     finally:
         movers._cache.clear(); movers._movers_cache.clear()
+        _teardown()
+
+
+# ------------------------------------------------------------------ inactive markets (owner, 2026-09-19)
+def _mkt(g, a, b, rate, vol, inactive=False, stock=10_000):
+    g.add(Edge(a, b, "digest", rate, [{"rate": rate, "stock": stock}], age_s=0.0,
+               vol_in_per_h=vol, meta={"inactive": inactive}))
+
+
+def test_a_thin_inactive_market_never_outranks_a_deep_one(monkeypatch):
+    """An item trades steadily against Divine (14.7 div) and barely against Exalted, where the
+    hours that did trade disagree wildly — that market is inactive. The deep market prices it:
+    pricing it off the thin one read a Preserved Cranium at 3.33 divine."""
+    g = _graph(monkeypatch)
+    try:
+        _mkt(g, "thing", "divine", 14.7, 60)          # deep: ~60 things/h against divine
+        _mkt(g, "divine", "thing", 1 / 14.7, 900)
+        _mkt(g, "thing", "exalted", 4_000, 1.2, inactive=True)     # thin, and its hours disagree
+        _mkt(g, "exalted", "thing", 1 / 4_000, 3_000, inactive=True)
+        V = g.values()
+        assert g.priced_by["thing"] == "divine", g.priced_by.get("thing")
+        assert abs(V["thing"] / V["divine"] - 14.7) < 1e-6, V["thing"] / V["divine"]
+    finally:
+        _teardown()
+
+
+def test_an_inactive_market_cannot_drag_a_value_down(monkeypatch):
+    """Same shape, but the inactive market is wildly cheap (a lone sparse hour). It must not
+    price the item, and it must not become the yardstick that discredits the real markets —
+    Tecrod's Gaze went from 12 divine to 6.6 that way, and then to no price at all."""
+    g = _graph(monkeypatch)
+    try:
+        _mkt(g, "thing", "divine", 12.0, 65)
+        _mkt(g, "divine", "thing", 1 / 12.0, 790)
+        _mkt(g, "thing", "chaos", 105.9, 22)
+        _mkt(g, "chaos", "thing", 1 / 105.9, 2_100)
+        _mkt(g, "thing", "exalted", 87.5, 1.4, inactive=True)      # 65x below its real price
+        _mkt(g, "exalted", "thing", 1 / 87.5, 3_500, inactive=True)
+        V = g.values()
+        assert g.priced_by["thing"] == "divine", g.priced_by.get("thing")
+        assert abs(V["thing"] / V["divine"] - 12.0) < 1e-6, V["thing"] / V["divine"]
+    finally:
         _teardown()

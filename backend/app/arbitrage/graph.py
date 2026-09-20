@@ -15,9 +15,9 @@ from ..settings import get_settings
 from dataclasses import dataclass, field
 
 INF = float("inf")
-# Graph.values: the most two sides of one market may disagree (each valued independently) and
-# still price it. Thin-but-honest markets run ~2-3× apart; fat-fingers thousands.
-SIDE_MISMATCH = 10.0
+# How far a market may sit from poe2scout's independent close and still price a currency.
+# Thin-but-honest markets run 2-3x from it; the trades that are not prices run thousands.
+OUTSIDE_DISAGREEMENT = 10.0
 BAIT_FACTOR = 1.5     # a live offer paying > this × the pair's EXECUTED (digest) rate is bait
 
 
@@ -119,7 +119,8 @@ class Graph:
                 if (a, b) in g.edges:
                     continue
                 g.add(Edge(a, b, "digest", d["rate"], [{"rate": d["rate"], "stock": d["stock"]}],
-                           d["age_s"], meta={"hour": d["hour"], "volume": d["volume_to"]}))
+                           d["age_s"], meta={"hour": d["hour"], "volume": d["volume_to"],
+                                             "inactive": d.get("inactive", False)}))
         vols = digest.pair_volume(league, s.get("volume_window_h", 24))
         for (a, b), e in g.edges.items():
             if e.kind != "recipe":
@@ -182,12 +183,12 @@ class Graph:
         DEEPEST chain of markets from the reference — a widest path, where a market's width is the
         value it trades per hour and a chain is as wide as its thinnest market. A Preserved Cranium
         is priced through Divine (~11M ex/h), not its direct Exalted market (~30k ex/h, half the
-        price). A market is only as deep as its thinner SIDE: both sides are valued (the settled
-        side at its value, the other at the pessimistic floor), and a market whose sides disagree by more
-        than SIDE_MISMATCH× is not a price at all — a one-hour fat-finger moved ~56k ex of Divine
-        for ~2 ex of Lesser Essence of Battle (a thin-but-honest market, like the cranium's
-        Exalted one, is off by ~2-3×). Each hop uses the market's own rate
-        (`direct_rate`), so a card in the market that prices it shows exactly that market.
+        price). Markets nobody quotes are skipped while a quoted one exists (`dead`, from the
+        digest's inactive flag), so a couple of scattered trades cannot set what a thing is worth —
+        judging them against "the cheapest price anywhere" instead let the junk set its own
+        yardstick and a cranium worth ~6,900 ex was priced off a market trading 46 ex an hour.
+        Each hop uses the market's own rate, so a card shown in the market that prices it shows
+        exactly that market's rate.
 
         Currencies with no market at all fall back to `ref_values` (the poe2scout fallback).
         EVERYTHING prices from here — the Board, cards, Capital, cash-out, wealth, Hold, Movers,
@@ -199,7 +200,6 @@ class Graph:
 
     def _widest_values(self) -> dict[str, float]:
         ref = self.s["reference"]
-        naive = self._floor_values()
         nbrs: dict[str, set[str]] = {}
         for (a, b), e in self.edges.items():
             if e.kind != "recipe" and e.rate > 0:
@@ -220,6 +220,18 @@ class Graph:
             e = market(b, a)
             return (1.0 / e.rate) if e else 0.0
 
+        def dead(u: str, v: str) -> bool:
+            """Whether the u<->v market is one nobody quotes (digest.directed_rates flagged its
+            traded hours as disagreeing). Such a market is priced at its ask/bid, which is honest
+            for TRADING it, but it must not set what anything is WORTH while a real market exists:
+            Tecrod's Gaze read 88 exalted off a market that trades a couple a day, against the
+            12 divine its own steady market pays."""
+            e = market(u, v) or market(v, u)
+            return bool(e and e.meta.get("inactive"))
+
+        def has_live_market(c: str) -> bool:
+            return any(not dead(c, n) for n in nbrs.get(c, ()))
+
         def units(u: str, v: str) -> tuple[float, float]:
             """(units of u, units of v) traded per hour in the u<->v market, each direction
             converted at the market's own rate."""
@@ -231,6 +243,16 @@ class Graph:
             return vol_uv + vol_vu * u_per_v, vol_vu + vol_uv * v_per_u
 
         scout_px = self._scout_values()
+
+        def believable(c: str, px: float) -> bool:
+            """Whether a market's claim about `c` survives evidence from OUTSIDE the exchange.
+            poe2scout's close is the only yardstick used here on purpose: every yardstick drawn
+            from the exchange itself was one the junk market could set (a fat-finger that moved
+            2,900 Divine for 53 essences was its own proof, and a cranium worth ~6,900 ex was
+            judged against 441). With no outside price, the deepest market wins."""
+            outside = scout_px.get(c)
+            return not outside or max(outside, px) <= OUTSIDE_DISAGREEMENT * min(outside, px)
+
         vals: dict[str, float] = {ref: 1.0}
         priced_by: dict[str, str] = {}
         width: dict[str, float] = {ref: INF}
@@ -245,17 +267,9 @@ class Graph:
                 if v in done:
                     continue
                 px = market_rate(v, u)                             # u per v
-                if not px:
+                if not px or (dead(u, v) and has_live_market(v)) or not believable(v, px * vals[u]):
                     continue
-                uu, vv = units(u, v)
-                # Size the far side on evidence this market cannot fabricate: its own floor price
-                # AND poe2scout's close. A currency whose ONLY market is a fat-finger had a floor
-                # derived from that very trade, so both sides agreed and the test passed it.
-                other = [x for x in (naive.get(v), scout_px.get(v)) if x]
-                side_u, side_v = uu * vals[u], vv * (min(other) if other else 0.0)
-                if not side_u or not side_v or max(side_u, side_v) > SIDE_MISMATCH * min(side_u, side_v):
-                    continue                                       # the sides disagree: not a price
-                cand = min(-w, side_u, side_v)
+                cand = min(-w, units(u, v)[0] * vals[u])           # as deep as its thinnest market
                 if cand > width.get(v, 0.0):
                     width[v] = cand
                     vals[v] = vals[u] * px
@@ -285,14 +299,33 @@ class Graph:
                 out[cid] = px * ex
         return out
 
+    def _scout_values(self) -> dict[str, float]:
+        """poe2scout's latest close per currency, in the reference — evidence from outside the
+        exchange, used to size the far side of a market and to price what no market priced."""
+        scout = leaguehistory.scout_prices(self.s["league"])       # never raises (logs + {} on failure)
+        if not scout:
+            return {}
+        ex = self.direct_rate("exalted", self.s["reference"]) if self.s["reference"] != "exalted" else 1.0
+        out: dict[str, float] = {}
+        for cid in registry.by_id:
+            px = leaguehistory.scout_lookup(scout, cid)
+            if px and ex:
+                out[cid] = px * ex
+        return out
+
     def _floor_values(self) -> dict[str, float]:
         """A deliberately PESSIMISTIC value per currency: the same levelled walk as `ref_values`
-        but keeping the LOWEST price each market implies. `values()` uses it only to size the far
+        but keeping the LOWEST price each QUOTED market implies. `values()` uses it only to size the far
         side of a market, because the optimistic table is itself inflated by the very trades the
         side test exists to catch (2,900 Divine for 53 Lesser Essences of Battle made the essence
         look like it was worth 54 Divine on both sides)."""
         low: dict[tuple[str, str], float] = {}
         for (a, b), e in self.edges.items():
+            # A market nobody quotes must not become the floor that judges every other market:
+            # the gaze's lone 87.5-ex hour made its real markets look 30x too big and got them
+            # all rejected, leaving the item with no price at all.
+            if e.meta.get("inactive"):
+                continue
             if e.kind != "recipe" and e.rate > 0:
                 low[(a, b)] = min(low.get((a, b), e.rate), e.rate)
                 low[(b, a)] = min(low.get((b, a), 1.0 / e.rate), 1.0 / e.rate)
