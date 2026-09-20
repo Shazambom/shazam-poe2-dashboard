@@ -9,7 +9,10 @@ actually move:
 - [`desktop-debugging.md`](./desktop-debugging.md) — driving the real renderer over CDP.
 - [`ui-styleguide.md`](./ui-styleguide.md) — the visual contract + the style linter.
 - [`db-architecture.md`](./db-architecture.md) / [`db-maintenance.md`](./db-maintenance.md) — the DB split.
-- [`strategy-ecosystem-plan.md`](./strategy-ecosystem-plan.md) — **the roadmap; start here to pick up work.**
+- [`strategy-ecosystem-plan.md`](./strategy-ecosystem-plan.md) — the Strategy-tab roadmap. Phases 1–7a
+  are shipped; only Phase 7b (deploy efficiency) was never started. Read it for the locked
+  cross-cutting decisions, not as a queue of work.
+- [`README.md`](./README.md) — the index: what each doc is and, for the plan docs, what is actually built.
 
 ---
 

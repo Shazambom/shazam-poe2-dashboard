@@ -1,8 +1,18 @@
 # Trading + Watches rework — research brief (input for /arena planning)
 
-> Status: **RESEARCH COMPLETE, NOT YET PLANNED/BUILT.** This is the synthesized input for
-> an `/arena` planning pass. Four parallel research streams (current codebase, Exiled-Exchange-2
-> patterns, PoE2 trade-site mechanics, library candidates) fed this. 2026-09-14.
+> Status: **BUILT (`2108827`, before the 0.2.56 EE2 wave) — this doc survives as the locked design
+> rationale, not as a plan.**
+> Everything below was planned and shipped: the Trading tab, the workspace tree, the Electron-main
+> live-search engine, the ping pipeline, the global hotkey and the one-click teleport. The staged PR
+> plan that consumed it (`trading-rework-plan.md`) was deleted on 2026-09-20 once every PR had
+> landed; `git log --diff-filter=D -- docs/trading-rework-plan.md` has it. Keep this doc: the
+> user-confirmed design decisions below (desktop-only live half, never auto-fire teleports, sound on
+> every ping, human-in-the-loop) still govern `desktop/src/trade/`. Four parallel research streams
+> (current codebase, Exiled-Exchange-2 patterns, PoE2 trade-site mechanics, library candidates) fed
+> this. 2026-09-14.
+>
+> Two library picks below were NOT taken: `sonner` (the ping banner rides the home-grown toast bus)
+> and `dockview` (rejected outright — see the workspace roadmap §14).
 
 ## Goals (from the user)
 

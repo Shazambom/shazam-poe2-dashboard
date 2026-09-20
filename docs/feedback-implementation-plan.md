@@ -5,14 +5,17 @@ driven end to end on this Mac (a report packaged in ~5–13 s, all 10 screens re
 the snap window). Owner-steered after a four-candidate arena (synthesis note at the end).
 Owner side verified on shazam the same day: keypair minted in the bot image (key id 1, public half
 shipped as `desktop/src/feedback/owner-key.pub`), the opener deployed hardened, a real report → ✅ and
-a tampered one → ⚠️/quarantine. **Still needed before the feature ships:** the Discord server +
-invite → `DISCORD_INVITE`, the bot token → `/etc/arbiter/discord-token`, `FEEDBACK_FORUM_ID` in
-shazam's `.env`, then `./ops/deploy-web.sh bot` again (docs/dev-notes.md → "Feedback reports"). Deviations
+a tampered one → ⚠️/quarantine. **SHIPPED in 0.3.0** (`0b1426b`): the Discord server and its invite are
+wired (`DISCORD_INVITE` in `desktop/src/feedback/index.js`), the bot token and `FEEDBACK_FORUM_ID` are
+set on shazam, and the app carries "Report a problem", "Submit a bug" and "Join our Discord". Nothing
+is outstanding; the setup steps live in docs/dev-notes.md → "Feedback reports". Deviations
 from the plan below: the offscreen-`paint` fallback (6.4a) was not built — `stayHidden` captures
 worked on macOS; a screen is photographed once its fetches go quiet (not after two frames); the
 desktop keeps a CommonJS twin of `dests.js` (Electron's main process cannot require the ESM file).
-Supersedes the mechanics in `docs/feedback-system-design.md`; that doc keeps the problem
-statement and threat framing, this one is what gets built.
+This is the sole design record for the feature. An earlier design (`feedback-system-design.md`,
+a Cloudflare Worker + R2 receiver with Ed25519 signing and an HMAC gate) was rejected in favour of
+the no-drop-point shape below and deleted on 2026-09-20; its threat framing survives in the
+"Threat model" section here. `git log -- docs/feedback-system-design.md` has it if ever needed.
 
 ## Decision summary
 
@@ -291,7 +294,6 @@ mounted read-only; `feedback-opener`: `network_mode: none`, `read_only: true`, `
   PEM in `KEY_DIR`), the Discord setup (forum channel, invite targeting it, bot permissions + the
   Message Content intent), deploying the bot (`./ops/deploy-web.sh bot` → rsync `ops/feedback-bot/`
   + `docker compose up -d --build feedback-bot`), reading the inbox, the `?snap=1` mode.
-- `docs/feedback-system-design.md`: status → superseded by this plan.
 - **CLAUDE.md: no change.** The app makes no new outbound call; opening the invite is the OS browser.
 
 ## Threat model

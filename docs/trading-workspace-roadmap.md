@@ -1,7 +1,8 @@
 # Trading Workspace roadmap — EE2 history, clipboard-add, QOL, Sales tab
 
-> Feature spec for the next Trading-tab work. Successor to [`trading-rework-plan.md`](./trading-rework-plan.md)
-> (PR1–PR7 shipped: Trading tab, workspace tree, live engine, pings, hotkey, teleport). Synthesized via `/arena`
+> Feature spec for the Trading tab's EE2 wave. Builds on the earlier Trading + Watches rework
+> (Trading tab, workspace tree, live engine, pings, hotkey, teleport — all shipped; its locked design
+> decisions live in [`trading-rework-research.md`](./trading-rework-research.md)). Synthesized via `/arena`
 > on 2026-09-16 (record at the end) and then settled with the owner over four rounds; **every decision below is
 > final** — nothing is left open. Repo `/Users/ianmoreno/shazam-poe2-dashboard`; EE2 reference checkout
 > `/Users/ianmoreno/Exiled-Exchange-2` (MIT, read-only). **Implemented and shipped — see the status block below.**

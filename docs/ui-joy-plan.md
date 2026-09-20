@@ -5,9 +5,31 @@
 > can have multiple themes. Use PoE2 characters as inspiration like the Arbiter of Ash and the Arbiter
 > of Divinity. What pieces of UI can we polish up and refine?"
 >
-> Status: **BUILT on `dev` 2026-09-18 (awaiting owner review before commit)** — §0 cuts A1–A11, the token sweep + linter + `theme.js` aliases, motion honesty B1–B8, all five presets with the Settings Appearance row / ⌘K commands / Electron backdrop, and C2 (focus in/out of the detail), C3 (keyboard-reachable tile remove), C6 (⌘1–5), C7 (glyphs). Deferred on purpose (keep it simple): A12 tone curation (owner-taste call), C1 the `<CurrencyPicker>` swap inside tiles (needs a small variant), C3's roving tabindex, C5 chart skeletons, C9 the icon placeholder disc, C8 (already global). Originally: Every file:line below was verified against `dev` at `1c17c78`
-> (0.2.62-beta.1) and will drift; treat them as pointers. The styleguide (`docs/ui-styleguide.md`)
-> and CLAUDE.md §0 Restraint remain the contract; this plan only applies them.
+> Status: **SHIPPED (0.2.63 / 0.3.0).** §0 cuts A1–A11, the token sweep + linter checks 7–8 +
+> `theme.js` aliases, motion honesty B2–B8, the presets with the Settings Appearance row / ⌘K
+> commands / Electron backdrop, and C2 (focus in/out of the detail), C3 (keyboard-reachable tile
+> remove), C6 (⌘1–5), C7 (glyphs).
+>
+> **Two things the plan below no longer describes correctly:**
+> - **B1 was reverted by the owner.** The plan calls "stop counting up from zero on every mount" the
+>   single highest joy-per-line change; it was built, the owner disagreed, and `cbf3793` put the
+>   count-up back and pinned it with a test. Do not re-apply B1.
+> - **There are six themes, not five.** `vault, ash, divinity, sekhemas, vaal, azmeri` — `azmeri`
+>   shipped after this doc was written, so §1's "five is the cap" is superseded. Beyond the plan
+>   entirely, **custom themes** shipped too: `lib/{themeDerive,themeCss,themeStore}.js` +
+>   `components/ThemeBuilder.jsx` derive a full preset token table from eight primaries, persisted
+>   as `settings.custom_themes`.
+>
+> **Still deferred on purpose** (each verified still outstanding on 2026-09-20): A12 tone curation
+> (`lib/ping-sound.js` still lists **17** tones, not the 6 the plan wants — `merge()` already remaps a
+> retired tone id, so this is a delete-and-ship), C1 the `<CurrencyPicker>` swap inside tiles
+> (`BoardView.jsx` is still a raw `<select>`, which the styleguide bans and which renders un-themed OS
+> chrome on Windows — the one deferral that visibly breaks the themes), C3's roving tabindex, C5 chart
+> skeletons (`SkeletonRows` does not exist), C9 the icon placeholder disc. C8 was already global.
+>
+> Every file:line below was verified against `dev` at `1c17c78` (0.2.62-beta.1) and has drifted; treat
+> them as pointers. The styleguide (`docs/ui-styleguide.md`) and CLAUDE.md §0 Restraint remain the
+> contract; this plan only applies them.
 
 The thesis, which all four candidates reached independently: Arbiter already *looks* good. What stops
 it being a joy is (a) it **narrates itself** — counts, legends, methodology paragraphs, σ labels — so

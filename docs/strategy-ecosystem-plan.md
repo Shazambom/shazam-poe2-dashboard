@@ -18,10 +18,9 @@ Hold=KEEP. The big gap was **TIME** (when to act).
 |---|------|---------|--------|
 | 1 | **Convert** (cheapest A→B) | TIME/execution | ✅ DONE (see below) |
 | — | **Gold-value slider** | shared gold price for ranking | ✅ DONE (phase 1.5) |
-| 2 | **Ghost Wealth** (can I cash out?) | KEEP/DECIDE | ⬜ TODO |
+| 2 | **Ghost Wealth** (can I cash out?) | KEEP/DECIDE | ✅ DONE (0.2.45) — `liquidity.realizable()` + the 👻 tail in `CapitalCard.jsx` |
 | 3 | **Timing / league-arc** (when to buy/sell) | TIME | ✅ DONE (DTW arc in CardDetail + Hold) |
 | 4 | **What's about to move** | TIME | ✅ DONE (Divine-orb signal inbox → CardDetail) |
-| 2 | **Ghost Wealth** (can I cash out?) | KEEP/DECIDE | ✅ DONE (0.2.45) |
 | — | **Centrality** (connective tissue) | feeds 1/2/4, never a page | ✅ DONE (Phase 5 below) |
 | — | **Sidecar runtime** | hosts heavy libs for 3 & 4 | ✅ DONE (Phase 6 below) |
 
@@ -43,17 +42,16 @@ Hold=KEEP. The big gap was **TIME** (when to act).
 - **Thin-data discipline:** reuse `holdscore._smooth` (3-day median) + volume floors
   (`movers.MIN_VALUE_EX`); winsorize returns before any correlation.
 
-## Shared cores (build once, before dependents)
-- `backend/app/analytics_common.py` (TODO): thin wrapper over `movers._current_series()` +
-  `log_returns`, `medval`, `mad_z`, `winsorize`; re-export `holdscore._smooth`. Used by 3 & 4.
-- `backend/app/liquidity.py` (TODO): `realizable(currency, qty, ref_value, max_slip)` — walk the
-  sell-side ladder (`orderbook.latest_books`, `Edge.fill` semantics), digest-volume fallback,
-  return `{realizable_ref, slippage_pct, fill_hours, source}`. Used by Ghost Wealth (2). NOTE:
-  the convert loss/gold math already lives in `arbitrage._convert_path`; factor shared bits if
-  they converge.
-- `market.sqlite` `analytics_cache(kind, key, computed_at, value_json)` (TODO): sidecar writes,
-  backend reads. Add to `MARKET_SCHEMA` in `db.py` + bump the market snapshot version (market
-  schema change → new snapshot, NOT a user migration; see `docs/db-maintenance.md`).
+## Shared cores (all resolved)
+- `backend/app/analytics_common.py` — **never built, and not needed.** Phases 3 & 4 shipped
+  reading `movers._current_series()` and `holdscore._smooth` directly; no shared wrapper module
+  ever justified itself. Do not create one on this doc's say-so.
+- `backend/app/liquidity.py` — ✅ DONE: `realizable(g, ref_value, currency, qty, …)` walks the
+  sell-side ladder with a digest-volume fallback and returns `{realizable_ref, slippage_pct,
+  fill_hours, source}`. Used by Ghost Wealth (2).
+- `market.sqlite` `analytics_cache(kind, key, computed_at, value_json)` — ✅ DONE: in
+  `MARKET_SCHEMA` (`db.py`) alongside `analytics_jobs`; the sidecar is the sole writer, endpoints
+  only read it.
 
 ---
 
@@ -286,15 +284,17 @@ libs go in `requirements-sidecar.txt` + get bundled by `build-sidecar.sh` / the 
 ## Phase 7 — Windows hardening, sidecar slimming & deploy efficiency (7a DONE, 7b PLANNED)
 
 Triggered by the desktop-v0.2.46 ship (first release carrying the Phase 6 sidecar). Two Windows-only
-failures, found via telemetry (`p=backend` installlog — a TEMPORARY DEV DIAGNOSTIC in `main.js`
-`bkLog`, to be stripped once this phase lands):
+failures, both since fixed, found via telemetry (`p=backend` installlog — `bkLog` in `main.js`. It was
+written as a temporary diagnostic and is **still in the code**, but it no longer needs stripping: every
+sender now runs behind the one `diagTelemetryOn()` gate, so a stable packaged build makes zero telemetry
+calls and `bkLog` fires on beta/dev only. See CLAUDE.md's telemetry rule):
 
 1. **Watchdog Ctrl+C (FIXED, v0.2.48).** `watchdog.parent_alive` polled `os.kill(parent_pid, 0)`; on
    Windows signal 0 is `CTRL_C_EVENT`, so every 2 s it Ctrl+C'd its own console process group and
    killed the backend + sidecar (`ECONNREFUSED 8210`). Fix: use the `OpenProcess`/`GetExitCodeProcess`
    handle check on `os.name == "nt"`, never `os.kill`. See [[reference_win_oskill_ctrlc]]. Regression
    test asserts `os.kill` is never called on nt.
-2. **Sidecar native crash (OPEN — this phase).** Telemetry (v0.2.49 `/api/diag.analytics`) showed
+2. **Sidecar native crash (FIXED by 7a, 2026-09-16).** Telemetry (v0.2.49 `/api/diag.analytics`) showed
    `jobs {queued, running}` with **0 done, 0 error, last_error null** — the classic signature of a
    native crash (`0xC0000005`) mid-compute: the sidecar claims a job (→`running`), then the heavy
    numeric stack dies before Python can write the result or mark failure, so signals never reach
@@ -336,7 +336,10 @@ imports the analytics modules and computes both jobs once; a native fault (`0xC0
 non-zero and turns the release build RED. This reproduces the exact v0.2.49 crash environment at
 build time, so a numpy-only regression can never ship again.
 
-### 7b. Deploy efficiency — make updates proportional to what changed
+### 7b. Deploy efficiency — make updates proportional to what changed (STILL OPEN as of 0.3.1)
+Nothing here has been started: `desktop/build-backend.sh` and `desktop/build-sidecar.sh` both still
+pass `--onefile`, and `market-seed` is still a plain `extraResources` entry in `desktop/package.json`.
+
 electron-updater already ships **block-differential** downloads (the `.blockmap` assets), but two
 things defeat it:
 - **PyInstaller `--onefile`** compresses each binary into one blob, so a 1-line change reshuffles all
@@ -344,10 +347,14 @@ things defeat it:
   `--onedir`**: numpy/etc. become stable uncompressed files whose blocks are byte-identical across
   releases → the updater skips them; a code-only update ships a few KB of changed `.pyc`. Biggest lever
   for "only redownload what changed."
-- **The bundled snapshot (~40 MB)** rides every installer and changes every release (fetch-seed), so it
-  redownloads on every update even for code-only changes. Options: only refresh it on releases that
-  actually change market data, or bundle a tiny seed and fetch the full one lazily on first run (trades
-  the instant-first-boot board). Evaluate after 7a.
+- **The bundled snapshot** rides every installer and changes every release (fetch-seed), so it
+  redownloads on every update even for code-only changes. It grew to **~76 MB gzipped** in 0.3.1 when
+  the two new digest indexes rode into the seed. Options: only refresh it on releases that actually
+  change market data, or bundle a tiny seed and fetch the full one lazily on first run (trades away
+  the instant-first-boot board). ⚠️ **Do not propose shrinking the seed as such** — the owner ruled on
+  2026-09-19 that a bigger download beats work the client does at boot ("data transfer is cheap"),
+  because a strip-and-rebuild costs ~4 s on *every* re-seed. Any 7b work here is about not re-sending
+  an *unchanged* seed, never about making the seed smaller.
 
 ### Note — sidecar output IS cached
 The sidecar is never called synchronously: it upserts results into `analytics_cache` (market.sqlite);

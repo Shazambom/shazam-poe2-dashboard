@@ -1,7 +1,7 @@
 // Live-search engine (Electron main). For each enabled watch: open GGG's live-search
 // WebSocket, and on each ping fetch the listing details and emit an enriched ping to the
 // renderer. Read-only discovery + the manual teleport POST — strictly human-triggered, no
-// auto-buy. See docs/trading-rework-plan.md.
+// auto-buy. See docs/trading-rework-research.md for the locked design decisions.
 const WebSocket = require('ws')
 const { POE, poeRequest, poeJson, cookieHeader, userAgent } = require('./proxy.js')
 const budget = require('./budget.js')
@@ -119,7 +119,7 @@ async function _onPingIds(itemId, ids) {
   }
 }
 
-// Shape the fetch result into the renderer Ping (see docs/trading-rework-plan.md).
+// Shape the fetch result into the renderer Ping.
 function _normalize(itemId, rec, r) {
   if (!r || !r.listing) return null
   const L = r.listing
