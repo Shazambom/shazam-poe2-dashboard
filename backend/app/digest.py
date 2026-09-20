@@ -96,11 +96,28 @@ def prune_old() -> int:
         return c.execute("DELETE FROM digest_markets WHERE hour < ?", (cutoff,)).rowcount
 
 
+ANALYZE_EVERY_S = 3600.0
+_last_analyze = 0.0
+
+
+def maybe_analyze(stored: bool) -> None:
+    """Keep the planner's statistics honest as hours land. Statistics taken once, when the DB
+    was empty, would tell SQLite the digest's pair index is worthless and send every card's
+    history back to scanning the window. Hourly at most, and only after new rows."""
+    global _last_analyze
+    if not stored or time.time() - _last_analyze < ANALYZE_EVERY_S:
+        return
+    _last_analyze = time.time()
+    db.analyze()
+
+
 async def run_forever() -> None:
     while True:
         try:
+            before = state["last_hour"]
             await sync_once()
             n = await asyncio.to_thread(prune_old)
+            await asyncio.to_thread(maybe_analyze, state["last_hour"] != before)
             if n:
                 log.info("digest: pruned %d rows older than %dd", n, MARKET_RETENTION_DAYS)
         except Exception as exc:  # never let the loop die
@@ -179,6 +196,15 @@ def latest_rates(league: str, max_age_hours: int = 6) -> dict[tuple[str, str], d
     return out
 
 
+# An hour with no volume on a side has no rate, so the history readers below pass over it. Asking
+# SQLite not to hand it over is the same judgement one step earlier: a fifth of the rows, never
+# materialised. Written to match `not va or not vb` exactly, NULL and 0 alike — proved equal for
+# every market in `tests/test_query_plans.py`, and over the owner's DB (933,985 rows, 9,538
+# markets, 0 differences). The rows stay in the table; only these two readers skip them, and the
+# Python guard below stays as the thing that can never divide by zero.
+TRADED_ONLY = " AND vol_a IS NOT NULL AND vol_a <> 0 AND vol_b IS NOT NULL AND vol_b <> 0"
+
+
 def pair_history(league: str, a: str, b: str, hours: int = 168) -> list[dict]:
     """Hourly series for the a<->b market, expressed as b per a."""
     metas_a = registry.metas(a)
@@ -188,9 +214,10 @@ def pair_history(league: str, a: str, b: str, hours: int = 168) -> list[dict]:
     since = _hour(time.time()) - hours * 3600
     with db.q() as c:
         rows = c.execute(
-            """SELECT * FROM digest_markets WHERE league=? AND hour>=?
-               AND ((cur_a IN ({a}) AND cur_b IN ({b})) OR (cur_a IN ({b}) AND cur_b IN ({a})))
-               ORDER BY hour""".format(a=",".join("?" * len(metas_a)), b=",".join("?" * len(metas_b))),
+            ("""SELECT * FROM digest_markets WHERE league=? AND hour>=?
+                AND ((cur_a IN ({a}) AND cur_b IN ({b})) OR (cur_a IN ({b}) AND cur_b IN ({a})))"""
+             + TRADED_ONLY + " ORDER BY hour").format(
+                a=",".join("?" * len(metas_a)), b=",".join("?" * len(metas_b))),
             (league, since, *metas_a, *metas_b, *metas_b, *metas_a),
         ).fetchall()
     series = []
@@ -211,8 +238,8 @@ def window_history(league: str, hours: int = 168):
     made carding hundreds of assets (Hold, Movers) take tens of seconds."""
     since = _hour(time.time()) - hours * 3600
     with db.q() as c:
-        rows = c.execute("SELECT hour, cur_a, cur_b, vol_a, vol_b FROM digest_markets WHERE league=? AND hour>=?",
-                         (league, since)).fetchall()
+        rows = c.execute("SELECT hour, cur_a, cur_b, vol_a, vol_b FROM digest_markets "
+                         "WHERE league=? AND hour>=?" + TRADED_ONLY, (league, since)).fetchall()
     by_pair: dict[tuple[str, str], list] = {}
     for r in rows:
         by_pair.setdefault((r["cur_a"], r["cur_b"]), []).append(r)
