@@ -7,8 +7,8 @@ Divine over short/medium/long horizons, with a cross-league forward-return predi
   own column, not folded into the score (keeps the ranking readable). Confidence =
   data-shrinkage × liquidity, so thin/obscure items don't top the board on noise.
 - Prediction = the league-phase analog: at the current league's day N, average each
-  asset's forward Δ-day return from day N across PAST leagues (recency-weighted),
-  with the cross-league dispersion as a confidence band.
+  asset's forward Δ-day return from the days around N (±PRED_WINDOW) across PAST
+  leagues (recency-weighted), with the dispersion as a confidence band.
 
 Pure Python (stdlib only) — the data is a few hundred items × ~150 days.
 """
@@ -65,6 +65,15 @@ VALUE_FLOOR = 30_000_000.0   # median daily traded VALUE (exalted) for full liqu
 # not raw units: a Mirror trades few units but enormous value; an essence the reverse.
 GAMMA = 0.65            # recency weight for past leagues (most recent = weight 1)
 MIN_PRED_LEAGUES = 2
+PRED_WINDOW = 5         # the board's forecast reads start days N±5 in each past league, not day N
+                        # alone. Early-league 3d IC: +0.263 at ±0 -> +0.317 at ±5 (see the handoff).
+# The forecast is SHOWN as arrows (direction + 1-3 strength), never a %: only its ordering was ever
+# validated, and its ± is 4-22x too narrow. Past ARROW_LAST_DAY the arrows stop telling the truth
+# (3d: a down arrow fell 16% of the time vs 30% chance), so the board drops the column.
+ARROW_LAST_DAY = 14
+ARROW_DASH_SHARE = 0.25  # the weakest quarter of the day's forecasts shows a dash, not an arrow
+ARROW_HORIZONS = ("3d", "7d")  # 1d red arrows are a coin flip (fell 46% vs 48% chance), so the 1d
+                               # column keeps its place but shows only dashes
 
 _cache: dict = {}            # leaderboard results
 _ctx_cache: dict = {}        # build_context per (league setting, numeraire)
@@ -198,8 +207,12 @@ def _rank(entries, k: float, cut: float | None = None):
     return keep
 
 
-def _predict(item_id, N, delta, past, weights=None, min_leagues=MIN_PRED_LEAGUES):
+def _predict(item_id, N, delta, past, weights=None, min_leagues=MIN_PRED_LEAGUES, window=0):
     """Forward Δ-day return from day N averaged across past leagues.
+
+    `window` reads start days N-window..N+window in each past league and averages them, so one
+    freak day can't carry a league's contribution. 0 = the single aligned day (the league-arc's
+    behaviour; Hold passes PRED_WINDOW).
 
     Weighting: by default recency (`GAMMA**rank`, most-recent league = 1). Phase 3 passes a DTW
     `weights` map {league_name: weight} — 'which past league does now resemble' — which REPLACES
@@ -208,6 +221,7 @@ def _predict(item_id, N, delta, past, weights=None, min_leagues=MIN_PRED_LEAGUES
     to recency rather than emit a degenerate prediction — so a dead/partial sidecar degrades to Hold's
     original numbers. The returned `weighted` flag records which path was taken."""
     fwd = []                                     # (rank, league, log_return)
+    reads = []                                   # every start-day read, all leagues — the band
     for rank, (lg, per) in enumerate(past):      # past already sorted most-recent first
         s = per.get(item_id)
         if not s:
@@ -215,10 +229,15 @@ def _predict(item_id, N, delta, past, weights=None, min_leagues=MIN_PRED_LEAGUES
         # Both ends smoothed like the current league's (_smooth): a past league's thin daily close
         # is noise — a Cranium at 0.07 → 0.04 div one day read as −43% and dragged the forecast
         # negative while its neighbours were flat.
-        if _nearest(s, N) and _nearest(s, N + delta):
-            p0, p1 = _smooth(s, N), _smooth(s, N + delta)
-            if p0 > 0:
-                fwd.append((rank, lg, math.log(p1 / p0)))
+        rets = []
+        for a in range(N - window, N + window + 1):
+            if _nearest(s, a) and _nearest(s, a + delta):
+                p0, p1 = _smooth(s, a), _smooth(s, a + delta)
+                if p0 > 0:
+                    rets.append(math.log(p1 / p0))
+        if rets:
+            fwd.append((rank, lg, statistics.fmean(rets)))
+            reads.extend(rets)
     if len(fwd) < min_leagues:
         return None
     wts = [max(0.0, weights.get(lg, 0.0)) for _r, lg, _f in fwd] if weights else None
@@ -227,8 +246,28 @@ def _predict(item_id, N, delta, past, weights=None, min_leagues=MIN_PRED_LEAGUES
         wts = [GAMMA ** r for r, _lg, _f in fwd]
     vals = [f for _r, _lg, f in fwd]
     wmean = sum(f * w for f, w in zip(vals, wts)) / sum(wts)
-    return {"pred": math.exp(wmean) - 1, "band": statistics.pstdev(vals) if len(vals) > 1 else 0.0,
+    return {"pred": math.exp(wmean) - 1, "band": statistics.pstdev(reads) if len(reads) > 1 else 0.0,
             "n_leagues": len(vals), "weighted": used_weights}
+
+
+def arrows(preds) -> list:
+    """The day's forecasts → arrows: +1..+3 up, -1..-3 down, 0 = dash, None = no forecast.
+
+    Direction is the forecast's sign; strength is its rank within that direction today (strongest
+    third = 3), and the weakest ARROW_DASH_SHARE of the day shows a dash. Rank, not size, because
+    the forecast's ordering is measured and its magnitude isn't — so this is scale-free."""
+    live = [i for i, p in enumerate(preds) if p is not None]
+    out = [None] * len(preds)
+    weakest = sorted(live, key=lambda i: abs(preds[i]))[:int(ARROW_DASH_SHARE * len(live))]
+    dashed = set(weakest) | {i for i in live if preds[i] == 0}
+    for i in dashed:
+        out[i] = 0
+    for sign in (1, -1):
+        side = sorted((i for i in live if i not in dashed and preds[i] * sign > 0),
+                      key=lambda i: abs(preds[i]))
+        for pos, i in enumerate(side):
+            out[i] = sign * (1 + pos * 3 // len(side))
+    return out
 
 
 def build_context(num_id: int):
@@ -326,25 +365,32 @@ def _leaderboard(horizon: str, category: str, numeraire: str, num_id: int, num_n
 
     cut = value_cut([e[3] for e in entries])    # the day's threshold, over everything
     cats = sorted({cat for _i, _n, cat, _m in entries})   # dropdown reads the full universe
-    if category != "all":
-        entries = [e for e in entries if e[2] == category]
+    board = _rank(entries, k, cut)              # the whole day's ranked board, every category
+    # The forecast column exists only through ARROW_LAST_DAY, and carries arrows only on
+    # ARROW_HORIZONS (1d keeps the column, all dashes). Arrows rank each forecast against the WHOLE
+    # board, so viewing one category can't restyle an asset.
+    shown = max((m["cur_age"] for *_x, m in entries), default=0) <= ARROW_LAST_DAY
+    arrow_of = {}
+    if shown and horizon in ARROW_HORIZONS:
+        preds = [(_predict(iid, m["cur_age"], delta, past, weights, window=PRED_WINDOW) or {}).get("pred")
+                 for iid, _n, _c, m in board]
+        arrow_of = dict(zip((e[0] for e in board), arrows(preds)))
 
     assets = []
-    for iid, name, cat, m in _rank(entries, k, cut):
-        pr = _predict(iid, m["cur_age"], delta, past, weights)
+    for iid, name, cat, m in board:
+        if category != "all" and cat != category:
+            continue
         assets.append({
             "id": iid, "name": name, "category": cat,
             "ret_pct": round(m["ret"] * 100, 1), "mdd_pct": round(m["mdd"] * 100, 1),
             # log(1 + return) + k*log(1 + drawdown) — sign-safe, so a deeper crash always costs.
             "hold": round(hold_score(m, k), 4), "days": m["n"], "medvol": round(m["valvol"]),
             "confidence": round(m["conf"], 2),
-            "pred_pct": round(pr["pred"] * 100, 1) if pr else None,
-            "pred_band_pct": round(pr["band"] * 100, 1) if pr else None,
-            "pred_leagues": pr["n_leagues"] if pr else 0,
+            "pred_arrows": arrow_of.get(iid),
         })
     return {"league": cur_name, "horizon": horizon, "delta_days": delta, "window_h": delta * 24,
             "pred_weighted": weights is not None,   # Phase 3: forward pred is DTW-weighted vs recency
             "numeraire": numeraire, "numeraire_name": num_name,
             "numeraires": [{"id": nk, "name": nv[1]} for nk, nv in NUMERAIRES.items()],
             "categories": ["all"] + cats, "count": len(assets), "assets": assets,
-            "k": k, "k_range": list(CAUTION_RANGE)}
+            "k": k, "k_range": list(CAUTION_RANGE), "pred_shown": shown}

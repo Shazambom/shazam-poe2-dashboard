@@ -12,6 +12,21 @@ beta; telemetry clean on win32 + darwin. Four items below were deliberately left
 Findings are in item 1. Item 3 lost its most promising fix. Item 2 became entangled with item 1 and must now
 ship in the same change. Nothing has been altered in production code since `0.3.2`.
 
+**Shipped in `0.3.3-beta.1` (2026-09-20), all test-first with production-DB tests:**
+- **Window + band (item 1, done).** `_predict` reads start days N±`PRED_WINDOW` (5) in each past league;
+  early-league 3d IC **+0.263 → +0.317**. The band pools every start-day read, so it widens instead of
+  shrinking (typical band **0.150 → 0.282** over 1,942 real forecasts). The league-arc keeps `window=0`.
+- **Arrows, never a %.** Only the forecast's ordering was ever validated, so `arrows()` shows direction
+  (sign) and 1–3 strength (rank tercile within that direction, that day); the weakest 25% show a dash.
+  Early league: 3d up arrows rose **75%** (chance 63%), down fell **60%** (chance 37%); 7d **84% / 69%**
+  (chance 65% / 35%). Arrows rank against the whole board, so a category filter can't restyle one.
+- **1d shows only dashes** — its down arrows are a coin flip even early (fell 46% vs 48% chance). The
+  column stays so switching horizons doesn't jump the table.
+- **The column hides after league-day 14** (`ARROW_LAST_DAY`) at every horizon: past it, a 3d down
+  arrow fell only **16%** of the time vs 30% chance. Forbidden Rites is past it, so it's hidden now.
+- `pred_pct` / `pred_band_pct` / `pred_leagues` are gone from `/api/hold`. "Return (Div)" is now
+  "Past Nd (Div)"; the Hold-score tooltip describes the 0.3.2 score.
+
 ---
 
 ## ⚠️ Read this before re-running any measurement
@@ -73,8 +88,9 @@ daily-close variant. This gap is not closeable with the data we have.
 
 ## 1. The board can recommend what it predicts will fall
 
-**State: MEASURED 2026-09-20, decision pending.** The ranking score and the `pred_pct` column are still computed
-by unrelated methods and never meet. What changed is that we now know what the forecast is worth.
+**State: shipped in 0.3.3-beta.1** (window + band + arrows — see the top of this doc). The ranking still
+does not use the forecast; blending them stays a separate, later decision (1f). The measurements below are
+what the shipped change rests on.
 
 Live-board correlation between the two, unchanged from the first pass (n = 374 assets with a prediction):
 
@@ -249,7 +265,9 @@ blending as a separate change with a fixed, un-tuned weight.
 
 ## 2. The ± band understates uncertainty by 4–22×
 
-**State: open, and now entangled with item 1 — they must ship together.** See 1e.
+**State: no longer displayed (0.3.3-beta.1).** The band is still computed (for the league-arc and
+the arrow ranking's inputs) and still understated, but no number or ± reaches the Hold screen. The
+analysis below stands if a band is ever shown again.
 
 `_predict` returns `statistics.pstdev(vals)` over 2–4 past leagues. Two compounding faults:
 
@@ -284,7 +302,8 @@ folded in per 1e. **Honest fix:** if the interval is ±3300, don't print a confi
 
 ## 3. Hold's signal is gone by league-day 30 and the board doesn't say so
 
-**State:** open, **time-sensitive**, and its most attractive fix is now ruled out.
+**State:** partly addressed. The forecast column hides after league-day 14 (0.3.3-beta.1). The
+*ranking* itself still presents post-day-30 noise with full confidence — that part is open.
 
 IC by league phase (7d horizon, gap=2):
 
