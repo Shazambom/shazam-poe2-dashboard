@@ -12,7 +12,8 @@ beta; telemetry clean on win32 + darwin. Four items below were deliberately left
 Findings are in item 1. Item 3 lost its most promising fix. Item 2 became entangled with item 1 and must now
 ship in the same change. Nothing has been altered in production code since `0.3.2`.
 
-**Shipped in `0.3.3-beta.1` (2026-09-20), all test-first with production-DB tests:**
+**Shipped in `0.3.3` (stable 2026-09-21; beta `0.3.3-beta.1`, telemetry clean on win32), all test-first with
+production-DB tests:**
 - **Window + band (item 1, done).** `_predict` reads start days N±`PRED_WINDOW` (5) in each past league;
   early-league 3d IC **+0.263 → +0.317**. The band pools every start-day read, so it widens instead of
   shrinking (typical band **0.150 → 0.282** over 1,942 real forecasts). The league-arc keeps `window=0`.
