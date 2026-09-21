@@ -290,6 +290,10 @@ data.
 Verified on Forbidden Rites day 16: Mirror, Hinekora's Lock and Divine all kept, 108/297 eligible, the one
 volatile pick (Omen of the Hunt, −41.7%) removed.
 
+Still open, **not** part of this change — the durable state, the measurements behind each, and the
+decision each one needs are in the handoff:
+[`2026-09-20-hold-open-items-handoff.md`](2026-09-20-hold-open-items-handoff.md).
+
 Still open, **not** part of this change:
 - **The forecast column.** Either integrate it into the score before ranking (AQR: integrating *"avoid[s] stocks
   with offsetting style exposures"* — literally this bug) or rename the board to describe what it measures.
