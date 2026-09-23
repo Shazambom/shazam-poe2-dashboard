@@ -47,16 +47,19 @@ test('closing and reopening the dialog while a report is packaging does not star
   assert.equal(readdirSync(join(h.userData, 'reports')).length, 1)
 })
 
-test('the vendored EE2 trade stats are written in a stable order', () => {
-  // GGG returns /trade/data/stats in a different order on every fetch. The sync writes it as
-  // fetched, so every release commits an 850 KB file whose CONTENT is unchanged. Stable order
-  // (by id, within each group) makes an unchanged upstream an unchanged file.
-  const p = join(fileURLToPath(new URL('.', import.meta.url)), '..', 'src', 'vendor', 'ee2-query', 'data', 'trade', 'stats.json')
-  const stats = JSON.parse(readFileSync(p, 'utf8'))
-  for (const group of stats.result) {
-    const ids = group.entries.map(e => e.id)
-    const sorted = [...ids].sort()
-    assert.deepEqual(ids, sorted, `group "${group.id}" is in fetch order, not a stable one`)
+test('the vendored EE2 trade snapshot is written in a stable order', () => {
+  // GGG returns each group's entries in a different order per fetch. Written as fetched, every
+  // release committed unchanged files (850 KB of stats, 186 KB of items). Entries are sorted by
+  // their canonical JSON, so any shape (stats carry an id, items do not) is stable and an
+  // unchanged upstream is an unchanged file.
+  const dir = join(fileURLToPath(new URL('.', import.meta.url)), '..', 'src', 'vendor', 'ee2-query', 'data', 'trade')
+  const canon = (e) => JSON.stringify(e, Object.keys(e).sort())
+  for (const kind of ['stats', 'items']) {
+    const snap = JSON.parse(readFileSync(join(dir, `${kind}.json`), 'utf8'))
+    for (const group of snap.result) {
+      const keys = group.entries.map(canon)
+      assert.deepEqual(keys, [...keys].sort(), `${kind}.json group "${group.id ?? group.label}" is in fetch order, not a stable one`)
+    }
   }
 })
 

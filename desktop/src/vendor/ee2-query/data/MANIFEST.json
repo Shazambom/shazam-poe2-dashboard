@@ -84,11 +84,11 @@
    "bytes": 9398
   },
   "data/trade/items.json": {
-   "sha256": "3de1d507ae0081a7bd45d9ed3cf2dfc3abcfa5c997f6f65803f4afd078abc4e5",
+   "sha256": "18512af0068c556eb42e747bc33ecf7c1a73340c3284c1a7b85448fc7b3bdfbc",
    "bytes": 186636
   },
   "data/trade/stats.json": {
-   "sha256": "db09e1a49e3d0984125a71b74f013cb0c51a3055e5b1751d4e82e1e1fa7c40f1",
+   "sha256": "b39b0c0223f14b4c98e89fee39838af20e025a76b5ad5310941d77f1171504e6",
    "bytes": 853338
   }
  }
