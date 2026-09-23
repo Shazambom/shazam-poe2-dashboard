@@ -15,9 +15,28 @@ test('the board tile no longer claims the zoomed card shows ask, bid and spread'
   assert.doesNotMatch(read('../src/components/BoardView.jsx'), /Ask \/ bid \/ spread/)
 })
 
-test('the inactive-market spread input cannot take a value below 1', () => {
+test('every knob in the Arbitrage algorithm section is a bounded slider, never a number box', () => {
+  // Owner (2026-09-23): "we don't want users inputting nonsense" — sliders, so the only values on
+  // offer are the ones that mean anything. One shared Knob renders the range input with the gold
+  // slider's classes; each use pins its own bounds.
   const src = read('../src/components/ArbitrageAlgorithm.jsx')
-  const line = src.split('\n').find(l => /set\('wide_spread'/.test(l)) || ''
-  assert.match(line, /min="1"/, `wide_spread input: ${line.trim()}`)
-  assert.doesNotMatch(src, /0 turns it off/, 'the tooltip still offers a value the input cannot take')
+  assert.doesNotMatch(src, /type="number"/, 'a free number box is still there')
+  assert.match(src, /type="range"[^\n]*min=\{min\}[^\n]*max=\{max\}[^\n]*step=\{step\}/, 'the shared Knob is not a bounded range input')
+  assert.match(src, /gold-slider/, 'reuses the gold slider presentation, no new CSS')
+  assert.doesNotMatch(src, /0 turns it off/)
+  const want = {
+    max_steps: { min: '2', max: '5', step: '1' },
+    max_start_fraction: { min: '0.05', max: '1', step: '0.05' },
+    step_overhead_min: { min: '0', max: '15', step: '0.5' },
+    volume_window_h: { min: '1', max: '168', step: '1' },
+    wide_spread: { min: '1', max: '5', step: '0.5' },
+  }
+  const knobs = src.split('<Knob').slice(1)
+  for (const [key, r] of Object.entries(want)) {
+    const knob = knobs.find(k => k.includes(`set('${key}'`)) || ''
+    assert.ok(knob, `no Knob for ${key}`)
+    for (const [k, v] of Object.entries(r)) assert.match(knob, new RegExp(`${k}="${v}"`), `${key}: ${k} should be ${v}`)
+  }
+  const weights = knobs.find(k => /setWeight\(/.test(k)) || ''
+  assert.match(weights, /min="0"/); assert.match(weights, /max="1"/); assert.match(weights, /step="0.05"/)
 })

@@ -8,6 +8,17 @@ import { useStatus } from '../lib/statusStore.js'
 const WEIGHTS = [['velocity', 'Velocity'], ['margin_per_1k_gold', 'Gold efficiency'], ['margin_ref', 'Margin value'], ['volume', 'Traded volume']]
 const num = (v, fb) => { const n = Number(v); return Number.isFinite(n) ? n : fb }
 
+// One bounded slider: label with the current value, the range, and what its two ends mean.
+function Knob({ label, value, min, max, step, ends, fmt, title, onChange }) {
+  return (
+    <div className="gold-slider-wrap" title={title}>
+      <div className="gold-slider-label">{label} <b>{fmt(value)}</b></div>
+      <input className="gold-slider" type="range" min={min} max={max} step={step} value={value} onChange={e => onChange(Number(e.target.value))} />
+      <div className="gold-slider-ends"><span>{ends[0]}</span><span>{ends[1]}</span></div>
+    </div>
+  )
+}
+
 export default function ArbitrageAlgorithm({ onSaved }) {
   const [s, setS] = useState(null)
   const { save, arm } = useAutosave(async (next) => {
@@ -25,16 +36,23 @@ export default function ArbitrageAlgorithm({ onSaved }) {
   return (
     <details className="adv">
       <summary>Arbitrage algorithm</summary>
-      <div className="field"><label>Maximum steps per loop</label><input type="number" min="2" max="5" value={s.max_steps} onChange={e => set('max_steps', e.target.value)} /></div>
-      <div className="field"><label>Fraction of held capital to commit</label><input type="number" min="0.05" max="1" step="0.05" value={s.max_start_fraction} onChange={e => set('max_start_fraction', e.target.value)} /></div>
-      <div className="field"><label>Minutes per exchange step</label><input type="number" min="0" step="0.5" value={s.step_overhead_min ?? 2} onChange={e => set('step_overhead_min', e.target.value)} /></div>
-      <div className="field"><label>Volume window, hours</label><input type="number" min="1" value={s.volume_window_h ?? 24} onChange={e => set('volume_window_h', e.target.value)} /></div>
-      <div className="field"><label title="A market whose traded prices over the window disagree by this much is treated as inactive: you buy at its dearest and sell at its cheapest, never the average.">Inactive market, prices apart by</label>
-        <input type="number" min="1" step="0.5" value={s.wide_spread ?? 2} onChange={e => set('wide_spread', e.target.value)} /></div>
+      {/* Sliders, not number boxes (owner, 2026-09-23): the only values on offer are the ones that
+          mean anything. Each reuses the gold slider's classes; no new CSS. */}
+      <Knob label="Maximum steps per loop" value={num(s.max_steps, 3)} min="2" max="5" step="1" ends={['short', 'long']}
+            fmt={v => `${v}`} onChange={v => set('max_steps', v)} />
+      <Knob label="Fraction of held capital to commit" value={num(s.max_start_fraction, 1)} min="0.05" max="1" step="0.05" ends={['a little', 'all of it']}
+            fmt={v => `${Math.round(v * 100)}%`} onChange={v => set('max_start_fraction', v)} />
+      <Knob label="Minutes per exchange step" value={num(s.step_overhead_min, 2)} min="0" max="15" step="0.5" ends={['instant', 'slow']}
+            fmt={v => `${v.toFixed(1)} min`} onChange={v => set('step_overhead_min', v)} />
+      <Knob label="Volume window, hours" value={num(s.volume_window_h, 24)} min="1" max="168" step="1" ends={['1h', '7d']}
+            fmt={v => `${v}h`} onChange={v => set('volume_window_h', v)} />
+      <Knob label="Inactive market, prices apart by" value={num(s.wide_spread, 2)} min="1" max="5" step="0.5" ends={['strict', 'lenient']}
+            title="A market whose traded prices over the window disagree by this much is treated as inactive: you buy at its dearest and sell at its cheapest, never the average."
+            fmt={v => `${v.toFixed(1)}×`} onChange={v => set('wide_spread', v)} />
       <p className="hint">Ranking weights — the default sort blends these; velocity leads.</p>
       {WEIGHTS.map(([k, l]) => (
-        <div className="field" key={k}><label>{l}</label>
-          <input type="number" step="0.05" min="0" value={s.rank_weights?.[k] ?? 0} onChange={e => setWeight(k, e.target.value)} /></div>
+        <Knob key={k} label={l} value={num(s.rank_weights?.[k], 0)} min="0" max="1" step="0.05" ends={['ignore', 'decides']}
+              fmt={v => v.toFixed(2)} onChange={v => setWeight(k, v)} />
       ))}
     </details>
   )
