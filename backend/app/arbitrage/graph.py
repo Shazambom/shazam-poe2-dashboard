@@ -1,6 +1,6 @@
 """The exchange graph: nodes are trade ids, directed edges are ways to turn `from` into `to`.
-  * live      — top-of-book ladder from the exchange API (best rate first)
-  * digest    — GGG hourly VWAP, single synthetic offer sized by highest stock
+  * digest    — GGG hourly VWAP, single synthetic offer sized by highest stock (the sole price
+                source; the "live" kind is kept as a data type for tests and older callers)
   * recipe    — off-exchange combine/disenchant; no gold, lot-sized input
 Plus the fill model every feature shares: simulate() walks a list of edges with whole-unit
 rounding and the gold fee model; route_cap/cycle_unit size a path by its liquidity.
@@ -18,21 +18,6 @@ INF = float("inf")
 # How far a market may sit from poe2scout's independent close and still price a currency.
 # Thin-but-honest markets run 2-3x from it; the trades that are not prices run thousands.
 OUTSIDE_DISAGREEMENT = 10.0
-BAIT_FACTOR = 1.5     # a live offer paying > this × the pair's EXECUTED (digest) rate is bait
-
-
-def credible_offers(offers: list[dict], executed_rate: float | None) -> list[dict]:
-    """The part of a live ladder worth believing. Bulk-exchange price-fixers park absurdly cheap
-    listings they never honour (2026-09-17: Omen of Light listed at 1, 10 and 55 exalted while it
-    TRADED at ~2,261); sorted best-first they are the top of the book and turn into +25,000%
-    loops. The hourly digest is executed volume — the truth — so an offer paying more than
-    BAIT_FACTOR × that rate is dropped. A real edge is a few percent, never a multiple. With no
-    executed rate for the pair there is nothing to judge by: the book is returned as is."""
-    if not executed_rate or executed_rate <= 0:
-        return offers
-    return [o for o in offers if o["rate"] <= executed_rate * BAIT_FACTOR]
-
-
 def counterparts_by_volume(g, rv: dict[str, float] | None = None) -> dict[str, list[tuple[float, str]]]:
     """THE volume rule: per currency, its counterpart markets ranked by how many UNITS OF THAT
     CURRENCY the market moves an hour — what it sold there plus what the other side's sales
@@ -133,15 +118,10 @@ class Graph:
         g = cls(s)
         g.fee_table = gamedata.fees()["by_trade"]
         league = s["league"]
-        live = orderbook.latest_books(league, s["live_max_age_s"])
-        # Executed rates judge the live books (credible_offers) even when digest EDGES are off.
+        # The hourly digest is the sole price source: the Bulk Item Exchange (whisper listings,
+        # not the in-game order book) is retired (owner, 2026-09-17; for good, 2026-09-23), and
+        # GGG exposes no live book for the in-game exchange.
         executed = digest.latest_rates(league, s["digest_max_age_h"])
-        for (a, b), book in live.items():
-            offers = credible_offers(book["offers"], (executed.get((a, b)) or {}).get("rate"))
-            if not offers:
-                continue              # the whole book was bait — the digest edge (if any) stands in
-            g.add(Edge(a, b, "live", offers[0]["rate"], offers, book["age_s"],
-                       meta={"depth": len(offers), "bait_dropped": len(book["offers"]) - len(offers)}))
         if s["allow_digest_edges"]:
             for (a, b), d in executed.items():
                 if (a, b) in g.edges:
@@ -384,54 +364,6 @@ class Graph:
             if px and ex:
                 out[cid] = px * ex
         return out
-
-    def _scout_values(self) -> dict[str, float]:
-        """poe2scout's latest close per currency, in the reference — evidence from outside the
-        exchange, used to size the far side of a market and to price what no market priced."""
-        scout = leaguehistory.scout_prices(self.s["league"])       # never raises (logs + {} on failure)
-        if not scout:
-            return {}
-        ex = self.direct_rate("exalted", self.s["reference"]) if self.s["reference"] != "exalted" else 1.0
-        out: dict[str, float] = {}
-        for cid in registry.by_id:
-            px = leaguehistory.scout_lookup(scout, cid)
-            if px and ex:
-                out[cid] = px * ex
-        return out
-
-    def _floor_values(self) -> dict[str, float]:
-        """A deliberately PESSIMISTIC value per currency: the same levelled walk as `ref_values`
-        but keeping the LOWEST price each QUOTED market implies. `values()` uses it only to size the far
-        side of a market, because the optimistic table is itself inflated by the very trades the
-        side test exists to catch (2,900 Divine for 53 Lesser Essences of Battle made the essence
-        look like it was worth 54 Divine on both sides)."""
-        low: dict[tuple[str, str], float] = {}
-        for (a, b), e in self.edges.items():
-            # A market nobody quotes must not become the floor that judges every other market:
-            # the gaze's lone 87.5-ex hour made its real markets look 30x too big and got them
-            # all rejected, leaving the item with no price at all.
-            if e.meta.get("inactive"):
-                continue
-            if e.kind != "recipe" and e.rate > 0:
-                low[(a, b)] = min(low.get((a, b), e.rate), e.rate)
-                low[(b, a)] = min(low.get((b, a), 1.0 / e.rate), 1.0 / e.rate)
-        hops: dict[str, list[tuple[str, float]]] = {}
-        for (a, b), r in low.items():
-            hops.setdefault(a, []).append((b, r))
-        vals: dict[str, float] = {self.s["reference"]: 1.0}
-        for _ in range(6):
-            level: dict[str, float] = {}
-            for n, out in hops.items():
-                if n in vals:
-                    continue
-                for dst, r in out:
-                    v = vals.get(dst)
-                    if v is not None and (n not in level or r * v < level[n]):
-                        level[n] = r * v
-            if not level:
-                break
-            vals.update(level)
-        return vals
 
     def ref_values(self) -> dict[str, float]:
         """Naive value of 1 unit of each currency in the reference — INTERNAL to `values()`, which

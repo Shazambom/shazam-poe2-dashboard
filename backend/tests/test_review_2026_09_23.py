@@ -276,26 +276,35 @@ def test_the_leaderboard_falls_back_to_the_hold_caution_setting(monkeypatch):
     assert seen["k"] == 3.5, f"k=None must read the setting, got {seen}"
 
 
-# ============================================================ 6. a market with one price has a spread of exactly 0
-# The board derives bid and ask from the same window rate via `1/px` and `px`; the round trip lands
-# a hair below zero (-7e-15 in the golden), and the API now emits a negative spread for a market
-# whose two sides agree.
+# ============================================================ 6. a card carries no bid, ask or spread
+# The board used to derive bid and ask from the same window rate via `1/px` and `px` (the round trip
+# landed at -7e-15 and the API emitted a negative spread for a market whose sides agree). With the
+# bulk-exchange books gone they could never differ, and nothing rendered them; they are cut.
 
 import test_arbitrage_golden as G  # noqa: E402
 
 frozen = G.frozen
 
 
-def test_a_market_whose_sides_agree_has_no_spread(frozen):
+def test_a_card_carries_no_bid_ask_or_spread(frozen):
+    """Owner (2026-09-23): with the live order books gone the digest gives one window rate both
+    ways, so buy == sell and the spread is 0 on every quoted card, and the only market that ever
+    made them differ is a dead one's extremes. Nothing renders them. Cut, don't clutter."""
     from app import arbitrage
     G._seed_digest_league()
     arbitrage.invalidate_caches()
-    b = arbitrage.board(24)
-    for r in b["rows"]:
-        if r["spread"] is None:
-            continue
-        assert r["spread"] >= 0, f"{r['name']}: spread {r['spread']!r} — the two sides agree and the API says negative"
-        assert r["spread_pct"] is None or r["spread_pct"] >= 0, f"{r['name']}: spread_pct {r['spread_pct']!r}"
+    for r in arbitrage.board(24)["rows"]:
+        assert not {"buy", "sell", "spread", "spread_pct", "depth"} & set(r), sorted(set(r))
+
+
+# ============================================================ 6. a card carries no bid, ask or spread
+# The board used to derive bid and ask from the same window rate via `1/px` and `px` (the round trip
+# landed at -7e-15 and the API emitted a negative spread for a market whose sides agree). With the
+# bulk-exchange books gone they could never differ, and nothing rendered them; they are cut.
+
+import test_arbitrage_golden as G  # noqa: E402
+
+frozen = G.frozen
 
 
 # ============================================================ 8. a wide spread is a question that depth answers
@@ -740,3 +749,29 @@ def test_production_the_close_does_not_override_the_market_that_trades_it(monkey
     ex_per_unit = (1 / rates[(meta, ex)]) if (meta, ex) in rates else rates.get((ex, meta))   # either orientation
     assert ex_per_unit, "no exalted window rate?"
     assert values[tid] == pytest.approx(ex_per_unit, rel=1e-9), f"{values[tid]} vs the close {close}"
+
+
+# ============================================================ 13. cleanup the review found worth doing
+
+def test_the_graph_never_reads_the_bulk_exchange_books(monkeypatch):
+    """The Bulk Item Exchange is gone for good (owner, 2026-09-23). The graph's live-edge path was
+    dead code with two latent bugs (a live edge carried no `inactive` flag; the bait filter was
+    judged against a dead market's extreme). Building must not even ask for the books."""
+    from app import orderbook
+    from app.arbitrage import graph as G_
+    def boom(*a, **k):
+        raise AssertionError("Graph.build asked orderbook for live books")
+    monkeypatch.setattr(orderbook, "latest_books", boom)
+    dv, ex = registry.metas("divine")[0], registry.metas("exalted")[0]
+    _put("ReviewNoBooks", [(h, dv, ex, 100, 50_000) for h in range(0, 6)])
+    g = _built("ReviewNoBooks", monkeypatch)
+    assert g.edges[("divine", "exalted")].kind == "digest"
+    assert not hasattr(G_, "credible_offers") and not hasattr(G_, "BAIT_FACTOR")
+
+
+def test_graph_py_carries_no_dead_definitions():
+    import inspect
+    from app.arbitrage import graph as G_
+    src = inspect.getsource(G_)
+    assert src.count("def _scout_values") == 1, "_scout_values is defined twice; the second silently wins"
+    assert "_floor_values" not in src, "_floor_values is unreachable"

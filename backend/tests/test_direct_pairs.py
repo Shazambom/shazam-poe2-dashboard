@@ -206,17 +206,13 @@ def test_a_priced_in_pick_moves_the_trend_to_that_market(monkeypatch):
         _teardown()
 
 
-def test_bid_ask_and_source_describe_the_shown_market(monkeypatch):
-    """Once the card's own market prices it, its bid/ask come from THAT market's edges (scaled
-    into reference units by the client's factor, so `value / factor` is the market's own
-    bid/ask), not from the reference market."""
+def test_source_describes_the_shown_market(monkeypatch):
+    """Once the card's own market prices it, its source (and freshness) come from THAT market's
+    edges, not from the reference market. (Bid/ask were cut on 2026-09-23.)"""
     g = _graph(monkeypatch)
     try:
         b = client.get("/api/board?window_h=24").json()
         d = {r["id"]: r for r in b["rows"]}["divine"]
-        factor = b["prices"]["chaos"]                        # what the client divides by
-        assert abs(d["sell"] / factor - 55.0) < 1e-9         # the divine→chaos edge
-        assert abs(d["buy"] / factor - 55.0) < 1e-9          # the chaos→divine edge, inverted
         assert d["source"] == "live"
     finally:
         _teardown()
@@ -339,7 +335,7 @@ def test_own_market_survives_a_spread(monkeypatch):
         d = {r["id"]: r for r in client.get("/api/board?window_h=24").json()["rows"]}["divine"]
         assert g.priced_by["divine"] == "chaos"
         assert d["trend_num"] == "chaos" and abs(d["change_pct"] - 10.0) < 1e-9
-        assert d["source"] == "live" and d["sell"] is not None
+        assert d["source"] == "live"
     finally:
         _teardown()
 

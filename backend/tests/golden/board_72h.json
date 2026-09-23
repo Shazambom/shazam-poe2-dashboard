@@ -9,18 +9,13 @@
  "rows": [
   {
    "age_s": 0.0,
-   "buy": 51.1659361854336,
    "change_pct": -2.541073932507426,
-   "depth": null,
    "hub": true,
    "id": "divine",
    "mid": 51.16593618543361,
    "name": "Divine Orb",
    "pref_num": "exalted",
-   "sell": 51.16593618543361,
    "source": "digest",
-   "spread": 0.0,
-   "spread_pct": 0.0,
    "trend": [
     {
      "t": 1799978400,
@@ -55,18 +50,13 @@
   },
   {
    "age_s": 0.0,
-   "buy": 9.772126482508195,
    "change_pct": 2.607328066336051,
-   "depth": null,
    "hub": false,
    "id": "chaos",
    "mid": 9.772126482508195,
    "name": "Chaos Orb",
    "pref_num": "exalted",
-   "sell": 9.772126482508195,
    "source": "digest",
-   "spread": 0.0,
-   "spread_pct": 0.0,
    "trend": [
     {
      "t": 1799978400,
@@ -101,18 +91,13 @@
   },
   {
    "age_s": null,
-   "buy": null,
    "change_pct": null,
-   "depth": null,
    "hub": false,
    "id": "regal",
    "mid": null,
    "name": "Regal Orb",
    "pref_num": "exalted",
-   "sell": null,
    "source": null,
-   "spread": null,
-   "spread_pct": null,
    "trend": [],
    "trend_num": "exalted"
   }

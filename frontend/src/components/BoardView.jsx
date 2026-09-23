@@ -59,8 +59,6 @@ function Tile({ r, num, factor, prices, numOptions, onNum, onRemove, onOpen, ind
         {change != null && <span className={`pt-chg ${change >= 0 ? 'gain' : 'loss'}`}>{fmt.pct(change)}</span>}
       </div>
       <Spark points={trend} />
-      {/* Ask / bid / spread live in the zoomed card (CardDetail), with their currency — the base
-          card stays a price, a trend and where the price came from. */}
       <div className="pt-foot muted">{r.source === 'scout' ? 'daily close' : 'exchange price'}{r.age_s != null && <> · traded {fmt.age(r.age_s)} ago</>}</div>
       {onNum && numOptions.length > 0 && (
         <div className="pt-num-row" onClick={e => e.stopPropagation()}>priced in{' '}

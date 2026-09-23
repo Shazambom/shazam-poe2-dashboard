@@ -129,24 +129,27 @@ its manifest hash were re-sorted once by hand.
 **Two tests that could not fail** now can: the ANALYZE test exercises the boot path, and the
 `hold_caution` fallback test reads the setting.
 
+## Cleanup, done after the beta
+
+- **The graph no longer reads bulk-exchange books.** The Bulk Item Exchange is retired for good
+  (owner, 2026-09-23); its live-edge path in `Graph.build` was dead code carrying two latent bugs
+  (a live edge had no `inactive` flag, so `dead()` answered by orientation; the bait filter was
+  judged against a dead market's extreme). `credible_offers`, `BAIT_FACTOR` and the build loop are
+  gone, with their tests. `orderbook.py` keeps its deprecated switch and its own tests.
+- **Bid, ask and spread are cut from every card** (`buy`, `sell`, `spread`, `spread_pct`, `depth`
+  on `/api/board` and `/api/asset` rows). With the books gone the digest gives one window rate both
+  ways, so they were the number twice and 0; nothing rendered them (the zoomed card read them into
+  variables and never drew them; the board tile's comment claiming otherwise was stale).
+- **The Arbitrage page's spread input starts at 1.** The server reads a value in (0, 1) as the
+  default; the input no longer offers one. The setting's 0 (off) is still honoured if saved
+  through the API.
+- **`graph.py` leftovers**: the duplicate `_scout_values` and the unreachable `_floor_values`.
+
 ## Found and left alone, on purpose
 
-- A card shown in a currency that is neither its pricing market nor the reference takes its bid and
-  ask from the reference market (`board._row`: "otherwise they all describe the reference market").
-  Omen of Abyssal Echoes today: priced through divine (94.6 ex), shown in chaos (readability: worth
-  less than a divine), bid/ask 79.4 ex from the exalted market. Three markets on one card. Existing
-  design, unchanged by this review; the number and the line agree.
-
-- The live-order-book path in `Graph.build` (a live edge carries no `inactive` flag, so `dead()`
-  answers by orientation; `credible_offers` is judged against the inactive extreme). Unreachable:
-  `BULK_EXCHANGE_ENABLED` is False and the owner says it never comes back. Candidate for deletion.
-- A vendor recipe pricing a currency that has no other market. Owner: recipes are valid markets.
 - `arrows()` strength for a side with fewer than three forecasts, and ties in board order.
   Cosmetic at today's 55 up / 12 down.
-- `_scout_values` is defined twice in `graph.py`; `_floor_values` is unreachable. Dead code, no
-  behaviour.
-- The Arbitrage page still lets the user type 0.5 into wide_spread; the server reads it as the
-  default now. The input's floor is the next copy change on that page.
+- A vendor recipe pricing a currency that has no other market. Owner: recipes are valid markets.
 
 ## Goldens
 

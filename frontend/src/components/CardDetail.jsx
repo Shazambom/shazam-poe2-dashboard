@@ -54,7 +54,7 @@ export function Spark({ points, w = 132, h = 34 }) {
   )
 }
 
-// The expanded detail view: bigger trend, bid/ask breakdown, freshness, and the value in every
+// The expanded detail view: bigger trend, freshness, and the value in every
 // other major currency — the "more detail" the hover-lift promises. It enters as a centered
 // scale/fade zoom — deliberately NOT a Framer Motion shared-`layoutId` morph.
 // The old tile→card morph occasionally measured the origin tile at a near-zero/off rect and
@@ -67,7 +67,7 @@ export default function CardDetail({ r, num, factor, numOptions, onNum, prices, 
   if (range == null) throw new Error('CardDetail requires a `range` prop — a time-range label (e.g. "3d") or "all"')
   const f = factor || 1
   const rp = (v) => (v == null ? null : v / f)
-  const mid = rp(r.mid), buy = rp(r.buy), sell = rp(r.sell)
+  const mid = rp(r.mid)
   const trend = trendIn(r, num, f, prices)
   const change = r.change_pct
   const inCurs = Object.keys(prices).filter(c => c !== r.id && prices[c]).sort((a, b) => prices[b] - prices[a]).slice(0, 8)

@@ -29,8 +29,8 @@ export default function ArbitrageAlgorithm({ onSaved }) {
       <div className="field"><label>Fraction of held capital to commit</label><input type="number" min="0.05" max="1" step="0.05" value={s.max_start_fraction} onChange={e => set('max_start_fraction', e.target.value)} /></div>
       <div className="field"><label>Minutes per exchange step</label><input type="number" min="0" step="0.5" value={s.step_overhead_min ?? 2} onChange={e => set('step_overhead_min', e.target.value)} /></div>
       <div className="field"><label>Volume window, hours</label><input type="number" min="1" value={s.volume_window_h ?? 24} onChange={e => set('volume_window_h', e.target.value)} /></div>
-      <div className="field"><label title="A market whose traded prices over the window disagree by this much is treated as inactive: you buy at its dearest and sell at its cheapest, never the average. 0 turns it off.">Inactive market, prices apart by</label>
-        <input type="number" min="0" step="0.5" value={s.wide_spread ?? 2} onChange={e => set('wide_spread', e.target.value)} /></div>
+      <div className="field"><label title="A market whose traded prices over the window disagree by this much is treated as inactive: you buy at its dearest and sell at its cheapest, never the average.">Inactive market, prices apart by</label>
+        <input type="number" min="1" step="0.5" value={s.wide_spread ?? 2} onChange={e => set('wide_spread', e.target.value)} /></div>
       <p className="hint">Ranking weights — the default sort blends these; velocity leads.</p>
       {WEIGHTS.map(([k, l]) => (
         <div className="field" key={k}><label>{l}</label>

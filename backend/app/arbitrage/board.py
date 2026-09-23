@@ -16,8 +16,8 @@ BOARD_TTL_S = 30.0
 
 
 def board(window_h: int = 24, nums: dict[str, str] | None = None) -> dict:
-    """Live price board: each watched currency priced in the reference, with the
-    buy/sell rates that make up the spread, depth, freshness, and a trend series.
+    """Live price board: each watched currency priced in the reference, with freshness and a
+    trend series.
 
     `window_h` is the trend/%-change horizon (24h, 3d, 7d, 14d from the UI): the sparkline
     spans it and change_pct is measured over it. `nums` is the client's per-card "priced in"
@@ -25,8 +25,7 @@ def board(window_h: int = 24, nums: dict[str, str] | None = None) -> dict:
     SHOWN in, so a pick that changes the market changes the line with it.
 
     Prices are R-per-unit (reference currency per 1 of the currency), so bigger = more
-    valuable — the natural way to read a price. buy = what it costs you to acquire one
-    (from the R->c ladder), sell = what you get for one (from the c->R ladder).
+    valuable — the natural way to read a price.
 
     Result is TTL-cached: it runs one history query per watched currency, but the
     underlying digest only changes hourly, so repeated polls are served from memory
@@ -297,29 +296,19 @@ def _row(g, rv: dict[str, float], ranked, hub_ids, c: str, pick: str | None, win
         shown = "divine" if (c != "divine" and rv.get("divine")) else R
     if not rv.get(shown):
         shown = R
-    # ONE decision for the whole row: does the card's own market with `shown` price it
-    # (the value table)? Then bid/ask/spread, depth, source, freshness and the
-    # trend all describe THAT market; otherwise they all describe the reference market.
+    # ONE decision for the whole row: does the card's own market with `shown` price it (the value
+    # table)? Then source, freshness and the trend all describe THAT market; otherwise they all
+    # describe the reference market. (Bid/ask/spread were cut on 2026-09-23: with the bulk-exchange
+    # books gone the digest gives one window rate both ways, so they were the number twice.)
     direct = g.direct_rate(c, shown)
     # The card's own market prices it when that market is the one the value table used (either
     # orientation — Graph.priced_by says so). Deriving it from a float identity instead silently
     # failed on every live pair with a spread, and those cards fell back to the reference market.
     own_market = shown != R and (g.priced_by.get(c) == shown or g.priced_by.get(shown) == c)
     mkt = shown if own_market else R
-    buy_edge = g.edges.get((mkt, c))     # c per mkt -> price to BUY c = 1/rate
-    sell_edge = g.edges.get((c, mkt))    # mkt per c -> price to SELL c = rate
-    # bid/ask travel in reference units like mid (the client's contract: value / factor is
-    # the shown price). In the card's own market they are scaled by mid/direct — exactly the
-    # client's factor — so the card shows that market's bid/ask, not a reference cross.
-    to_ref = rv[shown] if (own_market and rv.get(shown)) else 1.0
-    buy = (to_ref / buy_edge.rate) if buy_edge and buy_edge.rate > 0 else None
-    sell = (sell_edge.rate * to_ref) if sell_edge else None
+    buy_edge = g.edges.get((mkt, c))     # c per mkt
+    sell_edge = g.edges.get((c, mkt))    # mkt per c
     edges = [e for e in (buy_edge, sell_edge) if e]
-    depth = next((len(e.ladder) for e in (sell_edge, buy_edge) if e and e.kind == "live"), None)
-    spread = (buy - sell) if (buy is not None and sell is not None) else None
-    if spread is not None and abs(spread) <= 1e-9 * max(abs(buy), abs(sell)):
-        spread = 0.0                        # two sides of one window rate: 1/px and px round-trip to -7e-15
-    spread_pct = (spread / mid * 100) if (spread is not None and mid) else None
     # Source label + freshness: live/digest exchange data; a currency the exchange graph
     # doesn't cover is priced from poe2scout ("scout"); anything else valued only via
     # multi-hop is "derived".
@@ -349,9 +338,8 @@ def _row(g, rv: dict[str, float], ranked, hub_ids, c: str, pick: str | None, win
     # change over the window = latest vs the point at (or nearest before) the window start.
     change_pct = marketseries.change_over(trend, window_h * 3600)[1]
     return {
-        "id": c, "name": registry.name(c), "mid": mid, "buy": buy, "sell": sell,
-        "spread": spread, "spread_pct": spread_pct, "source": source, "age_s": age,
-        "depth": depth, "trend": trend, "trend_num": trend_num, "change_pct": change_pct,
+        "id": c, "name": registry.name(c), "mid": mid, "source": source, "age_s": age,
+        "trend": trend, "trend_num": trend_num, "change_pct": change_pct,
         "pref_num": pref, "hub": c in hub_ids,
     }
 
