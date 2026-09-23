@@ -13,7 +13,9 @@ from __future__ import annotations
 
 import json
 import math
-from .. import cache, db, orderbook, pairscore
+import threading
+import time
+from .. import cache, db, devtelemetry, orderbook, pairscore
 from .. import settings as settings_mod
 from ..currencies import registry
 from ..settings import get_settings
@@ -267,15 +269,34 @@ def _finish(routes: list[dict], f: dict, s: dict) -> tuple[list[dict], int]:
     return kept, int(f.get("limit", 100))
 
 
+def _diag(cached: bool, routes: int, after_filters: int, candidates: int, t0: float,
+          notional: float, starts, g: Graph) -> None:
+    """TEMPORARY DEV DIAGNOSTIC (beta channel only, through the one gate): what a route search
+    returned and what it was sized from. Owner, 2026-09-23 (0.3.4-beta.2): the Arbitrage page
+    "jumping between a few offerings and many"; not reproducible on a copy of the data, and
+    stable is blind. Off the request thread; never raises."""
+    try:
+        quoted = sum(1 for e in g.edges.values() if e.meta.get("quoted_by_volume_rule"))
+        msg = (f"cached={cached} routes={routes} after_filters={after_filters} candidates={candidates} "
+               f"ms={int((time.time() - t0) * 1000)} capital_ref={float(notional or 0):.0f} "
+               f"starts={len(starts or ())} edges={len(g.edges)} quoted={quoted}")
+        threading.Thread(target=devtelemetry.tlog, args=("routes", msg), daemon=True).start()
+    except Exception:
+        pass
+
+
 def stream_routes(filters: dict | None = None, start_currencies: list[str] | None = None):
     """Generator for the SSE endpoint: ('meta', …) once, ('route', r) for every route
     that passes the filters as it is discovered, then ('done', summary). The finished,
     scored result is also placed in the route cache so follow-up queries are instant."""
+    t0 = time.time()
     g, s, f, ref_value, capital, starts, notional = _search_setup(filters, start_currencies)
     # Serve a fresh cached result as one burst instead of re-searching.
     key = _cache_key(filters, start_currencies)
     cached = _cache_get(key, s)
     if cached is not None:
+        _diag(True, len(cached["routes"]), cached["total_after_filters"], cached["total_candidates"], t0,
+              notional, starts, g)
         yield "meta", {"reference": cached["reference"], "capital": cached["capital"],
                        "notional": cached["notional"], "graph": cached["graph"],
                        "filters": cached["filters"]}
@@ -300,6 +321,7 @@ def stream_routes(filters: dict | None = None, start_currencies: list[str] | Non
     kept, limit = _finish(routes, f, s)
     result = _result(g, s, f, ref_value, capital, notional, routes, kept, limit, deep)
     _cache_put(key, result)
+    _diag(False, len(kept[:limit]), len(kept), len(routes), t0, notional, starts, g)
     yield "done", {
         "total_candidates": len(routes), "total_after_filters": len(kept),
         "truncated": len(routes) >= MAX_CANDIDATES,

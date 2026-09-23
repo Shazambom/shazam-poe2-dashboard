@@ -775,3 +775,43 @@ def test_graph_py_carries_no_dead_definitions():
     src = inspect.getsource(G_)
     assert src.count("def _scout_values") == 1, "_scout_values is defined twice; the second silently wins"
     assert "_floor_values" not in src, "_floor_values is unreachable"
+
+
+# ============================================================ 14. the routes stream reports itself on beta
+# Owner (2026-09-23, on 0.3.4-beta.2): "my arbitrage page is jumping between a few offerings and
+# many." Not reproducible on a copy of the data (deterministic values and routes; cold search
+# 0.8 s; cache-drift moves the loop count a few percent). Stable is blind, so the beta build
+# says, through the one telemetry gate, what every search returned and what it was sized from.
+
+def _tlog_capture(monkeypatch):
+    import threading
+    from app import devtelemetry
+    got = []
+    monkeypatch.setattr(devtelemetry, "tlog", lambda tag, msg: got.append((tag, msg)))
+    def drain():
+        for t in threading.enumerate():
+            if t is not threading.current_thread():
+                t.join(2)
+        return got
+    return drain
+
+
+def test_every_route_search_posts_one_diagnostic_line(frozen, monkeypatch):
+    from app import arbitrage
+    drain = _tlog_capture(monkeypatch)
+    g = G._synthetic_graph()
+    monkeypatch.setattr(arbitrage.graph, "cached_graph", lambda: g)
+    monkeypatch.setattr(arbitrage, "cached_graph", lambda: g)
+    arbitrage._route_cache.clear()
+    events = list(arbitrage.stream_routes({}, None))
+    done = events[-1][1]
+    got = [m for t, m in drain() if t == "routes"]
+    assert len(got) == 1, got
+    line = got[0]
+    for key in ("cached=False", f"routes={len(done['order'])}", f"after_filters={done['total_after_filters']}",
+                f"candidates={done['total_candidates']}", "ms=", "capital_ref=", "starts="):
+        assert key in line, f"{key!r} missing from {line!r}"
+    # served from cache: still one line, marked as such
+    list(arbitrage.stream_routes({}, None))
+    got = [m for t, m in drain() if t == "routes"]
+    assert len(got) == 2 and "cached=True" in got[1], got
