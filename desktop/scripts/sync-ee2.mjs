@@ -143,6 +143,9 @@ async function snapshotTradeData() {
     if (!r.ok) throw new Error(`${GGG}/${kind} → ${r.status}`)
     const j = await r.json()
     if (!Array.isArray(j.result)) throw new Error(`${kind}: unexpected shape`)
+    // GGG returns each group's entries in a different order per fetch; written as fetched, every
+    // release committed an unchanged 850 KB file. Sorted by id, an unchanged upstream is an unchanged file.
+    for (const g of j.result) if (Array.isArray(g.entries)) g.entries.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
     fs.writeFileSync(f, JSON.stringify(j))
     await new Promise(r => setTimeout(r, 1500))
   }

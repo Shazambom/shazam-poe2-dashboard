@@ -28,6 +28,7 @@ function registerFeedback({ ipcMain, BrowserWindow, session, win, uiUrl, backend
   const dir = path.join(userData, 'reports')
   const produced = new Map()       // shortId → file, this session only: the only files drag/reveal may touch
   let last = null                  // { at, shortId, file } — the throttle
+  let inflight = null              // the package being built: a second request joins it, never starts another
   const fromApp = (e) => e && e.sender && win && !win.isDestroyed?.() && e.sender.id === win.webContents.id
   const fileOf = (p) => { const id = String(p && p.shortId || ''); return ID_RE.test(id) ? produced.get(id) : undefined }
 
@@ -45,9 +46,16 @@ function registerFeedback({ ipcMain, BrowserWindow, session, win, uiUrl, backend
     } catch {}
   }
 
+  // The sweep's snap window shares ONE session.webRequest listener, so two sweeps at once would
+  // replace each other's write filter (the dialog closed and reopened mid-package). One at a time.
   ipcMain.handle('feedback:package', async (e) => {
     if (!fromApp(e)) return
     if (last && now() - last.at < THROTTLE_MS) return { throttled: true, shortId: last.shortId, file: last.file }
+    if (inflight) return inflight
+    inflight = packageReport().finally(() => { inflight = null })
+    return inflight
+  })
+  const packageReport = async () => {
     try {
       const bounds = win.getBounds()
       let shots = { screens: {}, partial: true }
@@ -70,7 +78,7 @@ function registerFeedback({ ipcMain, BrowserWindow, session, win, uiUrl, backend
     } catch (err) {
       return { error: String(err && err.message || err) }
     }
-  })
+  }
   ipcMain.handle('feedback:drag', (e, p) => { const f = fileOf(p); if (fromApp(e) && f) win.webContents.startDrag({ file: f, icon }) })
   ipcMain.handle('feedback:reveal', (e, p) => { const f = fileOf(p); if (fromApp(e) && f) shell.showItemInFolder(f) })
   ipcMain.handle('feedback:discord', (e) => { if (fromApp(e)) shell.openExternal(DISCORD_INVITE) })

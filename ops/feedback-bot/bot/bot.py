@@ -110,19 +110,25 @@ class Handler:
             if p.exists():
                 try:
                     r = json.loads(p.read_text())
-                    if (isinstance(r, dict) and r.get("status") in STATUSES and isinstance(r.get("reason"), str)
-                            and len(r["reason"]) <= 200 and isinstance(r.get("shortId"), str)
-                            and (r["status"] != "OK" or SHORT_ID.match(r["shortId"]))):
-                        return {"status": r["status"], "shortId": r["shortId"], "reason": r["reason"]}
-                except Exception:
-                    pass
+                except (OSError, ValueError):
+                    await asyncio.sleep(0.1)          # a poll that landed mid-write: not a verdict yet
+                    continue
+                if (isinstance(r, dict) and r.get("status") in STATUSES and isinstance(r.get("reason"), str)
+                        and len(r["reason"]) <= 200 and isinstance(r.get("shortId"), str)
+                        and (r["status"] != "OK" or SHORT_ID.match(r["shortId"]))):
+                    return {"status": r["status"], "shortId": r["shortId"], "reason": r["reason"]}
                 return {"status": "REFUSE", "shortId": "", "reason": "malformed result.json"}
             await asyncio.sleep(0.1)
         return {"status": "REFUSE", "shortId": "", "reason": "opener timeout"}
 
     def _move(self, out: Path, short_id: str):
-        dest = self.inbox / short_id
-        dest.mkdir(parents=True, exist_ok=True)
+        # Anyone can seal a report under any shortId (the public key ships in the app) and a real
+        # report's id is public, so a second report under an earlier id goes BESIDE it, never over it.
+        dest, n = self.inbox / short_id, 1
+        while dest.exists():
+            n += 1
+            dest = self.inbox / f"{short_id}-{n}"
+        dest.mkdir(parents=True)
         for rel in FIXED_FILES:
             src = out / rel
             if src.is_file():

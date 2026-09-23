@@ -10,6 +10,7 @@
   "meta": {
    "hour": 1799996400,
    "inactive": false,
+   "quoted_rate": 9.772126482508195,
    "volume": 10000
   },
   "rate": 9.772126482508195,
@@ -27,6 +28,7 @@
   "meta": {
    "hour": 1799996400,
    "inactive": false,
+   "quoted_rate": 51.16593618543361,
    "volume": 50000
   },
   "rate": 51.16593618543361,
@@ -44,6 +46,7 @@
   "meta": {
    "hour": 1799996400,
    "inactive": false,
+   "quoted_rate": 0.10233187237086719,
    "volume": 1000
   },
   "rate": 0.10233187237086719,
@@ -61,6 +64,7 @@
   "meta": {
    "hour": 1799996400,
    "inactive": false,
+   "quoted_rate": 0.019544252965016388,
    "volume": 1000
   },
   "rate": 0.019544252965016388,

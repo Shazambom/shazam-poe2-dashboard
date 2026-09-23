@@ -230,7 +230,7 @@ def _predict(item_id, N, delta, past, weights=None, min_leagues=MIN_PRED_LEAGUES
         # is noise — a Cranium at 0.07 → 0.04 div one day read as −43% and dragged the forecast
         # negative while its neighbours were flat.
         rets = []
-        for a in range(N - window, N + window + 1):
+        for a in range(max(0, N - window), N + window + 1):   # never before the league began
             if _nearest(s, a) and _nearest(s, a + delta):
                 p0, p1 = _smooth(s, a), _smooth(s, a + delta)
                 if p0 > 0:

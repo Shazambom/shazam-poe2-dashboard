@@ -119,6 +119,7 @@ def _seed(rows):
                         None, None, 100, 100, None, None, None, None)
                        for ago, m, a, b, va, vb in rows])
     digest._rate_cache.clear()
+    digest._volume_cache.clear()      # volumes now decide which market is quoted (the volume rule)
 
 
 def test_the_line_ends_where_the_number_is():
@@ -194,26 +195,41 @@ def test_a_cards_line_ends_where_its_number_is(seeded_board, window_h):
     assert checked >= 2, f"only {checked} cards carried a line"
 
 
-def test_an_inactive_market_is_priced_outside_this_contract(monkeypatch):
-    """KNOWN GAP, pinned so it cannot drift silently. A market whose traded hours disagree by more
-    than `wide_spread` (2x) is given up on: `directed_rates` prices it at the dearest/cheapest hour
-    on purpose (the Tecrod's Gaze rule, owner 2026-09-19), which is a risk stance rather than an
-    estimate. The LINE is folded regardless, so on such a card the number and the line still
-    disagree. Resolving that means deciding whether valuation and route-feasibility may use the
-    same number — a separate call from this change."""
+def g_priced_by(arbitrage):
+    g = arbitrage.graph.cached_graph()
+    g.values()
+    return g.priced_by
+
+
+def test_a_dead_secondary_market_never_sets_the_number_or_the_line(monkeypatch):
+    """Was the KNOWN GAP (a market given up on was priced at its extreme while its line was the
+    fold, so the two disagreed). Closed on 2026-09-23 by the volume rule: a currency's busiest
+    market is always quoted and prices it, the line follows the market the price comes from, and a
+    dead market can only ever be a SECONDARY one — which neither the number nor the line reads.
+    Here chaos trades against divine far more than against exalted; the exalted market wanders
+    5.5x and stays dead, and the card is priced through divine: number 10, line ending at 10."""
     from app import arbitrage, leaguehistory
     monkeypatch.setattr(leaguehistory, "scout_prices", lambda league: {})
     monkeypatch.setattr(leaguehistory, "scout_history", lambda league, days=60: {})
     rows = [(ago, f"ch{ago}", CH, EX, 1_000, 55_000) for ago in range(1, 60)]
     rows += [(0, "ch0", CH, EX, 2, 20)]                  # 10 vs ~55 — a 5.5x swing, over the 2x gate
+    rows += [(ago, f"cd{ago}", CH, DV, 50_000, 1_000) for ago in range(0, 60)]      # 50 chaos/div — chaos's busiest market
+    rows += [(ago, f"dv{ago}", DV, EX, 1_000, 500_000) for ago in range(0, 60)]     # 500 ex/div — exalted's busiest market
     _seed(rows)
     db.kv_set("settings", {**BOARD_SETTINGS, "watchlist": ["chaos"]})
     arbitrage.invalidate_caches()
     try:
         out = board.board(window_h=24)
         row = {r["id"]: r for r in out["rows"]}["chaos"]
-        assert row["mid"] == pytest.approx(10.0), "the wide-spread guard stopped pricing the extreme"
-        assert row["trend"][-1]["v"] > 40, "the line should still be the folded price"
+        assert row["mid"] == pytest.approx(10.0), "chaos is priced through its busiest market (divine)"
+        assert g_priced_by(arbitrage)["chaos"] == "divine"
+        # Worth 10 ex, less than one divine, so the card is SHOWN in exalted (the readability rule);
+        # the line is still the pricing chain (chaos→divine→exalted), never the dead direct market.
+        assert row["trend_num"] == "exalted"
+        assert row["trend"][-1]["v"] == pytest.approx(row["mid"] / out["prices"]["exalted"], rel=0.02), \
+            "the line ends on the number, not on the dead market's fold (~55)"
+        g = arbitrage.graph.cached_graph()
+        assert g.edges[("chaos", "exalted")].meta["inactive"] is True, "the wandering secondary market stays dead"
     finally:
         db.kv_set("settings", {})
         arbitrage.invalidate_caches()

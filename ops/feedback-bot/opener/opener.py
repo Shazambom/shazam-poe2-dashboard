@@ -60,7 +60,9 @@ def run_one(in_path: Path, outdir: Path, cell_argv=None, wall_s: float = WALL_S)
         result = {"status": "QUARANTINE", "shortId": "", "reason": "not a readable report"}
     else:
         result = {"status": "REFUSE", "shortId": "", "reason": f"cell exit {code}: {err.strip()}"[:200]}
-    (outdir / "result.json").write_text(json.dumps(result))
+    tmp = outdir / "result.json.tmp"
+    tmp.write_text(json.dumps(result))
+    os.replace(tmp, outdir / "result.json")                 # atomic: the bot's poll never sees a half file
     try:
         in_path.unlink()
     except FileNotFoundError:

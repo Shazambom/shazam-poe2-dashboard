@@ -66,6 +66,12 @@ DEFAULTS: dict = {
     # the middle (digest.directed_rates). Tunable on the Arbitrage page; 0 turns it off. Every
     # actively traded market measured under 1.4x on 2026-09-19; the median market was 1.25x.
     "wide_spread": 2.0,
+    # A wide-spread market is still a market when its book is DEEP on both sides: each side
+    # standing at least `depth_hours` of the pair's own executed volume, the thin side at least
+    # `depth_balance` of the deep one (owner, 2026-09-23). Measured in the pair's own units, so a
+    # market that moves ten a day and one that moves a hundred thousand meet the same bar.
+    "depth_hours": 1.0,
+    "depth_balance": 0.1,
     "step_overhead_min": 2.0,       # minutes per exchange step to place and collect an order
     # Price of gold for ranking, in Divine per 1000 gold. Gold's real worth shifts across a
     # league, so a slider (Arbitrage page, range 100k–10M gold/Divine) tunes this; it feeds
@@ -142,8 +148,31 @@ def hold_caution(s: dict) -> float:
 
 def wide_spread(s: dict) -> float:
     """How far apart a market's traded prices may run before it counts as inactive (0 = never)."""
-    v = s.get("wide_spread")
-    return float(v) if v is not None else 2.0
+    try:
+        v = float(s.get("wide_spread"))
+    except (TypeError, ValueError):
+        return DEFAULTS["wide_spread"]
+    # `hi/lo >= wide` with wide in (0, 1) is true of every market that traded twice; only 0 (off)
+    # and >= 1 mean anything. Anything else is the default, not a switch that kills every market.
+    return v if v == 0 or v >= 1.0 else DEFAULTS["wide_spread"]
+
+
+def _positive(s: dict, key: str) -> float:
+    try:
+        v = float(s.get(key))
+    except (TypeError, ValueError):
+        return DEFAULTS[key]
+    return v if v >= 0 else DEFAULTS[key]
+
+
+def depth_hours(s: dict) -> float:
+    """Hours of the pair's own executed volume each side of the book must stand to be deep."""
+    return _positive(s, "depth_hours")
+
+
+def depth_balance(s: dict) -> float:
+    """The thin side of a deep book holds at least this share of the deep side's units."""
+    return _positive(s, "depth_balance")
 
 
 def hub_count(s: dict) -> int:

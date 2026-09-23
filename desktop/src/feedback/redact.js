@@ -1,7 +1,8 @@
 // A feedback report never carries a credential. Two layers, in order: an ALLOW-LIST for the two
 // settings documents (unknown keys are dropped, fail-closed), then redactDeep over everything —
-// every string scrubbed of secret shapes, every credential-named key dropped. The account name is
-// not a secret here (it is in the screenshots anyway); the dialog says so.
+// every string scrubbed of secret shapes, every credential-named key dropped. The PoE account name
+// (`/api/status` → oauth.username) and the OS user name (inside `/api/diag` → data_dir) are dropped
+// too (owner, 2026-09-23): a report says what the app did, not who ran it.
 'use strict'
 
 // /api/settings + desktop-settings.json: the keys a report may carry. Anything not listed is dropped.
@@ -15,7 +16,10 @@ const SETTINGS_KEYS = [
   'betaChannel', 'customBackdrop', 'focusHotkey',
 ]
 
-const DROP_KEY = /sess|cookie|token|secret|password|authorization/i
+const DROP_KEY = /sess|cookie|token|secret|password|authorization|username/i
+// A path under the user's home names the OS user; the report keeps only the folder's own name.
+const PATH_KEY = /(^|_)(dir|path|file)$/i
+const lastSegment = (s) => String(s).split(/[\\/]/).filter(Boolean).pop() || ''
 
 const SECRET_PATTERNS = [
   /POESESSID\s*[=:]\s*\S+/gi,
@@ -45,7 +49,7 @@ function redactDeep(value, seen = new Set(), depth = 0) {
   const out = {}
   for (const [k, v] of Object.entries(value)) {
     if (DROP_KEY.test(k)) continue
-    out[k] = redactDeep(v, seen, depth + 1)
+    out[k] = (PATH_KEY.test(k) && typeof v === 'string') ? lastSegment(v) : redactDeep(v, seen, depth + 1)
   }
   return out
 }

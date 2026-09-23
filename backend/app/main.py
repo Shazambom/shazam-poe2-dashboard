@@ -443,7 +443,9 @@ async def hold(window_h: int | None = None, horizon: str | None = None, category
     # `k` = the Hold page's CAUTION slider (0 = return alone, higher = favour the steadier
     # asset); omitted it falls back to the `hold_caution` setting.
     res = await run_in_threadpool(holdscore.leaderboard, hz, category, numeraire, k)
-    if not res["assets"]:
+    # No rows AND no category scored: nothing is stored, crawl. A category with nothing eligible
+    # today is an empty page, not a missing backfill.
+    if not res["assets"] and len(res.get("categories") or []) <= 1:
         building = _ask_backfill(get_settings()["league"])
         if building:
             _spawn(leaguehistory.backfill(full=True))

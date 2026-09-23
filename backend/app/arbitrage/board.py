@@ -2,31 +2,17 @@
 freshness, trend and %-change over the app-wide window; plus the edge table / pair list."""
 from __future__ import annotations
 
+import time
+
 from .. import cache, centrality, digest, leaguehistory, marketseries, orderbook, session
 from .. import settings as settings_mod
 from ..currencies import registry
 from ..settings import get_settings
 from . import graph
-from .graph import INF
+from .graph import INF, counterparts_by_volume   # THE volume rule lives in graph.py; re-exported here
 
 _board_cache: dict = {}
 BOARD_TTL_S = 30.0
-
-
-def counterparts_by_volume(g, rv: dict[str, float]) -> dict[str, list[tuple[float, str]]]:
-    """Per-currency counterpart markets, ranked by traded value/hour (units × ref value) — a
-    fair, direction-symmetric measure of each market's size. THE volume rule: the board's default
-    numeraire and the league arc's fallback numeraire both walk this ranking."""
-    ranked: dict[str, list[tuple[float, str]]] = {}
-    for (a, b), e in g.edges.items():
-        if e.kind == "recipe" or not e.vol_in_per_h:
-            continue
-        volr = e.vol_in_per_h * (rv.get(a) or 0.0)
-        for node, other in ((a, b), (b, a)):
-            ranked.setdefault(node, []).append((volr, other))
-    for lst in ranked.values():
-        lst.sort(reverse=True)
-    return ranked
 
 
 def board(window_h: int = 24, nums: dict[str, str] | None = None) -> dict:
@@ -132,7 +118,7 @@ def _align(a: list[dict], b: list[dict], op) -> list[dict]:
     return out
 
 
-def _fold_series(series: list[dict]) -> list[dict]:
+def _fold_series(series: list[dict], until: int | None = None) -> list[dict]:
     """A market's per-hour series folded into its PRICE at each hour: the same volume-weighted,
     decayed rate `digest.window_rates` gives the number, evaluated at every point instead of only
     at the newest one. Carried forward as a running sum, so it costs one pass.
@@ -147,20 +133,42 @@ def _fold_series(series: list[dict]) -> list[dict]:
     executed, and folding it would erase the trades it exists to show."""
     if not series or series[0].get("volume_a") is None:
         return series            # a caller's own rate-only series: nothing to weight by, so as-is
-    out, na, nb, prev = [], 0.0, 0.0, None
-    for p in series:
-        va, vb = p.get("volume_a"), p.get("volume_b")
-        if not va or not vb:     # `pair_history` never emits these; belt and braces
-            continue
+    # Each point is `_fold_rates` over the RATE_WINDOW_H before it — the same rows, the same
+    # weights the number gets at that hour — so the line's end IS the number. Rows older than
+    # the window leave the running sums at their decayed weight; decay alone never expires them,
+    # and a burst two days ago would otherwise bend today's end away from today's number.
+    window = digest.RATE_WINDOW_H * 3600
+    pts = [p for p in series if p.get("volume_a") and p.get("volume_b")]   # `pair_history` never emits an empty side
+    out, na, nb, prev, start = [], 0.0, 0.0, None, 0
+    for i, p in enumerate(pts):
         if prev is not None:
             decay = 2.0 ** (-((p["hour"] - prev) / 3600.0) / digest.RATE_HALF_LIFE_H)
             na *= decay
             nb *= decay
         prev = p["hour"]
-        na += va
-        nb += vb
+        while pts[start]["hour"] < p["hour"] - window:                  # expired: take it back out
+            q = pts[start]
+            w = 2.0 ** (-((p["hour"] - q["hour"]) / 3600.0) / digest.RATE_HALF_LIFE_H)
+            na -= w * q["volume_a"]
+            nb -= w * q["volume_b"]
+            start += 1
+        na += p["volume_a"]
+        nb += p["volume_b"]
         if na > 0:
             out.append({**p, "rate": nb / na})
+    if out and until is not None and until > out[-1]["hour"]:
+        # One more point at `until`: the same fold, decayed and expired forward to that hour.
+        decay = 2.0 ** (-((until - prev) / 3600.0) / digest.RATE_HALF_LIFE_H)
+        na *= decay
+        nb *= decay
+        while start < len(pts) and pts[start]["hour"] < until - window:
+            q = pts[start]
+            w = 2.0 ** (-((until - q["hour"]) / 3600.0) / digest.RATE_HALF_LIFE_H)
+            na -= w * q["volume_a"]
+            nb -= w * q["volume_b"]
+            start += 1
+        if start < len(pts) and na > 0:
+            out.append({"hour": until, "rate": nb / na, "volume_a": 0, "volume_b": 0})
     return out
 
 
@@ -170,23 +178,28 @@ def _fold_series(series: list[dict]) -> list[dict]:
 RATE_WARMUP_H = int(digest.RATE_WINDOW_H)
 
 
-def _priced_history(league: str, window_h: int, shared=None):
+def _priced_history(league: str, window_h: int, shared=None, now: int | None = None):
     """`history(a, b, h)` giving the PRICE of b in a at each hour (`_fold_series`), rather than
     what that hour printed. `shared` is the batch reader (`digest.window_history`) when one card's
-    worth of queries would be repeated across hundreds of assets."""
+    worth of queries would be repeated across hundreds of assets. The line always reaches `now`
+    (the clock's hour): its last point is the same 48h fold the number is, so it ends on the
+    number whether the market traded this hour or two days ago (owner, 2026-09-23)."""
     span = window_h + RATE_WARMUP_H
     base = shared if shared is not None else (
         lambda a, b, _h: digest.pair_history(league, a, b, span))   # noqa: E731
+    end = digest._hour(time.time()) if now is None else now
 
     def history(a, b, h):
-        folded = _fold_series(base(a, b, span))
+        folded = _fold_series(base(a, b, span), until=end)
         if not folded:
             return folded
-        # Trim the warm-up relative to the series' own newest hour, not the clock: `change_over`
-        # measures back from the last point too, and a market whose last trade is hours old should
-        # draw its own last `h` hours rather than an empty chart.
+        # A folded line's last hour IS `end`; a caller's own rate-only series keeps its own end.
         cutoff = folded[-1]["hour"] - h * 3600
-        return [p for p in folded if p["hour"] >= cutoff]
+        shown = [p for p in folded if p["hour"] >= cutoff]
+        if len(shown) < 2:
+            # Nothing traded inside the window: a flat line from the last trade to now, not a dot.
+            shown = folded[-2:]
+        return shown
     return history
 
 
@@ -304,6 +317,8 @@ def _row(g, rv: dict[str, float], ranked, hub_ids, c: str, pick: str | None, win
     edges = [e for e in (buy_edge, sell_edge) if e]
     depth = next((len(e.ladder) for e in (sell_edge, buy_edge) if e and e.kind == "live"), None)
     spread = (buy - sell) if (buy is not None and sell is not None) else None
+    if spread is not None and abs(spread) <= 1e-9 * max(abs(buy), abs(sell)):
+        spread = 0.0                        # two sides of one window rate: 1/px and px round-trip to -7e-15
     spread_pct = (spread / mid * 100) if (spread is not None and mid) else None
     # Source label + freshness: live/digest exchange data; a currency the exchange graph
     # doesn't cover is priced from poe2scout ("scout"); anything else valued only via

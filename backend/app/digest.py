@@ -145,7 +145,8 @@ def traded_bounds(rows) -> dict[tuple[str, str], tuple[float, float]]:
 
 
 def directed_rates(a: str, b: str, r, age: float, bounds: tuple[float, float] | None = None,
-                   wide_spread: float | None = None, rate: float | None = None) -> dict[tuple[str, str], dict]:
+                   wide_spread: float | None = None, rate: float | None = None,
+                   volume: tuple[float, float] | None = None) -> dict[tuple[str, str], dict]:
     """The directed edges one traded hour of the a<->b market supports. An edge a->b hands you b,
     so someone must have been STANDING there offering b: the receiving side's standing stock
     (`hi_stock_*`) must be > 0. No sellers → no edge in that direction — traded volume is never a
@@ -166,19 +167,38 @@ def directed_rates(a: str, b: str, r, age: float, bounds: tuple[float, float] | 
     from the ONE number rather than from two divisions, so their product stays within a single
     rounding step of 1 — a market that traded against itself would be a free two-hop loop."""
     lo, hi = bounds or (0.0, 0.0)
-    wide = settings.wide_spread(settings.get_settings()) if wide_spread is None else wide_spread
+    s = settings.get_settings()
+    wide = settings.wide_spread(s) if wide_spread is None else wide_spread
     inactive = bool(lo > 0 and hi > 0 and wide > 0 and hi / lo >= wide)
     px = rate if rate else (r["vol_a"] / r["vol_b"])                 # a per b
+    if inactive and volume and _deep(r, px, volume, settings.depth_hours(s), settings.depth_balance(s)):
+        inactive = False                                             # wide, but a book stands on both sides
     to_b = (1.0 / hi) if inactive else (1.0 / px)                    # b per a — you pay the dearest
     to_a = lo if inactive else px                                    # a per b — you take the cheapest
+    # `quoted_rate` is what the market would be priced at if it were quoted (the window rate),
+    # carried on every edge so the value table can quote a currency's busiest market whatever
+    # its spread says (Graph.quote_busiest_markets — the volume rule, owner 2026-09-23).
     out: dict[tuple[str, str], dict] = {}
     if r["hi_stock_b"]:
-        out[(a, b)] = {"rate": to_b, "stock": r["hi_stock_b"], "inactive": inactive,
+        out[(a, b)] = {"rate": to_b, "stock": r["hi_stock_b"], "inactive": inactive, "quoted_rate": 1.0 / px,
                        "volume_from": r["vol_a"], "volume_to": r["vol_b"], "hour": r["hour"], "age_s": age}
     if r["hi_stock_a"]:
-        out[(b, a)] = {"rate": to_a, "stock": r["hi_stock_a"], "inactive": inactive,
+        out[(b, a)] = {"rate": to_a, "stock": r["hi_stock_a"], "inactive": inactive, "quoted_rate": px,
                        "volume_from": r["vol_b"], "volume_to": r["vol_a"], "hour": r["hour"], "age_s": age}
     return out
+
+
+def _deep(r, a_per_b: float, volume: tuple[float, float], min_hours: float, min_balance: float) -> bool:
+    """Whether the standing stock on BOTH sides of a market is a book: each side covers
+    `min_hours` of that side's executed volume, and the thin side (in the deep side's units)
+    holds at least `min_balance` of the deep one. A wide spread with this behind it is a market
+    that is merely wide (owner, 2026-09-23); without it, one order against a wall is not."""
+    va_h, vb_h = volume
+    sa, sb = r["hi_stock_a"] or 0, r["hi_stock_b"] or 0
+    hours = min(sa / va_h if va_h else 0.0, sb / vb_h if vb_h else 0.0)
+    ua, ub = sa, sb * a_per_b                                        # both in a's units
+    balance = min(ua, ub) / max(ua, ub) if max(ua, ub) else 0.0
+    return hours >= min_hours and balance >= min_balance
 
 
 def latest_rates(league: str, max_age_hours: int = 6) -> dict[tuple[str, str], dict]:
@@ -190,7 +210,10 @@ def latest_rates(league: str, max_age_hours: int = 6) -> dict[tuple[str, str], d
             (league, since),
         ).fetchall()
     bounds = traded_bounds(rows)            # how far the executed hours ran, per market
-    priced = window_rates(league)           # what each market traded at across the longer window
+    # The pricing window is never narrower than the rows it prices: a setting past RATE_WINDOW_H
+    # would otherwise leave the older markets to their newest hour alone.
+    priced = window_rates(league, max(RATE_WINDOW_H, max_age_hours))
+    day = pair_volume(league, 24)           # each side's executed units per hour: the depth yardstick
     wide = settings.wide_spread(settings.get_settings())
     out: dict[tuple[str, str], dict] = {}
     for r in rows:
@@ -202,7 +225,8 @@ def latest_rates(league: str, max_age_hours: int = 6) -> dict[tuple[str, str], d
             continue
         out.update(directed_rates(a, b, r, time.time() - (r["hour"] + 3600),
                                   bounds.get((r["cur_a"], r["cur_b"])), wide,
-                                  priced.get((r["cur_a"], r["cur_b"]))))
+                                  priced.get((r["cur_a"], r["cur_b"])),
+                                  volume=(day.get((a, b), 0.0), day.get((b, a), 0.0))))
     return out
 
 

@@ -33,6 +33,33 @@ def credible_offers(offers: list[dict], executed_rate: float | None) -> list[dic
     return [o for o in offers if o["rate"] <= executed_rate * BAIT_FACTOR]
 
 
+def counterparts_by_volume(g, rv: dict[str, float] | None = None) -> dict[str, list[tuple[float, str]]]:
+    """THE volume rule: per currency, its counterpart markets ranked by how many UNITS OF THAT
+    CURRENCY the market moves an hour — what it sold there plus what the other side's sales
+    bought (that side's units × the market's rate). Owner, 2026-09-23: the busiest market is the
+    one that trades the most of the currency; not the most value (chaos and divine pay 10-20x more
+    per Thaumaturgic Flux than the exalted market that moves five times the flux), not the
+    counterparty's units (12.5M exalts for an omen are 146k omens against 460k in divine), and
+    not gold (charging it needs the currency's own value, which is what is unreliable when it
+    matters). `rv` is accepted for the callers that pass it and ignored: the pick never moves
+    with the value table. The Board's default numeraire, the league arc's fallback numeraire and
+    the value table (`Graph.quote_busiest_markets`, `Graph._widest_values`) all walk this
+    ranking; nothing else defines "the market that trades a currency"."""
+    units: dict[tuple[str, str], float] = {}          # (currency, counterpart) -> units of currency per hour
+    for (a, b), e in g.edges.items():
+        if e.kind == "recipe" or not e.vol_in_per_h or e.rate <= 0:
+            continue
+        units[(a, b)] = units.get((a, b), 0.0) + e.vol_in_per_h                 # a sold for b
+        units[(b, a)] = units.get((b, a), 0.0) + e.vol_in_per_h * e.rate        # b bought with that a
+    ranked: dict[str, list[tuple[float, str]]] = {}
+    for (c, other), u in units.items():
+        if u > 0:
+            ranked.setdefault(c, []).append((u, other))
+    for lst in ranked.values():
+        lst.sort(reverse=True)
+    return ranked
+
+
 @dataclass
 class Edge:
     src: str
@@ -90,6 +117,7 @@ class Graph:
         self.fee_table: dict[str, int] = {}
         self._values: dict[str, float] | None = None     # Graph.values(), once per build
         self.priced_by: dict[str, str] = {}              # currency -> the counterpart that prices it
+        self.busiest: dict[str, str] = {}                # currency -> its busiest counterpart (the volume rule)
 
     def add(self, e: Edge) -> None:
         self.edges[(e.src, e.dst)] = e
@@ -120,7 +148,8 @@ class Graph:
                     continue
                 g.add(Edge(a, b, "digest", d["rate"], [{"rate": d["rate"], "stock": d["stock"]}],
                            d["age_s"], meta={"hour": d["hour"], "volume": d["volume_to"],
-                                             "inactive": d.get("inactive", False)}))
+                                             "inactive": d.get("inactive", False),
+                                             "quoted_rate": d.get("quoted_rate")}))
         vols = digest.pair_volume(league, s.get("volume_window_h", 24))
         for (a, b), e in g.edges.items():
             if e.kind != "recipe":
@@ -155,6 +184,7 @@ class Graph:
                 g.adj = {}
                 for e in g.edges.values():
                     g.adj.setdefault(e.src, []).append(e)
+        g.quote_busiest_markets()
         if s["allow_recipe_edges"]:
             for r in recipes.edges():
                 if (r["from"], r["to"]) in g.edges and g.edges[(r["from"], r["to"])].rate >= r["rate"]:
@@ -174,6 +204,31 @@ class Graph:
         if e and e.rate > 0:
             return 1.0 / e.rate
         return None
+
+    def quote_busiest_markets(self) -> None:
+        """A currency's BUSIEST market is always quoted and always prices it (owner, 2026-09-23):
+        the market that actually trades a currency sets its price whatever the spread rule or
+        poe2scout say about it. Busiest is THE volume rule (`counterparts_by_volume`, the same
+        ranking the Board's default numeraire and the league arc walk) — units of the currency,
+        so it needs no value table and cannot be moved by one. A dead edge on such a market takes
+        its `quoted_rate` (the window rate) and stops being dead; the extreme pricing of
+        2026-09-19 stays for a currency's secondary markets. Ulaman's Gaze read 44.66 ex off a
+        dead exalted market while its chaos market moved twice the gazes."""
+        ranked = counterparts_by_volume(self)
+        self.busiest = {c: lst[0][1] for c, lst in ranked.items() if lst}
+        changed = False
+        for c, other in self.busiest.items():
+            for key in ((c, other), (other, c)):
+                e = self.edges.get(key)
+                if e and e.kind != "recipe" and e.meta.get("inactive") and e.meta.get("quoted_rate"):
+                    e.rate = e.meta["quoted_rate"]
+                    if e.ladder:
+                        e.ladder[0]["rate"] = e.rate
+                    e.meta["inactive"] = False
+                    e.meta["quoted_by_volume_rule"] = True
+                    changed = True
+        if changed or self._values is not None:
+            self._values, self.priced_by = None, {}
 
     def values(self) -> dict[str, float]:
         """THE value of 1 unit of each currency in the reference — the one table every screen
@@ -256,25 +311,56 @@ class Graph:
         vals: dict[str, float] = {ref: 1.0}
         priced_by: dict[str, str] = {}
         width: dict[str, float] = {ref: INF}
-        heap = [(-INF, ref)]
-        done: set[str] = set()
-        while heap:
-            w, u = heapq.heappop(heap)
-            if u in done:
+
+        def relax(through_dead: bool) -> None:
+            """The widest-path walk from everything priced so far. The first pass refuses a dead
+            market for any currency that has a live one; the second prices only what the first
+            could not, through its dead market, at the bid the walk always gives a dead market —
+            the same price it would get with no other market at all. Without it such a currency
+            fell through `ref_values`, which reads the same dead market at its ASK, so an
+            unrelated market hanging off it moved a gaze from 87.5 ex to 3,114."""
+            heap = [(-width[c], c) for c in vals]
+            heapq.heapify(heap)
+            done: set[str] = set()
+            while heap:
+                w, u = heapq.heappop(heap)
+                if u in done:
+                    continue
+                done.add(u)
+                for v in nbrs.get(u, ()):
+                    if v in done or (through_dead and v in vals):
+                        continue
+                    px = market_rate(v, u)                             # u per v
+                    if not px or (not through_dead and dead(u, v) and has_live_market(v)) \
+                            or not believable(v, px * vals[u]):
+                        continue
+                    cand = min(-w, units(u, v)[0] * vals[u])           # as deep as its thinnest market
+                    if cand > width.get(v, 0.0):
+                        width[v] = cand
+                        vals[v] = vals[u] * px
+                        priced_by[v] = u                               # the market this price came from
+                        heapq.heappush(heap, (-cand, v))
+
+        relax(through_dead=False)
+        if any(c not in vals for c in nbrs):
+            relax(through_dead=True)
+        # The volume rule, last word: a currency is worth what its BUSIEST market says, priced
+        # off that counterpart's value — not the widest chain (by value the flux's divine market
+        # at ~500 ex out-widens its exalted market at ~25, which moves five times the flux), and
+        # not poe2scout's close (`believable` guards secondary markets; the market that trades a
+        # currency cannot be vetoed by an outside close that broke 23 cards on 2026-09-23).
+        # Only through a counterpart that sits closer to the reference than the currency itself,
+        # so a hub is never re-priced through one of the small things that trade against it.
+        for c, b in self.busiest.items():
+            if c == ref or b not in vals or width.get(b, 0.0) <= width.get(c, 0.0):
                 continue
-            done.add(u)
-            for v in nbrs.get(u, ()):
-                if v in done:
-                    continue
-                px = market_rate(v, u)                             # u per v
-                if not px or (dead(u, v) and has_live_market(v)) or not believable(v, px * vals[u]):
-                    continue
-                cand = min(-w, units(u, v)[0] * vals[u])           # as deep as its thinnest market
-                if cand > width.get(v, 0.0):
-                    width[v] = cand
-                    vals[v] = vals[u] * px
-                    priced_by[v] = u                               # the market this price came from
-                    heapq.heappush(heap, (-cand, v))
+            if self.busiest.get(b) == c and c in vals:
+                continue                                   # each other's busiest market: the walk stands
+            px = market_rate(c, b)                         # b per c, from the busiest market itself
+            if px > 0:
+                vals[c] = vals[b] * px
+                priced_by[c] = b
+                width[c] = min(width[b], units(b, c)[0] * vals[b])
         self.priced_by = priced_by
         # Whatever no market priced: poe2scout's close first (an independent source), then
         # ref_values. A currency whose every market failed the side test must NOT come back at the
