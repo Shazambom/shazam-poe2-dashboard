@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
+import { finishRoutes } from '../lib/routesStream.js'
 import { api, fmt } from '../lib/api.js'
 import CapitalCard from './CapitalCard.jsx'
 import ConvertView from './ConvertView.jsx'
@@ -63,8 +64,9 @@ export default function RoutesView({ capital, status, currencies, onCapitalSaved
     es.addEventListener('scores', e => applyScores(JSON.parse(e.data)))
     es.addEventListener('done', e => {
       const d = JSON.parse(e.data)
-      applyScores(d.scores)
-      setRoutes([...accRef.current])
+      // The authoritative top list, whether this was a fresh search or a cached replay
+      // (lib/routesStream.js): one population for the banding, so the rows don't change on reload.
+      setRoutes(finishRoutes(accRef.current, d))
       setCounts(d)
       setStreaming(false)
       es.close()

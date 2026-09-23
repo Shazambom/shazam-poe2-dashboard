@@ -278,7 +278,7 @@ def _diag(cached: bool, routes: int, after_filters: int, candidates: int, t0: fl
     try:
         quoted = sum(1 for e in g.edges.values() if e.meta.get("quoted_by_volume_rule"))
         msg = (f"cached={cached} routes={routes} after_filters={after_filters} candidates={candidates} "
-               f"ms={int((time.time() - t0) * 1000)} capital_ref={float(notional or 0):.0f} "
+               f"ms={int((time.time() - t0) * 1000)} notional={bool(notional)} "
                f"starts={len(starts or ())} edges={len(g.edges)} quoted={quoted}")
         threading.Thread(target=devtelemetry.tlog, args=("routes", msg), daemon=True).start()
     except Exception:
