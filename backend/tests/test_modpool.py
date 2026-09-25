@@ -169,8 +169,11 @@ def test_build_pool_gives_each_item_type_only_the_sections_with_something_in_the
     des = next(s for s in ring["sections"] if s["id"] == "desecrated")
     keyed = [f for f in des["prefix"] + des["suffix"] if set(f["tags"]) & {"amanamu_mod", "kurgal_mod", "ulaman_mod", "breach_desecration"}]
     assert keyed and len(keyed) == len(des["prefix"] + des["suffix"]), "every desecrated family carries its key"
+    assert all(len(f["tags"]) == len(set(f["tags"])) for f in keyed), "a bone the mod already carries is not added twice"
     chips = {t["id"]: t for t in ring["tags"]}
     assert chips["amanamu_mod"]["label"] == "Amanamu" and chips["kurgal_mod"]["count"] > 0
+    order = [t["id"] for t in ring["tags"]]
+    assert order.index("life") < order.index("amanamu_mod"), "the base pool's tags lead the row; the bones follow"
     assert "genesis_tree_caster" not in chips, "a single-key section is titled by its key; no chip repeats it"
     wand = modpool.build_pool(pools["wand"], derived.families, derived.sections)
     wids = [s["id"] for s in wand["sections"]]

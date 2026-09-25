@@ -439,13 +439,16 @@ def build_pool(pool: dict, families: list, sections: list) -> dict:
                 continue
             # In a section of several keys (the bones) a family says which key rolls it: a chip like
             # any other tag. One key is the section's title already.
-            keys = [k for k in s["keys"] if any(w > 0 and t == k for tier in tiers for t, w in tier["weights"])] if len(s["keys"]) > 1 else []
+            keys = [k for k in s["keys"] if k not in f["tags"] and any(w > 0 and t == k for tier in tiers for t, w in tier["weights"])] if len(s["keys"]) > 1 else []
             sec[f["affix"]].append({"id": f["id"], "text": f["text"], "tags": list(f["tags"]) + keys,
                                     "tiers": [{"tier": i + 1, "name": t["name"], "ilvl": t["ilvl"], "text": t["text"]} for i, t in enumerate(tiers)]})
         if s["id"] == "base" or any(sec[a] for a in s["affixes"]):
             out.append(sec)
+    # Chips: every tag on any table, the base pool's tags first (as poe2db's row reads), then the
+    # keys and whatever only the other pools carry.
     count = Counter(t for sec in out for a in ("prefix", "suffix") for f in sec.get(a, []) for t in f["tags"])
-    chips = sorted(({"id": t, "label": label(t), "count": n} for t, n in count.items()), key=lambda c: (-c["count"], c["id"]))
+    base = Counter(t for a in ("prefix", "suffix") for f in out[0].get(a, []) for t in f["tags"])
+    chips = sorted(({"id": t, "label": label(t), "count": n} for t, n in count.items()), key=lambda c: (-base[c["id"]], -c["count"], c["id"]))
     return {"sections": out, "tags": chips}
 
 
