@@ -21,6 +21,12 @@ so the Mac never saw it, and the failure was logged only to the backend's stdout
 **Fix** (0.3.6-beta.3): flush and sync through the handle the copy was written with;
 `test_seed_market_syncs_through_the_write_handle` pins that the synced handle is writable.
 
+**Reproduction on any platform:** `backend/tests/test_seed_windows.py` runs the seed step under a
+Windows-like `os.fsync` (EBADF on a read-only handle). Against the pre-fix code the fresh-install
+and unseeded-client cases fail with the exact telemetry line above; against the fix they seed,
+the mod tables arrive, and the `[seed]` lines read `replacing … / replaced: now v…`. A failed seed
+keeps the previous DB, leaves no temp file and reports `FAILED`.
+
 **Lessons.**
 - A silent fallback ("will crawl live") hid a platform bug for weeks. The seed step now reports
   kept / replaced / failed over beta telemetry, and the mod-table counts at startup.
