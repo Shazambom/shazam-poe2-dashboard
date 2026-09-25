@@ -1,58 +1,51 @@
 # Arbiter
 
-If you play Path of Exile 2 for the economy, you know the routine. Twelve trade tabs open. A price
-site in another window. A spreadsheet where you guess what your stash is worth. Half an hour of
-tabbing around before you make a single trade. I got sick of it and built the thing I wanted: one
-window that trades, watches the market, and runs the numbers for me.
+I got sick and tired of having a billion PoE2 trade tabs open so I built Arbiter. Its your one
+stop shop for trading, market research, and protecting your stash against inflation.
 
 ![Arbiter, the Board](docs/screenshots/board-vault.png)
 
-## It makes you currency
+## Arbitrage
 
-Tell Arbiter what's in your bank. It finds loops on the currency exchange, and through vendor
-recipes, that end with more of what you started with. It sizes every loop to what you actually
-hold, charges the real gold fees, works out how long each step takes to fill from real hourly
-volume, and ranks them by how fast they earn per gold you burn. Gold cheap for you right now? The
-gold-hungry loops float up. Gold precious? The gold-free ones win. One slider.
+It runs an arbitrage simulation. You tell it what you hold and it finds currency exchange loops
+(vendor recipes included) that end with more of what you started with. It scales to how much
+currency you have in your bank, charges the real gold fees, figures out how long each step takes
+to fill from actual hourly volume, and ranks the loops by how fast they earn per gold. You can
+weight it based on how valuable you think gold is. I've been using it to make quite a bit of
+currency.
 
-I run this every session and it pays for itself. It's not a get-rich button, it's the boring edge
-you'd never find by eye, found for you, every hour.
+## Hold
 
-## It tells you what to hold
+It tells you which currencies are going to be resistant to inflation and are good assets to park
+wealth in. Scores every currency as a store of value and shows you which ones are holding and
+which ones are about to move, so your profits don't melt while you're not looking.
 
-Profits melt. The league inflates, the currency you stacked last week buys less this week, and by
-the time you notice it's gone. The Hold page scores every currency as a store of value and tells
-you which ones are holding up against inflation and which are about to move. Park your wealth
-somewhere that keeps it.
+## Prices
 
-## It watches the market so you don't have to
+Its a price dashboard too. Every currency, priced off the market that actually trades it, with the
+hourly history behind it. Click a card for the full history and every market it trades in.
 
-Every currency, priced off the market that actually trades it, with the hourly history behind it.
-Price, trend, change, a line that ends on today's number. Click a card and you get the zoomed
-history and every market that thing trades in. This is the price site, except it's yours, it's
-local, and it's already open.
+## Trading
 
-## It kills your tab problem
+Its a trade site wrapper. The real trade site, logged in, inside the app, with folders for
+different types of trade searches (mapping, crafting, flipping, whatever). Copy an item in game
+and it shows up in an ExiledExchange2 history folder with a search ready to run. Every search is
+Instant Buyout so travel to hideout just works.
 
-The Trading tab is the real trade site, inside the app, logged in, with folders. Save a search,
-drop it in a folder (mapping, crafting, flipping, whatever), and open it with one click. Copy an
-item in game and it shows up in an ExiledExchange2 history folder with a search ready to run.
-Every search is Instant Buyout, so travel-to-hideout just works.
+Live trade webhooks. Set a search to listen for live trades and hit `Ctrl+G` to instantly bring
+up the latest ping and travel. You never leave the game.
 
-Set a search live and Arbiter listens. When a listing pings, hit `Ctrl+G`. It pulls up the newest
-hit and travels you to the seller. You never leave the game.
+## Regex
 
-## It writes your stash searches
+A stash search builder. Pick the waystone tier, revives, mods you want and mods you don't, or the
+tablet kind and its mods, and it writes the search box string for you. Knows the 250 character
+limit. The same selection can go straight to the trade site as a search.
 
-Rolling waystones, sorting tablets? Pick the tier, the revives, the mods you want, the mods you
-don't, and it writes the regex for the stash search box. It knows the 250-character limit and has a
-switch for when you're over. The same selection goes straight to the trade site as a search.
+## Sales
 
-## What sold
+What sold, when, for how much, next to what you're holding.
 
-Sales, when, for how much, next to what you're holding. So you know if the plan is working.
-
-## Six looks, one layout
+## Themes
 
 | Vault (default) | Arbiter of Ash | Arbiter of Divinity |
 |---|---|---|
@@ -73,11 +66,11 @@ Sales, when, for how much, next to what you're holding. So you know if the plan 
 
 ## Get it
 
-Latest release: [Windows installer and Mac dmg](https://github.com/Shazambom/shazam-poe2-dashboard/releases/latest).
-Install it, log in once from the top bar (the normal pathofexile.com login, Steam works), and
-you're trading. It updates itself.
+[Windows installer and Mac dmg](https://github.com/Shazambom/shazam-poe2-dashboard/releases/latest).
+Install it, log in once from the top bar (normal pathofexile.com login, Steam works too), done. It
+updates itself.
 
-Everything stays on your PC. No account of mine, no server of mine, nothing phoning home. It talks
-to GitHub for updates and to pathofexile.com on your own login, and that's it.
+Everything runs on your machine. No account, no server, nothing phoning home. It talks to GitHub
+for updates and to pathofexile.com on your own login and thats it.
 
-The trading side grew out of what I liked in Better Trading. The rest is what I wished existed.
+The trading stuff is based off of Better Trading somewhat. The rest is what I wanted to exist.
