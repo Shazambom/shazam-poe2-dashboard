@@ -39,10 +39,10 @@ test('the view imports the tables as data and reaches only the app', () => {
   assert.ok(/from '\.\.\/data\/regex\/waystone\.json'/.test(view) && /from '\.\.\/data\/regex\/tablet\.json'/.test(view), 'the tables ride in the bundle')
 })
 
-test('the tab is mounted under Trading, last, and only while selected', () => {
+test('the tab is mounted under Trading, after the trading tabs and beside Mods, and only while selected', () => {
   const tv = read('components/TradingView.jsx')
   const subs = [...tv.matchAll(/id: '([a-z]+)', label:/g)].map(m => m[1])
-  assert.equal(subs[subs.length - 1], 'regex', `sub-tabs: ${subs}`)
+  assert.deepEqual(subs.slice(-2), ['regex', 'mods'], `sub-tabs: ${subs}`)
   assert.ok(/sub === 'regex'\s*&&\s*<RegexView/.test(tv), 'mounted on selection')
 })
 
