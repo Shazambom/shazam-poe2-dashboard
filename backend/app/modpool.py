@@ -390,6 +390,7 @@ def sections_from(export: Export, families: list) -> list:
                 if w > 0 and tag not in carried:
                     keyed[tag].append((f, t))
     sections = [{"id": "base", "title": None, "domain": None, "affixes": ["prefix", "suffix"], "keys": [], "classes": None, "floored": True}]
+    by_domain: dict = {}   # keys of one non-item domain are one section (poe2db: one "Desecrated" group, the bones as tags in it)
     for tag, pairs in sorted(keyed.items()):
         domain = Counter(f["domain"] for f, _ in pairs).most_common(1)[0][0]
         if tag in carriers:
@@ -400,7 +401,13 @@ def sections_from(export: Export, families: list) -> list:
         else:
             log.info("modpool: key %s has no carrier and no base tag; skipped", tag)
             continue
-        sections.append({"id": tag, "title": title, "domain": domain, "affixes": ["prefix", "suffix"], "keys": [tag], "classes": classes, "floored": domain == "item"})
+        if domain != "item":
+            if domain not in by_domain:
+                by_domain[domain] = {"id": domain, "title": label(domain), "domain": domain, "affixes": ["prefix", "suffix"], "keys": [], "classes": None, "floored": False}
+                sections.append(by_domain[domain])
+            by_domain[domain]["keys"].append(tag)
+            continue
+        sections.append({"id": tag, "title": title, "domain": domain, "affixes": ["prefix", "suffix"], "keys": [tag], "classes": classes, "floored": True})
     for affix, title in (("corrupted", "Corrupted"), ("enchant", "Corrupted upgrade")):
         if any(f["affix"] == affix for f in families):
             sections.append({"id": affix, "title": title, "domain": "item", "affixes": [affix], "keys": [], "classes": None, "floored": False})
@@ -430,11 +437,14 @@ def build_pool(pool: dict, families: list, sections: list) -> dict:
             tiers = [t for t in f["tiers"] if rolls_on(t["weights"], tags)]
             if not tiers:
                 continue
-            sec[f["affix"]].append({"id": f["id"], "text": f["text"], "tags": list(f["tags"]),
+            # In a section of several keys (the bones) a family says which key rolls it: a chip like
+            # any other tag. One key is the section's title already.
+            keys = [k for k in s["keys"] if any(w > 0 and t == k for tier in tiers for t, w in tier["weights"])] if len(s["keys"]) > 1 else []
+            sec[f["affix"]].append({"id": f["id"], "text": f["text"], "tags": list(f["tags"]) + keys,
                                     "tiers": [{"tier": i + 1, "name": t["name"], "ilvl": t["ilvl"], "text": t["text"]} for i, t in enumerate(tiers)]})
         if s["id"] == "base" or any(sec[a] for a in s["affixes"]):
             out.append(sec)
-    count = Counter(t for a in ("prefix", "suffix") for f in out[0].get(a, []) for t in f["tags"])
+    count = Counter(t for sec in out for a in ("prefix", "suffix") for f in sec.get(a, []) for t in f["tags"])
     chips = sorted(({"id": t, "label": label(t), "count": n} for t, n in count.items()), key=lambda c: (-c["count"], c["id"]))
     return {"sections": out, "tags": chips}
 

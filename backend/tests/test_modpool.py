@@ -143,24 +143,35 @@ def test_sections_are_derived_from_the_data_not_listed(derived):
     assert "Wands" in secs["destruction"]["classes"] and "Bows" in secs["destruction"]["classes"] and "Gloves" not in secs["destruction"]["classes"]
     assert secs["marksman"]["title"] == "Kolr's Hunt" and secs["marksman"]["classes"] == ["Gloves"]
     # The bones and the Genesis Tree key on tags no base carries; their mods carry the base tags.
-    for k in ["ulaman_mod", "amanamu_mod", "kurgal_mod", "breach_desecration", "genesis_tree_caster", "genesis_tree_minion"]:
-        assert k in secs and secs[k]["classes"] is None, k
-    assert secs["ulaman_mod"]["title"] == "Ulaman"
+    # Keys of one non-item domain are ONE section (poe2db: one "Desecrated" group, the bones as
+    # tags in it; owner 2026-09-25); item-domain keys stay their own section.
+    assert secs["desecrated"]["keys"] == ["amanamu_mod", "breach_desecration", "kurgal_mod", "ulaman_mod"]
+    assert secs["desecrated"]["title"] == "Desecrated" and secs["desecrated"]["classes"] is None
+    assert not any(k in secs for k in ["ulaman_mod", "amanamu_mod", "kurgal_mod", "breach_desecration"])
+    for k in ["genesis_tree_caster", "genesis_tree_minion"]:
+        assert k in secs and secs[k]["classes"] is None and secs[k]["keys"] == [k], k
     assert secs["genesis_tree_caster"]["title"] == "Genesis Tree Caster"
     # A key with no base tag and no carrier (Kulemak, Watcher) would show on every item: not a section.
     assert "kulemak_abyss_prefix" not in secs and "watcher_abyss_suffix" not in secs
     assert secs["corrupted"]["affixes"] == ["corrupted"] and secs["enchant"]["affixes"] == ["enchant"]
     # The orb's minimum modifier level applies where regular orbs roll: item-domain prefix/suffix pools.
     assert secs["base"]["floored"] and secs["destruction"]["floored"]
-    assert not secs["ulaman_mod"]["floored"] and not secs["corrupted"]["floored"] and not secs["enchant"]["floored"]
+    assert not secs["desecrated"]["floored"] and not secs["corrupted"]["floored"] and not secs["enchant"]["floored"]
 
 
 def test_build_pool_gives_each_item_type_only_the_sections_with_something_in_them(derived):
     pools = {p["id"]: p for p in derived.pools}
     ring = modpool.build_pool(pools["ring"], derived.families, derived.sections)
     ids = [s["id"] for s in ring["sections"]]
-    assert ids[0] == "base" and "kurgal_mod" in ids and "corrupted" in ids and "enchant" in ids and "destruction" not in ids
-    assert "breach_desecration" in ids or "genesis_tree_caster" in ids
+    assert ids[0] == "base" and "desecrated" in ids and "corrupted" in ids and "enchant" in ids and "destruction" not in ids
+    assert "kurgal_mod" not in ids and "breach_desecration" not in ids
+    # In the merged section each family says which bone (key) rolls it, and the bones are chips.
+    des = next(s for s in ring["sections"] if s["id"] == "desecrated")
+    keyed = [f for f in des["prefix"] + des["suffix"] if set(f["tags"]) & {"amanamu_mod", "kurgal_mod", "ulaman_mod", "breach_desecration"}]
+    assert keyed and len(keyed) == len(des["prefix"] + des["suffix"]), "every desecrated family carries its key"
+    chips = {t["id"]: t for t in ring["tags"]}
+    assert chips["amanamu_mod"]["label"] == "Amanamu" and chips["kurgal_mod"]["count"] > 0
+    assert "genesis_tree_caster" not in chips, "a single-key section is titled by its key; no chip repeats it"
     wand = modpool.build_pool(pools["wand"], derived.families, derived.sections)
     wids = [s["id"] for s in wand["sections"]]
     assert "destruction" in wids and "marksman" not in wids
