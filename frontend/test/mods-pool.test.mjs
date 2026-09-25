@@ -9,7 +9,7 @@ import { prepare, atLevel, visible, shownChance, bandOf, inPool, tagLabel } from
 const tier = (tier, name, ilvl, text) => ({ tier, name, ilvl, text })
 const fam = (id, text, tags, tiers) => ({ id, text, tags, tiers })
 // A pool as the server sends it: tiers best first.
-const POOL = () => prepare({ id: 'ring', name: 'Rings', tags: [{ id: 'life', label: 'Life', count: 1 }, { id: 'attack', label: 'Attack', count: 1 }, { id: 'energy_shield', label: 'Energy Shield', count: 1 }], sections: [
+const POOL = () => prepare({ id: 'ring', name: 'Rings', tags: [{ id: 'life', label: 'Life' }, { id: 'attack', label: 'Attack' }, { id: 'energy_shield', label: 'Energy Shield' }], sections: [
   { id: 'base', title: null, floored: true,
     prefix: [
       fam('prefix:Life', '+# to maximum Life', ['life'], [tier(1, 'Virile', 54, '+(100–119) to maximum Life'), tier(2, 'Rotund', 46, '+(85–99) to maximum Life'), tier(3, 'Stout', 33, '+(60–69) to maximum Life'), tier(4, 'Sanguine', 16, '+(30–39) to maximum Life'), tier(5, 'Healthy', 6, '+(20–29) to maximum Life'), tier(6, 'Hale', 1, '+(10–19) to maximum Life')]),

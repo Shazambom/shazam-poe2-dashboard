@@ -171,19 +171,39 @@ def test_build_pool_gives_each_item_type_only_the_sections_with_something_in_the
     assert keyed and len(keyed) == len(des["prefix"] + des["suffix"]), "every desecrated family carries its key"
     assert all(len(f["tags"]) == len(set(f["tags"])) for f in keyed), "a bone the mod already carries is not added twice"
     chips = {t["id"]: t for t in ring["tags"]}
-    assert chips["amanamu_mod"]["label"] == "Amanamu" and chips["kurgal_mod"]["count"] > 0
+    assert chips["amanamu_mod"]["label"] == "Amanamu"
+    assert all(set(f["tags"][:1]) & {"amanamu_mod", "kurgal_mod", "ulaman_mod", "breach_desecration"} for f in keyed), \
+        "the bone leads the row's tags: the two the row shows include it"
     order = [t["id"] for t in ring["tags"]]
     assert order.index("life") < order.index("amanamu_mod"), "the base pool's tags lead the row; the bones follow"
+    assert order[0] == "elemental" and order.index("attack") < order.index("evasion"), "within a group the commoner tag first"
     assert "genesis_tree_caster" not in chips, "a single-key section is titled by its key; no chip repeats it"
     wand = modpool.build_pool(pools["wand"], derived.families, derived.sections)
     wids = [s["id"] for s in wand["sections"]]
     assert "destruction" in wids and "marksman" not in wids
     assert all(k in ring["sections"][0] for k in ("prefix", "suffix")) and "prefix" not in next(s for s in ring["sections"] if s["id"] == "corrupted")
-    assert ring["tags"] and all({"id", "label", "count"} <= set(t) for t in ring["tags"])
+    assert ring["tags"] and all(set(t) == {"id", "label"} for t in ring["tags"]), "a chip is an id and a label; counts stay here"
     assert not any(t["id"] in ("resource", "drop", "elemental_damage") for t in ring["tags"]), "compound and bookkeeping tags are not chips"
     jewel = modpool.build_pool(pools["jewel_ruby"], derived.families, derived.sections)
     assert [s["id"] for s in jewel["sections"]] == ["base"], "a jewel has its base pool only"
     assert jewel["sections"][0]["prefix"] or jewel["sections"][0]["suffix"]
+
+
+def test_build_pool_never_repeats_a_section_title_as_a_tag_and_needs_no_base_section(derived):
+    """A key that titles its section is not a tag in it, whether or not the export already marks the
+    mod with it; and the chip row is built from whatever sections there are, not from the first."""
+    pools = {p["id"]: p for p in derived.pools}
+    caster = next(s for s in derived.sections if s["id"] == "genesis_tree_caster")
+    whole = modpool.build_pool(pools["ring"], derived.families, derived.sections)
+    shown = next(s for s in whole["sections"] if s["id"] == "genesis_tree_caster")
+    fam = next(f for f in derived.families if f["id"] == (shown["prefix"] + shown["suffix"])[0]["id"])
+    marked = [{**f, "tags": ["genesis_tree_caster"] + list(f["tags"])} if f is fam else f for f in derived.families]
+    built = modpool.build_pool(pools["ring"], marked, [caster])
+    assert [s["id"] for s in built["sections"]] == ["genesis_tree_caster"]
+    rows = built["sections"][0]["prefix"] + built["sections"][0]["suffix"]
+    row = next(r for r in rows if r["id"] == fam["id"])
+    assert row["tags"] == list(fam["tags"]), "the section's own key is its title, never its tag"
+    assert built["tags"] and "genesis_tree_caster" not in {t["id"] for t in built["tags"]}
 
 
 # ------------------------------------------------------------------ poe2db pages

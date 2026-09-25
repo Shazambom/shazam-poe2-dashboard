@@ -200,8 +200,10 @@ These are equipment's; a jewel, flask, relic, waystone, tablet or logbook has it
 
 - **Desecrated**: one section for the game's desecrated domain, as poe2db shows it: the families
   keyed on the bones (`ulaman_mod`, `amanamu_mod`, `kurgal_mod`) and on breach desecration
-  (Tul's, Xoph's, Esh's, Uul-Netol's), each family carrying its key as a tag, so the bones are
-  chips. Keys of one non-item domain always share a section; item-domain keys get their own.
+  (Tul's, Xoph's, Esh's, Uul-Netol's), each family leading its tags with the key it rolls on, so
+  the two tags a row shows include the bone and the bones are chips. A key that titles its own
+  section is never a tag in it. Keys of one non-item domain always share a section; item-domain
+  keys get their own. The chip row is every tag on any table, the base table's tags first.
   The pool is the base tags plus the keys; every bone mod is level 65.
 - **Genesis Tree · Caster / Minion** on amulets, rings and belts: the families keyed on the
   tree's tags, with the mods' own base weights.

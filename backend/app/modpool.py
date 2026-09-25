@@ -414,13 +414,29 @@ def sections_from(export: Export, families: list) -> list:
     return sections
 
 
+def _rolled(tiers: list) -> set:
+    """Every tag any of the tiers has a weight on."""
+    return {t for tier in tiers for t, w in tier["weights"] if w > 0}
+
+
 def _keys_on(family: dict, keys: list) -> bool:
-    return not keys or any(w > 0 and t in keys for tier in family["tiers"] for t, w in tier["weights"])
+    return not keys or bool(_rolled(family["tiers"]) & set(keys))
+
+
+def _row_tags(family: dict, section: dict, rolled: set) -> list:
+    """The row's tags. A section's keys are never tags in it (one key is the section's title); in a
+    section of several keys (the bones) the keys the family rolls on lead, so the two tags a row
+    shows include the bone, then the family's own tags."""
+    keys = set(section["keys"])
+    own = [t for t in family["tags"] if t not in keys]
+    lead = [k for k in section["keys"] if k in rolled] if len(section["keys"]) > 1 else []
+    return lead + own
 
 
 def build_pool(pool: dict, families: list, sections: list) -> dict:
     """One item type's pools, precomputed for the client: no spawn weights leave here."""
     out = []
+    count, base = Counter(), Counter()   # tag → rows carrying it, over every table / the base table
     for s in sections:
         if s["id"] != "base" and pool["domain"] != "item":
             continue
@@ -437,18 +453,17 @@ def build_pool(pool: dict, families: list, sections: list) -> dict:
             tiers = [t for t in f["tiers"] if rolls_on(t["weights"], tags)]
             if not tiers:
                 continue
-            # In a section of several keys (the bones) a family says which key rolls it: a chip like
-            # any other tag. One key is the section's title already.
-            keys = [k for k in s["keys"] if k not in f["tags"] and any(w > 0 and t == k for tier in tiers for t, w in tier["weights"])] if len(s["keys"]) > 1 else []
-            sec[f["affix"]].append({"id": f["id"], "text": f["text"], "tags": list(f["tags"]) + keys,
+            row_tags = _row_tags(f, s, _rolled(tiers))
+            sec[f["affix"]].append({"id": f["id"], "text": f["text"], "tags": row_tags,
                                     "tiers": [{"tier": i + 1, "name": t["name"], "ilvl": t["ilvl"], "text": t["text"]} for i, t in enumerate(tiers)]})
+            count.update(row_tags)
+            if s["id"] == "base":
+                base.update(row_tags)
         if s["id"] == "base" or any(sec[a] for a in s["affixes"]):
             out.append(sec)
-    # Chips: every tag on any table, the base pool's tags first (as poe2db's row reads), then the
-    # keys and whatever only the other pools carry.
-    count = Counter(t for sec in out for a in ("prefix", "suffix") for f in sec.get(a, []) for t in f["tags"])
-    base = Counter(t for a in ("prefix", "suffix") for f in out[0].get(a, []) for t in f["tags"])
-    chips = sorted(({"id": t, "label": label(t), "count": n} for t, n in count.items()), key=lambda c: (-base[c["id"]], -c["count"], c["id"]))
+    # Chips: every tag on any table, the base pool's tags first (as poe2db's row reads), commonest
+    # first within a group, then the keys and whatever only the other pools carry.
+    chips = [{"id": t, "label": label(t)} for t in sorted(count, key=lambda t: (-base[t], -count[t], t))]
     return {"sections": out, "tags": chips}
 
 
