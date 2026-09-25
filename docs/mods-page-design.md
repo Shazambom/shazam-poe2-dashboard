@@ -14,10 +14,42 @@ how likely is each thing?** Everything else is one level down or cut.
   overall weight is the sum over the affix type, and the chance is the ratio. poe2db prints tiers
   × 1000 and a banner admitting it; we print the count and the real percentage.
 - **The pool has two edges.** The item level is the top (a tier above it cannot roll). The
-  minimum modifier level is the bottom, and it comes from the orb: Exalted, Chaos and Regal have
-  none, the Greater versions have 35, the Perfect versions have 50. A tier below the floor is out
-  of the pool: it cannot roll, it carries no weight, it leaves the totals. Strict, no exceptions
-  (poe2db keeps each family's top tier under its Min iLvL; that is poe2db's quirk, not the game).
+  minimum modifier level is the bottom, and it comes from the currency used. A tier below the
+  floor is out of the pool: it cannot roll, it carries no weight, it leaves the totals. Strict,
+  no exceptions (poe2db keeps each family's top tier under its Min iLvL; that is poe2db's quirk,
+  not the game). The complete index of currencies that bound the pool is below.
+
+## Currencies that bound the pool
+
+Indexed 2026-09-25 from every stackable currency on poe2db (263 items), which renders the game's
+`TieredCurrency` (MinimumModLevel per orb tier) and `AbyssBenchTicketTypes` (MaximumItemLevel and
+MinimumModLevel per bone) tables. ggpk.exposed refuses those two files (error 1101), so the
+values were read off the item pages. Sixteen items carry a level rule; nothing else does
+(essences add a fixed modifier, jeweller's orbs add sockets, Vaal and fracturing orbs do not
+touch the pool, Preserved bones have no bound).
+
+| Currency | Floor (min modifier level) | Cap (max item level) | Applies to |
+|---|---|---|---|
+| Orb of Transmutation / Augmentation / Regal / Exalted / Chaos | none | | the base orbs |
+| Greater Orb of Transmutation | 44 | | normal → magic, 1 mod |
+| Perfect Orb of Transmutation | 70 | | |
+| Greater Orb of Augmentation | 44 | | magic, +1 mod |
+| Perfect Orb of Augmentation | 70 | | |
+| Greater Regal Orb | 35 | | magic → rare, +1 mod |
+| Perfect Regal Orb | 50 | | |
+| Greater Exalted Orb | 35 | | rare, +1 mod |
+| Perfect Exalted Orb | 50 | | |
+| Greater Chaos Orb | 35 | | rare, remove 1 + add 1 |
+| Perfect Chaos Orb | 50 | | |
+| Gnawed Jawbone / Rib / Collarbone | none | 64 | desecration; weapons and quivers / armour / amulet, ring, belt; usable only on items of level 64 or below |
+| Preserved Jawbone / Rib / Collarbone | none | none | desecration, no bound |
+| Ancient Jawbone / Rib / Collarbone | 40 | none | desecration |
+
+So the floor takes one of six values: 0, 35, 40, 44, 50, 70. The magic-item orbs (Transmutation,
+Augmentation) sit higher than the rare-item orbs (Regal, Exalted, Chaos), and the bones have
+their own value. The Gnawed cap is not a pool edge; it is a rule on which items the bone can be
+used on, and it matters for the phase 2 Desecrated section (an item above 64 cannot take a
+Gnawed bone at all).
 - **The unit of lookup is a pool, not a base.** The pool is decided by the base's tags, so every
   ring shares one pool while gloves split by attribute. Collapsing bases by their spawn-tag set
   reproduces poe2db's index (Rings 1, Amulets 1, Belts 1, Gloves and Boots and Body Armour and
@@ -32,7 +64,7 @@ Trading → Mods, the last sub-tab. One sticky bar, two tables. No modal, no sim
 ```
  Workspace   Live   Sales   Regex   Mods
  ┌ bar (sticky) ──────────────────────────────────────────────────────────────────────────┐
- │ [Rings                    ▾]   Item level [ 82 ]   Min level [ any ] [Any|Greater|Perfect]   [Filter modifiers   ] │
+ │ [Rings                    ▾]   Item level [ 82 ]   Min level [ any ]  Orb [Any              ▾]   [Filter modifiers   ] │
  │  Life  Mana  Attack  Caster  Fire  Cold  Lightning  Chaos  Physical  Speed  Attribute  Resistance      │
  └─────────────────────────────────────────────────────────────────────────────────────────┘
 
@@ -46,10 +78,10 @@ Trading → Mods, the last sub-tab. One sticky bar, two tables. No modal, no sim
  └──────────────────────────────────────────────────────────┘ └─────────────────────────────────────────────────┘
 ```
 
-The same pool with Greater pressed (floor 35), item level 50, Life expanded:
+The same pool with Greater Exalted chosen (floor 35), item level 50, Life expanded:
 
 ```
- │ [Rings                    ▾]   Item level [ 50 ]   Min level [ 35 ] [Any|GREATER|Perfect]   [life               ] │
+ │ [Rings                    ▾]   Item level [ 50 ]   Min level [ 35 ]  Orb [Greater Exalted  ▾]   [life               ] │
 
  ┌ PREFIX ────────────────────────────── Tiers  Chance ┐
  │ ▾ +# to maximum Life              Life     2 / 8    7.7% │
@@ -85,17 +117,22 @@ Total stays on screen while tiers are read, which poe2db's modal hides.
 |---|---|---|---|---|
 | Pool | `CurrencyPicker` (`renderIcon={null}`), one option per pool variant, named `Rings`, `Body Armour · Str/Int`, `Wand · Bone, Offering`; base names are hidden keywords so "siph" finds the right wand | last used, else Rings | the pool, the tag chips | yes |
 | Item level | `Num` (lifted out of `RegexView.jsx` into `components/Num.jsx`), 1..100 | 82 | the pool's top edge: every count, total and % | yes |
-| Min level | `Num`, 0..100, placeholder `any` (0 = no floor), with a `Seg` beside it: `Any` 0 · `Greater` 35 · `Perfect` 50 | any | the pool's bottom edge: every count, total and % | yes, the number only |
+| Min level | `Num`, 0..100, placeholder `any` (0 = no floor) | any | the pool's bottom edge: every count, total and % | yes |
+| Orb | `CurrencyPicker` with the currency icon, options = the 16 currencies in the index above grouped by orb (Any; Greater / Perfect Transmutation 44 / 70; Augmentation 44 / 70; Regal 35 / 50; Exalted 35 / 50; Chaos 35 / 50; Ancient bones 40); choosing one writes the floor | Any | the floor, hence the same | no, derived from the floor: the picker shows the first orb whose floor matches the number, or `Any` when none does |
 | Tag chips | pill buttons built from the pool's own tags, multi-select, OR | none | which rows show (never the numbers) | yes |
 | Filter | `.ws-filter-input` over family text and tag names | empty | which rows show (never the numbers) | no |
 
 The two level boxes are separate and uncoupled. The item level is a fact about the item you
 hold; the floor is a fact about the orb. A floor above the item level is a real question with a
 real answer (nothing), so the boxes never drag each other along the way the Regex tier range
-does. The orb Seg is derived from the floor number: pressing a segment writes the number, the
-segment lights when the box matches, and a typed 40 lights nothing. One persisted value, no way
-to disagree. The box stays because the owner types numbers and a fourth orb grade would
-otherwise need a release.
+does. The orb picker is derived from the floor number: choosing an orb writes its floor, the
+picker shows the orb the number matches (the first of a tie, so 35 reads `Greater Exalted` and
+44 `Greater Transmutation`), and a typed 60 shows `Any`. One persisted value, no way to disagree.
+The box stays because the owner types numbers and a new orb grade would otherwise need a release.
+It is a picker rather than a `Seg` because six floors across five orb families is past a Seg's
+two to four options, and the icon says which orb you are modelling at a glance. The pool the
+picker gives is exactly what that orb rolls from, whatever the item's current mod count; how
+many mods an item can still take is phase 3 (your item against the pool).
 
 Row order is game order and never changes with a level, so the row under the pointer stays
 there. No sort controls, no Prefix/Suffix/Both switch (the two columns are the split), no Reset.
@@ -141,13 +178,13 @@ into the Regex tab with the mod ticked.
 
 ## The loop, made robust
 
-Owner's loop: expand a family, type an item level or a floor (or press an orb), read the
+Owner's loop: expand a family, type an item level or a floor (or pick an orb), read the
 weights and the total, repeat.
 
 - **Keyboard.** Family rows are a roving-tabindex list per column: ↑/↓ move, Home/End jump,
   Enter/Space toggle, Esc collapses and keeps focus, ←/→ hop to the other column. Tab order:
-  pool, item level, min level, the orb Seg, filter, chips, prefix rows, suffix rows. Both boxes
-  select on focus, ↑/↓ step 1, Shift+↑/↓ step 10.
+  pool, item level, min level, the orb picker, filter, chips, prefix rows, suffix rows. Both
+  boxes select on focus, ↑/↓ step 1, Shift+↑/↓ step 10.
 - **Focus.** Rows keyed by family id, tables keyed by pool id, never by a level, the filter or
   the tags. A level change re-renders values inside existing nodes, so focus in a box or on a row
   survives. A filter that hides the focused row moves focus to the nearest visible row.
@@ -172,14 +209,15 @@ weights and the total, repeat.
 ```
 frontend/src/components/
   ModsView.jsx      the tab: settings load/autosave, lazy data, bar, two ModTable
-  ModsBar.jsx       pool picker, two Num boxes, the orb Seg, filter, tag chips
+  ModsBar.jsx       pool picker, two Num boxes, the orb picker, filter, tag chips
   ModTable.jsx      one affix column: sticky header, rows, total; roving focus
   ModFamily.jsx     one family row + its tier bands (memo; plain-value props)
   Num.jsx           lifted from RegexView.jsx unchanged (RegexView imports it)
 frontend/src/lib/mods/
   index.js          load(): lazy import of ../../data/mods/*.json, cached
   pool.js           PURE: poolFor(pool, data), atLevel(pool, ilvl, floor), tagsOf(pool), visible(rows, {tags, q})
-  defaults.js       defaults, merge(stored); ORB_FLOORS = [[0,'Any'],[35,'Greater'],[50,'Perfect']]
+  defaults.js       defaults, merge(stored)
+  currency.js       the 16 bounded currencies: { id, name, floor, cap, group } (the index above; hand-maintained like data/regex/pools until the game tables are fetchable)
   trade.js          PURE: familyQuery(pool, family) → trade2 query, Instant Buyout, reusing regex/trade.js
   session.js        module store: expanded Set per pool
 frontend/src/data/mods/   pools.json, mods.json, MANIFEST.json  (frontend/scripts/sync-mods-data.mjs)
@@ -196,7 +234,7 @@ atLevel(pool, L, F) = { prefix: { rows: Row[], total: N }, suffix: {...} }
 Row    = { family, k, n, chance, tiers: (Tier & { state: 'above'|'in'|'below' })[] }
 ```
 
-Tests, exhaustive over every pool × L 1..100 × F ∈ {0, 1, 35, 50, 82, 100}: chances sum to 1 per
+Tests, exhaustive over every pool × L 1..100 × F ∈ {0, 1, 35, 40, 44, 50, 70, 82, 100}: chances sum to 1 per
 affix when N > 0; k is non-decreasing in L and non-increasing in F; k equals the count of tiers
 with `F ≤ level ≤ L`, no exception; `F > L` gives N = 0; bands are contiguous in tier order;
 every tier belongs to exactly one family; `visible()` never changes a chance or a total; Rings,
@@ -225,7 +263,9 @@ columns, stacks under 980px like `.rx-body`), `.mods-table` (`.rx-surface`), `.m
   drag rule would move the item level when a floor is typed, and a floor above the level is a
   legitimate query the pair forbids.
 - **Presets instead of the floor box**: the owner types numbers; a new grade would need a release.
-  **A 26-orb dropdown**: three values exist.
+  **A three-way Seg (Any / Greater / Perfect)**: the first draft, wrong once the currencies were
+  indexed: Greater means 35 on an Exalt and 44 on a Transmute, Perfect 50 and 70, and Ancient
+  bones are 40. A picker of the actual orbs, with icons, replaces it.
 - **Sort by chance, or sortable headers**: rows walk under the pointer during the most-used
   interaction. Game order only.
 - **Prefix / Suffix / Both switch**: hides a column that already fits.
@@ -248,8 +288,9 @@ Four independent designs were written against the same brief, revised twice (aft
 poe2db drive and after the owner's correction that the floor is a strict pool exclusion, then
 the Greater 35 / Perfect 50 orb facts), scored by a separate judge on six criteria, and read in
 full. All four converged on the shape above: class × variant picker, two typed levels with an
-orb Seg, strict exclusion, `k / n` and `k / N`, in-place expansion, Search on trade one level
-down, pure `pool.js`, `useAutosave`, no debounce. The base was the design that kept game order
+orb control, strict exclusion, `k / n` and `k / N`, in-place expansion, Search on trade one
+level down, pure `pool.js`, `useAutosave`, no debounce. The orb control was a three-way Seg in
+every candidate; the currency index written afterwards turned it into a picker. The base was the design that kept game order
 under every level change, kept the two boxes uncoupled and specified focus, scroll and edge
 states most fully. Grafted from the others: base names as picker keywords; the per-tier chance
 stated once instead of a column; the Total row's summed chance of the shown rows; the

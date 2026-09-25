@@ -87,8 +87,10 @@ page anywhere else, per the ecosystem rule; a mod lookup is a distinct workflow,
 
 The UI is decided in [`mods-page-design.md`](mods-page-design.md) (2026-09-25). In short: one
 picker over pool variants (class × attribute, wands split by element), an item level box and a
-minimum modifier level box with an orb `Seg` (Any 0, Greater 35, Perfect 50) that writes it, tag
-chips from the pool, a text filter; Prefix and Suffix tables side by side, one row per family
+minimum modifier level box with an orb picker that writes it (the 16 currencies with a level
+rule are indexed in the design: Greater / Perfect Transmutation and Augmentation 44 / 70, Regal,
+Exalted and Chaos 35 / 50, Ancient bones 40, Gnawed bones capped at item level 64), tag chips
+from the pool, a text filter; Prefix and Suffix tables side by side, one row per family
 with `tiers in the pool / tiers` and the chance, a Total row; a row expands in place to its tiers
 in three bands (above the item level, in the pool, below the floor) with `Search on trade` in the
 footer. The floor is a strict pool exclusion (owner): a tier is in the pool iff
