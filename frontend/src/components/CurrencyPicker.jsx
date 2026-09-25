@@ -18,7 +18,11 @@ export default function CurrencyPicker({ value, onChange, options = [], placehol
   const selected = useMemo(() => options.find(o => o.id === value), [options, value])
   const matches = useMemo(() => {
     const t = q.trim().toLowerCase()
-    return t ? options.filter(o => o.name.toLowerCase().includes(t) || String(o.id).toLowerCase().includes(t) || o.keywords?.some(k => k.toLowerCase().includes(t))) : options
+    if (!t) return options
+    // A hit on the name or id outranks a hidden keyword hit ("ruby" is the Ruby jewel before the Ruby Charm).
+    const direct = options.filter(o => o.name.toLowerCase().includes(t) || String(o.id).toLowerCase().includes(t))
+    const viaKeyword = options.filter(o => !direct.includes(o) && o.keywords?.some(k => k.toLowerCase().includes(t)))
+    return [...direct, ...viaKeyword]
   }, [options, q])
 
   // close on outside click
