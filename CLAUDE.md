@@ -54,6 +54,11 @@ dots and the updater 404s.
 [`docs/dev-notes.md`](docs/dev-notes.md) → "Deploying a desktop release". Shipping is gated on
 authorization (see "Web vs desktop" below).
 
+**A full-sync fallback on the beta channel is a T0 blocker for stable** (owner directive
+2026-09-25): beta clients report it themselves (`[T0]` lines, `devtelemetry.t0`), and
+`publish-github.sh` refuses a stable release while the version's beta line has one or has no
+healthy beta client since the last beta (`ops/t0-check.sh`). See the runbook's "T0 gate".
+
 **Tests gate the deploy scripts, not GitHub Actions** (owner directive 2026-09-16):
 `ops/run-tests.sh` (pytest + node tests + style lint) runs at the top of `ops/deploy-web.sh`
 and `desktop/publish-github.sh`, and a red test aborts before any rsync, tag push or upload.

@@ -159,6 +159,12 @@ Threading a new user setting all the way through (as `hub_count` did):
 
 ## Verifying the packaged Windows app (telemetry)
 
+**T0 blockers, automatic.** Any full-sync fallback (seed failed / unreadable / unseeded, digest
+cold start with a seed, a league refetched wholesale, empty mod tables with a seed) is reported
+by the client as `[T0]: <kind>: …` (`devtelemetry.t0`, kinds in `T0_KINDS`) on the beta channel;
+`ops/t0-scan.py` classifies the log and `ops/t0-check.sh` gates every stable release on it and on a
+healthy `[mods]` startup line. See the runbook's "T0 gate". Tests: `backend/tests/test_t0.py`.
+
 The policy — *the user is not your tester; build telemetry so YOU can see behavior* — lives in
 CLAUDE.md. The mechanics:
 

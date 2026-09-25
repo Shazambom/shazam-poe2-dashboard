@@ -229,6 +229,18 @@ def _merge_meta_bridge(new: dict[str, str]) -> None:
     log.info("meta_bridge: %d total mappings (%d new/changed this pass)", len(cur), changed)
 
 
+def crawl_verdict(current: bool, items: int, fetched: int, stored_hits: int) -> str | None:
+    """Was this league's crawl a full-sync fallback? A past league is fetched once and then marked
+    complete, so refetching a tenth of it means the marks were missing. A current league refreshes
+    wholesale every 12h by design; that is a fallback only when the client held (almost) no
+    history for it, which means the seed's league_daily never landed."""
+    if not items:
+        return None
+    if not current:
+        return "league-full-crawl" if fetched >= 0.1 * items else None
+    return "league-full-crawl" if fetched >= 0.5 * items and stored_hits < 0.5 * items else None
+
+
 async def backfill(force: bool = False, full: bool = True) -> dict:
     """Pull daily history for the target leagues × items into league_daily. Past
     leagues are fetched once; current leagues refresh on a 12h cadence.
@@ -300,8 +312,13 @@ async def backfill(force: bool = False, full: bool = True) -> dict:
                     if not current and not data.get("HasMore"):
                         db.kv_set(f"lh_complete:{name}:{item_id}", True)
                     fetched[f"{name}/{item_id}"] = len(rows)
-            # Beta telemetry: why this league did or did not crawl (counts only).
+            # Beta telemetry: why this league did or did not crawl (counts only), and whether that
+            # was a full-sync fallback (a T0 blocker).
             devtelemetry.tlog("lh", f"league={name!r} current={current} items={len(item_ids)} complete={tally['complete']} fresh={tally['fresh']} fetched={tally['fetched']} errors={tally['errors']} s={time.time() - t0:.0f}")
+            stored_hits = sum(1 for i in item_ids if stored.get((name, i)))
+            verdict = crawl_verdict(current, len(item_ids), tally["fetched"], stored_hits)
+            if verdict and not force:
+                devtelemetry.t0(verdict, f"league={name!r} current={current} items={len(item_ids)} fetched={tally['fetched']} stored={stored_hits} complete_marks={tally['complete']}")
         _cache.clear()   # fresh data → drop cross()/marketcap() caches
         progress.update({"running": False, "phase": "done", "updated": time.time(),
                          "leagues_done": len(leagues)})

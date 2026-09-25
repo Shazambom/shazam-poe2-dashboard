@@ -67,6 +67,21 @@ Then read `p=sidecar` / `p=backend` telemetry once the tester's app updates.
 **Promote beta → stable:** when a dev build is good, cut the SAME code as a plain `x.y.z` stable release
 (no `-beta`). Nothing else changes.
 
+## ⚠️ T0 gate — a full-sync fallback on beta blocks stable (owner directive 2026-09-25)
+
+A client rebuilding market data it should have received from the seed (seed failed or
+unreadable, DB left unseeded, digest starting from scratch, a league refetched wholesale, no mod
+tables with a seed bundled) is a T0 blocker. Beta clients detect it themselves and post one line,
+`[T0]: <kind>: …`, on the beta telemetry log (`backend/app/devtelemetry.py` → `T0_KINDS`).
+`publish-github.sh` runs `ops/t0-check.sh <x.y.z>` before any **stable** release: it reads the log
+on shazam through `ops/t0-scan.py` for the version's beta line since the latest beta went live and
+refuses on a blocker. It also refuses when **no** beta client has reported a healthy startup
+(`[mods]: … pools=N>0`) since then: silence is not validation. It fails closed (no ssh, no beta).
+Read the state by hand: `ops/t0-check.sh 0.3.6`, or the summary
+`ssh shazam … python3 /tmp/t0-scan.py --log data/install-reports.log`.
+Why: the 2026-09-25 Windows seed failure (`docs/bugs/2026-09-25-windows-seed-never-applied.md`)
+was a silent fallback for weeks; on stable it would have surfaced as a bug report, which is a failure.
+
 ## ⚠️ Step 0 — ALWAYS ASK: does this release need a fresh market snapshot?
 
 The desktop app bundles a **market snapshot** at build time (`desktop/market-seed/`, fetched

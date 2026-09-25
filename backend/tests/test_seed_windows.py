@@ -117,7 +117,7 @@ def test_a_failed_seed_keeps_the_old_db_and_reports_the_failure(env, monkeypatch
     db.seed_market()
     assert db._read_snapshot_version(market) == 3, "the previous DB survives a failed seed"
     assert not (d / "market.sqlite.tmp").exists(), "no half-written temp file is left behind"
-    assert any(l.startswith("[seed] FAILED (OSError:") and "crawling live" in l for l in lines), lines
+    assert any(l.startswith("[T0] seed-failed: OSError:") and "crawling live" in l for l in lines), "a failed seed is a T0 blocker: " + str(lines)
 
 
 def test_a_newer_local_db_is_kept_and_says_so(env):

@@ -41,6 +41,11 @@ git diff --cached --quiet || git commit -q -m "chore(ee2-query): sync vendored E
 # keeps `desktop-v*` because that path resolves via /releases/latest (literal tag match, no semver).
 case "$VER" in *-beta*) TAG="$VER" ;; *) TAG="desktop-v${VER}" ;; esac
 
+# T0 gate (owner directive 2026-09-25): a full-sync fallback reported on the beta channel is a hard
+# blocker for stable. ops/t0-check.sh reads shazam's beta telemetry log for this version's beta line
+# and fails closed. Betas themselves are not gated: they are how the blockers get found.
+case "$VER" in *-beta*) ;; *) ../ops/t0-check.sh "$VER" || { echo "FATAL: T0 blocker on the beta line of $VER (or the check could not run); not shipping stable"; exit 1; } ;; esac
+
 # The commit this release is cut from. main goes up first (CI checks this sha out, and the workflow
 # file itself is read from main); the TAG IS NOT PUSHED — GitHub's releases.atom lists bare tags, so
 # a tag pushed up front makes every beta client chase a manifest that isn't public yet. Publishing

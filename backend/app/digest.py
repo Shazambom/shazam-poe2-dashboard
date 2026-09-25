@@ -16,7 +16,7 @@ import time
 
 import httpx
 
-from . import cache, db, gateway, settings
+from . import devtelemetry, cache, db, gateway, settings
 from .datapolicy import MARKET_RETENTION_DAYS
 from .config import DIGEST_BACKFILL_HOURS, DIGEST_POLL_SECONDS, GGG_DIGEST_URL
 from .currencies import registry
@@ -60,9 +60,19 @@ def _store(hour: int, markets: list[dict]) -> int:
     return len(rows)
 
 
+def cold_start_reason(cursor, seed_bundled: bool) -> str | None:
+    """A missing digest cursor means the hourly digest rebuilds from scratch. With a seed bundled
+    that is a full-sync fallback (the seed carries the cursor); without one (dev, server) it is
+    how the DB is built."""
+    return "digest-cold" if cursor is None and seed_bundled else None
+
+
 async def sync_once() -> None:
     cursor = db.kv_get("digest_cursor")
     if cursor is None:
+        reason = cold_start_reason(cursor, bool(db.MARKET_SEED_PATH))
+        if reason:
+            devtelemetry.t0(reason, f"digest cursor missing with a seed bundled; backfilling {DIGEST_BACKFILL_HOURS}h from scratch")
         cursor = _hour(time.time() - DIGEST_BACKFILL_HOURS * 3600)
     elif state["last_hour"] is None:
         state["last_hour"] = cursor - 3600   # restart: reflect what's already stored

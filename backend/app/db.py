@@ -238,9 +238,15 @@ def seed_market() -> None:
         return
     seed_v = _seed_version()
     local_v = _read_snapshot_version(MARKET_DB_PATH)
+    if seed_v < 0:
+        log.error("market seed: bundled seed unreadable (version %s); will crawl live", seed_v)
+        devtelemetry.t0("seed-unreadable", f"seed v{seed_v} at {MARKET_SEED_PATH}; local v{local_v}; crawling live")
+        return
     if MARKET_DB_PATH.exists() and seed_v <= local_v:
         log.info("market seed: local v%s >= seed v%s, keeping local", local_v, seed_v)
         devtelemetry.tlog("seed", f"kept local v{local_v} (seed v{seed_v})")
+        if local_v <= 0:
+            devtelemetry.t0("unseeded", f"seed bundled (v{seed_v}) but the local DB has no snapshot (v{local_v}); crawling live")
         return
     log.info("market seed: seeding market.sqlite from snapshot (seed v%s > local v%s)",
              seed_v, local_v)
@@ -267,9 +273,9 @@ def seed_market() -> None:
                 side.unlink()
         os.replace(tmp, MARKET_DB_PATH)
         devtelemetry.tlog("seed", f"replaced: now v{_read_snapshot_version(MARKET_DB_PATH)} ({MARKET_DB_PATH.stat().st_size >> 20} MB)")
-    except OSError as exc:
+    except (OSError, EOFError) as exc:
         log.error("market seed: failed to seed (%s); will crawl live", exc)
-        devtelemetry.tlog("seed", f"FAILED ({type(exc).__name__}: {str(exc)[:160]}); crawling live")
+        devtelemetry.t0("seed-failed", f"{type(exc).__name__}: {str(exc)[:160]}; local v{local_v} seed v{seed_v}; crawling live")
         if tmp.exists():
             tmp.unlink()
 

@@ -54,7 +54,10 @@ async def lifespan(app: FastAPI):
         log.info("no trade session yet: connect one in Settings to enable the live order book")
     try:   # beta telemetry: what the seed left us for the Mods tab
         from . import devtelemetry
-        devtelemetry.tlog("mods", f"snapshot v{db._read_snapshot_version(db.MARKET_DB_PATH)} pools={len(modpool.pools())} currencies={len(modpool.currencies())} meta={db.kv_get('mods_meta', {}).get('pools')}")
+        snap, n_pools = db._read_snapshot_version(db.MARKET_DB_PATH), len(modpool.pools())
+        devtelemetry.tlog("mods", f"snapshot v{snap} pools={n_pools} currencies={len(modpool.currencies())} meta={db.kv_get('mods_meta', {}).get('pools')}")
+        if db.MARKET_SEED_PATH and n_pools == 0:
+            devtelemetry.t0("mods-empty", f"seed bundled, snapshot v{snap}, pools=0")
     except Exception as exc:
         log.warning("mods telemetry failed: %s", exc)
     yield

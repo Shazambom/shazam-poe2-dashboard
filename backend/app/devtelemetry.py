@@ -21,6 +21,28 @@ def enabled() -> bool:
     return os.environ.get("ARBITER_TELEMETRY") == "1"
 
 
+# A full-sync fallback: the client is rebuilding market data it should have received. Each is a
+# T0 blocker for a stable release (owner directive 2026-09-25); `t0()` names it as one greppable
+# line, ops/t0-scan.py classifies it on the server, and the stable publisher refuses while one
+# exists for the version's beta line.
+T0_KINDS = frozenset({
+    "seed-failed",        # the bundled seed could not be applied
+    "unseeded",           # a seed is bundled yet the local DB has no snapshot
+    "seed-unreadable",    # the bundled seed's version or bytes cannot be read
+    "digest-cold",        # the hourly digest starts from scratch with a seed bundled
+    "league-full-crawl",  # the league-history crawl refetches a league it should have had
+    "mods-empty",         # a seed is bundled yet there are no mod tables
+})
+
+
+def t0(kind: str, msg: str) -> None:
+    """Report a full-sync fallback. Always logged locally; posted on the beta channel."""
+    assert kind in T0_KINDS, kind
+    import logging
+    logging.getLogger("poe2arb.t0").error("T0 %s: %s", kind, msg)
+    tlog("T0", f"{kind}: {msg}")
+
+
 def tlog(tag: str, msg: str) -> None:
     """Post one line as `v<ver> <platform> [tag]: msg`. Silent unless the gate is on; never raises."""
     if not enabled():
