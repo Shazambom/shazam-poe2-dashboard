@@ -232,6 +232,24 @@ def test_store_then_read_back_through_the_query_layer(export, derived):
     assert db.kv_get("mods_meta")["source"]["patch"] == "0.3.x"
 
 
+def test_stored_grants_read_the_last_good_currencies_and_pages_back(export, derived):
+    pages = {"Greater Essence of the Body": (FIX / "essence-greater-body.html").read_text(), "Runic Alloy": (FIX / "alloy-runic.html").read_text()}
+    result = modpool.assemble(derived, export=export, currencies=modpool.currencies_from((FIX / "stackable.html").read_text()),
+                              grants=[modpool.grant_from(n, h) for n, h in pages.items()], source={})
+    modpool.store(result)
+    cur, grants = modpool.stored_grants()
+    assert any(c["name"] == "Greater Exalted Orb" for c in cur)
+    names = {g["name"]: g for g in grants}
+    assert set(names) == {"Greater Essence of the Body", "Runic Alloy"}
+    body = names["Greater Essence of the Body"]
+    assert body["kind"] == "essence" and body["tier"] == 2
+    assert {"class": "Body Armours", "text": "+(100–119) to maximum Life", "affix": "prefix", "level": 43} in body["rows"]
+    assert {"class": "Amulets", "text": "+(85–99) to maximum Life", "affix": "prefix", "level": 36} in body["rows"]
+    # A rebuild with those carried-over grants gives the same pools back.
+    again = modpool.assemble(derived, export=export, currencies=cur, grants=grants, source={})
+    assert {p["id"]: p["data"]["grants"] for p in again["pools"]} == {p["id"]: p["data"]["grants"] for p in result["pools"]}
+
+
 def test_the_tables_ride_the_seed():
     for t in ("mod_pools", "mod_currencies"):
         assert t in datapolicy.SEED_TABLES

@@ -44,6 +44,7 @@ log = logging.getLogger("poe2arb.modpool")
 REPOE = "https://repoe-fork.github.io/poe2/"
 REPOE_FILES = ("mods.json", "base_items.json", "item_classes.json", "augments.min.json")
 POE2DB = "https://poe2db.tw/us/"
+PAGE_HEADERS = {"Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8", "Accept-Language": "en-US,en;q=0.9"}
 AFFIXES = ("prefix", "suffix", "corrupted", "enchant")
 # Tags that group families for the game's bookkeeping, never worth a chip.
 GENERIC_TAGS = frozenset({"resource", "drop", "default", "unveiled_mod", "upgraded_corruption_mod"})
@@ -581,31 +582,62 @@ async def _page(slug_: str, max_age: int) -> str:
     path = gamedata.CACHE / f"poe2db-{slug_}.html"
     if path.exists() and time.time() - path.stat().st_mtime < max_age:
         return path.read_text("utf-8", "replace")
-    r = await gateway.request("GET", POE2DB + slug_, policy="poe2db")
+    # poe2db's edge answers 503 to a request without a browser's Accept headers.
+    r = await gateway.request("GET", POE2DB + slug_, policy="poe2db", headers=PAGE_HEADERS)
     r.raise_for_status()
     gamedata.CACHE.mkdir(parents=True, exist_ok=True)
     path.write_bytes(r.content)
     return r.content.decode("utf-8", "replace")
 
 
+def stored_grants() -> tuple[list, list]:
+    """The last good currencies and grant pages, read back out of the tables (the grants are the
+    union over every pool's rows, which is what the pages held)."""
+    cur = currencies()
+    by_name: dict = {}
+    with db.q() as c:
+        rows = c.execute("SELECT data FROM mod_pools").fetchall()
+    for r in rows:
+        g = json.loads(r["data"]).get("grants") or {}
+        for e in [*g.get("essences", []), *g.get("alloys", [])]:
+            slot = by_name.setdefault(e["name"], {"name": e["name"], "kind": e["kind"], "tier": e["tier"], "rows": []})
+            for row in e["rows"]:
+                if row not in slot["rows"]:
+                    slot["rows"].append(row)
+    return cur, list(by_name.values())
+
+
 async def refresh(force: bool = False) -> dict:
-    """Fetch the sources and rebuild the tables. Runs on shazam before the seed is published; a
-    failure keeps the last good tables and reports in `state`."""
+    """Fetch the sources and rebuild the tables. Runs on shazam before the seed is published. If
+    the export cannot be fetched nothing changes; if only poe2db is unreachable the pools still
+    rebuild and the currencies and grants carry over from the last good tables. Either way the
+    outcome is in `state`."""
     max_age = 0 if force else 86400
     try:
         raw = {f: await gamedata._get(REPOE + f, f"repoe-{f}", max_age) for f in REPOE_FILES}
         export = Export(**{k: json.loads(raw[f]) for k, f in zip(("mods", "bases", "classes", "augments"), REPOE_FILES)})
-        stackable = await _page("Stackable_Currency", max_age)
-        grants = [grant_from(name, await _page(s, max_age)) for s, name in grant_slugs(stackable)]
-        derived = derive(export)
-        import hashlib
-        source = {f: hashlib.sha256(raw[f]).hexdigest()[:16] for f in REPOE_FILES}
-        result = assemble(derived, export=export, currencies=currencies_from(stackable), grants=grants, source=source)
-        store(result)
-        log.info("mod pools rebuilt: %d pools, %d families, %d currencies, %d grant pages", len(result["pools"]), len(derived.families), len(result["currencies"]), len([g for g in grants if g]))
     except Exception as exc:
         state["last_error"] = str(exc)
         log.warning("mod pool refresh failed: %s", exc)
+        return state
+    try:
+        stackable = await _page("Stackable_Currency", max_age)
+        cur = currencies_from(stackable)
+        grants = [grant_from(name, await _page(s, max_age)) for s, name in grant_slugs(stackable)]
+        if not cur:
+            raise ValueError("the currency list parsed to nothing (page layout changed?)")
+        pages_error = None
+    except Exception as exc:
+        cur, grants = stored_grants()
+        pages_error = str(exc)
+        log.warning("mod pool refresh: poe2db unreachable (%s); keeping %d currencies and %d grant pages from the last build", exc, len(cur), len(grants))
+    derived = derive(export)
+    import hashlib
+    source = {f: hashlib.sha256(raw[f]).hexdigest()[:16] for f in REPOE_FILES}
+    result = assemble(derived, export=export, currencies=cur, grants=grants, source=source)
+    store(result)
+    state["last_error"] = pages_error
+    log.info("mod pools rebuilt: %d pools, %d families, %d currencies, %d grant pages", len(result["pools"]), len(derived.families), len(result["currencies"]), len([g for g in grants if g]))
     return state
 
 
