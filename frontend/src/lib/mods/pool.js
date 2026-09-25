@@ -21,6 +21,9 @@ export function prepare(pool) {
   return pool
 }
 
+// Whether the family's tiers carry names (a corruption implicit and its upgrade never do).
+export const namedTiers = (family) => family.tiers.some(t => t.name)
+
 // Where a tier sits against the two edges: above the item level, in the pool, below the floor.
 export const bandOf = (tier, ilvl, floor) => (tier.ilvl > ilvl ? 'above' : tier.ilvl < floor ? 'below' : 'in')
 

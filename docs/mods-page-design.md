@@ -181,8 +181,15 @@ per line, and the kind's category is the one most of the pool's bases fall under
 category table (none for claws and traps: the stat alone). Where the site lists a mod was
 measured over every pool: a prefix or suffix under `explicit` and `desecrated` (both searched),
 a corrupted mod and its upgrade under `enchant`. A text the site lacks (some hybrids, a few
-socketable mods) gets a toast to search by hand. `Find in stash` for waystone and tablet pools
-into the Regex tab is still to come.
+socketable mods) gets a toast to search by hand.
+
+**Find in stash** (waystone and tablet pools, `lib/mods/stash.js`): the family becomes a wanted
+modifier of the Regex tab and the tab opens on that kind. The Regex table lists a modifier per
+printed line (forms joined by ` ~ `); a pool family is the game's mod, often several lines, so
+it wants every table modifier one of its lines prints (measured: 30 of 32 waystone families and
+66 of 86 tablet families find one; the rest, the yield lines and a few tablet mods the table
+lacks, get a toast to pick by hand). One already wanted keeps its minimum. A family whose tiers
+carry no name (every corruption implicit and upgrade) shows no name column.
 
 ## The other pools (built 2026-09-25)
 

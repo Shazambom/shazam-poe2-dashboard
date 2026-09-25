@@ -9,8 +9,14 @@ import { sessionFor } from '../lib/mods/index.js'
 import { prepare, atLevel, visible, AFFIXES } from '../lib/mods/pool.js'
 import { merge } from '../lib/mods/defaults.js'
 import { familyQuery } from '../lib/mods/trade.js'
+import { stashKind, stashMods, withWanted } from '../lib/mods/stash.js'
+import { merge as mergeRegex } from '../lib/regex/defaults.js'
 import { nav } from '../lib/nav.js'
 import { useWorkspace } from '../lib/workspaceStore.js'
+import waystoneTable from '../data/regex/waystone.json'
+import tabletTable from '../data/regex/tablet.json'
+
+const REGEX_TABLES = { waystone: waystoneTable, tablet: tabletTable }
 
 // Desktop only: the trade site's names for a mod and a kind come from main (EE2's data).
 const modLookup = typeof window !== 'undefined' ? window.poe2desktop?.trade?.modLookup : null
@@ -73,6 +79,20 @@ export default function ModsView() {
     if (r.result === 'dup' && r.id) ws.rerunFromItem(r.id)
     nav.openTrading('workspace')
   }, [pool, pools, poolId])
+  // Find in stash: the family as a wanted modifier of the Regex tab (waystone and tablet pools).
+  const stashable = stashKind(pools.find(p => p.id === poolId))
+  const onStash = useCallback(async (affix, id) => {
+    const family = pool?.sections.flatMap(sec => sec[affix] || []).find(f => f.id === id)
+    const kind = stashKind(pools.find(p => p.id === poolId))
+    if (!family || !kind) return
+    const ids = stashMods(family, REGEX_TABLES[kind])
+    if (!ids.length) { toast('Pick this modifier by hand in the Regex tab', false); return }
+    try {
+      const stored = await ensureSettings()
+      await useStatus.getState().saveSettings({ regex_tools: withWanted(mergeRegex(stored.regex_tools), kind, ids) })
+    } catch { toast('Could not save the search', false); return }
+    nav.openTrading('regex')
+  }, [pool, pools, poolId])
 
   if (!s) return null
   const update = (p) => { const n = { ...s, ...p }; setS(n); save(n) }
@@ -86,7 +106,7 @@ export default function ModsView() {
     return (
       <div className={`mods-body ${affixes.length === 1 ? 'one' : ''}`}>
         {affixes.map(a => (
-          <ModTable key={a} title={TITLES[a]} affix={a} rows={shown[i][a]} total={level[a].total} expanded={open.rows} onToggle={toggleRow} onTrade={modLookup ? onTrade : null}
+          <ModTable key={a} title={TITLES[a]} affix={a} rows={shown[i][a]} total={level[a].total} expanded={open.rows} onToggle={toggleRow} onTrade={modLookup ? onTrade : null} onStash={stashable ? onStash : null}
                     ilvl={s.ilvl} floor={floored ? s.floor : 0} empty={empty} />
         ))}
       </div>

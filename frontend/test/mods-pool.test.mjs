@@ -4,7 +4,7 @@
 // weight = the column's sum, chance = the ratio.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { prepare, atLevel, visible, shownChance, bandOf, inPool, tagLabel } from '../src/lib/mods/pool.js'
+import { prepare, atLevel, visible, shownChance, bandOf, inPool, tagLabel, namedTiers } from '../src/lib/mods/pool.js'
 
 const tier = (tier, name, ilvl, text) => ({ tier, name, ilvl, text })
 const fam = (id, text, tags, tiers) => ({ id, text, tags, tiers })
@@ -86,4 +86,11 @@ test('prepare builds the search text from the family text and the pool\'s tag la
   assert.ok(Math.abs(shownChance(rows) - 1) < 1e-9)
   assert.equal(shownChance([]), 0)
   assert.equal(shownChance(atLevel(pool.sections[0], 40, 60).prefix.rows), null, 'an empty pool has no share to sum')
+})
+
+test('namedTiers: a family whose tiers carry no name shows no name column (every corruption and upgrade tier)', () => {
+  const pool = POOL()
+  assert.equal(namedTiers(pool.sections[0].prefix[0]), true)
+  assert.equal(namedTiers(pool.sections[1].corrupted[0]), false)
+  assert.equal(namedTiers({ tiers: [tier(1, '', 1, 'a'), tier(2, 'Named', 1, 'b')] }), true, 'one named tier keeps the column')
 })

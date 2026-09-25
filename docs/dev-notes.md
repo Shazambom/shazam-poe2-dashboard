@@ -279,6 +279,9 @@ arithmetic, `orbs.js`, `defaults.js`, `format.jsx`; `index.js` the session store
 the shared `Num.jsx`. Settings persist under `mods_tools`. "Search on trade" on a family:
 `lib/mods/trade.js` builds the query in the Regex frame from what main's `mods:lookup`
 (`desktop/src/trade/modsearch.js`, EE2's stat + item catalogues) returns; web has no button.
+`lib/mods/stash.js` (Find in stash) maps a waystone/tablet family to the Regex tab's wanted
+modifiers by printed line and writes `regex_tools` before `nav.openTrading('regex')`
+(tests: `frontend/test/mods-stash.test.mjs`).
 Tests: `backend/tests/test_modpool.py` (derivations over `tests/fixtures/mods`, a trimmed
 export), `frontend/test/mods-*.test.mjs`, `desktop/test/mods-search.test.mjs` (the real
 vendored data, so an EE2 sync that renames a group fails here).
