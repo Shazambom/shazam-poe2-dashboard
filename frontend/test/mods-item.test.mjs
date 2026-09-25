@@ -69,3 +69,27 @@ test('atLevel with the rolled families excluded: they show their tier, count for
   assert.equal(level.prefix.rows.find(r => r.family.id === 'prefix:ArmourHybrid').chance, 1)
   assert.equal(level.suffix.rows.find(r => r.family.id === 'suffix:Strength').onItem, undefined)
 })
+
+test('a tier comes from the tier name only: the game prints tiers on the other scale, so an unknown name has no tier', () => {
+  const m = matchItem(POOL(), { ...ITEM, mods: [mod('prefix', 'Not a name', 4, ['# to maximum Life'])] })
+  assert.deepEqual(m.rolled.map(r => [r.family.id, r.tier, r.name]), [['prefix:IncreasedLife', null, 'Not a name']])
+})
+
+test('a rolled family names every section id it appears under, so no section keeps counting it', () => {
+  const m = matchItem(POOL(), ITEM)
+  assert.deepEqual(m.rolled.find(r => r.family.id === 'suffix:SpellDamage').ids, ['suffix:SpellDamage', 'suffix:SpellDamage@genesis'])
+  assert.deepEqual(m.rolled.find(r => r.family.id === 'prefix:IncreasedLife').ids, ['prefix:IncreasedLife'])
+  const onItem = new Map(m.rolled.flatMap(r => r.ids.map(id => [id, r.tier])))
+  const genesis = atLevel(POOL().sections[1], 68, 0, onItem)
+  assert.equal(genesis.suffix.total, 0)
+  assert.equal(genesis.suffix.rows[0].onItem, 1)
+})
+
+test('the pasted item lives for the session: a hop to another tab and back finds it, a new paste replaces it', async () => {
+  const { pasted } = await import('../src/lib/mods/index.js')
+  pasted.set(null)
+  assert.equal(pasted.get(), null)
+  pasted.set(ITEM)
+  assert.equal(pasted.get(), ITEM)
+  pasted.set(null)
+})

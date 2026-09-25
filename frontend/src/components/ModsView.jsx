@@ -5,7 +5,7 @@ import { ModSection, GrantList, essenceRows, augmentRows } from './ModSection.js
 import { useStatus, ensureSettings } from '../lib/statusStore.js'
 import { useApi, useAutosave } from '../lib/hooks.js'
 import { api, toast } from '../lib/api.js'
-import { sessionFor } from '../lib/mods/index.js'
+import { sessionFor, pasted } from '../lib/mods/index.js'
 import { prepare, atLevel, visible, AFFIXES } from '../lib/mods/pool.js'
 import { merge } from '../lib/mods/defaults.js'
 import { familyQuery } from '../lib/mods/trade.js'
@@ -22,7 +22,7 @@ const REGEX_TABLES = { waystone: waystoneTable, tablet: tabletTable }
 // Desktop only: the trade site's names for a mod and a kind come from main (EE2's data).
 const modLookup = typeof window !== 'undefined' ? window.poe2desktop?.trade?.modLookup : null
 const modItem = typeof window !== 'undefined' ? window.poe2desktop?.trade?.modItem : null
-const PASTE_FAIL = { empty: 'Copy an item in game first', 'not-item': 'The clipboard holds no item', worker: 'Reading items is not available right now' }
+const PASTE_FAIL = { empty: 'Copy an item in game first', 'not-item': 'The clipboard holds no item', worker: 'Reading items is not available right now', timeout: 'Reading items is not available right now' }
 
 const TITLES = { prefix: 'Prefix', suffix: 'Suffix', corrupted: 'Corrupted', enchant: 'Upgrade' }
 
@@ -53,10 +53,11 @@ export default function ModsView() {
   const prices = priced.data
 
   // The pasted item (desktop): its rolled families show their tier and count for nothing, so the
-  // chances are over what can still land. Session state, never saved.
-  const [item, setItem] = useState(null)
+  // chances are over what can still land. Session state (a hop to another tab keeps it), never saved.
+  const [item, setItemState] = useState(() => pasted.get())
+  const setItem = (it) => { pasted.set(it); setItemState(it || null) }
   const match = useMemo(() => matchItem(pool, item), [pool, item])
-  const onItem = useMemo(() => (item ? new Map(match.rolled.map(r => [r.family.id, r.tier])) : null), [match, item])
+  const onItem = useMemo(() => (item ? new Map(match.rolled.flatMap(r => r.ids.map(id => [id, r.tier]))) : null), [match, item])
   const levels = useMemo(() => (pool && s ? pool.sections.map(sec => atLevel(sec, s.ilvl, sec.floored ? s.floor : 0, onItem)) : null), [pool, s?.ilvl, s?.floor, onItem])
   const tags = useMemo(() => new Set(s?.tags || []), [s?.tags])
   const shown = useMemo(() => levels && levels.map(level => Object.fromEntries(AFFIXES.filter(a => level[a]).map(a => [a, visible(level[a].rows, { tags, q: filter })]))), [levels, tags, filter])
@@ -139,7 +140,7 @@ export default function ModsView() {
   return (
     <div className="mods">
       <ModsBar pools={pools} currencies={currencies} poolId={poolId || s.poolId} ilvl={s.ilvl} floor={s.floor} filter={filter} tags={tags} tagOptions={pool?.tags || []}
-               onPool={id => update({ poolId: id, tags: [] })} onIlvl={v => update({ ilvl: v })} onFloor={v => update({ floor: v })}
+               onPool={id => { if (id !== poolId) setItem(null); update({ poolId: id, tags: [] }) }} onIlvl={v => update({ ilvl: v })} onFloor={v => update({ floor: v })}
                onFilter={setFilter} onTag={toggleTag} disabled={!list.data}
                item={strip} onPaste={modItem ? onPaste : null} onClearItem={() => setItem(null)} />
       {failed && <div className="empty">Reopen the tab to load the modifier tables.</div>}

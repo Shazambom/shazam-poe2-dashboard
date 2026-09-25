@@ -305,6 +305,8 @@ def test_pool_prices_come_from_the_one_value_table_keyed_by_grant_name(export, d
         def values(self):
             return {"runic-alloy": 49.11, "adept-rune": 125.32, "exalted": 1.0}
     monkeypatch.setattr(arbitrage, "cached_graph", lambda: G())
+    monkeypatch.setattr(registry, "by_id", dict(registry.by_id))                  # the links below die with the test
+    monkeypatch.setattr(registry, "meta_to_trade", dict(registry.meta_to_trade))
     registry._link("Metadata/Items/Currency/RunicAlloyTest", "runic-alloy")
     registry._link("Metadata/Items/Currency/AdeptRuneTest", "adept-rune")
     out = modpool.prices("ring")

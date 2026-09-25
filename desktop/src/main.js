@@ -704,12 +704,13 @@ ipcMain.handle('clipboard:classify', async () => {
 // Trading → Mods → "Paste item": main reads the clipboard; only the compact parse crosses (never the
 // text). { item } when the clipboard holds an item, { item: null, reason } otherwise.
 ipcMain.handle('mods:item', async () => {
-  const { classifyClipboard, MAX_CLIP } = require('./clipboard-add.js')
-  const cls = classifyClipboard(() => clipboard.readText())
+  const { classify, MAX_CLIP } = require('./clipboard-add.js')
+  let text = ''
+  try { text = String(clipboard.readText() || '').slice(0, MAX_CLIP) } catch { text = '' }   // read once: classify and parse see one text
+  const cls = classify(text)
   if (cls.kind !== 'item') return { item: null, reason: cls.kind === 'none' && !cls.len ? 'empty' : 'not-item' }
   if (!_history) return { item: null, reason: 'worker' }
-  const item = await _history.parseItem(String(clipboard.readText() || '').slice(0, MAX_CLIP))
-  return item ? { item } : { item: null, reason: 'not-item' }
+  return _history.parseItem(text)
 })
 
 // Give the renderer a beat to flush its debounced workspace save before we go: send ws:flush,

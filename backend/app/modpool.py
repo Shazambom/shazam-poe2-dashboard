@@ -608,7 +608,8 @@ def prices(pool_id: str) -> dict | None:
     from the app's one value table (Graph.values, reference per unit), keyed by grant name. A
     grant the exchange does not trade is absent; a cold graph prices nothing. Read-only."""
     from . import arbitrage
-    from .movers import _trade_id
+    from .currencies import registry
+    from .movers import _slug
     p = pool(pool_id)
     if p is None:
         return None
@@ -618,13 +619,15 @@ def prices(pool_id: str) -> dict | None:
     except Exception as exc:                       # a cold or empty graph is no price, never an error
         log.warning("modpool: prices unavailable: %s", exc)
         return {"reference": None, "prices": {}}
+    by_name = {cur.name.lower(): cid for cid, cur in registry.by_id.items()}   # one pass, not one per grant
     out = {}
     for kind in ("essences", "alloys", "augments"):
         for grant in p.get("grants", {}).get(kind, []):
-            tid = _trade_id(grant["name"])
+            name = grant["name"]
+            tid = next((c for c in (name.lower(), _slug(name)) if c in registry.by_id), None) or by_name.get(name.lower())
             px = values.get(tid) if tid else None
             if px:
-                out[grant["name"]] = float(px)
+                out[name] = float(px)
     return {"reference": ref, "prices": out}
 
 

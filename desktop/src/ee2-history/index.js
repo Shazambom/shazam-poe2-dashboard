@@ -100,16 +100,23 @@ function createHistoryConsumer({ manager, worker, prefs, send = null, log = () =
   return {
     onItem, warm, invalidatePrefs,
     buildIntent: (raw, origin = 'clipboard') => buildIntent(String(raw || ''), origin, { folder: null, source: 'clipboard' }),
-    // Trading → Mods: the compact parse of an item (never the text); null when there is no worker
-    // or the text is not an item. A worker failure counts like a build failure (restart throttle).
+    // Trading → Mods: the compact parse of an item (never the text) as { item, reason }: reason
+    // 'not-item' when the parser refuses the text, 'worker' when there is no worker or it failed,
+    // 'timeout' when the parse ran past its budget. A failure counts like a build failure
+    // (the restart throttle), a refusal does not.
     async parseItem(raw) {
       const p = ensureWorker()
-      if (!p || typeof p.parse !== 'function') { log('mods-parse-skip reason=worker'); return null }
-      try { return await p.parse(String(raw || '')) } catch (e) {
+      if (!p || typeof p.parse !== 'function') { log('mods-parse-skip reason=worker'); return { item: null, reason: 'worker' } }
+      let r
+      try { r = await p.parse(String(raw || '')) } catch (e) {
+        const msg = String(e && e.message || e)
+        const reason = /timeout/i.test(msg) ? 'timeout' : 'worker'
         lastFailure = now(); try { p.kill?.() } catch {}; proc = null; status.warm = false
-        log(`mods-parse-skip reason=worker err="${String(e && e.message || e).slice(0, 160)}"`)
-        return null
+        log(`mods-parse-skip reason=${reason} err="${msg.slice(0, 160)}"`)
+        return { item: null, reason }
       }
+      if (r && r.error) { log(`mods-parse-skip reason=worker stage=${r.error.stage} err="${String(r.error.message || '').slice(0, 160)}"`); return { item: null, reason: 'worker' } }
+      return r ? { item: r, reason: null } : { item: null, reason: 'not-item' }
     },
     setEnabled(v) { enabled = !!v; if (!enabled && proc) { try { proc.kill?.() } catch {}; proc = null; status.warm = false } },
     setSender(fn) { sender = fn; if (fn) { const q = held.splice(0); for (const i of q) { try { fn('trade:ingest', i) } catch {} } } },

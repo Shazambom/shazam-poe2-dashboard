@@ -202,7 +202,10 @@ tie or standing in for an unknown name (measured over the EE2 fixtures: 66 of 78
 text; the misses are essence-only mods and waystone mods whose pool text carries yield lines);
 the base section wins over another holding the same family. A rolled family shows its tier in
 gold where the tier count was, no chance, and counts for nothing: the totals and chances are over
-what can still land. Session state only; Clear drops it.
+what can still land. The tier shown comes from the tier name alone (the game prints tiers on the
+other scale). A family the item carries is excluded under every section id it appears with.
+Session state (a hop to another tab keeps it); Clear or picking another item type drops it. A
+worker failure or timeout is told apart from "not an item" in the toast and the beta log.
 
 **Prices beside mods** (`lib/mods/prices.js`, `GET /api/mods/pool/{id}/prices`): what forcing a
 modifier costs. The backend prices the pool's grants (essences, alloys, socketables) from the

@@ -5,3 +5,8 @@ export const sessionFor = (poolId) => {
   if (!session.has(poolId)) session.set(poolId, { rows: new Set(), sections: new Set() })
   return session.get(poolId)
 }
+
+// The pasted item (Trading → Mods → Paste item), for the session: a hop to Workspace or Regex
+// and back finds it; a restart does not. One item at a time, whatever the pool.
+let pastedItem = null
+export const pasted = { get: () => pastedItem, set: (item) => { pastedItem = item || null } }

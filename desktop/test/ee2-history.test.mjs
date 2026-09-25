@@ -115,3 +115,22 @@ test('worker-host maps an app.asar path to its unpacked twin (the worker and ven
   const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
   assert.ok(pkg.build.asarUnpack.includes('src/ee2-history/**') && pkg.build.asarUnpack.includes('src/vendor/ee2-query/**'))
 })
+
+
+test('parseItem: the parse crosses as { item, reason }; a worker error, a timeout and no worker are told apart from "not an item"', async () => {
+  const parses = []
+  const mk = (parse) => {
+    const pkg = new EventEmitter()
+    const worker = { spawn() { return { build: async () => ({ q: '{}', name: 'x', item: {}, host: '', buildMs: 1 }), parse, kill() {} } } }
+    return createHistoryConsumer({ manager: pkg, worker, prefs: () => ({ prefs: { leagueId: 'L', language: 'en' }, source: 'ee2' }), send: () => {}, log: (l) => parses.push(l), now: () => 1 })
+  }
+  const item = { baseType: 'Gold Ring', rarity: 'Rare', itemLevel: 80, mods: [] }
+  assert.deepEqual(await mk(async () => item).parseItem(RAW), { item, reason: null })
+  assert.deepEqual(await mk(async () => null).parseItem('hello'), { item: null, reason: 'not-item' })
+  assert.deepEqual(await mk(async () => ({ error: { stage: 'parse', message: 'boom' } })).parseItem(RAW), { item: null, reason: 'worker' })
+  assert.deepEqual(await mk(async () => { throw new Error('build timeout') }).parseItem(RAW), { item: null, reason: 'timeout' })
+  assert.deepEqual(await mk(async () => { throw new Error('worker exited') }).parseItem(RAW), { item: null, reason: 'worker' })
+  const noParse = mk(undefined)
+  assert.deepEqual(await noParse.parseItem(RAW), { item: null, reason: 'worker' })
+  assert.ok(parses.some(l => l.startsWith('mods-parse-skip reason=timeout')) && parses.some(l => l.startsWith('mods-parse-skip reason=worker')))
+})

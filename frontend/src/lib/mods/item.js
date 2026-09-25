@@ -36,9 +36,13 @@ export function matchItem(pool, item) {
     if (!hits.length) hits = ofAffix.filter(c => c.text === key(m.lines))
     const hit = hits.find(c => c.section === 'base') || hits[0]
     if (!hit) { out.loose.push(m); continue }
-    seen.add(hit.family.id)
+    // The same family under another section's id (the Genesis Tree twin) is on the item too.
+    const ids = hits.map(c => c.family.id)
+    for (const id of ids) seen.add(id)
+    // The tier comes from the name alone: the game prints its tiers on the other scale (higher
+    // is better), the pool's are best first, so a printed tier is never carried over.
     const named = m.name ? hit.family.tiers.find(t => t.name === m.name) : null
-    out.rolled.push({ family: hit.family, section: hit.section, affix: m.affix, tier: named ? named.tier : (typeof m.tier === 'number' ? m.tier : null), name: m.name })
+    out.rolled.push({ family: hit.family, ids, section: hit.section, affix: m.affix, tier: named ? named.tier : null, name: m.name })
   }
   return out
 }
