@@ -248,13 +248,17 @@ def seed_market() -> None:
     tmp = MARKET_DB_PATH.with_suffix(MARKET_DB_PATH.suffix + ".tmp")
     is_gz = str(MARKET_SEED_PATH).endswith(".gz")
     try:
-        if is_gz:
-            with gzip.open(MARKET_SEED_PATH, "rb") as fi, open(tmp, "wb") as fo:
-                shutil.copyfileobj(fi, fo, length=1 << 20)
-        else:
-            shutil.copyfile(MARKET_SEED_PATH, tmp)
-        with open(tmp, "rb") as f:
-            os.fsync(f.fileno())
+        # Sync through the WRITE handle: on Windows os.fsync on a read-only handle fails with
+        # EBADF, which silently left every Windows install unseeded (beta telemetry, 2026-09-25).
+        with open(tmp, "wb") as fo:
+            if is_gz:
+                with gzip.open(MARKET_SEED_PATH, "rb") as fi:
+                    shutil.copyfileobj(fi, fo, length=1 << 20)
+            else:
+                with open(MARKET_SEED_PATH, "rb") as fi:
+                    shutil.copyfileobj(fi, fo, length=1 << 20)
+            fo.flush()
+            os.fsync(fo.fileno())
         # Drop any stale WAL/SHM from a previous market DB so the seeded file is
         # opened clean (the seed is exported VACUUMed, no sidecars).
         for suffix in ("-wal", "-shm"):

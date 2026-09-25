@@ -12,6 +12,7 @@ migrations_user.py can't silently drift:
     DATA_DIR=$(mktemp -d) MARKET_SEED= python -m pytest backend/tests/test_db_split.py -q
 """
 import gzip
+import os
 import json
 import sqlite3
 import sys
@@ -177,3 +178,21 @@ def test_m2_derives_workspace_once(user_conn):
     migrations_user._m2_watches_to_workspace(user_conn)   # idempotent: does not overwrite
     ws2 = json.loads(user_conn.execute("SELECT value FROM kv WHERE key='trading_workspace'").fetchone()[0])
     assert ws2["tree"] == []
+
+
+def test_seed_market_syncs_through_the_write_handle(seed_env, monkeypatch):
+    """Windows rejects os.fsync on a read-only handle (EBADF), which left every Windows install
+    unseeded until beta telemetry showed it (2026-09-25). The seed must be synced through the
+    handle it was written with."""
+    import fcntl
+    d, market = seed_env
+    _make_seed(d, 9)
+    modes = []
+    real = os.fsync
+    def spy(fd):
+        modes.append(fcntl.fcntl(fd, fcntl.F_GETFL) & os.O_ACCMODE)
+        real(fd)
+    monkeypatch.setattr(os, "fsync", spy)
+    db.seed_market()
+    assert db._read_snapshot_version(market) == 9
+    assert modes and all(m != os.O_RDONLY for m in modes), modes
