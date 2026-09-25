@@ -30,6 +30,7 @@ keeps the previous DB, leaves no temp file and reports `FAILED`.
 **Lessons.**
 - A silent fallback ("will crawl live") hid a platform bug for weeks. The seed step now reports
   kept / replaced / failed over beta telemetry, and the mod-table counts at startup.
-- The league crawl walks every league's item list at about ten items a second even when it
-  skips them all, so a seeded client still shows "crawling N/500" for a minute per league. It is
-  bookkeeping, not fetching, but it reads as a full sync. Worth counting only fetch candidates.
+- The league crawl used to walk every league's item list, two kv reads per item, so a seeded
+  client still showed "crawling N/500" for a minute per league: bookkeeping that read as a full
+  sync. It now reads a league's marks in one query, plans the fetch list up front
+  (`leaguehistory.plan_league`) and the orb counts that list only.

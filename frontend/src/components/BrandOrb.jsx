@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { api } from '../lib/api.js'
+import { backfillLabel } from '../lib/backfillLabel.js'
 
 // The header logo. Idle → the Annulment orb (our mark). While the local backend is
 // cold-building price history it SPINS, and every full rotation lands on a different
@@ -35,9 +36,7 @@ export default function BrandOrb({ onDone }) {
       const on = !!(d && d.running && (d.phase === 'crawling' || d.phase === 'leagues'))
       setRunning(on)
       if (on) {
-        setLabel(d.phase === 'leagues'
-          ? 'Building your dashboard — fetching leagues…'
-          : `Building your dashboard — ${d.league || 'market history'} · ${d.league_done}/${d.league_total} · ${Math.round(d.pct || 0)}%`)
+        setLabel(backfillLabel(d))
       }
       if (wasRunning.current && !on) { try { onDone && onDone() } catch {} }   // finished → refresh views
       wasRunning.current = on

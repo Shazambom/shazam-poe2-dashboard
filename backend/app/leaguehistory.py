@@ -14,6 +14,7 @@ rebased to its own day-0 = 100 and plotted by day-of-league, so you can read
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import re
 import time
@@ -134,8 +135,12 @@ REFRESH_S = 12 * 3600   # re-pull current leagues at most twice a day; past leag
 
 
 async def _get(path: str):
+    # Every fetch is a heartbeat for the orb's stall rule: between leagues the crawl only fetches
+    # item universes, and a league with nothing to do ticks no items.
+    progress["updated"] = time.time()
     r = await gateway.request("GET", f"{BASE}{path}", policy="poe2scout",
                               headers={"Accept": "application/json"})
+    progress["updated"] = time.time()
     r.raise_for_status()
     return r.json()
 
@@ -241,6 +246,41 @@ def crawl_verdict(current: bool, items: int, fetched: int, stored_hits: int) -> 
     return "league-full-crawl" if fetched >= 0.5 * items and stored_hits < 0.5 * items else None
 
 
+def _marks(name: str) -> tuple[set, dict]:
+    """One read of a league's crawl bookkeeping: the items marked complete, and when each was
+    last fetched (kv_ops; one query each instead of two per item)."""
+    with db.q() as c:
+        rows = c.execute("SELECT key, value FROM kv_ops WHERE key LIKE ? OR key LIKE ?",
+                         (f"lh_complete:{name}:%", f"lh_fetch:{name}:%")).fetchall()
+    complete, fetched_at = set(), {}
+    for r in rows:
+        kind, _, item = r["key"].split(":", 2)
+        try:
+            item_id, value = int(item), json.loads(r["value"])
+        except (ValueError, TypeError):
+            continue
+        if kind == "lh_complete" and value:
+            complete.add(item_id)
+        elif kind == "lh_fetch":
+            fetched_at[item_id] = float(value or 0)
+    return complete, fetched_at
+
+
+def plan_league(item_ids, current: bool, force: bool, stored: set, complete: set, fetched_at: dict, now: float) -> tuple[list, dict]:
+    """Which of a league's items this crawl fetches, in order, and why the rest are skipped. A
+    past league's item marked complete is final; a current league's stored item fetched within
+    REFRESH_S is fresh. `force` fetches everything. The orb counts the fetch list only."""
+    todo, tally = [], {"complete": 0, "fresh": 0}
+    for item_id in item_ids:
+        if not force and not current and item_id in complete:
+            tally["complete"] += 1
+        elif not force and current and item_id in stored and now - fetched_at.get(item_id, 0) < REFRESH_S:
+            tally["fresh"] += 1
+        else:
+            todo.append(item_id)
+    return todo, tally
+
+
 async def backfill(force: bool = False, full: bool = True) -> dict:
     """Pull daily history for the target leagues × items into league_daily. Past
     leagues are fetched once; current leagues refresh on a 12h cadence.
@@ -276,24 +316,15 @@ async def backfill(force: bool = False, full: bool = True) -> dict:
                     item_ids = await _universe(name)
                 except Exception as exc:
                     log.warning("poe2scout universe %s failed: %s", name, exc)
-            progress.update({"league": name, "league_total": len(item_ids), "league_done": 0,
+            complete, fetched_at = _marks(name)
+            todo, tally = plan_league(item_ids, current, force, {i for (lg, i) in stored if lg == name}, complete, fetched_at, time.time())
+            tally.update({"fetched": 0, "errors": 0})
+            progress.update({"league": name, "league_total": len(todo), "league_done": 0,
                              "leagues_done": li, "phase": "crawling", "updated": time.time()})
-            tally = {"complete": 0, "fresh": 0, "fetched": 0, "errors": 0}
             t0 = time.time()
-            for item_id in item_ids:
+            for item_id in todo:
                 progress["league_done"] += 1
                 progress["updated"] = time.time()
-                complete = db.kv_get(f"lh_complete:{name}:{item_id}", False)
-                # A past league marked complete (full history captured) is final → skip.
-                # Partial stores (never marked complete) and current→past transitions
-                # are re-fetched. Current leagues refresh on the 12h cadence.
-                if complete and not force:
-                    tally["complete"] += 1
-                    continue
-                if current and stored.get((name, item_id)) and not force:
-                    if time.time() - db.kv_get(f"lh_fetch:{name}:{item_id}", 0) < REFRESH_S:
-                        tally["fresh"] += 1
-                        continue
                 try:
                     enc = urllib.parse.quote(name)
                     data = await _get(f"/Leagues/{enc}/Items/{item_id}/DailyStatsHistory?dayCount=500")

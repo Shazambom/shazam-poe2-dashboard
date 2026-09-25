@@ -175,13 +175,17 @@ async def install_log(request: Request):
     return {"ok": True}
 
 
+# The crawl ticks on every fetch; poe2scout's 20/min budget can hold a fetch for most of a minute.
+STALL_S = 120
+
+
 @app.get("/api/backfill")
 def backfill_status():
     """Live cold-start progress so the UI can stream 'building your dashboard…' instead
     of showing a blank/stale board on a fresh (self-contained) install."""
     p = dict(leaguehistory.progress)
     # A crawl that hasn't ticked in a while (rare mid-crawl error) is not 'running'.
-    if p.get("running") and p.get("updated") and time.time() - p["updated"] > 30:
+    if p.get("running") and p.get("updated") and time.time() - p["updated"] > STALL_S:
         p["running"], p["phase"] = False, "stalled"
     tot = p.get("league_total") or 0
     p["pct"] = round(100 * (p.get("league_done") or 0) / tot, 1) if tot else (100.0 if p.get("phase") == "done" else 0.0)
