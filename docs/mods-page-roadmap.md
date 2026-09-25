@@ -82,25 +82,17 @@ fallback and the page's shape does not change.
 
 ## The page
 
-Trading → Mods, next to Regex (the two link to each other). One sub-tab, no new page anywhere
-else, per the ecosystem rule; a mod lookup is a distinct workflow, like Regex.
+Trading → Mods, the last sub-tab beside Regex (the two link to each other). One sub-tab, no new
+page anywhere else, per the ecosystem rule; a mod lookup is a distinct workflow, like Regex.
 
-Controls, our controls, no crafting simulator in phase 1:
-
-- Item class dropdown (equipment classes only: the 118 classes trimmed to what has a pool), then
-  a base dropdown within the class (bases carry their level and attribute requirements; the base
-  decides the tags, so picking one is what makes the pool exact). The Regex page's picker pattern.
-- Item level: a number box (owner: exact numbers). Default 82. Everything below is computed at
-  this level.
-- Prefix / Suffix / Both: a `Seg`.
-- Tag chips computed from the pool's own tags (not a fixed list): click to filter.
-- A text filter over the mod text.
-
-The tables: Prefix and Suffix side by side, one row per family: the text with `#` where the roll
-goes (markup stripped), the tag chips, tiers eligible at this level over tiers total, the
-family's chance at this level as a percentage. A row expands in place (no modal) to its tiers:
-tier number, name, item level, the range at that tier, and a mark on the tiers this level can
-roll. Total row per table: eligible tiers, so the percentages add to 100.
+The UI is decided in [`mods-page-design.md`](mods-page-design.md) (2026-09-25). In short: one
+picker over pool variants (class × attribute, wands split by element), an item level box and a
+minimum modifier level box with an orb `Seg` (Any 0, Greater 35, Perfect 50) that writes it, tag
+chips from the pool, a text filter; Prefix and Suffix tables side by side, one row per family
+with `tiers in the pool / tiers` and the chance, a Total row; a row expands in place to its tiers
+in three bands (above the item level, in the pool, below the floor) with `Search on trade` in the
+footer. The floor is a strict pool exclusion (owner): a tier is in the pool iff
+`floor ≤ level ≤ item level`. No modal, no crafting simulator, no sort, no Prefix/Suffix switch.
 
 Sections below the base tables, in phase 2: Desecrated (by bone), Essence, Corrupted.
 
@@ -150,7 +142,7 @@ Same shape as `frontend/src/data/regex/` and the EE2 vendoring:
 
 ## Open decisions for the owner
 
-- Trading → Mods, or Economy → Mods.
 - Vendor the RePoE PoE2 export (fast, complete) versus parsing raw tables ourselves (no third
   party, much more work). The plan assumes the export with its licence recorded.
 - Phase 1 stops at equipment. Jewels, flasks, charms and relics come with phase 2 if wanted.
+- The design's open points are settled in `mods-page-design.md`; the tab placement is Trading → Mods (owner, 2026-09-25).
