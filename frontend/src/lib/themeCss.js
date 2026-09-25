@@ -2,11 +2,11 @@
 // `:root[data-theme="x"]` block. Same block grammar as scripts/lint-style.mjs. Pure (no DOM,
 // no imports) so the builder, the exporter and the node tests share ONE reading of the CSS.
 
-// Tokens a preset never touches (mirror of NEVER_THEMED in scripts/lint-style.mjs).
+// Tokens a preset never touches: the one list, which scripts/lint-style.mjs imports.
 export const NEVER_THEMED = new Set([
   '--afk', '--offline',
   '--rarity-normal', '--rarity-magic', '--rarity-rare', '--rarity-unique', '--rarity-gem', '--rarity-currency',
-  '--radius', '--radius-lg', '--shadow-1', '--shadow-2', '--ease', '--font', '--card-gradient', '--glow-gold',
+  '--radius', '--radius-lg', '--shadow-1', '--shadow-2', '--ease', '--font', '--mono', '--card-gradient', '--glow-gold',
 ])
 
 // { root: Map(token → value), presets: { id: Map(token → value) } } in source order.

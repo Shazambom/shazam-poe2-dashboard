@@ -1,23 +1,13 @@
 import React, { useEffect, useState } from 'react'
 import { useAutosave } from '../lib/hooks.js'
 import { useStatus } from '../lib/statusStore.js'
+import Knob from './Knob.jsx'
 
 // The route-search knobs, on the page they affect: loop length, how much capital a loop may
 // commit, the ranking blend, and the two pacing inputs. Collapsed by default under Filters — the
 // user tweaks them here instead of walking to Settings. Same settings blob, same debounced save.
 const WEIGHTS = [['velocity', 'Velocity'], ['margin_per_1k_gold', 'Gold efficiency'], ['margin_ref', 'Margin value'], ['volume', 'Traded volume']]
 const num = (v, fb) => { const n = Number(v); return Number.isFinite(n) ? n : fb }
-
-// One bounded slider: label with the current value, the range, and what its two ends mean.
-function Knob({ label, value, min, max, step, ends, fmt, title, onChange }) {
-  return (
-    <div className="gold-slider-wrap" title={title}>
-      <div className="gold-slider-label">{label} <b>{fmt(value)}</b></div>
-      <input className="gold-slider" type="range" min={min} max={max} step={step} value={value} onChange={e => onChange(Number(e.target.value))} />
-      <div className="gold-slider-ends"><span>{ends[0]}</span><span>{ends[1]}</span></div>
-    </div>
-  )
-}
 
 export default function ArbitrageAlgorithm({ onSaved }) {
   const [s, setS] = useState(null)

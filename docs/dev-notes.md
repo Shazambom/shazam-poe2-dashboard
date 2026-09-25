@@ -243,6 +243,21 @@ app, no new outbound call (the invite opens in the OS browser); nothing can bill
   (user migration 5) is the ledger. Only `POST /api/sales/ingest` writes it.
 - **Drive scripts:** target workspace rows by `data-id` (never by name — names collide with real searches).
 
+### Regex (Trading → Regex, added 2026-09-24)
+
+The in-game search-string builder for Waystones and Tablets. Plan, decisions and data:
+[`regex-filters-plan.md`](regex-filters-plan.md). Pieces: `frontend/src/lib/regex/`
+(pure generators: `number.js`, `terms.js`, `waystone.js`, `tablet.js`, `trade.js`, `shortest.js`,
+`defaults.js`, `index.js`); `frontend/src/data/regex/` (the shipped tables, built by
+`frontend/scripts/sync-regex-data.mjs` from the hand-authored `pools/*.txt`, `tooltip-lines.json`
+and `map-names.json`, hashed in `MANIFEST.json`); `components/RegexView.jsx`, `RegexResult.jsx`,
+`ModPicker.jsx`, the shared `Knob.jsx`. Settings persist under `regex_tools` in the settings blob.
+**When a patch adds a mod:** add its line to the pool, run the sync, read the token it got, commit
+both. The fuzz suite (`frontend/test/regex-fuzz.test.mjs`) models the tooltip and the search box;
+a wrong assumption about the game is one edit there. `frontend/scripts/regex-number-goldens.mjs`
+regenerates the number goldens from the reference implementation (dev only, pinned commit,
+source stays in `~/.cache`); `frontend/test/regex-number-golden.test.mjs` holds `number.js` to them.
+
 ## Deploying a desktop release (mechanics)
 
 Full runbook: [`release-runbook.md`](./release-runbook.md). Shape: bump `desktop/package.json`,

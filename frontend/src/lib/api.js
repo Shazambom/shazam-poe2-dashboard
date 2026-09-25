@@ -6,6 +6,10 @@ export const bus = {
 }
 export const toast = (text, ok = true) => bus.emit({ text, ok })
 
+// Copy text and say so; `quiet` skips the toasts (a copy the user did not click for).
+export const copyText = (text, what = 'Link', quiet = false) =>
+  navigator.clipboard?.writeText(text).then(() => { if (!quiet) toast(`${what} copied`) }).catch(() => { if (!quiet) toast('Copy failed', false) })
+
 export const cleanErr = (e) => String(e?.message || e).replace(/^\d+ /, '')
 
 const j = async (r) => {

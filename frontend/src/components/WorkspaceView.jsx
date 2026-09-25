@@ -5,7 +5,7 @@ import { shouldAcceptNav } from '../lib/webview.js'
 import { SNAP } from '../lib/dests.js'
 import { addFromClipboard } from '../lib/clipboardAdd.js'
 import { findWhere, flatten, locate } from '../lib/tree.js'
-import { bus, toast } from '../lib/api.js'
+import { bus, toast, copyText } from '../lib/api.js'
 import { diag } from '../lib/diag.js'
 import SearchTree from './SearchTree.jsx'
 import ContextMenu from './ContextMenu.jsx'
@@ -40,7 +40,6 @@ const UNDO_TTL = 10000
 export const EMPTY_HINT = 'Press + to build a search · Paste a trade URL'
 export const EMPTY_HINT_EE2 = ' · Copy an item in game and it appears under ExiledExchange2 History.'
 
-const copyText = (text, what = 'Link') => navigator.clipboard?.writeText(text).then(() => toast(`${what} copied`)).catch(() => toast('Copy failed', false))
 
 // Force the trade site's delivery-mode dropdown to "Instant Buyout" (the mode that enables
 // travel-to-hideout). vue-multiselect selects on `mousedown`, not click. Retries a few times
@@ -141,6 +140,7 @@ export default function WorkspaceView({ league }) {
   const ee2Present = useWorkspace(s => s.ee2Present)
   const historyOn = useWorkspace(s => s.historyPrefs.enabled) && ee2Present   // no EE2 → no EE2 UI at all
   const rerunFromItem = useWorkspace(s => s.rerunFromItem)
+  const rerunTick = useWorkspace(s => s.rerunTick)   // a re-run of the active row must remount the window too
   const sortChildren = useWorkspace(s => s.sortChildren)
   const removeMany = useWorkspace(s => s.removeMany)
   const restoreMany = useWorkspace(s => s.restoreMany)
@@ -322,7 +322,7 @@ export default function WorkspaceView({ league }) {
   const mountUrl = useMemo(() => {
     const n = activeId ? useWorkspace.getState().nodeById(activeId) : null
     return n?.slug ? tradeUrl(n, league, n.live) : (n?.q && !n.degraded) ? queryUrl(n, league) : tradeHome(league)
-  }, [activeId, league])
+  }, [activeId, league, rerunTick])
 
   // Default each freshly-mounted trade window to Instant Buyout (the mode travel-to-hideout
   // needs). Re-attaches per webview instance (keyed remount).
@@ -464,7 +464,7 @@ export default function WorkspaceView({ league }) {
               <button className="ws-mini on" title="Reload" aria-label="Reload" onClick={() => setWvNonce(n => n + 1)}>↻</button>
             </div>
             <div className={`ws-progress ${navState.loading ? 'on' : ''}`} aria-hidden="true" />
-            {!SNAP && <webview key={`${activeId || 'home'}:${wvNonce}`} ref={wv} src={mountUrl} className="ws-webview" allowpopups="true" />}
+            {!SNAP && <webview key={`${activeId || 'home'}:${wvNonce}:${rerunTick}`} ref={wv} src={mountUrl} className="ws-webview" allowpopups="true" />}
           </>
         ) : (
           <div className="ws-overlay">

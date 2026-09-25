@@ -1,0 +1,107 @@
+// The modifiers that roll on a Precursor Tablet, one per line, as the game prints them with #
+// where the number goes. See waystone.txt for the rules.
+Map has #% increased Magic Monsters
+Map has #% increased Monster Rarity
+Map has #% increased number of Rare Monsters
+Map has # additional random Modifiers ~ Map has # additional random Modifier
+Map has #% increased chance to contain Shrines
+Map has #% increased chance to contain Strongboxes
+Map has #% increased chance to contain Azmeri Spirits
+Map has #% increased chance to contain Rogue Exiles
+Map has #% increased chance to contain Essences
+Map has #% increased chance to contain a Summoning Circle
+Map has #% chance to contain four additional Abysses
+Map contains an additional Essence ~ Map contains # additional Essences ~ Areas with Powerful Map Bosses contain an additional Essence
+Map contains an additional Abyss
+Map contains an additional Shrine ~ Map contains # additional Shrines ~ Areas with Map Powerful Map Bosses contain an additional Shrine
+Map contains an additional Strongbox ~ Map contains # additional Strongboxes ~ Areas with Powerful Map Bosses contain an additional Strongbox
+Map contains an additional Summoning Circle
+Map contains an additional Azmeri Spirit ~ Map contains # additional Azmeri Spirit ~ Map contains # additional Azmeri Spirits ~ Areas with Powerful Map Bosses contain an additional Azmeri Spirit
+Map contains # additional Rare Chests
+Map contains #% increased number of Runic Monster Markers
+Map is inhabited by # additional Rogue Exile
+Map Bosses grant #% increased Experience
+Monsters have #% increased Effectiveness
+Unique Monsters have # additional Rare Modifier
+#% increased Experience gain in Map
+#% increased Pack Size in Map
+#% increased Rarity of Items found in Map
+#% increased Rarity of Items dropped by Map Bosses
+#% increased Quantity of Items dropped by Map Bosses
+#% increased Quantity of Waystones found in Map
+#% increased Quantity of Waystones dropped by Map Bosses
+#% increased Gold found in Map
+#% increased Quantity of Hiveblood found in Map
+#% increased Quantity of Wombgifts found in Map
+Wombgifts have #% chance to drop one Level higher in Map
+#% increased Stack size of Simulacrum Splinters found in Map
+#% increased Expedition Explosive Placement Range in Map
+#% increased Expedition Explosive Radius in Map
+#% increased quantity of Expedition Artifacts dropped by Monsters in Map
+#% increased Quantity of Expedition Logbooks dropped by Runic Monsters in Map
+#% increased Effect of Expedition Remnants in Map
+#% increased number of Rare Expedition Monsters in Map
+Expeditions in Map have # Remnant ~ Expeditions in Map have +# Remnants
+Favours Deferred at Ritual Altars in Map reappear #% sooner
+Ritual Altars in Map allow rerolling Favours an additional time ~ Ritual Altars in Map allow rerolling Favours # additional times
+Revived Monsters from Ritual Altars in Map have #% increased chance to be Magic
+Revived Monsters from Ritual Altars in Map have #% increased chance to be Rare
+Deferring Favours at Ritual Altars in Map costs #% reduced Tribute
+Rerolling Favours at Ritual Altars in Map costs #% reduced Tribute
+Favours Rerolled at Ritual Altars in Map have #% chance to cost no Tribute
+Monsters Sacrificed at Ritual Altars in Map grant #% increased Tribute
+Ritual Favours in Map have #% increased chance to be Omens
+#% increased chance for Abyssal monsters in Map to have Abyssal Modifiers
+# additional Rare Monsters are spawned from Abysses in Map
+Abyss Pits in Map are twice as likely to have Rewards
+Abysses in Map have #% increased chance to lead to an Abyssal Depths
+#% increased chance for Desecrated Currency from Abysses in Map
+Abysses in Map spawn #% increased Monsters
+Abyssal Monsters have #% increased Effectiveness for each closed Pit, up to #%
+Breaches in Map have #% increased Pack Size
+#% increased Effectiveness of Rare Breach Monsters in Map
+Unstable Breaches in Map spawn an additional Rare Monster when Stabilised ~ Unstable Breaches in Map spawn # additional Rare Monsters when Stabilised
+Unstable Breaches in Map have #% increased chance to contain Vruun, Marshal of Xesht
+Delirium Fog in Map lasts # additional seconds before dissipating
+Delirium Fog in Map applies #% increased Deliriousness to Players
+Delirium Fog in Map spawns #% increased Fracturing Mirrors
+Delirium Fog in Map spawns #% increased Mirror Shards ~ Delirium Fog in Map spawns #% increased MirrorShards
+Delirium Fog in Map dissipates #% slower
+Delirium Monsters in Map have #% increased Pack Size
+Delirium Encounters in Map are #% more likely to spawn Unique Bosses
+Slaying Rare Monsters in Map pauses the Delirium Mirror Timer for 1 second ~ Slaying Rare Monsters in Map pauses the Delirium Mirror Timer for # seconds
+#% chance to gain an additional Crystal from Vaal Beacons in Map
+#% increased Pack Size for Monsters around Vaal Beacons in Map
+# extra pack of Monsters around Vaal Beacons in Map
+#% chance for an extra packs of Monsters around Vaal Beacons in Map
+#% chance to add a Vaal Beacon Unique Monster to the Map
+#% increased chance Vaal Beacons summon additional Monsters in Map
+#% increased chance Vaal Beacon Chests are Rare in Map
+
+// Added 2026-09-24 from GGG's explicit stat texts naming the Map (desktop/src/vendor/ee2-query/data/trade/stats.json).
+Breaches in Map spawn #% increased Magic Monsters
+Expeditions contain 1 Additional Verisium Sentry in Map
+Expeditions contain 1 Additional Boss encased in ice in Map
+Map Boss has +#% chance to drop a Waystone of the current tier or higher
+Deferring Favours at Ritual Altars in Map costs #% increased Tribute
+Map Bosses have # additional Modifier
+Breaches in Map spawn an additional Rare Monster
+Expeditions contain 1 buried Strongbox in Map
+Breaches in Map contain # additional Clasped Hand
+Rerolling Favours at Ritual Altars in Map costs #% increased Tribute
+Map has #% chance to contain three additional Breaches
+Breaches in Map open and close #% faster
+Map Bosses are Hunted by Azmeri Spirits
+Breach Hives in Map have an additional wave of Hiveborn Monsters
+Expeditions contain 1 Vaal Relic in Map
+#% increased Expedition Monster Rarity in Map
+#% increased Expedition Explosive Area of Effect in Map
+Map has #% chance to contain an additional Breach
+Delirium Fog in Map dissipates #% faster
+Delirious Monsters Killed in Map provide #% increased Reward Progress
+Rare Monsters in Map have a #% Surpassing chance to have an additional Modifier
+Verisium Remnants have +#% chance to add an additional Runic Modifier in Map
+The first unearthed Runic Monster will be a Rare Monster in Map
+Unstable Breaches in Map take an additional second to collapse after timer is filled
+#% increased Quantity of Breach Splinters dropped by Breach Monsters in Map
+Expeditions have +#% Surpassing chance to Duplicate Runic Monsters in Map

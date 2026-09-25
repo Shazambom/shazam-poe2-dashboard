@@ -1,0 +1,1321 @@
+{
+  "mods": [
+    {
+      "id": "652ed575",
+      "text": "# additional Rare Monsters are spawned from Abysses in Map",
+      "regex": "wne",
+      "trade": [
+        "explicit.stat_243380454",
+        "desecrated.stat_243380454"
+      ],
+      "num": {
+        "side": "after",
+        "gap": true,
+        "after": " "
+      }
+    },
+    {
+      "id": "e1845138",
+      "text": "# extra pack of Monsters around Vaal Beacons in Map",
+      "regex": "ck o",
+      "trade": [
+        "explicit.stat_3294218801"
+      ],
+      "num": {
+        "side": "after",
+        "gap": true,
+        "after": " "
+      }
+    },
+    {
+      "id": "930dd7ca",
+      "text": "#% chance for an extra packs of Monsters around Vaal Beacons in Map",
+      "regex": "cks",
+      "trade": [
+        "explicit.stat_1359775981"
+      ],
+      "num": {
+        "side": "after",
+        "gap": true,
+        "after": "%"
+      }
+    },
+    {
+      "id": "ce2bd54f",
+      "text": "#% chance to add a Vaal Beacon Unique Monster to the Map",
+      "regex": "a V",
+      "trade": [
+        "explicit.stat_3937291366"
+      ],
+      "num": {
+        "side": "after",
+        "gap": true,
+        "after": "%"
+      }
+    },
+    {
+      "id": "f381bea1",
+      "text": "#% chance to gain an additional Crystal from Vaal Beacons in Map",
+      "regex": "o g",
+      "trade": [
+        "explicit.stat_1940774881"
+      ],
+      "num": {
+        "side": "after",
+        "gap": true,
+        "after": "%"
+      }
+    },
+    {
+      "id": "d1829e43",
+      "text": "#% increased chance for Abyssal monsters in Map to have Abyssal Modifiers",
+      "regex": "r Ab",
+      "trade": [
+        "explicit.stat_2789248444"
+      ],
+      "num": {
+        "side": "after",
+        "gap": true,
+        "after": "%"
+      }
+    },
+    {
+      "id": "773c9d10",
+      "text": "#% increased chance for Desecrated Currency from Abysses in Map",
+      "regex": "ncy",
+      "trade": [
+        "explicit.stat_1710200734"
+      ],
+      "num": {
+        "side": "after",
+        "gap": true,
+        "after": "%"
+      }
+    },
+    {
+      "id": "7191c634",
+      "text": "#% increased chance Vaal Beacon Chests are Rare in Map",
+      "regex": "on C",
+      "trade": [
+        "explicit.stat_2514439422"
+      ],
+      "num": {
+        "side": "after",
+        "gap": true,
+        "after": "%"
+      }
+    },
+    {
+      "id": "17ef1948",
+      "text": "#% increased chance Vaal Beacons summon additional Monsters in Map",
+      "regex": "ns s",
+      "trade": [
+        "explicit.stat_632698321"
+      ],
+      "num": {
+        "side": "after",
+        "gap": true,
+        "after": "%"
+      }
+    },
+    {
+      "id": "424a304f",
+      "text": "#% increased Effect of Expedition Remnants in Map",
+      "regex": "ct o",
+      "trade": [
+        "explicit.stat_3078574625"
+      ],
+      "num": {
+        "side": "after",
+        "gap": true,
+        "after": "%"
+      }
+    },
+    {
+      "id": "e64a0b6d",
+      "text": "#% increased Effectiveness of Rare Breach Monsters in Map",
+      "regex": "ess o",
+      "trade": [
+        "explicit.stat_2895378479"
+      ],
+      "num": {
+        "side": "after",
+        "gap": true,
+        "after": "%"
+      }
+    },
+    {
+      "id": "f5a3b3a3",
+      "text": "#% increased Expedition Explosive Area of Effect in Map",
+      "regex": "ea ",
+      "trade": [
+        "explicit.stat_3039133122"
+      ],
+      "num": {
+        "side": "after",
+        "gap": true,
+        "after": "%"
+      }
+    },
+    {
+      "id": "7638ba1a",
+      "text": "#% increased Expedition Explosive Placement Range in Map",
+      "regex": "ace",
+      "trade": [
+        "explicit.stat_1539368271",
+        "implicit.stat_1539368271"
+      ],
+      "num": {
+        "side": "after",
+        "gap": true,
+        "after": "%"
+      }
+    },
+    {
+      "id": "ce1f8ff0",
+      "text": "#% increased Expedition Explosive Radius in Map",
+      "regex": "diu",
+      "trade": [
+        "explicit.stat_3289828378",
+        "implicit.stat_3289828378"
+      ],
+      "num": {
+        "side": "after",
+        "gap": true,
+        "after": "%"
+      }
+    },
+    {
+      "id": "b851634a",
+      "text": "#% increased Expedition Monster Rarity in Map",
+      "regex": "ty i",
+      "trade": [
+        "explicit.stat_2905096233"
+      ],
+      "num": {
+        "side": "after",
+        "gap": true,
+        "after": "%"
+      }
+    },
+    {
+      "id": "d572fefb",
+      "text": "#% increased Experience gain in Map",
+      "regex": "ce g",
+      "trade": [
+        "explicit.stat_57434274",
+        "fractured.stat_57434274"
+      ],
+      "num": {
+        "side": "after",
+        "gap": true,
+        "after": "%"
+      }
+    },
+    {
+      "id": "80b23ba2",
+      "text": "#% increased Gold found in Map",
+      "regex": " Go",
+      "trade": [],
+      "num": {
+        "side": "after",
+        "gap": true,
+        "after": "%"
+      }
+    },
+    {
+      "id": "05ea2020",
+      "text": "#% increased number of Rare Expedition Monsters in Map",
+      "regex": "Rare E",
+      "trade": [
+        "explicit.stat_2694800111"
+      ],
+      "num": {
+        "side": "after",
+        "gap": true,
+        "after": "%"
+      }
+    },
+    {
+      "id": "b20e0dce",
+      "text": "#% increased Pack Size for Monsters around Vaal Beacons in Map",
+      "regex": "ze f",
+      "trade": [
+        "explicit.stat_890040946"
+      ],
+      "num": {
+        "side": "after",
+        "gap": true,
+        "after": "%"
+      }
+    },
+    {
+      "id": "f912d458",
+      "text": "#% increased Pack Size in Map",
+      "regex": "ze i",
+      "trade": [
+        "explicit.stat_2017682521",
+        "enchant.stat_2017682521"
+      ],
+      "num": {
+        "side": "after",
+        "gap": true,
+        "after": "%"
+      }
+    },
+    {
+      "id": "bbc47a16",
+      "text": "#% increased Quantity of Breach Splinters dropped by Breach Monsters in Map",
+      "regex": "f B",
+      "trade": [
+        "explicit.stat_624534143"
+      ],
+      "num": {
+        "side": "after",
+        "gap": true,
+        "after": "%"
+      }
+    },
+    {
+      "id": "ce6c213c",
+      "text": "#% increased quantity of Expedition Artifacts dropped by Monsters in Map",
+      "regex": "rti",
+      "trade": [
+        "explicit.stat_4219583418",
+        "implicit.stat_4219583418"
+      ],
+      "num": {
+        "side": "after",
+        "gap": true,
+        "after": "%"
+      }
+    },
+    {
+      "id": "fbf2b958",
+      "text": "#% increased Quantity of Expedition Logbooks dropped by Runic Monsters in Map",
+      "regex": "ok",
+      "trade": [
+        "explicit.stat_1083387327"
+      ],
+      "num": {
+        "side": "after",
+        "gap": true,
+        "after": "%"
+      }
+    },
+    {
+      "id": "e0ec303e",
+      "text": "#% increased Quantity of Hiveblood found in Map",
+      "regex": "ebl",
+      "trade": [
+        "explicit.stat_2778285247"
+      ],
+      "num": {
+        "side": "after",
+        "gap": true,
+        "after": "%"
+      }
+    },
+    {
+      "id": "f109975d",
+      "text": "#% increased Quantity of Items dropped by Map Bosses",
+      "regex": "tity of I",
+      "trade": [
+        "explicit.stat_3119172063"
+      ],
+      "num": {
+        "side": "after",
+        "gap": true,
+        "after": "%"
+      }
+    },
+    {
+      "id": "a5ee957c",
+      "text": "#% increased Quantity of Waystones dropped by Map Bosses",
+      "regex": "es d",
+      "trade": [
+        "explicit.stat_1457896329"
+      ],
+      "num": {
+        "side": "after",
+        "gap": true,
+        "after": "%"
+      }
+    },
+    {
+      "id": "39e855bf",
+      "text": "#% increased Quantity of Waystones found in Map",
+      "regex": "es f",
+      "trade": [
+        "explicit.stat_2777224821"
+      ],
+      "num": {
+        "side": "after",
+        "gap": true,
+        "after": "%"
+      }
+    },
+    {
+      "id": "76b534d4",
+      "text": "#% increased Quantity of Wombgifts found in Map",
+      "regex": " Wo",
+      "trade": [
+        "explicit.stat_472809816"
+      ],
+      "num": {
+        "side": "after",
+        "gap": true,
+        "after": "%"
+      }
+    },
+    {
+      "id": "f52c9f4b",
+      "text": "#% increased Rarity of Items dropped by Map Bosses",
+      "regex": "rity of Items d",
+      "trade": [
+        "explicit.stat_4255069232"
+      ],
+      "num": {
+        "side": "after",
+        "gap": true,
+        "after": "%"
+      }
+    },
+    {
+      "id": "2c73d58e",
+      "text": "#% increased Rarity of Items found in Map",
+      "regex": "ms f",
+      "trade": [
+        "explicit.stat_2306002879",
+        "enchant.stat_2306002879"
+      ],
+      "num": {
+        "side": "after",
+        "gap": true,
+        "after": "%"
+      }
+    },
+    {
+      "id": "477095a2",
+      "text": "#% increased Stack size of Simulacrum Splinters found in Map",
+      "regex": "tac",
+      "trade": [
+        "explicit.stat_3836551197",
+        "enchant.stat_3836551197"
+      ],
+      "num": {
+        "side": "after",
+        "gap": true,
+        "after": "%"
+      }
+    },
+    {
+      "id": "e66808db",
+      "text": "Abyss Pits in Map are twice as likely to have Rewards",
+      "regex": " tw",
+      "trade": [
+        "explicit.stat_4256531808",
+        "desecrated.stat_4256531808"
+      ],
+      "num": null
+    },
+    {
+      "id": "d2b5dfaa",
+      "text": "Abyssal Monsters have #% increased Effectiveness for each closed Pit, up to #%",
+      "regex": "t,",
+      "trade": [],
+      "num": null
+    },
+    {
+      "id": "621d7008",
+      "text": "Abysses in Map have #% increased chance to lead to an Abyssal Depths",
+      "regex": "hs",
+      "trade": [
+        "explicit.stat_2722831300"
+      ],
+      "num": {
+        "side": "after",
+        "gap": true,
+        "after": "%"
+      }
+    },
+    {
+      "id": "e0c0082c",
+      "text": "Abysses in Map spawn #% increased Monsters",
+      "regex": "d Monsters$",
+      "trade": [
+        "explicit.stat_944630113",
+        "desecrated.stat_944630113"
+      ],
+      "num": {
+        "side": "after",
+        "gap": true,
+        "after": "%"
+      }
+    },
+    {
+      "id": "27e438e4",
+      "text": "Breach Hives in Map have an additional wave of Hiveborn Monsters",
+      "regex": "h H",
+      "trade": [
+        "explicit.stat_2734787892"
+      ],
+      "num": null
+    },
+    {
+      "id": "c903b7a2",
+      "text": "Breaches in Map contain # additional Clasped Hand",
+      "regex": "asp",
+      "trade": [
+        "explicit.stat_2224050171"
+      ],
+      "num": {
+        "side": "after",
+        "gap": true,
+        "after": " "
+      }
+    },
+    {
+      "id": "57b03bdd",
+      "text": "Breaches in Map have #% increased Pack Size",
+      "regex": "^Breaches in Map h",
+      "trade": [
+        "explicit.stat_1210760818"
+      ],
+      "num": {
+        "side": "before",
+        "gap": true,
+        "after": "%"
+      }
+    },
+    {
+      "id": "0478efcf",
+      "text": "Breaches in Map open and close #% faster",
+      "regex": "ap o",
+      "trade": [
+        "explicit.stat_2504358770"
+      ],
+      "num": {
+        "side": "before",
+        "gap": true,
+        "after": "%"
+      }
+    },
+    {
+      "id": "c02f67c4",
+      "text": "Breaches in Map spawn #% increased Magic Monsters",
+      "regex": "^B.*ag",
+      "trade": [
+        "explicit.stat_1090596078"
+      ],
+      "num": {
+        "side": "inside",
+        "gap": true,
+        "after": "%"
+      }
+    },
+    {
+      "id": "d8be508c",
+      "text": "Breaches in Map spawn an additional Rare Monster",
+      "regex": "nster$",
+      "trade": [
+        "explicit.stat_1653625239"
+      ],
+      "num": null
+    },
+    {
+      "id": "fc3e0ef2",
+      "text": "Deferring Favours at Ritual Altars in Map costs #% increased Tribute",
+      "regex": "ef.*nc",
+      "trade": [
+        "explicit.stat_1345835998"
+      ],
+      "num": {
+        "side": "inside",
+        "gap": true,
+        "after": "%"
+      }
+    },
+    {
+      "id": "fe2a9118",
+      "text": "Deferring Favours at Ritual Altars in Map costs #% reduced Tribute",
+      "regex": "^D.*du",
+      "trade": [],
+      "num": {
+        "side": "inside",
+        "gap": true,
+        "after": "%"
+      }
+    },
+    {
+      "id": "9138a577",
+      "text": "Delirious Monsters Killed in Map provide #% increased Reward Progress",
+      "regex": "s K",
+      "trade": [
+        "explicit.stat_3428124128"
+      ],
+      "num": {
+        "side": "before",
+        "gap": true,
+        "after": "%"
+      }
+    },
+    {
+      "id": "46dec2c8",
+      "text": "Delirium Encounters in Map are #% more likely to spawn Unique Bosses",
+      "regex": "nco",
+      "trade": [
+        "explicit.stat_3962960008"
+      ],
+      "num": {
+        "side": "before",
+        "gap": true,
+        "after": "%"
+      }
+    },
+    {
+      "id": "b6970673",
+      "text": "Delirium Fog in Map applies #% increased Deliriousness to Players",
+      "regex": "sn",
+      "trade": [
+        "explicit.stat_1769611692"
+      ],
+      "num": {
+        "side": "after",
+        "gap": true,
+        "after": "%"
+      }
+    },
+    {
+      "id": "b9e820e5",
+      "text": "Delirium Fog in Map dissipates #% faster",
+      "regex": "ip.*f",
+      "trade": [
+        "explicit.stat_3350944114"
+      ],
+      "num": {
+        "side": "inside",
+        "gap": true,
+        "after": "%"
+      }
+    },
+    {
+      "id": "707925fa",
+      "text": "Delirium Fog in Map dissipates #% slower",
+      "regex": " sl",
+      "trade": [],
+      "num": {
+        "side": "after",
+        "gap": true,
+        "after": "%"
+      }
+    },
+    {
+      "id": "6e714863",
+      "text": "Delirium Fog in Map lasts # additional seconds before dissipating",
+      "regex": "p l",
+      "trade": [
+        "explicit.stat_1174954559",
+        "explicit.stat_3226351972"
+      ],
+      "num": {
+        "side": "before",
+        "gap": true,
+        "after": " "
+      }
+    },
+    {
+      "id": "21095844",
+      "text": "Delirium Fog in Map spawns #% increased Fracturing Mirrors",
+      "regex": "Fra",
+      "trade": [
+        "explicit.stat_551040294"
+      ],
+      "num": {
+        "side": "after",
+        "gap": true,
+        "after": "%"
+      }
+    },
+    {
+      "id": "99433145",
+      "text": "Delirium Fog in Map spawns #% increased Mirror Shards ~ Delirium Fog in Map spawns #% increased MirrorShards",
+      "regex": "d Mi",
+      "trade": [
+        "explicit.stat_900933517"
+      ],
+      "num": null
+    },
+    {
+      "id": "86edef32",
+      "text": "Delirium Monsters in Map have #% increased Pack Size",
+      "regex": "um Mo",
+      "trade": [
+        "explicit.stat_3465791711"
+      ],
+      "num": {
+        "side": "before",
+        "gap": true,
+        "after": "%"
+      }
+    },
+    {
+      "id": "28831d76",
+      "text": "Expeditions contain 1 Additional Boss encased in ice in Map",
+      "regex": "nca",
+      "trade": [
+        "explicit.stat_1183698646"
+      ],
+      "num": null
+    },
+    {
+      "id": "cfa8c445",
+      "text": "Expeditions contain 1 Additional Verisium Sentry in Map",
+      "regex": "try",
+      "trade": [
+        "explicit.stat_1109460697"
+      ],
+      "num": null
+    },
+    {
+      "id": "efb67c6e",
+      "text": "Expeditions contain 1 buried Strongbox in Map",
+      "regex": " bu",
+      "trade": [
+        "explicit.stat_181823691"
+      ],
+      "num": null
+    },
+    {
+      "id": "9296b560",
+      "text": "Expeditions contain 1 Vaal Relic in Map",
+      "regex": "Rel",
+      "trade": [
+        "explicit.stat_2852112245"
+      ],
+      "num": null
+    },
+    {
+      "id": "399b10ba",
+      "text": "Expeditions have +#% Surpassing chance to Duplicate Runic Monsters in Map",
+      "regex": " Du",
+      "trade": [
+        "explicit.stat_779964546"
+      ],
+      "num": {
+        "side": "after",
+        "gap": true,
+        "after": "%"
+      }
+    },
+    {
+      "id": "5cd872e9",
+      "text": "Expeditions in Map have # Remnant ~ Expeditions in Map have +# Remnants",
+      "regex": "ions i",
+      "trade": [
+        "explicit.stat_3753446846"
+      ],
+      "num": null
+    },
+    {
+      "id": "136ef082",
+      "text": "Favours Deferred at Ritual Altars in Map reappear #% sooner",
+      "regex": "p r",
+      "trade": [
+        "explicit.stat_28208665"
+      ],
+      "num": {
+        "side": "before",
+        "gap": true,
+        "after": "%"
+      }
+    },
+    {
+      "id": "d8c3c0e6",
+      "text": "Favours Rerolled at Ritual Altars in Map have #% chance to cost no Tribute",
+      "regex": "no ",
+      "trade": [
+        "explicit.stat_937291386"
+      ],
+      "num": {
+        "side": "after",
+        "gap": true,
+        "after": "%"
+      }
+    },
+    {
+      "id": "f2f0040d",
+      "text": "Map Boss has +#% chance to drop a Waystone of the current tier or higher",
+      "regex": "s \\+",
+      "trade": [
+        "explicit.stat_1314787770"
+      ],
+      "num": {
+        "side": "before",
+        "gap": false,
+        "after": "%"
+      }
+    },
+    {
+      "id": "a02e116d",
+      "text": "Map Bosses are Hunted by Azmeri Spirits",
+      "regex": "Hu",
+      "trade": [
+        "explicit.stat_2588474575"
+      ],
+      "num": null
+    },
+    {
+      "id": "55440268",
+      "text": "Map Bosses grant #% increased Experience",
+      "regex": "es g",
+      "trade": [
+        "explicit.stat_3860150265"
+      ],
+      "num": {
+        "side": "before",
+        "gap": true,
+        "after": "%"
+      }
+    },
+    {
+      "id": "69e80623",
+      "text": "Map Bosses have # additional Modifier",
+      "regex": "es h",
+      "trade": [
+        "explicit.stat_1458461453"
+      ],
+      "num": {
+        "side": "before",
+        "gap": true,
+        "after": " "
+      }
+    },
+    {
+      "id": "1fcf1886",
+      "text": "Map contains # additional Rare Chests",
+      "regex": "sts$",
+      "trade": [],
+      "num": {
+        "side": "after",
+        "gap": true,
+        "after": " "
+      }
+    },
+    {
+      "id": "0e095de0",
+      "text": "Map contains #% increased number of Runic Monster Markers",
+      "regex": "rke",
+      "trade": [
+        "explicit.stat_1640965354",
+        "implicit.stat_1640965354"
+      ],
+      "num": {
+        "side": "after",
+        "gap": true,
+        "after": "%"
+      }
+    },
+    {
+      "id": "6dab967a",
+      "text": "Map contains an additional Abyss",
+      "regex": "yss$",
+      "trade": [
+        "explicit.stat_1070816711"
+      ],
+      "num": null
+    },
+    {
+      "id": "52ed014a",
+      "text": "Map contains an additional Azmeri Spirit ~ Map contains # additional Azmeri Spirit ~ Map contains # additional Azmeri Spirits ~ Areas with Powerful Map Bosses contain an additional Azmeri Spirit",
+      "regex": "l Az",
+      "trade": [
+        "explicit.stat_775597083",
+        "explicit.stat_358129101"
+      ],
+      "num": null
+    },
+    {
+      "id": "2eb6a1d5",
+      "text": "Map contains an additional Essence ~ Map contains # additional Essences ~ Areas with Powerful Map Bosses contain an additional Essence",
+      "regex": "l Es",
+      "trade": [
+        "explicit.stat_2162684861",
+        "explicit.stat_395808938"
+      ],
+      "num": null
+    },
+    {
+      "id": "187962ac",
+      "text": "Map contains an additional Shrine ~ Map contains # additional Shrines ~ Areas with Map Powerful Map Bosses contain an additional Shrine",
+      "regex": "l Sh",
+      "trade": [
+        "explicit.stat_1468737867",
+        "explicit.stat_3042527515"
+      ],
+      "num": null
+    },
+    {
+      "id": "c77861de",
+      "text": "Map contains an additional Strongbox ~ Map contains # additional Strongboxes ~ Areas with Powerful Map Bosses contain an additional Strongbox",
+      "regex": "l Str",
+      "trade": [
+        "explicit.stat_3040603554",
+        "explicit.stat_3240183538"
+      ],
+      "num": null
+    },
+    {
+      "id": "682661fd",
+      "text": "Map contains an additional Summoning Circle",
+      "regex": "tional Su",
+      "trade": [
+        "explicit.stat_2839545956"
+      ],
+      "num": null
+    },
+    {
+      "id": "b63b3598",
+      "text": "Map has # additional random Modifiers ~ Map has # additional random Modifier",
+      "regex": "dom",
+      "trade": [
+        "explicit.stat_588512487"
+      ],
+      "num": null
+    },
+    {
+      "id": "f7d65bbb",
+      "text": "Map has #% chance to contain an additional Breach",
+      "regex": "ch$",
+      "trade": [
+        "explicit.stat_3049505189"
+      ],
+      "num": {
+        "side": "after",
+        "gap": true,
+        "after": "%"
+      }
+    },
+    {
+      "id": "c9479613",
+      "text": "Map has #% chance to contain four additional Abysses",
+      "regex": "in f",
+      "trade": [
+        "explicit.stat_2890355696"
+      ],
+      "num": {
+        "side": "after",
+        "gap": true,
+        "after": "%"
+      }
+    },
+    {
+      "id": "4dff8720",
+      "text": "Map has #% chance to contain three additional Breaches",
+      "regex": "thr",
+      "trade": [
+        "explicit.stat_2440265466"
+      ],
+      "num": {
+        "side": "after",
+        "gap": true,
+        "after": "%"
+      }
+    },
+    {
+      "id": "1a4f912c",
+      "text": "Map has #% increased chance to contain a Summoning Circle",
+      "regex": "a Su",
+      "trade": [
+        "explicit.stat_267210597"
+      ],
+      "num": {
+        "side": "after",
+        "gap": true,
+        "after": "%"
+      }
+    },
+    {
+      "id": "f81e0b94",
+      "text": "Map has #% increased chance to contain Azmeri Spirits",
+      "regex": "n Az",
+      "trade": [
+        "explicit.stat_3815617979"
+      ],
+      "num": {
+        "side": "after",
+        "gap": true,
+        "after": "%"
+      }
+    },
+    {
+      "id": "3e4445fd",
+      "text": "Map has #% increased chance to contain Essences",
+      "regex": "in E",
+      "trade": [
+        "explicit.stat_1825943485"
+      ],
+      "num": {
+        "side": "after",
+        "gap": true,
+        "after": "%"
+      }
+    },
+    {
+      "id": "f5ce04f4",
+      "text": "Map has #% increased chance to contain Rogue Exiles",
+      "regex": "les$",
+      "trade": [
+        "explicit.stat_1352729973"
+      ],
+      "num": {
+        "side": "after",
+        "gap": true,
+        "after": "%"
+      }
+    },
+    {
+      "id": "f110f2e6",
+      "text": "Map has #% increased chance to contain Shrines",
+      "regex": "n Sh",
+      "trade": [
+        "explicit.stat_689816330"
+      ],
+      "num": {
+        "side": "after",
+        "gap": true,
+        "after": "%"
+      }
+    },
+    {
+      "id": "f308187e",
+      "text": "Map has #% increased chance to contain Strongboxes",
+      "regex": "in St",
+      "trade": [
+        "explicit.stat_4279535856"
+      ],
+      "num": {
+        "side": "after",
+        "gap": true,
+        "after": "%"
+      }
+    },
+    {
+      "id": "f3859a2f",
+      "text": "Map has #% increased Magic Monsters",
+      "regex": "^M.*gi",
+      "trade": [
+        "explicit.stat_3873704640",
+        "fractured.stat_3873704640",
+        "enchant.stat_3873704640",
+        "desecrated.stat_3873704640"
+      ],
+      "num": {
+        "side": "inside",
+        "gap": true,
+        "after": "%"
+      }
+    },
+    {
+      "id": "2803ed14",
+      "text": "Map has #% increased Monster Rarity",
+      "regex": "rity$",
+      "trade": [
+        "explicit.stat_4142653832"
+      ],
+      "num": {
+        "side": "after",
+        "gap": true,
+        "after": "%"
+      }
+    },
+    {
+      "id": "4e4d801e",
+      "text": "Map has #% increased number of Rare Monsters",
+      "regex": "f Rare M",
+      "trade": [
+        "explicit.stat_3793155082",
+        "fractured.stat_3793155082",
+        "enchant.stat_3793155082",
+        "desecrated.stat_3793155082"
+      ],
+      "num": {
+        "side": "after",
+        "gap": true,
+        "after": "%"
+      }
+    },
+    {
+      "id": "8f1f561d",
+      "text": "Map is inhabited by # additional Rogue Exile",
+      "regex": "p i",
+      "trade": [
+        "explicit.stat_3550168289"
+      ],
+      "num": {
+        "side": "before",
+        "gap": true,
+        "after": " "
+      }
+    },
+    {
+      "id": "baf3afee",
+      "text": "Monsters have #% increased Effectiveness",
+      "regex": "eness$",
+      "trade": [
+        "explicit.stat_2065500219"
+      ],
+      "num": {
+        "side": "after",
+        "gap": true,
+        "after": "%"
+      }
+    },
+    {
+      "id": "25660a2c",
+      "text": "Monsters Sacrificed at Ritual Altars in Map grant #% increased Tribute",
+      "regex": "Sac",
+      "trade": [
+        "explicit.stat_159726667"
+      ],
+      "num": {
+        "side": "before",
+        "gap": true,
+        "after": "%"
+      }
+    },
+    {
+      "id": "002d305d",
+      "text": "Rare Monsters in Map have a #% Surpassing chance to have an additional Modifier",
+      "regex": "^Rare",
+      "trade": [
+        "explicit.stat_3732878551",
+        "enchant.stat_3732878551"
+      ],
+      "num": {
+        "side": "before",
+        "gap": true,
+        "after": "%"
+      }
+    },
+    {
+      "id": "032c0bb2",
+      "text": "Rerolling Favours at Ritual Altars in Map costs #% increased Tribute",
+      "regex": "^Rer.*nc",
+      "trade": [
+        "explicit.stat_2282052746"
+      ],
+      "num": {
+        "side": "inside",
+        "gap": true,
+        "after": "%"
+      }
+    },
+    {
+      "id": "a7b889d8",
+      "text": "Rerolling Favours at Ritual Altars in Map costs #% reduced Tribute",
+      "regex": "^R.*du",
+      "trade": [],
+      "num": {
+        "side": "inside",
+        "gap": true,
+        "after": "%"
+      }
+    },
+    {
+      "id": "d3b2efed",
+      "text": "Revived Monsters from Ritual Altars in Map have #% increased chance to be Magic",
+      "regex": "be M",
+      "trade": [
+        "explicit.stat_1031644647"
+      ],
+      "num": {
+        "side": "after",
+        "gap": true,
+        "after": "%"
+      }
+    },
+    {
+      "id": "2f83b386",
+      "text": "Revived Monsters from Ritual Altars in Map have #% increased chance to be Rare",
+      "regex": "be R",
+      "trade": [
+        "explicit.stat_3979184174"
+      ],
+      "num": {
+        "side": "after",
+        "gap": true,
+        "after": "%"
+      }
+    },
+    {
+      "id": "d80ac920",
+      "text": "Ritual Altars in Map allow rerolling Favours an additional time ~ Ritual Altars in Map allow rerolling Favours # additional times",
+      "regex": "w ",
+      "trade": [
+        "explicit.stat_120737942"
+      ],
+      "num": null
+    },
+    {
+      "id": "c4ddcc4b",
+      "text": "Ritual Favours in Map have #% increased chance to be Omens",
+      "regex": " Om",
+      "trade": [
+        "explicit.stat_4219853180"
+      ],
+      "num": {
+        "side": "after",
+        "gap": true,
+        "after": "%"
+      }
+    },
+    {
+      "id": "60732780",
+      "text": "Slaying Rare Monsters in Map pauses the Delirium Mirror Timer for 1 second ~ Slaying Rare Monsters in Map pauses the Delirium Mirror Timer for # seconds",
+      "regex": "^Sl",
+      "trade": [
+        "explicit.stat_2323782229"
+      ],
+      "num": null
+    },
+    {
+      "id": "bb6369c8",
+      "text": "The first unearthed Runic Monster will be a Rare Monster in Map",
+      "regex": "^Th",
+      "trade": [
+        "explicit.stat_3963944561"
+      ],
+      "num": null
+    },
+    {
+      "id": "f8290e60",
+      "text": "Unique Monsters have # additional Rare Modifier",
+      "regex": "^Uni",
+      "trade": [
+        "explicit.stat_3371085671",
+        "enchant.stat_3371085671"
+      ],
+      "num": {
+        "side": "before",
+        "gap": true,
+        "after": " "
+      }
+    },
+    {
+      "id": "f476c037",
+      "text": "Unstable Breaches in Map have #% increased chance to contain Vruun, Marshal of Xesht",
+      "regex": "Vr",
+      "trade": [
+        "explicit.stat_2433436306"
+      ],
+      "num": {
+        "side": "after",
+        "gap": true,
+        "after": "%"
+      }
+    },
+    {
+      "id": "c319f462",
+      "text": "Unstable Breaches in Map spawn an additional Rare Monster when Stabilised ~ Unstable Breaches in Map spawn # additional Rare Monsters when Stabilised",
+      "regex": "wh",
+      "trade": [
+        "explicit.stat_3762913035"
+      ],
+      "num": null
+    },
+    {
+      "id": "61809bc9",
+      "text": "Unstable Breaches in Map take an additional second to collapse after timer is filled",
+      "regex": "af",
+      "trade": [
+        "explicit.stat_4104094246"
+      ],
+      "num": null
+    },
+    {
+      "id": "10a26ee9",
+      "text": "Verisium Remnants have +#% chance to add an additional Runic Modifier in Map",
+      "regex": "^Ve",
+      "trade": [
+        "explicit.stat_3871299443"
+      ],
+      "num": {
+        "side": "before",
+        "gap": true,
+        "after": "%"
+      }
+    },
+    {
+      "id": "e62846df",
+      "text": "Wombgifts have #% chance to drop one Level higher in Map",
+      "regex": "^Wo",
+      "trade": [
+        "explicit.stat_2889272422"
+      ],
+      "num": {
+        "side": "before",
+        "gap": true,
+        "after": "%"
+      }
+    }
+  ],
+  "kinds": [
+    {
+      "key": "irradiated",
+      "label": "Irradiated",
+      "base": "Irradiated Tablet",
+      "description": "Adds Irradiated to a Map",
+      "regex": "ds I"
+    },
+    {
+      "key": "ritual",
+      "label": "Ritual",
+      "base": "Ritual Tablet",
+      "description": "Adds Ritual Altars to a Map",
+      "regex": "ds R"
+    },
+    {
+      "key": "delirium",
+      "label": "Delirium",
+      "base": "Delirium Tablet",
+      "description": "Adds a Mirror of Delirium to a Map",
+      "regex": "f D"
+    },
+    {
+      "key": "breach",
+      "label": "Breach",
+      "base": "Breach Tablet",
+      "description": "Adds an Otherworldy Breach to a Map",
+      "regex": "dy"
+    },
+    {
+      "key": "abyss",
+      "label": "Abyss",
+      "base": "Abyss Tablet",
+      "description": "Adds Abysses to a Map",
+      "regex": "ds Ab"
+    },
+    {
+      "key": "temple",
+      "label": "Temple",
+      "base": "Temple Tablet",
+      "description": "Adds Vaal Beacons to a Map",
+      "regex": "ds V"
+    },
+    {
+      "key": "overseer",
+      "label": "Overseer",
+      "base": "Overseer Tablet",
+      "description": "Empowers the Map Boss of a Map",
+      "regex": "mpo"
+    },
+    {
+      "key": "expedition",
+      "label": "Expedition",
+      "base": "Expedition Tablet",
+      "description": "Adds a Kalguuran Expedition to a Map",
+      "regex": "Ka"
+    }
+  ]
+}

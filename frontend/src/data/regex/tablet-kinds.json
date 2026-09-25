@@ -1,0 +1,53 @@
+{
+ "//": "The tablet kinds, read off live trade listings 2026-09-24: the trade base name and the description line every tablet of that kind prints. The sync computes each kind's token from its description with the same uniqueness rule as the mods.",
+ "kinds": [
+  {
+   "key": "irradiated",
+   "label": "Irradiated",
+   "base": "Irradiated Tablet",
+   "description": "Adds Irradiated to a Map"
+  },
+  {
+   "key": "ritual",
+   "label": "Ritual",
+   "base": "Ritual Tablet",
+   "description": "Adds Ritual Altars to a Map"
+  },
+  {
+   "key": "delirium",
+   "label": "Delirium",
+   "base": "Delirium Tablet",
+   "description": "Adds a Mirror of Delirium to a Map"
+  },
+  {
+   "key": "breach",
+   "label": "Breach",
+   "base": "Breach Tablet",
+   "description": "Adds an Otherworldy Breach to a Map"
+  },
+  {
+   "key": "abyss",
+   "label": "Abyss",
+   "base": "Abyss Tablet",
+   "description": "Adds Abysses to a Map"
+  },
+  {
+   "key": "temple",
+   "label": "Temple",
+   "base": "Temple Tablet",
+   "description": "Adds Vaal Beacons to a Map"
+  },
+  {
+   "key": "overseer",
+   "label": "Overseer",
+   "base": "Overseer Tablet",
+   "description": "Empowers the Map Boss of a Map"
+  },
+  {
+   "key": "expedition",
+   "label": "Expedition",
+   "base": "Expedition Tablet",
+   "description": "Adds a Kalguuran Expedition to a Map"
+  }
+ ]
+}

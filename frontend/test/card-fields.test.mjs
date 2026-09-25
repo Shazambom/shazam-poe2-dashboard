@@ -20,9 +20,11 @@ test('every knob in the Arbitrage algorithm section is a bounded slider, never a
   // offer are the ones that mean anything. One shared Knob renders the range input with the gold
   // slider's classes; each use pins its own bounds.
   const src = read('../src/components/ArbitrageAlgorithm.jsx')
+  const knob = read('../src/components/Knob.jsx')
   assert.doesNotMatch(src, /type="number"/, 'a free number box is still there')
-  assert.match(src, /type="range"[^\n]*min=\{min\}[^\n]*max=\{max\}[^\n]*step=\{step\}/, 'the shared Knob is not a bounded range input')
-  assert.match(src, /gold-slider/, 'reuses the gold slider presentation, no new CSS')
+  assert.match(knob, /type="range"[^\n]*min=\{min\}[^\n]*max=\{max\}[^\n]*step=\{step\}/, 'the shared Knob is not a bounded range input')
+  assert.match(knob, /gold-slider/, 'reuses the gold slider presentation, no new CSS')
+  assert.match(src, /import Knob from '\.\/Knob\.jsx'/, 'the page uses the shared Knob')
   assert.doesNotMatch(src, /0 turns it off/)
   const want = {
     max_steps: { min: '2', max: '5', step: '1' },

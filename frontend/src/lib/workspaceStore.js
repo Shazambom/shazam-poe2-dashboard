@@ -129,6 +129,7 @@ export const useWorkspace = create((set, get) => ({
   loaded: false,
   loadError: null,  // set when the GET failed: the tree is NOT the user's and must never be written back
   saveState: 'idle',   // idle | dirty | saving | error
+  rerunTick: 0,        // bumped by rerunFromItem so the trade window remounts even when the row is already active
   league: '',          // the app's top-bar league (App keeps it current): stamped on history rows, filters the folder
   historyPrefs: { ...HISTORY_PREFS },   // mirrors settings.ee2History (enabled / max / retentionDays)
   ee2Present: false,   // main's detection (ee2:status.present); every EE2-history control is gated on it
@@ -323,7 +324,7 @@ export const useWorkspace = create((set, get) => ({
   rerunFromItem: (id) => {
     const n = findNode(get().tree, id)
     if (get().loadError || !n || n.kind !== 'search' || !n.q) return false
-    set(s => ({ tree: mapNode(s.tree, id, x => ({ ...x, slug: '' })), activeId: id }))
+    set(s => ({ tree: mapNode(s.tree, id, x => ({ ...x, slug: '' })), activeId: id, rerunTick: s.rerunTick + 1 }))
     persist(get, set); return true
   },
   // Folders first, then A–Z (case-insensitive); `null` sorts the root.

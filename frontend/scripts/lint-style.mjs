@@ -41,11 +41,7 @@ const CHART_EXTRAS = new Set(
 // Tokens a theme preset never touches: game semantics, the alert family, and everything that
 // isn't colour. A preset must redeclare every OTHER token in :root — a missing one silently
 // falls through to the default theme, which no human spots on screen.
-const NEVER_THEMED = new Set([
-  '--afk', '--offline',
-  '--rarity-normal', '--rarity-magic', '--rarity-rare', '--rarity-unique', '--rarity-gem', '--rarity-currency',
-  '--radius', '--radius-lg', '--shadow-1', '--shadow-2', '--ease', '--font', '--card-gradient', '--glow-gold',
-])
+import { NEVER_THEMED } from '../src/lib/themeCss.js'
 // The channel triplets that must equal their colour token, per block.
 const RGB_PAIRS = [['--accent-rgb', '--gold'], ['--gain-rgb', '--gain'], ['--loss-rgb', '--loss'], ['--live-rgb', '--live'], ['--digest-rgb', '--digest']]
 // WCAG: [foreground, background, minimum ratio]. 4.5 = AA body text; 7 = AAA for the primary ink.

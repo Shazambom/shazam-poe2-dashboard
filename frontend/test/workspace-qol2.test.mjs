@@ -11,8 +11,10 @@ const S = (id, name, extra = {}) => ({ id, kind: 'search', name, slug: 's' + id,
 
 test('rerunFromItem clears the slug of a q+slug row and opens it; refuses rows without q', async () => {
   await fresh([S('a', 'A', { q: '{"query":{}}' }), S('b', 'B')])
+  const tick = st().rerunTick
   assert.equal(st().rerunFromItem('a'), true)
   assert.equal(st().nodeById('a').slug, ''); assert.equal(st().activeId, 'a')
+  assert.equal(st().rerunTick, tick + 1, 'a re-run of the already-active row must still remount the trade window')
   assert.equal(st().rerunFromItem('b'), false); assert.equal(st().nodeById('b').slug, 'sb')
 })
 

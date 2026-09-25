@@ -1,0 +1,87 @@
+// The modifiers that roll on a Waystone, one per line, as the game prints them with # where the
+// number goes. A two-line modifier is written on one line with " | " between its lines. This is
+// the one hand-maintained input of frontend/scripts/sync-regex-data.mjs: the game's text is
+// GGG's, the pool membership is a game fact (cross-checked against EE2's fromAreaMods flag), and
+// the token and trade id for each line are computed. Add a line when a patch adds a mod.
+Players are periodically Cursed with Temporal Chains
+Players are periodically Cursed with Elemental Weakness
+Players are periodically Cursed with Enfeeble
+Monsters deal #% of Damage as Extra Chaos
+Monsters deal #% of Damage as Extra Cold
+Monsters deal #% of Damage as Extra Fire
+Monsters deal #% of Damage as Extra Lightning
+Monster Damage Penetrates #% Elemental Resistances
+Monsters have #% increased Stun Threshold | Monsters have #% increased Ailment Threshold
+Monsters have #% increased Critical Hit Chance | Monsters have +#% Critical Damage Bonus
+Monsters have #% increased Attack, Cast and Movement Speed
+Monsters have #% chance to inflict Bleeding on Hit
+Monsters have #% chance to Poison on Hit
+Monsters have #% increased Stun Buildup
+Monsters have #% increased Accuracy Rating
+Monster have #% increased Elemental Ailment Application
+Monsters take #% reduced Extra Damage from Critical Hits
+Monsters Break Armour equal to #% of Physical Damage dealt
+Monsters gain #% of maximum Life as Extra maximum Energy Shield
+Monsters are Armoured
+Monsters are Evasive
++#% Monster Elemental Resistances
+#% increased Monster Damage
+#% more Monster Life
+#% less effect of Curses on Monsters
+-#% maximum Player Resistances
+Players have #% less Recovery Rate of Life and Energy Shield
+Players have #% less Cooldown Recovery Rate
+Players gain #% reduced Flask Charges
+Area has patches of Ignited Ground
+Area has patches of Chilled Ground
+Area has patches of Shocked Ground
+
+// Added 2026-09-24 from EE2's area-mod flags (desktop/src/vendor/ee2-query/data/en/stats.ndjson).
+# additional Rare Monsters are spawned from Abysses in Map
+#% increased Gold found in Map
+#% increased Magic Pack Size
+#% increased Pack Size in Map
+#% increased Quantity of Items found in Map
+#% increased Quantity of Waystones found in Map
+#% increased amount of Magic Chests
+#% increased amount of Rare Chests
+#% increased number of Monster Packs
+Abyss Cracks have #% chance to spawn all Monsters as at least Magic
+Abyss Pits have #% chance to spawn all Monsters as at least Magic
+Abyss Pits in Map are twice as likely to have Rewards
+Abyssal Monsters grant #% increased Experience
+Abyssal Monsters in Map have increased Difficulty and Reward for each closed Pit
+Abysses in Map spawn #% increased Monsters
+Abysses lead to an Abyssal Boss
+Abysses lead to an Abyssal Depths
+Area contains # additional packs of Beasts
+Area contains # additional packs of Bramble Monsters
+Area contains # additional packs of Ezomyte Monsters
+Area contains # additional packs of Faridun Monsters
+Area contains # additional packs of Iron Guards
+Area contains # additional packs of Plagued Monsters
+Area contains # additional packs of Transcended Monsters
+Area contains # additional packs of Undead
+Area contains # additional packs of Vaal Monsters
+Area contains an additional Incubator Queen
+Area contains an additional Magic Chest
+Area has patches of Mana Siphoning Ground
+Map contains # additional Abysses
+Map contains # additional Strongboxes
+Map contains an additional Essence
+Map contains an additional Rare Chest
+Map contains an additional Shrine
+Map has #% increased Magic Monsters
+Map has #% increased number of Rare Monsters
+Map is overrun by the Abyssal
+Monsters fire # additional Projectiles
+Monsters have #% chance to steal Power, Frenzy and Endurance charges on Hit
+Monsters have #% increased Area of Effect
+Monsters inflict # Grasping Vine on Hit
+Natural Rare Monsters in Area Eat the Souls of slain Monsters in their Presence
+Natural Rare Monsters in Area have # extra Abyssal Modifier
+Players and their Minions deal no damage for 3 out of every 10 seconds
+Players are Marked for Death for # seconds | after killing a Rare or Unique monster
+Players have #% more Movement and Skill Speed for each time they've used a Skill Recently
+Players steal the Eaten Souls of Slain Rare Monsters in Area
+Rare Monsters have # additional Modifier

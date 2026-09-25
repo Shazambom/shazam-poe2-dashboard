@@ -1,0 +1,1037 @@
+{
+  "mods": [
+    {
+      "id": "5cdafaa9",
+      "text": "-#% maximum Player Resistances",
+      "regex": "% ma",
+      "trade": [
+        "explicit.stat_3376488707",
+        "fractured.stat_3376488707",
+        "desecrated.stat_3376488707"
+      ],
+      "num": {
+        "side": "after",
+        "gap": false,
+        "after": "%"
+      }
+    },
+    {
+      "id": "652ed575",
+      "text": "# additional Rare Monsters are spawned from Abysses in Map",
+      "regex": "wne",
+      "trade": [
+        "explicit.stat_243380454",
+        "desecrated.stat_243380454"
+      ],
+      "num": {
+        "side": "after",
+        "gap": true,
+        "after": " "
+      }
+    },
+    {
+      "id": "deb66a1b",
+      "text": "#% increased amount of Magic Chests",
+      "regex": "f Mag",
+      "trade": [
+        "explicit.stat_2898517796"
+      ],
+      "num": {
+        "side": "after",
+        "gap": true,
+        "after": "%"
+      }
+    },
+    {
+      "id": "70d1f54a",
+      "text": "#% increased amount of Rare Chests",
+      "regex": "nt of R",
+      "trade": [
+        "explicit.stat_798469000"
+      ],
+      "num": {
+        "side": "after",
+        "gap": true,
+        "after": "%"
+      }
+    },
+    {
+      "id": "80b23ba2",
+      "text": "#% increased Gold found in Map",
+      "regex": " Go",
+      "trade": [],
+      "num": {
+        "side": "after",
+        "gap": true,
+        "after": "%"
+      }
+    },
+    {
+      "id": "77ccc930",
+      "text": "#% increased Magic Pack Size",
+      "regex": "ze$",
+      "trade": [
+        "explicit.stat_1714706956",
+        "fractured.stat_1714706956"
+      ],
+      "num": {
+        "side": "after",
+        "gap": true,
+        "after": "%"
+      }
+    },
+    {
+      "id": "91ccc4fc",
+      "text": "#% increased Monster Damage",
+      "regex": "age$",
+      "trade": [
+        "explicit.stat_1890519597",
+        "fractured.stat_1890519597",
+        "desecrated.stat_1890519597"
+      ],
+      "num": {
+        "side": "after",
+        "gap": true,
+        "after": "%"
+      }
+    },
+    {
+      "id": "c8b54f17",
+      "text": "#% increased number of Monster Packs",
+      "regex": "ks$",
+      "trade": [
+        "explicit.stat_2624927319"
+      ],
+      "num": {
+        "side": "after",
+        "gap": true,
+        "after": "%"
+      }
+    },
+    {
+      "id": "f912d458",
+      "text": "#% increased Pack Size in Map",
+      "regex": "ze ",
+      "trade": [
+        "explicit.stat_2017682521",
+        "enchant.stat_2017682521"
+      ],
+      "num": {
+        "side": "after",
+        "gap": true,
+        "after": "%"
+      }
+    },
+    {
+      "id": "74f50ba4",
+      "text": "#% increased Quantity of Items found in Map",
+      "regex": "ms",
+      "trade": [
+        "explicit.stat_2390685262"
+      ],
+      "num": {
+        "side": "after",
+        "gap": true,
+        "after": "%"
+      }
+    },
+    {
+      "id": "39e855bf",
+      "text": "#% increased Quantity of Waystones found in Map",
+      "regex": "f W",
+      "trade": [
+        "explicit.stat_2777224821"
+      ],
+      "num": {
+        "side": "after",
+        "gap": true,
+        "after": "%"
+      }
+    },
+    {
+      "id": "4ad89e97",
+      "text": "#% less effect of Curses on Monsters",
+      "regex": "s ef",
+      "trade": [
+        "explicit.stat_3796523155",
+        "fractured.stat_3796523155",
+        "desecrated.stat_3796523155"
+      ],
+      "num": {
+        "side": "after",
+        "gap": true,
+        "after": "%"
+      }
+    },
+    {
+      "id": "ce4e5822",
+      "text": "#% more Monster Life",
+      "regex": "fe$",
+      "trade": [
+        "explicit.stat_95249895",
+        "fractured.stat_95249895",
+        "desecrated.stat_95249895"
+      ],
+      "num": {
+        "side": "after",
+        "gap": true,
+        "after": "%"
+      }
+    },
+    {
+      "id": "00a0b0b7",
+      "text": "+#% Monster Elemental Resistances",
+      "regex": "^\\+",
+      "trade": [
+        "explicit.stat_1054098949",
+        "fractured.stat_1054098949",
+        "desecrated.stat_1054098949"
+      ],
+      "num": {
+        "side": "before",
+        "gap": false,
+        "after": "%"
+      }
+    },
+    {
+      "id": "761cfbff",
+      "text": "Abyss Cracks have #% chance to spawn all Monsters as at least Magic",
+      "regex": " Cra",
+      "trade": [
+        "explicit.stat_1388221282",
+        "desecrated.stat_1388221282"
+      ],
+      "num": {
+        "side": "before",
+        "gap": true,
+        "after": "%"
+      }
+    },
+    {
+      "id": "487137c4",
+      "text": "Abyss Pits have #% chance to spawn all Monsters as at least Magic",
+      "regex": "ts h",
+      "trade": [
+        "explicit.stat_4157613372",
+        "desecrated.stat_4157613372"
+      ],
+      "num": {
+        "side": "before",
+        "gap": true,
+        "after": "%"
+      }
+    },
+    {
+      "id": "e66808db",
+      "text": "Abyss Pits in Map are twice as likely to have Rewards",
+      "regex": "ik",
+      "trade": [
+        "explicit.stat_4256531808",
+        "desecrated.stat_4256531808"
+      ],
+      "num": null
+    },
+    {
+      "id": "337509df",
+      "text": "Abyssal Monsters grant #% increased Experience",
+      "regex": "s gr",
+      "trade": [
+        "explicit.stat_2975078312",
+        "desecrated.stat_2975078312"
+      ],
+      "num": {
+        "side": "before",
+        "gap": true,
+        "after": "%"
+      }
+    },
+    {
+      "id": "e70226a6",
+      "text": "Abyssal Monsters in Map have increased Difficulty and Reward for each closed Pit",
+      "regex": "iff",
+      "trade": [
+        "explicit.stat_360553763",
+        "desecrated.stat_360553763"
+      ],
+      "num": null
+    },
+    {
+      "id": "e0c0082c",
+      "text": "Abysses in Map spawn #% increased Monsters",
+      "regex": "p s",
+      "trade": [
+        "explicit.stat_944630113",
+        "desecrated.stat_944630113"
+      ],
+      "num": {
+        "side": "before",
+        "gap": true,
+        "after": "%"
+      }
+    },
+    {
+      "id": "d24572cb",
+      "text": "Abysses lead to an Abyssal Boss",
+      "regex": "oss$",
+      "trade": [
+        "explicit.stat_2399592398",
+        "desecrated.stat_2399592398"
+      ],
+      "num": null
+    },
+    {
+      "id": "8f6fcd68",
+      "text": "Abysses lead to an Abyssal Depths",
+      "regex": "hs",
+      "trade": [
+        "explicit.stat_2278777540",
+        "desecrated.stat_2278777540"
+      ],
+      "num": null
+    },
+    {
+      "id": "ab0bf484",
+      "text": "Area contains # additional packs of Beasts",
+      "regex": "f Be",
+      "trade": [
+        "explicit.stat_3757259819",
+        "desecrated.stat_3757259819"
+      ],
+      "num": {
+        "side": "after",
+        "gap": true,
+        "after": " "
+      }
+    },
+    {
+      "id": "fe2204e6",
+      "text": "Area contains # additional packs of Bramble Monsters",
+      "regex": "Bra",
+      "trade": [
+        "explicit.stat_3309089125",
+        "desecrated.stat_3309089125"
+      ],
+      "num": {
+        "side": "after",
+        "gap": true,
+        "after": " "
+      }
+    },
+    {
+      "id": "a7b55194",
+      "text": "Area contains # additional packs of Ezomyte Monsters",
+      "regex": "Ez",
+      "trade": [
+        "explicit.stat_1436812886",
+        "desecrated.stat_1436812886"
+      ],
+      "num": {
+        "side": "after",
+        "gap": true,
+        "after": " "
+      }
+    },
+    {
+      "id": "6c56e756",
+      "text": "Area contains # additional packs of Faridun Monsters",
+      "regex": "f F",
+      "trade": [
+        "explicit.stat_4130878258",
+        "desecrated.stat_4130878258"
+      ],
+      "num": {
+        "side": "after",
+        "gap": true,
+        "after": " "
+      }
+    },
+    {
+      "id": "773078d8",
+      "text": "Area contains # additional packs of Iron Guards",
+      "regex": "Iro",
+      "trade": [
+        "explicit.stat_2949706590",
+        "fractured.stat_2949706590",
+        "desecrated.stat_2949706590"
+      ],
+      "num": {
+        "side": "after",
+        "gap": true,
+        "after": " "
+      }
+    },
+    {
+      "id": "cc5de745",
+      "text": "Area contains # additional packs of Plagued Monsters",
+      "regex": "lag",
+      "trade": [
+        "explicit.stat_3592067990",
+        "desecrated.stat_3592067990"
+      ],
+      "num": {
+        "side": "after",
+        "gap": true,
+        "after": " "
+      }
+    },
+    {
+      "id": "aff75980",
+      "text": "Area contains # additional packs of Transcended Monsters",
+      "regex": "nded",
+      "trade": [
+        "explicit.stat_1689473577",
+        "desecrated.stat_1689473577"
+      ],
+      "num": {
+        "side": "after",
+        "gap": true,
+        "after": " "
+      }
+    },
+    {
+      "id": "e2ce4735",
+      "text": "Area contains # additional packs of Undead",
+      "regex": "ad$",
+      "trade": [
+        "explicit.stat_240445958",
+        "desecrated.stat_240445958"
+      ],
+      "num": {
+        "side": "after",
+        "gap": true,
+        "after": " "
+      }
+    },
+    {
+      "id": "989776fb",
+      "text": "Area contains # additional packs of Vaal Monsters",
+      "regex": "f Va",
+      "trade": [
+        "explicit.stat_4181857719",
+        "desecrated.stat_4181857719"
+      ],
+      "num": {
+        "side": "after",
+        "gap": true,
+        "after": " "
+      }
+    },
+    {
+      "id": "f8a26b6c",
+      "text": "Area contains an additional Incubator Queen",
+      "regex": "ub",
+      "trade": [
+        "explicit.stat_1827854662",
+        "desecrated.stat_1827854662"
+      ],
+      "num": null
+    },
+    {
+      "id": "9d662c0b",
+      "text": "Area contains an additional Magic Chest",
+      "regex": "l Mag",
+      "trade": [
+        "explicit.stat_2396719220"
+      ],
+      "num": null
+    },
+    {
+      "id": "e96b1107",
+      "text": "Area has patches of Chilled Ground",
+      "regex": "Chi",
+      "trade": [
+        "explicit.stat_349586058",
+        "fractured.stat_349586058",
+        "desecrated.stat_349586058"
+      ],
+      "num": null
+    },
+    {
+      "id": "3787a30c",
+      "text": "Area has patches of Ignited Ground",
+      "regex": " Ig",
+      "trade": [
+        "explicit.stat_133340941",
+        "fractured.stat_133340941",
+        "desecrated.stat_133340941"
+      ],
+      "num": null
+    },
+    {
+      "id": "ed1cfbc8",
+      "text": "Area has patches of Mana Siphoning Ground",
+      "regex": "na ",
+      "trade": [
+        "explicit.stat_3190283174",
+        "desecrated.stat_3190283174"
+      ],
+      "num": null
+    },
+    {
+      "id": "3fa52cc3",
+      "text": "Area has patches of Shocked Ground",
+      "regex": "hoc",
+      "trade": [
+        "explicit.stat_3477720557",
+        "fractured.stat_3477720557",
+        "desecrated.stat_3477720557"
+      ],
+      "num": null
+    },
+    {
+      "id": "4ec55e7c",
+      "text": "Map contains # additional Abysses",
+      "regex": "ses$",
+      "trade": [
+        "explicit.stat_3490187949",
+        "desecrated.stat_3490187949"
+      ],
+      "num": {
+        "side": "after",
+        "gap": true,
+        "after": " "
+      }
+    },
+    {
+      "id": "8cd2d348",
+      "text": "Map contains # additional Strongboxes",
+      "regex": "l Str",
+      "trade": [
+        "explicit.stat_3240183538"
+      ],
+      "num": {
+        "side": "after",
+        "gap": true,
+        "after": " "
+      }
+    },
+    {
+      "id": "da4c76d4",
+      "text": "Map contains an additional Essence",
+      "regex": "l Es",
+      "trade": [
+        "explicit.stat_2162684861",
+        "explicit.stat_395808938"
+      ],
+      "num": null
+    },
+    {
+      "id": "8fb7c8fb",
+      "text": "Map contains an additional Rare Chest",
+      "regex": "e Chest$",
+      "trade": [
+        "explicit.stat_231864447"
+      ],
+      "num": null
+    },
+    {
+      "id": "15773d19",
+      "text": "Map contains an additional Shrine",
+      "regex": "l Sh",
+      "trade": [
+        "explicit.stat_1468737867",
+        "explicit.stat_3042527515"
+      ],
+      "num": null
+    },
+    {
+      "id": "f3859a2f",
+      "text": "Map has #% increased Magic Monsters",
+      "regex": "gic M",
+      "trade": [
+        "explicit.stat_3873704640",
+        "fractured.stat_3873704640",
+        "enchant.stat_3873704640",
+        "desecrated.stat_3873704640"
+      ],
+      "num": {
+        "side": "after",
+        "gap": true,
+        "after": "%"
+      }
+    },
+    {
+      "id": "4e4d801e",
+      "text": "Map has #% increased number of Rare Monsters",
+      "regex": "r of R",
+      "trade": [
+        "explicit.stat_3793155082",
+        "fractured.stat_3793155082",
+        "enchant.stat_3793155082",
+        "desecrated.stat_3793155082"
+      ],
+      "num": {
+        "side": "after",
+        "gap": true,
+        "after": "%"
+      }
+    },
+    {
+      "id": "d588f0e7",
+      "text": "Map is overrun by the Abyssal",
+      "regex": "p i",
+      "trade": [
+        "explicit.stat_2741291867",
+        "desecrated.stat_2741291867"
+      ],
+      "num": null
+    },
+    {
+      "id": "96a8063a",
+      "text": "Monster Damage Penetrates #% Elemental Resistances",
+      "regex": "net",
+      "trade": [
+        "explicit.stat_1898978455",
+        "fractured.stat_1898978455",
+        "desecrated.stat_1898978455"
+      ],
+      "num": {
+        "side": "before",
+        "gap": true,
+        "after": "%"
+      }
+    },
+    {
+      "id": "d3008592",
+      "text": "Monster have #% increased Elemental Ailment Application",
+      "regex": "pp",
+      "trade": [
+        "explicit.stat_3877264671",
+        "fractured.stat_3877264671",
+        "desecrated.stat_3877264671"
+      ],
+      "num": {
+        "side": "after",
+        "gap": true,
+        "after": "%"
+      }
+    },
+    {
+      "id": "e117d261",
+      "text": "Monsters are Armoured",
+      "regex": "red$",
+      "trade": [
+        "explicit.stat_2539290279",
+        "fractured.stat_2539290279",
+        "desecrated.stat_2539290279"
+      ],
+      "num": null
+    },
+    {
+      "id": "457e166f",
+      "text": "Monsters are Evasive",
+      "regex": "vas",
+      "trade": [
+        "explicit.stat_2570249991",
+        "fractured.stat_2570249991",
+        "desecrated.stat_2570249991"
+      ],
+      "num": null
+    },
+    {
+      "id": "fff97a8d",
+      "text": "Monsters Break Armour equal to #% of Physical Damage dealt",
+      "regex": "hy",
+      "trade": [
+        "explicit.stat_1879340377",
+        "fractured.stat_1879340377",
+        "desecrated.stat_1879340377"
+      ],
+      "num": {
+        "side": "after",
+        "gap": true,
+        "after": "%"
+      }
+    },
+    {
+      "id": "628ac7d0",
+      "text": "Monsters deal #% of Damage as Extra Chaos",
+      "regex": "os$",
+      "trade": [
+        "explicit.stat_2200661314",
+        "fractured.stat_2200661314",
+        "desecrated.stat_2200661314"
+      ],
+      "num": {
+        "side": "after",
+        "gap": true,
+        "after": "%"
+      }
+    },
+    {
+      "id": "73f29c02",
+      "text": "Monsters deal #% of Damage as Extra Cold",
+      "regex": " Col",
+      "trade": [
+        "explicit.stat_211727",
+        "fractured.stat_211727",
+        "desecrated.stat_211727"
+      ],
+      "num": {
+        "side": "after",
+        "gap": true,
+        "after": "%"
+      }
+    },
+    {
+      "id": "c3faa34c",
+      "text": "Monsters deal #% of Damage as Extra Fire",
+      "regex": "ire$",
+      "trade": [
+        "explicit.stat_92381065",
+        "fractured.stat_92381065",
+        "desecrated.stat_92381065"
+      ],
+      "num": {
+        "side": "after",
+        "gap": true,
+        "after": "%"
+      }
+    },
+    {
+      "id": "6c89e4ea",
+      "text": "Monsters deal #% of Damage as Extra Lightning",
+      "regex": "tn",
+      "trade": [
+        "explicit.stat_512071314",
+        "fractured.stat_512071314",
+        "desecrated.stat_512071314"
+      ],
+      "num": {
+        "side": "after",
+        "gap": true,
+        "after": "%"
+      }
+    },
+    {
+      "id": "bce3148c",
+      "text": "Monsters fire # additional Projectiles",
+      "regex": "til",
+      "trade": [
+        "explicit.stat_1309819744",
+        "desecrated.stat_1309819744"
+      ],
+      "num": {
+        "side": "after",
+        "gap": true,
+        "after": " "
+      }
+    },
+    {
+      "id": "01714cf5",
+      "text": "Monsters gain #% of maximum Life as Extra maximum Energy Shield",
+      "regex": "um L",
+      "trade": [
+        "explicit.stat_2887760183",
+        "fractured.stat_2887760183",
+        "desecrated.stat_2887760183"
+      ],
+      "num": {
+        "side": "after",
+        "gap": true,
+        "after": "%"
+      }
+    },
+    {
+      "id": "1989d53a",
+      "text": "Monsters have #% chance to inflict Bleeding on Hit",
+      "regex": " Bl",
+      "trade": [
+        "explicit.stat_2506820610",
+        "fractured.stat_2506820610",
+        "desecrated.stat_2506820610"
+      ],
+      "num": {
+        "side": "after",
+        "gap": true,
+        "after": "%"
+      }
+    },
+    {
+      "id": "25b38f99",
+      "text": "Monsters have #% chance to Poison on Hit",
+      "regex": "o P",
+      "trade": [
+        "explicit.stat_95221307",
+        "fractured.stat_95221307",
+        "desecrated.stat_95221307"
+      ],
+      "num": {
+        "side": "after",
+        "gap": true,
+        "after": "%"
+      }
+    },
+    {
+      "id": "d754bbbc",
+      "text": "Monsters have #% chance to steal Power, Frenzy and Endurance charges on Hit",
+      "regex": "r,",
+      "trade": [
+        "explicit.stat_3222482040",
+        "fractured.stat_3222482040",
+        "desecrated.stat_3222482040"
+      ],
+      "num": {
+        "side": "after",
+        "gap": true,
+        "after": "%"
+      }
+    },
+    {
+      "id": "fc490622",
+      "text": "Monsters have #% increased Accuracy Rating",
+      "regex": "cc",
+      "trade": [
+        "explicit.stat_1588049749",
+        "fractured.stat_1588049749",
+        "desecrated.stat_1588049749"
+      ],
+      "num": {
+        "side": "after",
+        "gap": true,
+        "after": "%"
+      }
+    },
+    {
+      "id": "322678f3",
+      "text": "Monsters have #% increased Area of Effect",
+      "regex": "a o",
+      "trade": [
+        "explicit.stat_1708461270"
+      ],
+      "num": {
+        "side": "after",
+        "gap": true,
+        "after": "%"
+      }
+    },
+    {
+      "id": "53c25a58",
+      "text": "Monsters have #% increased Attack, Cast and Movement Speed",
+      "regex": "k,",
+      "trade": [
+        "explicit.stat_3909654181",
+        "fractured.stat_3909654181",
+        "desecrated.stat_3909654181",
+        "sanctum.stat_3909654181"
+      ],
+      "num": {
+        "side": "after",
+        "gap": true,
+        "after": "%"
+      }
+    },
+    {
+      "id": "1d2660c7",
+      "text": "Monsters have #% increased Critical Hit Chance | Monsters have +#% Critical Damage Bonus",
+      "regex": "it ",
+      "trade": [],
+      "num": null
+    },
+    {
+      "id": "40f1cf09",
+      "text": "Monsters have #% increased Stun Buildup",
+      "regex": "up$",
+      "trade": [
+        "explicit.stat_115425161",
+        "fractured.stat_115425161",
+        "desecrated.stat_115425161"
+      ],
+      "num": {
+        "side": "after",
+        "gap": true,
+        "after": "%"
+      }
+    },
+    {
+      "id": "74301f6d",
+      "text": "Monsters have #% increased Stun Threshold | Monsters have #% increased Ailment Threshold",
+      "regex": "Thr",
+      "trade": [],
+      "num": null
+    },
+    {
+      "id": "672d3ded",
+      "text": "Monsters inflict # Grasping Vine on Hit",
+      "regex": "ras",
+      "trade": [
+        "explicit.stat_1751584857",
+        "desecrated.stat_1751584857"
+      ],
+      "num": {
+        "side": "after",
+        "gap": true,
+        "after": " "
+      }
+    },
+    {
+      "id": "f2c74a85",
+      "text": "Monsters take #% reduced Extra Damage from Critical Hits",
+      "regex": "tak",
+      "trade": [
+        "explicit.stat_337935900",
+        "fractured.stat_337935900",
+        "desecrated.stat_337935900"
+      ],
+      "num": {
+        "side": "before",
+        "gap": true,
+        "after": "%"
+      }
+    },
+    {
+      "id": "1bd7458f",
+      "text": "Natural Rare Monsters in Area Eat the Souls of slain Monsters in their Presence",
+      "regex": "a E",
+      "trade": [
+        "explicit.stat_1266185101",
+        "desecrated.stat_1266185101"
+      ],
+      "num": null
+    },
+    {
+      "id": "a5549718",
+      "text": "Natural Rare Monsters in Area have # extra Abyssal Modifier",
+      "regex": "a A",
+      "trade": [
+        "explicit.stat_1168851547",
+        "desecrated.stat_1168851547"
+      ],
+      "num": {
+        "side": "after",
+        "gap": true,
+        "after": " "
+      }
+    },
+    {
+      "id": "944a656f",
+      "text": "Players and their Minions deal no damage for 3 out of every 10 seconds",
+      "regex": "nio",
+      "trade": [
+        "explicit.stat_2408625104",
+        "desecrated.stat_2408625104"
+      ],
+      "num": null
+    },
+    {
+      "id": "badc4cd8",
+      "text": "Players are Marked for Death for # seconds | after killing a Rare or Unique monster",
+      "regex": "af",
+      "trade": [],
+      "num": null
+    },
+    {
+      "id": "a2984d44",
+      "text": "Players are periodically Cursed with Elemental Weakness",
+      "regex": "kn",
+      "trade": [
+        "explicit.stat_554690751",
+        "fractured.stat_554690751",
+        "desecrated.stat_554690751"
+      ],
+      "num": null
+    },
+    {
+      "id": "c7934906",
+      "text": "Players are periodically Cursed with Enfeeble",
+      "regex": "eb",
+      "trade": [
+        "explicit.stat_2029171424",
+        "fractured.stat_2029171424",
+        "desecrated.stat_2029171424"
+      ],
+      "num": null
+    },
+    {
+      "id": "0b4a864c",
+      "text": "Players are periodically Cursed with Temporal Chains",
+      "regex": "hai",
+      "trade": [
+        "explicit.stat_1629357380",
+        "fractured.stat_1629357380",
+        "desecrated.stat_1629357380"
+      ],
+      "num": null
+    },
+    {
+      "id": "91d35270",
+      "text": "Players gain #% reduced Flask Charges",
+      "regex": "Fla",
+      "trade": [
+        "explicit.stat_2549889921",
+        "fractured.stat_2549889921",
+        "desecrated.stat_2549889921"
+      ],
+      "num": {
+        "side": "after",
+        "gap": true,
+        "after": "%"
+      }
+    },
+    {
+      "id": "564ddb9e",
+      "text": "Players have #% less Cooldown Recovery Rate",
+      "regex": "Coo",
+      "trade": [],
+      "num": {
+        "side": "after",
+        "gap": true,
+        "after": "%"
+      }
+    },
+    {
+      "id": "c7a5cea2",
+      "text": "Players have #% less Recovery Rate of Life and Energy Shield",
+      "regex": "f L",
+      "trade": [
+        "explicit.stat_4181072906",
+        "fractured.stat_4181072906",
+        "desecrated.stat_4181072906"
+      ],
+      "num": {
+        "side": "after",
+        "gap": true,
+        "after": "%"
+      }
+    },
+    {
+      "id": "87445084",
+      "text": "Players have #% more Movement and Skill Speed for each time they've used a Skill Recently",
+      "regex": "ey",
+      "trade": [
+        "explicit.stat_4274247770",
+        "desecrated.stat_4274247770"
+      ],
+      "num": {
+        "side": "after",
+        "gap": true,
+        "after": "%"
+      }
+    },
+    {
+      "id": "f7582c83",
+      "text": "Players steal the Eaten Souls of Slain Rare Monsters in Area",
+      "regex": "ea$",
+      "trade": [
+        "explicit.stat_1365079333",
+        "desecrated.stat_1365079333"
+      ],
+      "num": null
+    },
+    {
+      "id": "4e5d8e8d",
+      "text": "Rare Monsters have # additional Modifier",
+      "regex": "^Rare",
+      "trade": [
+        "explicit.stat_2550456553",
+        "fractured.stat_2550456553",
+        "desecrated.stat_2550456553"
+      ],
+      "num": {
+        "side": "before",
+        "gap": true,
+        "after": " "
+      }
+    }
+  ]
+}

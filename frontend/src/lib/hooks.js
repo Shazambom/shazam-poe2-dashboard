@@ -34,12 +34,18 @@ export function useAutosave(saver, delay = 700) {
   const [state, setState] = useState('')
   const timer = useRef(null)
   const armed = useRef(false)
-  useEffect(() => () => clearTimeout(timer.current), [])
+  const pending = useRef(null)
+  // An edit made in the last `delay` ms before the view unmounts (a tab switch) is saved, not
+  // dropped with the timer.
+  useEffect(() => () => { if (timer.current) { clearTimeout(timer.current); timer.current = null; if (pending.current) saver(pending.current.payload).catch(() => {}) } }, []) // eslint-disable-line
   const save = (payload) => {
     if (!armed.current) return
     clearTimeout(timer.current)
+    pending.current = { payload }
     setState('saving')
     timer.current = setTimeout(async () => {
+      timer.current = null
+      pending.current = null
       try {
         await saver(payload)
         setState('saved')

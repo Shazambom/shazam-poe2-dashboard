@@ -1,0 +1,34 @@
+{
+  "source": "data/regex inputs + ee2-query/data/trade/stats.json",
+  "sourceSha256": "b39b0c0223f14b4c98e89fee39838af20e025a76b5ad5310941d77f1171504e6",
+  "files": {
+    "map-names.json": {
+      "sha256": "6ab97986f7a69174adc1a0215dda776bd563eac6e8c2fd5c8196a8ab0f25d7ce",
+      "bytes": 3257
+    },
+    "pools/tablet.txt": {
+      "sha256": "2cf2c896d68c77f64694615b8dfd0044dc1dfd885e2863b26f62a9595d51c908",
+      "bytes": 6812
+    },
+    "pools/waystone.txt": {
+      "sha256": "890c1e996e8c1f6591d3c2827d3a60b5168dff2a20685c2f98f355d6fcd63311",
+      "bytes": 4368
+    },
+    "tablet-kinds.json": {
+      "sha256": "e4b1385a2ec3ea84a55a6277e76522b2803420b4b66e78429f1a6e6fa9f7118a",
+      "bytes": 1331
+    },
+    "tablet.json": {
+      "sha256": "4fdc46498bf7358b27ac3d11f4d4d8b53917d26d2d4037076b2492881f939f36",
+      "bytes": 30408
+    },
+    "tooltip-lines.json": {
+      "sha256": "7d26dbda1a84af28ee5e7ed43c3fbc85ef18173309b58a293e574a65b083619e",
+      "bytes": 1340
+    },
+    "waystone.json": {
+      "sha256": "4e5e01dd20649cdb3254e382dd779058681ab43b4e8c2957873384564eed5e23",
+      "bytes": 23801
+    }
+  }
+}
