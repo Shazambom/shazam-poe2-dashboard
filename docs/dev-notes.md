@@ -258,6 +258,23 @@ a wrong assumption about the game is one edit there. `frontend/scripts/regex-num
 regenerates the number goldens from the reference implementation (dev only, pinned commit,
 source stays in `~/.cache`); `frontend/test/regex-number-golden.test.mjs` holds `number.js` to them.
 
+### Mods (Trading → Mods, added 2026-09-25)
+
+The modifier pool viewer: what can roll on an item type between an orb's minimum modifier
+level and the item level, and how likely each family is. Design and decisions:
+[`mods-page-design.md`](mods-page-design.md); research: [`mods-page-roadmap.md`](mods-page-roadmap.md).
+Pieces: `frontend/src/lib/mods/` (pure: `pool.js` with `SECTIONS`, `sectionsFor`, `atLevel`;
+`extras.js` for essences and socketables; `currency.js`, the 16 currencies with a level rule;
+`defaults.js`; `index.js`, the lazy loader); `frontend/src/data/mods/` (the shipped tables:
+`pools.json`, `mods.json`, `augments.json` built by `frontend/scripts/sync-mods-data.mjs` from the
+RePoE PoE2 export cached in `~/.cache/arbiter/repoe`; `essences.json` built by
+`frontend/scripts/mods-essences.mjs` from poe2db's essence pages cached in `~/.cache/arbiter/poe2db`;
+all hashed in `MANIFEST.json`); `components/ModsView.jsx`, `ModsBar.jsx`, `ModTable.jsx`,
+`ModFamily.jsx`, `ModSection.jsx`, the shared `Num.jsx`. Settings persist under `mods_tools`.
+**When a patch changes mods:** delete the caches, run `mods-essences.mjs` then `sync-mods-data.mjs`,
+read the golden diffs in `frontend/test/mods-data.test.mjs`, commit tables and goldens together.
+**When GGG ships a new orb grade or bone:** add it to `currency.js` (tested by `mods-settings`).
+
 ## Deploying a desktop release (mechanics)
 
 Full runbook: [`release-runbook.md`](./release-runbook.md). Shape: bump `desktop/package.json`,

@@ -1,0 +1,27 @@
+{
+  "source": "https://repoe-fork.github.io/poe2/",
+  "sources": {
+    "mods.json": "3ee691822595d8c91c96416583d1adc9c5e9884232db6cc6f295e79d15d85a07",
+    "base_items.json": "86932dabccb37552e0d38b3abf996edebea73f1946bfa941ed7992c05f16fcd3",
+    "item_classes.json": "c235f54b1801a84bc03c121072d2003615b8efd40be423cf498c9b6965d35d60",
+    "augments.min.json": "8f39db1eec0f927c30bd944a3a5bf62d6ce74d9d4a655161a91fce3e85d76977"
+  },
+  "files": {
+    "augments.json": {
+      "sha256": "e3588c9c5da7b47ab1da0ae6ec15e95f29ee4e45723bb8639de029d17e39a6e5",
+      "bytes": 131759
+    },
+    "essences.json": {
+      "sha256": "fbe677e24d8d441cb7bdb5ea25100446d5e7b071ef60750470916fd164668ede",
+      "bytes": 77758
+    },
+    "mods.json": {
+      "sha256": "3c01a0df89487c1b14330c1322291a60df4e8bcea1c001d09ea386dab3399dd5",
+      "bytes": 480796
+    },
+    "pools.json": {
+      "sha256": "ece4d59c157e9a222ec270613191c4dc40dcc2d36c26d8ba4281fb31b7c5c121",
+      "bytes": 61356
+    }
+  }
+}

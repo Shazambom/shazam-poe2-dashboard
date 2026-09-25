@@ -7,6 +7,7 @@ const defaultIcon = (o, size) => <Cur id={o.id} name={o.name} size={size} />
 // into a type-ahead that progressively filters, listing matches as icons + names (reuses the
 // ⌘K palette's list styling so it matches the app aesthetic). Keyboard: ↑↓ move, ↵ pick, esc close.
 // `renderIcon(option)` swaps the per-row icon (default: the currency icon); pass `null` for none.
+// An option's `keywords` (hidden aliases, e.g. the base names behind a mod pool) match the query too.
 export default function CurrencyPicker({ value, onChange, options = [], placeholder = 'search…', renderIcon = defaultIcon }) {
   const [open, setOpen] = useState(false)
   const [q, setQ] = useState('')
@@ -17,7 +18,7 @@ export default function CurrencyPicker({ value, onChange, options = [], placehol
   const selected = useMemo(() => options.find(o => o.id === value), [options, value])
   const matches = useMemo(() => {
     const t = q.trim().toLowerCase()
-    return t ? options.filter(o => o.name.toLowerCase().includes(t) || String(o.id).toLowerCase().includes(t)) : options
+    return t ? options.filter(o => o.name.toLowerCase().includes(t) || String(o.id).toLowerCase().includes(t) || o.keywords?.some(k => k.toLowerCase().includes(t))) : options
   }, [options, q])
 
   // close on outside click

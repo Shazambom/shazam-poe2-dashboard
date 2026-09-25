@@ -176,6 +176,37 @@ query on the pool's trade category plus the family's stat ids, through `useWorks
 `RegexView.onTrade` does) and, for waystone and tablet pools once they arrive, `Find in stash`
 into the Regex tab with the mod ticked.
 
+## The other pools (built 2026-09-25)
+
+Below the base tables, one collapsed section per currency that opens its own pool on the item,
+shown only when it has something for this item type, remembered open or closed for the session:
+
+- **Desecrated**: the bone-keyed families of the game's desecrated domain (the three bones are the
+  tags `ulaman_mod`, `amanamu_mod`, `kurgal_mod`, shown as the row's chip). The pool is the base
+  tags plus the bone tags; every desecrated mod is level 65.
+- **Genesis Tree · Caster / Minion** on amulets, rings and belts: the families keyed on the tree's
+  tags, with the mods' own base weights.
+- **Thrud's Might** (weapons), **Kolr's Hunt** and **Katla's Gloom** (gloves), **Vorana's Carnage**
+  (helmets), **Medved's Tending** (body armour), **Uhtred's Sidereus** (boots): the families keyed
+  on the socketable's tag; the mods carry no base tag, so the class list is the socketable's.
+- **Corrupted**: the Vaal Orb implicits, one column.
+- **Essence**: what every essence forces on this class, Lesser to Perfect, with affix and level.
+  The game keeps this in tables ggpk.exposed refuses to serve, so `scripts/mods-essences.mjs`
+  reads poe2db's essence pages (which render those tables) into `essences.json`.
+- **Socketables**: every rune, soul core and idol that fits the class, with what it grants there
+  and its bonded effect (from the export's augments table).
+
+The orb floor applies where regular orbs roll the pool: the base pool and the socketable
+uniques' pools. A bone, the Genesis Tree and a Vaal Orb have no minimum modifier level, so
+those sections ignore it (a bone's own floor never bites: every desecrated mod is level 65).
+The item level applies everywhere. Filter and tag chips apply to every table; chips come from
+the base pool. All of it is the same `atLevel` arithmetic over a section's pool
+(`sectionsFor` in `pool.js`), so the numbers mean the same thing in every table.
+
+Not modelled: poe2db's PoE1 leftovers (influences, Delve, Synthesis), Liquid Emotions
+(instilled passives, not mods), Haunted and Rotmother's Ducat (not in the export), the
+Kulemak and Watcher unique desecrations, and the breach desecration set.
+
 ## The loop, made robust
 
 Owner's loop: expand a family, type an item level or a floor (or pick an orb), read the
@@ -212,16 +243,18 @@ frontend/src/components/
   ModsBar.jsx       pool picker, two Num boxes, the orb picker, filter, tag chips
   ModTable.jsx      one affix column: sticky header, rows, total; roving focus
   ModFamily.jsx     one family row + its tier bands (memo; plain-value props)
+  ModSection.jsx    a collapsed section (header + body), the essence list, the socketable list
   Num.jsx           lifted from RegexView.jsx unchanged (RegexView imports it)
 frontend/src/lib/mods/
-  index.js          load(): lazy import of ../../data/mods/*.json, cached
-  pool.js           PURE: poolFor(pool, data), atLevel(pool, ilvl, floor), tagsOf(pool), visible(rows, {tags, q})
+  index.js          loadMods(): lazy import of ../../data/mods/*.json, cached; session stores for open rows and sections
+  pool.js           PURE: SECTIONS, poolFor, sectionsFor(def, families), atLevel(pool, ilvl, floor), tagsOf, visible, shownChance
+  extras.js         PURE: essencesFor(def, essences), augmentsFor(def, augments)
   defaults.js       defaults, merge(stored)
   currency.js       the 16 bounded currencies: { id, name, floor, cap, group } (the index above; hand-maintained like data/regex/pools until the game tables are fetchable)
   trade.js          PURE: familyQuery(pool, family) → trade2 query, Instant Buyout, reusing regex/trade.js
   session.js        module store: expanded Set per pool
-frontend/src/data/mods/   pools.json, mods.json, MANIFEST.json  (frontend/scripts/sync-mods-data.mjs)
-frontend/test/            mods-data.test.mjs, mods-pool.test.mjs
+frontend/src/data/mods/   pools.json, mods.json, augments.json (frontend/scripts/sync-mods-data.mjs), essences.json (frontend/scripts/mods-essences.mjs), MANIFEST.json
+frontend/test/            mods-data, mods-pool, mods-sections, mods-extras, mods-settings
 ```
 
 Pure shapes (`pool.js`, no React):

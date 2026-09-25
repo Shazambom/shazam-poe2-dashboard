@@ -3,6 +3,7 @@ import Toggle from './Toggle.jsx'
 import Seg from './Seg.jsx'
 import ModPicker from './ModPicker.jsx'
 import RegexResult from './RegexResult.jsx'
+import Num from './Num.jsx'
 import { useStatus, ensureSettings } from '../lib/statusStore.js'
 import { useAutosave } from '../lib/hooks.js'
 import { toast, copyText } from '../lib/api.js'
@@ -21,19 +22,6 @@ const RARITIES = [['normal', 'Normal'], ['magic', 'Magic'], ['rare', 'Rare']]
 const YIELDS = [['itemRarity', 'Item rarity'], ['packSize', 'Pack size'], ['monsterRarity', 'Monster rarity'], ['monsterEffect', 'Monster effectiveness'], ['dropChance', 'Waystone drop chance']]
 const CURRENCIES = [['exalted', 'Exalted'], ['divine', 'Divine']]
 const MODES = [['any', 'Any'], ['all', 'All']]
-
-// Exact numbers here, not sliders (owner, 2026-09-24): people are precise about the mods they
-// want. Each box is clamped to its range; blank means "any" where 0 does.
-function Num({ label, value, min, max, onChange, placeholder }) {
-  const clamp = (raw) => { if (raw === '') return min; const n = Math.floor(Number(raw)); return Number.isFinite(n) ? Math.max(min, Math.min(max, n)) : min }
-  return (
-    <div className="field rx-num">
-      <label>{label}</label>
-      <input type="number" inputMode="numeric" min={min} max={max} step="1" value={value === 0 && placeholder ? '' : value} placeholder={placeholder}
-             onChange={e => onChange(clamp(e.target.value))} onFocus={e => e.target.select()} />
-    </div>
-  )
-}
 
 export default function RegexView() {
   const [s, setS] = useState(null)
