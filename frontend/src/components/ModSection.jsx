@@ -21,10 +21,10 @@ const AFFIX = { prefix: 'Prefix', suffix: 'Suffix', implicit: 'Implicit' }
 
 // What each essence forces on this item type: the essence, the modifier, its affix and level.
 // A level above the item level is muted: that essence's modifier cannot land on this item.
-export function EssenceList({ essences, ilvl }) {
+export function EssenceList({ essences, ilvl, title = 'Essence' }) {
   return (
     <div className="mods-list rx-surface">
-      <div className="mods-head mods-ess-head"><span className="settings-sub">Essence</span><span>Adds</span><span className="mods-num">Level</span></div>
+      <div className="mods-head mods-ess-head"><span className="settings-sub">{title}</span><span>Adds</span><span className="mods-num">Level</span></div>
       {essences.map(e => e.rows.map((r, i) => (
         <div key={`${e.name}:${i}`} className={`mods-ess ${r.level > ilvl ? 'out' : ''}`}>
           <span className="mods-ess-name"><Cur name={e.name} size={16} /> {e.name}</span>

@@ -10,7 +10,7 @@
 // and a Vaal Orb draws from the corruption implicits. Each is a SECTION: the base tags plus the
 // section's key tags, restricted to the families that key on them.
 
-export const AFFIXES = ['prefix', 'suffix', 'corrupted']
+export const AFFIXES = ['prefix', 'suffix', 'corrupted', 'enchant']
 
 const WEAPONS = ['Bows', 'Claws', 'Crossbows', 'Daggers', 'Flails', 'One Hand Axes', 'One Hand Maces', 'One Hand Swords', 'Quarterstaves', 'Sceptres', 'Spears', 'Staves', 'Talismans', 'Traps', 'Two Hand Axes', 'Two Hand Maces', 'Two Hand Swords', 'Wands']
 
@@ -20,8 +20,9 @@ const WEAPONS = ['Bows', 'Claws', 'Crossbows', 'Daggers', 'Flails', 'One Hand Ax
 // socketable uniques' pools (regular orbs roll them); a bone, the Genesis Tree and a Vaal Orb
 // have no such floor (a bone's own floor never bites: every desecrated mod is level 65).
 export const SECTIONS = Object.freeze([
-  { id: 'base', title: null, domain: 'item', affixes: ['prefix', 'suffix'], keys: [], floored: true },
+  { id: 'base', title: null, domain: null, affixes: ['prefix', 'suffix'], keys: [], floored: true },
   { id: 'desecrated', title: 'Desecrated', domain: 'desecrated', affixes: ['prefix', 'suffix'], keys: ['ulaman_mod', 'amanamu_mod', 'kurgal_mod'], floored: false },
+  { id: 'genesis_breach', title: 'Genesis Tree · Breach', domain: 'desecrated', affixes: ['prefix', 'suffix'], keys: ['breach_desecration'], classes: ['Amulets', 'Rings', 'Belts'], floored: false },
   { id: 'genesis_caster', title: 'Genesis Tree · Caster', domain: 'item', affixes: ['prefix', 'suffix'], keys: ['genesis_tree_caster'], classes: ['Amulets', 'Rings', 'Belts'], floored: false },
   { id: 'genesis_minion', title: 'Genesis Tree · Minion', domain: 'item', affixes: ['prefix', 'suffix'], keys: ['genesis_tree_minion'], classes: ['Amulets', 'Rings', 'Belts'], floored: false },
   { id: 'destruction', title: "Thrud's Might", domain: 'item', affixes: ['prefix', 'suffix'], keys: ['destruction'], floored: true, classes: WEAPONS },
@@ -31,6 +32,7 @@ export const SECTIONS = Object.freeze([
   { id: 'soul', title: "Medved's Tending", domain: 'item', affixes: ['prefix', 'suffix'], keys: ['soul'], floored: true, classes: ['Body Armours'] },
   { id: 'chronomancy', title: "Uhtred's Sidereus", domain: 'item', affixes: ['prefix', 'suffix'], keys: ['chronomancy'], floored: true, classes: ['Boots'] },
   { id: 'corrupted', title: 'Corrupted', domain: 'item', affixes: ['corrupted'], keys: [], floored: false },
+  { id: 'enchant', title: 'Corrupted upgrade', domain: 'item', affixes: ['enchant'], keys: [], floored: false },
 ].map(Object.freeze))
 
 // The RePoE rule: walk the tier's spawn weights in order; the first tag the pool carries decides.
@@ -45,9 +47,10 @@ const keysOn = (family, keys) => !keys.length || family.tiers.some(t => t.weight
 // level) first and numbered T1..Tn. Families with no rolling tier are dropped. Game order kept.
 function build(def, families, tags, section) {
   const out = { id: def.id, name: def.name, section: section.id }
+  const domain = section.domain || def.domain || 'item'
   for (const affix of section.affixes) out[affix] = []
   for (const f of families) {
-    if ((f.domain || 'item') !== section.domain || !section.affixes.includes(f.affix) || !keysOn(f, section.keys)) continue
+    if ((f.domain || 'item') !== domain || !section.affixes.includes(f.affix) || !keysOn(f, section.keys)) continue
     const tiers = f.tiers.filter(t => rollsOn(t.weights, tags))
     if (!tiers.length) continue
     tiers.sort((a, b) => b.ilvl - a.ilvl)
@@ -59,10 +62,13 @@ function build(def, families, tags, section) {
 // The base pool of an item type.
 export const poolFor = (def, families) => build(def, families, new Set(def.tags), SECTIONS[0])
 
-// Every pool the item type has, the base first, then each currency's pool that has anything in it.
+// Every pool the item type has, the base first, then each currency's pool that has anything in
+// it. The currency pools are equipment's: a jewel, flask, relic, waystone, tablet or logbook has
+// its base pool only.
 export function sectionsFor(def, families) {
   const out = []
   for (const section of SECTIONS) {
+    if (section.id !== 'base' && (def.domain || 'item') !== 'item') continue
     if (section.classes && !section.classes.includes(def.class)) continue
     const pool = build(def, families, new Set([...def.tags, ...section.keys]), section)
     if (section.id !== 'base' && !section.affixes.some(a => pool[a].length)) continue
@@ -92,7 +98,7 @@ export function atLevel(pool, ilvl, floor) {
   return out
 }
 
-const LABELS = { dot_multi: 'Damage over Time', gem: 'Skill Gems', ulaman_mod: 'Ulaman', amanamu_mod: 'Amanamu', kurgal_mod: 'Kurgal', genesis_tree_caster: 'Caster', genesis_tree_minion: 'Minion' }
+const LABELS = { dot_multi: 'Damage over Time', gem: 'Skill Gems', ulaman_mod: 'Ulaman', amanamu_mod: 'Amanamu', kurgal_mod: 'Kurgal', genesis_tree_caster: 'Caster', genesis_tree_minion: 'Minion', breach_desecration: 'Breach' }
 export const tagLabel = (id) => LABELS[id] || id.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
 
 // The pool's own tags with how many families carry each, most common first, then by id.

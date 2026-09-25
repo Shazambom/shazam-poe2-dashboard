@@ -17,7 +17,12 @@ const FAMILIES = [
   fam('prefix:GenesisES', 'prefix', 'item', '+# to maximum Energy Shield', ['genesis_tree_caster', 'energy_shield'], [tier('G1', 'Shining', 1, '+(8–14) to maximum Energy Shield', W(['amulet', 1], ['ring', 0], ['genesis_tree_caster', 1], ['default', 0]))]),
   fam('corrupted:Mana', 'corrupted', 'item', '+# to maximum Mana', ['mana'], [tier('C1', '', 1, '+(20–30) to maximum Mana', W(['ring', 1], ['default', 0]))]),
   fam('corrupted:Armour', 'corrupted', 'item', '#% increased Armour', ['defences'], [tier('C2', '', 1, '(15–25)% increased Armour', W(['str_armour', 1], ['default', 0]))]),
+  fam('enchant:Mana', 'enchant', 'item', '+# to maximum Mana', ['mana'], [tier('E1', '', 1, '+(40–60) to maximum Mana', W(['ring', 1], ['default', 0]))]),
+  fam('prefix:BreachCold', 'prefix', 'desecrated', 'Gain #% of Physical Damage as Extra Cold Damage', ['breach_desecration', 'cold'], [tier('B1', "Tul's", 1, 'Gain (10–20)% of Physical Damage as Extra Cold Damage', W(['ring', 0], ['belt', 0], ['breach_desecration', 1], ['default', 0]))]),
+  fam('prefix:JewelAccuracy', 'prefix', 'misc', '#% increased Accuracy Rating', ['attack'], [tier('J1', 'Accurate', 1, '(5–10)% increased Accuracy Rating', W(['dexjewel', 1], ['default', 0]))]),
 ]
+const RUBY = { id: 'jewel_ruby', name: 'Jewels · Ruby', class: 'Jewels', domain: 'misc', tags: ['default', 'jewel', 'strjewel'] }
+const EMERALD = { id: 'jewel_emerald', name: 'Jewels · Emerald', class: 'Jewels', domain: 'misc', tags: ['default', 'dexjewel', 'jewel'] }
 const RING = { id: 'ring', name: 'Rings', class: 'Rings', tags: ['default', 'ring'] }
 const AMULET = { id: 'amulet', name: 'Amulets', class: 'Amulets', tags: ['amulet', 'default'] }
 const BELT = { id: 'belt', name: 'Belts', class: 'Belts', tags: ['belt', 'default'] }
@@ -27,19 +32,20 @@ const GLOVES = { id: 'gloves_str', name: 'Gloves · Str', class: 'Gloves', tags:
 test('SECTIONS: the base pool first, then the currency pools, each with its key tags and title', () => {
   assert.equal(SECTIONS[0].id, 'base')
   const ids = SECTIONS.map(s => s.id)
-  for (const id of ['desecrated', 'genesis_caster', 'genesis_minion', 'destruction', 'marksman', 'berserking', 'decay', 'soul', 'chronomancy', 'corrupted']) assert.ok(ids.includes(id), id)
+  for (const id of ['desecrated', 'genesis_breach', 'genesis_caster', 'genesis_minion', 'destruction', 'marksman', 'berserking', 'decay', 'soul', 'chronomancy', 'corrupted', 'enchant']) assert.ok(ids.includes(id), id)
   assert.equal(SECTIONS.find(s => s.id === 'destruction').title, "Thrud's Might")
   assert.deepEqual(SECTIONS.find(s => s.id === 'desecrated').keys, ['ulaman_mod', 'amanamu_mod', 'kurgal_mod'])
-  assert.equal(ids[ids.length - 1], 'corrupted')
+  assert.equal(ids[ids.length - 1], 'enchant')
   // The orb's floor applies where regular orbs roll the pool, not to a bone, the Genesis Tree or a Vaal Orb.
   assert.deepEqual(SECTIONS.filter(s => s.floored).map(s => s.id), ['base', 'destruction', 'marksman', 'berserking', 'decay', 'soul', 'chronomancy'])
-  assert.deepEqual(SECTIONS.filter(s => !s.floored).map(s => s.id), ['desecrated', 'genesis_caster', 'genesis_minion', 'corrupted'])
+  assert.deepEqual(SECTIONS.filter(s => !s.floored).map(s => s.id), ['desecrated', 'genesis_breach', 'genesis_caster', 'genesis_minion', 'corrupted', 'enchant'])
 })
 
 test('sectionsFor: the base pool is always first; a section appears only when a family rolls in it', () => {
   const ring = sectionsFor(RING, FAMILIES)
-  assert.deepEqual(ring.map(s => s.id), ['base', 'desecrated', 'corrupted'])
-  assert.deepEqual(ring.map(s => s.floored), [true, false, false])
+  assert.deepEqual(ring.map(s => s.id), ['base', 'desecrated', 'corrupted', 'enchant'])
+  assert.deepEqual(ring.map(s => s.floored), [true, false, false, false])
+  assert.deepEqual(ring[3].pool.enchant.map(f => f.id), ['enchant:Mana'], 'a Vaal Orb can upgrade the implicit')
   const base = ring[0]
   assert.deepEqual(base.pool.prefix.map(f => f.id), ['prefix:Life'])
   assert.deepEqual(base.pool.suffix, [], 'the desecrated family is not in the base pool')
@@ -58,17 +64,30 @@ test('sectionsFor: key-only pools (socketables) are restricted to the classes th
   assert.deepEqual(wand[1].pool.suffix.map(f => f.id), ['suffix:Destruction'])
   const gloves = sectionsFor(GLOVES, FAMILIES)
   assert.deepEqual(gloves.map(s => s.id), ['base', 'desecrated', 'corrupted'], 'Thrud\'s does not fit gloves; Kurgal rolls on armour; str armour corrupts')
+  const amulet = sectionsFor(AMULET, FAMILIES)
+  assert.ok(amulet.some(s => s.id === 'genesis_breach'), 'the breach set rolls where ring and belt say 0: on amulets')
+  assert.deepEqual(amulet.find(s => s.id === 'genesis_breach').pool.prefix.map(f => f.id), ['prefix:BreachCold'])
+  assert.equal(sectionsFor(RING, FAMILIES).some(s => s.id === 'genesis_breach'), false)
   assert.deepEqual(gloves[2].pool.corrupted.map(f => f.id), ['corrupted:Armour'])
 })
 
 test('sectionsFor: the Genesis Tree pools follow the mods\' own base weights', () => {
   const amulet = sectionsFor(AMULET, FAMILIES)
-  assert.deepEqual(amulet.map(s => s.id), ['base', 'genesis_caster'])
-  assert.equal(amulet[1].title, 'Genesis Tree · Caster')
-  assert.deepEqual(amulet[1].pool.prefix.map(f => f.id), ['prefix:GenesisES'])
+  assert.deepEqual(amulet.map(s => s.id), ['base', 'genesis_breach', 'genesis_caster'])
+  assert.equal(amulet[2].title, 'Genesis Tree · Caster')
+  assert.deepEqual(amulet[2].pool.prefix.map(f => f.id), ['prefix:GenesisES'])
   assert.equal(sectionsFor(RING, FAMILIES).some(s => s.id === 'genesis_caster'), false, 'ring weight is 0')
   const belt = sectionsFor(BELT, FAMILIES)
   assert.deepEqual(belt.find(s => s.id === 'desecrated').pool.prefix.map(f => f.id), ['prefix:UlamanFlask'])
+})
+
+test('a pool outside the item domain has its base pool only, from its own domain', () => {
+  const ruby = sectionsFor(RUBY, FAMILIES)
+  assert.deepEqual(ruby.map(s => s.id), ['base'])
+  assert.deepEqual(ruby[0].pool.prefix, [], 'the dex jewel mod does not roll on a ruby')
+  const emerald = sectionsFor(EMERALD, FAMILIES)
+  assert.deepEqual(emerald[0].pool.prefix.map(f => f.id), ['prefix:JewelAccuracy'])
+  assert.equal(emerald[0].pool.suffix.length, 0, 'item-domain families never leak into a jewel')
 })
 
 test('atLevel runs on any section pool, including a one-column corruption pool', () => {

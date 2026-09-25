@@ -178,21 +178,33 @@ into the Regex tab with the mod ticked.
 
 ## The other pools (built 2026-09-25)
 
+Every item class with a pool is an item type in the picker, 94 in all: the equipment classes
+(class × spawn-tag variant), jewels (each jewel is its own pool: Ruby, Emerald, Sapphire, Diamond
+and the Time-Lost four), life and mana flasks, charms, relics (small, medium, large), waystones
+(the four tier bands Low T1–5, Mid T6–10, High T11–15, Top T16), the eight tablets, and
+expedition logbooks (whose mods key on the areas a logbook can hold, so its pool is every tag
+its domain uses). Each lives in its own mod domain; the pool's `domain` field says which.
+Sanctified relics have no mod that keys on them and are not a pool.
+
 Below the base tables, one collapsed section per currency that opens its own pool on the item,
-shown only when it has something for this item type, remembered open or closed for the session:
+shown only when it has something for this item type, remembered open or closed for the session.
+These are equipment's; a jewel, flask, relic, waystone, tablet or logbook has its base pool only.
 
 - **Desecrated**: the bone-keyed families of the game's desecrated domain (the three bones are the
   tags `ulaman_mod`, `amanamu_mod`, `kurgal_mod`, shown as the row's chip). The pool is the base
   tags plus the bone tags; every desecrated mod is level 65.
-- **Genesis Tree · Caster / Minion** on amulets, rings and belts: the families keyed on the tree's
-  tags, with the mods' own base weights.
+- **Genesis Tree · Breach / Caster / Minion** on amulets, rings and belts: the families keyed on
+  the tree's tags, with the mods' own base weights (the breach set is Tul's, Xoph's, Esh's,
+  Uul-Netol's).
 - **Thrud's Might** (weapons), **Kolr's Hunt** and **Katla's Gloom** (gloves), **Vorana's Carnage**
   (helmets), **Medved's Tending** (body armour), **Uhtred's Sidereus** (boots): the families keyed
   on the socketable's tag; the mods carry no base tag, so the class list is the socketable's.
-- **Corrupted**: the Vaal Orb implicits, one column.
+- **Corrupted**: the Vaal Orb implicits, one column. **Corrupted upgrade**: the stronger implicit a
+  Vaal Orb can turn the base implicit into (the game files it as a unique mod), one column.
 - **Essence**: what every essence forces on this class, Lesser to Perfect, with affix and level.
-  The game keeps this in tables ggpk.exposed refuses to serve, so `scripts/mods-essences.mjs`
-  reads poe2db's essence pages (which render those tables) into `essences.json`.
+  **Alloy**: the same for the thirteen alloys. The game keeps both in tables ggpk.exposed refuses
+  to serve, so `scripts/mods-essences.mjs` reads poe2db's essence and alloy pages (which render
+  those tables) into `essences.json`.
 - **Socketables**: every rune, soul core and idol that fits the class, with what it grants there
   and its bonded effect (from the export's augments table).
 
@@ -203,9 +215,11 @@ The item level applies everywhere. Filter and tag chips apply to every table; ch
 the base pool. All of it is the same `atLevel` arithmetic over a section's pool
 (`sectionsFor` in `pool.js`), so the numbers mean the same thing in every table.
 
-Not modelled: poe2db's PoE1 leftovers (influences, Delve, Synthesis), Liquid Emotions
-(instilled passives, not mods), Haunted and Rotmother's Ducat (not in the export), the
-Kulemak and Watcher unique desecrations, and the breach desecration set.
+Not modelled, and why: poe2db's PoE1 leftovers (influences, Delve, Synthesis, Bestiary,
+Recombinator) are not PoE2; Liquid Emotions instil passives, not mods; Haunted modifiers and
+Rotmother's Ducat are not in the export; the Kulemak set is granted skills with no text; the
+Watcher set belongs to a unique the export does not name a base for; the 411 "hand wraps" mods
+and the other zero-weight leftovers (`of the Stars`, `of the Hunt`) have no tag anything carries.
 
 ## The loop, made robust
 

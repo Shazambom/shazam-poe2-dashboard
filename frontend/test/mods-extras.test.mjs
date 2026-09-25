@@ -40,12 +40,14 @@ const { essences } = readJson('essences.json')
 const { augments } = readJson('augments.json')
 const { pools } = readJson('pools.json')
 
-test('essences: every essence with its class rows, texts clean, levels and affixes present', () => {
-  assert.ok(essences.length >= 80, essences.length)
+test('essences: every essence and alloy with its class rows, texts clean, levels and affixes present', () => {
+  assert.ok(essences.filter(e => e.kind === 'essence').length >= 80, essences.length)
+  assert.ok(essences.filter(e => e.kind === 'alloy').length >= 13, 'the alloys')
+  assert.ok(essences.some(e => e.kind === 'alloy' && e.name === 'Runic Alloy' && e.rows.some(r => r.class === 'Rings' && /Runic Ward/.test(r.text))))
   assert.equal(new Set(essences.map(e => e.name)).size, essences.length)
   const classes = new Set(pools.map(p => p.class))
   for (const e of essences) {
-    assert.ok(e.name && Number.isInteger(e.tier) && Array.isArray(e.rows) && e.rows.length, e.name)
+    assert.ok(e.name && ['essence', 'alloy'].includes(e.kind) && Number.isInteger(e.tier) && Array.isArray(e.rows) && e.rows.length, e.name)
     for (const r of e.rows) {
       assert.ok(classes.has(r.class), `${e.name}: unknown class ${r.class}`)
       assert.ok(['prefix', 'suffix', 'implicit'].includes(r.affix), `${e.name}: ${r.affix}`)

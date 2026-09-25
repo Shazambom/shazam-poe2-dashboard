@@ -10,7 +10,7 @@ import { sectionsFor, atLevel, tagsOf, visible, AFFIXES } from '../lib/mods/pool
 import { essencesFor, augmentsFor } from '../lib/mods/extras.js'
 import { merge } from '../lib/mods/defaults.js'
 
-const TITLES = { prefix: 'Prefix', suffix: 'Suffix', corrupted: 'Corrupted' }
+const TITLES = { prefix: 'Prefix', suffix: 'Suffix', corrupted: 'Corrupted', enchant: 'Upgrade' }
 
 // Trading → Mods: what can roll on an item type between the orb's minimum modifier level and
 // the item level, and how likely each family is (docs/mods-page-design.md). The base pool on
@@ -79,9 +79,14 @@ export default function ModsView() {
           {tables(j + 1)}
         </ModSection>
       ))}
-      {shown && essences.length > 0 && (
+      {shown && essences.some(e => e.kind !== 'alloy') && (
         <ModSection id="essence" title="Essence" open={openSections.has('essence')} onToggle={() => toggleSection('essence')}>
-          <EssenceList essences={essences} ilvl={s.ilvl} />
+          <EssenceList essences={essences.filter(e => e.kind !== 'alloy')} ilvl={s.ilvl} />
+        </ModSection>
+      )}
+      {shown && essences.some(e => e.kind === 'alloy') && (
+        <ModSection id="alloy" title="Alloy" open={openSections.has('alloy')} onToggle={() => toggleSection('alloy')}>
+          <EssenceList essences={essences.filter(e => e.kind === 'alloy')} title="Alloy" ilvl={s.ilvl} />
         </ModSection>
       )}
       {shown && augments.length > 0 && (

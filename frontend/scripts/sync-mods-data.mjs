@@ -6,8 +6,10 @@
 //   node scripts/sync-mods-data.mjs            # fetch the export into ~/.cache/arbiter/repoe
 //   node scripts/sync-mods-data.mjs --from DIR # use mods.json, base_items.json, item_classes.json in DIR
 //
-// pools.json: one pool per distinct spawn-tag set within an equipment class (poe2db's class ×
-//   attribute unit, computed rather than hand-listed): { id, name, class, tags, keywords }.
+// pools.json: one pool per distinct spawn-tag set within an item class (poe2db's class ×
+//   attribute unit, computed rather than hand-listed): { id, name, class, domain, tags, keywords }.
+//   `domain` is where the class's base pool lives (item, misc for jewels, flask, sanctum_relic,
+//   area for waystones, tablet, expedition_relic for logbooks).
 // mods.json: prefix, suffix and corrupted families of the item domain plus the bone-keyed
 //   families of the desecrated domain: { id, affix, domain, group, text, tags, tiers: [{ id, name,
 //   ilvl, text, weights: [[tag, 0|1]] }] }, markup stripped, `#` where the roll goes. A family is
@@ -30,11 +32,18 @@ const SOURCE = 'https://repoe-fork.github.io/poe2/'
 const FILES = ['mods.json', 'base_items.json', 'item_classes.json', 'augments.min.json']
 const CACHE = path.join(os.homedir(), '.cache', 'arbiter', 'repoe')
 
-// Equipment classes (phase 1): the RePoE item_class id → keep. Jewels, flasks, charms, relics,
-// waystones and tablets are phase 2.
-const CLASSES = ['Ring', 'Amulet', 'Belt', 'Gloves', 'Boots', 'Body Armour', 'Helmet', 'Shield', 'Buckler', 'Focus', 'Quiver',
+// Every item class with a mod pool: the RePoE item_class id → the mod domain its pool lives in.
+const EQUIPMENT = ['Ring', 'Amulet', 'Belt', 'Gloves', 'Boots', 'Body Armour', 'Helmet', 'Shield', 'Buckler', 'Focus', 'Quiver',
   'Wand', 'Sceptre', 'Staff', 'Warstaff', 'Bow', 'Crossbow', 'Spear', 'Flail', 'Claw', 'Dagger', 'Talisman', 'TrapTool',
   'One Hand Axe', 'One Hand Mace', 'One Hand Sword', 'Two Hand Axe', 'Two Hand Mace', 'Two Hand Sword']
+const DOMAINS = {
+  ...Object.fromEntries(EQUIPMENT.map(c => [c, 'item'])),
+  Jewel: 'misc', LifeFlask: 'flask', ManaFlask: 'flask', UtilityFlask: 'flask',
+  Relic: 'sanctum_relic', SanctumSpecialRelic: 'sanctum_relic', Map: 'area', TowerAugmentation: 'tablet', ExpeditionLogbook: 'expedition_relic',
+}
+const CLASSES = Object.keys(DOMAINS)
+// A pool named after one tag rather than its bases (a waystone's tier band).
+const TAG_NAMES = { map_key_low: 'Low (T1–5)', map_key_medium: 'Mid (T6–10)', map_key_high: 'High (T11–15)', map_key_highest: 'Top (T16)' }
 
 const sha = (buf) => crypto.createHash('sha256').update(buf).digest('hex')
 const slug = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '')
@@ -58,7 +67,7 @@ export function primaryTags(tags, universe, freq = new Map()) {
     .sort((a, b) => (freq.get(a) ?? 0) - (freq.get(b) ?? 0) || (a < b ? -1 : 1))
 }
 
-const ATTR = /^((?:str|dex|int)(?:_(?:str|dex|int))*)_(?:armour|shield)$/
+const ATTR = /^((?:str|dex|int)(?:_(?:str|dex|int))*)_(?:armour|shield|special_relic)$/
 const attrsOf = (tags) => { for (const t of tags) { const m = t.match(ATTR); if (m) return m[1].split('_').map(a => a.charAt(0).toUpperCase() + a.slice(1)) } return null }
 
 // A pool's name: the class, `Class · Str/Int` from its attribute tags, or (a split with no
@@ -67,10 +76,15 @@ export function variantName(className, tags, baseNames, split = false) {
   const attrs = attrsOf(tags)
   if (attrs) return `${className} · ${attrs.join('/')}`
   if (!split) return className
+  const named = tags.find(t => TAG_NAMES[t])
+  if (named) return `${className} · ${TAG_NAMES[named]}`
   const words = baseNames.map(n => n.split(' '))
   const last = words[0][words[0].length - 1]
-  const short = words.every(w => w[w.length - 1] === last) ? words.map(w => w.slice(0, -1).join(' ')) : baseNames
-  const head = short.slice(0, 3).join(', ')
+  // Bases that share their last word drop it (Bone Wand, Offering Wand → Bone, Offering); a lone
+  // base drops it only when that word is the class itself (Breach Tablet → Breach, not Ruby → nothing).
+  const shared = words.every(w => w.length > 1 && w[w.length - 1] === last) && (words.length > 1 || last === className || last === className.replace(/s$/, ''))
+  const short = shared ? words.map(w => w.slice(0, -1).join(' ')) : baseNames
+  const head = [...short].sort().slice(0, 3).join(', ')
   return `${className} · ${head}${short.length > 3 ? ` +${short.length - 3}` : ''}`
 }
 
@@ -120,18 +134,24 @@ export function build(srcDir) {
   const spawnTags = new Set()
   const byKey = new Map()
   let dropped = 0
-  const BONES = ['ulaman_mod', 'amanamu_mod', 'kurgal_mod']
+  // The Watcher and Kulemak desecration sets belong to uniques the export does not name a base for; left out.
+  const KEYS = ['ulaman_mod', 'amanamu_mod', 'kurgal_mod', 'breach_desecration']
+  const POOL_DOMAINS = new Set(Object.values(DOMAINS))
   for (const [id, m] of Object.entries(mods)) {
-    const item = m.domain === 'item' && ['prefix', 'suffix', 'corrupted'].includes(m.generation_type) && !m.is_essence_only
     const weights = (m.spawn_weights || []).map(w => [w.tag, w.weight])
-    const bone = m.domain === 'desecrated' && ['prefix', 'suffix'].includes(m.generation_type) && weights.some(([t, w]) => w > 0 && BONES.includes(t))
-    if (!item && !bone) continue
+    let affix = m.generation_type
+    const rolled = POOL_DOMAINS.has(m.domain) && ['prefix', 'suffix', 'corrupted'].includes(affix) && !m.is_essence_only
+    const keyed = m.domain === 'desecrated' && ['prefix', 'suffix'].includes(affix) && weights.some(([t, w]) => w > 0 && KEYS.includes(t))
+    // A Vaal Orb can also upgrade an implicit: the CorruptionUpgrade mods, filed as uniques.
+    const upgrade = m.domain === 'item' && affix === 'unique' && id.startsWith('CorruptionUpgrade')
+    if (upgrade) affix = 'enchant'
+    if (!rolled && !keyed && !upgrade) continue
     if (!m.text || !weights.some(([, w]) => w > 0)) { dropped++; continue }
     for (const [t] of weights) spawnTags.add(t)
     const text = stripMarkup(m.text)
     const group = (m.groups && m.groups[0]) || m.type
-    const key = `${m.domain}:${m.generation_type}:${group}\u0000${familyText(text)}`
-    if (!byKey.has(key)) byKey.set(key, { affix: m.generation_type, domain: m.domain, group, text: familyText(text), tags: new Set(), tiers: [] })
+    const key = `${m.domain}:${affix}:${group}\u0000${familyText(text)}`
+    if (!byKey.has(key)) byKey.set(key, { affix, domain: m.domain, group, text: familyText(text), tags: new Set(), tiers: [] })
     const fam = byKey.get(key)
     for (const t of m.implicit_tags || []) fam.tags.add(t)
     fam.tiers.push({ id, name: m.name || '', ilvl: m.required_level || 0, text: tierText(text), weights })
@@ -150,7 +170,7 @@ export function build(srcDir) {
   // Pools: released equipment bases grouped by class and spawn-tag set.
   const groups = new Map()   // class id → Map(tagKey → { tags, bases })
   for (const b of Object.values(bases)) {
-    if (!CLASSES.includes(b.item_class) || b.release_state !== 'released' || b.domain !== 'item') continue
+    if (!CLASSES.includes(b.item_class) || b.release_state !== 'released') continue
     const tags = [...new Set((b.tags || []).filter(t => spawnTags.has(t)))].sort()
     const key = tags.join(',')
     if (!groups.has(b.item_class)) groups.set(b.item_class, new Map())
@@ -167,14 +187,28 @@ export function build(srcDir) {
     if (variants.some(v => attrsOf(v.tags))) variants = variants.filter(v => attrsOf(v.tags))
     const className = classes[cls]?.name || cls
     const split = variants.length > 1 && !variants.some(v => attrsOf(v.tags))
-    const largest = split ? variants.reduce((a, b) => (b.bases.length > a.bases.length ? b : a)) : null
+    // In a split without attribute tags the generic variant keeps the class name (the plain wands
+    // beside the element-locked ones); a split into peers (jewels, waystone bands) names every one.
+    const big = split ? variants.reduce((a, b) => (b.bases.length > a.bases.length ? b : a)) : null
+    const largest = big && big.bases.length >= 3 && variants.every(v => v === big || big.bases.length > 2 * v.bases.length) ? big : null
+    // A logbook's mods key on the areas it can hold, not on the base: its pool is every tag its domain uses.
+    if (variants.every(v => !v.tags.some(t => families.some(f => f.domain === DOMAINS[cls] && f.tiers.some(tr => tr.weights.some(([tag, w]) => w > 0 && tag === t)))))) {
+      const all = [...new Set(families.filter(f => f.domain === DOMAINS[cls]).flatMap(f => f.tiers.flatMap(tr => tr.weights.filter(([, w]) => w > 0).map(([tag]) => tag))))].sort()
+      for (const v of variants) v.tags = all
+    }
     for (const v of variants) {
       const attrs = attrsOf(v.tags)
       const name = v === largest ? className : variantName(className, v.tags, v.bases, split)
       const id = attrs ? `${slug(cls)}_${attrs.join('_').toLowerCase()}` : v === largest || !split ? slug(cls) : `${slug(cls)}_${slug(v.bases[0])}`
-      pools.push({ id, name, class: className, tags: v.tags, keywords: [...new Set(v.bases)].sort() })
+      pools.push({ id, name, class: className, domain: DOMAINS[cls], tags: v.tags, keywords: [...new Set(v.bases)].sort() })
     }
   }
+  // A pool nothing rolls on (sanctified relics: no mod keys on their tags) is not a pool.
+  const tagSet = (p) => new Set(p.tags)
+  const rolls = (p) => families.some(f => ['prefix', 'suffix'].includes(f.affix) && (f.domain === DOMAINS[CLASSES.find(c => (classes[c]?.name || c) === p.class)]) && f.tiers.some(t => { for (const [tag, w] of t.weights) if (tagSet(p).has(tag)) return w > 0; return false }))
+  for (const p of pools.filter(p => !rolls(p))) console.warn(`no mods roll on ${p.id}; dropped`)
+  const kept = pools.filter(rolls)
+  pools.length = 0; pools.push(...kept)
   if (new Set(pools.map(p => p.id)).size !== pools.length) throw new Error('pool ids collide')
 
   // Socketables: name from the base, type from the markup, each category → the classes it fits.

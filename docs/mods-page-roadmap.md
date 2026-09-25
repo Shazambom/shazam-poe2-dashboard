@@ -138,10 +138,10 @@ Same shape as `frontend/src/data/regex/` and the EE2 vendoring:
 
 1. DONE 2026-09-25: sync script and tests; `pool.js`; the tab with the pool picker, the two
    levels and the orb picker, tag chips, filter, the two tables with expansion and chances; plus
-   the other pools as sections (Desecrated, Genesis Tree, the six socketable uniques, Corrupted,
-   Essence, Socketables). Waystone and Tablet mods are already in the Regex tables and can appear
-   here through the same page later.
-2. "Search on trade" per family; jewels, flasks, charms and relics as pools.
+   the other pools as sections (Desecrated, Genesis Tree, the six socketable uniques, Corrupted
+   and its upgrades, Essence, Alloy, Socketables); every item class with a pool as an item type
+   (equipment, jewels, flasks, charms, relics, waystone bands, tablets, logbooks).
+2. "Search on trade" per family.
 3. Your item against the pool (EE2 parser); prices next to mods.
 
 ## Open decisions for the owner

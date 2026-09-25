@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-// Build frontend/src/data/mods/essences.json: what every essence forces on every item class.
+// Build frontend/src/data/mods/essences.json: what every essence, and every alloy, forces on
+// every item class (`kind`: essence | alloy).
 // The game keeps this in tables ggpk.exposed refuses to serve (Essences, EssenceMods), so it is
 // read off poe2db's essence pages, which render those tables. Dev only, run by hand in a
 // reviewed change; pages are cached under ~/.cache/arbiter/poe2db and the result is hashed into
@@ -54,11 +55,15 @@ export function parseEssence(html, name) {
 
 export function build() {
   const list = fetchPage('Stackable_Currency')
-  const pages = [...new Set([...list.matchAll(/href="([A-Za-z_]*Essence_of_[A-Za-z_]+)"><img[^>]*\/>((?:Lesser |Greater |Perfect )?Essence of [A-Za-z ]+)<\/a>/g)].map(m => `${m[1]}\u0000${m[2]}`))]
-    .map(s => s.split('\u0000')).sort((a, b) => (a[1] < b[1] ? -1 : 1))
-  const essences = pages.map(([slug, name]) => ({ name, tier: essenceTier(name), rows: parseEssence(fetchPage(slug), name) }))
+  const links = (re) => [...new Set([...list.matchAll(re)].map(m => `${m[1]}\u0000${m[2]}`))].map(s => s.split('\u0000')).sort((a, b) => (a[1] < b[1] ? -1 : 1))
+  const essencePages = links(/href="([A-Za-z_]*Essence_of_[A-Za-z_]+)"><img[^>]*\/>((?:Lesser |Greater |Perfect )?Essence of [A-Za-z ]+)<\/a>/g)
+  const alloyPages = links(/href="([A-Za-z_']*Alloy)"><img[^>]*\/>([A-Za-z' ]*Alloy)<\/a>/g)
+  const essences = [
+    ...essencePages.map(([slug, name]) => ({ name, kind: 'essence', tier: essenceTier(name), rows: parseEssence(fetchPage(slug), name) })),
+    ...alloyPages.map(([slug, name]) => ({ name, kind: 'alloy', tier: 1, rows: parseEssence(fetchPage(slug), name) })),
+  ]
   fs.writeFileSync(OUT, JSON.stringify({ essences }) + '\n')
-  console.log(`${essences.length} essences, ${essences.reduce((s, e) => s + e.rows.length, 0)} class rows`)
+  console.log(`${essences.filter(e => e.kind === 'essence').length} essences and ${essences.filter(e => e.kind === 'alloy').length} alloys, ${essences.reduce((s, e) => s + e.rows.length, 0)} class rows`)
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) build()

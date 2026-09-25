@@ -268,7 +268,7 @@ Pieces: `frontend/src/lib/mods/` (pure: `pool.js` with `SECTIONS`, `sectionsFor`
 `defaults.js`; `index.js`, the lazy loader); `frontend/src/data/mods/` (the shipped tables:
 `pools.json`, `mods.json`, `augments.json` built by `frontend/scripts/sync-mods-data.mjs` from the
 RePoE PoE2 export cached in `~/.cache/arbiter/repoe`; `essences.json` built by
-`frontend/scripts/mods-essences.mjs` from poe2db's essence pages cached in `~/.cache/arbiter/poe2db`;
+`frontend/scripts/mods-essences.mjs` from poe2db's essence and alloy pages cached in `~/.cache/arbiter/poe2db`;
 all hashed in `MANIFEST.json`); `components/ModsView.jsx`, `ModsBar.jsx`, `ModTable.jsx`,
 `ModFamily.jsx`, `ModSection.jsx`, the shared `Num.jsx`. Settings persist under `mods_tools`.
 **When a patch changes mods:** delete the caches, run `mods-essences.mjs` then `sync-mods-data.mjs`,
