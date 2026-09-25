@@ -36,6 +36,7 @@ contextBridge.exposeInMainWorld('poe2desktop', {
     onWebviewNav: sub('trade:webview-nav'),
     startSearch: (itemId, league, slug, type) => ipcRenderer.invoke('trade:start-search', { itemId, league, slug, type }),
     stopSearch: (itemId) => ipcRenderer.invoke('trade:stop-search', { itemId }),
+    modLookup: (p) => ipcRenderer.invoke('mods:lookup', p),   // Mods tab: a family's stat ids + the pool's category
     teleport: (token) => ipcRenderer.invoke('trade:teleport', { token }),
     onPing: sub('trade:ping'),
     onEngineState: sub('trade:engine-state'),

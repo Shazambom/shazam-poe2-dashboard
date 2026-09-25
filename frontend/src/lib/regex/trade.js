@@ -47,7 +47,7 @@ const priceFilter = (price) => {
 
 // The shared frame: instant buyout, sorted by price, the type filter, optional stat groups and
 // price filter, plus whatever the kind adds under `filters`.
-function baseQuery(typeFilters, stats, price, extraFilters = {}) {
+export function baseQuery(typeFilters, stats, price, extraFilters = {}) {
   const q = {
     query: { status: INSTANT_BUYOUT, filters: { type_filters: { disabled: false, filters: typeFilters }, ...extraFilters } },
     sort: { price: 'asc' },

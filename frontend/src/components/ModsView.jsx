@@ -8,6 +8,12 @@ import { api, toast } from '../lib/api.js'
 import { sessionFor } from '../lib/mods/index.js'
 import { prepare, atLevel, visible, AFFIXES } from '../lib/mods/pool.js'
 import { merge } from '../lib/mods/defaults.js'
+import { familyQuery } from '../lib/mods/trade.js'
+import { nav } from '../lib/nav.js'
+import { useWorkspace } from '../lib/workspaceStore.js'
+
+// Desktop only: the trade site's names for a mod and a kind come from main (EE2's data).
+const modLookup = typeof window !== 'undefined' ? window.poe2desktop?.trade?.modLookup : null
 
 const TITLES = { prefix: 'Prefix', suffix: 'Suffix', corrupted: 'Corrupted', enchant: 'Upgrade' }
 
@@ -52,6 +58,21 @@ export default function ModsView() {
     return { ...o, [kind]: next }
   }), [poolId])
   const toggleRow = useCallback((id) => toggleIn('rows', id), [toggleIn])
+  // Search on trade: the family as a Workspace search for this kind carrying it (docs/mods-page-design.md).
+  const onTrade = useCallback(async (affix, id) => {
+    const family = pool?.sections.flatMap(sec => sec[affix] || []).find(f => f.id === id)
+    const meta = pools.find(p => p.id === poolId)
+    if (!family || !meta || !modLookup) return
+    let found = null
+    try { found = await modLookup({ text: family.text, affix, bases: meta.keywords || [] }) } catch {}
+    const built = familyQuery(family, meta, found)
+    if (!built) { toast('Search this modifier by hand on the trade site', false); return }
+    const ws = useWorkspace.getState()
+    const r = ws.ingest({ source: 'mods', q: JSON.stringify(built.query), name: built.name, folder: null })
+    if (r.result === 'dropped') { toast('Could not add the search', false); return }
+    if (r.result === 'dup' && r.id) ws.rerunFromItem(r.id)
+    nav.openTrading('workspace')
+  }, [pool, pools, poolId])
 
   if (!s) return null
   const update = (p) => { const n = { ...s, ...p }; setS(n); save(n) }
@@ -65,7 +86,7 @@ export default function ModsView() {
     return (
       <div className={`mods-body ${affixes.length === 1 ? 'one' : ''}`}>
         {affixes.map(a => (
-          <ModTable key={a} title={TITLES[a]} rows={shown[i][a]} total={level[a].total} expanded={open.rows} onToggle={toggleRow}
+          <ModTable key={a} title={TITLES[a]} affix={a} rows={shown[i][a]} total={level[a].total} expanded={open.rows} onToggle={toggleRow} onTrade={modLookup ? onTrade : null}
                     ilvl={s.ilvl} floor={floored ? s.floor : 0} empty={empty} />
         ))}
       </div>

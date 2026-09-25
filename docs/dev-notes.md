@@ -276,8 +276,12 @@ with the next seed and no file in the repo changes. `GET /api/mods/pools` and
 `GET /api/mods/pool/{id}` read them. Client pieces: `frontend/src/lib/mods/` (pure: `pool.js`
 arithmetic, `orbs.js`, `defaults.js`, `format.jsx`; `index.js` the session store),
 `components/ModsView.jsx`, `ModsBar.jsx`, `ModTable.jsx`, `ModFamily.jsx`, `ModSection.jsx`,
-the shared `Num.jsx`. Settings persist under `mods_tools`. Tests: `backend/tests/test_modpool.py`
-(derivations over `tests/fixtures/mods`, a trimmed export), `frontend/test/mods-*.test.mjs`.
+the shared `Num.jsx`. Settings persist under `mods_tools`. "Search on trade" on a family:
+`lib/mods/trade.js` builds the query in the Regex frame from what main's `mods:lookup`
+(`desktop/src/trade/modsearch.js`, EE2's stat + item catalogues) returns; web has no button.
+Tests: `backend/tests/test_modpool.py` (derivations over `tests/fixtures/mods`, a trimmed
+export), `frontend/test/mods-*.test.mjs`, `desktop/test/mods-search.test.mjs` (the real
+vendored data, so an EE2 sync that renames a group fails here).
 **On a dev backend** the tables are empty until `POST /api/mods/refresh` (it fetches the sources
 into `DATA_DIR/gamedata`); the desktop app never calls it.
 

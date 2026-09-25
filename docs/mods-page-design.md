@@ -171,10 +171,18 @@ orb adds any of the families shown. That is a `pool.js` invariant with a test, n
 **Family row**: chevron · text with `#` for the roll (game markup stripped at sync) · up to two
 tag chips, muted · `Tiers` as `k / n` · `Chance`. A family with `k = 0` stays in place, muted,
 `0 / n`, `–`, still expandable so the user sees which edge shut it. **Tier row**: `T#` · tier
-name · level · text with the range substituted. **Footer**: `Search on trade` (Instant Buyout
-query on the pool's trade category plus the family's stat ids, through `useWorkspace.ingest` as
-`RegexView.onTrade` does) and, for waystone and tablet pools once they arrive, `Find in stash`
-into the Regex tab with the mod ticked.
+name · level · text with the range substituted. **Tier header** (desktop only): `Search on trade`
+(built 2026-09-25): an Instant Buyout query for items of the pool's kind carrying the family,
+into the Workspace through `useWorkspace.ingest` as `RegexView.onTrade` does. Nothing about it
+is hand-listed: the desktop's `trade/modsearch.js` reads the trade site's stat catalogue and
+EE2's item catalogue (both in `vendor/ee2-query/data`, synced every release) once; a family's
+text finds its stat ids (the site prints a stat without its sign), a hybrid is one count group
+per line, and the kind's category is the one most of the pool's bases fall under in EE2's
+category table (none for claws and traps: the stat alone). Where the site lists a mod was
+measured over every pool: a prefix or suffix under `explicit` and `desecrated` (both searched),
+a corrupted mod and its upgrade under `enchant`. A text the site lacks (some hybrids, a few
+socketable mods) gets a toast to search by hand. `Find in stash` for waystone and tablet pools
+into the Regex tab is still to come.
 
 ## The other pools (built 2026-09-25)
 
@@ -190,12 +198,13 @@ Below the base tables, one collapsed section per currency that opens its own poo
 shown only when it has something for this item type, remembered open or closed for the session.
 These are equipment's; a jewel, flask, relic, waystone, tablet or logbook has its base pool only.
 
-- **Desecrated**: the bone-keyed families of the game's desecrated domain (the three bones are the
-  tags `ulaman_mod`, `amanamu_mod`, `kurgal_mod`, shown as the row's chip). The pool is the base
-  tags plus the bone tags; every desecrated mod is level 65.
-- **Genesis Tree · Breach / Caster / Minion** on amulets, rings and belts: the families keyed on
-  the tree's tags, with the mods' own base weights (the breach set is Tul's, Xoph's, Esh's,
-  Uul-Netol's).
+- **Desecrated**: one section for the game's desecrated domain, as poe2db shows it: the families
+  keyed on the bones (`ulaman_mod`, `amanamu_mod`, `kurgal_mod`) and on breach desecration
+  (Tul's, Xoph's, Esh's, Uul-Netol's), each family carrying its key as a tag, so the bones are
+  chips. Keys of one non-item domain always share a section; item-domain keys get their own.
+  The pool is the base tags plus the keys; every bone mod is level 65.
+- **Genesis Tree · Caster / Minion** on amulets, rings and belts: the families keyed on the
+  tree's tags, with the mods' own base weights.
 - **Thrud's Might** (weapons), **Kolr's Hunt** and **Katla's Gloom** (gloves), **Vorana's Carnage**
   (helmets), **Medved's Tending** (body armour), **Uhtred's Sidereus** (boots): the families keyed
   on the socketable's tag; the mods carry no base tag, so the class list is the socketable's.
@@ -211,8 +220,8 @@ These are equipment's; a jewel, flask, relic, waystone, tablet or logbook has it
 The orb floor applies where regular orbs roll the pool: the base pool and the socketable
 uniques' pools. A bone, the Genesis Tree and a Vaal Orb have no minimum modifier level, so
 those sections ignore it (a bone's own floor never bites: every desecrated mod is level 65).
-The item level applies everywhere. Filter and tag chips apply to every table; chips come from
-the base pool. All of it is the same `atLevel` arithmetic over a section's pool
+The item level applies everywhere. Filter and tag chips apply to every table; chips are
+counted over every table. All of it is the same `atLevel` arithmetic over a section's pool
 (`sectionsFor` in `pool.js`), so the numbers mean the same thing in every table.
 
 Not modelled, and why: poe2db's PoE1 leftovers (influences, Delve, Synthesis, Bestiary,

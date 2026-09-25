@@ -5,7 +5,7 @@ import { pct, lines } from '../lib/mods/format.jsx'
 // One family row and, when open, its tiers in three bands: above the item level, in the pool,
 // below the min level. The row carries its family id for the table's delegated click and key
 // handlers, so no callback is allocated per row and the memo holds across filter keystrokes.
-function ModFamily({ row, open, ilvl, floor, perTier }) {
+function ModFamily({ row, open, ilvl, floor, perTier, canTrade }) {
   const { family, k, n, chance } = row
   return (
     <div className="mods-fam-wrap">
@@ -18,7 +18,10 @@ function ModFamily({ row, open, ilvl, floor, perTier }) {
       </div>
       {open && (
         <div className="mods-tiers" role="region" aria-label={family.text}>
-          {perTier !== null && <div className="mods-tiers-head">Each tier {pct(perTier)}</div>}
+          <div className="mods-tiers-head">
+            <span>{perTier !== null && <>Each tier {pct(perTier)}</>}</span>
+            {canTrade && <button type="button" className="btn small" data-trade={family.id}>Search on trade</button>}
+          </div>
           {family.tiers.map((t, i) => {
             const band = bandOf(t, ilvl, floor)
             return (

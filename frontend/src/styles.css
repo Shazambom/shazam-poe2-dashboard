@@ -1061,7 +1061,7 @@ code { background: var(--bg); padding: 1px 5px; border-radius: 3px; font-size: 1
 .mods-fam-tags { color: var(--muted); font-size: 11px; white-space: nowrap; }
 .mods-chance { color: var(--ink-2); }
 .mods-tiers { margin: 4px 10px 10px 26px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--bg); font-size: 12.5px; }
-.mods-tiers-head { padding: 5px 10px; color: var(--muted); font-size: 11.5px; border-bottom: 1px solid var(--line); min-height: 26px; }
+.mods-tiers-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 3px 6px 3px 10px; color: var(--muted); font-size: 11.5px; border-bottom: 1px solid var(--line); min-height: 26px; }
 .mods-tier { display: grid; grid-template-columns: 30px 120px 32px minmax(0, 1fr); gap: 10px; align-items: center; padding: 4px 10px; }
 .mods-tier .mods-num:first-child { text-align: left; color: var(--muted); }
 .mods-tier.above, .mods-tier.below { color: var(--muted); }

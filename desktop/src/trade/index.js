@@ -18,6 +18,8 @@ function registerTrade(getWin, getBackendUrl) {
   ipcMain.handle('trade:start-search', (_e, { itemId, league, slug, type }) =>
     engine.startSearch(itemId, league, slug, type))
   ipcMain.handle('trade:stop-search', (_e, { itemId }) => { engine.stopSearch(itemId); return { ok: true } })
+  // Trading → Mods → Search on trade: what the site calls a mod and an item kind (EE2's data, read once).
+  ipcMain.handle('mods:lookup', (_e, p) => require('./modsearch.js').lookup(p || {}))
   // Sales tab (roadmap batch 6): Merchant History through the user's session under policy trade-history.
   const salesFetch = require('./sales.js').makeSalesFetcher({
     request: (r) => require('./proxy.js').poeRequest({ method: 'GET', path: r.path, referer: r.referer }),
