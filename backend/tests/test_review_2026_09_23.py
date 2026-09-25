@@ -669,21 +669,24 @@ def test_a_currency_whose_only_market_wanders_is_still_priced_by_it(monkeypatch)
 
 @_prod
 def test_production_ulamans_gaze_is_priced_by_its_chaos_market(monkeypatch):
-    """The real rows: every Ulaman's Gaze market is wide; by the volume rule the chaos one is the
-    busiest (it moves the most value both ways). The value table prices the gaze through it at
-    its window rate — the number the card shows and the line it draws agree."""
+    """The real rows: every Ulaman's Gaze market is wide; the value table prices the gaze through
+    its busiest one (the volume rule; chaos on 2026-09-23, exalted two days later — the market
+    moves, the rule does not) at that market's window rate, so the number the card shows and the
+    line it draws agree."""
     G = "Metadata/Items/SoulCores/UlamansGaze"
     registry._link(G, "ulamans-gaze")            # the test registry has no seed for soul cores
     league, n = _prod_copy([G])
     assert n > 50, f"only {n} rows copied — is the gaze still trading?"
     g = _built(league, monkeypatch)
     values = g.values()
-    assert g.priced_by.get("ulamans-gaze") == "chaos", g.priced_by.get("ulamans-gaze")
-    e = g.edges.get(("ulamans-gaze", "chaos")) or g.edges.get(("chaos", "ulamans-gaze"))
+    hub = g.busiest.get("ulamans-gaze")
+    assert hub in ("chaos", "exalted", "divine"), hub
+    assert g.priced_by.get("ulamans-gaze") == hub, (g.priced_by.get("ulamans-gaze"), hub)
+    e = g.edges.get(("ulamans-gaze", hub)) or g.edges.get((hub, "ulamans-gaze"))
     assert e and e.meta["inactive"] is False
-    window = digest.window_rates(league).get((G, registry.metas("chaos")[0]))
-    assert window, "no chaos window rate?"
-    assert values["ulamans-gaze"] == pytest.approx(values["chaos"] / window, rel=1e-9)
+    window = digest.window_rates(league).get((G, registry.metas(hub)[0]))
+    assert window, f"no {hub} window rate?"
+    assert values["ulamans-gaze"] == pytest.approx(values[hub] / window, rel=1e-9)
 
 
 # ============================================================ 12. poe2scout cannot veto the busiest market
