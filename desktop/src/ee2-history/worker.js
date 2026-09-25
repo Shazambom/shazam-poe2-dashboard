@@ -5,6 +5,7 @@
 //   → { t:'init', dataDir? }                 ← { t:'ready', ms, items, stats }
 //   → { t:'build', id, raw, prefs }          ← { t:'built', id, q, name, item, host, buildMs }
 //                                           ← { t:'error', id, stage, message }
+//   → { t:'parse', id, raw }                 ← { t:'parsed', id, item }   (Mods tab: the compact parse, null if not an item)
 // A build that runs past BUILD_TIMEOUT_MS reports { stage:'timeout' } (the parser is sync, so this
 // only trips on a pathological input). Nothing here touches the network — index.js refuses it.
 //
@@ -18,6 +19,11 @@ async function handle(msg, reply) {
   if (!msg || typeof msg !== 'object') return
   if (msg.t === 'init') {
     try { reply({ t: 'ready', ...(await port.init(msg.dataDir)) }) } catch (e) { reply({ t: 'error', id: null, stage: 'init', message: String(e && e.message || e) }) }
+    return
+  }
+  if (msg.t === 'parse') {
+    try { await port.init(); reply({ t: 'parsed', id: msg.id, item: port.parseItem(msg.raw) }) }
+    catch (e) { reply({ t: 'error', id: msg.id, stage: 'parse', message: String(e && e.message || e) }) }
     return
   }
   if (msg.t === 'build') {

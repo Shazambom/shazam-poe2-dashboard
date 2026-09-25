@@ -28,6 +28,7 @@ function spawnWorker({ onExit } = {}) {
     const p = pending.get(m.id); if (!p) return
     pending.delete(m.id); clearTimeout(p.timer)
     if (m.t === 'built') { const { t, id, ...rest } = m; p.resolve(rest) }
+    else if (m.t === 'parsed') p.resolve(m.item)
     else p.resolve({ error: { stage: m.stage, message: m.message } })
   })
   const touch = () => { clearTimeout(idle); idle = setTimeout(() => { if (!pending.size) kill() }, IDLE_EXIT_MS); if (idle.unref) idle.unref() }
@@ -39,7 +40,8 @@ function spawnWorker({ onExit } = {}) {
     touch()
     return ready
   }
-  const build = async (raw, prefs) => {
+  // One request to the worker: a 'build' (the query) or a 'parse' (the Mods tab's compact parse).
+  const request = async (msg) => {
     if (dead) throw new Error('worker exited')
     // The timeout covers init too: a worker that never reports ready must not hang the caller.
     const timeout = new Promise((_, rej) => setTimeout(() => rej(new Error('build timeout')), BUILD_TIMEOUT_MS + 5000).unref?.())
@@ -49,11 +51,13 @@ function spawnWorker({ onExit } = {}) {
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => { pending.delete(id); reject(new Error('build timeout')) }, BUILD_TIMEOUT_MS)
       pending.set(id, { resolve, reject, timer })
-      child.postMessage({ t: 'build', id, raw, prefs })
+      child.postMessage({ ...msg, id })
     })
   }
+  const build = (raw, prefs) => request({ t: 'build', raw, prefs })
+  const parse = (raw) => request({ t: 'parse', raw })
   const kill = () => { if (dead) return; try { child.kill() } catch {} }
-  return { build, warm, kill }
+  return { build, parse, warm, kill }
 }
 
 module.exports = { spawnWorker, unpacked, IDLE_EXIT_MS, BUILD_TIMEOUT_MS }

@@ -73,4 +73,26 @@ function buildQuery(raw, prefs) {
   }
 }
 
-module.exports = { init, buildQuery, presetOpts, DATA_DIR }
+// Trading → Mods → "Paste item": the compact parse of an item — base, rarity, item level and each
+// modifier's type, affix, tier name, tier and printed lines (numbers as #). Never the raw text.
+// Null for anything the parser refuses (not an item) and for a currency (nothing to roll).
+function parseItem(raw) {
+  if (!ee2) throw new Error('ee2-query: call init() first')
+  const parsed = ee2.parseClipboard(String(raw || ''))
+  if (!parsed.isOk()) return null
+  const item = parsed.value
+  if (item.category === ee2.ItemCategory.Currency) return null
+  const mods = (item.newMods || []).map(m => ({
+    type: m.info?.type || 'explicit',
+    affix: m.info?.generation || null,
+    name: m.info?.name || null,
+    tier: typeof m.info?.tier === 'number' ? m.info.tier : null,
+    lines: (m.stats || []).map(s => String(s.translation?.string || s.stat?.ref || '')).filter(Boolean),
+  }))
+  return {
+    name: item.name || '', baseType: item.info?.refName || item.info?.name || item.baseType || '', itemClass: item.category || '',
+    rarity: item.rarity || '', itemLevel: typeof item.itemLevel === 'number' ? item.itemLevel : null, corrupted: !!item.isCorrupted, mods,
+  }
+}
+
+module.exports = { init, buildQuery, parseItem, presetOpts, DATA_DIR }

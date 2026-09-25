@@ -191,6 +191,19 @@ it wants every table modifier one of its lines prints (measured: 30 of 32 waysto
 lacks, get a toast to pick by hand). One already wanted keeps its minimum. A family whose tiers
 carry no name (every corruption implicit and upgrade) shows no name column.
 
+**Paste item** (desktop; `lib/mods/item.js`, main's `mods:item`): the copied item against its
+pool. Main reads the clipboard and the EE2 worker parses it (`parseItem` in the vendored port's
+seam, a `parse` message beside `build`); only the compact parse crosses IPC (base, rarity, item
+level, each mod's type, affix, tier name, tier, printed lines), never the text. The pool follows
+the base (a pool's keywords are its bases), the item level box takes the item's level, and the
+bar shows the item with its affix counts against the rarity's slots (rare 3/3, magic 1/1). Each
+explicit, fractured or desecrated mod finds its family by tier name, the printed text breaking a
+tie or standing in for an unknown name (measured over the EE2 fixtures: 66 of 78 by name, 60 by
+text; the misses are essence-only mods and waystone mods whose pool text carries yield lines);
+the base section wins over another holding the same family. A rolled family shows its tier in
+gold where the tier count was, no chance, and counts for nothing: the totals and chances are over
+what can still land. Session state only; Clear drops it.
+
 **Prices beside mods** (`lib/mods/prices.js`, `GET /api/mods/pool/{id}/prices`): what forcing a
 modifier costs. The backend prices the pool's grants (essences, alloys, socketables) from the
 app's one value table (`Graph.values`, reference per unit), keyed by grant name; a grant the

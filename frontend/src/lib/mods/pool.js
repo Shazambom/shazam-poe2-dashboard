@@ -40,14 +40,20 @@ export const inPool = (tiers, ilvl, floor) => Math.max(0, firstAtOrBelow(tiers, 
 // The pool between the floor and the item level: per column the rows (one per family, in pool
 // order, keyed by the section's own family object) and the total; chance is null when the
 // column is empty so nothing ever reads NaN. Rows are cheap value objects; a renderer derives
-// each tier's band with `bandOf`.
-export function atLevel(section, ilvl, floor) {
+// each tier's band with `bandOf`. With `onItem` (family id → the tier the pasted item carries)
+// those families show their tier and count for nothing: a mod already on the item cannot roll
+// again, so the chances are over what can still land.
+export function atLevel(section, ilvl, floor, onItem = null) {
   const out = {}
   for (const affix of AFFIXES) {
     if (!Array.isArray(section[affix])) continue
-    const rows = section[affix].map(family => ({ family, k: inPool(family.tiers, ilvl, floor), n: family.tiers.length, chance: null }))
-    const total = rows.reduce((s, r) => s + r.k, 0)
-    for (const r of rows) r.chance = total ? r.k / total : null
+    const rows = section[affix].map(family => {
+      const row = { family, k: inPool(family.tiers, ilvl, floor), n: family.tiers.length, chance: null }
+      if (onItem && onItem.has(family.id)) row.onItem = onItem.get(family.id)
+      return row
+    })
+    const total = rows.reduce((s, r) => s + (r.onItem === undefined ? r.k : 0), 0)
+    for (const r of rows) r.chance = total && r.onItem === undefined ? r.k / total : null
     out[affix] = { rows, total }
   }
   return out

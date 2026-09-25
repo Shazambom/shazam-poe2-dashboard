@@ -10,6 +10,7 @@ import { prepare, atLevel, visible, AFFIXES } from '../lib/mods/pool.js'
 import { merge } from '../lib/mods/defaults.js'
 import { familyQuery } from '../lib/mods/trade.js'
 import { stashKind, stashMods, withWanted } from '../lib/mods/stash.js'
+import { poolFor, matchItem, slotsFor } from '../lib/mods/item.js'
 import { merge as mergeRegex } from '../lib/regex/defaults.js'
 import { nav } from '../lib/nav.js'
 import { useWorkspace } from '../lib/workspaceStore.js'
@@ -20,6 +21,8 @@ const REGEX_TABLES = { waystone: waystoneTable, tablet: tabletTable }
 
 // Desktop only: the trade site's names for a mod and a kind come from main (EE2's data).
 const modLookup = typeof window !== 'undefined' ? window.poe2desktop?.trade?.modLookup : null
+const modItem = typeof window !== 'undefined' ? window.poe2desktop?.trade?.modItem : null
+const PASTE_FAIL = { empty: 'Copy an item in game first', 'not-item': 'The clipboard holds no item', worker: 'Reading items is not available right now' }
 
 const TITLES = { prefix: 'Prefix', suffix: 'Suffix', corrupted: 'Corrupted', enchant: 'Upgrade' }
 
@@ -49,7 +52,12 @@ export default function ModsView() {
   const priced = useApi(() => (poolId ? api.modPrices(poolId).catch(() => null) : Promise.resolve(null)), [poolId])
   const prices = priced.data
 
-  const levels = useMemo(() => (pool && s ? pool.sections.map(sec => atLevel(sec, s.ilvl, sec.floored ? s.floor : 0)) : null), [pool, s?.ilvl, s?.floor])
+  // The pasted item (desktop): its rolled families show their tier and count for nothing, so the
+  // chances are over what can still land. Session state, never saved.
+  const [item, setItem] = useState(null)
+  const match = useMemo(() => matchItem(pool, item), [pool, item])
+  const onItem = useMemo(() => (item ? new Map(match.rolled.map(r => [r.family.id, r.tier])) : null), [match, item])
+  const levels = useMemo(() => (pool && s ? pool.sections.map(sec => atLevel(sec, s.ilvl, sec.floored ? s.floor : 0, onItem)) : null), [pool, s?.ilvl, s?.floor, onItem])
   const tags = useMemo(() => new Set(s?.tags || []), [s?.tags])
   const shown = useMemo(() => levels && levels.map(level => Object.fromEntries(AFFIXES.filter(a => level[a]).map(a => [a, visible(level[a].rows, { tags, q: filter })]))), [levels, tags, filter])
   const grants = useMemo(() => (pool ? [
@@ -99,6 +107,17 @@ export default function ModsView() {
 
   if (!s) return null
   const update = (p) => { const n = { ...s, ...p }; setS(n); save(n) }
+  // Paste item: main reads the clipboard and hands over the parse; the pool follows the base.
+  const onPaste = async () => {
+    let r = null
+    try { r = await modItem() } catch { r = { item: null, reason: 'worker' } }
+    if (!r?.item) { toast(PASTE_FAIL[r?.reason] || PASTE_FAIL['not-item'], false); return }
+    const target = poolFor(pools, r.item)
+    if (!target) { toast('No modifier pool for this item type', false); return }
+    setItem(r.item)
+    update({ poolId: target.id, tags: target.id === poolId ? s.tags : [], ...(r.item.itemLevel ? { ilvl: r.item.itemLevel } : {}) })
+  }
+  const strip = item ? { name: item.name, base: item.baseType, ilvl: item.itemLevel, count: match.count, slots: slotsFor(item.rarity) } : null
   const toggleTag = (id) => update({ tags: tags.has(id) ? s.tags.filter(t => t !== id) : [...s.tags, id] })
   const empty = tags.size > 0 || filter.trim() !== '' ? 'Clear the filter or a tag to see more.' : 'Nothing rolls here.'
   const failed = list.err || fetched.err
@@ -121,7 +140,8 @@ export default function ModsView() {
     <div className="mods">
       <ModsBar pools={pools} currencies={currencies} poolId={poolId || s.poolId} ilvl={s.ilvl} floor={s.floor} filter={filter} tags={tags} tagOptions={pool?.tags || []}
                onPool={id => update({ poolId: id, tags: [] })} onIlvl={v => update({ ilvl: v })} onFloor={v => update({ floor: v })}
-               onFilter={setFilter} onTag={toggleTag} disabled={!list.data} />
+               onFilter={setFilter} onTag={toggleTag} disabled={!list.data}
+               item={strip} onPaste={modItem ? onPaste : null} onClearItem={() => setItem(null)} />
       {failed && <div className="empty">Reopen the tab to load the modifier tables.</div>}
       {!failed && list.data && !pools.length && <div className="empty">The modifier tables arrive with the next market update.</div>}
       {loading && pools.length > 0 && <div className="mods-body"><div className="sk mods-skel" /><div className="sk mods-skel" /></div>}

@@ -37,6 +37,7 @@ contextBridge.exposeInMainWorld('poe2desktop', {
     startSearch: (itemId, league, slug, type) => ipcRenderer.invoke('trade:start-search', { itemId, league, slug, type }),
     stopSearch: (itemId) => ipcRenderer.invoke('trade:stop-search', { itemId }),
     modLookup: (p) => ipcRenderer.invoke('mods:lookup', p),   // Mods tab: a family's stat ids + the pool's category
+    modItem: () => ipcRenderer.invoke('mods:item'),           // Mods tab: the copied item's compact parse (main reads the clipboard)
     teleport: (token) => ipcRenderer.invoke('trade:teleport', { token }),
     onPing: sub('trade:ping'),
     onEngineState: sub('trade:engine-state'),

@@ -701,6 +701,17 @@ ipcMain.handle('clipboard:classify', async () => {
   return intent ? { kind: 'item', intent } : { kind: 'none', len: 0, currency: true }
 })
 
+// Trading → Mods → "Paste item": main reads the clipboard; only the compact parse crosses (never the
+// text). { item } when the clipboard holds an item, { item: null, reason } otherwise.
+ipcMain.handle('mods:item', async () => {
+  const { classifyClipboard, MAX_CLIP } = require('./clipboard-add.js')
+  const cls = classifyClipboard(() => clipboard.readText())
+  if (cls.kind !== 'item') return { item: null, reason: cls.kind === 'none' && !cls.len ? 'empty' : 'not-item' }
+  if (!_history) return { item: null, reason: 'worker' }
+  const item = await _history.parseItem(String(clipboard.readText() || '').slice(0, MAX_CLIP))
+  return item ? { item } : { item: null, reason: 'not-item' }
+})
+
 // Give the renderer a beat to flush its debounced workspace save before we go: send ws:flush,
 // wait for ws:flushed (or 1 s), then quit for real.
 // (`_flushedForQuit` is declared up top so the update handler can set it before quitAndInstall.)

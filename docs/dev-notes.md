@@ -284,6 +284,11 @@ modifiers by printed line and writes `regex_tools` before `nav.openTrading('rege
 (tests: `frontend/test/mods-stash.test.mjs`). `lib/mods/prices.js` (`forcedBy`, `priceOf`) joins
 grants to tiers by text and reads `modpool.prices(pool_id)` (`/api/mods/pool/{id}/prices`, the
 value table by grant name; tests: `frontend/test/mods-prices.test.mjs`, `test_modpool.py`).
+Paste item: `desktop/src/vendor/ee2-query/index.js` `parseItem` → worker `parse` message
+(`ee2-history/worker.js`, host `parse()`, consumer `parseItem`) → main `mods:item` (reads the
+clipboard; only the parse crosses) → preload `trade.modItem` → `lib/mods/item.js` (`poolFor`,
+`matchItem`, `slotsFor`) and `atLevel(..., onItem)` (tests: `desktop/test/mods-item.test.mjs`,
+`frontend/test/mods-item.test.mjs`).
 Tests: `backend/tests/test_modpool.py` (derivations over `tests/fixtures/mods`, a trimmed
 export), `frontend/test/mods-*.test.mjs`, `desktop/test/mods-search.test.mjs` (the real
 vendored data, so an EE2 sync that renames a group fails here).
