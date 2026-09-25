@@ -8,6 +8,7 @@ import threading
 from contextlib import contextmanager
 from typing import Any, Callable, Iterator
 
+from . import devtelemetry
 from .config import MARKET_DB_PATH, MARKET_SEED_PATH, USER_DB_PATH
 from .datapolicy import is_user_kv
 
@@ -233,14 +234,17 @@ def seed_market() -> None:
     data is untouched (it lives in user.sqlite).
     """
     if not MARKET_SEED_PATH or not MARKET_SEED_PATH.exists():
+        devtelemetry.tlog("seed", f"no seed bundled (path={MARKET_SEED_PATH})")
         return
     seed_v = _seed_version()
     local_v = _read_snapshot_version(MARKET_DB_PATH)
     if MARKET_DB_PATH.exists() and seed_v <= local_v:
         log.info("market seed: local v%s >= seed v%s, keeping local", local_v, seed_v)
+        devtelemetry.tlog("seed", f"kept local v{local_v} (seed v{seed_v})")
         return
     log.info("market seed: seeding market.sqlite from snapshot (seed v%s > local v%s)",
              seed_v, local_v)
+    devtelemetry.tlog("seed", f"replacing local v{local_v} with seed v{seed_v} ({MARKET_SEED_PATH.stat().st_size >> 20} MB gz)")
     tmp = MARKET_DB_PATH.with_suffix(MARKET_DB_PATH.suffix + ".tmp")
     is_gz = str(MARKET_SEED_PATH).endswith(".gz")
     try:
@@ -258,8 +262,10 @@ def seed_market() -> None:
             if side.exists():
                 side.unlink()
         os.replace(tmp, MARKET_DB_PATH)
+        devtelemetry.tlog("seed", f"replaced: now v{_read_snapshot_version(MARKET_DB_PATH)} ({MARKET_DB_PATH.stat().st_size >> 20} MB)")
     except OSError as exc:
         log.error("market seed: failed to seed (%s); will crawl live", exc)
+        devtelemetry.tlog("seed", f"FAILED ({type(exc).__name__}: {str(exc)[:160]}); crawling live")
         if tmp.exists():
             tmp.unlink()
 

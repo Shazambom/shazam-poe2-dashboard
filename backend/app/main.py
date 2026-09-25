@@ -52,6 +52,11 @@ async def lifespan(app: FastAPI):
              asyncio.create_task(_league_history_loop()), asyncio.create_task(_analytics_loop())]
     if not session.get_cookie():
         log.info("no trade session yet: connect one in Settings to enable the live order book")
+    try:   # beta telemetry: what the seed left us for the Mods tab
+        from . import devtelemetry
+        devtelemetry.tlog("mods", f"snapshot v{db._read_snapshot_version(db.MARKET_DB_PATH)} pools={len(modpool.pools())} currencies={len(modpool.currencies())} meta={db.kv_get('mods_meta', {}).get('pools')}")
+    except Exception as exc:
+        log.warning("mods telemetry failed: %s", exc)
     yield
     for t in tasks:
         t.cancel()

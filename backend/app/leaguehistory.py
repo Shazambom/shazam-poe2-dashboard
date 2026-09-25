@@ -19,7 +19,7 @@ import re
 import time
 import urllib.parse
 
-from . import cache, db, gateway, marketseries
+from . import cache, db, devtelemetry, gateway, marketseries
 
 log = logging.getLogger(__name__)
 
@@ -266,6 +266,8 @@ async def backfill(force: bool = False, full: bool = True) -> dict:
                     log.warning("poe2scout universe %s failed: %s", name, exc)
             progress.update({"league": name, "league_total": len(item_ids), "league_done": 0,
                              "leagues_done": li, "phase": "crawling", "updated": time.time()})
+            tally = {"complete": 0, "fresh": 0, "fetched": 0, "errors": 0}
+            t0 = time.time()
             for item_id in item_ids:
                 progress["league_done"] += 1
                 progress["updated"] = time.time()
@@ -274,14 +276,18 @@ async def backfill(force: bool = False, full: bool = True) -> dict:
                 # Partial stores (never marked complete) and current→past transitions
                 # are re-fetched. Current leagues refresh on the 12h cadence.
                 if complete and not force:
+                    tally["complete"] += 1
                     continue
                 if current and stored.get((name, item_id)) and not force:
                     if time.time() - db.kv_get(f"lh_fetch:{name}:{item_id}", 0) < REFRESH_S:
+                        tally["fresh"] += 1
                         continue
                 try:
                     enc = urllib.parse.quote(name)
                     data = await _get(f"/Leagues/{enc}/Items/{item_id}/DailyStatsHistory?dayCount=500")
+                    tally["fetched"] += 1
                 except Exception as exc:
+                    tally["errors"] += 1
                     log.warning("poe2scout history %s/%s failed: %s", name, item_id, exc)
                     continue
                 rows = [(name, item_id, s["Time"], s.get("Close"), s.get("Average"), s.get("Volume"))
@@ -294,6 +300,8 @@ async def backfill(force: bool = False, full: bool = True) -> dict:
                     if not current and not data.get("HasMore"):
                         db.kv_set(f"lh_complete:{name}:{item_id}", True)
                     fetched[f"{name}/{item_id}"] = len(rows)
+            # Beta telemetry: why this league did or did not crawl (counts only).
+            devtelemetry.tlog("lh", f"league={name!r} current={current} items={len(item_ids)} complete={tally['complete']} fresh={tally['fresh']} fetched={tally['fetched']} errors={tally['errors']} s={time.time() - t0:.0f}")
         _cache.clear()   # fresh data → drop cross()/marketcap() caches
         progress.update({"running": False, "phase": "done", "updated": time.time(),
                          "leagues_done": len(leagues)})

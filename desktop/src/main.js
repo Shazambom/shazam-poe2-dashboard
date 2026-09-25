@@ -622,6 +622,13 @@ app.whenReady().then(async () => {
         backendUrl: () => backendUrl, log: (m) => telemetry.installLog('icons', m) })
     } catch (e) { console.log('[icondiag] failed:', String(e)) }
   }
+  // TEMPORARY DEV DIAGNOSTIC (beta/dev only): what the seed left for the Mods tab and what the
+  // league crawl is doing, as the backend and the renderer see it — see modsdiag.js.
+  if (diagTelemetryOn()) {
+    try {
+      require('./modsdiag.js').install({ win: () => win, backendUrl: () => backendUrl, log: (m) => telemetry.installLog('mods', m) })
+    } catch (e) { console.log('[modsdiag] failed:', String(e)) }
+  }
   setupUpdates()
   startEe2Integration()   // self-gates on EE2 presence; dormant if EE2 isn't installed
   try { require('./trade').registerTrade(() => win, () => backendUrl) } catch (e) { console.log('[trade] register failed:', String(e)) }
