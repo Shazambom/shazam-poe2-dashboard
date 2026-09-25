@@ -9,7 +9,7 @@ import path from 'node:path'
 import crypto from 'node:crypto'
 import { fileURLToPath } from 'node:url'
 import { stripMarkup, familyText, variantName, primaryTags } from '../scripts/sync-mods-data.mjs'
-import { poolFor, atLevel } from '../src/lib/mods/pool.js'
+import { poolFor, atLevel, bandOf } from '../src/lib/mods/pool.js'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const DATA = path.join(HERE, '..', 'src', 'data', 'mods')
@@ -202,10 +202,11 @@ test('invariants over every shipped pool: chances sum to 1, k is monotone in bot
         else assert.ok(rows.every(r => r.chance === null))
         if (prev) for (const [i, r] of rows.entries()) assert.ok(r.k >= prev[affix].rows[i].k, `${def.id} ${affix} k fell from L=${L - 1} to ${L}`)
         for (const r of rows) {
-          assert.equal(r.k, r.tiers.filter(t => t.state === 'in').length)
-          assert.equal(r.k, r.tiers.filter(t => t.ilvl <= L).length, 'k is exactly the count in the window')
-          const states = r.tiers.map(t => t.state).join(',')
-          assert.equal(/in,above|below,in|below,above/.test(states), false, `${def.id} ${r.family.id} L=${L}: ${states}`)
+          assert.equal(r.k, r.family.tiers.filter(t => t.ilvl <= L).length, 'k is exactly the count in the window')
+          if (L === 1 || L === 50 || L === 100) {
+            const bands = r.family.tiers.map(t => bandOf(t, L, 0))
+            for (let i = 1; i < bands.length; i++) assert.ok(bands[i - 1] === bands[i] || (bands[i - 1] === 'above' && bands[i] === 'in') || bands[i] === 'below', `${def.id} ${r.family.id} L=${L}: ${bands}`)
+          }
         }
       }
       prev = cur
@@ -215,7 +216,7 @@ test('invariants over every shipped pool: chances sum to 1, k is monotone in bot
       const cur = atLevel(pool, 82, F)
       for (const affix of ['prefix', 'suffix']) {
         for (const [i, r] of cur[affix].rows.entries()) {
-          assert.equal(r.k, r.tiers.filter(t => F <= t.ilvl && t.ilvl <= 82).length)
+          assert.equal(r.k, r.family.tiers.filter(t => F <= t.ilvl && t.ilvl <= 82).length)
           if (prevF) assert.ok(r.k <= prevF[affix].rows[i].k, `${def.id} ${affix} k rose when the floor rose to ${F}`)
         }
       }

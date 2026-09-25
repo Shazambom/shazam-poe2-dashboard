@@ -43,10 +43,14 @@ export function rollsOn(weights, tags) {
 
 const keysOn = (family, keys) => !keys.length || family.tiers.some(t => t.weights.some(([tag, w]) => w > 0 && keys.includes(tag)))
 
+const LABELS = { dot_multi: 'Damage over Time', gem: 'Skill Gems', ulaman_mod: 'Ulaman', amanamu_mod: 'Amanamu', kurgal_mod: 'Kurgal', genesis_tree_caster: 'Caster', genesis_tree_minion: 'Minion', breach_desecration: 'Breach' }
+export const tagLabel = (id) => LABELS[id] || id.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
+
 // The families that roll on a tag set, each with only the tiers that roll there, best (highest
 // level) first and numbered T1..Tn. Families with no rolling tier are dropped. Game order kept.
+// `search` is what the filter box matches: the text and the tag labels, lower case, built once.
 function build(def, families, tags, section) {
-  const out = { id: def.id, name: def.name, section: section.id }
+  const out = { id: def.id, name: def.name }
   const domain = section.domain || def.domain || 'item'
   for (const affix of section.affixes) out[affix] = []
   for (const f of families) {
@@ -54,7 +58,11 @@ function build(def, families, tags, section) {
     const tiers = f.tiers.filter(t => rollsOn(t.weights, tags))
     if (!tiers.length) continue
     tiers.sort((a, b) => b.ilvl - a.ilvl)
-    out[f.affix].push({ id: f.id, affix: f.affix, text: f.text, tags: [...f.tags], tiers: tiers.map((t, i) => ({ id: t.id, tier: i + 1, name: t.name, ilvl: t.ilvl, text: t.text })) })
+    out[f.affix].push({
+      id: f.id, affix: f.affix, text: f.text, tags: [...f.tags],
+      search: `${f.text} ${f.tags.map(tagLabel).join(' ')}`.toLowerCase(),
+      tiers: tiers.map((t, i) => ({ id: t.id, tier: i + 1, name: t.name, ilvl: t.ilvl, text: t.text })),
+    })
   }
   return out
 }
@@ -77,29 +85,34 @@ export function sectionsFor(def, families) {
   return out
 }
 
-const stateOf = (t, ilvl, floor) => (t.ilvl > ilvl ? 'above' : t.ilvl < floor ? 'below' : 'in')
+// Where a tier sits against the two edges: above the item level, in the pool, below the floor.
+export const bandOf = (tier, ilvl, floor) => (tier.ilvl > ilvl ? 'above' : tier.ilvl < floor ? 'below' : 'in')
+
+// Tiers are sorted by level, best first: the first index whose level is at most `level`.
+function firstAtOrBelow(tiers, level) {
+  let lo = 0, hi = tiers.length
+  while (lo < hi) { const mid = (lo + hi) >> 1; if (tiers[mid].ilvl > level) lo = mid + 1; else hi = mid }
+  return lo
+}
+
+// The tiers of a family inside floor ≤ level ≤ ilvl: two binary searches, no copies.
+export const inPool = (tiers, ilvl, floor) => Math.max(0, firstAtOrBelow(tiers, floor - 1) - firstAtOrBelow(tiers, ilvl))
 
 // The pool between the floor and the item level: per column the rows (one per family, in pool
 // order, keyed by the pool's own family object) and the total; chance is null when the column
-// is empty so nothing ever reads NaN.
+// is empty so nothing ever reads NaN. Rows are cheap value objects; a renderer derives each
+// tier's band with `bandOf`.
 export function atLevel(pool, ilvl, floor) {
   const out = {}
   for (const affix of AFFIXES) {
     if (!Array.isArray(pool[affix])) continue
-    const rows = pool[affix].map(family => {
-      const tiers = family.tiers.map(t => ({ ...t, state: stateOf(t, ilvl, floor) }))
-      const k = tiers.filter(t => t.state === 'in').length
-      return { family, k, n: tiers.length, chance: null, tiers }
-    })
+    const rows = pool[affix].map(family => ({ family, k: inPool(family.tiers, ilvl, floor), n: family.tiers.length, chance: null }))
     const total = rows.reduce((s, r) => s + r.k, 0)
     for (const r of rows) r.chance = total ? r.k / total : null
     out[affix] = { rows, total }
   }
   return out
 }
-
-const LABELS = { dot_multi: 'Damage over Time', gem: 'Skill Gems', ulaman_mod: 'Ulaman', amanamu_mod: 'Amanamu', kurgal_mod: 'Kurgal', genesis_tree_caster: 'Caster', genesis_tree_minion: 'Minion', breach_desecration: 'Breach' }
-export const tagLabel = (id) => LABELS[id] || id.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
 
 // The pool's own tags with how many families carry each, most common first, then by id.
 export function tagsOf(pool) {
@@ -111,11 +124,7 @@ export function tagsOf(pool) {
 // Which rows show: any picked tag (OR) and the text (family text or a tag label). Never a number.
 export function visible(rows, { tags, q }) {
   const needle = (q || '').trim().toLowerCase()
-  return rows.filter(({ family }) => {
-    if (tags && tags.size && !family.tags.some(t => tags.has(t))) return false
-    if (!needle) return true
-    return family.text.toLowerCase().includes(needle) || family.tags.some(t => tagLabel(t).toLowerCase().includes(needle))
-  })
+  return rows.filter(({ family }) => (!tags || !tags.size || family.tags.some(t => tags.has(t))) && (!needle || family.search.includes(needle)))
 }
 
 // The chance the orb adds any of these rows; null when the pool is empty.

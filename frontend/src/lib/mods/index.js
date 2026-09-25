@@ -14,9 +14,10 @@ export function loadMods() {
   return loading
 }
 
-// Which families and which sections are open, per pool, for the session: a hop to Workspace
-// and back finds them open, a restart does not (they are not user data).
-const expanded = new Map()
-export const expandedFor = (poolId) => { if (!expanded.has(poolId)) expanded.set(poolId, new Set()); return expanded.get(poolId) }
-const sections = new Map()
-export const openSectionsFor = (poolId) => { if (!sections.has(poolId)) sections.set(poolId, new Set()); return sections.get(poolId) }
+// What is open, per pool, for the session (a hop to Workspace and back finds it open; a restart
+// does not, it is not user data). Read into state on pool change, written back on every toggle.
+const session = new Map()
+export const sessionFor = (poolId) => {
+  if (!session.has(poolId)) session.set(poolId, { rows: new Set(), sections: new Set() })
+  return session.get(poolId)
+}

@@ -256,13 +256,14 @@ frontend/src/components/
   ModsView.jsx      the tab: settings load/autosave, lazy data, bar, two ModTable
   ModsBar.jsx       pool picker, two Num boxes, the orb picker, filter, tag chips
   ModTable.jsx      one affix column: sticky header, rows, total; roving focus
-  ModFamily.jsx     one family row + its tier bands (memo; plain-value props)
-  ModSection.jsx    a collapsed section (header + body), the essence list, the socketable list
+  ModFamily.jsx     one family row + its tier bands (memo; a data-id for the table's delegated handlers)
+  ModSection.jsx    a collapsed section (header + body) and the one GrantList (essences, alloys, socketables)
   Num.jsx           lifted from RegexView.jsx unchanged (RegexView imports it)
 frontend/src/lib/mods/
   index.js          loadMods(): lazy import of ../../data/mods/*.json, cached; session stores for open rows and sections
-  pool.js           PURE: SECTIONS, poolFor, sectionsFor(def, families), atLevel(pool, ilvl, floor), tagsOf, visible, shownChance
+  pool.js           PURE: SECTIONS, poolFor, sectionsFor(def, families), atLevel (two binary searches per family, no copies), inPool, bandOf, tagsOf, visible, shownChance
   extras.js         PURE: essencesFor(def, essences), augmentsFor(def, augments)
+  format.jsx        pct and lines, the two formatters every Mods component shares
   defaults.js       defaults, merge(stored)
   currency.js       the 16 bounded currencies: { id, name, floor, cap, group } (the index above; hand-maintained like data/regex/pools until the game tables are fetchable)
   trade.js          PURE: familyQuery(pool, family) → trade2 query, Instant Buyout, reusing regex/trade.js
@@ -343,3 +344,37 @@ states most fully. Grafted from the others: base names as picker keywords; the p
 stated once instead of a column; the Total row's summed chance of the shown rows; the
 denominator rule as a tested invariant. Dropped from the base: its opt-in sortable headers, by
 its own argument against reordering.
+
+## Moving the tables into the market pipeline (decided 2026-09-25)
+
+The shipped JSON tables were the wrong shape: game data must update with every release with
+nobody editing files. It rides the market-data pipeline instead. The decisions, from a reuse and
+altitude review of the first build:
+
+- **Where.** A backend module beside the gold-fee loader (`backend/app/modpool.py`, modelled on
+  `gamedata.py`: `_get` through the gateway with an on-disk cache and the HTML-guard, a patch
+  version probe that forces a refetch on a new game version, `db.kv_set` for the watermark, a
+  `state` entry in `/api/status`). Its `refresh()` runs on shazam only, called by the seed cron
+  before `publish-market-snapshot.sh`; the poe2db page reads never run in a shipped binary.
+  Outputs are `MARKET_SCHEMA` tables listed in `datapolicy.SEED_TABLES` (`mod_pools`,
+  `mod_families`, `mod_augments`, `mod_essences`, `mod_currencies`), so the exporter ships them
+  with no edit; snapshot version bump, exporter re-run, `market-seed-latest` confirmed to advance.
+- **Shape of the API.** Per pool, precomputed: `GET /api/mods/pools` (id, name, class, keywords),
+  `GET /api/mods/pool/{id}` (the sections already built, tiers sorted, tags labelled, no spawn
+  weights: ~9 KB gzip), `GET /api/mods/pool/{id}/grants` (essences, alloys, socketables for that
+  class, fetched when a section opens). The frontend loads through `useApi`; `pool.js` shrinks to
+  `atLevel`, `inPool`, `bandOf`, `visible`, `shownChance`.
+- **Derive, do not hand-list.** The socketable sections come from the augments table itself: a
+  socketable whose text is "Can roll X modifiers" opens a section keyed on tag `x` on the classes
+  its target names. The corruption upgrades are the mods tagged `upgraded_corruption_mod`, not an
+  id prefix. Each class's pool domain is the domain its bases' tags reach under the first-match
+  rule (denylist the four junk classes, not allowlist 38). Plurals come from `item_classes`.
+  `classesOf` warns and drops on an unknown target rather than failing the nightly build. The
+  chip rule is "a tag that discriminates within the pool", not a denylist.
+- **Names are presentation.** A pool's identity is class + tag set + bases; its display name is
+  one function over those fields (shared stem plus a numeric range gives "Waystones · T1–5"),
+  so a naming rule can never change which pools exist.
+- **The floor belongs to the currency.** Store the picked orb, derive the floor; a section is
+  opened by a currency and takes that currency's floor, which retires the `floored` flag.
+- **Oracle.** `mods_by_base.json` upstream groups the same pools by full base tags; a nightly
+  check asserts every derived pool's mod set matches it for the same bases.

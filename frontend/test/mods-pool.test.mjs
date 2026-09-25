@@ -3,7 +3,7 @@
 // so weight = tiers in the pool, overall weight = the column's sum, chance = the ratio.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { rollsOn, poolFor, atLevel, tagsOf, visible, shownChance } from '../src/lib/mods/pool.js'
+import { rollsOn, poolFor, atLevel, tagsOf, visible, shownChance, bandOf, inPool } from '../src/lib/mods/pool.js'
 
 const W = (...pairs) => pairs
 const tier = (id, name, ilvl, text, weights) => ({ id, name, ilvl, text, weights })
@@ -72,7 +72,7 @@ test('atLevel: a tier is in the pool iff floor ≤ level ≤ item level, k / n, 
   assert.equal(at82.prefix.total, 10)
   assert.equal(life.chance, 0.6)
   assert.ok(Math.abs(at82.prefix.rows.reduce((s, r) => s + r.chance, 0) - 1) < 1e-9)
-  assert.deepEqual(at82.prefix.rows[2].tiers.map(t => t.state), ['above', 'in'])
+  assert.deepEqual(at82.prefix.rows[2].family.tiers.map(t => bandOf(t, 82, 0)), ['above', 'in'])
   assert.equal(at82.suffix.total, 2)
 
   const greater = atLevel(ring, 50, 35)
@@ -86,12 +86,15 @@ test('atLevel: a tier is in the pool iff floor ≤ level ≤ item level, k / n, 
 test('atLevel bands: above the item level, in the pool, below the floor, in that order', () => {
   const ring = poolFor(RING, FAMILIES)
   const r = atLevel(ring, 50, 35).prefix.rows[0]
-  assert.deepEqual(r.tiers.map(t => [t.name, t.state]), [['Virile', 'above'], ['Rotund', 'in'], ['Stout', 'below'], ['Sanguine', 'below'], ['Healthy', 'below'], ['Hale', 'below']])
+  assert.deepEqual(r.family.tiers.map(t => [t.name, bandOf(t, 50, 35)]), [['Virile', 'above'], ['Rotund', 'in'], ['Stout', 'below'], ['Sanguine', 'below'], ['Healthy', 'below'], ['Hale', 'below']])
   assert.equal(r.k, 1)
   const strict = atLevel(ring, 82, 60).prefix.rows[0]
   assert.equal(strict.k, 0, 'no keep-the-top-tier exception: Virile is 54 < 60')
   assert.equal(strict.chance, 0)
-  assert.ok(strict.tiers.every(t => t.state === 'below'))
+  assert.ok(strict.family.tiers.every(t => bandOf(t, 82, 60) === 'below'))
+  // inPool is two binary searches over the best-first tiers; it agrees with a plain count everywhere.
+  const tiers = ring.prefix[0].tiers
+  for (let L = 0; L <= 100; L += 7) for (const F of [0, 1, 6, 16, 33, 46, 54, 55, 100]) assert.equal(inPool(tiers, L, F), tiers.filter(t => F <= t.ilvl && t.ilvl <= L).length, `L=${L} F=${F}`)
 })
 
 test('atLevel: an empty pool has total 0 and null chances, never NaN; floor above the level is allowed', () => {
@@ -130,6 +133,7 @@ test('visible hides rows by tag (OR) and text, matches tag labels, and never cha
   assert.deepEqual(visible(rows, { tags: new Set(), q: 'MANA' }).map(r => r.family.id), ['prefix:Mana'])
   assert.deepEqual(visible(rows, { tags: new Set(), q: 'attack' }).map(r => r.family.id), ['prefix:Fire'], 'the tag label matches too')
   assert.deepEqual(visible(rows, { tags: new Set(['life']), q: 'mana' }), [])
+  assert.deepEqual(visible(rows, { tags: new Set(), q: 'LIFE' }).map(r => r.family.id), ['prefix:Life'], 'case-insensitive over the built search text')
   const shown = visible(rows, { tags: new Set(['life']), q: '' })
   assert.equal(shown[0].chance, 0.6, 'the denominator rule: filtering never moves a number')
   assert.ok(Math.abs(shownChance(shown) - 0.6) < 1e-9)

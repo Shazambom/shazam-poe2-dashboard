@@ -1,14 +1,13 @@
 import React from 'react'
 import Cur from './Cur.jsx'
-
-const lines = (text) => text.split('\n').map((l, i) => <React.Fragment key={i}>{i > 0 && <br />}{l}</React.Fragment>)
+import { lines } from '../lib/mods/format.jsx'
 
 // A pool another currency opens on the item, one level down from the base tables: a header
-// that opens it, and inside whatever the section holds (tables, an essence list, a socketable list).
+// that opens it, and inside whatever the section holds (tables or a grant list).
 export function ModSection({ id, title, open, onToggle, children }) {
   return (
     <section className={`mods-section ${open ? 'open' : ''}`}>
-      <button type="button" className="mods-sec-head" aria-expanded={open} aria-controls={`mods-sec-${id}`} onClick={onToggle}>
+      <button type="button" className="sales-head mods-sec-head" aria-expanded={open} aria-controls={`mods-sec-${id}`} onClick={onToggle}>
         <span className="mods-caret" aria-hidden="true">{open ? '▾' : '▸'}</span>
         <span className="mods-sec-title">{title}</span>
       </button>
@@ -17,40 +16,28 @@ export function ModSection({ id, title, open, onToggle, children }) {
   )
 }
 
-const AFFIX = { prefix: 'Prefix', suffix: 'Suffix', implicit: 'Implicit' }
-
-// What each essence forces on this item type: the essence, the modifier, its affix and level.
-// A level above the item level is muted: that essence's modifier cannot land on this item.
-export function EssenceList({ essences, ilvl, title = 'Essence' }) {
+// A list of things that grant a fixed modifier rather than roll one: an essence's forced mod,
+// a socketable's effect. Row: { key, name, badge, lines: [{ text, cls }], level }. A level above
+// the item level is muted: that grant cannot land on this item.
+export function GrantList({ title, heading, rows, ilvl }) {
   return (
     <div className="mods-list rx-surface">
-      <div className="mods-head mods-ess-head"><span className="settings-sub">{title}</span><span>Adds</span><span className="mods-num">Level</span></div>
-      {essences.map(e => e.rows.map((r, i) => (
-        <div key={`${e.name}:${i}`} className={`mods-ess ${r.level > ilvl ? 'out' : ''}`}>
-          <span className="mods-ess-name"><Cur name={e.name} size={16} /> {e.name}</span>
-          <span className="mods-text">{lines(r.text)} <span className="mods-fam-tags">{AFFIX[r.affix] || r.affix}</span></span>
+      <div className="mods-head mods-grant"><span className="settings-sub">{title}</span><span>{heading}</span><span className="mods-num">Level</span></div>
+      {rows.map(r => (
+        <div key={r.key} className={`mods-grant ${r.level > ilvl ? 'out' : ''}`}>
+          <span className="mods-grant-name"><Cur name={r.name} size={16} /> {r.name} {r.badge && <span className="mods-fam-tags">{r.badge}</span>}</span>
+          <span className="mods-text">{r.lines.map((l, i) => <div key={i} className={l.cls || ''}>{lines(l.text)}</div>)}</span>
           <span className="mods-num">{r.level || '–'}</span>
-        </div>
-      )))}
-    </div>
-  )
-}
-
-// What each rune, soul core and idol grants when socketed in this item type.
-export function AugmentList({ augments, ilvl }) {
-  return (
-    <div className="mods-list rx-surface">
-      <div className="mods-head mods-aug-head"><span className="settings-sub">Socketable</span><span>Grants</span><span className="mods-num">Level</span></div>
-      {augments.map(a => (
-        <div key={a.id} className={`mods-aug ${a.level && a.level > ilvl ? 'out' : ''}`}>
-          <span className="mods-ess-name"><Cur name={a.name} size={16} /> {a.name} <span className="mods-fam-tags">{a.type}</span></span>
-          <span className="mods-text">
-            {a.fits[0].text.map((t, i) => <div key={`t${i}`}>{lines(t)}</div>)}
-            {a.fits[0].bonded.map((t, i) => <div key={`b${i}`} className="mods-bonded">{lines(t)}</div>)}
-          </span>
-          <span className="mods-num">{a.level || '–'}</span>
         </div>
       ))}
     </div>
   )
 }
+
+const AFFIX = { prefix: 'Prefix', suffix: 'Suffix', implicit: 'Implicit' }
+
+// Essence rows: one per class row (an essence may force one mod per affix).
+export const essenceRows = (essences) => essences.flatMap(e => e.rows.map((r, i) => ({ key: `${e.name}:${i}`, name: e.name, badge: AFFIX[r.affix] || r.affix, lines: [{ text: r.text }], level: r.level })))
+
+// Socketable rows: the effect, then the bonded effect.
+export const augmentRows = (augments) => augments.map(a => ({ key: a.id, name: a.name, badge: a.type, level: a.level, lines: [...a.fits[0].text.map(text => ({ text })), ...a.fits[0].bonded.map(text => ({ text, cls: 'mods-bonded' }))] }))

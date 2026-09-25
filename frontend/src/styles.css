@@ -1071,16 +1071,15 @@ code { background: var(--bg); padding: 1px 5px; border-radius: 3px; font-size: 1
 .mods-rows .empty.small { padding: 24px 8px; }
 .mods-body.one { grid-template-columns: 1fr; }
 .mods-section { display: grid; gap: 12px; }
-.mods-sec-head { display: flex; align-items: center; gap: 10px; width: 100%; font: inherit; font-size: 13px; font-weight: 600; color: var(--ink-2); background: var(--surface-1); border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; cursor: pointer; text-align: left; transition: border-color .12s var(--ease), background .12s var(--ease); }
+.mods-sec-head { width: 100%; font: inherit; font-size: 13px; font-weight: 600; color: var(--ink-2); cursor: pointer; text-align: left; transition: border-color .12s var(--ease), background .12s var(--ease); }
 .mods-sec-head:hover { background: var(--panel-hi); }
 .mods-sec-head:focus-visible { outline: none; box-shadow: 0 0 0 1px var(--gold-dim); }
 .mods-section.open .mods-sec-head { border-color: var(--gold-dim); }
 .mods-sec-body { display: grid; gap: 12px; }
 .mods-list { display: grid; }
-.mods-ess-head, .mods-aug-head, .mods-ess, .mods-aug { display: grid; grid-template-columns: 260px minmax(0, 1fr) 56px; gap: 12px; align-items: center; padding: 6px 12px; }
-.mods-ess, .mods-aug { font-size: 13px; border-bottom: 1px solid var(--line); }
-.mods-ess:last-child, .mods-aug:last-child { border-bottom: 0; }
-.mods-ess.out, .mods-aug.out { color: var(--muted); }
-.mods-ess-name { display: flex; align-items: center; gap: 8px; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.mods-ess-name .cur { flex: none; }
+.mods-grant { display: grid; grid-template-columns: 260px minmax(0, 1fr) 56px; gap: 12px; align-items: center; padding: 6px 12px; font-size: 13px; border-bottom: 1px solid var(--line); }
+.mods-grant:last-child { border-bottom: 0; }
+.mods-grant.out { color: var(--muted); }
+.mods-grant-name { display: flex; align-items: center; gap: 8px; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mods-grant-name .cur { flex: none; }
 .mods-bonded { color: var(--recipe); }

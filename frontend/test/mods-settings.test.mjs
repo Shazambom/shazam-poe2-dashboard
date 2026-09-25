@@ -3,7 +3,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { defaults, merge } from '../src/lib/mods/defaults.js'
-import { CURRENCIES, currencyFor, floorOf, FLOORS } from '../src/lib/mods/currency.js'
+import { CURRENCIES, currencyFor, floorOf } from '../src/lib/mods/currency.js'
 
 test('defaults: a ring pool at item level 82 with no floor and no tags', () => {
   assert.deepEqual(defaults, { poolId: 'ring', ilvl: 82, floor: 0, tags: [] })
@@ -27,27 +27,14 @@ test('merge folds a stored partial over the defaults and clamps every value', ()
   const m = merge({ tags: ['x'] }); m.tags.push('y'); assert.deepEqual(defaults.tags, [])
 })
 
-test('the currency index: sixteen items with a level rule, the six floors, grouped by orb', () => {
-  assert.equal(CURRENCIES.length, 16)
-  const byName = Object.fromEntries(CURRENCIES.map(c => [c.name, c]))
-  assert.deepEqual([byName['Greater Orb of Transmutation'].floor, byName['Perfect Orb of Transmutation'].floor], [44, 70])
-  assert.deepEqual([byName['Greater Orb of Augmentation'].floor, byName['Perfect Orb of Augmentation'].floor], [44, 70])
-  assert.deepEqual([byName['Greater Regal Orb'].floor, byName['Perfect Regal Orb'].floor], [35, 50])
-  assert.deepEqual([byName['Greater Exalted Orb'].floor, byName['Perfect Exalted Orb'].floor], [35, 50])
-  assert.deepEqual([byName['Greater Chaos Orb'].floor, byName['Perfect Chaos Orb'].floor], [35, 50])
-  for (const bone of ['Jawbone', 'Rib', 'Collarbone']) {
-    assert.equal(byName[`Ancient ${bone}`].floor, 40)
-    assert.equal(byName[`Gnawed ${bone}`].cap, 64)
-    assert.equal(byName[`Gnawed ${bone}`].floor, 0)
-  }
-  assert.equal(new Set(CURRENCIES.map(c => c.id)).size, 16, 'ids are unique')
-  assert.deepEqual(FLOORS, [35, 40, 44, 50, 70])
-  for (const c of CURRENCIES) {
-    assert.ok(typeof c.group === 'string' && c.group, c.name)
-    assert.ok(c.cap === null || Number.isInteger(c.cap), c.name)
-    assert.ok(Number.isInteger(c.floor) && c.floor >= 0, c.name)
-  }
-  assert.deepEqual([...new Set(CURRENCIES.map(c => c.group))], ['transmutation', 'augmentation', 'regal', 'exalted', 'chaos', 'bone'], 'grouped in orb order')
+test('the currency index: every orb with a minimum modifier level, in orb order', () => {
+  const floors = Object.fromEntries(CURRENCIES.map(c => [c.name, c.floor]))
+  assert.deepEqual(floors, {
+    'Greater Orb of Transmutation': 44, 'Perfect Orb of Transmutation': 70, 'Greater Orb of Augmentation': 44, 'Perfect Orb of Augmentation': 70,
+    'Greater Regal Orb': 35, 'Perfect Regal Orb': 50, 'Greater Exalted Orb': 35, 'Perfect Exalted Orb': 50, 'Greater Chaos Orb': 35, 'Perfect Chaos Orb': 50,
+    'Ancient Jawbone': 40, 'Ancient Rib': 40, 'Ancient Collarbone': 40,
+  })
+  assert.equal(new Set(CURRENCIES.map(c => c.id)).size, CURRENCIES.length, 'ids are unique')
 })
 
 test('currencyFor reads the orb back from a floor (first of a tie), floorOf writes it', () => {
@@ -60,6 +47,5 @@ test('currencyFor reads the orb back from a floor (first of a tie), floorOf writ
   assert.equal(currencyFor(60), null)
   assert.equal(floorOf('greater-exalted'), 35)
   assert.equal(floorOf('perfect-chaos'), 50)
-  assert.equal(floorOf('gnawed-rib'), 0)
   assert.equal(floorOf('nope'), 0)
 })
