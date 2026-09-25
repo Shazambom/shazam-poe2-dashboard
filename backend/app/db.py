@@ -113,6 +113,25 @@ CREATE TABLE IF NOT EXISTS item_meta (
     category TEXT
 );
 
+-- The mod-pool tables (app/modpool.py): per item type, the pools every currency opens on it,
+-- precomputed for the Mods tab, plus the orbs that carry a minimum modifier level. Rebuilt on
+-- shazam before each seed publish; clients only read them.
+CREATE TABLE IF NOT EXISTS mod_pools (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    class TEXT NOT NULL,
+    domain TEXT NOT NULL,
+    keywords TEXT NOT NULL,
+    data TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS mod_currencies (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    floor INTEGER NOT NULL,
+    cap INTEGER
+);
+
 CREATE TABLE IF NOT EXISTS kv_ops (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL

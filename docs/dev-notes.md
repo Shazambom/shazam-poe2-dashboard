@@ -263,17 +263,17 @@ source stays in `~/.cache`); `frontend/test/regex-number-golden.test.mjs` holds 
 The modifier pool viewer: what can roll on an item type between an orb's minimum modifier
 level and the item level, and how likely each family is. Design and decisions:
 [`mods-page-design.md`](mods-page-design.md); research: [`mods-page-roadmap.md`](mods-page-roadmap.md).
-Pieces: `frontend/src/lib/mods/` (pure: `pool.js` with `SECTIONS`, `sectionsFor`, `atLevel`;
-`extras.js` for essences and socketables; `currency.js`, the 16 currencies with a level rule;
-`defaults.js`; `index.js`, the lazy loader); `frontend/src/data/mods/` (the shipped tables:
-`pools.json`, `mods.json`, `augments.json` built by `frontend/scripts/sync-mods-data.mjs` from the
-RePoE PoE2 export cached in `~/.cache/arbiter/repoe`; `essences.json` built by
-`frontend/scripts/mods-essences.mjs` from poe2db's essence and alloy pages cached in `~/.cache/arbiter/poe2db`;
-all hashed in `MANIFEST.json`); `components/ModsView.jsx`, `ModsBar.jsx`, `ModTable.jsx`,
-`ModFamily.jsx`, `ModSection.jsx`, the shared `Num.jsx`. Settings persist under `mods_tools`.
-**When a patch changes mods:** delete the caches, run `mods-essences.mjs` then `sync-mods-data.mjs`,
-read the golden diffs in `frontend/test/mods-data.test.mjs`, commit tables and goldens together.
-**When GGG ships a new orb grade or bone:** add it to `currency.js` (tested by `mods-settings`).
+The tables are **market data**: `backend/app/modpool.py` derives them from the RePoE PoE2 export
+and poe2db's currency pages and writes `mod_pools` / `mod_currencies` (in `SEED_TABLES`), rebuilt
+on shazam by `ops/publish-market-snapshot.sh` before every seed, so a new patch's pools ship
+with the next seed and no file in the repo changes. `GET /api/mods/pools` and
+`GET /api/mods/pool/{id}` read them. Client pieces: `frontend/src/lib/mods/` (pure: `pool.js`
+arithmetic, `orbs.js`, `defaults.js`, `format.jsx`; `index.js` the session store),
+`components/ModsView.jsx`, `ModsBar.jsx`, `ModTable.jsx`, `ModFamily.jsx`, `ModSection.jsx`,
+the shared `Num.jsx`. Settings persist under `mods_tools`. Tests: `backend/tests/test_modpool.py`
+(derivations over `tests/fixtures/mods`, a trimmed export), `frontend/test/mods-*.test.mjs`.
+**On a dev backend** the tables are empty until `POST /api/mods/refresh` (it fetches the sources
+into `DATA_DIR/gamedata`); the desktop app never calls it.
 
 ## Deploying a desktop release (mechanics)
 

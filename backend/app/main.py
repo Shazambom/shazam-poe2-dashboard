@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field, model_validator
 
 from fastapi.responses import RedirectResponse, PlainTextResponse
 
-from . import analytics, arbitrage, db, diag, digest, gamedata, gateway, holdscore, inflation, leaguearc, leaguehistory, liquidity, migrations_user, movers, oauth, orderbook, recipes, session, sidecar_supervisor, signalsack, watchdog, workspace
+from . import analytics, arbitrage, db, diag, digest, gamedata, gateway, holdscore, inflation, leaguearc, leaguehistory, liquidity, migrations_user, modpool, movers, oauth, orderbook, recipes, session, sidecar_supervisor, signalsack, watchdog, workspace
 from .config import INSTALL_LOG_PATH
 from .currencies import registry
 from .settings import get_settings, save_settings
@@ -133,6 +133,7 @@ def status():
         "registry_loaded_at": registry.loaded_at,
         "unmapped_metadata_ids": len(registry.unmapped_meta),
         "gold_fees": gamedata.state,
+        "mod_pools": modpool.state,
         "wealth_prices": _wealth_prices(),   # reference per unit of chaos/divine/mirror (UI wealth rule)
     }
 
@@ -350,6 +351,27 @@ def gold_fees():
 @app.post("/api/goldfees/refresh")
 async def gold_fees_refresh():
     return await gamedata.refresh(force=True)
+
+
+# -------------------------------------------------------------- mod pools (Trading → Mods)
+# Reads only: the tables ride the market seed and are rebuilt on shazam (app/modpool.py).
+@app.get("/api/mods/pools")
+def mod_pools():
+    return {"pools": modpool.pools(), "currencies": modpool.currencies()}
+
+
+@app.get("/api/mods/pool/{pool_id}")
+def mod_pool(pool_id: str):
+    p = modpool.pool(pool_id)
+    if p is None:
+        raise HTTPException(status_code=404, detail="no such pool")
+    return p
+
+
+@app.post("/api/mods/refresh")
+async def mod_pools_refresh():
+    """The shazam cron's entry (and a dev convenience): rebuild the tables from the sources."""
+    return await modpool.refresh(force=True)
 
 
 # ----------------------------------------------------------------- market

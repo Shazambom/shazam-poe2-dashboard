@@ -40,4 +40,4 @@ const AFFIX = { prefix: 'Prefix', suffix: 'Suffix', implicit: 'Implicit' }
 export const essenceRows = (essences) => essences.flatMap(e => e.rows.map((r, i) => ({ key: `${e.name}:${i}`, name: e.name, badge: AFFIX[r.affix] || r.affix, lines: [{ text: r.text }], level: r.level })))
 
 // Socketable rows: the effect, then the bonded effect.
-export const augmentRows = (augments) => augments.map(a => ({ key: a.id, name: a.name, badge: a.type, level: a.level, lines: [...a.fits[0].text.map(text => ({ text })), ...a.fits[0].bonded.map(text => ({ text, cls: 'mods-bonded' }))] }))
+export const augmentRows = (augments) => augments.map(a => ({ key: a.id, name: a.name, badge: a.type, level: a.level, lines: [...a.text.map(text => ({ text })), ...a.bonded.map(text => ({ text, cls: 'mods-bonded' }))] }))

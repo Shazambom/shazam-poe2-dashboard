@@ -2,20 +2,20 @@ import React, { useState } from 'react'
 import CurrencyPicker from './CurrencyPicker.jsx'
 import Cur from './Cur.jsx'
 import Num from './Num.jsx'
-import { CURRENCIES, currencyFor, floorOf } from '../lib/mods/currency.js'
+import { currencyFor, floorOf, orbOptions } from '../lib/mods/orbs.js'
 
 const ANY = { id: 'any', name: 'Any orb' }
-const ORBS = [ANY, ...CURRENCIES]
 const orbIcon = (o, size) => (o.id === 'any' ? null : <Cur name={o.name} size={size} />)
 
 // The sticky bar: which pool, the pool's two edges (item level, min modifier level), the orb
 // that sets the floor, the text filter, and the pool's own tags as chips.
-export default function ModsBar({ pools, poolId, ilvl, floor, filter, tags, tagOptions, onPool, onIlvl, onFloor, onFilter, onTag, disabled }) {
+export default function ModsBar({ pools, currencies, poolId, ilvl, floor, filter, tags, tagOptions, onPool, onIlvl, onFloor, onFilter, onTag, disabled }) {
   // The floor is the one stored value; the picker reads it back as the orb last picked while the
   // number still matches it, else the first orb with that floor, else Any.
   const [picked, setPicked] = useState(null)
-  const orb = (picked && floorOf(picked) === floor ? picked : currencyFor(floor)?.id) || 'any'
-  const pickOrb = (id) => { setPicked(id); onFloor(floorOf(id)) }
+  const orbs = [ANY, ...orbOptions(currencies)]
+  const orb = (picked && floorOf(currencies, picked) === floor ? picked : currencyFor(currencies, floor)?.id) || 'any'
+  const pickOrb = (id) => { setPicked(id); onFloor(floorOf(currencies, id)) }
   return (
     <div className="mods-bar rx-surface">
       <div className="mods-controls">
@@ -27,7 +27,7 @@ export default function ModsBar({ pools, poolId, ilvl, floor, filter, tags, tagO
         <Num label="Min level" value={floor} min={0} max={100} placeholder="any" onChange={onFloor} />
         <div className="field mods-orb">
           <label>Orb</label>
-          <CurrencyPicker value={orb} onChange={pickOrb} options={ORBS} placeholder="Search orbs" renderIcon={orbIcon} />
+          <CurrencyPicker value={orb} onChange={pickOrb} options={orbs} placeholder="Search orbs" renderIcon={orbIcon} />
         </div>
         <div className="field mods-filter">
           <label>Filter</label>

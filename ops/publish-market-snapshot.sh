@@ -18,6 +18,12 @@ OUT="$REPO/data/market-seed.sqlite.gz"
 
 echo "=== $(date -u +%FT%TZ) publish-market-snapshot ==="
 
+# Rebuild the mod-pool tables first (backend/app/modpool.py: the RePoE PoE2 export + poe2db's
+# currency pages → mod_pools / mod_currencies), so the seed carries this patch's pools. A failed
+# rebuild keeps the previous tables and is logged, never a frozen seed.
+sudo docker exec -i "$CONTAINER" python -m app.modpool --force \
+  || echo "WARN: mod pool refresh failed; the seed carries the previous mod tables"
+
 # Export inside the backend container: it has the live DB at /data, python, and the app
 # package (cwd=/app) the exporter imports its data policy from. Piping the script over stdin
 # keeps it decoupled from the image.

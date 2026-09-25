@@ -152,3 +152,12 @@ sidecar so the client can compare `snapshot_version` without decompressing on ev
 | Refresh users' market data | Publish a newer snapshot (bumped version) — clients replace on update |
 | Reset a user's market data | Delete `DATA_DIR/market.sqlite`; it re-seeds on next launch |
 | Never | Put market data in `user.sqlite`, or user data in `market.sqlite` |
+
+## Mod-pool tables (added 2026-09-25)
+
+`mod_pools` and `mod_currencies` are market tables produced by `backend/app/modpool.py` from the
+RePoE PoE2 export and poe2db's currency pages, rebuilt on shazam as the first step of
+`ops/publish-market-snapshot.sh` and shipped in the seed (`datapolicy.SEED_TABLES`). Clients only
+read them (`/api/mods/*`). Their schema is a JSON payload per item type, so a change in what the
+Mods tab needs is a change in the producer and a new seed, no migration. `kv_ops.mods_meta` holds
+the source hashes of the last rebuild.

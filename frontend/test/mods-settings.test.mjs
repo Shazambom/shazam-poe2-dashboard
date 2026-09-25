@@ -1,9 +1,8 @@
-// The Mods tab's settings shape (persisted under `mods_tools`) and the index of currencies that
-// bound the pool (docs/mods-page-design.md → "Currencies that bound the pool").
+// The Mods tab's settings shape (persisted under `mods_tools`) and the orb picker's helpers.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { defaults, merge } from '../src/lib/mods/defaults.js'
-import { CURRENCIES, currencyFor, floorOf } from '../src/lib/mods/currency.js'
+import { currencyFor, floorOf, orbOptions } from '../src/lib/mods/orbs.js'
 
 test('defaults: a ring pool at item level 82 with no floor and no tags', () => {
   assert.deepEqual(defaults, { poolId: 'ring', ilvl: 82, floor: 0, tags: [] })
@@ -27,25 +26,24 @@ test('merge folds a stored partial over the defaults and clamps every value', ()
   const m = merge({ tags: ['x'] }); m.tags.push('y'); assert.deepEqual(defaults.tags, [])
 })
 
-test('the currency index: every orb with a minimum modifier level, in orb order', () => {
-  const floors = Object.fromEntries(CURRENCIES.map(c => [c.name, c.floor]))
-  assert.deepEqual(floors, {
-    'Greater Orb of Transmutation': 44, 'Perfect Orb of Transmutation': 70, 'Greater Orb of Augmentation': 44, 'Perfect Orb of Augmentation': 70,
-    'Greater Regal Orb': 35, 'Perfect Regal Orb': 50, 'Greater Exalted Orb': 35, 'Perfect Exalted Orb': 50, 'Greater Chaos Orb': 35, 'Perfect Chaos Orb': 50,
-    'Ancient Jawbone': 40, 'Ancient Rib': 40, 'Ancient Collarbone': 40,
-  })
-  assert.equal(new Set(CURRENCIES.map(c => c.id)).size, CURRENCIES.length, 'ids are unique')
-})
+// The currencies as the backend lists them (poe2db's list, in its order): floors and caps.
+const CUR = [
+  { id: 'greater-chaos-orb', name: 'Greater Chaos Orb', floor: 35, cap: null },
+  { id: 'greater-exalted-orb', name: 'Greater Exalted Orb', floor: 35, cap: null },
+  { id: 'perfect-exalted-orb', name: 'Perfect Exalted Orb', floor: 50, cap: null },
+  { id: 'gnawed-jawbone', name: 'Gnawed Jawbone', floor: 0, cap: 64 },
+  { id: 'ancient-jawbone', name: 'Ancient Jawbone', floor: 40, cap: null },
+]
 
-test('currencyFor reads the orb back from a floor (first of a tie), floorOf writes it', () => {
-  assert.equal(currencyFor(0), null)
-  assert.equal(currencyFor(35).name, 'Greater Regal Orb', 'the first 35 in orb order')
-  assert.equal(currencyFor(44).name, 'Greater Orb of Transmutation')
-  assert.equal(currencyFor(50).name, 'Perfect Regal Orb')
-  assert.equal(currencyFor(70).name, 'Perfect Orb of Transmutation')
-  assert.equal(currencyFor(40).name, 'Ancient Jawbone')
-  assert.equal(currencyFor(60), null)
-  assert.equal(floorOf('greater-exalted'), 35)
-  assert.equal(floorOf('perfect-chaos'), 50)
-  assert.equal(floorOf('nope'), 0)
+test('the orb picker reads the floor back as the first orb with it, writes it from the orb, and lists only orbs that set one', () => {
+  assert.equal(currencyFor(CUR, 0), null)
+  assert.equal(currencyFor(CUR, 35).name, 'Greater Chaos Orb', 'the first 35 in list order')
+  assert.equal(currencyFor(CUR, 50).name, 'Perfect Exalted Orb')
+  assert.equal(currencyFor(CUR, 40).name, 'Ancient Jawbone')
+  assert.equal(currencyFor(CUR, 60), null)
+  assert.equal(floorOf(CUR, 'greater-exalted-orb'), 35)
+  assert.equal(floorOf(CUR, 'gnawed-jawbone'), 0)
+  assert.equal(floorOf(CUR, 'nope'), 0)
+  assert.deepEqual(orbOptions(CUR).map(c => c.id), ['greater-chaos-orb', 'greater-exalted-orb', 'perfect-exalted-orb', 'ancient-jawbone'], 'a bone with only a cap sets no floor')
+  assert.deepEqual(orbOptions([]), [])
 })

@@ -3,4 +3,3 @@ desktop/src/vendor/ee2-query/data/** linguist-generated=true -diff -text
 desktop/test/goldens/ee2-query/** linguist-generated=true -text
 desktop/test/fixtures/ee2/** -text
 frontend/src/data/regex/** -text
-frontend/src/data/mods/** -text

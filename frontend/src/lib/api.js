@@ -77,6 +77,9 @@ export const api = {
   arc: (item, numeraire) => fetch('/api/arc' + qs({ item, numeraire })).then(j),
   leagueArc: (numeraire) => fetch('/api/leaguearc' + qs({ numeraire })).then(j),
   goldFees: () => fetch('/api/goldfees').then(j),
+  // Trading → Mods: the mod-pool tables (backend/app/modpool.py), read-only.
+  modPools: () => fetch('/api/mods/pools').then(j),
+  modPool: (id) => fetch(`/api/mods/pool/${encodeURIComponent(id)}`).then(j),
   refreshGoldFees: () => post('/api/goldfees/refresh'),
   syncDigest: () => post('/api/digest/sync'),
 }

@@ -167,6 +167,9 @@ POLICIES: dict[str, Policy] = {p.name: p for p in [
     Policy("static", [Rate(1, Duration.SECOND), Rate(30, Duration.MINUTE)], ("ggpk.exposed", "github.com", "objects.githubusercontent.com")),
     # poe2scout economy history — no auth, Cloudflare-fronted; be polite.
     Policy("poe2scout", [Rate(1, Duration.SECOND), Rate(20, Duration.MINUTE)], ("api.poe2scout.com",)),
+    # poe2db item pages, read by the mod-pool build on shazam only (app/modpool.py): a hundred
+    # pages once a day, spaced out.
+    Policy("poe2db", [Rate(1, Duration.SECOND * 2), Rate(20, Duration.MINUTE)], ("poe2db.tw",)),
 ]}
 
 

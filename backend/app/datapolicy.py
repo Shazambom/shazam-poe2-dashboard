@@ -34,4 +34,4 @@ ORDERBOOK_HISTORY_RETENTION_H = 72
 # Tables that ship in the market seed. orderbook/orderbook_history are session-bound and
 # re-accrue live within minutes, and analytics_* are runtime-only (the sidecar recomputes), so
 # none of those ship. market_meta is written by the exporter itself.
-SEED_TABLES = ("digest_markets", "league_daily", "item_meta", "kv_ops")
+SEED_TABLES = ("digest_markets", "league_daily", "item_meta", "kv_ops", "mod_pools", "mod_currencies")

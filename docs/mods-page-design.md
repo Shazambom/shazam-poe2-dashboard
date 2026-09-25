@@ -260,16 +260,17 @@ frontend/src/components/
   ModSection.jsx    a collapsed section (header + body) and the one GrantList (essences, alloys, socketables)
   Num.jsx           lifted from RegexView.jsx unchanged (RegexView imports it)
 frontend/src/lib/mods/
-  index.js          loadMods(): lazy import of ../../data/mods/*.json, cached; session stores for open rows and sections
-  pool.js           PURE: SECTIONS, poolFor, sectionsFor(def, families), atLevel (two binary searches per family, no copies), inPool, bandOf, tagsOf, visible, shownChance
-  extras.js         PURE: essencesFor(def, essences), augmentsFor(def, augments)
+  index.js          the session store for open rows and sections
+  pool.js           PURE: prepare (search text), atLevel (two binary searches per family, no copies), inPool, bandOf, visible, shownChance, tagLabel
+  orbs.js           PURE: currencyFor, floorOf, orbOptions over the fetched currencies
+  defaults.js       defaults, merge(stored)
   format.jsx        pct and lines, the two formatters every Mods component shares
+backend/app/modpool.py   the producer: derive → assemble → store; pools()/pool()/currencies() for the endpoints; refresh() for shazam
   defaults.js       defaults, merge(stored)
   currency.js       the 16 bounded currencies: { id, name, floor, cap, group } (the index above; hand-maintained like data/regex/pools until the game tables are fetchable)
   trade.js          PURE: familyQuery(pool, family) → trade2 query, Instant Buyout, reusing regex/trade.js
   session.js        module store: expanded Set per pool
-frontend/src/data/mods/   pools.json, mods.json, augments.json (frontend/scripts/sync-mods-data.mjs), essences.json (frontend/scripts/mods-essences.mjs), MANIFEST.json
-frontend/test/            mods-data, mods-pool, mods-sections, mods-extras, mods-settings
+frontend/test/            mods-pool, mods-settings;  backend/tests/test_modpool.py with fixtures/mods (a trimmed export + page cuts)
 ```
 
 Pure shapes (`pool.js`, no React):
@@ -345,36 +346,37 @@ stated once instead of a column; the Total row's summed chance of the shown rows
 denominator rule as a tested invariant. Dropped from the base: its opt-in sortable headers, by
 its own argument against reordering.
 
-## Moving the tables into the market pipeline (decided 2026-09-25)
+## The tables ride the market pipeline (built 2026-09-25)
 
-The shipped JSON tables were the wrong shape: game data must update with every release with
-nobody editing files. It rides the market-data pipeline instead. The decisions, from a reuse and
-altitude review of the first build:
+Game data must update with every release with nobody editing files, so the tables are market
+data, not files in the repo:
 
-- **Where.** A backend module beside the gold-fee loader (`backend/app/modpool.py`, modelled on
-  `gamedata.py`: `_get` through the gateway with an on-disk cache and the HTML-guard, a patch
-  version probe that forces a refetch on a new game version, `db.kv_set` for the watermark, a
-  `state` entry in `/api/status`). Its `refresh()` runs on shazam only, called by the seed cron
-  before `publish-market-snapshot.sh`; the poe2db page reads never run in a shipped binary.
-  Outputs are `MARKET_SCHEMA` tables listed in `datapolicy.SEED_TABLES` (`mod_pools`,
-  `mod_families`, `mod_augments`, `mod_essences`, `mod_currencies`), so the exporter ships them
-  with no edit; snapshot version bump, exporter re-run, `market-seed-latest` confirmed to advance.
-- **Shape of the API.** Per pool, precomputed: `GET /api/mods/pools` (id, name, class, keywords),
-  `GET /api/mods/pool/{id}` (the sections already built, tiers sorted, tags labelled, no spawn
-  weights: ~9 KB gzip), `GET /api/mods/pool/{id}/grants` (essences, alloys, socketables for that
-  class, fetched when a section opens). The frontend loads through `useApi`; `pool.js` shrinks to
-  `atLevel`, `inPool`, `bandOf`, `visible`, `shownChance`.
-- **Derive, do not hand-list.** The socketable sections come from the augments table itself: a
-  socketable whose text is "Can roll X modifiers" opens a section keyed on tag `x` on the classes
-  its target names. The corruption upgrades are the mods tagged `upgraded_corruption_mod`, not an
-  id prefix. Each class's pool domain is the domain its bases' tags reach under the first-match
-  rule (denylist the four junk classes, not allowlist 38). Plurals come from `item_classes`.
-  `classesOf` warns and drops on an unknown target rather than failing the nightly build. The
-  chip rule is "a tag that discriminates within the pool", not a denylist.
-- **Names are presentation.** A pool's identity is class + tag set + bases; its display name is
-  one function over those fields (shared stem plus a numeric range gives "Waystones · T1–5"),
-  so a naming rule can never change which pools exist.
-- **The floor belongs to the currency.** Store the picked orb, derive the floor; a section is
-  opened by a currency and takes that currency's floor, which retires the `floored` flag.
-- **Oracle.** `mods_by_base.json` upstream groups the same pools by full base tags; a nightly
-  check asserts every derived pool's mod set matches it for the same bases.
+- **Producer.** `backend/app/modpool.py` derives everything from the sources: the RePoE PoE2
+  export (mods, base items, item classes, socketables) and poe2db's currency pages (the orbs with
+  a minimum modifier level; the essences and alloys, found as the currencies whose text says they
+  add a guaranteed modifier, and what each forces per class from its page's table). Nothing is
+  hand-listed: a class's pool domain is where its bases' tags reach under the first-match rule;
+  a pool is one class × one spawn-tag set, named from its attribute tags, a shared stem with a
+  numeric range (Waystones · T1–5) or its bases; a section is every spawn tag no base carries,
+  titled and placed by the socketable that says "Can roll X modifiers" or, for keys whose mods
+  name base tags (the bones, the Genesis Tree), by the tag itself; corruption implicits and their
+  upgrades (the `upgraded_corruption_mod` tag) are two more. A new patch's data lands by running
+  it again. Tests: `backend/tests/test_modpool.py` over a trimmed export fixture.
+- **Where it runs.** On shazam only, as the first step of `ops/publish-market-snapshot.sh`
+  (`python -m app.modpool --force` inside the backend container), so every seed carries this
+  patch's pools; a failed rebuild keeps the previous tables and is logged. Fetches go through the
+  gateway (a `poe2db` policy, spaced out) into the gold-fee loader's cache. Desktop installs
+  never fetch.
+- **Storage and delivery.** `mod_pools` (one row per item type, its precomputed sections, chips
+  and grants as JSON) and `mod_currencies`, market tables in `datapolicy.SEED_TABLES`, so the
+  exporter ships them unchanged; `mods_meta` in `kv_ops` carries the source hashes. The snapshot
+  version is the export's timestamp, so a rebuilt seed is newer by construction.
+- **API and client.** `GET /api/mods/pools` (the list plus the currencies) and
+  `GET /api/mods/pool/{id}` (one item type: sections with tiers sorted best first, no spawn
+  weights, ~9 KB gzip), through `useApi`. `pool.js` keeps the arithmetic only: `atLevel`,
+  `inPool`, `bandOf`, `visible`, `shownChance`. The orb picker's options are the fetched
+  currencies with a floor. `POST /api/mods/refresh` exists for shazam and for a dev backend.
+
+Verifying after a market-side change (CLAUDE.md): deploy the backend to shazam, run the
+publisher, confirm the `market-seed-latest` asset's version advances and a fresh install shows
+the Mods tab populated.
