@@ -1079,7 +1079,12 @@ code { background: var(--bg); padding: 1px 5px; border-radius: 3px; font-size: 1
 .mods-section.open .mods-sec-head { border-color: var(--gold-dim); }
 .mods-sec-body { display: grid; gap: 12px; }
 .mods-list { display: grid; }
-.mods-grant { display: grid; grid-template-columns: 260px minmax(0, 1fr) 56px; gap: 12px; align-items: center; padding: 6px 12px; font-size: 13px; border-bottom: 1px solid var(--line); }
+.mods-grant { display: grid; grid-template-columns: 260px minmax(0, 1fr) 96px 56px; gap: 12px; align-items: center; padding: 6px 12px; font-size: 13px; border-bottom: 1px solid var(--line); }
+.mods-price { white-space: nowrap; }
+.mods-price .cur { vertical-align: middle; }
+.mods-forced { display: grid; grid-template-columns: 30px minmax(0, 1fr) 96px; gap: 10px; align-items: center; padding: 4px 10px; border-top: 1px solid var(--line); }
+.mods-forced .mods-num:first-child { text-align: left; color: var(--muted); }
+.mods-forced.out { color: var(--muted); }
 .mods-grant:last-child { border-bottom: 0; }
 .mods-grant.out { color: var(--muted); }
 .mods-grant-name { display: flex; align-items: center; gap: 8px; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

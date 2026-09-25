@@ -281,7 +281,9 @@ the shared `Num.jsx`. Settings persist under `mods_tools`. "Search on trade" on 
 (`desktop/src/trade/modsearch.js`, EE2's stat + item catalogues) returns; web has no button.
 `lib/mods/stash.js` (Find in stash) maps a waystone/tablet family to the Regex tab's wanted
 modifiers by printed line and writes `regex_tools` before `nav.openTrading('regex')`
-(tests: `frontend/test/mods-stash.test.mjs`).
+(tests: `frontend/test/mods-stash.test.mjs`). `lib/mods/prices.js` (`forcedBy`, `priceOf`) joins
+grants to tiers by text and reads `modpool.prices(pool_id)` (`/api/mods/pool/{id}/prices`, the
+value table by grant name; tests: `frontend/test/mods-prices.test.mjs`, `test_modpool.py`).
 Tests: `backend/tests/test_modpool.py` (derivations over `tests/fixtures/mods`, a trimmed
 export), `frontend/test/mods-*.test.mjs`, `desktop/test/mods-search.test.mjs` (the real
 vendored data, so an EE2 sync that renames a group fails here).

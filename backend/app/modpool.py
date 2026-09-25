@@ -603,6 +603,31 @@ def currencies() -> list:
     return [{"id": r["id"], "name": r["name"], "floor": r["floor"], "cap": r["cap"]} for r in rows]
 
 
+def prices(pool_id: str) -> dict | None:
+    """What forcing a modifier costs: the pool's grants (essences, alloys, socketables) priced
+    from the app's one value table (Graph.values, reference per unit), keyed by grant name. A
+    grant the exchange does not trade is absent; a cold graph prices nothing. Read-only."""
+    from . import arbitrage
+    from .movers import _trade_id
+    p = pool(pool_id)
+    if p is None:
+        return None
+    try:
+        g = arbitrage.cached_graph()
+        values, ref = g.values(), g.s["reference"]
+    except Exception as exc:                       # a cold or empty graph is no price, never an error
+        log.warning("modpool: prices unavailable: %s", exc)
+        return {"reference": None, "prices": {}}
+    out = {}
+    for kind in ("essences", "alloys", "augments"):
+        for grant in p.get("grants", {}).get(kind, []):
+            tid = _trade_id(grant["name"])
+            px = values.get(tid) if tid else None
+            if px:
+                out[grant["name"]] = float(px)
+    return {"reference": ref, "prices": out}
+
+
 # ------------------------------------------------------------------ refresh (shazam's cron)
 async def _page(slug_: str, max_age: int) -> str:
     """A poe2db page, cached beside the gold-fee tables (these are HTML on purpose, so the data

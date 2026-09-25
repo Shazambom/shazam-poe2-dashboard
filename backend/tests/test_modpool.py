@@ -288,3 +288,33 @@ def test_the_tables_ride_the_seed():
     for t in ("mod_pools", "mod_currencies"):
         assert t in datapolicy.SEED_TABLES
         assert f"CREATE TABLE IF NOT EXISTS {t}" in db.MARKET_SCHEMA
+
+
+def test_pool_prices_come_from_the_one_value_table_keyed_by_grant_name(export, derived, monkeypatch):
+    """Prices beside mods: what forcing a modifier costs is the app's value table (Graph.values,
+    reference per unit) read for the pool's grants — never a second pricing rule. A grant the
+    exchange does not trade is simply absent."""
+    from app import arbitrage
+    from app.currencies import registry
+    pages = {"Runic Alloy": (FIX / "alloy-runic.html").read_text()}
+    modpool.store(modpool.assemble(derived, export=export, currencies=[], grants=[modpool.grant_from(n, h) for n, h in pages.items()], source={}))
+
+    class G:
+        s = {"reference": "exalted"}
+
+        def values(self):
+            return {"runic-alloy": 49.11, "adept-rune": 125.32, "exalted": 1.0}
+    monkeypatch.setattr(arbitrage, "cached_graph", lambda: G())
+    registry._link("Metadata/Items/Currency/RunicAlloyTest", "runic-alloy")
+    registry._link("Metadata/Items/Currency/AdeptRuneTest", "adept-rune")
+    out = modpool.prices("ring")
+    assert out["reference"] == "exalted"
+    assert out["prices"] == {"Runic Alloy": 49.11, "Adept Rune": 125.32}, "the ring's two priced grants, keyed by name"
+    wand = modpool.prices("wand")
+    assert wand["prices"] == {"Adept Rune": 125.32}, "a pool prices its own grants only; one the exchange does not trade is absent"
+    assert modpool.prices("nope") is None
+    from fastapi.testclient import TestClient
+    from app import main
+    r = TestClient(main.app).get("/api/mods/pool/wand/prices")
+    assert r.status_code == 200 and r.json()["prices"]["Adept Rune"] == 125.32
+    assert TestClient(main.app).get("/api/mods/pool/nope/prices").status_code == 404

@@ -80,6 +80,7 @@ export const api = {
   // Trading → Mods: the mod-pool tables (backend/app/modpool.py), read-only.
   modPools: () => fetch('/api/mods/pools').then(j),
   modPool: (id) => fetch(`/api/mods/pool/${encodeURIComponent(id)}`).then(j),
+  modPrices: (id) => fetch(`/api/mods/pool/${encodeURIComponent(id)}/prices`).then(j),
   refreshGoldFees: () => post('/api/goldfees/refresh'),
   syncDigest: () => post('/api/digest/sync'),
 }

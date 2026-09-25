@@ -380,6 +380,14 @@ def mod_pool(pool_id: str):
     return p
 
 
+@app.get("/api/mods/pool/{pool_id}/prices")
+def mod_pool_prices(pool_id: str):
+    p = modpool.prices(pool_id)
+    if p is None:
+        raise HTTPException(status_code=404, detail="no such pool")
+    return p
+
+
 @app.post("/api/mods/refresh")
 async def mod_pools_refresh():
     """The shazam cron's entry (and a dev convenience): rebuild the tables from the sources."""

@@ -45,6 +45,9 @@ export default function ModsView() {
   const poolId = s && pools.length ? (pools.find(p => p.id === s.poolId) || pools[0]).id : null
   const fetched = useApi(() => (poolId ? api.modPool(poolId).then(prepare) : Promise.resolve(null)), [poolId])
   const pool = fetched.data && fetched.data.id === poolId ? fetched.data : null
+  // What forcing a modifier costs: the pool's grants priced by the local backend (read-only).
+  const priced = useApi(() => (poolId ? api.modPrices(poolId).catch(() => null) : Promise.resolve(null)), [poolId])
+  const prices = priced.data
 
   const levels = useMemo(() => (pool && s ? pool.sections.map(sec => atLevel(sec, s.ilvl, sec.floored ? s.floor : 0)) : null), [pool, s?.ilvl, s?.floor])
   const tags = useMemo(() => new Set(s?.tags || []), [s?.tags])
@@ -107,7 +110,7 @@ export default function ModsView() {
       <div className={`mods-body ${affixes.length === 1 ? 'one' : ''}`}>
         {affixes.map(a => (
           <ModTable key={a} title={TITLES[a]} affix={a} rows={shown[i][a]} total={level[a].total} expanded={open.rows} onToggle={toggleRow} onTrade={modLookup ? onTrade : null} onStash={stashable ? onStash : null}
-                    ilvl={s.ilvl} floor={floored ? s.floor : 0} empty={empty} />
+                    ilvl={s.ilvl} floor={floored ? s.floor : 0} empty={empty} grants={pool.grants} prices={prices} />
         ))}
       </div>
     )
@@ -131,7 +134,7 @@ export default function ModsView() {
       ))}
       {shown && grants.map(g => (
         <ModSection key={g.id} id={g.id} title={g.title} open={open.sections.has(g.id)} onToggle={() => toggleIn('sections', g.id)}>
-          <GrantList title={g.title} heading={g.heading} rows={g.rows} ilvl={s.ilvl} />
+          <GrantList title={g.title} heading={g.heading} rows={g.rows} ilvl={s.ilvl} prices={prices} />
         </ModSection>
       ))}
     </div>

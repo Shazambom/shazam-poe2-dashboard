@@ -191,6 +191,15 @@ it wants every table modifier one of its lines prints (measured: 30 of 32 waysto
 lacks, get a toast to pick by hand). One already wanted keeps its minimum. A family whose tiers
 carry no name (every corruption implicit and upgrade) shows no name column.
 
+**Prices beside mods** (`lib/mods/prices.js`, `GET /api/mods/pool/{id}/prices`): what forcing a
+modifier costs. The backend prices the pool's grants (essences, alloys, socketables) from the
+app's one value table (`Graph.values`, reference per unit), keyed by grant name; a grant the
+exchange does not trade is absent and shows a dash. The Essence, Alloy and Socketables lists get
+a Cost column; an open family lists, under its tiers, each grant that forces one of them (the
+grant row's text is exactly that tier's text; measured: every essence row that is in a pool
+matches a tier, the rest are essence-only mods) with the tier and the price. Read-only: the Mods
+tab never writes market data or reshapes the Board (owner directive 2026-09-25).
+
 ## The other pools (built 2026-09-25)
 
 Every item class with a pool is an item type in the picker, 94 in all: the equipment classes

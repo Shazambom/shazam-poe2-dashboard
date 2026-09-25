@@ -1,14 +1,19 @@
 import React from 'react'
 import { tagLabel, bandOf, namedTiers } from '../lib/mods/pool.js'
+import { forcedBy, priceOf } from '../lib/mods/prices.js'
 import { pct, lines } from '../lib/mods/format.jsx'
+import { Price } from './ModSection.jsx'
+import Cur from './Cur.jsx'
 
 // One family row and, when open, its tiers in three bands: above the item level, in the pool,
 // below the min level. The row carries its family id for the table's delegated click and key
 // handlers, so no callback is allocated per row and the memo holds across filter keystrokes.
-// The name column goes when no tier has one (a corruption implicit and its upgrade).
-function ModFamily({ row, open, ilvl, floor, perTier, canTrade, canStash }) {
+// The name column goes when no tier has one (a corruption implicit and its upgrade). Under the
+// tiers, what forces one (an essence, an alloy) and what it costs.
+function ModFamily({ row, open, ilvl, floor, perTier, canTrade, canStash, grants, prices }) {
   const { family, k, n, chance } = row
   const named = open && namedTiers(family)
+  const forced = open ? forcedBy(family, grants) : []
   return (
     <div className="mods-fam-wrap">
       <div className={`mods-fam ${k === 0 ? 'out' : ''}`} role="button" aria-expanded={open} tabIndex={0} data-id={family.id}>
@@ -38,6 +43,13 @@ function ModFamily({ row, open, ilvl, floor, perTier, canTrade, canStash }) {
               </div>
             )
           })}
+          {forced.map(f => (
+            <div key={f.name} className={`mods-forced ${f.level > ilvl ? 'out' : ''}`}>
+              <span className="mods-num">T{f.tier}</span>
+              <span className="mods-grant-name"><Cur name={f.name} size={14} /> {f.name}</span>
+              <Price value={priceOf(f.name, prices)} reference={prices?.reference} />
+            </div>
+          ))}
         </div>
       )}
     </div>
