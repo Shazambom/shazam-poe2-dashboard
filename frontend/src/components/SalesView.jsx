@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { api, toast } from '../lib/api.js'
+import { api, fmt, toast } from '../lib/api.js'
+import { wealthDigits } from '../lib/wealth.js'
 import { useStatus } from '../lib/statusStore.js'
 import { useSync } from '../lib/syncStore.js'
 import { useWorkspace } from '../lib/workspaceStore.js'
@@ -9,7 +10,6 @@ import { diag } from '../lib/diag.js'
 import { hasTradeEngine as isDesktop } from '../lib/session.js'
 import { nav } from '../lib/nav.js'
 import ItemCard from './ItemCard.jsx'
-import Wealth from './Wealth.jsx'
 import Cur from './Cur.jsx'
 import RefreshButton from './RefreshButton.jsx'
 import CapitalCard from './CapitalCard.jsx'
@@ -81,7 +81,11 @@ export default function SalesView({ league }) {
         <b>Sales</b>
         <span className="ws-chip" title="Follows the top-bar league; the ledger keeps every league">{sel || '—'}</span>
         <span className="ws-chip" title="Sales in the last 24 h / 7 d">{stats.today} today · {stats.week} this week</span>
-        <span className="ws-chip" title={stats.unpriced ? `${stats.unpriced} sale${stats.unpriced === 1 ? '' : 's'} in a currency with no known price` : 'Total of every priced sale, in the reference currency'}>total <Wealth v={stats.totalRef} /></span>
+        {stats.totals.length > 0 && (
+          <span className="ws-chip" title="Every sale, summed in the currency it was paid in">total {stats.totals.map((t, i) => (
+            <span key={t.currency}>{i ? ' · ' : ''}{fmt.n(t.amount, wealthDigits(t.amount))} <Cur id={t.currency} size={14} /></span>
+          ))}</span>
+        )}
         <span className="spacer" />
         {lastFetch && <span className="muted sales-last">{lastFetch.ok ? `fetched ${relativeTime(new Date(lastFetch.at).toISOString())}` : lastFetch.error === 'rate' ? 'rate limited' : lastFetch.error === 'auth' ? 'no session' : 'fetch failed'}</span>}
         {isDesktop ? <RefreshButton busy={busy} onClick={() => refresh(false)} title="Fetch the trade site's Merchant History now" /> : <span className="muted" style={{ fontSize: 12 }}>Fetching runs in the desktop app</span>}

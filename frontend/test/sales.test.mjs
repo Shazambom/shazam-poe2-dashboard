@@ -13,14 +13,15 @@ const RARE = { name: 'Hate Pelt', typeLine: 'Vaal Regalia', frameType: 2, ilvl: 
 const UNIQUE = { name: 'Headhunter', typeLine: 'Heavy Belt', frameType: 3, explicitMods: [{ description: 'When you kill a Rare monster, you gain its Modifiers for 60 seconds' }], runeMods: ['+20 to Strength'] }
 const CURRENCY = { name: '', typeLine: 'Divine Orb', frameType: 5, properties: [{ name: 'Stack Size', values: [['5/10', 0]] }] }
 
-test('saleValueRef and salesStats convert through the reference prices and count windows', () => {
+test('saleValueRef converts through the reference prices; salesStats counts windows and sums raw', () => {
   const prices = { divine: 180, chaos: 0.5 }
   assert.equal(saleValueRef({ amount: 3, currency: 'divine' }, 'exalted', prices), 540)
   assert.equal(saleValueRef({ amount: 12, currency: 'exalted' }, 'exalted', prices), 12)
   assert.equal(saleValueRef({ amount: 1, currency: 'mirror' }, 'exalted', prices), null)
   const now = Date.parse('2026-09-16T12:00:00Z')
   const rows = [{ time: '2026-09-16T10:00:00Z', price: { amount: 3, currency: 'divine' } }, { time: '2026-09-12T10:00:00Z', price: { amount: 2, currency: 'exalted' } }, { time: '2026-08-01T10:00:00Z', price: { amount: 1, currency: 'mirror' } }]
-  assert.deepEqual(salesStats(rows, 'exalted', prices, now), { count: 3, today: 1, week: 2, totalRef: 542, unpriced: 1 })
+  assert.deepEqual(salesStats(rows, 'exalted', prices, now), { count: 3, today: 1, week: 2,
+    totals: [{ currency: 'divine', amount: 3 }, { currency: 'exalted', amount: 2 }, { currency: 'mirror', amount: 1 }] })
   assert.equal(relativeTime('2026-09-16T11:30:00Z', now), '30m ago'); assert.equal(relativeTime('nope'), '')
 })
 
@@ -47,4 +48,28 @@ test('ItemCard renders every block from the fixtures with token-driven rarity cl
   }
   const html = renderToStaticMarkup(React.createElement(ItemCard, { item: RARE }))
   assert.ok(html.includes('ic-augmented'), 'augmented values are marked')
+})
+
+// The volume rule (CLAUDE.md): a sale's price is native to the currency it was paid in, so the
+// total is the raw sum per currency — nothing converted through the reference.
+test('salesStats totals are raw sums per currency, the most valuable first', () => {
+  const prices = { divine: 180, chaos: 0.5 }
+  const rows = [
+    { time: '2026-09-16T10:00:00Z', price: { amount: 3, currency: 'divine' } },
+    { time: '2026-09-16T10:00:00Z', price: { amount: 450, currency: 'exalted' } },
+    { time: '2026-09-15T10:00:00Z', price: { amount: 2, currency: 'divine' } },
+    { time: '2026-09-15T10:00:00Z', price: { amount: 20, currency: 'chaos' } },
+    { time: '2026-09-14T10:00:00Z', price: { amount: 1, currency: 'mirror' } },
+    { time: '2026-09-14T10:00:00Z', price: null },
+  ]
+  assert.deepEqual(salesStats(rows, 'exalted', prices).totals, [
+    { currency: 'divine', amount: 5 }, { currency: 'exalted', amount: 450 }, { currency: 'chaos', amount: 20 }, { currency: 'mirror', amount: 1 },
+  ], 'divine 900 ex > exalted 450 > chaos 10; mirror has no price, so last, still at its raw amount')
+})
+
+test('the Sales header shows the raw per-currency totals', async () => {
+  const { readFileSync } = await import('node:fs')
+  const s = readFileSync(new URL('../src/components/SalesView.jsx', import.meta.url), 'utf8')
+  assert.ok(s.includes('stats.totals.map'), 'the header lists stats.totals')
+  assert.ok(!s.includes('<Wealth v={stats.totalRef}'), 'no converted single total')
 })

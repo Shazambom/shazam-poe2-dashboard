@@ -10,15 +10,20 @@ export function saleValueRef(price, ref, prices) {
 }
 
 const DAY = 86400000
+// `totals`: the raw sum per currency the sales were paid in (the volume rule: a sale's price is
+// native to its currency), the most valuable total first; a currency with no known price last.
 export function salesStats(rows, ref, prices, now = Date.now()) {
-  let today = 0, week = 0, totalRef = 0, unpriced = 0
+  let today = 0, week = 0
+  const raw = new Map()
   for (const r of rows || []) {
     const t = Date.parse(r.time)
     if (Number.isFinite(t)) { if (now - t < DAY) today++; if (now - t < 7 * DAY) week++ }
-    const v = saleValueRef(r.price, ref, prices)
-    if (v == null) unpriced++; else totalRef += v
+    const cur = r.price && String(r.price.currency || '')
+    if (cur && Number.isFinite(Number(r.price.amount))) raw.set(cur, (raw.get(cur) || 0) + Number(r.price.amount))
   }
-  return { count: (rows || []).length, today, week, totalRef, unpriced }
+  const worth = ([cur, amount]) => saleValueRef({ amount, currency: cur }, ref, prices) ?? -1
+  const totals = [...raw].sort((a, b) => worth(b) - worth(a)).map(([currency, amount]) => ({ currency, amount }))
+  return { count: (rows || []).length, today, week, totals }
 }
 
 export function relativeTime(iso, now = Date.now()) {
