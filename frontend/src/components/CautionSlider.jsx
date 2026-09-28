@@ -1,10 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { useStatus, ensureSettings } from '../lib/statusStore.js'
 
-// CAUTION: how much a steady price is worth to you, versus a bigger gain. The board scores
-// log(1 + return) + k * log(1 + drawdown); this sets k. At 0 the board ranks on return alone and
-// will happily offer something that already halved; turned up, an asset that held its value wins
-// over one that gained more on the way through a crash.
+// CAUTION: how much a steady price is worth to you. The board ranks kept value, steadiness, a
+// steady climb and price (holdscore.hold_rank); this sets steadiness's weight (k / default). At 0
+// a dip doesn't count; turned up, an asset that never dipped wins over one that recovered.
 //
 // Range and default come from the backend (`k_range`, `k`) so there is one source of truth —
 // see docs/bugs/2026-09-20-hold-ranks-against-its-own-forecast.md for why it stops at 6.

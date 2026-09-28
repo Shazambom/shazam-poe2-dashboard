@@ -328,7 +328,7 @@ Full table + steps: [`release-runbook.md`](./release-runbook.md) → "Two channe
   (`Graph.build/ref_values/iter_cycles/iter_paths`, `simulate`, the graph cache), `routes.py`
   (`find_routes/stream_routes`, ranking, the route cache), `convert.py` (`convert`/`_best_conversions`),
   `board.py` (`board()`, `edge_table`); `centrality.py` alongside.
-- **Analytics:** `movers.py`, `holdscore.py`, `inflation.py`/`leaguehistory.py`, `centrality.py`.
+- **Analytics:** `movers.py`, `holdscore.py` (research + smoke test: `docs/hold-research.md`, `ops/hold-backtest.py`), `inflation.py`/`leaguehistory.py`, `centrality.py`.
 - **Negative-cycle search (2026-09-17):** `negcycle.py` — Bellman-Ford from the Wikipedia pseudocode,
   twice: `bellman_ford_naive` (line for line; the spec) and `bellman_ford` (numpy, one array pass per
   round; what runs). Held 1:1 to each other, to a brute-force enumerator, to William Fiset's version

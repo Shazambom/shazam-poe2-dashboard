@@ -14,8 +14,11 @@ test('the backward-looking column says it is the past, over the same horizon as 
   assert.ok(!hold.includes('>Return ({unit})</th>'), 'the ambiguous "Return (Div)" is gone')
 })
 
-test('the Hold score tooltip describes the score that ships, not the pre-0.3.2 product', () => {
-  // since 0.3.2: log(1 + return) + Caution x log(1 + drawdown) — see backend/app/holdscore.py
-  assert.ok(!hold.includes('Return × confidence'), 'the old `ret * conf` formula is gone')
-  assert.ok(hold.includes('title="Past return weighed against max drawdown — higher ranks first. Caution sets the weight."'))
+test('the Hold score tooltip describes the ranking that ships', () => {
+  // since 2026-09-28: holdscore.hold_rank — kept value, steadiness, a steady climb and price,
+  // each ranked against the day's board (docs/hold-research.md)
+  assert.ok(!hold.includes('Return × confidence'), 'the pre-0.3.2 `ret * conf` formula is gone')
+  assert.ok(!hold.includes('Past return weighed against max drawdown'), 'the 0.3.2 score is gone')
+  assert.ok(hold.includes('title="Value kept, steadiness, a steady climb, price and how it held in past leagues, each ranked against today\'s board (0–100). Caution sets how much steadiness counts."'))
+  assert.ok(hold.includes('title="Worst drop since the league\'s prices settled"'))
 })

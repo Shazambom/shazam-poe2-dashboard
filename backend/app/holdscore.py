@@ -1,11 +1,13 @@
-"""'What to hold' leaderboard: rank assets by how well they retain/gain value in
-Divine over short/medium/long horizons, with a cross-league forward-return prediction.
+"""'What to hold' leaderboard: good, safe places to park currency against inflation, with a
+cross-league forward-return prediction. Research, diagnosis and sources: docs/hold-research.md;
+smoke test: ops/hold-backtest.py.
 
 - Everything is priced in DIVINE (not the inflating Exalted base) — that's what
   "held value" means to a player.
-- HOLD score = horizon return-in-Divine × confidence. Max drawdown is shown as its
-  own column, not folded into the score (keeps the ranking readable). Confidence =
-  data-shrinkage × liquidity, so thin/obscure items don't top the board on noise.
+- Ranking = `hold_rank`: value kept since the league's prices settled and a steady climb (one
+  signal), a smooth path, a high price, and the item's record in earlier leagues, each ranked on the
+  day and averaged; the list settles over a few days.
+  The horizon sets the return column and the forecast, not the order.
 - Prediction = the league-phase analog: at the current league's day N, average each
   asset's forward Δ-day return from the days around N (±PRED_WINDOW) across PAST
   leagues (recency-weighted), with the dispersion as a confidence band.
@@ -17,7 +19,7 @@ from __future__ import annotations
 import math
 import statistics
 
-from . import analytics, cache, db, marketseries
+from . import analytics, cache, db, devtelemetry, marketseries
 from .marketseries import league_age as _age
 from .settings import get_settings
 
@@ -39,18 +41,12 @@ def horizon_for(window_h: int | None = None, horizon: str | None = None) -> str:
         return max((h for h, d in HORIZON_DAYS.items() if d <= days), key=HORIZON_DAYS.get)
     return "3d"
 SHRINK_K = 8            # data-count shrinkage: confidence = n/(n+K)
-# --- ranking contract (measured 2026-09-20; see docs/bugs/2026-09-20-hold-ranks-against-its-own-forecast.md)
-# The score is SIGN-SAFE: it composes in log-space over strictly positive factors, so a worse
-# drawdown always lowers it. The old `ret * conf * stab` multiplied a SIGNED return by factors in
-# [0,1], which reverses a penalty below zero — a deeper crash made the score less negative and
-# ranked it HIGHER (61% of negative-return pairs were inverted on the owner's DB).
-CAUTION_K = 2.0            # drawdown weight. Backtested: k=2 reproduces the old crash rate (5%) and
-                        # blue-chip mix with better drawdowns; safety saturates at k=3.
+# --- eligibility (measured 2026-09-20; see docs/bugs/2026-09-20-hold-ranks-against-its-own-forecast.md)
+CAUTION_K = 2.0         # the Caution dial's default. The dip's weight in `hold_rank` is k / CAUTION_K,
+                        # so the default weighs it like every other signal.
 # k is a USER DIAL (owner directive 2026-09-20): a CAUTION slider on the Hold page, persisted as the
-# `hold_caution` setting. 0 = rank on return alone; higher = favour the steadier asset. Capped
-# at 6 because the backtest shows drawdown flat at -14.0% from k=3 up, so beyond that the dial
-# costs return and buys nothing. Monotonicity holds at EVERY position, so the slider can change
-# what the board prefers but can never reintroduce the sign bug.
+# `hold_caution` setting. 0 = the dip doesn't count; higher = favour the steadier asset. The rank
+# is monotone in every signal at every position, so the dial changes preference, never sense.
 CAUTION_RANGE = (0.0, 6.0)
 MDD_CAP = -0.40         # exclude anything that fell worse than this. Tightest cap that still
                         # spares Mirror/Hinekora (at -35% they drop out 25%/27% of early days).
@@ -58,7 +54,6 @@ MIN_DAYS = 4            # a score needs at least this many days behind it
 VALUE_PERCENTILE = 0.50  # keep the top half of the DAY's traded value — RELATIVE, because the
                         # value scale shifts ~14x between leagues and an absolute floor is either
                         # unreachable or arbitrary. A relative cut can never empty the board.
-_EPS = 1e-12            # keeps log() finite at a total loss without disturbing any real ordering
 VALUE_FLOOR = 30_000_000.0   # median daily traded VALUE (exalted) for full liquidity confidence.
 # The board answers "what's a good place to park currency to beat inflation" — so a hold must
 # be liquid *in value* (you can park real wealth), which is why the floor is on exalted/day,
@@ -165,16 +160,152 @@ def clamp_k(v) -> float:
     return min(max(k, lo), hi)
 
 
-def hold_score(m: dict, k: float | None = None) -> float:
-    """The ranking score: `log(1 + ret) + k * log(1 + mdd)` (k defaults to CAUTION_K).
+# --- the ranking (2026-09-28; docs/hold-research.md, smoke test ops/hold-backtest.py) -------------
+# Hold is a store-of-value list: what kept its value since the league's prices settled and climbs
+# steadily (one signal: kept + trend, half each), didn't dip, is expensive, and held its value in
+# earlier leagues. Each signal is ranked against the day's board and the ranks are averaged with
+# fixed weights — four past leagues cannot tune weights. Chosen by an arena of four designs
+# (docs/hold-research.md "Arena"); graded by ops/hold-backtest.py on every league.
+DISCOVERY_DAY = 7   # a league's opening week is price discovery; kept value is measured from here
+SKIP_DAYS = 3       # kept value stops SKIP_DAYS ago, so a jump in the last days doesn't count
+TREND_DAYS = 14     # the climb is read over the TREND_DAYS before the last TREND_SKIP days
+TREND_SKIP = 2
+SETTLE_DAYS = 3     # an asset's score is its mean over the last SETTLE_DAYS days: the list settles
+# The record: in earlier leagues, the share of RECORD_HOLD-day holds (started from DISCOVERY_DAY) that
+# kept RECORD_KEEP of their value. An item's place in PoE2's economy — how it drops, whether crafting
+# consumes it — repeats every league, so its record stands in for sink and supply data we don't have.
+# Neither number is fitted: 14 days is the longest hold the app offers, −20% the smoke test's crash
+# line. Only league-days <= RECORD_TO count: a past league's first two months are over before the next
+# league starts, so a replayed day never reads the future, and the record never changes once read.
+RECORD_HOLD = 14
+RECORD_KEEP = 0.80
+RECORD_TO = 60
+RECORD_MIN_WINDOWS = 20   # about three weeks of one league
+_record_cache: dict = {}
 
-    Both terms are logs of strictly positive quantities — growth (what 1 unit became) and
-    steadiness (what 1 unit was worth at the trough relative to its peak) — so the score is
-    monotone in BOTH axes on either side of zero, at every k. A deeper drawdown always costs,
-    whether the asset gained or lost. Reads `mdd` rather than the clamped `stab` so ordering
-    survives among assets that all crashed hard."""
-    return (math.log(max(_EPS, 1.0 + m["ret"]))
-            + (CAUTION_K if k is None else k) * math.log(max(_EPS, 1.0 + m["mdd"])))
+
+def _signals(series: dict[int, tuple[float, float]], t: int) -> dict | None:
+    """kept / dip / trend / price for one asset as of league-day t, on smoothed prices (`_smooth`:
+    a thin asset's single odd close is neither a crash nor a gain)."""
+    s = {a: v for a, v in series.items() if a <= t}
+    if len(s) < 2:
+        return None
+    ages = sorted(s)
+    sm = {a: _smooth(s, a) for a in ages}
+    if min(sm.values()) <= 0:
+        return None
+    base = next((a for a in ages if a >= DISCOVERY_DAY and t - a >= SKIP_DAYS), ages[0])
+    end = next((a for a in reversed(ages) if a <= t - SKIP_DAYS), None)
+    # None = not measurable yet (no settled span before the skip); it is left out, never a 0
+    kept = math.log(sm[end] / sm[base]) if end is not None and end > base else None
+    peak, dip = None, 0.0
+    for a in ages:
+        if a >= min(base, DISCOVERY_DAY):
+            peak = sm[a] if peak is None else max(peak, sm[a])
+            dip = min(dip, sm[a] / peak - 1)
+    win = [a for a in ages if t - TREND_DAYS - TREND_SKIP <= a <= t - TREND_SKIP]
+    trend = None
+    if len(win) >= 5:
+        ys = [math.log(sm[a]) for a in win]
+        mx, my = statistics.fmean(win), statistics.fmean(ys)
+        sxx = sum((x - mx) ** 2 for x in win)
+        sxy = sum((x - mx) * (y - my) for x, y in zip(win, ys))
+        syy = sum((y - my) ** 2 for y in ys)
+        trend = (sxy / sxx) * (sxy * sxy / (sxx * syy)) if sxx and syy else 0.0
+    return {"kept": kept, "dip": dip, "trend": trend, "price": math.log(s[ages[-1]][0])}
+
+
+def _pct_ranks(vals: list[float]) -> list[float]:
+    """Each value's rank on the day, 0 (worst) … 1 (best); ties share the mean rank."""
+    n = len(vals)
+    order = sorted(range(n), key=lambda i: vals[i])
+    out = [0.0] * n
+    i = 0
+    while i < n:
+        j = i
+        while j + 1 < n and vals[order[j + 1]] == vals[order[i]]:
+            j += 1
+        for p in range(i, j + 1):
+            out[order[p]] = ((i + j) / 2) / max(1, n - 1)
+        i = j + 1
+    return out
+
+
+def _record(iid, past) -> float | None:
+    """The item's record in `past` [(league, per)]: the share of RECORD_HOLD-day holds, started from
+    DISCOVERY_DAY and ending by RECORD_TO, that kept RECORD_KEEP of their value (smoothed prices).
+    None with fewer than RECORD_MIN_WINDOWS holds."""
+    ok = n = 0
+    for lg, per in past:
+        full = per.get(iid)
+        if not full:
+            continue
+        ps = {a: v for a, v in full.items() if a <= RECORD_TO + 1}
+        key = (lg, iid, len(ps), max(ps, default=-1), ps.get(max(ps, default=-1)))
+        if key not in _record_cache:
+            sm = {a: _smooth(ps, a) for a in ps}
+            wins = [(sm[a], sm[a + RECORD_HOLD]) for a in sm
+                    if a >= DISCOVERY_DAY and a + RECORD_HOLD <= RECORD_TO and a + RECORD_HOLD in sm and sm[a] > 0]
+            _record_cache[key] = (sum(p1 >= RECORD_KEEP * p0 for p0, p1 in wins), len(wins))
+        o, w = _record_cache[key]
+        ok, n = ok + o, n + w
+    return ok / n if n >= RECORD_MIN_WINDOWS else None
+
+
+def _weights(t: int, k: float) -> dict:
+    """kept and trend both measure this league's climb, so they share one unit; the dip carries the
+    Caution dial. Before discovery settles there is no climb to measure."""
+    w = {"kept": 0.5, "trend": 0.5, "dip": k / CAUTION_K, "price": 1.0, "record": 1.0}
+    if t < DISCOVERY_DAY:
+        del w["kept"], w["trend"]
+    return w
+
+
+def _rank_day(entries, t: int, k: float, past=()) -> dict:
+    """One day's composite: {item_id: 0..1}. `entries` = [(item_id, series, ...)]."""
+    sig = [(e[0], _signals(e[1], t)) for e in entries]
+    sig = [(i, x) for i, x in sig if x]
+    if not sig:
+        return {}
+    for iid, x in sig:
+        x["record"] = _record(iid, past) if past else None
+    # Each signal is ranked among the assets it can be measured for; an asset's score averages the
+    # signals it has. A signal nobody has yet (early league) simply doesn't weigh. The record is the
+    # exception once earlier leagues exist: no record is a neutral rank, not a missing one, so a new
+    # item gets neither credit nor blame for a history it doesn't have.
+    num = [0.0] * len(sig)
+    den = [0.0] * len(sig)
+    for name, w in _weights(t, k).items():
+        if not w:
+            continue
+        have = [i for i, (_iid, x) in enumerate(sig) if x[name] is not None]
+        if len(have) >= 2:
+            for i, r in zip(have, _pct_ranks([sig[i][1][name] for i in have])):
+                num[i] += w * r
+                den[i] += w
+        if name == "record" and past:
+            for i, (_iid, x) in enumerate(sig):
+                if x["record"] is None:
+                    num[i] += w * 0.5
+                    den[i] += w
+    return {iid: (num[i] / den[i] if den[i] else 0.5) for i, (iid, _x) in enumerate(sig)}
+
+
+def hold_rank(entries, t: int, k: float | None = None, past=()) -> dict:
+    """Hold's ranking as of league-day t: {item_id: score in 0..1}, higher first. `entries` =
+    [(item_id, series, ...)] — the day's eligible board; `past` = earlier leagues [(league, per)].
+    Each asset's score is its mean composite over the last SETTLE_DAYS days (its series as it stood
+    each day), so the list settles."""
+    k = CAUTION_K if k is None else k
+    acc: dict = {}
+    for back in range(SETTLE_DAYS):
+        tt = t - back
+        # an earlier day counts for an asset only if it traded that day (a stale close isn't a read);
+        # today counts for every eligible asset
+        day = [e for e in entries if tt in e[1]] if back else list(entries)
+        for iid, v in _rank_day(day, tt, k, past).items():
+            acc.setdefault(iid, []).append(v)
+    return {iid: statistics.fmean(v) for iid, v in acc.items()}
 
 
 def value_cut(rows) -> float:
@@ -193,18 +324,23 @@ def eligible(m: dict, cut: float) -> bool:
     return m["valvol"] >= cut and m["n"] >= MIN_DAYS and m["mdd"] >= MDD_CAP
 
 
-def _rank(entries, k: float, cut: float | None = None):
-    """[(iid, name, cat, metrics)] → the ones worth ranking, best first.
+def _rank(entries, k: float, cut: float | None = None, t: int | None = None, past=()):
+    """[(iid, name, cat, metrics, series)] → (the ones worth ranking, best first, {iid: score}).
 
     Eligibility is a HARD gate, not a weight: an asset either trades enough value to park wealth
     in, has enough days behind it and hasn't already fallen off a cliff — or it is not an answer
     to "what should I hold" at all. `cut` is the day's value threshold; computed over `entries`
-    when the caller doesn't pass the whole-universe one."""
+    when the caller doesn't pass the whole-universe one. The order is `hold_rank` as of league-day
+    `t` (default: the newest day any entry has)."""
     if cut is None:
         cut = value_cut([e[3] for e in entries])
     keep = [e for e in entries if eligible(e[3], cut)]
-    keep.sort(key=lambda e: -hold_score(e[3], k))
-    return keep
+    if t is None:
+        t = max((max(e[4]) for e in keep), default=0)
+    score = hold_rank([(e[0], e[4]) for e in keep], t, k, past)
+    keep = [e for e in keep if e[0] in score]
+    keep.sort(key=lambda e: -score[e[0]])
+    return keep, score
 
 
 def _predict(item_id, N, delta, past, weights=None, min_leagues=MIN_PRED_LEAGUES, window=0):
@@ -361,30 +497,36 @@ def _leaderboard(horizon: str, category: str, numeraire: str, num_id: int, num_n
         # return to a board labelled "vs Divine", and Exalted inflates over a league.
         if card and card["change_pct"] is not None and card["trend_num"] == num_tid:
             m["ret"] = card["change_pct"] / 100.0
-        entries.append((iid, name, cat, m))
+        entries.append((iid, name, cat, m, series))
 
     cut = value_cut([e[3] for e in entries])    # the day's threshold, over everything
-    cats = sorted({cat for _i, _n, cat, _m in entries})   # dropdown reads the full universe
-    board = _rank(entries, k, cut)              # the whole day's ranked board, every category
+    cats = sorted({e[2] for e in entries})      # dropdown reads the full universe
+    today = max((m["cur_age"] for _i, _n, _c, m, _s in entries), default=0)
+    board, score = _rank(entries, k, cut, today, past)   # the whole day's ranked board, every category
     # The forecast column exists only through ARROW_LAST_DAY, and carries arrows only on
     # ARROW_HORIZONS (1d keeps the column, all dashes). Arrows rank each forecast against the WHOLE
     # board, so viewing one category can't restyle an asset.
-    shown = max((m["cur_age"] for *_x, m in entries), default=0) <= ARROW_LAST_DAY
+    shown = today <= ARROW_LAST_DAY
     arrow_of = {}
     if shown and horizon in ARROW_HORIZONS:
         preds = [(_predict(iid, m["cur_age"], delta, past, weights, window=PRED_WINDOW) or {}).get("pred")
-                 for iid, _n, _c, m in board]
+                 for iid, _n, _c, m, _s in board]
         arrow_of = dict(zip((e[0] for e in board), arrows(preds)))
 
+    # beta telemetry (gated off in stable builds): what the board showed, so a beta Hold list can be
+    # checked from the log
+    devtelemetry.tlog("hold", f"day={today} hz={horizon} k={k:g} eligible={len(board)} "
+                              f"top5={'; '.join(e[1] for e in board[:5])}")
     assets = []
-    for iid, name, cat, m in board:
+    for iid, name, cat, m, series in board:
         if category != "all" and cat != category:
             continue
+        sig = _signals(series, today) or {"dip": m["mdd"]}
         assets.append({
             "id": iid, "name": name, "category": cat,
-            "ret_pct": round(m["ret"] * 100, 1), "mdd_pct": round(m["mdd"] * 100, 1),
-            # log(1 + return) + k*log(1 + drawdown) — sign-safe, so a deeper crash always costs.
-            "hold": round(hold_score(m, k), 4), "days": m["n"], "medvol": round(m["valvol"]),
+            # the dip the ranking reads: smoothed, since the league's prices settled
+            "ret_pct": round(m["ret"] * 100, 1), "mdd_pct": round(sig["dip"] * 100, 1),
+            "hold": round(score[iid] * 100), "days": m["n"], "medvol": round(m["valvol"]),
             "confidence": round(m["conf"], 2),
             "pred_arrows": arrow_of.get(iid),
         })

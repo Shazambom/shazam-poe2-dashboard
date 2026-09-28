@@ -1,5 +1,7 @@
 # HANDOFF — Hold's remaining open items after 0.3.2
 
+> **Research index:** [`docs/hold-research.md`](../hold-research.md) — the goal, the 2026-09-28 diagnosis, the smoke test (`ops/hold-backtest.py`) and every source.
+
 Companion to [`2026-09-20-hold-ranks-against-its-own-forecast.md`](2026-09-20-hold-ranks-against-its-own-forecast.md),
 which is the diagnosis and the shipped fix. **This doc is the durable state of what is still open.** An agent
 picking this up after a context compaction should be able to continue from here without re-deriving anything.

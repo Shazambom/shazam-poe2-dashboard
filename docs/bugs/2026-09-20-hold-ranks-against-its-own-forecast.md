@@ -1,5 +1,7 @@
 # BUG — the Hold board ranks assets against its own forecast, and rewards the worst losers
 
+> **Research index:** [`docs/hold-research.md`](../hold-research.md) — the goal, the 2026-09-28 diagnosis, the smoke test (`ops/hold-backtest.py`) and every source.
+
 **Status:** FIXED — shipped in `0.3.2` (beta `0.3.2-beta.3`, validated by the owner; telemetry clean on
 win32 + darwin). The score, floor and cap below live in `backend/app/holdscore.py` behind
 `backend/tests/test_hold_score.py`. The three items under "Still open" are deliberately NOT part of it. · **Severity:** medium-high — the board's title is an instruction ("What to hold") and
