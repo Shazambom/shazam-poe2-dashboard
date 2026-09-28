@@ -1,16 +1,17 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import ModsBar from './ModsBar.jsx'
 import ModTable from './ModTable.jsx'
 import { ModSection, GrantList, essenceRows, augmentRows } from './ModSection.jsx'
 import { useStatus, ensureSettings } from '../lib/statusStore.js'
 import { useApi, useAutosave } from '../lib/hooks.js'
 import { api, toast } from '../lib/api.js'
+import { diag } from '../lib/diag.js'
 import { sessionFor, pasted } from '../lib/mods/index.js'
 import { prepare, atLevel, visible, AFFIXES } from '../lib/mods/pool.js'
 import { merge } from '../lib/mods/defaults.js'
 import { familyQuery } from '../lib/mods/trade.js'
 import { stashKind, stashMods, withWanted } from '../lib/mods/stash.js'
-import { poolFor, matchItem, slotsFor } from '../lib/mods/item.js'
+import { poolFor, matchItem, slotsFor, pasteDiag } from '../lib/mods/item.js'
 import { merge as mergeRegex } from '../lib/regex/defaults.js'
 import { nav } from '../lib/nav.js'
 import { useWorkspace } from '../lib/workspaceStore.js'
@@ -57,6 +58,11 @@ export default function ModsView() {
   const [item, setItemState] = useState(() => pasted.get())
   const setItem = (it) => { pasted.set(it); setItemState(it || null) }
   const match = useMemo(() => matchItem(pool, item), [pool, item])
+  // Beta: once per pasted item, when its pool has loaded, how it matched (counts only).
+  const reported = useRef(null)
+  useEffect(() => {
+    if (item && pool && reported.current !== item) { reported.current = item; diag('mods', pasteDiag(pool.id, item, match)) }
+  }, [item, pool, match])
   const onItem = useMemo(() => (item ? new Map(match.rolled.flatMap(r => r.ids.map(id => [id, r.tier]))) : null), [match, item])
   const levels = useMemo(() => (pool && s ? pool.sections.map(sec => atLevel(sec, s.ilvl, sec.floored ? s.floor : 0, onItem)) : null), [pool, s?.ilvl, s?.floor, onItem])
   const tags = useMemo(() => new Set(s?.tags || []), [s?.tags])

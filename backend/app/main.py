@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field, model_validator
 
 from fastapi.responses import RedirectResponse, PlainTextResponse
 
-from . import analytics, arbitrage, db, diag, digest, gamedata, gateway, holdscore, inflation, leaguearc, leaguehistory, liquidity, migrations_user, modpool, movers, oauth, orderbook, recipes, session, sidecar_supervisor, signalsack, watchdog, workspace
+from . import analytics, arbitrage, db, devtelemetry, diag, digest, gamedata, gateway, holdscore, inflation, leaguearc, leaguehistory, liquidity, migrations_user, modpool, movers, oauth, orderbook, recipes, session, sidecar_supervisor, signalsack, watchdog, workspace
 from .config import INSTALL_LOG_PATH
 from .currencies import registry
 from .settings import get_settings, save_settings
@@ -225,11 +225,29 @@ def map_currency(body: MetaOverride):
 
 
 # ---------------------------------------------------------------- capital
+# Beta telemetry for the startup `syncing` state (no markets yet after an update): one line when a
+# client starts waiting, one when markets arrive, with the seconds in between. Counts only.
+_capital_sync: dict = {"since": None}
+
+
+def _note_capital_sync(payload: dict) -> None:
+    n = len(payload.get("rows") or [])
+    if payload.get("syncing"):
+        if _capital_sync["since"] is None:
+            _capital_sync["since"] = time.time()
+            devtelemetry.tlog("capital", f"syncing: no markets yet (rows={n})")
+    elif _capital_sync["since"] is not None:
+        devtelemetry.tlog("capital", f"markets after {time.time() - _capital_sync['since']:.1f}s (rows={n})")
+        _capital_sync["since"] = None
+
+
 @app.get("/api/capital")
 def capital():
     """Holdings at paper value AND at what they would realize (Ghost Wealth) — see liquidity."""
     g = arbitrage.cached_graph()
-    return liquidity.capital_rows(db.get_capital(), g, g.values())
+    out = liquidity.capital_rows(db.get_capital(), g, g.values())
+    _note_capital_sync(out)
+    return out
 
 
 class CapitalBody(BaseModel):
@@ -394,6 +412,7 @@ async def mod_pools_refresh():
     `python -m app.modpool --force` (ops/publish-market-snapshot.sh). A backend with a seed bundled
     is a desktop install: it reads the tables its seed carries and never scrapes or rebuilds them."""
     if db.MARKET_SEED_PATH:
+        devtelemetry.tlog("mods", "refresh refused: this install reads its tables from the seed")
         raise HTTPException(status_code=403, detail="desktop installs read their mod tables from the seed")
     return await modpool.refresh(force=True)
 

@@ -102,3 +102,11 @@ test('a tier name two families share is kept when the printed text matches neith
   assert.deepEqual(m.rolled.map(r => [r.family.id, r.section, r.tier]), [['suffix:SpellDamage', 'base', 1]])
   assert.deepEqual(m.rolled[0].ids.sort(), ['suffix:SpellDamage', 'suffix:SpellDamage@genesis'], 'both twins are on the item')
 })
+
+test('the beta line for a pasted item carries the pool, rarity and counts, never a mod or its text', async () => {
+  const { pasteDiag } = await import('../src/lib/mods/item.js')
+  const m = matchItem(POOL(), ITEM)
+  const line = pasteDiag('ring', ITEM, m)
+  assert.equal(line, 'mods-paste pool=ring rarity=Rare rolled=4 loose=1 prefix=2/3 suffix=3/3')
+  assert.ok(!/Life|Strength|Havoc|Sapphire|Virile/.test(line))
+})

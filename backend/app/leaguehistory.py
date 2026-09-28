@@ -323,7 +323,7 @@ async def backfill(force: bool = False, full: bool = True) -> dict:
                     log.warning("poe2scout universe %s failed: %s", name, exc)
             complete, fetched_at = _marks(name)
             todo, tally = plan_league(item_ids, current, force, {i for (lg, i) in stored if lg == name}, complete, fetched_at, time.time())
-            tally.update({"fetched": 0, "errors": 0})
+            tally.update({"fetched": 0, "errors": 0, "empty": 0})
             progress.update({"league": name, "league_total": len(todo), "league_done": 0,
                              "leagues_done": li, "phase": "crawling", "updated": time.time()})
             t0 = time.time()
@@ -340,6 +340,8 @@ async def backfill(force: bool = False, full: bool = True) -> dict:
                     continue
                 rows = [(name, item_id, s["Time"], s.get("Close"), s.get("Average"), s.get("Volume"))
                         for s in data.get("DailyStats", []) if s.get("Time")]
+                if not rows:
+                    tally["empty"] += 1
                 if rows:
                     with db.tx() as c:
                         c.executemany("INSERT OR REPLACE INTO league_daily VALUES (?,?,?,?,?,?)", rows)
@@ -351,7 +353,7 @@ async def backfill(force: bool = False, full: bool = True) -> dict:
                     db.kv_set(f"lh_complete:{name}:{item_id}", True)
             # Beta telemetry: why this league did or did not crawl (counts only), and whether that
             # was a full-sync fallback (a T0 blocker).
-            devtelemetry.tlog("lh", f"league={name!r} current={current} items={len(item_ids)} complete={tally['complete']} fresh={tally['fresh']} fetched={tally['fetched']} errors={tally['errors']} s={time.time() - t0:.0f}")
+            devtelemetry.tlog("lh", f"league={name!r} current={current} was_current={name in was_current} items={len(item_ids)} complete={tally['complete']} fresh={tally['fresh']} fetched={tally['fetched']} empty={tally['empty']} errors={tally['errors']} s={time.time() - t0:.0f}")
             stored_hits = sum(1 for i in item_ids if stored.get((name, i)))
             verdict = crawl_verdict(current, len(item_ids), tally["fetched"], stored_hits, was_current=name in was_current)
             if verdict and not force:

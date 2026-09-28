@@ -72,7 +72,7 @@ test('diag bridge: allow-listed markers only, 300-char clamp, 30 lines/min budge
   const sent = []
   let t = 0
   const log = makeDiagBridge({ installLog: (m, l) => sent.push([m, l]), now: () => t })
-  assert.deepEqual(DIAG_MARKERS, ['ee2', 'ws', 'sales'])
+  assert.deepEqual(DIAG_MARKERS, ['ee2', 'ws', 'sales', 'mods'])
   assert.equal(log('login', 'x'), false, 'unlisted marker dropped')
   assert.equal(log('ws', 42), false, 'non-string line dropped')
   assert.equal(log('ws', 'ws-load fail err="boom"'), true)
@@ -83,4 +83,12 @@ test('diag bridge: allow-listed markers only, 300-char clamp, 30 lines/min budge
   assert.equal(sent.length, 30, '30 per minute, then dropped')
   t = 61_000
   assert.equal(log('ws', 'after'), true)
+})
+
+test('the Mods paste line has its marker; the 20s/2m/10m line reports pools from the tables, not the server-side refresh state', async () => {
+  const { DIAG_MARKERS: M } = await import('../src/diag-bridge.js')
+  assert.ok(M.includes('mods'), 'mods marker allow-listed')
+  const { readFileSync } = await import('node:fs')
+  const src = readFileSync(new URL('../src/modsdiag.js', import.meta.url), 'utf8')
+  assert.ok(!src.includes('mod_pools_state'), 'the desktop never runs the refresh: that state always read pools=0')
 })

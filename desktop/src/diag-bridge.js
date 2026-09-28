@@ -4,7 +4,7 @@
 // renderer bug can never flood the server. Never pass q, raw clipboard, or a full slug.
 'use strict'
 
-const DIAG_MARKERS = ['ee2', 'ws', 'sales']
+const DIAG_MARKERS = ['ee2', 'ws', 'sales', 'mods']
 const MAX_LINE = 300
 const BUDGET = 30          // lines per window
 const WINDOW_MS = 60_000

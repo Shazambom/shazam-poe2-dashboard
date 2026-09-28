@@ -49,3 +49,11 @@ export function matchItem(pool, item) {
   }
   return out
 }
+
+// The beta diagnostic for a pasted item (beta/dev only, through the renderer's one diag bridge):
+// the pool, the rarity and the match counts, never a mod, a name or any item text.
+export function pasteDiag(poolId, item, match) {
+  const slots = slotsFor(item?.rarity) || { prefix: 0, suffix: 0 }
+  return `mods-paste pool=${poolId} rarity=${item?.rarity || '?'} rolled=${match.rolled.length} loose=${match.loose.length} ` +
+    `prefix=${match.count.prefix}/${slots.prefix} suffix=${match.count.suffix}/${slots.suffix}`
+}

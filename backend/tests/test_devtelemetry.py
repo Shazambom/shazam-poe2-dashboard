@@ -93,3 +93,19 @@ def test_a_slow_or_unreachable_server_never_blocks_the_caller(monkeypatch):
     gate.set()
     assert devtelemetry.flush(5)
     assert sent == ["line 0", "line 1", "line 2"], "one worker keeps the order"
+
+
+def test_a_stable_build_sends_none_of_the_new_lines(monkeypatch):
+    """Telemetry comes only from LAN beta clients and never from a production app: Electron passes
+    ARBITER_TELEMETRY=1 only on the beta channel or an unpackaged dev run. With the gate off, the
+    0.3.6 diagnostics (capital syncing, the refresh refusal) queue nothing and reach no socket."""
+    from app import main
+    calls = _capture(monkeypatch)
+    monkeypatch.delenv("ARBITER_TELEMETRY", raising=False)
+    monkeypatch.setattr(main, "_capital_sync", {"since": None})
+    before = devtelemetry._queue.qsize()
+    main._note_capital_sync({"syncing": True, "rows": [1]})
+    main._note_capital_sync({"syncing": False, "rows": [1]})
+    devtelemetry.tlog("mods", "refresh refused: this install reads its tables from the seed")
+    assert devtelemetry.flush(2)
+    assert devtelemetry._queue.qsize() == before == 0 and calls == []

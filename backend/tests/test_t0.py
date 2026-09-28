@@ -221,3 +221,44 @@ def test_t0_scan_blocks_a_stable_release_whose_beta_line_has_a_t0():
     assert scan.validated(events, "0.3.6", since="2026-09-25 19:25:00") == [("0.3.6-beta.3", "win32", "2026-09-25 19:30:01")]
     assert scan.validated(events, "0.3.6", since="2026-09-25 19:31:00") == []
     assert scan.validated(events, "0.3.7") == []
+
+
+# ------------------------------------------------------------------ beta diagnostics for the 0.3.6 fixes
+def test_the_lh_line_says_whether_the_league_was_current_and_how_many_items_came_back_empty(monkeypatch, lines):
+    with db.tx() as c:
+        c.execute("DELETE FROM kv_ops WHERE key LIKE 'lh_%'")
+    db.kv_set("lh_current", ["Ended"])
+    _crawl(monkeypatch, [{"Value": "Ended", "IsCurrent": False}], [1, 2, 3],
+           {1: [{"Time": "2026-09-01", "Close": 1.0, "Average": 1.0, "Volume": 1}], 2: [], 3: []})
+    lh = [m for t, m in lines if t == "lh"]
+    assert lh and "was_current=True" in lh[0] and "empty=2" in lh[0], lh
+
+
+def test_capital_reports_how_long_it_waited_for_markets(monkeypatch, lines):
+    """The startup fix (capital `syncing`) is only visible on a beta client through telemetry: one
+    line when a client starts waiting, one when markets arrive, with the seconds in between."""
+    from app import main
+    clock = iter([100.0, 112.5])
+    monkeypatch.setattr(main.time, "time", lambda: next(clock))
+    monkeypatch.setattr(main, "_capital_sync", {"since": None})
+    main._note_capital_sync({"syncing": True, "rows": [1, 2]})
+    main._note_capital_sync({"syncing": True, "rows": [1, 2]})
+    main._note_capital_sync({"syncing": False, "rows": [1, 2]})
+    main._note_capital_sync({"syncing": False, "rows": [1, 2]})
+    got = [m for t, m in lines if t == "capital"]
+    assert got == ["syncing: no markets yet (rows=2)", "markets after 12.5s (rows=2)"], got
+
+
+def test_an_old_layout_local_db_and_a_refused_refresh_say_so(monkeypatch, lines, tmp_path):
+    import sqlite3
+    old = tmp_path / "old.sqlite"
+    c = sqlite3.connect(str(old)); c.execute("CREATE TABLE market_meta (key TEXT, value TEXT)"); c.commit(); c.close()
+    new = tmp_path / "new.sqlite"
+    c = sqlite3.connect(str(new)); c.executescript(db.MARKET_SCHEMA); c.commit(); c.close()
+    assert db._carry_crawl(new, old) == (0, 0)
+    assert ("seed", "local DB has no crawl tables; nothing to carry") in lines
+    from fastapi.testclient import TestClient
+    from app import main
+    monkeypatch.setattr(db, "MARKET_SEED_PATH", tmp_path / "seed.gz")
+    assert TestClient(main.app).post("/api/mods/refresh").status_code == 403
+    assert ("mods", "refresh refused: this install reads its tables from the seed") in lines

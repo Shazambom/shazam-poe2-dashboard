@@ -235,6 +235,7 @@ def _carry_crawl(new, old) -> tuple[int, int]:
         c.execute("ATTACH DATABASE ? AS loc", (str(old),))
         have = {r[0] for r in c.execute("SELECT name FROM loc.sqlite_master WHERE type='table'")}
         if not {"kv_ops", "league_daily"} <= have:
+            devtelemetry.tlog("seed", "local DB has no crawl tables; nothing to carry")
             return 0, 0                            # an older layout: no crawl bookkeeping to carry
         seed_at = {k: v for k, v in c.execute("SELECT key, CAST(value AS REAL) FROM main.kv_ops WHERE key LIKE 'lh_fetch:%'")}
         newer = []
