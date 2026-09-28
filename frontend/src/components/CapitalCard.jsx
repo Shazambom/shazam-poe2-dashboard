@@ -5,27 +5,33 @@ import { useStatus } from '../lib/statusStore.js'
 import { useSync } from '../lib/syncStore.js'
 import Cur from './Cur.jsx'
 import CurrencyPicker from './CurrencyPicker.jsx'
-import Wealth, { useWealthText } from './Wealth.jsx'
+import Wealth, { Native, useWealthText } from './Wealth.jsx'
+import { holdingLine } from '../lib/capital.js'
 
 const PRIMARY = ['chaos', 'exalted', 'divine']
 
-// Compact per-row sub-line under the currency name (the rail is too narrow for extra columns):
-// paper worth, and — only when it differs — what it ACTUALLY cashes out to, with a ghost hint.
-// `partial` = the book can't absorb the whole stack; a `▼x%` tag flags all-in loss; `no market
-// data` = we have no tracked exchange market for it. Cash-like holdings just show their worth.
+// Compact per-row sub-line under the currency name (the rail is too narrow for extra columns), by
+// the volume rule (lib/capital.js holdingLine): a traded holding's worth at its market's rate, and
+// — only when it differs — what it ACTUALLY cashes out to, in the cash currency the sale ends in,
+// with a ghost hint. A cash holding's quantity is already its native amount: no line. `partial` =
+// the book can't absorb the whole stack; `▼x%` = all-in loss; `no market data` = no tracked market.
 function worthLine(v, qtyStr, ref, backfilling, wtext) {
-  if (!v || v.value_ref == null) {
+  const l = holdingLine(v)
+  if (!l) {
     return Number(qtyStr) > 0 ? <span className="muted" title={backfilling ? 'valued once market data finishes syncing' : 'no market rate yet'}>…</span> : ''
   }
-  const worth = <Wealth v={v.value_ref} cur={ref} size={13} />
-  if (v.realizable_ref == null) {
+  const worth = l.worth && <Native v={l.worth.amount} cur={l.worth.cur} vRef={l.worth.ref} size={13} />
+  if (l.noMarket) {
     return <>{worth} <span className="muted" title="no tracked exchange market for this currency, so its cash-out can't be measured">· no market data</span></>
   }
-  const ghost = v.value_ref - v.realizable_ref
-  const ghostPct = v.value_ref > 0 ? ghost / v.value_ref * 100 : 0    // all-in loss: slippage + gold + stranded
   let tail = null
-  if (v.full_fill === false) tail = <span className="cap-ghost" title={`the market can't absorb the whole stack right now — 👻 ${wtext(ghost, ref)} ghost`}> → <Wealth v={v.realizable_ref} cur={ref} size={13} /> partial</span>
-  else if (ghostPct >= 1) tail = <span className="cap-ghost" title={`cash out via best path · 👻 ${wtext(ghost, ref)} ghost (slippage + gold)`}> → <Wealth v={v.realizable_ref} cur={ref} size={13} /> ▼{ghostPct.toFixed(0)}%</span>
+  if (l.cashout) {
+    const ghost = v.value_ref - v.realizable_ref
+    const out = <Native v={l.cashout.amount} cur={l.cashout.cur} vRef={l.cashout.ref} size={13} />
+    tail = l.partial
+      ? <span className="cap-ghost" title={`the market can't absorb the whole stack right now — 👻 ${wtext(ghost, ref)} ghost`}> → {out} partial</span>
+      : <span className="cap-ghost" title={`cash out via best path · 👻 ${wtext(ghost, ref)} ghost (slippage + gold)`}> → {out} ▼{l.ghostPct.toFixed(0)}%</span>
+  }
   return <>{worth}{tail}</>
 }
 

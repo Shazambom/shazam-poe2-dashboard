@@ -162,6 +162,8 @@ def capital_rows(caps: dict[str, float], g: "arbitrage.Graph", ref_value: dict[s
     (Ghost Wealth), plus the totals. Pure over (caps, graph, ref_value)."""
     gv = settings.gold_value_per_1k(g.s)
     cash = cash_set(g, ref_value)          # hub currencies = cash-like; derived once (PageRank)
+    ranked = arbitrage.counterparts_by_volume(g, ref_value)
+    ref = g.s["reference"]
     rows = []
     for c, q in caps.items():
         px = 1.0 if c == g.s["reference"] else ref_value.get(c)
@@ -171,6 +173,18 @@ def capital_rows(caps: dict[str, float], g: "arbitrage.Graph", ref_value: dict[s
         row.update(realizable_ref=liq["realizable_ref"], slippage_pct=liq["slippage_pct"],
                    fill_hours=liq["fill_hours"], source=liq["source"], full_fill=liq["full_fill"],
                    cashout_path=liq["path"])
+        # The volume rule (CLAUDE.md): cash IS native money, worth its own raw amount; anything else
+        # is worth its quantity at the rate of the market that trades it. A cash-out's result is the
+        # amount of the cash currency the path ends in (sold at paper there), not its ex value.
+        if c == ref or c in cash:
+            row["native"] = row["realizable_native"] = {"amount": q, "cur": c}
+        else:
+            native = arbitrage.native_price(g, c, ref_value, ranked, ref)
+            row["native"] = {"amount": q * native[0], "cur": native[1]} if native else None
+            end = (liq["path"] or [None])[-1]
+            end_px = 1.0 if end == ref else ref_value.get(end)
+            row["realizable_native"] = ({"amount": liq["realizable_ref"] / end_px, "cur": end}
+                                        if liq["realizable_ref"] is not None and end_px else None)
         rows.append(row)
     total = sum(r["value_ref"] for r in rows if r["value_ref"] is not None)
     realizable_total = sum(r["realizable_ref"] for r in rows if r["realizable_ref"] is not None)

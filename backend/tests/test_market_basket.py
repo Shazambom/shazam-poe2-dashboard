@@ -290,3 +290,24 @@ def test_the_parent_map_never_outlives_its_table(g):
     assert fx.priced_by
     fx.add(Edge("divine", "whatever", "digest", 1.0, [{"rate": 1.0, "stock": 1}], age_s=0.0, vol_in_per_h=1.0))
     assert fx.priced_by == {} and fx._values is None
+
+
+# ------------------------------------------------------------------ the volume rule (CLAUDE.md)
+def test_a_holding_is_worth_its_own_currency_or_its_market_rate_never_a_conversion(g, rv):
+    """A cash holding IS native money: its worth is its own raw amount. Anything else is worth its
+    quantity at the rate of the market that trades it (arbitrage.native_price). A cash-out's
+    result is what the path ends in: the amount of that cash currency received, not its ex value."""
+    from app import arbitrage
+    caps = {"preserved-cranium": 2.0, "divine": 4.0, "chaos": 108.0, REF: 136.0}
+    out = liquidity.capital_rows(caps, g, rv)
+    rows = {r["currency"]: r for r in out["rows"]}
+    for c in ("divine", "chaos", REF):
+        assert rows[c]["native"] == {"amount": caps[c], "cur": c}, c
+        assert rows[c]["realizable_native"] == {"amount": caps[c], "cur": c}, c
+    cr = rows["preserved-cranium"]
+    rate, cur = arbitrage.native_price(g, "preserved-cranium", rv, arbitrage.counterparts_by_volume(g, rv), REF)
+    assert cr["native"] == {"amount": pytest.approx(2.0 * rate), "cur": cur}
+    assert cur == REF or g.direct_rate("preserved-cranium", cur) == pytest.approx(rate), "priced in a market it trades in"
+    end = cr["cashout_path"][-1]
+    assert end in HUBS
+    assert cr["realizable_native"] == {"amount": pytest.approx(cr["realizable_ref"] / rv[end]), "cur": end}
