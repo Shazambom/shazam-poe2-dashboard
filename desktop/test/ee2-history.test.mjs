@@ -148,3 +148,27 @@ test('onBuilt sees every built intent, from the automatic stream and from the cl
   await c.buildIntent(RAW, 'clipboard')
   assert.deepEqual(built.map(i => [i.origin, i.q, i.cfgLeague]), [['ee2', '{"query":{}}', 'L'], ['clipboard', '{"query":{}}', 'L']])
 })
+
+test('a history search ticks every mod the item has, whatever EE2\'s "select all" setting says', async () => {
+  // EE2's final search (after the ticks in its window) is not observable, so the history searches
+  // for items like this one: every mod filter enabled, through EE2's own defaultAllSelected (owner,
+  // 2026-09-28). Seen on beta: a rare's search opened with its mods unticked. The port itself stays
+  // faithful to the setting (its golden tests); the history is what asks for "all".
+  const given = []
+  const worker = { spawn() { return { build: async (raw, pf) => { given.push(pf); return { q: '{"query":{}}', name: 'x', item: { name: 'x', baseType: 'b', rarity: 'Rare', itemClass: 'Boots' }, host: 'www.pathofexile.com', buildMs: 1 } }, kill() {} } } }
+  const c = createHistoryConsumer({ manager: new EventEmitter(), worker, prefs: () => ({ prefs: { leagueId: 'L', language: 'en', defaultAllSelected: false }, source: 'ee2' }), send: () => {} })
+  await c.buildIntent(RAW, 'clipboard')
+  assert.equal(given[0].defaultAllSelected, true)
+  assert.equal(given[0].leagueId, 'L', 'the rest of the EE2 settings pass through')
+
+  const { createRequire } = await import('node:module')
+  const port = createRequire(import.meta.url)('../src/vendor/ee2-query')
+  const { readFileSync } = await import('node:fs')
+  await port.init()
+  const raw = readFileSync(new URL('./fixtures/ee2/items/RareItem.txt', import.meta.url), 'utf8')
+  const r = port.buildQuery(raw, { leagueId: 'Forbidden Rites', language: 'en', defaultAllSelected: true })
+  // The item's own mods; EE2's "open affix" helpers (pseudo_number_of_empty_*) stay off even under
+  // its own select-all: ticking one would demand a free slot, not "items like this one".
+  const mods = JSON.parse(r.q).query.stats.flatMap(s => s.filters).filter(f => !/pseudo_number_of_empty_/.test(f.id))
+  assert.ok(mods.length >= 3 && mods.every(f => !f.disabled), `every mod ticked: ${JSON.stringify(mods.map(f => [f.id, f.disabled]))}`)
+})

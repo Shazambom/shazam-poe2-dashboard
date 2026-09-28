@@ -53,7 +53,9 @@ function createHistoryConsumer({ manager, worker, prefs, send = null, log = () =
     const { prefs: pf } = readPrefs()
     const t0 = now()
     let r
-    try { r = await p.build(raw, pf) } catch (e) {
+    // Every mod ticked (EE2's own "select all"), whatever the EE2 setting: the ticks made in EE2's
+    // window are not observable, so a history search finds items like this one (owner, 2026-09-28).
+    try { r = await p.build(raw, { ...pf, defaultAllSelected: true }) } catch (e) {
       const msg = String(e && e.message || e)
       lastFailure = now(); try { p.kill?.() } catch {}; proc = null; status.warm = false
       log(`history-skip reason=${/timeout/i.test(msg) ? 'timeout' : 'worker'} origin=${origin} err="${msg.slice(0, 160)}"`)
