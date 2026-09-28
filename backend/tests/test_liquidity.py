@@ -17,6 +17,8 @@ walk. Built on a SYNTHETIC graph so it needs no DB (mirrors test_convert.py).
 import sys
 from pathlib import Path
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # backend/
 from app import liquidity  # noqa: E402
 from app.arbitrage import Edge, Graph  # noqa: E402
@@ -245,3 +247,28 @@ def test_capital_endpoint_enriches_rows(monkeypatch):
 if __name__ == "__main__":
     import pytest
     raise SystemExit(pytest.main([__file__, "-q"]))
+
+
+# --------------------------------------------------------------- no markets yet (startup after an update)
+def test_capital_says_syncing_while_the_graph_holds_no_markets():
+    """Right after a seed replace (every update) or a launch after more than digest_max_age_h away,
+    the digest's newest hour is too old to quote, so the graph has values (poe2scout) but no
+    markets: no hubs, no cash-out path, no market rate. Judging holdings then printed "no market
+    data", a realizable total near zero and a ghost of everything (seen on the dev app 2026-09-28).
+    Capital says it is syncing instead and makes no market judgment."""
+    g = _g()
+    g.values = lambda: {"exalted": 1.0, "chaos": 64.0, "divine": 513.0, "vaal": 7.0}
+    out = liquidity.capital_rows({"chaos": 212.0, "divine": 603.0, "vaal": 40.0}, g, g.values())
+    assert out["syncing"] is True
+    assert out["total_ref"] == pytest.approx(212 * 64 + 603 * 513 + 40 * 7), "worth still counts: the value table has it"
+    assert out["realizable_total_ref"] is None and out["ghost_ref"] is None
+    for r in out["rows"]:
+        assert r["realizable_ref"] is None and r["native"] is None and r["realizable_native"] is None, r
+
+
+def test_capital_is_not_syncing_once_a_market_is_quoted():
+    g = _g()
+    g.add(_edge("divine", "exalted", 500.0, 1_000_000, kind="digest"))
+    g.add(_edge("exalted", "divine", 1 / 500.0, 1_000_000, kind="digest"))
+    out = liquidity.capital_rows({"divine": 2.0}, g, g.values())
+    assert out["syncing"] is False and out["realizable_total_ref"] is not None

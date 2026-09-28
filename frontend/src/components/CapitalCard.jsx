@@ -15,10 +15,10 @@ const PRIMARY = ['chaos', 'exalted', 'divine']
 // — only when it differs — what it ACTUALLY cashes out to, in the cash currency the sale ends in,
 // with a ghost hint. A cash holding's quantity is already its native amount: no line. `partial` =
 // the book can't absorb the whole stack; `▼x%` = all-in loss; `no market data` = no tracked market.
-function worthLine(v, qtyStr, ref, backfilling, wtext) {
-  const l = holdingLine(v)
+function worthLine(v, qtyStr, ref, backfilling, syncing, wtext) {
+  const l = holdingLine(v, { syncing })
   if (!l) {
-    return Number(qtyStr) > 0 ? <span className="muted" title={backfilling ? 'valued once market data finishes syncing' : 'no market rate yet'}>…</span> : ''
+    return Number(qtyStr) > 0 ? <span className="muted" title={backfilling || syncing ? 'valued once market data finishes syncing' : 'no market rate yet'}>…</span> : ''
   }
   const worth = l.worth && <Native v={l.worth.amount} cur={l.worth.cur} vRef={l.worth.ref} size={13} />
   if (l.noMarket) {
@@ -69,6 +69,7 @@ export default function CapitalCard({ currencies, status, onSaved }) {
   const remove = (c) => setQty(r => { const n = { ...r }; delete n[c]; save(n); return n })
   const valueOf = (c) => data?.rows.find(r => r.currency === c)
   const backfilling = status?.digest?.backfilling
+  const syncing = data?.syncing   // no markets yet (startup after an update): no judgment, "…"
   const ref = data?.reference ?? 'exalted'
   const wtext = useWealthText()
 
@@ -87,7 +88,7 @@ export default function CapitalCard({ currencies, status, onSaved }) {
             <input type="number" min="0" step="1" value={qty[c]} aria-label={`${c} held`}
               onChange={e => setOne(c, e.target.value)} />
             {PRIMARY.includes(c) ? <span /> : <button className="cap-x" title="Remove" aria-label={`Remove ${c}`} onClick={() => remove(c)}>×</button>}
-            <div className="cap-sub">{worthLine(valueOf(c), qty[c], ref, backfilling, wtext)}</div>
+            <div className="cap-sub">{worthLine(valueOf(c), qty[c], ref, backfilling, syncing, wtext)}</div>
           </div>
         ))}
       </div>

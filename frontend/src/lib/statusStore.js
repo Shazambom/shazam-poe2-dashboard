@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { api } from './api.js'
+import { nextPollMs } from './capital.js'
 
 // The ONE poll of the app-level status: /api/status + /api/capital every 30s (started by App),
 // the rate budget, and the saved settings. Views that used to poll /api/session, /api/oauth/status
@@ -41,11 +42,15 @@ export const ensureSettings = () => {
   return st.settings ? Promise.resolve(st.settings) : st.loadSettings()
 }
 
-// Start the 30s status poll; returns the stop function (App owns the lifetime).
+// Start the 30s status poll (every few seconds while Capital is syncing, lib/capital.js
+// nextPollMs); returns the stop function (App owns the lifetime).
 export function startStatusPolling(ms = 30000) {
-  const st = useStatus.getState()
-  st.refresh()
+  let t = null, stopped = false
+  const tick = async () => {
+    await useStatus.getState().refresh()
+    if (!stopped) t = setTimeout(tick, nextPollMs(useStatus.getState().capital, ms))
+  }
+  tick()
   ensureSettings().catch(() => {})
-  const t = setInterval(() => useStatus.getState().refresh(), ms)
-  return () => clearInterval(t)
+  return () => { stopped = true; clearTimeout(t) }
 }

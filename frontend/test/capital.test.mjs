@@ -37,3 +37,25 @@ test('CapitalCard renders the holding line natively, the total as the one approx
   assert.ok(!s.includes('<Wealth v={v.value_ref}') && !s.includes('<Wealth v={v.realizable_ref}'), 'no re-denominated holding')
   assert.ok(s.includes('<Wealth v={data?.total_ref}'), 'the total stays one wealth figure')
 })
+
+// Startup after an update (or a long break): the graph has no markets until the digest sync
+// catches up, and the backend says `syncing` instead of judging holdings. The card waits ("…")
+// and the poll comes back in seconds, not 30 s, so it never shows a no-market judgment.
+test('while syncing a holding has no line yet; the poll comes back fast until it clears', async () => {
+  const { nextPollMs, SYNC_POLL_MS } = await import('../src/lib/capital.js')
+  const v = { currency: 'chaos', qty: 212, value_ref: 13568, realizable_ref: null, native: null, realizable_native: null }
+  assert.equal(holdingLine(v, { syncing: true }), null)
+  assert.notEqual(holdingLine(v), null, 'outside syncing the same row is a no-market row')
+  assert.equal(SYNC_POLL_MS, 3000)
+  assert.equal(nextPollMs({ syncing: true }, 30000), 3000)
+  assert.equal(nextPollMs({ syncing: false }, 30000), 30000)
+  assert.equal(nextPollMs(null, 30000), 30000)
+})
+
+test('the card and the poll read the syncing flag', async () => {
+  const { readFileSync } = await import('node:fs')
+  const card = readFileSync(new URL('../src/components/CapitalCard.jsx', import.meta.url), 'utf8')
+  const store = readFileSync(new URL('../src/lib/statusStore.js', import.meta.url), 'utf8')
+  assert.ok(card.includes('data?.syncing'), 'CapitalCard reads the payload flag')
+  assert.ok(store.includes('nextPollMs('), 'the status poll schedules by it')
+})

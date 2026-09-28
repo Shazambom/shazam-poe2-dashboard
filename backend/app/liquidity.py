@@ -162,10 +162,23 @@ def realizable(g: "arbitrage.Graph", ref_value: dict[str, float], currency: str,
 def capital_rows(caps: dict[str, float], g: "arbitrage.Graph", ref_value: dict[str, float]) -> dict:
     """The /api/capital payload: every holding priced at paper AND at what it would realize
     (Ghost Wealth), plus the totals. Pure over (caps, graph, ref_value)."""
+    ref = g.s["reference"]
+    # No exchange market in the graph yet: the digest's newest hour is older than it quotes (the
+    # first seconds after a seed replace, or a launch after a long break) until the sync catches
+    # up. Worth still counts (the value table has poe2scout); a cash-out, a hub or a market rate
+    # judged now would be nonsense, so none is made and the view says it is syncing.
+    if not any(e.kind != "recipe" for e in g.edges.values()):
+        rows = [{"currency": c, "name": registry.name(c), "qty": q,
+                 "ref_value": 1.0 if c == ref else ref_value.get(c),
+                 "value_ref": q * (1.0 if c == ref else ref_value.get(c)) if (c == ref or ref_value.get(c)) else None,
+                 "realizable_ref": None, "slippage_pct": None, "fill_hours": None, "source": "none",
+                 "full_fill": None, "cashout_path": None, "native": None, "realizable_native": None}
+                for c, q in caps.items()]
+        return {"rows": rows, "total_ref": sum(r["value_ref"] for r in rows if r["value_ref"] is not None),
+                "realizable_total_ref": None, "ghost_ref": None, "reference": ref, "syncing": True}
     gv = settings.gold_value_per_1k(g.s)
     cash = cash_set(g, ref_value)          # hub currencies = cash-like; derived once (PageRank)
     ranked = arbitrage.counterparts_by_volume(g, ref_value)
-    ref = g.s["reference"]
     rows = []
     for c, q in caps.items():
         px = 1.0 if c == g.s["reference"] else ref_value.get(c)
@@ -188,4 +201,4 @@ def capital_rows(caps: dict[str, float], g: "arbitrage.Graph", ref_value: dict[s
     total = sum(r["value_ref"] for r in rows if r["value_ref"] is not None)
     realizable_total = sum(r["realizable_ref"] for r in rows if r["realizable_ref"] is not None)
     return {"rows": rows, "total_ref": total, "realizable_total_ref": realizable_total,
-            "ghost_ref": total - realizable_total, "reference": g.s["reference"]}
+            "ghost_ref": total - realizable_total, "reference": ref, "syncing": False}
