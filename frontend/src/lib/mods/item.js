@@ -50,10 +50,19 @@ export function matchItem(pool, item) {
   return out
 }
 
+// Ctrl+V (Cmd+V on a Mac) on the Mods page pastes the copied item, unless the key is typing into a
+// field (the filter, a number box) or something else already handled it.
+export function isPasteShortcut(e) {
+  if (!e || e.defaultPrevented || !(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey) return false
+  if (String(e.key).toLowerCase() !== 'v') return false
+  const t = e.target
+  return !(t && (t.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName)))
+}
+
 // The beta diagnostic for a pasted item (beta/dev only, through the renderer's one diag bridge):
 // the pool, the rarity and the match counts, never a mod, a name or any item text.
-export function pasteDiag(poolId, item, match) {
+export function pasteDiag(poolId, item, match, via = 'button') {
   const slots = slotsFor(item?.rarity) || { prefix: 0, suffix: 0 }
-  return `mods-paste pool=${poolId} rarity=${item?.rarity || '?'} rolled=${match.rolled.length} loose=${match.loose.length} ` +
+  return `mods-paste via=${via} pool=${poolId} rarity=${item?.rarity || '?'} rolled=${match.rolled.length} loose=${match.loose.length} ` +
     `prefix=${match.count.prefix}/${slots.prefix} suffix=${match.count.suffix}/${slots.suffix}`
 }

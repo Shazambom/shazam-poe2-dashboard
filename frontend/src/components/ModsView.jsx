@@ -11,7 +11,7 @@ import { prepare, atLevel, visible, AFFIXES } from '../lib/mods/pool.js'
 import { merge } from '../lib/mods/defaults.js'
 import { familyQuery } from '../lib/mods/trade.js'
 import { stashKind, stashMods, withWanted } from '../lib/mods/stash.js'
-import { poolFor, matchItem, slotsFor, pasteDiag } from '../lib/mods/item.js'
+import { poolFor, matchItem, slotsFor, pasteDiag, isPasteShortcut } from '../lib/mods/item.js'
 import { merge as mergeRegex } from '../lib/regex/defaults.js'
 import { nav } from '../lib/nav.js'
 import { useWorkspace } from '../lib/workspaceStore.js'
@@ -60,9 +60,18 @@ export default function ModsView() {
   const match = useMemo(() => matchItem(pool, item), [pool, item])
   // Beta: once per pasted item, when its pool has loaded, how it matched (counts only).
   const reported = useRef(null)
+  const pastedVia = useRef('button')
   useEffect(() => {
-    if (item && pool && reported.current !== item) { reported.current = item; diag('mods', pasteDiag(pool.id, item, match)) }
+    if (item && pool && reported.current !== item) { reported.current = item; diag('mods', pasteDiag(pool.id, item, match, pastedVia.current)) }
   }, [item, pool, match])
+  // Ctrl+V (Cmd+V) anywhere on the page pastes the copied item, as the button does (desktop only).
+  const pasteRef = useRef(null)
+  useEffect(() => {
+    if (!modItem) return undefined
+    const onKey = (e) => { if (isPasteShortcut(e)) { e.preventDefault(); pasteRef.current?.('key') } }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
   const onItem = useMemo(() => (item ? new Map(match.rolled.flatMap(r => r.ids.map(id => [id, r.tier]))) : null), [match, item])
   const levels = useMemo(() => (pool && s ? pool.sections.map(sec => atLevel(sec, s.ilvl, sec.floored ? s.floor : 0, onItem)) : null), [pool, s?.ilvl, s?.floor, onItem])
   const tags = useMemo(() => new Set(s?.tags || []), [s?.tags])
@@ -115,7 +124,8 @@ export default function ModsView() {
   if (!s) return null
   const update = (p) => { const n = { ...s, ...p }; setS(n); save(n) }
   // Paste item: main reads the clipboard and hands over the parse; the pool follows the base.
-  const onPaste = async () => {
+  const onPaste = async (via = 'button') => {
+    pastedVia.current = via
     let r = null
     try { r = await modItem() } catch { r = { item: null, reason: 'worker' } }
     if (!r?.item) { toast(PASTE_FAIL[r?.reason] || PASTE_FAIL['not-item'], false); return }
@@ -124,6 +134,7 @@ export default function ModsView() {
     setItem(r.item)
     update({ poolId: target.id, tags: target.id === poolId ? s.tags : [], ...(r.item.itemLevel ? { ilvl: r.item.itemLevel } : {}) })
   }
+  pasteRef.current = onPaste
   const strip = item ? { name: item.name, base: item.baseType, ilvl: item.itemLevel, count: match.count, slots: slotsFor(item.rarity) } : null
   const toggleTag = (id) => update({ tags: tags.has(id) ? s.tags.filter(t => t !== id) : [...s.tags, id] })
   const empty = tags.size > 0 || filter.trim() !== '' ? 'Clear the filter or a tag to see more.' : 'Nothing rolls here.'
@@ -148,7 +159,7 @@ export default function ModsView() {
       <ModsBar pools={pools} currencies={currencies} poolId={poolId || s.poolId} ilvl={s.ilvl} floor={s.floor} filter={filter} tags={tags} tagOptions={pool?.tags || []}
                onPool={id => { if (id !== poolId) setItem(null); update({ poolId: id, tags: [] }) }} onIlvl={v => update({ ilvl: v })} onFloor={v => update({ floor: v })}
                onFilter={setFilter} onTag={toggleTag} disabled={!list.data}
-               item={strip} onPaste={modItem ? onPaste : null} onClearItem={() => setItem(null)} />
+               item={strip} onPaste={modItem ? () => onPaste('button') : null} onClearItem={() => setItem(null)} />
       {failed && <div className="empty">Reopen the tab to load the modifier tables.</div>}
       {!failed && list.data && !pools.length && <div className="empty">The modifier tables arrive with the next market update.</div>}
       {loading && pools.length > 0 && <div className="mods-body"><div className="sk mods-skel" /><div className="sk mods-skel" /></div>}

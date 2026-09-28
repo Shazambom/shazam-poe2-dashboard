@@ -106,7 +106,31 @@ test('a tier name two families share is kept when the printed text matches neith
 test('the beta line for a pasted item carries the pool, rarity and counts, never a mod or its text', async () => {
   const { pasteDiag } = await import('../src/lib/mods/item.js')
   const m = matchItem(POOL(), ITEM)
-  const line = pasteDiag('ring', ITEM, m)
-  assert.equal(line, 'mods-paste pool=ring rarity=Rare rolled=4 loose=1 prefix=2/3 suffix=3/3')
+  const line = pasteDiag('ring', ITEM, m, 'key')
+  assert.equal(line, 'mods-paste via=key pool=ring rarity=Rare rolled=4 loose=1 prefix=2/3 suffix=3/3')
   assert.ok(!/Life|Strength|Havoc|Sapphire|Virile/.test(line))
+})
+
+test('Ctrl+V (Cmd+V) pastes an item on the Mods page, except while typing in a field', async () => {
+  const { isPasteShortcut } = await import('../src/lib/mods/item.js')
+  const page = { tagName: 'DIV', isContentEditable: false }
+  const key = (over) => ({ key: 'v', ctrlKey: false, metaKey: false, altKey: false, shiftKey: false, target: page, ...over })
+  assert.equal(isPasteShortcut(key({ ctrlKey: true })), true)
+  assert.equal(isPasteShortcut(key({ metaKey: true })), true)
+  assert.equal(isPasteShortcut(key({ ctrlKey: true, key: 'V' })), true, 'caps lock')
+  assert.equal(isPasteShortcut(key({})), false, 'a bare v types')
+  assert.equal(isPasteShortcut(key({ ctrlKey: true, shiftKey: true })), false, 'Ctrl+Shift+V is another shortcut')
+  assert.equal(isPasteShortcut(key({ ctrlKey: true, altKey: true })), false)
+  assert.equal(isPasteShortcut(key({ ctrlKey: true, key: 'c' })), false)
+  for (const tagName of ['INPUT', 'TEXTAREA', 'SELECT']) {
+    assert.equal(isPasteShortcut(key({ ctrlKey: true, target: { tagName, isContentEditable: false } })), false, `typing in ${tagName}`)
+  }
+  assert.equal(isPasteShortcut(key({ ctrlKey: true, target: { tagName: 'DIV', isContentEditable: true } })), false)
+  assert.equal(isPasteShortcut(key({ ctrlKey: true, defaultPrevented: true })), false, 'someone else handled it')
+})
+
+test('the Mods page listens for the paste shortcut', async () => {
+  const { readFileSync } = await import('node:fs')
+  const s = readFileSync(new URL('../src/components/ModsView.jsx', import.meta.url), 'utf8')
+  assert.ok(s.includes('isPasteShortcut(') && s.includes("addEventListener('keydown'"), 'ModsView wires Ctrl+V to onPaste')
 })

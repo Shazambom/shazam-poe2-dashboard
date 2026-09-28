@@ -1057,8 +1057,13 @@ code { background: var(--bg); padding: 1px 5px; border-radius: 3px; font-size: 1
 .mods-fam:focus-visible { outline: none; box-shadow: inset 0 0 0 1px var(--gold-dim); }
 .mods-fam[aria-expanded="true"] { background: rgba(var(--accent-rgb),.10); box-shadow: inset 2px 0 0 var(--gold); }
 .mods-fam.out { color: var(--muted); }
-.mods-fam.on-item { box-shadow: inset 2px 0 0 var(--gold-dim); }
-.mods-fam.on-item .mods-num:not(.mods-chance) { color: var(--gold); }
+/* A mod the pasted item carries: gold means selected (styleguide), so the row is tinted, barred
+   and its tier is a solid badge; it must read at a glance among ninety rows. */
+.mods-fam.on-item { background: rgba(var(--accent-rgb),.14); box-shadow: inset 3px 0 0 var(--gold); }
+.mods-fam.on-item:hover { background: rgba(var(--accent-rgb),.20); }
+.mods-fam.on-item .mods-text { color: var(--ink); font-weight: 600; }
+.mods-fam.on-item .mods-num:not(.mods-chance) { justify-self: end; color: var(--ink-on-gold); background: var(--gold);
+  border-radius: 999px; padding: 1px 8px; font-weight: 600; }
 .mods-item { display: flex; align-items: center; gap: 14px; font-size: 12.5px; color: var(--ink-2); }
 .mods-item-name { font-weight: 600; color: var(--ink); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mods-item .btn { margin-left: auto; }
