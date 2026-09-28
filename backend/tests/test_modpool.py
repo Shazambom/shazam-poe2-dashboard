@@ -378,3 +378,17 @@ def test_a_cost_with_no_market_in_its_currency_stays_in_the_reference_at_its_val
                       [("divine", "exalted", 500.0, 1_000), ("exalted", "divine", 1 / 500.0, 500_000)])
     monkeypatch.setattr(arbitrage, "cached_graph", lambda: g)
     assert modpool.prices("ring")["prices"] == {"Adept Rune": {"price": 1005.0, "cur": "exalted", "value_ref": 1005.0}}
+
+
+def test_derive_builds_the_families_and_the_pools_once(export, monkeypatch):
+    """families_from and pools_from each scan every mod against every class; derive() computes
+    each once and hands them on (it ran families_from three times and pools_from twice)."""
+    calls = {"families_from": 0, "pools_from": 0}
+    for name in calls:
+        real = getattr(modpool, name)
+        def counted(*a, _real=real, _name=name, **k):
+            calls[_name] += 1
+            return _real(*a, **k)
+        monkeypatch.setattr(modpool, name, counted)
+    modpool.derive(export)
+    assert calls == {"families_from": 1, "pools_from": 1}, calls

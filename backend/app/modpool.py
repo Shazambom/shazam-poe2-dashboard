@@ -68,6 +68,7 @@ class Export:
     bases: dict
     classes: dict
     augments: dict
+    _class_tags: dict | None = field(default=None, repr=False, compare=False)   # memo of _class_tags()
 
 
 @dataclass
@@ -145,12 +146,14 @@ def singulars(plural: str) -> list:
 
 
 def _class_tags(export: Export) -> dict:
-    """Class id → the union of its released bases' tags."""
-    out = defaultdict(set)
-    for b in export.bases.values():
-        if b.get("release_state") == "released":
-            out[b.get("item_class")].update(b.get("tags") or [])
-    return out
+    """Class id → the union of its released bases' tags. One scan of the bases per export."""
+    if export._class_tags is None:
+        out = defaultdict(set)
+        for b in export.bases.values():
+            if b.get("release_state") == "released":
+                out[b.get("item_class")].update(b.get("tags") or [])
+        export._class_tags = out
+    return export._class_tags
 
 
 def classes_of(target, plural: dict, export: Export) -> list:
@@ -233,7 +236,7 @@ def _domain_of(class_tags: set, mods: dict) -> str | None:
     return counts.most_common(1)[0][0] if counts else None
 
 
-def pools_from(export: Export) -> list:
+def pools_from(export: Export, families: list | None = None) -> list:
     spawn_tags = _spawn_tags_by_domain(export.mods)
     # Classes are grouped by display name: two class ids with one name are one thing to the user.
     by_name: dict = {}
@@ -294,7 +297,7 @@ def pools_from(export: Export) -> list:
             pools.append({"id": pid, "name": name, "class": class_name, "domain": domain, "tags": tags, "keywords": names,
                           "desecrates": sorted(desecrates[tuple(tags)])})
     # A pool nothing rolls on is not a pool (sanctified relics, junk classes).
-    fams = families_from(export)
+    fams = families if families is not None else families_from(export)
     keep = []
     for p in pools:
         tags = set(p["tags"])
@@ -323,14 +326,14 @@ def _base_tags(export: Export) -> set:
 
 def families_from(export: Export) -> list:
     """Every family that can land on some pool: prefix/suffix/corrupted mods of every pool domain,
-    the corruption upgrades, and the desecrated-domain mods keyed on a tag no base carries."""
+    the corruption upgrades, and every desecrated prefix and suffix (the bones' lords, the Altered
+    Collarbone, the jewel and waystone bones)."""
     domains = set(DOMAIN_OVERRIDES.values())
     class_tags = _class_tags(export)
     for cid, tags in class_tags.items():
         d = _domain_of(tags, export.mods)
         if d:
             domains.add(d)
-    carried = _base_tags(export)
     by_key: dict = {}
     for mid, m in export.mods.items():
         weights = [[w["tag"], w["weight"]] for w in m.get("spawn_weights") or []]
@@ -373,7 +376,7 @@ def families_from(export: Export) -> list:
 _CAN_ROLL = re.compile(r"Can roll (\w+) modifiers", re.I)
 
 
-def sections_from(export: Export, families: list) -> list:
+def sections_from(export: Export, families: list, pools: list | None = None) -> list:
     carried = _base_tags(export)
     plural = plural_index(export.classes)
     # Carriers: a socketable whose text names the pool it opens.
@@ -393,7 +396,7 @@ def sections_from(export: Export, families: list) -> list:
                 if w > 0 and tag not in carried:
                     keyed[tag].append((f, t))
     sections = [{"id": "base", "title": None, "domain": None, "affixes": ["prefix", "suffix"], "keys": [], "classes": None, "floored": True}]
-    pool_classes = {p["class"] for p in pools_from(export)}
+    pool_classes = {p["class"] for p in (pools if pools is not None else pools_from(export, families))}
     by_domain: dict = {}   # the unveiled keys of a non-item domain are one section (poe2db: one "Desecrated" group, the lords as tags in it)
     for tag, pairs in sorted(keyed.items()):
         domain = Counter(f["domain"] for f, _ in pairs).most_common(1)[0][0]
@@ -495,7 +498,8 @@ def build_pool(pool: dict, families: list, sections: list) -> dict:
 
 def derive(export: Export) -> Derived:
     families = families_from(export)
-    return Derived(pools=pools_from(export), families=families, sections=sections_from(export, families))
+    pools = pools_from(export, families)
+    return Derived(pools=pools, families=families, sections=sections_from(export, families, pools))
 
 
 # ------------------------------------------------------------------ poe2db pages
