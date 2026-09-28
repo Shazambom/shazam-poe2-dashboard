@@ -174,7 +174,11 @@ immediately and the spinner rarely appears.
 
 ## Non-goals / explicitly out of scope
 
-- No merge between old and new market data on update (wholesale replace only).
+- No merge between old and new market data on update (wholesale replace), with one exception:
+  league-history items the client crawled after the seed's own crawl (`lh_fetch` newer than the
+  seed's) keep their `league_daily` rows and `lh_*` marks (`db._carry_crawl`, 2026-09-28). Without
+  it every update restarted the current-league crawl (beta telemetry: 183/527 → 2/527). A carry-over
+  that fails is the T0 `crawl-lost`.
 - No migrations for the market DB (schema rides with the snapshot + backend version).
 - Per-card numeraire overrides stay in the frontend `localStorage` (already persists across
   updates); not part of this split.

@@ -32,6 +32,7 @@ T0_KINDS = frozenset({
     "digest-cold",        # the hourly digest starts from scratch with a seed bundled
     "league-full-crawl",  # the league-history crawl refetches a league it should have had
     "mods-empty",         # a seed is bundled yet there are no mod tables
+    "crawl-lost",         # a seed replace could not carry the client's newer crawl over
 })
 
 

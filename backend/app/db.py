@@ -223,6 +223,41 @@ def _seed_version() -> int:
     return _read_snapshot_version(p)
 
 
+def _carry_crawl(new, old) -> tuple[int, int]:
+    """Copy the league-history crawl the client did after the seed's own into the new file: for
+    every (league, item) whose local `lh_fetch` stamp is newer than the seed's (or that the seed
+    never fetched), its league_daily rows, its stamp and its `lh_complete` mark. Reads the old DB
+    through its WAL; writes the new file in rollback-journal mode so the merge is in the main file
+    before the rename. Returns (items, rows) carried."""
+    c = sqlite3.connect(str(new))
+    try:
+        c.execute("PRAGMA journal_mode=DELETE")
+        c.execute("ATTACH DATABASE ? AS loc", (str(old),))
+        seed_at = {k: v for k, v in c.execute("SELECT key, CAST(value AS REAL) FROM main.kv_ops WHERE key LIKE 'lh_fetch:%'")}
+        newer = []
+        for key, at in c.execute("SELECT key, CAST(value AS REAL) FROM loc.kv_ops WHERE key LIKE 'lh_fetch:%'").fetchall():
+            if key in seed_at and seed_at[key] >= at:
+                continue
+            league, _, item = key[len("lh_fetch:"):].rpartition(":")
+            try:
+                newer.append((key, league, int(item)))
+            except ValueError:
+                continue
+        if not newer:
+            return 0, 0
+        c.execute("CREATE TEMP TABLE carry(key TEXT, league TEXT, item_id INTEGER, PRIMARY KEY (league, item_id))")
+        c.executemany("INSERT OR IGNORE INTO carry VALUES (?,?,?)", newer)
+        with c:
+            rows = c.execute("INSERT OR REPLACE INTO main.league_daily(league, item_id, day, close, average, volume) "
+                             "SELECT l.league, l.item_id, l.day, l.close, l.average, l.volume FROM loc.league_daily l "
+                             "JOIN carry k ON k.league = l.league AND k.item_id = l.item_id").rowcount
+            c.execute("INSERT OR REPLACE INTO main.kv_ops(key, value) SELECT o.key, o.value FROM loc.kv_ops o "
+                      "JOIN carry k ON o.key = k.key OR o.key = 'lh_complete:' || k.league || ':' || k.item_id")
+        return len(newer), rows
+    finally:
+        c.close()
+
+
 def seed_market() -> None:
     """Replace the local market.sqlite with the bundled snapshot when the snapshot is
     newer (or when there's no local market DB yet). Atomic: write .tmp, fsync, rename.
@@ -230,7 +265,9 @@ def seed_market() -> None:
     No-op when no seed is bundled (dev/server) — the live crawl builds market.sqlite.
 
     This is the "throw in a snapshot without regard of structure" rule: a newer
-    snapshot_version wholesale-replaces the local file — no migration, no merge. User
+    snapshot_version wholesale-replaces the local file — no migration. The one merge: the client's
+    league-history crawl newer than the seed's is carried into the new file (`_carry_crawl`), so an
+    update never restarts a crawl the client already did (owner, 2026-09-28). User
     data is untouched (it lives in user.sqlite).
     """
     if not MARKET_SEED_PATH or not MARKET_SEED_PATH.exists():
@@ -265,6 +302,14 @@ def seed_market() -> None:
                     shutil.copyfileobj(fi, fo, length=1 << 20)
             fo.flush()
             os.fsync(fo.fileno())
+        if MARKET_DB_PATH.exists():
+            try:
+                items, rows = _carry_crawl(tmp, MARKET_DB_PATH)
+                if items:
+                    devtelemetry.tlog("seed", f"carried over {items} crawled item(s), {rows} row(s), newer than the seed")
+            except (sqlite3.Error, OSError) as exc:
+                log.error("market seed: could not carry the local crawl over (%s)", exc)
+                devtelemetry.t0("crawl-lost", f"{type(exc).__name__}: {str(exc)[:160]}; local v{local_v} seed v{seed_v}; the crawl refetches what it had")
         # Drop any stale WAL/SHM from a previous market DB so the seeded file is
         # opened clean (the seed is exported VACUUMed, no sidecars).
         for suffix in ("-wal", "-shm"):

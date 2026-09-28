@@ -141,8 +141,9 @@ token or on colors pasted into JSX. New colors → add a semantic token to `:roo
 The DB is split (IMPLEMENTED 2026-09-14) into **`user.sqlite`** (persist forever, migrate
 carefully — settings, capital, session, watches; `backend/app/migrations_user.py`) and
 **`market.sqlite`** (disposable financial/operational data, seeded from a gzipped snapshot
-bundled in the binary at build time, replaced wholesale on newer snapshots, and caught up to
-now by the watermark-driven crawl). The split is invisible to users: a seeded install shows a
+bundled in the binary at build time, replaced wholesale on newer snapshots (the client's
+league-history crawl newer than the seed's is carried over, `db._carry_crawl`), and caught up
+to now by the watermark-driven crawl). The split is invisible to users: a seeded install shows a
 populated board instantly and only the loading orb (driven by `/api/backfill`) ever surfaces
 real work. Highest-level rules:
 
