@@ -32,7 +32,10 @@ export function matchItem(pool, item) {
     if (m.affix in out.count) out.count[m.affix] += 1
     const ofAffix = fams.filter(c => c.affix === m.affix && !seen.has(c.family.id))
     let hits = m.name ? ofAffix.filter(c => c.family.tiers.some(t => t.name === m.name)) : []
-    if (hits.length > 1) hits = hits.filter(c => c.text === key(m.lines))
+    if (hits.length > 1) {                    // the text breaks the tie, but never discards the name
+      const byText = hits.filter(c => c.text === key(m.lines))
+      if (byText.length) hits = byText
+    }
     if (!hits.length) hits = ofAffix.filter(c => c.text === key(m.lines))
     const hit = hits.find(c => c.section === 'base') || hits[0]
     if (!hit) { out.loose.push(m); continue }

@@ -93,3 +93,12 @@ test('the pasted item lives for the session: a hop to another tab and back finds
   assert.equal(pasted.get(), ITEM)
   pasted.set(null)
 })
+
+test('a tier name two families share is kept when the printed text matches neither', () => {
+  // EE2's translation can print a line differently from the pool (a "#" or a sign), so the text
+  // tie-break finds no family. The name still names the family: the base section's, not loose.
+  const m = matchItem(POOL(), { ...ITEM, mods: [mod('suffix', "Incanter's", 1, ['# % increased Spell Damage'])] })
+  assert.deepEqual(m.loose, [])
+  assert.deepEqual(m.rolled.map(r => [r.family.id, r.section, r.tier]), [['suffix:SpellDamage', 'base', 1]])
+  assert.deepEqual(m.rolled[0].ids.sort(), ['suffix:SpellDamage', 'suffix:SpellDamage@genesis'], 'both twins are on the item')
+})
