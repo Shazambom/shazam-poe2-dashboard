@@ -134,3 +134,51 @@ test('the Mods page listens for the paste shortcut', async () => {
   const s = readFileSync(new URL('../src/components/ModsView.jsx', import.meta.url), 'utf8')
   assert.ok(s.includes('isPasteShortcut(') && s.includes("addEventListener('keydown'"), 'ModsView wires Ctrl+V to onPaste')
 })
+
+// From a real beta paste (2026-09-28, Runeforged Blacksteel Sabatons): a crafted prefix and the same
+// suffix family three times. And a plain Ctrl+C copy, which the parser gives no modifiers for.
+test('a crafted mod takes its slot: matched when its family is in the pool, loose when it is not', () => {
+  const m = matchItem(POOL(), { ...ITEM, mods: [
+    mod('prefix', 'Verisium', null, ['#% increased Runic Ward'], 'crafted'),
+    mod('prefix', null, null, ['# to maximum Life'], 'crafted'),
+    mod('suffix', 'of the Brute', 2, ['# to Strength']),
+  ] })
+  assert.deepEqual(m.count, { prefix: 2, suffix: 1 }, 'both crafted prefixes take a prefix slot')
+  assert.deepEqual(m.rolled.map(r => r.family.id), ['prefix:IncreasedLife', 'suffix:Strength'])
+  assert.deepEqual(m.loose.map(x => x.name), ['Verisium'])
+})
+
+test('the same family on the item more than once is one row carrying every copy, best tier first', async () => {
+  const { onItemLabel } = await import('../src/lib/mods/item.js')
+  const m = matchItem(POOL(), { ...ITEM, mods: [
+    mod('suffix', 'of the Brute', 2, ['# to Strength']),
+    mod('suffix', 'of the Brute', 2, ['# to Strength']),
+    mod('suffix', 'of the Bear', 1, ['# to Strength']),
+  ] })
+  assert.deepEqual(m.loose, [], 'a repeat is not a mod outside the pool')
+  assert.equal(m.count.suffix, 3)
+  assert.equal(m.rolled.length, 1)
+  assert.deepEqual([m.rolled[0].tier, m.rolled[0].copies], [1, 3])
+  assert.equal(onItemLabel(m.rolled[0]), 'T1 ×3')
+  assert.equal(onItemLabel({ tier: 2, copies: 1 }), 'T2')
+  assert.equal(onItemLabel({ tier: null, copies: 1 }), 'on item')
+  assert.equal(onItemLabel({ tier: null, copies: 2 }), 'on item ×2')
+})
+
+test('a plain copy (no affix on any mod) of a magic or rare item asks for the advanced copy', async () => {
+  const { isPlainCopy } = await import('../src/lib/mods/item.js')
+  assert.equal(isPlainCopy({ rarity: 'Rare', mods: [] }), true)
+  assert.equal(isPlainCopy({ rarity: 'Magic', mods: [mod(null, null, null, ['#% to Cold Resistance'], 'implicit')] }), true)
+  assert.equal(isPlainCopy(ITEM), false)
+  assert.equal(isPlainCopy({ rarity: 'Normal', mods: [] }), false, 'a normal item has no slots to count')
+  assert.equal(isPlainCopy({ rarity: 'Unique', mods: [] }), false)
+  assert.equal(isPlainCopy(null), false)
+})
+
+test('the bar shows the copy instruction for a plain copy and the row badge takes the label', async () => {
+  const { readFileSync } = await import('node:fs')
+  const bar = readFileSync(new URL('../src/components/ModsBar.jsx', import.meta.url), 'utf8')
+  const view = readFileSync(new URL('../src/components/ModsView.jsx', import.meta.url), 'utf8')
+  assert.ok(bar.includes('Copy with Ctrl+Alt+C to match its modifiers'))
+  assert.ok(view.includes('isPlainCopy(') && view.includes('onItemLabel('))
+})

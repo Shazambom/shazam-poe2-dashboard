@@ -45,7 +45,8 @@ export default function ModsBar({ pools, currencies, poolId, ilvl, floor, filter
         <div className="mods-item" role="status">
           <span className="mods-item-name">{item.name ? `${item.name} · ${item.base}` : item.base}</span>
           <span className="mods-num">ilvl {item.ilvl ?? '–'}</span>
-          {item.slots && <span className="mods-num">Prefix {item.count.prefix} / {item.slots.prefix} · Suffix {item.count.suffix} / {item.slots.suffix}</span>}
+          {item.plain ? <span className="muted">Copy with Ctrl+Alt+C to match its modifiers</span>
+            : item.slots && <span className="mods-num">Prefix {item.count.prefix} / {item.slots.prefix} · Suffix {item.count.suffix} / {item.slots.suffix}</span>}
           <button type="button" className="btn small" onClick={onClearItem}>Clear</button>
         </div>
       )}

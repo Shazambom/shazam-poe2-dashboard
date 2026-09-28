@@ -11,7 +11,7 @@ import { prepare, atLevel, visible, AFFIXES } from '../lib/mods/pool.js'
 import { merge } from '../lib/mods/defaults.js'
 import { familyQuery } from '../lib/mods/trade.js'
 import { stashKind, stashMods, withWanted } from '../lib/mods/stash.js'
-import { poolFor, matchItem, slotsFor, pasteDiag, isPasteShortcut } from '../lib/mods/item.js'
+import { poolFor, matchItem, slotsFor, pasteDiag, isPasteShortcut, onItemLabel, isPlainCopy } from '../lib/mods/item.js'
 import { merge as mergeRegex } from '../lib/regex/defaults.js'
 import { nav } from '../lib/nav.js'
 import { useWorkspace } from '../lib/workspaceStore.js'
@@ -72,7 +72,7 @@ export default function ModsView() {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [])
-  const onItem = useMemo(() => (item ? new Map(match.rolled.flatMap(r => r.ids.map(id => [id, r.tier]))) : null), [match, item])
+  const onItem = useMemo(() => (item ? new Map(match.rolled.flatMap(r => r.ids.map(id => [id, onItemLabel(r)]))) : null), [match, item])
   const levels = useMemo(() => (pool && s ? pool.sections.map(sec => atLevel(sec, s.ilvl, sec.floored ? s.floor : 0, onItem)) : null), [pool, s?.ilvl, s?.floor, onItem])
   const tags = useMemo(() => new Set(s?.tags || []), [s?.tags])
   const shown = useMemo(() => levels && levels.map(level => Object.fromEntries(AFFIXES.filter(a => level[a]).map(a => [a, visible(level[a].rows, { tags, q: filter })]))), [levels, tags, filter])
@@ -135,7 +135,7 @@ export default function ModsView() {
     update({ poolId: target.id, tags: target.id === poolId ? s.tags : [], ...(r.item.itemLevel ? { ilvl: r.item.itemLevel } : {}) })
   }
   pasteRef.current = onPaste
-  const strip = item ? { name: item.name, base: item.baseType, ilvl: item.itemLevel, count: match.count, slots: slotsFor(item.rarity) } : null
+  const strip = item ? { name: item.name, base: item.baseType, ilvl: item.itemLevel, count: match.count, slots: slotsFor(item.rarity), plain: isPlainCopy(item) } : null
   const toggleTag = (id) => update({ tags: tags.has(id) ? s.tags.filter(t => t !== id) : [...s.tags, id] })
   const empty = tags.size > 0 || filter.trim() !== '' ? 'Clear the filter or a tag to see more.' : 'Nothing rolls here.'
   const failed = list.err || fetched.err

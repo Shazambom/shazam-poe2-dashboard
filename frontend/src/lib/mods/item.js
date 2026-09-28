@@ -3,7 +3,7 @@
 // tier and printed lines; never the text). Pure: the pool by the base, each explicit mod's family
 // and tier, the affix counts, and the slots the rarity allows.
 
-const ROLLED = new Set(['explicit', 'fractured', 'desecrated'])
+const ROLLED = new Set(['explicit', 'fractured', 'desecrated', 'crafted'])   // the mods that take an affix slot
 const SLOTS = { Rare: { prefix: 3, suffix: 3 }, Magic: { prefix: 1, suffix: 1 }, Normal: { prefix: 0, suffix: 0 } }
 
 // The pool whose bases name the item's base, else null.
@@ -19,8 +19,10 @@ const key = (lines) => lines.map(bare).sort().join('\n')
 
 // Each rolled mod's family in the pool: by tier name (the family whose tiers carry it), the
 // printed text breaking a tie or standing in when the name is unknown; the base section wins
-// over another section holding the same family. The rest of the rolled mods are loose (an
-// essence-only mod, a mod of another pool); `count` is every rolled mod per affix.
+// over another section holding the same family, and a family not yet taken wins over one that
+// is. A mod whose only family is already on the item is another copy of it (`copies`, the best
+// tier kept). The rest of the rolled mods are loose (an essence-only mod, a crafted mod no pool
+// holds, a mod of another pool); `count` is every rolled mod per affix, crafted ones included.
 export function matchItem(pool, item) {
   const out = { rolled: [], loose: [], count: { prefix: 0, suffix: 0 } }
   if (!pool || !item) return out
@@ -30,25 +32,42 @@ export function matchItem(pool, item) {
   for (const m of item.mods || []) {
     if (!ROLLED.has(m.type) || !m.affix) continue
     if (m.affix in out.count) out.count[m.affix] += 1
-    const ofAffix = fams.filter(c => c.affix === m.affix && !seen.has(c.family.id))
+    const ofAffix = fams.filter(c => c.affix === m.affix)
     let hits = m.name ? ofAffix.filter(c => c.family.tiers.some(t => t.name === m.name)) : []
     if (hits.length > 1) {                    // the text breaks the tie, but never discards the name
       const byText = hits.filter(c => c.text === key(m.lines))
       if (byText.length) hits = byText
     }
     if (!hits.length) hits = ofAffix.filter(c => c.text === key(m.lines))
-    const hit = hits.find(c => c.section === 'base') || hits[0]
+    const fresh = hits.filter(c => !seen.has(c.family.id))
+    const pick = fresh.length ? fresh : hits
+    const hit = pick.find(c => c.section === 'base') || pick[0]
     if (!hit) { out.loose.push(m); continue }
     // The same family under another section's id (the Genesis Tree twin) is on the item too.
-    const ids = hits.map(c => c.family.id)
-    for (const id of ids) seen.add(id)
     // The tier comes from the name alone: the game prints its tiers on the other scale (higher
     // is better), the pool's are best first, so a printed tier is never carried over.
     const named = m.name ? hit.family.tiers.find(t => t.name === m.name) : null
-    out.rolled.push({ family: hit.family, ids, section: hit.section, affix: m.affix, tier: named ? named.tier : null, name: m.name })
+    const tier = named ? named.tier : null
+    const prev = out.rolled.find(r => r.ids.includes(hit.family.id))
+    if (prev) {
+      prev.copies += 1
+      if (tier != null && (prev.tier == null || tier < prev.tier)) prev.tier = tier
+      continue
+    }
+    const ids = pick.map(c => c.family.id)
+    for (const id of ids) seen.add(id)
+    out.rolled.push({ family: hit.family, ids, section: hit.section, affix: m.affix, tier, name: m.name, copies: 1 })
   }
   return out
 }
+
+// The badge a rolled family's row shows: its best tier ("T2"), or "on item" when the name gave none,
+// with the number of copies when the item carries it more than once ("T2 ×3").
+export const onItemLabel = (r) => `${r.tier != null ? `T${r.tier}` : 'on item'}${r.copies > 1 ? ` ×${r.copies}` : ''}`
+
+// A plain Ctrl+C copy carries no affix or tier name, and the parser gives it no modifiers to match:
+// a magic or rare item whose mods name no affix asks for the game's advanced copy (Ctrl+Alt+C).
+export const isPlainCopy = (item) => !!item && (SLOTS[item.rarity]?.prefix || 0) > 0 && !(item.mods || []).some(m => m.affix)
 
 // Ctrl+V (Cmd+V on a Mac) on the Mods page pastes the copied item, unless the key is typing into a
 // field (the filter, a number box) or something else already handled it.
