@@ -1,12 +1,12 @@
 import React from 'react'
 import Cur from './Cur.jsx'
+import { Native } from './Wealth.jsx'
 import { lines } from '../lib/mods/format.jsx'
 import { priceOf } from '../lib/mods/prices.js'
-import { fmt } from '../lib/api.js'
 
-// A price in the reference, or a dash when the exchange does not trade the thing.
-export const Price = ({ value, reference }) => (
-  <span className="mods-num mods-price">{value == null ? '–' : <>{fmt.rate(value)} {reference && <Cur id={reference} size={12} />}</>}</span>
+// A grant's cost in the market that trades it (the volume rule), or a dash when nothing prices it.
+export const Price = ({ value }) => (
+  <span className="mods-num mods-price">{value == null ? '–' : <Native v={value.price} cur={value.cur} vRef={value.value_ref} size={12} />}</span>
 )
 
 // A pool another currency opens on the item, one level down from the base tables: a header
@@ -34,7 +34,7 @@ export function GrantList({ title, heading, rows, ilvl, prices }) {
         <div key={r.key} className={`mods-grant ${r.level > ilvl ? 'out' : ''}`}>
           <span className="mods-grant-name"><Cur name={r.name} size={16} /> {r.name} {r.badge && <span className="mods-fam-tags">{r.badge}</span>}</span>
           <span className="mods-text">{r.lines.map((l, i) => <div key={i} className={l.cls || ''}>{lines(l.text)}</div>)}</span>
-          <Price value={priceOf(r.name, prices)} reference={prices?.reference} />
+          <Price value={priceOf(r.name, prices)} />
           <span className="mods-num">{r.level || '–'}</span>
         </div>
       ))}

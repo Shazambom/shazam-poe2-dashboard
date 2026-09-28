@@ -630,9 +630,12 @@ def currencies() -> list:
 
 
 def prices(pool_id: str) -> dict | None:
-    """What forcing a modifier costs: the pool's grants (essences, alloys, socketables) priced
-    from the app's one value table (Graph.values, reference per unit), keyed by grant name. A
-    grant the exchange does not trade is absent; a cold graph prices nothing. Read-only."""
+    """What forcing a modifier costs: the pool's grants (essences, alloys, socketables), keyed by
+    grant name, each {price, cur, value_ref}. By the volume rule (CLAUDE.md): `cur` is the market
+    that trades the grant (the Board's `default_numeraire`) and `price` that market's own rate; a
+    grant with no market in that currency stays in the reference at its value (never a conversion
+    through ex). `value_ref` (the one value table) is only for the display's approximation. A grant
+    nothing prices is absent; a cold graph prices nothing. Read-only."""
     from . import arbitrage
     from .currencies import registry
     from .movers import _slug
@@ -645,15 +648,16 @@ def prices(pool_id: str) -> dict | None:
     except Exception as exc:                       # a cold or empty graph is no price, never an error
         log.warning("modpool: prices unavailable: %s", exc)
         return {"reference": None, "prices": {}}
+    ranked = arbitrage.counterparts_by_volume(g, values)
     by_name = {cur.name.lower(): cid for cid, cur in registry.by_id.items()}   # one pass, not one per grant
     out = {}
     for kind in ("essences", "alloys", "augments"):
         for grant in p.get("grants", {}).get(kind, []):
             name = grant["name"]
             tid = next((c for c in (name.lower(), _slug(name)) if c in registry.by_id), None) or by_name.get(name.lower())
-            px = values.get(tid) if tid else None
-            if px:
-                out[name] = float(px)
+            native = arbitrage.native_price(g, tid, values, ranked, ref) if tid else None
+            if native:
+                out[name] = {"price": native[0], "cur": native[1], "value_ref": float(values[tid])}
     return {"reference": ref, "prices": out}
 
 

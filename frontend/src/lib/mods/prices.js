@@ -18,5 +18,5 @@ export function forcedBy(family, grants) {
   return out.sort((a, b) => a.tier - b.tier || a.name.localeCompare(b.name))
 }
 
-// The price of a grant in the reference, or null when the exchange does not trade it.
+// A grant's cost, { price, cur, value_ref } by the volume rule (the server's), or null when nothing prices it.
 export const priceOf = (name, prices) => (prices?.prices && prices.prices[name] != null ? prices.prices[name] : null)

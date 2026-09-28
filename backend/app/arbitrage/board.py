@@ -251,36 +251,7 @@ def _row(g, rv: dict[str, float], ranked, hub_ids, c: str, pick: str | None, win
     if history is None:                          # the price of b in a, hour by hour
         history = _priced_history(league, window_h)
     mid = rv.get(c)     # includes the poe2scout fallback threaded through ref_values
-    # Default numeraire: the highest-VOLUME counterpart whose price stays readable.
-    # Cheap currencies' biggest market is often Divine (huge value moves even on
-    # modest flow), which would print a useless micro-price (Regal = 0.0034 div) — so
-    # walk down the volume ranking and take the first counterpart the card is worth at
-    # least ONE of. That is how prices are quoted by hand: a card is never shown in a
-    # currency worth more than the card (a 0.5 floor once put Chaos "in Omen of Abyssal
-    # Echoes" at 0.43 the hour that omen out-traded Exalted). Divine keeps its Chaos
-    # market, omens keep Divine, Regal/Chaos/Vaal drop to Exalted. Currencies with no
-    # liquid, readable market (poe2scout-only, or thin digest) tier by value instead.
-    MIN_READABLE = 1.0   # numeraire units per 1 of the currency; below this, step down
-    pref, seen = None, set()
-    for _volr, other in ranked.get(c, ()):
-        if other == c or other in seen:
-            continue
-        seen.add(other)
-        nv = rv.get(other)
-        if nv and mid and mid / nv >= MIN_READABLE:
-            pref = other
-            break
-    if pref is None:
-        mv, dv = rv.get("mirror"), rv.get("divine")
-        if mid and mv and mid >= mv:
-            pref = "mirror"
-        elif mid and dv and mid >= dv:
-            pref = "divine"
-        else:
-            pref = R
-    # Universal rule: NOTHING is ever priced against itself (a 1:1 is useless).
-    if pref == c:
-        pref = "divine" if (c != "divine" and rv.get("divine")) else R
+    pref = default_numeraire(c, rv, ranked, R)
     # Trend + %-change over the selected window (24h/3d/7d/14d), from the SAME market the
     # card's price comes from. When the volume rule prices the card by its own market with
     # the numeraire it is shown in (the user's pick, else `pref`; omens in Divine: thousands
@@ -342,6 +313,56 @@ def _row(g, rv: dict[str, float], ranked, hub_ids, c: str, pick: str | None, win
         "trend": trend, "trend_num": trend_num, "change_pct": change_pct,
         "pref_num": pref, "hub": c in hub_ids,
     }
+
+
+def default_numeraire(c: str, rv: dict[str, float], ranked: dict, R: str) -> str:
+    """The currency a card is shown in (the Board's rule; the Mods page's costs use it too)."""
+    mid = rv.get(c)
+    # Default numeraire: the highest-VOLUME counterpart whose price stays readable.
+    # Cheap currencies' biggest market is often Divine (huge value moves even on
+    # modest flow), which would print a useless micro-price (Regal = 0.0034 div) — so
+    # walk down the volume ranking and take the first counterpart the card is worth at
+    # least ONE of. That is how prices are quoted by hand: a card is never shown in a
+    # currency worth more than the card (a 0.5 floor once put Chaos "in Omen of Abyssal
+    # Echoes" at 0.43 the hour that omen out-traded Exalted). Divine keeps its Chaos
+    # market, omens keep Divine, Regal/Chaos/Vaal drop to Exalted. Currencies with no
+    # liquid, readable market (poe2scout-only, or thin digest) tier by value instead.
+    MIN_READABLE = 1.0   # numeraire units per 1 of the currency; below this, step down
+    pref, seen = None, set()
+    for _volr, other in ranked.get(c, ()):
+        if other == c or other in seen:
+            continue
+        seen.add(other)
+        nv = rv.get(other)
+        if nv and mid and mid / nv >= MIN_READABLE:
+            pref = other
+            break
+    if pref is None:
+        mv, dv = rv.get("mirror"), rv.get("divine")
+        if mid and mv and mid >= mv:
+            pref = "mirror"
+        elif mid and dv and mid >= dv:
+            pref = "divine"
+        else:
+            pref = R
+    # Universal rule: NOTHING is ever priced against itself (a 1:1 is useless).
+    if pref == c:
+        pref = "divine" if (c != "divine" and rv.get("divine")) else R
+    return pref
+
+
+def native_price(g, c: str, rv: dict[str, float], ranked: dict, R: str) -> tuple[float, str] | None:
+    """The price of 1 `c` by the volume rule (CLAUDE.md): (rate, currency) in the market that trades
+    it (`default_numeraire`), at that market's own rate; with no market in that currency, the
+    reference market's rate, else the value table's reference value — never a conversion through
+    ex. None when nothing prices `c`."""
+    if not rv.get(c):
+        return None
+    cur = default_numeraire(c, rv, ranked, R)
+    rate = g.direct_rate(c, cur)
+    if rate is None:
+        cur, rate = R, g.direct_rate(c, R) or rv[c]
+    return float(rate), cur
 
 
 def _prices(g, rv: dict[str, float], rows: list[dict], extra=()) -> dict:

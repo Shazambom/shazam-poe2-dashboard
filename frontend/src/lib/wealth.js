@@ -21,6 +21,20 @@ export function wealthUnit(amount, ref, prices) {
   return { value: a, unit: ref }
 }
 
+// The volume rule (CLAUDE.md): an amount native to a currency (a price in the market that trades
+// the thing, a holding) shows in that currency, precisely. Only a native number too large to read
+// (≥ NATIVE_MAX of its own unit, the tiers' own boundary) falls back to the wealth rule over its
+// reference value, flagged `approx`. Without a reference value the native number stands.
+export const NATIVE_MAX = 1000
+
+export function nativeAmount(value, unit, valueRef, ref, prices) {
+  if (value == null || !Number.isFinite(Number(value))) return null
+  const v = Number(value)
+  if (Math.abs(v) < NATIVE_MAX || valueRef == null) return { value: v, unit, approx: false }
+  const w = wealthUnit(valueRef, ref, prices)
+  return w && w.unit !== unit ? { ...w, approx: true } : { value: v, unit, approx: false }
+}
+
 // Digits scale with magnitude so 11.0 divine and 4,321 exalted both read naturally.
 export const wealthDigits = (v) => (Math.abs(v) >= 100 ? 0 : 1)
 

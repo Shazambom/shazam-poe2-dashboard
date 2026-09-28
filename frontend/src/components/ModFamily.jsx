@@ -48,7 +48,7 @@ function ModFamily({ row, open, ilvl, floor, perTier, canTrade, canStash, grants
             <div key={f.name} className={`mods-forced ${f.level > ilvl ? 'out' : ''}`}>
               <span className="mods-num">T{f.tier}</span>
               <span className="mods-grant-name"><Cur name={f.name} size={14} /> {f.name}</span>
-              <Price value={priceOf(f.name, prices)} reference={prices?.reference} />
+              <Price value={priceOf(f.name, prices)} />
             </div>
           ))}
         </div>

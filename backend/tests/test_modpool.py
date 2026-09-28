@@ -321,33 +321,60 @@ def test_the_tables_ride_the_seed():
         assert f"CREATE TABLE IF NOT EXISTS {t}" in db.MARKET_SCHEMA
 
 
-def test_pool_prices_come_from_the_one_value_table_keyed_by_grant_name(export, derived, monkeypatch):
-    """Prices beside mods: what forcing a modifier costs is the app's value table (Graph.values,
-    reference per unit) read for the pool's grants — never a second pricing rule. A grant the
-    exchange does not trade is simply absent."""
-    from app import arbitrage
+def _priced_graph(values, edges):
+    """A real Graph: the given digest edges (a, b, rate b per a, units of a per hour) and value table."""
+    from app.arbitrage import Edge, Graph
+    g = Graph({"reference": "exalted", "league": "L", "gold_value_per_1k": 0.0, "max_steps": 3, "filters": {}})
+    for a, b, rate, vol in edges:
+        g.add(Edge(a, b, "digest", rate, [{"rate": rate, "stock": 1_000_000}], age_s=0.0, vol_in_per_h=vol,
+                   meta={"inactive": False, "quoted_rate": rate}))
+    g.values = lambda: dict(values)
+    return g
+
+
+@pytest.fixture
+def ring_grants(export, derived, monkeypatch):
     from app.currencies import registry
     pages = {"Runic Alloy": (FIX / "alloy-runic.html").read_text()}
     modpool.store(modpool.assemble(derived, export=export, currencies=[], grants=[modpool.grant_from(n, h) for n, h in pages.items()], source={}))
-
-    class G:
-        s = {"reference": "exalted"}
-
-        def values(self):
-            return {"runic-alloy": 49.11, "adept-rune": 125.32, "exalted": 1.0}
-    monkeypatch.setattr(arbitrage, "cached_graph", lambda: G())
     monkeypatch.setattr(registry, "by_id", dict(registry.by_id))                  # the links below die with the test
     monkeypatch.setattr(registry, "meta_to_trade", dict(registry.meta_to_trade))
     registry._link("Metadata/Items/Currency/RunicAlloyTest", "runic-alloy")
     registry._link("Metadata/Items/Currency/AdeptRuneTest", "adept-rune")
+
+
+def test_a_cost_is_shown_in_the_market_that_trades_the_grant_at_that_markets_rate(ring_grants, monkeypatch):
+    """The volume rule (CLAUDE.md): a grant's cost is shown in its highest-volume counterpart it is
+    worth at least one of, at THAT market's rate — never its reference value divided by the
+    counterpart's. The reference value rides along only for the display's approximation."""
+    from app import arbitrage
+    values = {"exalted": 1.0, "divine": 500.0, "runic-alloy": 49.11, "adept-rune": 1005.0}
+    g = _priced_graph(values, [
+        ("divine", "exalted", 500.0, 1_000), ("exalted", "divine", 1 / 500.0, 500_000),
+        ("runic-alloy", "divine", 0.1, 40), ("runic-alloy", "exalted", 48.0, 10),   # divine busiest, but the alloy is worth < 1 div
+        ("adept-rune", "divine", 2.1, 30), ("adept-rune", "exalted", 990.0, 1),     # the rune's market is divine
+    ])
+    monkeypatch.setattr(arbitrage, "cached_graph", lambda: g)
     out = modpool.prices("ring")
     assert out["reference"] == "exalted"
-    assert out["prices"] == {"Runic Alloy": 49.11, "Adept Rune": 125.32}, "the ring's two priced grants, keyed by name"
-    wand = modpool.prices("wand")
-    assert wand["prices"] == {"Adept Rune": 125.32}, "a pool prices its own grants only; one the exchange does not trade is absent"
+    assert out["prices"] == {
+        "Runic Alloy": {"price": 48.0, "cur": "exalted", "value_ref": 49.11},
+        "Adept Rune": {"price": 2.1, "cur": "divine", "value_ref": 1005.0},
+    }
+    assert modpool.prices("wand")["prices"] == {"Adept Rune": {"price": 2.1, "cur": "divine", "value_ref": 1005.0}}, "a pool prices its own grants only"
     assert modpool.prices("nope") is None
     from fastapi.testclient import TestClient
     from app import main
     r = TestClient(main.app).get("/api/mods/pool/wand/prices")
-    assert r.status_code == 200 and r.json()["prices"]["Adept Rune"] == 125.32
+    assert r.status_code == 200 and r.json()["prices"]["Adept Rune"]["cur"] == "divine"
     assert TestClient(main.app).get("/api/mods/pool/nope/prices").status_code == 404
+
+
+def test_a_cost_with_no_market_in_its_currency_stays_in_the_reference_at_its_value(ring_grants, monkeypatch):
+    """Worth past a divine but no divine market: showing it in divine would be a conversion through
+    ex. It stays in the reference, at the value table's number. A grant nothing prices is absent."""
+    from app import arbitrage
+    g = _priced_graph({"exalted": 1.0, "divine": 500.0, "adept-rune": 1005.0},
+                      [("divine", "exalted", 500.0, 1_000), ("exalted", "divine", 1 / 500.0, 500_000)])
+    monkeypatch.setattr(arbitrage, "cached_graph", lambda: g)
+    assert modpool.prices("ring")["prices"] == {"Adept Rune": {"price": 1005.0, "cur": "exalted", "value_ref": 1005.0}}

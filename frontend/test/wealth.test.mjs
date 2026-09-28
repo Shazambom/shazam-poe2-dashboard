@@ -53,3 +53,23 @@ test('wealth display sites use the shared component', () => {
     assert.ok(!/fmt\.n\([^)]*(value_ref|total_ref|realizable_ref|realizable_total_ref|margin_ref|liquidity_ref|volume_ref_per_h|value_ex|medvol)/.test(s), `${f} still formats wealth by hand`)
   }
 })
+
+// The volume rule (CLAUDE.md): an amount native to a currency shows in that currency, precisely;
+// only a native number too large to read falls back to the wealth rule, as an approximation.
+test('nativeAmount keeps a native price and approximates only an unreadable one', async () => {
+  const { nativeAmount, NATIVE_MAX } = await import('../src/lib/wealth.js')
+  assert.equal(NATIVE_MAX, 1000)
+  assert.deepEqual(nativeAmount(2.1, 'divine', 953.8, 'exalted', P), { value: 2.1, unit: 'divine', approx: false })
+  assert.deepEqual(nativeAmount(0.31, 'exalted', 0.31, 'exalted', P), { value: 0.31, unit: 'exalted', approx: false })
+  assert.deepEqual(nativeAmount(999, 'chaos', 47_252, 'exalted', P), { value: 999, unit: 'chaos', approx: false })
+  const big = nativeAmount(1005, 'exalted', 1005, 'exalted', P)          // a rune whose market is exalted
+  assert.equal(big.unit, 'divine'); assert.equal(big.approx, true); assert.ok(Math.abs(big.value - 1005 / 454.2) < 1e-9)
+  assert.deepEqual(nativeAmount(1005, 'exalted', null, 'exalted', P), { value: 1005, unit: 'exalted', approx: false }, 'no reference value: the native number, not a guess')
+  assert.equal(nativeAmount(null, 'exalted', 1, 'exalted', P), null)
+})
+
+test('the Mods cost renders the native price, not the reference value', () => {
+  const s = readFileSync(new URL('../src/components/ModSection.jsx', import.meta.url), 'utf8')
+  assert.ok(s.includes('<Native'), 'ModSection renders <Native>')
+  assert.ok(!/fmt\.rate\(value\)/.test(s) && !s.includes('<Wealth'), 'no reference-only or converted price')
+})
