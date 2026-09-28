@@ -116,8 +116,8 @@ sidecar so the client can compare `snapshot_version` without decompressing on ev
   Flags: `--all-leagues` (keep private leagues), `--no-gzip`, `--version N`, `--force` (skip the
   digest-freshness guard).
 - **Publishing:** `ops/publish-market-snapshot.sh` runs on shazam from **root's cron, daily at
-  04:17** (`crontab -l` as root; log in `/home/shazam/poe2-snapshot.log`), and on demand with
-  `sshshazambom sudo /home/shazam/bin/publish-market-snapshot.sh` (do this after any market-side
+  04:17** (root's crontab; it writes `poe2-snapshot.log` on shazam), and on demand by running the publisher
+  (`ops/publish-market-snapshot.sh`) through `sshshazambom sudo` (do this after any market-side
   change — see CLAUDE.md). It exports inside the backend container and uploads the seed +
   sidecar to the rolling `market-seed-latest` GitHub prerelease via `ops/upload-seed-github.sh`;
   the token comes from `shazam:~/.poe2-gh-token` (fine-grained PAT, **Contents: Read and write**;

@@ -149,7 +149,7 @@ Make "live" a single atomic flip at the END, and make uploads self-healing:
   — `starter` = half-created.
 - Local logs from the session (not committed): the publish script output showed
   `HTTP 500: Error saving asset (https://uploads.github.com/…name=Arbiter-0.2.60-arm64-mac.zip)`.
-- Beta telemetry around the window: `GET http://192.168.1.250:8080/api/installlog` — the Windows beta
+- Beta telemetry around the window: `GET /api/installlog` on the shazam web app — the Windows beta
   client updated cleanly at 18:02, AFTER the installer landed; nothing is logged for 17:02–17:53.
 
 ## State left behind

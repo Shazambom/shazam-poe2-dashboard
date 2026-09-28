@@ -163,7 +163,7 @@ real work. Highest-level rules:
   is easy to silently break: the DB split moved market data to `market.sqlite` and operational
   kv to `kv_ops`, but the exporter still pointed at the legacy `poe2arb.sqlite` / `kv` table,
   so the bundled seed silently froze until fixed. After any market-side change, run the
-  publisher on shazam (`sudo /home/shazam/bin/publish-market-snapshot.sh`) and confirm the
+  publisher on shazam (`ops/publish-market-snapshot.sh`, through `sshshazambom sudo`) and confirm the
   `market-seed-latest` GitHub asset's version advances. Seeds ship to desktop builds **only**
   via that GitHub release (Windows CI + the Mac build both pull it); the LAN `/downloads`
   channel is gone. The exporter derives each seed table's DDL from the live DB and takes its

@@ -20,7 +20,7 @@ actually move:
 
 | | What it is | Where | How to build/run |
 |---|---|---|---|
-| **Web** | TEST/staging surface | shazam Docker — backend `:8000`, frontend `:8080` (`http://192.168.1.250:8080`) | rsync + `docker compose up -d --build` (see below) |
+| **Web** | TEST/staging surface | shazam Docker — backend `:8000`, frontend `:8080` | rsync + `docker compose up -d --build` (see below) |
 | **Desktop dev** | representative local run | this Mac — backend `127.0.0.1:8210`, CDP `:9222` | `npx electron . --remote-debugging-port=9222` |
 | **Desktop packaged** | PRODUCTION artifact | `desktop/release/mac-arm64/Arbiter.app` | `npm run dist:mac` → `open …/Arbiter.app` |
 
@@ -171,7 +171,7 @@ CLAUDE.md. The mechanics:
 - This Mac can't run the Windows build, and native-module / install / update / OS-permission
   behavior isn't observable from dev. So: add server-reporting telemetry to the thing under test,
   cut a build, have the user just *use* it, and read the results yourself:
-  `GET http://192.168.1.250:8080/api/installlog`, filtered by a `?p=<tag>` marker.
+  `GET /api/installlog` on the shazam web app, filtered by a `?p=<tag>` marker.
 - **EE2 item texts and history queries.** The EE2 diagnostic (`desktop/src/dev-ee2-telemetry.js`)
   posts every item text EE2 read (`p=ee2-item`: price checks, clipboard add, Mods paste) and the
   history search URL the worker built (`p=ee2-query`). `./ops/pull-ee2-items.sh` pulls them from

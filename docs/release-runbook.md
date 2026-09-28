@@ -103,7 +103,7 @@ contents. **When in doubt, rebuild** — it's cheap and a stale snapshot ships w
 Order matters (avoid a Mac/Windows snapshot mismatch): **publish the new snapshot to
 `market-seed-latest` BEFORE pushing the `desktop-v*` tag**, so both the Windows CI and the local
 Mac build fetch the same fresh snapshot. Publish it only from a **caught-up** server (the
-exporter's mid-sync guard enforces this): `sshshazambom sudo bash /home/shazam/bin/publish-market-snapshot.sh`.
+exporter's mid-sync guard enforces this): the publisher (`ops/publish-market-snapshot.sh`) through `sshshazambom sudo`.
 
 > Lesson (2026-09-15): shipped desktop-v0.2.44 (the currency-mapping bridge fix) bundling the
 > pre-fix snapshot because this question wasn't asked. The fix lived in an operational kv
