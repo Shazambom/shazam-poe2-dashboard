@@ -149,26 +149,32 @@ test('onBuilt sees every built intent, from the automatic stream and from the cl
   assert.deepEqual(built.map(i => [i.origin, i.q, i.cfgLeague]), [['ee2', '{"query":{}}', 'L'], ['clipboard', '{"query":{}}', 'L']])
 })
 
-test('a history search ticks every mod the item has, whatever EE2\'s "select all" setting says', async () => {
-  // EE2's final search (after the ticks in its window) is not observable, so the history searches
-  // for items like this one: every mod filter enabled, through EE2's own defaultAllSelected (owner,
-  // 2026-09-28). Seen on beta: a rare's search opened with its mods unticked. The port itself stays
-  // faithful to the setting (its golden tests); the history is what asks for "all".
+test('a history search ticks what EE2 ticks by default: the EE2 settings pass through unchanged', async () => {
+  // Owner, 2026-09-28: follow the boxes EE2 ticks before searching. EE2's window calls createPresets
+  // with the same options the history passes (CheckedItem.vue), and the port matches createPresets
+  // (its golden tests), so passing the user's EE2 settings through is EE2's default search.
   const given = []
   const worker = { spawn() { return { build: async (raw, pf) => { given.push(pf); return { q: '{"query":{}}', name: 'x', item: { name: 'x', baseType: 'b', rarity: 'Rare', itemClass: 'Boots' }, host: 'www.pathofexile.com', buildMs: 1 } }, kill() {} } } }
-  const c = createHistoryConsumer({ manager: new EventEmitter(), worker, prefs: () => ({ prefs: { leagueId: 'L', language: 'en', defaultAllSelected: false }, source: 'ee2' }), send: () => {} })
-  await c.buildIntent(RAW, 'clipboard')
-  assert.equal(given[0].defaultAllSelected, true)
-  assert.equal(given[0].leagueId, 'L', 'the rest of the EE2 settings pass through')
+  for (const allSel of [false, true]) {
+    const c = createHistoryConsumer({ manager: new EventEmitter(), worker, prefs: () => ({ prefs: { leagueId: 'L', language: 'en', defaultAllSelected: allSel }, source: 'ee2' }), send: () => {} })
+    await c.buildIntent(RAW, 'clipboard')
+  }
+  assert.deepEqual(given.map(p => p.defaultAllSelected), [false, true])
+})
 
-  const { createRequire } = await import('node:module')
-  const port = createRequire(import.meta.url)('../src/vendor/ee2-query')
-  const { readFileSync } = await import('node:fs')
-  await port.init()
-  const raw = readFileSync(new URL('./fixtures/ee2/items/RareItem.txt', import.meta.url), 'utf8')
-  const r = port.buildQuery(raw, { leagueId: 'Forbidden Rites', language: 'en', defaultAllSelected: true })
-  // The item's own mods; EE2's "open affix" helpers (pseudo_number_of_empty_*) stay off even under
-  // its own select-all: ticking one would demand a free slot, not "items like this one".
-  const mods = JSON.parse(r.q).query.stats.flatMap(s => s.filters).filter(f => !/pseudo_number_of_empty_/.test(f.id))
-  assert.ok(mods.length >= 3 && mods.every(f => !f.disabled), `every mod ticked: ${JSON.stringify(mods.map(f => [f.id, f.disabled]))}`)
+test('beta lines say which EE2 settings the history read and how many filters each search ticks', async () => {
+  // If EE2's window ticks more than the history does, these two lines tell whether the settings
+  // were read differently (attached) or the search differs (build): counts and settings only.
+  const lines = []
+  const q = JSON.stringify({ query: { stats: [{ type: 'and', filters: [{ id: 'a', disabled: false }, { id: 'b', disabled: true }, { id: 'c' }] }] } })
+  const worker = { spawn() { return { build: async () => ({ q, name: 'x', item: { name: 'x', baseType: 'b', rarity: 'Rare', itemClass: 'Boots' }, host: 'www.pathofexile.com', buildMs: 1 }), kill() {} } } }
+  const mgr = new EventEmitter()
+  const c = createHistoryConsumer({ manager: mgr, worker, log: (l) => lines.push(l), send: () => {},
+    prefs: () => ({ prefs: { leagueId: 'L', language: 'en', defaultAllSelected: false, searchStatRange: 10, activateStockFilter: true }, source: 'ee2' }) })
+  mgr.emit('ee2-detected', { present: true, running: false })
+  await c.buildIntent(RAW, 'clipboard')
+  const attached = lines.find(l => l.startsWith('history-attached'))
+  assert.ok(/allSel=false range=10 stock=true/.test(attached), attached)
+  const built = lines.find(l => l.startsWith('history-build'))
+  assert.ok(/ on=2 off=1/.test(built), built)
 })

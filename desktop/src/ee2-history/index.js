@@ -13,6 +13,15 @@ const NO_WINDOW_BUFFER = 20
 const RESTART_MIN_MS = 5 * 60 * 1000
 const WARM_DELAY_MS = 15 * 1000
 
+// How many stat filters a built search ticks and leaves off (beta: compare with EE2's window).
+function ticks(q) {
+  try {
+    const fs = (JSON.parse(q).query?.stats || []).flatMap(s => s.filters || [])
+    const off = fs.filter(f => f.disabled).length
+    return `on=${fs.length - off} off=${off}`
+  } catch { return 'on=? off=?' }
+}
+
 function createHistoryConsumer({ manager, worker, prefs, send = null, log = () => {}, now = Date.now, hint = null, onBuilt = null }) {
   let enabled = true            // main assumes on until the renderer says otherwise (fail toward "it works")
   let sender = send
@@ -53,9 +62,9 @@ function createHistoryConsumer({ manager, worker, prefs, send = null, log = () =
     const { prefs: pf } = readPrefs()
     const t0 = now()
     let r
-    // Every mod ticked (EE2's own "select all"), whatever the EE2 setting: the ticks made in EE2's
-    // window are not observable, so a history search finds items like this one (owner, 2026-09-28).
-    try { r = await p.build(raw, { ...pf, defaultAllSelected: true }) } catch (e) {
+    // The user's EE2 settings, unchanged: EE2's window builds its default ticks with the same
+    // createPresets options (CheckedItem.vue), so this is the search EE2 opens with (owner, 2026-09-28).
+    try { r = await p.build(raw, pf) } catch (e) {
       const msg = String(e && e.message || e)
       lastFailure = now(); try { p.kill?.() } catch {}; proc = null; status.warm = false
       log(`history-skip reason=${/timeout/i.test(msg) ? 'timeout' : 'worker'} origin=${origin} err="${msg.slice(0, 160)}"`)
@@ -69,7 +78,7 @@ function createHistoryConsumer({ manager, worker, prefs, send = null, log = () =
       log(`history-degraded stage=${r.error.stage} name="${name}"`)
       return { ...base, q: null, degraded: true, stage: r.error.stage, name, item: { name: item?.name || '', baseType: item?.baseType || '', rarity: item?.rarity || '', itemClass: item?.itemClass || '' } }
     }
-    log(`history-build origin=${origin} rarity=${r.item?.rarity || item?.rarity || '?'} name="${String(r.name).slice(0, 40)}" ms=${base.buildMs} qb=${Buffer.byteLength(r.q, 'utf8')}`)
+    log(`history-build origin=${origin} rarity=${r.item?.rarity || item?.rarity || '?'} name="${String(r.name).slice(0, 40)}" ms=${base.buildMs} qb=${Buffer.byteLength(r.q, 'utf8')} ${ticks(r.q)}`)
     const intent = { ...base, q: r.q, degraded: false, stage: null, name: r.name, item: r.item }
     if (onBuilt) { try { onBuilt(intent) } catch {} }
     return intent
@@ -90,7 +99,7 @@ function createHistoryConsumer({ manager, worker, prefs, send = null, log = () =
     status = { ...status, present: !!info?.present, running: !!info?.running, configRead: !!info?.config }
     const { prefs: pf, source } = readPrefs()
     status.leagueId = pf.leagueId || null
-    log(`history-attached cfg=${source === 'ee2' ? 'ok' : 'default'} league="${pf.leagueId || ''}"`)
+    log(`history-attached cfg=${source === 'ee2' ? 'ok' : 'default'} league="${pf.leagueId || ''}" allSel=${!!pf.defaultAllSelected} range=${pf.searchStatRange} stock=${!!pf.activateStockFilter}`)
     if (info?.running) { clearTimeout(warmTimer); warmTimer = setTimeout(warm, info.initial ? WARM_DELAY_MS : 0); if (warmTimer.unref) warmTimer.unref(); if (!info.initial) warm() }
   }
   const onMissing = () => { status = { ...status, present: false, running: false } }
