@@ -1,6 +1,6 @@
 # Mods page: roadmap
 
-Status: research done 2026-09-25, nothing built. Goal (owner): look up an item type and see every
+Status: phases 1-3 built (2026-09-25 to 2026-09-28; on beta 0.3.6-beta.6). Goal (owner): look up an item type and see every
 modifier that can roll on it, with the pools and weights, from metadata we already pull. Not a
 copy of poe2db; a place to build on.
 
@@ -141,12 +141,16 @@ Same shape as `frontend/src/data/regex/` and the EE2 vendoring:
    the other pools as sections (Desecrated, Genesis Tree, the six socketable uniques, Corrupted
    and its upgrades, Essence, Alloy, Socketables); every item class with a pool as an item type
    (equipment, jewels, flasks, charms, relics, waystone bands, tablets, logbooks).
-2. "Search on trade" per family.
-3. Your item against the pool (EE2 parser); prices next to mods.
+2. DONE 2026-09-25: "Search on trade" per family (desktop).
+3. DONE 2026-09-25: your item against the pool (Paste item, EE2 parser); prices next to mods.
+   2026-09-28: the pools separated as poe2db groups them: Desecrated (the lords), Breach
+   Desecration (the Altered Collarbone), jewels and waystones desecrated, Genesis Tree on rings
+   and belts only (`mods-page-design.md`).
 
 ## Open decisions for the owner
 
 - Vendor the RePoE PoE2 export (fast, complete) versus parsing raw tables ourselves (no third
   party, much more work). The plan assumes the export with its licence recorded.
-- Phase 1 stops at equipment. Jewels, flasks, charms and relics come with phase 2 if wanted.
+- Still missing against poe2db: a jewel's Corrupted (11) and Orb of Sacrifice (7) groups, and its
+  Liquid Emotions (15); Thrud's Might on one-hand maces shows 8 of poe2db's 9.
 - The design's open points are settled in `mods-page-design.md`; the tab placement is Trading → Mods (owner, 2026-09-25).
