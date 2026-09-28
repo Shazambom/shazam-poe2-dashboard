@@ -234,12 +234,16 @@ def _merge_meta_bridge(new: dict[str, str]) -> None:
     log.info("meta_bridge: %d total mappings (%d new/changed this pass)", len(cur), changed)
 
 
-def crawl_verdict(current: bool, items: int, fetched: int, stored_hits: int) -> str | None:
+def crawl_verdict(current: bool, items: int, fetched: int, stored_hits: int, was_current: bool = False) -> str | None:
     """Was this league's crawl a full-sync fallback? A past league is fetched once and then marked
-    complete, so refetching a tenth of it means the marks were missing. A current league refreshes
-    wholesale every 12h by design; that is a fallback only when the client held (almost) no
-    history for it, which means the seed's league_daily never landed."""
+    complete, so refetching a tenth of it means the marks were missing, unless the league was
+    current on the previous crawl: it just ended, and its final pass over every item is by design
+    (a current league is never marked complete). A current league refreshes wholesale every 12h by
+    design; that is a fallback only when the client held (almost) no history for it, which means
+    the seed's league_daily never landed."""
     if not items:
+        return None
+    if not current and was_current:
         return None
     if not current:
         return "league-full-crawl" if fetched >= 0.1 * items else None
@@ -304,6 +308,7 @@ async def backfill(force: bool = False, full: bool = True) -> dict:
             log.warning("poe2scout leagues fetch failed: %s", exc)
             return {"error": str(exc)}
         progress["leagues_total"] = len(leagues)
+        was_current = set(db.kv_get("lh_current", []) or [])   # the previous crawl's: a league that just ended
         db.kv_set("lh_current", [l["Value"] for l in leagues if l.get("IsCurrent") and l.get("Value")])
         stored = _stored_counts()
         for li, lg in enumerate(leagues):
@@ -338,16 +343,17 @@ async def backfill(force: bool = False, full: bool = True) -> dict:
                 if rows:
                     with db.tx() as c:
                         c.executemany("INSERT OR REPLACE INTO league_daily VALUES (?,?,?,?,?,?)", rows)
-                    db.kv_set(f"lh_fetch:{name}:{item_id}", time.time())
-                    # A past league with no more pages is fully captured — mark it final.
-                    if not current and not data.get("HasMore"):
-                        db.kv_set(f"lh_complete:{name}:{item_id}", True)
                     fetched[f"{name}/{item_id}"] = len(rows)
+                db.kv_set(f"lh_fetch:{name}:{item_id}", time.time())
+                # A past league with no more pages is fully captured, rows or none: mark it final
+                # (an item poe2scout has no history for would otherwise be refetched every crawl).
+                if not current and not data.get("HasMore"):
+                    db.kv_set(f"lh_complete:{name}:{item_id}", True)
             # Beta telemetry: why this league did or did not crawl (counts only), and whether that
             # was a full-sync fallback (a T0 blocker).
             devtelemetry.tlog("lh", f"league={name!r} current={current} items={len(item_ids)} complete={tally['complete']} fresh={tally['fresh']} fetched={tally['fetched']} errors={tally['errors']} s={time.time() - t0:.0f}")
             stored_hits = sum(1 for i in item_ids if stored.get((name, i)))
-            verdict = crawl_verdict(current, len(item_ids), tally["fetched"], stored_hits)
+            verdict = crawl_verdict(current, len(item_ids), tally["fetched"], stored_hits, was_current=name in was_current)
             if verdict and not force:
                 devtelemetry.t0(verdict, f"league={name!r} current={current} items={len(item_ids)} fetched={tally['fetched']} stored={stored_hits} complete_marks={tally['complete']}")
         _cache.clear()   # fresh data → drop cross()/marketcap() caches

@@ -101,11 +101,62 @@ def test_league_crawl_verdict_names_a_full_or_cold_crawl_and_nothing_else():
     assert v(current=False, items=500, fetched=0, stored_hits=500) is None
     assert v(current=False, items=500, fetched=3, stored_hits=497) is None, "a few stragglers are not a crawl"
     assert v(current=False, items=500, fetched=120, stored_hits=380) == "league-full-crawl"
+    assert v(current=False, items=500, fetched=500, stored_hits=500, was_current=True) is None, "a league that just ended takes its final pass"
     # A current league refreshes every 12h: fetching it all with history present is the normal cadence.
     assert v(current=True, items=500, fetched=500, stored_hits=500) is None
     # A current league fetched wholesale with no history stored is a cold client: the seed did not land.
     assert v(current=True, items=500, fetched=400, stored_hits=10) == "league-full-crawl"
     assert v(current=True, items=0, fetched=0, stored_hits=0) is None
+
+
+def _crawl(monkeypatch, leagues, universe, history):
+    """Run leaguehistory.backfill over fake poe2scout answers: `history[item_id]` is its DailyStats."""
+    import asyncio
+
+    async def fake_leagues():
+        return leagues
+
+    async def fake_universe(name):
+        return set(universe)
+
+    async def fake_get(path):
+        item = int(path.split("/Items/")[1].split("/")[0])
+        return {"DailyStats": history.get(item, []), "HasMore": False}
+    monkeypatch.setattr(leaguehistory, "_leagues", fake_leagues)
+    monkeypatch.setattr(leaguehistory, "_universe", fake_universe)
+    monkeypatch.setattr(leaguehistory, "_get", fake_get)
+    return asyncio.run(leaguehistory.backfill())
+
+
+def test_a_league_that_just_ended_is_fetched_once_more_and_that_is_no_t0(monkeypatch, lines):
+    """The day a league ends it turns past with no complete marks (a current league is never
+    marked), so the crawl takes its final pass over every item. That is by design, not a lost
+    seed: the league was current on the previous crawl (`lh_current`)."""
+    with db.tx() as c:
+        c.execute("DELETE FROM kv_ops WHERE key LIKE 'lh_%'")
+    db.kv_set("lh_current", ["Ended"])
+    items = range(1, 41)
+    _crawl(monkeypatch, [{"Value": "Ended", "IsCurrent": False}], items,
+           {i: [{"Time": "2026-09-01", "Close": 1.0, "Average": 1.0, "Volume": 1}] for i in items})
+    assert not [m for t, m in lines if t == "T0"], lines
+    assert db.kv_get("lh_current") == []
+
+
+def test_a_past_item_with_no_history_is_final_and_not_refetched(monkeypatch, lines):
+    """poe2scout answers some past-league items with no DailyStats. Nothing more will come, so the
+    item is marked complete like any other; otherwise every crawl refetched it (and a league with
+    enough of them read as a full crawl)."""
+    with db.tx() as c:
+        c.execute("DELETE FROM kv_ops WHERE key LIKE 'lh_%'")
+    db.kv_set("lh_current", [])
+    league = [{"Value": "Old", "IsCurrent": False}]
+    rows = {1: [{"Time": "2025-01-01", "Close": 1.0, "Average": 1.0, "Volume": 1}], 2: []}
+    _crawl(monkeypatch, league, [1, 2], rows)
+    assert db.kv_get("lh_complete:Old:2") is True
+    lines.clear()
+    fetched = _crawl(monkeypatch, league, [1, 2], rows)["fetched"]
+    assert fetched == {}, "nothing left to fetch"
+    assert not [m for t, m in lines if t == "T0"], lines
 
 
 def test_digest_cold_start_with_a_seed_bundled_is_a_t0(monkeypatch, lines):
