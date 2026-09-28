@@ -392,3 +392,25 @@ def test_derive_builds_the_families_and_the_pools_once(export, monkeypatch):
         monkeypatch.setattr(modpool, name, counted)
     modpool.derive(export)
     assert calls == {"families_from": 1, "pools_from": 1}, calls
+
+
+def test_a_desktop_install_never_rebuilds_its_mod_tables(monkeypatch, tmp_path):
+    """Desktop installs read the mod tables their seed carries; only shazam builds them
+    (`python -m app.modpool --force` in the publisher). A backend with a seed bundled is a desktop
+    install, so POST /api/mods/refresh refuses there and never scrapes or overwrites the tables."""
+    from fastapi.testclient import TestClient
+    from app import db, main
+    ran = []
+
+    async def fake_refresh(force=False):
+        ran.append(force)
+        return {"pools": 1}
+    monkeypatch.setattr(modpool, "refresh", fake_refresh)
+    seed = tmp_path / "market-seed.sqlite.gz"
+    seed.write_bytes(b"x")
+    monkeypatch.setattr(db, "MARKET_SEED_PATH", seed)
+    r = TestClient(main.app).post("/api/mods/refresh")
+    assert r.status_code == 403 and ran == []
+    monkeypatch.setattr(db, "MARKET_SEED_PATH", None)      # the server, or a dev backend with no seed
+    r = TestClient(main.app).post("/api/mods/refresh")
+    assert r.status_code == 200 and ran == [True]

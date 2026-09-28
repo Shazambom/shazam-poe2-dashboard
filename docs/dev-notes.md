@@ -297,8 +297,10 @@ clipboard; only the parse crosses) → preload `trade.modItem` → `lib/mods/ite
 Tests: `backend/tests/test_modpool.py` (derivations over `tests/fixtures/mods`, a trimmed
 export), `frontend/test/mods-*.test.mjs`, `desktop/test/mods-search.test.mjs` (the real
 vendored data, so an EE2 sync that renames a group fails here).
-**On a dev backend** the tables are empty until `POST /api/mods/refresh` (it fetches the sources
-into `DATA_DIR/gamedata`); the desktop app never calls it.
+**The tables are built on shazam only** (`python -m app.modpool --force`, run by the snapshot
+publisher) and reach installs in the seed. A backend with a seed bundled (every desktop install,
+the dev app included) refuses `POST /api/mods/refresh` (403). To rebuild locally, run the same CLI
+against the data dir: `cd backend && DATA_DIR=<dir> ../.venv-test/bin/python -m app.modpool --force`.
 
 ## Deploying a desktop release (mechanics)
 

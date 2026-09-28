@@ -390,7 +390,11 @@ def mod_pool_prices(pool_id: str):
 
 @app.post("/api/mods/refresh")
 async def mod_pools_refresh():
-    """The shazam cron's entry (and a dev convenience): rebuild the tables from the sources."""
+    """A dev convenience: rebuild the tables from the sources. Shazam builds them with
+    `python -m app.modpool --force` (ops/publish-market-snapshot.sh). A backend with a seed bundled
+    is a desktop install: it reads the tables its seed carries and never scrapes or rebuilds them."""
+    if db.MARKET_SEED_PATH:
+        raise HTTPException(status_code=403, detail="desktop installs read their mod tables from the seed")
     return await modpool.refresh(force=True)
 
 

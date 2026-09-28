@@ -431,7 +431,8 @@ data, not files in the repo:
   `GET /api/mods/pool/{id}` (one item type: sections with tiers sorted best first, no spawn
   weights, ~9 KB gzip), through `useApi`. `pool.js` keeps the arithmetic only: `atLevel`,
   `inPool`, `bandOf`, `visible`, `shownChance`. The orb picker's options are the fetched
-  currencies with a floor. `POST /api/mods/refresh` exists for shazam and for a dev backend.
+  currencies with a floor. Shazam builds the tables (`python -m app.modpool --force`); `POST
+  /api/mods/refresh` is a dev convenience that a backend with a seed bundled refuses.
 
 Verifying after a market-side change (CLAUDE.md): deploy the backend to shazam, run the
 publisher, confirm the `market-seed-latest` asset's version advances and a fresh install shows
