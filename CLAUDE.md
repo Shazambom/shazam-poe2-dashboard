@@ -71,7 +71,8 @@ packaged) desktop app, you MUST build telemetry so YOU can see what's happening 
 never ask the user to be your eyes.** This is the ONE sanctioned exception to the
 desktop "server-for-updates-only" contract: a clearly-marked TEMPORARY DEV DIAGNOSTIC,
 kept OUTSIDE contract-clean packages, reporting only what you need (never
-secrets/keystrokes/raw clipboard), stripped or gated before a clean release.
+secrets/keystrokes; item text is fine, the server is LAN-only), stripped or gated before a clean
+release.
 
 How (the endpoint, existing `?p=` markers, where to put the file):
 [`docs/dev-notes.md`](docs/dev-notes.md) → "Verifying the packaged Windows app".

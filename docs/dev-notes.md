@@ -172,6 +172,11 @@ CLAUDE.md. The mechanics:
   behavior isn't observable from dev. So: add server-reporting telemetry to the thing under test,
   cut a build, have the user just *use* it, and read the results yourself:
   `GET http://192.168.1.250:8080/api/installlog`, filtered by a `?p=<tag>` marker.
+- **EE2 item texts and history queries.** The EE2 diagnostic (`desktop/src/dev-ee2-telemetry.js`)
+  posts every item text EE2 read (`p=ee2-item`: price checks, clipboard add, Mods paste) and the
+  history search URL the worker built (`p=ee2-query`). `./ops/pull-ee2-items.sh` pulls them from
+  shazam's log into `desktop/test/fixtures/ee2/live/` (gitignored): one file per item plus
+  `queries.txt`. Tests: `desktop/test/ee2-item-telemetry.test.mjs`.
 - Existing markers: `p=init` (installer self-heal), `p=backend` (spawn/exit/bind + the analytics
   probe), `p=login` (PoE/Steam login), `p=update` (auto-updater events), `p=ee2` (EE2 hooks),
   `p=sidecar` (sidecar + supervisor lifecycle).

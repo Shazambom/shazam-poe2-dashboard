@@ -13,6 +13,7 @@ const fs = require('fs')
 const http = require('http')
 const path = require('path')
 const telemetry = require('./telemetry.js')
+const { postItemText, postQuery } = require('./dev-ee2-telemetry.js')   // beta/dev-gated inside installLog
 const { makeRing } = require('./feedback/ring.js')
 
 // Log rings for "Report a problem" (local only — a report is a file the user drags into Discord):
@@ -550,6 +551,7 @@ async function startEe2Integration() {
         send: win && !win.isDestroyed() && !win.webContents.isLoading() ? (ch, p) => { try { win.webContents.send(ch, p) } catch {} } : null,
         log: (line) => telemetry.installLog('ee2', line),
         hint: (policy) => { try { require('./trade/budget.js').hint(policy) } catch {} },   // 4-B shared GGG budget
+        onBuilt: postQuery,
       })
       try { _unwatchEe2Config = require('./integrations/exiled-exchange/ee2-config.js').watchConfig(() => _history?.invalidatePrefs()) } catch {}
     } catch (e) { console.log('[ee2-history] disabled:', String(e)); _history = null }
@@ -697,7 +699,9 @@ ipcMain.handle('clipboard:classify', async () => {
   if (cls.kind !== 'item') return cls
   // 4-A: the item rung — the history consumer's worker builds the query here; the text stays in main.
   if (!_history) return { kind: 'none', len: 0 }
-  const intent = await _history.buildIntent(String(clipboard.readText() || '').slice(0, MAX_CLIP), 'clipboard')
+  const text = String(clipboard.readText() || '').slice(0, MAX_CLIP)
+  postItemText('clipboard', text)
+  const intent = await _history.buildIntent(text, 'clipboard')
   return intent ? { kind: 'item', intent } : { kind: 'none', len: 0, currency: true }
 })
 
@@ -710,6 +714,7 @@ ipcMain.handle('mods:item', async () => {
   const cls = classify(text)
   if (cls.kind !== 'item') return { item: null, reason: cls.kind === 'none' && !cls.len ? 'empty' : 'not-item' }
   if (!_history) return { item: null, reason: 'worker' }
+  postItemText('mods', text)
   return _history.parseItem(text)
 })
 

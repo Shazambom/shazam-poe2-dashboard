@@ -134,3 +134,17 @@ test('parseItem: the parse crosses as { item, reason }; a worker error, a timeou
   assert.deepEqual(await noParse.parseItem(RAW), { item: null, reason: 'worker' })
   assert.ok(parses.some(l => l.startsWith('mods-parse-skip reason=timeout')) && parses.some(l => l.startsWith('mods-parse-skip reason=worker')))
 })
+
+test('onBuilt sees every built intent, from the automatic stream and from the clipboard rung, never a degraded one', async () => {
+  const built = []
+  const pkg = new EventEmitter()
+  let fail = false
+  const worker = { spawn() { return { build: async () => (fail ? { error: { stage: 'parse', message: 'x' } } : { q: '{"query":{}}', name: 'Headhunter', item: { name: 'Headhunter', baseType: 'Heavy Belt', rarity: 'Unique', itemClass: 'Belts' }, host: 'www.pathofexile.com', buildMs: 5 }), kill() {} } } }
+  const c = createHistoryConsumer({ manager: pkg, worker, prefs: () => ({ prefs: { leagueId: 'L', language: 'en' }, source: 'ee2' }), send: () => {}, onBuilt: (i) => built.push(i) })
+  pkg.emit('item-checked', item('ee2'))
+  await new Promise(r => setTimeout(r, 10))
+  await c.buildIntent(RAW, 'clipboard')
+  fail = true
+  await c.buildIntent(RAW, 'clipboard')
+  assert.deepEqual(built.map(i => [i.origin, i.q, i.cfgLeague]), [['ee2', '{"query":{}}', 'L'], ['clipboard', '{"query":{}}', 'L']])
+})

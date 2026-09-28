@@ -2,7 +2,8 @@
 // item-checked events (the package stays untouched), asks the worker for the query, and hands the
 // renderer ONE IngestIntent per item over 'trade:ingest'. Raw clipboard text never crosses IPC.
 //
-//   createHistoryConsumer({ manager, worker, prefs, send, log, now }) → { setEnabled, setSender, status, stop, onItem }
+//   createHistoryConsumer({ manager, worker, prefs, send, log, now, onBuilt }) → { setEnabled, setSender, status, stop, onItem }
+//     onBuilt(intent): every built (non-degraded) intent, any origin — the dev diagnostic's hook
 //     manager: the ExiledExchangeIntegration emitter   worker: { spawn() → { build(raw, prefs), kill() } }
 //     prefs():  { prefs, source }                        send(channel, payload) | null while no window
 //     log(line): telemetry (marker ee2)                  now(): clock (tests)
@@ -12,7 +13,7 @@ const NO_WINDOW_BUFFER = 20
 const RESTART_MIN_MS = 5 * 60 * 1000
 const WARM_DELAY_MS = 15 * 1000
 
-function createHistoryConsumer({ manager, worker, prefs, send = null, log = () => {}, now = Date.now, hint = null }) {
+function createHistoryConsumer({ manager, worker, prefs, send = null, log = () => {}, now = Date.now, hint = null, onBuilt = null }) {
   let enabled = true            // main assumes on until the renderer says otherwise (fail toward "it works")
   let sender = send
   let proc = null               // { build, kill } from worker.spawn()
@@ -67,7 +68,9 @@ function createHistoryConsumer({ manager, worker, prefs, send = null, log = () =
       return { ...base, q: null, degraded: true, stage: r.error.stage, name, item: { name: item?.name || '', baseType: item?.baseType || '', rarity: item?.rarity || '', itemClass: item?.itemClass || '' } }
     }
     log(`history-build origin=${origin} rarity=${r.item?.rarity || item?.rarity || '?'} name="${String(r.name).slice(0, 40)}" ms=${base.buildMs} qb=${Buffer.byteLength(r.q, 'utf8')}`)
-    return { ...base, q: r.q, degraded: false, stage: null, name: r.name, item: r.item }
+    const intent = { ...base, q: r.q, degraded: false, stage: null, name: r.name, item: r.item }
+    if (onBuilt) { try { onBuilt(intent) } catch {} }
+    return intent
   }
 
   async function onItem(item) {

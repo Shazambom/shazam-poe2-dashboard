@@ -5,7 +5,7 @@
 // 2026-09-16) — `configure({ enabled })` is wired to the beta-channel gate in main.js, and every
 // sender (backend spawn/exit, updater, login window, EE2 hooks) goes through installLog(), so
 // there is exactly one place that decides whether anything leaves the machine. Bodies are plain
-// text: never secrets, keystrokes, or raw clipboard.
+// text, never secrets or keystrokes. The server is on the owner's LAN and reachable only there.
 'use strict'
 
 const SHAZAM = 'http://192.168.1.250:8080'
