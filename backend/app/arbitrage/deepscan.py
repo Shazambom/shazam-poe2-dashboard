@@ -17,7 +17,6 @@ exactly what it was.
 from __future__ import annotations
 
 import math
-import threading
 import time
 
 from .. import devtelemetry
@@ -41,7 +40,7 @@ def _report(msg: str) -> None:
     if not devtelemetry.enabled() or now - _last_report < REPORT_EVERY_S:
         return
     _last_report = now
-    threading.Thread(target=devtelemetry.tlog, args=("deepscan", msg), daemon=True).start()
+    devtelemetry.tlog("deepscan", msg)       # queues; never waits on the network
 
 
 def _load():

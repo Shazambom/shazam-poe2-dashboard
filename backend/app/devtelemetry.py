@@ -10,8 +10,11 @@ web/server env never post. This module is stdlib-only and importable by the lean
 """
 from __future__ import annotations
 
+import atexit
 import os
+import queue
 import sys
+import threading
 import urllib.request
 
 _URL = "http://192.168.1.250:8080/api/installlog?p=sidecar"
@@ -45,14 +48,53 @@ def t0(kind: str, msg: str) -> None:
 
 
 def tlog(tag: str, msg: str) -> None:
-    """Post one line as `v<ver> <platform> [tag]: msg`. Silent unless the gate is on; never raises."""
+    """Post one line as `v<ver> <platform> [tag]: msg`. Silent unless the gate is on; never raises,
+    never blocks: callers include the backend's event loop, and a beta client off the owner's LAN
+    would wait out the timeout on every line. The line is queued; one worker posts, in order."""
     if not enabled():
         return
+    ver = os.environ.get("ARBITER_VERSION", "?")
+    frozen = getattr(sys, "frozen", False)
+    _queue.put(f"v{ver} {sys.platform} frozen={frozen} [{tag}]: {msg}".encode("utf-8", "replace"))
+    _start()
+
+
+_queue: queue.Queue = queue.Queue()
+_worker: threading.Thread | None = None
+_lock = threading.Lock()
+
+
+def _post(body: bytes) -> None:
     try:
-        ver = os.environ.get("ARBITER_VERSION", "?")
-        frozen = getattr(sys, "frozen", False)
-        body = f"v{ver} {sys.platform} frozen={frozen} [{tag}]: {msg}".encode("utf-8", "replace")
         req = urllib.request.Request(_URL, data=body, headers={"Content-Type": "text/plain"})
         urllib.request.urlopen(req, timeout=4).close()
     except Exception:
         pass
+
+
+def _run() -> None:
+    while True:
+        body = _queue.get()
+        try:
+            _post(body)
+        finally:
+            _queue.task_done()
+
+
+def _start() -> None:
+    global _worker
+    with _lock:
+        if _worker is None or not _worker.is_alive():
+            _worker = threading.Thread(target=_run, name="devtelemetry", daemon=True)
+            _worker.start()
+
+
+def flush(timeout: float = 5.0) -> bool:
+    """Wait (at most `timeout` s) until every queued line is posted; True when the queue drained.
+    Runs at exit, so a process's last lines (the sidecar's death) still leave."""
+    done = threading.Event()
+    threading.Thread(target=lambda: (_queue.join(), done.set()), daemon=True).start()
+    return done.wait(timeout)
+
+
+atexit.register(flush)

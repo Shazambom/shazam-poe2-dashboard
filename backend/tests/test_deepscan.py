@@ -130,8 +130,6 @@ def test_notional_search_lists_the_deep_loop_from_every_vertex_once():
 def test_telemetry_is_gated_throttled_and_carries_no_currency_names(monkeypatch):
     sent = []
     monkeypatch.setattr(deepscan.devtelemetry, "tlog", lambda tag, msg: sent.append((tag, msg)))
-    monkeypatch.setattr(deepscan.threading, "Thread",
-                        lambda target, args, daemon: type("T", (), {"start": lambda self: target(*args)})())
     g = _graph(_ring(["exalted", "divine", "chaos", "regal", "vaal"], 1.05))
 
     monkeypatch.setattr(deepscan.devtelemetry, "enabled", lambda: False)

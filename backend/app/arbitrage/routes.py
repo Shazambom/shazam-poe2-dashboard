@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import json
 import math
-import threading
 import time
 from .. import cache, db, devtelemetry, orderbook, pairscore
 from .. import settings as settings_mod
@@ -280,7 +279,7 @@ def _diag(cached: bool, routes: int, after_filters: int, candidates: int, t0: fl
         msg = (f"cached={cached} routes={routes} after_filters={after_filters} candidates={candidates} "
                f"ms={int((time.time() - t0) * 1000)} notional={bool(notional)} "
                f"starts={len(starts or ())} edges={len(g.edges)} quoted={quoted}")
-        threading.Thread(target=devtelemetry.tlog, args=("routes", msg), daemon=True).start()
+        devtelemetry.tlog("routes", msg)     # queues; never waits on the network
     except Exception:
         pass
 
