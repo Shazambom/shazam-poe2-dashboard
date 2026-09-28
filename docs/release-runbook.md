@@ -78,7 +78,7 @@ on shazam through `ops/t0-scan.py` for the version's beta line since the latest 
 refuses on a blocker. It also refuses when **no** beta client has reported a healthy startup
 (`[mods]: … pools=N>0`) since then: silence is not validation. It fails closed (no ssh, no beta).
 Read the state by hand: `ops/t0-check.sh 0.3.6`, or the summary
-`ssh shazam … python3 /tmp/t0-scan.py --log data/install-reports.log`.
+`python3 /tmp/t0-scan.py --log data/install-reports.log` on shazam, run through `sshshazambom`.
 Why: the 2026-09-25 Windows seed failure (`docs/bugs/2026-09-25-windows-seed-never-applied.md`)
 was a silent fallback for weeks; on stable it would have surfaced as a bug report, which is a failure.
 

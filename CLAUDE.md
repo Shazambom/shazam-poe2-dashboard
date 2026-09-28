@@ -77,6 +77,11 @@ release.
 How (the endpoint, existing `?p=` markers, where to put the file):
 [`docs/dev-notes.md`](docs/dev-notes.md) → "Verifying the packaged Windows app".
 
+## Shazam access — `sshshazambom`
+
+Run every command on shazam through the `sshshazambom` script (`sshshazambom <command>`,
+`sshshazambom sudo …` for root), reads included (owner directive 2026-09-28).
+
 ## Debugging
 
 This is how you debug stuff: [`docs/desktop-debugging.md`](docs/desktop-debugging.md)
