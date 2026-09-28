@@ -99,6 +99,8 @@ def realizable(g: "arbitrage.Graph", ref_value: dict[str, float], currency: str,
       source        — cash | live | digest | mixed | none  (confidence)
       full_fill     — whether the whole stack cleared the book
       path          — the cash-out route as a list of currency ids (None if unrealizable)
+      out           — {amount, cur}: what the sale hands over, whole units of the currency the path
+                      ends in (a cash holding: itself); None if unrealizable. Gold is paid on top.
     """
     ref = g.s["reference"]
     if cash is None:
@@ -112,10 +114,10 @@ def realizable(g: "arbitrage.Graph", ref_value: dict[str, float], currency: str,
         if paper is None:
             return {"paper_ref": None, "realizable_ref": None, "ghost_ref": None,
                     "slippage_pct": None, "fill_hours": None, "source": "none",
-                    "full_fill": False, "path": None}
+                    "full_fill": False, "path": None, "out": None}
         return {"paper_ref": paper, "realizable_ref": paper, "ghost_ref": 0.0,
                 "slippage_pct": 0.0, "fill_hours": 0.0, "source": "cash",
-                "full_fill": True, "path": [currency]}
+                "full_fill": True, "path": [currency], "out": {"amount": qty, "cur": currency}}
 
     # Sell into whichever cash currency (or the reference) nets the most VALUE, through liquid
     # cash markets only, valued by the same table as paper (net of the gold the path charges).
@@ -141,7 +143,7 @@ def realizable(g: "arbitrage.Graph", ref_value: dict[str, float], currency: str,
     if best is None:                                       # no exchange market to measure against
         return {"paper_ref": paper, "realizable_ref": None, "ghost_ref": None,
                 "slippage_pct": None, "fill_hours": None, "source": "none",
-                "full_fill": False, "path": None}
+                "full_fill": False, "path": None, "out": None}
 
     realizable_ref = best_value                            # reference-denominated, net of gold
     # You can't realize MORE than paper by cashing out — any apparent surplus is a cross-rate
@@ -154,7 +156,7 @@ def realizable(g: "arbitrage.Graph", ref_value: dict[str, float], currency: str,
     return {"paper_ref": paper, "realizable_ref": realizable_ref, "ghost_ref": ghost,
             "slippage_pct": max(0.0, best["loss_pct"]), "fill_hours": best["fill_hours"],
             "source": _source(best["kinds"]), "full_fill": best["full_fill"],
-            "path": best["path"]}
+            "path": best["path"], "out": {"amount": float(_whole_units_out(best)), "cur": best["path"][-1]}}
 
 
 def capital_rows(caps: dict[str, float], g: "arbitrage.Graph", ref_value: dict[str, float]) -> dict:
@@ -174,17 +176,14 @@ def capital_rows(caps: dict[str, float], g: "arbitrage.Graph", ref_value: dict[s
                    fill_hours=liq["fill_hours"], source=liq["source"], full_fill=liq["full_fill"],
                    cashout_path=liq["path"])
         # The volume rule (CLAUDE.md): cash IS native money, worth its own raw amount; anything else
-        # is worth its quantity at the rate of the market that trades it. A cash-out's result is the
-        # amount of the cash currency the path ends in (sold at paper there), not its ex value.
+        # is worth its quantity at the rate of the market that trades it. A cash-out's result is
+        # what the sale hands over (`out`: whole units of the cash it ends in), not its ex value.
         if c == ref or c in cash:
-            row["native"] = row["realizable_native"] = {"amount": q, "cur": c}
+            row["native"] = {"amount": q, "cur": c}
         else:
             native = arbitrage.native_price(g, c, ref_value, ranked, ref)
             row["native"] = {"amount": q * native[0], "cur": native[1]} if native else None
-            end = (liq["path"] or [None])[-1]
-            end_px = 1.0 if end == ref else ref_value.get(end)
-            row["realizable_native"] = ({"amount": liq["realizable_ref"] / end_px, "cur": end}
-                                        if liq["realizable_ref"] is not None and end_px else None)
+        row["realizable_native"] = liq["out"]
         rows.append(row)
     total = sum(r["value_ref"] for r in rows if r["value_ref"] is not None)
     realizable_total = sum(r["realizable_ref"] for r in rows if r["realizable_ref"] is not None)

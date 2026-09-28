@@ -310,4 +310,8 @@ def test_a_holding_is_worth_its_own_currency_or_its_market_rate_never_a_conversi
     assert cur == REF or g.direct_rate("preserved-cranium", cur) == pytest.approx(rate), "priced in a market it trades in"
     end = cr["cashout_path"][-1]
     assert end in HUBS
-    assert cr["realizable_native"] == {"amount": pytest.approx(cr["realizable_ref"] / rv[end]), "cur": end}
+    # What the sale hands over: the whole units of the cash it ends in (you receive 15 Divine, not
+    # 15.71), never realizable_ref divided back through the value table.
+    liq = liquidity.realizable(g, rv, "preserved-cranium", 2.0, cash=HUBS, gold_value_per_1k=GOLD)
+    assert liq["out"] == {"amount": liq["out"]["amount"], "cur": end} and float(liq["out"]["amount"]).is_integer()
+    assert cr["realizable_native"] == liq["out"]
