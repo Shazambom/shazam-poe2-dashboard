@@ -7,6 +7,7 @@ number the app shows or a call it makes.
 
     cd backend && DATA_DIR="$(mktemp -d)" MARKET_SEED= ../.venv-test/bin/python -m pytest tests/test_review_2026_09_23.py -q
 """
+import json
 import math
 import os
 import sqlite3
@@ -526,6 +527,19 @@ def _prod_copy(currencies, hours=48):
     marks = ",".join("?" * len(ids))
     rows = _prod_rows(f"SELECT * FROM digest_markets WHERE league=? AND hour>=? AND cur_a IN ({marks}) AND cur_b IN ({marks})",
                       league, now - hours * 3600, *ids, *ids)
+    return _replay(rows, now)
+
+
+def _replay(rows, now, hours=48, min_traded_share=None):
+    """Land digest rows whose newest hour is `now` at the clock's newest hour, as league ProdCopy.
+    `min_traded_share` keeps only consistently traded markets: a market that traded in fewer than
+    that share of the window's hours is a spike and its rows are left out."""
+    if min_traded_share:
+        traded = defaultdict(set)
+        for r in rows:
+            if r["vol_a"] or r["vol_b"]:
+                traded[(r["cur_a"], r["cur_b"])].add(r["hour"])
+        rows = [r for r in rows if len(traded[(r["cur_a"], r["cur_b"])]) >= min_traded_share * hours]
     shift = digest._hour(time.time()) - now                    # land the rows at the clock's newest hour
     with db.tx() as c:
         c.execute("DELETE FROM digest_markets WHERE league=?", ("ProdCopy",))
@@ -729,18 +743,30 @@ def test_a_currency_with_no_market_is_still_priced_from_poe2scout(monkeypatch):
     assert g.values()["regal"] == pytest.approx(42.0)
 
 
-@_prod
+LUMP = json.loads((Path(__file__).parent / "fixtures" / "shard_flux_lump_2026-09-27.json").read_text())
+
+
 @pytest.mark.parametrize("meta, tid, close", [
     ("Metadata/Items/Currency/CurrencySetKalguuranSkillGemLevel15", "thaumaturgic-flux-15", 1.0),
     ("Metadata/Items/Currency/CurrencyAddEquipmentSocketShard", "artificers-shard", 59.464),
 ])
 def test_production_the_close_does_not_override_the_market_that_trades_it(monkeypatch, meta, tid, close):
-    """The real rows for the two worst cards of 2026-09-23, with the poe2scout close that broke
-    them: each is priced through its exalted market at that market's window rate."""
+    """Real rows for the two worst cards of 2026-09-23, with the poe2scout close that broke them:
+    each is priced through its exalted market at that market's window rate. Only markets that
+    trade consistently are replayed (owner, 2026-09-28): the shard's divine market trades in lumps
+    of one divine on a few hours, and a lump in the window priced the shard ~10 ex against the
+    exalted market's ~2.4. The rows are a fixed window (fixture, 2026-09-27 01:00 UTC) holding such
+    a lump; replaying the live DB's newest window made the test pass or fail with the market."""
     from app import leaguehistory
     registry._link(meta, tid)
-    league, n = _prod_copy([meta])
-    assert n > 20, f"only {n} rows — is it still trading?"
+    ids = {registry.metas(c)[0] for c in ("exalted", "divine", "chaos")} | {meta}
+    rows = [r for r in LUMP["rows"] if r["cur_a"] in ids and r["cur_b"] in ids]
+    if tid == "artificers-shard":   # the window holds the spike this test is about
+        dv = registry.metas("divine")[0]
+        lumpy = {r["hour"] for r in rows if {r["cur_a"], r["cur_b"]} == {meta, dv} and (r["vol_a"] or r["vol_b"])}
+        assert 0 < len(lumpy) < 0.25 * 48 and LUMP["now"] in lumpy, sorted(lumpy)
+    league, n = _replay(rows, LUMP["now"], min_traded_share=0.25)
+    assert n > 20, f"only {n} rows"
     name = str(registry.name(tid)).lower()
     g = _built(league, monkeypatch)
     monkeypatch.setattr(leaguehistory, "scout_prices", lambda league: {name: close, tid: close})
