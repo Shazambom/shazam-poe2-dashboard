@@ -198,18 +198,21 @@ preset's block in `styles.css`, keep `BACKDROPS` in `desktop/src/main.js` equal 
 
 ---
 
-### Wealth — the one display rule for amounts
+### Amounts — the volume rule first, wealth as the approximation
 
-Every amount of wealth is computed and stored in the **reference currency** (exalted by default;
-`/api/*` payloads carry `*_ref`, `value_ex`, `medvol`, … in it). That baseline is what makes
-worth comparable. On screen, big numbers stop meaning anything, so the display layer
-re-denominates: **≥1,000,000 ref → mirrors, ≥1,000 ref → divines, ≥100 ref → chaos**, else the
-reference. The rule lives in ONE place — `WEALTH_TIERS` + `wealthUnit()` in
-`frontend/src/lib/wealth.js` — and every wealth figure renders through
-`<Wealth v={amount} />` (`frontend/src/components/Wealth.jsx`: value + currency icon, raw
-reference amount on hover) or `wealthText()` for tooltips. Prices come from `/api/status →
-wealth_prices` (reference per unit), so the conversion follows the live market. Never format a
-wealth amount with `fmt.n(x) <Cur/>` by hand — add the site to `<Wealth>` instead.
+**Which currency:** the volume rule (CLAUDE.md → "Which currency to show an amount in"). An amount
+already held in a currency (a sale's price, a holding) shows in that currency, raw; a price shows
+in the market that trades the thing (`board.default_numeraire`) at that market's own rate
+(`Graph.direct_rate`). Never convert a native amount through exalted: it is not what anyone traded.
+
+**Wealth, the approximation:** worth that has no single native currency (a sum across currencies,
+such as a Capital total) is computed in the **reference currency** (`*_ref`, `value_ex`, `medvol`,
+…), and a native number too large to read is re-denominated. Both go through ONE rule —
+`WEALTH_TIERS` + `wealthUnit()` in `frontend/src/lib/wealth.js`, rendered by `<Wealth v={amount} />`
+(`frontend/src/components/Wealth.jsx`: value + currency icon, raw reference amount on hover) or
+`wealthText()` for tooltips: **≥1,000,000 ref → mirrors, ≥1,000 ref → divines, ≥100 ref → chaos**,
+else the reference. Prices come from `/api/status → wealth_prices`. Never hand-format a
+re-denomination with `fmt.n(x) <Cur/>`; never use `<Wealth>` where a native amount exists.
 
 ## 4. Color usage rules
 

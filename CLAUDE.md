@@ -206,6 +206,24 @@ Rules of thumb: **reuse UI relentlessly** — new data flows into existing compo
 (`CardDetail`, board sparkline/graph, chips, capital card) first. Features should cross-link
 and share data through the fewest new surfaces. Think ecosystem, not screens.
 
+## Which currency to show an amount in: the volume rule
+
+**When unsure what currency to display something in, follow the volume rule** (owner, 2026-09-28).
+A thing is shown in the market that actually trades it: its highest-volume counterpart
+(`counterparts_by_volume` in `backend/app/arbitrage/graph.py`), walking down the ranking to the
+first counterpart it is worth at least one of (`board.default_numeraire`, the Board's rule). The
+number is **that market's own rate** (`Graph.direct_rate`), never a conversion through exalted.
+- **Precise first.** An amount already held in a currency (a sale's price, a holding) shows in
+  that currency, raw. A price shows in its trading market at the traded rate. Converting one
+  currency into another through ex can mislead: it is not what anyone traded.
+- **Readable second.** Humans read neither huge nor tiny numbers well, so a native number that is
+  too large is re-denominated by the wealth rule (`frontend/src/lib/wealth.js`, `<Wealth>`) as an
+  **approximation**. The wealth rule is only ever that fallback, or the one number for a sum across
+  currencies (a Capital total); it never replaces a native amount that exists.
+- **Comparisons keep a common scale.** Where rows are compared by worth (route margins), keep the
+  native figure and its market-relative value side by side, so a 1 div margin reads bigger than a
+  1 ex margin.
+
 ## Heavy analytics: a local sidecar runtime, not a bloated binary
 
 The stdlib-bias keeps the MAIN backend binary lean. When a capability genuinely needs a heavy
