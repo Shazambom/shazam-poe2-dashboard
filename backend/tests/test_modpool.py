@@ -143,13 +143,20 @@ def test_sections_are_derived_from_the_data_not_listed(derived):
     assert "Wands" in secs["destruction"]["classes"] and "Bows" in secs["destruction"]["classes"] and "Gloves" not in secs["destruction"]["classes"]
     assert secs["marksman"]["title"] == "Kolr's Hunt" and secs["marksman"]["classes"] == ["Gloves"]
     # The bones and the Genesis Tree key on tags no base carries; their mods carry the base tags.
-    # Keys of one non-item domain are ONE section (poe2db: one "Desecrated" group, the bones as
-    # tags in it; owner 2026-09-25); item-domain keys stay their own section.
-    assert secs["desecrated"]["keys"] == ["amanamu_mod", "breach_desecration", "kurgal_mod", "ulaman_mod"]
+    # The bones' lords (unveiled at the Well of Souls) are ONE section, the lords as tags in it
+    # (poe2db: one "Desecrated Modifiers" group; owner 2026-09-25). The Altered Collarbone's
+    # otherworldly mods share the domain but are never unveiled: their own section (poe2db:
+    # "Otherworldly"; owner 2026-09-28). Item-domain keys stay their own section.
+    assert secs["desecrated"]["keys"] == ["amanamu_mod", "kurgal_mod", "ulaman_mod"]
     assert secs["desecrated"]["title"] == "Desecrated" and secs["desecrated"]["classes"] is None
-    assert not any(k in secs for k in ["ulaman_mod", "amanamu_mod", "kurgal_mod", "breach_desecration"])
+    assert secs["breach_desecration"]["keys"] == ["breach_desecration"] and secs["breach_desecration"]["domain"] == "desecrated"
+    assert secs["breach_desecration"]["title"] == "Breach Desecration" and not secs["breach_desecration"]["floored"]
+    assert secs["breach_desecration"]["classes"] == ["Amulets", "Belts", "Rings"], "the Altered Collarbone's targets, from the tags its mods name"
+    assert not any(k in secs for k in ["ulaman_mod", "amanamu_mod", "kurgal_mod"])
+    # No currency names the Genesis Tree's pools; its mods scope them (each zero-weights the other
+    # class): Rings and Belts, as poe2db lists them (not Amulets, weapons or armour).
     for k in ["genesis_tree_caster", "genesis_tree_minion"]:
-        assert k in secs and secs[k]["classes"] is None and secs[k]["keys"] == [k], k
+        assert k in secs and secs[k]["classes"] == ["Belts", "Rings"] and secs[k]["keys"] == [k], k
     assert secs["genesis_tree_caster"]["title"] == "Genesis Tree Caster"
     # A key with no base tag and no carrier (Kulemak, Watcher) would show on every item: not a section.
     assert "kulemak_abyss_prefix" not in secs and "watcher_abyss_suffix" not in secs
@@ -164,29 +171,53 @@ def test_build_pool_gives_each_item_type_only_the_sections_with_something_in_the
     ring = modpool.build_pool(pools["ring"], derived.families, derived.sections)
     ids = [s["id"] for s in ring["sections"]]
     assert ids[0] == "base" and "desecrated" in ids and "corrupted" in ids and "enchant" in ids and "destruction" not in ids
-    assert "kurgal_mod" not in ids and "breach_desecration" not in ids
-    # In the merged section each family says which bone (key) rolls it, and the bones are chips.
+    assert "kurgal_mod" not in ids and "breach_desecration" in ids
+    breach = next(s for s in ring["sections"] if s["id"] == "breach_desecration")
+    assert len(breach["prefix"] + breach["suffix"]) == 16, "poe2db Rings: Otherworldly /16"
+    assert not any("breach_desecration" in f["tags"] for f in breach["prefix"] + breach["suffix"]), "the key titles the section"
+    assert not any(set(f["tags"]) & {"amanamu_mod", "kurgal_mod", "ulaman_mod"} for f in breach["prefix"] + breach["suffix"]), \
+        "a lord's tag never rides into the otherworldly pool on a family that also holds a lord's tier"
+    # In the merged section each family says which lord (key) rolls it, and the lords are chips.
     des = next(s for s in ring["sections"] if s["id"] == "desecrated")
-    keyed = [f for f in des["prefix"] + des["suffix"] if set(f["tags"]) & {"amanamu_mod", "kurgal_mod", "ulaman_mod", "breach_desecration"}]
+    # One family can hold a lord's tier and an otherworldly tier (same group and text): each section
+    # shows only its own currency's tiers.
+    tiers_of = lambda sec: {(f["id"], t["name"], t["ilvl"]) for f in sec["prefix"] + sec["suffix"] for t in f["tiers"]}
+    assert not (tiers_of(des) & tiers_of(breach)), "no tier is in both pools"
+    exp = next(f for f in breach["suffix"] if f["id"] == "suffix:ExposureEffect@desecrated")
+    assert [t["name"] for t in exp["tiers"]] and not any("Kurgal" in t["name"] for t in exp["tiers"])
+    keyed = [f for f in des["prefix"] + des["suffix"] if set(f["tags"]) & {"amanamu_mod", "kurgal_mod", "ulaman_mod"}]
     assert keyed and len(keyed) == len(des["prefix"] + des["suffix"]), "every desecrated family carries its key"
     assert all(len(f["tags"]) == len(set(f["tags"])) for f in keyed), "a bone the mod already carries is not added twice"
     chips = {t["id"]: t for t in ring["tags"]}
     assert chips["amanamu_mod"]["label"] == "Amanamu"
-    assert all(set(f["tags"][:1]) & {"amanamu_mod", "kurgal_mod", "ulaman_mod", "breach_desecration"} for f in keyed), \
+    assert all(set(f["tags"][:1]) & {"amanamu_mod", "kurgal_mod", "ulaman_mod"} for f in keyed), \
         "the bone leads the row's tags: the two the row shows include it"
     order = [t["id"] for t in ring["tags"]]
     assert order.index("life") < order.index("amanamu_mod"), "the base pool's tags lead the row; the bones follow"
     assert order[0] == "elemental" and order.index("attack") < order.index("evasion"), "within a group the commoner tag first"
     assert "genesis_tree_caster" not in chips, "a single-key section is titled by its key; no chip repeats it"
+    amulet = modpool.build_pool(pools["amulet"], derived.families, derived.sections)
+    assert not {"genesis_tree_caster", "genesis_tree_minion"} & {s["id"] for s in amulet["sections"]}, "poe2db Amulets: no Genesis Tree"
     wand = modpool.build_pool(pools["wand"], derived.families, derived.sections)
     wids = [s["id"] for s in wand["sections"]]
     assert "destruction" in wids and "marksman" not in wids
     assert all(k in ring["sections"][0] for k in ("prefix", "suffix")) and "prefix" not in next(s for s in ring["sections"] if s["id"] == "corrupted")
     assert ring["tags"] and all(set(t) == {"id", "label"} for t in ring["tags"]), "a chip is an id and a label; counts stay here"
     assert not any(t["id"] in ("resource", "drop", "elemental_damage") for t in ring["tags"]), "compound and bookkeeping tags are not chips"
+    # A Preserved Cranium desecrates a jewel, a Preserved Vertebrae a waystone: their mods key on the
+    # base's own tags, no lord, and land in the Desecrated section (poe2db Ruby: Desecrated /32).
     jewel = modpool.build_pool(pools["jewel_ruby"], derived.families, derived.sections)
-    assert [s["id"] for s in jewel["sections"]] == ["base"], "a jewel has its base pool only"
+    assert [s["id"] for s in jewel["sections"]] == ["base", "desecrated"]
     assert jewel["sections"][0]["prefix"] or jewel["sections"][0]["suffix"]
+    jdes = jewel["sections"][1]
+    assert len(jdes["prefix"] + jdes["suffix"]) == 32
+    assert not any(set(f["tags"]) & {"amanamu_mod", "kurgal_mod", "ulaman_mod"} for f in jdes["prefix"] + jdes["suffix"])
+    lost = modpool.build_pool(pools["jewel_time_lost_ruby"], derived.families, derived.sections)
+    assert len(next(s for s in lost["sections"] if s["id"] == "desecrated")["prefix"] + next(s for s in lost["sections"] if s["id"] == "desecrated")["suffix"]) == 12, "radius jewel mods"
+    way = modpool.build_pool(pools["map_t16"], derived.families, derived.sections)
+    wdes = next(s for s in way["sections"] if s["id"] == "desecrated")
+    assert len(wdes["prefix"] + wdes["suffix"]) == 17
+    assert "breach_desecration" not in [s["id"] for s in jewel["sections"] + way["sections"]]
 
 
 def test_build_pool_never_repeats_a_section_title_as_a_tag_and_needs_no_base_section(derived):

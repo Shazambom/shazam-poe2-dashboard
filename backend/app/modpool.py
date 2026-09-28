@@ -267,11 +267,13 @@ def pools_from(export: Export) -> list:
             continue
         spawn = spawn_tags[domain]
         groups = defaultdict(list)
+        desecrates = defaultdict(set)   # a variant's base tags the bones' mods key on (a waystone's `map` is no area tag)
         for b in bases:
             tags = tuple(sorted(set(b.get("tags") or []) & spawn))
             if class_name in DOMAIN_OVERRIDES:   # a logbook: every tag its domain's mods roll on
                 tags = tuple(sorted(set(w["tag"] for m in export.mods.values() if m.get("domain") == domain for w in m.get("spawn_weights") or [] if w["weight"] > 0) - {"default"}))
             groups[tags].append(b["name"])
+            desecrates[tags] |= set(b.get("tags") or []) & spawn_tags.get("desecrated", set())
         variants = [(list(t), sorted(set(n))) for t, n in groups.items() if t]
         if any(_attrs(t) for t, _ in variants):   # the attribute-less golden bases are unique-only
             variants = [(t, n) for t, n in variants if _attrs(t)]
@@ -289,7 +291,8 @@ def pools_from(export: Export) -> list:
                 pid = f"{slug(cid)}_{slug(name.split(' · ', 1)[1])}"
             if any(p["id"] == pid for p in pools):   # two tag sets with the same attributes: the bases tell them apart
                 pid = f"{pid}_{slug(names[0])}"
-            pools.append({"id": pid, "name": name, "class": class_name, "domain": domain, "tags": tags, "keywords": names})
+            pools.append({"id": pid, "name": name, "class": class_name, "domain": domain, "tags": tags, "keywords": names,
+                          "desecrates": sorted(desecrates[tuple(tags)])})
     # A pool nothing rolls on is not a pool (sanctified relics, junk classes).
     fams = families_from(export)
     keep = []
@@ -339,8 +342,8 @@ def families_from(export: Export) -> list:
             pass
         elif m.get("domain") == "item" and affix == "unique" and "upgraded_corruption_mod" in implicit:
             affix = "enchant"
-        elif m.get("domain") == "desecrated" and affix in ("prefix", "suffix") and any(w > 0 and t not in carried for t, w in weights):
-            pass
+        elif m.get("domain") == "desecrated" and affix in ("prefix", "suffix"):
+            pass   # every rollable desecration: the bones' lords, the Altered Collarbone, the jewel/waystone bones
         else:
             continue
         text = strip_markup(m["text"])
@@ -390,20 +393,32 @@ def sections_from(export: Export, families: list) -> list:
                 if w > 0 and tag not in carried:
                     keyed[tag].append((f, t))
     sections = [{"id": "base", "title": None, "domain": None, "affixes": ["prefix", "suffix"], "keys": [], "classes": None, "floored": True}]
-    by_domain: dict = {}   # keys of one non-item domain are one section (poe2db: one "Desecrated" group, the bones as tags in it)
+    pool_classes = {p["class"] for p in pools_from(export)}
+    by_domain: dict = {}   # the unveiled keys of a non-item domain are one section (poe2db: one "Desecrated" group, the lords as tags in it)
     for tag, pairs in sorted(keyed.items()):
         domain = Counter(f["domain"] for f, _ in pairs).most_common(1)[0][0]
         if tag in carriers:
             title, classes = carriers[tag]
         elif any(t in carried and t != "default" for _, tier in pairs for t, _w in tier["weights"]):
-            # The key's own mods name base tags (at any weight), so the bases restrict where it lands.
-            title, classes = label(tag), None
+            # No currency names the pool, so its mods do: each zero-weights the scoped classes it is
+            # not for (a Genesis Tree ring mod names belt 0, a belt mod ring 0), and the union is
+            # where the pool lands. Measured against poe2db 2026-09-28: Genesis Tree on Rings and
+            # Belts only, the Altered Collarbone's on Amulets, Rings and Belts.
+            zeroed = {t for _, tier in pairs for t, w in tier["weights"] if w == 0 and t in carried and t != "default"}
+            title = label(tag)
+            classes = sorted({plural.get(c, c) for c, ct in _class_tags(export).items() if c and ct & zeroed} & pool_classes) if zeroed else None
         else:
             log.info("modpool: key %s has no carrier and no base tag; skipped", tag)
             continue
+        unveiled = all("unveiled_mod" in (export.mods.get(tier["id"], {}).get("implicit_tags") or []) for _, tier in pairs)
+        if domain != "item" and not unveiled:
+            # Same domain, never unveiled at the Well: another currency's pool (the Altered
+            # Collarbone's otherworldly mods; poe2db "Otherworldly", owner 2026-09-28).
+            sections.append({"id": tag, "title": title, "domain": domain, "affixes": ["prefix", "suffix"], "keys": [tag], "classes": classes, "floored": False})
+            continue
         if domain != "item":
             if domain not in by_domain:
-                by_domain[domain] = {"id": domain, "title": label(domain), "domain": domain, "affixes": ["prefix", "suffix"], "keys": [], "classes": None, "floored": False}
+                by_domain[domain] = {"id": domain, "title": label(domain), "domain": domain, "affixes": ["prefix", "suffix"], "keys": [], "classes": None, "floored": False, "unkeyed": True}
                 sections.append(by_domain[domain])
             by_domain[domain]["keys"].append(tag)
             continue
@@ -423,12 +438,13 @@ def _keys_on(family: dict, keys: list) -> bool:
     return not keys or bool(_rolled(family["tiers"]) & set(keys))
 
 
-def _row_tags(family: dict, section: dict, rolled: set) -> list:
+def _row_tags(family: dict, section: dict, rolled: set, all_keys: set = frozenset()) -> list:
     """The row's tags. A section's keys are never tags in it (one key is the section's title); in a
     section of several keys (the bones) the keys the family rolls on lead, so the two tags a row
-    shows include the bone, then the family's own tags."""
+    shows include the bone, then the family's own tags. Another pool's key rides on a family that
+    also holds that pool's tiers; it is a tag only where the shown tiers roll on it."""
     keys = set(section["keys"])
-    own = [t for t in family["tags"] if t not in keys]
+    own = [t for t in family["tags"] if t not in keys and not (t in all_keys and t not in rolled)]
     lead = [k for k in section["keys"] if k in rolled] if len(section["keys"]) > 1 else []
     return lead + own
 
@@ -437,23 +453,33 @@ def build_pool(pool: dict, families: list, sections: list) -> dict:
     """One item type's pools, precomputed for the client: no spawn weights leave here."""
     out = []
     count, base = Counter(), Counter()   # tag → rows carrying it, over every table / the base table
+    all_keys = {k for s in sections for k in s["keys"]}
     for s in sections:
-        if s["id"] != "base" and pool["domain"] != "item":
-            continue
+        if s["id"] != "base" and pool["domain"] != "item" and s["domain"] == "item":
+            continue   # a jewel or waystone takes no item-domain pool, but it can be desecrated
         if s["classes"] is not None and pool["class"] not in s["classes"]:
             continue
         tags = set(pool["tags"]) | set(s["keys"])
         domain = s["domain"] or pool["domain"]
+        if s["id"] != "base" and domain != "item":
+            tags |= set(pool.get("desecrates") or ())
         sec = {"id": s["id"], "title": s["title"], "floored": s["floored"]}
         for a in s["affixes"]:
             sec[a] = []
         for f in families:
-            if f["domain"] != domain or f["affix"] not in s["affixes"] or not _keys_on(f, s["keys"]):
+            if f["domain"] != domain or f["affix"] not in s["affixes"]:
+                continue
+            if not _keys_on(f, s["keys"]) and not (s.get("unkeyed") and not _rolled(f["tiers"]) & all_keys):
                 continue
             tiers = [t for t in f["tiers"] if rolls_on(t["weights"], tags)]
+            if domain != "item" and s["id"] != "base":
+                # A desecration pool shows the tiers its own currency adds: a lord's tier under the
+                # lords, an otherworldly tier under the Altered Collarbone, a tier keyed on no one
+                # under the jewel and waystone bones. One family can hold tiers of two of them.
+                tiers = [t for t in tiers if (_rolled([t]) & set(s["keys"])) or (s.get("unkeyed") and not _rolled([t]) & all_keys)]
             if not tiers:
                 continue
-            row_tags = _row_tags(f, s, _rolled(tiers))
+            row_tags = _row_tags(f, s, _rolled(tiers), all_keys)
             sec[f["affix"]].append({"id": f["id"], "text": f["text"], "tags": row_tags,
                                     "tiers": [{"tier": i + 1, "name": t["name"], "ilvl": t["ilvl"], "text": t["text"]} for i, t in enumerate(tiers)]})
             count.update(row_tags)

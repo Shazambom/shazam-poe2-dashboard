@@ -228,17 +228,30 @@ Sanctified relics have no mod that keys on them and are not a pool.
 
 Below the base tables, one collapsed section per currency that opens its own pool on the item,
 shown only when it has something for this item type, remembered open or closed for the session.
-These are equipment's; a jewel, flask, relic, waystone, tablet or logbook has its base pool only.
+These are equipment's; a flask, relic, tablet or logbook has its base pool only, and a jewel or
+waystone has its base pool and Desecrated.
 
-- **Desecrated**: one section for the game's desecrated domain, as poe2db shows it: the families
-  keyed on the bones (`ulaman_mod`, `amanamu_mod`, `kurgal_mod`) and on breach desecration
-  (Tul's, Xoph's, Esh's, Uul-Netol's), each family leading its tags with the key it rolls on, so
-  the two tags a row shows include the bone and the bones are chips. A key that titles its own
-  section is never a tag in it. Keys of one non-item domain always share a section; item-domain
-  keys get their own. The chip row is every tag on any table, the base table's tags first.
-  The pool is the base tags plus the keys; every bone mod is level 65.
-- **Genesis Tree · Caster / Minion** on amulets, rings and belts: the families keyed on the
-  tree's tags, with the mods' own base weights.
+- **Desecrated**: what the bones add, as poe2db's "Desecrated Modifiers" group shows it. On
+  equipment (Jawbones, Ribs, Collarbones) the families keyed on the Abyssal lords (`ulaman_mod`,
+  `amanamu_mod`, `kurgal_mod`), each family leading its tags with the lord it rolls on, so the two
+  tags a row shows include the lord and the lords are chips. On a jewel (Preserved Cranium) or a
+  waystone (Preserved Vertebrae) the desecrated mods keyed on the base's own tags, no lord. A key
+  joins this section when its mods are `unveiled_mod` (revealed at the Well of Souls); every
+  desecrated mod is except the Altered Collarbone's. The pool is the base's tags the desecrated
+  mods key on plus the keys; every bone mod is level 65.
+- **Breach Desecration** on amulets, rings and belts: the Altered Collarbone's otherworldly mods
+  (`breach_desecration`; Tul's, Xoph's, Esh's, Uul-Netol's), poe2db's "Otherworldly" group. Same
+  domain as the bones, never unveiled, so its own section (owner, 2026-09-28).
+- **Genesis Tree · Caster / Minion** on rings and belts: the families keyed on the tree's tags,
+  with the mods' own base weights.
+- No currency names the Breach Desecration or Genesis Tree pools, so their mods do: each mod
+  zero-weights the scoped classes it is not for (a ring mod names belt 0), and the union is where
+  the pool lands. Measured against poe2db 2026-09-28: every count on Rings, Amulets, Belts and
+  Ruby matches (Ring: Base 203, Desecrated 22, Otherworldly 16, Genesis 49 / 36).
+- One family (same group and text) can hold a lord's tier and an otherworldly tier; each section
+  shows only its own currency's tiers, and another pool's key is a tag only where the shown tiers
+  roll on it. A key that titles its own section is never a tag in it; item-domain keys get their
+  own section. The chip row is every tag on any table, the base table's tags first.
 - **Thrud's Might** (weapons), **Kolr's Hunt** and **Katla's Gloom** (gloves), **Vorana's Carnage**
   (helmets), **Medved's Tending** (body armour), **Uhtred's Sidereus** (boots): the families keyed
   on the socketable's tag; the mods carry no base tag, so the class list is the socketable's.
