@@ -233,6 +233,9 @@ def _carry_crawl(new, old) -> tuple[int, int]:
     try:
         c.execute("PRAGMA journal_mode=DELETE")
         c.execute("ATTACH DATABASE ? AS loc", (str(old),))
+        have = {r[0] for r in c.execute("SELECT name FROM loc.sqlite_master WHERE type='table'")}
+        if not {"kv_ops", "league_daily"} <= have:
+            return 0, 0                            # an older layout: no crawl bookkeeping to carry
         seed_at = {k: v for k, v in c.execute("SELECT key, CAST(value AS REAL) FROM main.kv_ops WHERE key LIKE 'lh_fetch:%'")}
         newer = []
         for key, at in c.execute("SELECT key, CAST(value AS REAL) FROM loc.kv_ops WHERE key LIKE 'lh_fetch:%'").fetchall():
@@ -302,7 +305,10 @@ def seed_market() -> None:
                     shutil.copyfileobj(fi, fo, length=1 << 20)
             fo.flush()
             os.fsync(fo.fileno())
-        if MARKET_DB_PATH.exists():
+        if MARKET_DB_PATH.exists() and local_v < 0:
+            # Corrupt (often why it is being replaced): no crawl anyone could read, nothing lost.
+            devtelemetry.tlog("seed", f"local DB unreadable (v{local_v}); nothing to carry")
+        elif MARKET_DB_PATH.exists():
             try:
                 items, rows = _carry_crawl(tmp, MARKET_DB_PATH)
                 if items:

@@ -130,13 +130,41 @@ def test_the_replaced_file_holds_the_carried_rows_without_a_sidecar(env):
     assert _rows(market, "SELECT close FROM league_daily WHERE item_id=5") == [(8.0,)]
 
 
-def test_an_unreadable_old_db_still_takes_the_seed_and_reports_the_lost_crawl(env):
+def test_an_unreadable_old_db_takes_the_seed_with_nothing_to_carry_and_no_t0(env):
+    """A corrupt local DB is often why it is being replaced: there is no crawl anyone could read, so
+    nothing is lost. The seed applies; one plain line says so; no T0 blocks the stable release."""
     d, market, lines = env
     _seed(d, 20, daily=[(LG, 1, "2026-09-26", 1.0, 1.0, 5)])
     market.write_bytes(b"not a database, but it has a snapshot version of 0")
     db.seed_market()
-    assert db._read_snapshot_version(market) == 20, "the seed applies even when the carry-over cannot"
-    assert any(l.startswith("[T0] crawl-lost: ") for l in lines), lines
+    assert db._read_snapshot_version(market) == 20, "the seed applies"
+    assert not any(l.startswith("[T0]") for l in lines), lines
+    assert any(l.startswith("[seed] local DB unreadable (v-1); nothing to carry") for l in lines), lines
+
+
+def test_an_old_layout_without_the_crawl_tables_has_nothing_to_carry(env):
+    d, market, lines = env
+    _seed(d, 20)
+    c = sqlite3.connect(str(market))
+    c.execute("CREATE TABLE market_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
+    c.execute("INSERT INTO market_meta VALUES ('snapshot_version', '3')")
+    c.commit(); c.close()
+    db.seed_market()
+    assert db._read_snapshot_version(market) == 20
+    assert not any(l.startswith("[T0]") for l in lines), lines
+
+
+def test_a_carry_that_fails_on_a_readable_db_is_still_a_t0(env, monkeypatch):
+    """A readable client crawl the replace could not keep IS lost: that stays a T0."""
+    d, market, lines = env
+    _seed(d, 20)
+    _market(market, 10, daily=[(LG, 1, "2026-09-27", 1.0, 1.0, 1)], stamps=[(LG, 1, 9.0)])
+    def boom(new, old):
+        raise sqlite3.OperationalError("disk I/O error")
+    monkeypatch.setattr(db, "_carry_crawl", boom)
+    db.seed_market()
+    assert db._read_snapshot_version(market) == 20
+    assert any(l.startswith("[T0] crawl-lost: OperationalError: disk I/O error") for l in lines), lines
 
 
 def test_a_first_install_has_nothing_to_carry(env):
