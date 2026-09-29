@@ -152,7 +152,7 @@ The crawl is **not** run per-build from scratch. **shazam already crawls continu
 holds the full financial history, so the snapshot is an **export of shazam's market tables**:
 
 ```
-shazam root cron (daily)  ──►  ops/export-market-snapshot.py  ──►  market-seed.sqlite.gz (+ .version)
+shazam root cron (hourly) ──►  ops/export-market-snapshot.py  ──►  market-seed.sqlite.gz (+ .version)
                                                                 └─►  GitHub release `market-seed-latest`
                                                                        ├─► Windows CI pulls it
                                                                        └─► Mac build pulls it (fetch-seed.sh)

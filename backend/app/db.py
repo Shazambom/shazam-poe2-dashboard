@@ -262,6 +262,34 @@ def _carry_crawl(new, old) -> tuple[int, int]:
         c.close()
 
 
+def _seed_cuts(path) -> tuple[list[str], list[str]]:
+    """Read a seed's promise (docs/bugs/2026-09-28-partial-sync-data.md): every current league ends on
+    the day the server verified final for every item (kv seed_cut:<league>). Returns (summary per
+    league, problems); a problem means the seed shipped partial days."""
+    c = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+    try:
+        # The leagues the server's seed poll found current (the crawl's lh_current can lag an ending).
+        row = c.execute("SELECT value FROM kv_ops WHERE key='seed_poll'").fetchone()
+        current = (json.loads(row[0]) or {}).get("leagues") or [] if row and row[0] else []
+        if not current:
+            row = c.execute("SELECT value FROM kv_ops WHERE key='lh_current'").fetchone()
+            current = json.loads(row[0]) if row and row[0] else []
+        summary, problems = [], []
+        for lg in current:
+            r = c.execute("SELECT value FROM kv_ops WHERE key=?", (f"seed_cut:{lg}",)).fetchone()
+            last = c.execute("SELECT MAX(day) FROM league_daily WHERE league=?", (lg,)).fetchone()[0]
+            if not r:
+                problems.append(f"{lg!r} has no verified day (last row {last})")
+                continue
+            cut = json.loads(r[0]).get("day")
+            summary.append(f"{lg} through {cut}")
+            if last is not None and (cut is None or last > cut):
+                problems.append(f"{lg!r} has rows through {last}, verified only through {cut}")
+        return summary, problems
+    finally:
+        c.close()
+
+
 def seed_market() -> None:
     """Replace the local market.sqlite with the bundled snapshot when the snapshot is
     newer (or when there's no local market DB yet). Atomic: write .tmp, fsync, rename.
@@ -306,6 +334,14 @@ def seed_market() -> None:
                     shutil.copyfileobj(fi, fo, length=1 << 20)
             fo.flush()
             os.fsync(fo.fileno())
+        try:   # the seed as shipped, before the client's own crawl is carried into it
+            summary, problems = _seed_cuts(tmp)
+            if summary:
+                devtelemetry.tlog("seed", "current leagues: " + "; ".join(summary))
+            if problems:
+                devtelemetry.t0("seed-partial", f"seed v{seed_v}: " + "; ".join(problems))
+        except (sqlite3.Error, ValueError) as exc:
+            log.warning("market seed: could not read its verified days (%s)", exc)
         if MARKET_DB_PATH.exists() and local_v < 0:
             # Corrupt (often why it is being replaced): no crawl anyone could read, nothing lost.
             devtelemetry.tlog("seed", f"local DB unreadable (v{local_v}); nothing to carry")

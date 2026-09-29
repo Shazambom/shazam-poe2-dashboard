@@ -114,10 +114,24 @@ sidecar so the client can compare `snapshot_version` without decompressing on ev
   3. Writes `market_meta.snapshot_version` = current epoch seconds (monotonic).
   4. `VACUUM`s, then gzips (`--no-gzip` to skip) and writes the `.version` sidecar.
   Flags: `--all-leagues` (keep private leagues), `--no-gzip`, `--version N`, `--force` (skip the
-  digest-freshness guard).
-- **Publishing:** `ops/publish-market-snapshot.sh` runs on shazam from **root's cron, daily at
-  04:17** (root's crontab; it writes `poe2-snapshot.log` on shazam), and on demand by running the publisher
-  (`ops/publish-market-snapshot.sh`) through `sshshazambom sudo` (do this after any market-side
+  digest-freshness guard), `--only-if-newer <published .cut>` (the hourly retry: exit 3 unless it is a
+  new UTC day or a league verified a newer day).
+- **Only verified days ship** (docs/bugs/2026-09-28-partial-sync-data.md). Each current league ends on
+  the day the server's **seed poll** (`app/seedready.py`, hourly, on only when `ARBITER_SEED_POLL=1`,
+  set in `docker-compose.yml`) verified final for every tracked item: poe2scout's category listing
+  carries each item's last week of daily Price/Quantity (= our average/volume), a day is final once
+  most of the items that traded it report a later day, and an item's row is final when it matches
+  the listing (or was fetched after that and poe2scout has not changed it since). The poll fetches
+  only the items holding a league back (kv `seed_fp:*`, never shipped) and records the cut in kv
+  `seed_cut:<league>`. The exporter drops rows after the cut, refuses a current league with no
+  `seed_cut` (the poll is not running), and writes `<seed>.cut`. Clients check the promise on seeding
+  (T0 `seed-partial`).
+- **Publishing:** `ops/publish-market-snapshot.sh` runs on shazam from **root's cron, hourly at
+  :17** (root's crontab; it writes `poe2-snapshot.log` on shazam). The first run of a UTC day always
+  publishes (and rebuilds the mod pools); later runs publish only a newer verified day, so the seed
+  follows poe2scout as it catches up without ever shipping a half-finished day. A publish is recorded
+  (`data/market-seed.published-cut`) only after its upload succeeds. Run it on demand
+  through `sshshazambom sudo` (do this after any market-side
   change — see CLAUDE.md). It exports inside the backend container and uploads the seed +
   sidecar to the rolling `market-seed-latest` GitHub prerelease via `ops/upload-seed-github.sh`;
   the token comes from `shazam:~/.poe2-gh-token` (fine-grained PAT, **Contents: Read and write**;

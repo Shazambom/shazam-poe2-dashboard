@@ -94,6 +94,66 @@ def test_a_healthy_seed_raises_no_t0(env, lines):
     assert not [m for t, m in lines if t == "T0"], lines
 
 
+# docs/bugs/2026-09-28-partial-sync-data.md: every current league in a seed ends on the day the server
+# verified final for every item (kv seed_cut:<league>). A seed that breaks that is a partial seed.
+def _league_seed(d: Path, version: int, cut: dict, days=("2026-09-26", "2026-09-27"), current=("Cur",)) -> None:
+    raw = d / "seed.sqlite"; _market(raw, version)
+    c = sqlite3.connect(str(raw))
+    c.execute("INSERT INTO kv_ops VALUES('lh_current', ?)", (json.dumps(list(current)),))
+    c.execute("INSERT INTO kv_ops VALUES('seed_poll', ?)", (json.dumps({"at": 1, "leagues": ["Cur"]}),))
+    for day in days:
+        c.execute("INSERT INTO league_daily VALUES('Cur', 1, ?, 1.0, 1.0, 5)", (day,))
+    for lg, day in cut.items():
+        c.execute("INSERT INTO kv_ops VALUES(?, ?)", (f"seed_cut:{lg}", json.dumps({"day": day, "through": day, "stale": []})))
+    c.commit(); c.close()
+    with open(raw, "rb") as fi, gzip.open(d / "market-seed.sqlite.gz", "wb") as fo:
+        fo.write(fi.read())
+    (d / "market-seed.sqlite.gz.version").write_text(str(version)); raw.unlink()
+
+
+def test_a_seed_ending_on_its_verified_day_reports_it_and_raises_no_t0(env, lines):
+    d, market = env
+    _league_seed(d, 5, {"Cur": "2026-09-27"})
+    db.seed_market()
+    assert not [m for t, m in lines if t == "T0"], lines
+    assert any(t == "seed" and "Cur through 2026-09-27" in m for t, m in lines), lines
+
+
+def test_a_seed_with_days_past_its_verified_day_is_a_t0(env, lines):
+    d, market = env
+    _league_seed(d, 5, {"Cur": "2026-09-26"})
+    db.seed_market()
+    assert any(t == "T0" and m.startswith("seed-partial:") and "Cur" in m for t, m in lines), lines
+
+
+def test_a_seed_whose_current_league_was_never_verified_is_a_t0(env, lines):
+    d, market = env
+    _league_seed(d, 5, {})
+    db.seed_market()
+    assert any(t == "T0" and m.startswith("seed-partial:") for t, m in lines), lines
+
+
+def test_a_league_that_just_ended_is_not_mistaken_for_a_partial_seed(env, lines):
+    """The crawl's lh_current can still list a league the seed poll already saw end."""
+    d, market = env
+    _league_seed(d, 5, {"Cur": "2026-09-27"}, current=("Cur", "Ended"))
+    db.seed_market()
+    assert not [m for t, m in lines if t == "T0"], lines
+
+
+def test_the_clients_own_newer_crawl_is_not_mistaken_for_a_partial_seed(env, lines):
+    """The client's crawl carried into the new file legitimately runs past the seed's cut."""
+    d, market = env
+    _market(market, 3)
+    c = sqlite3.connect(str(market))
+    c.execute("INSERT INTO league_daily VALUES('Cur', 1, '2026-09-28', 1.0, 1.0, 5)")
+    c.execute("INSERT INTO kv_ops VALUES('lh_fetch:Cur:1', '9999999999')")
+    c.commit(); c.close()
+    _league_seed(d, 5, {"Cur": "2026-09-27"})
+    db.seed_market()
+    assert not [m for t, m in lines if t == "T0"], lines
+
+
 # ------------------------------------------------------------------ the crawls
 def test_league_crawl_verdict_names_a_full_or_cold_crawl_and_nothing_else():
     v = leaguehistory.crawl_verdict

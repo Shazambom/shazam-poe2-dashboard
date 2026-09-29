@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field, model_validator
 
 from fastapi.responses import RedirectResponse, PlainTextResponse
 
-from . import analytics, arbitrage, db, devtelemetry, diag, digest, gamedata, gateway, holdscore, inflation, leaguearc, leaguehistory, liquidity, migrations_user, modpool, movers, oauth, orderbook, recipes, session, sidecar_supervisor, signalsack, watchdog, workspace
+from . import analytics, arbitrage, db, devtelemetry, diag, digest, gamedata, gateway, holdscore, inflation, leaguearc, leaguehistory, liquidity, migrations_user, modpool, movers, oauth, orderbook, recipes, seedready, session, sidecar_supervisor, signalsack, watchdog, workspace
 from .config import INSTALL_LOG_PATH
 from .currencies import registry
 from .settings import get_settings, save_settings
@@ -50,6 +50,8 @@ async def lifespan(app: FastAPI):
     tasks = [asyncio.create_task(registry.keep_static_fresh()), asyncio.create_task(digest.run_forever()), asyncio.create_task(_gold_fee_loop()),
              asyncio.create_task(orderbook.worker()), asyncio.create_task(orderbook.sweeper()),
              asyncio.create_task(_league_history_loop()), asyncio.create_task(_analytics_loop())]
+    if seed_poll_enabled():
+        tasks.append(asyncio.create_task(_seed_poll_loop()))
     if not session.get_cookie():
         log.info("no trade session yet: connect one in Settings to enable the live order book")
     try:   # beta telemetry: what the seed left us for the Mods tab
@@ -75,13 +77,39 @@ async def _gold_fee_loop():
         await asyncio.sleep(86400)
 
 
+CRAWL_RETRY_S = 120   # the seed poll holds the crawl lock for minutes at most
+
+
 async def _league_history_loop():
     while True:
+        res = {}
         try:
-            await leaguehistory.backfill()
+            res = await leaguehistory.backfill()
         except Exception as exc:
             log.exception("league history backfill error: %s", exc)
-        await asyncio.sleep(12 * 3600)
+        # A crawl that found the lock held (the seed poll, or a UI-kicked crawl) retries shortly
+        # instead of losing its turn for 12 hours.
+        await asyncio.sleep(CRAWL_RETRY_S if (res or {}).get("skipped") else 12 * 3600)
+
+
+SEED_POLL_S = 3600   # hourly: slow on purpose, poe2scout is a free community site
+
+
+def seed_poll_enabled() -> bool:
+    """Only the server that publishes the market seed sets ARBITER_SEED_POLL (docker-compose.yml);
+    a desktop app never does, so it makes no calls beyond its own crawl."""
+    return os.environ.get("ARBITER_SEED_POLL") == "1"
+
+
+async def _seed_poll_loop():
+    """Verify each current league's newest day item by item and fetch only what holds it back, so the
+    seed exporter can ship every day that is final and nothing that is not (app/seedready.py)."""
+    while True:
+        try:
+            await seedready.poll()
+        except Exception as exc:
+            log.exception("seed poll error: %s", exc)
+        await asyncio.sleep(SEED_POLL_S)
 
 
 async def _analytics_loop():

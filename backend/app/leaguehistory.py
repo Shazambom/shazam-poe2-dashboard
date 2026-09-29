@@ -159,14 +159,6 @@ def _stored_counts() -> dict[tuple[str, int], int]:
     return {(r["league"], r["item_id"]): r["n"] for r in rows}
 
 
-async def _currency_item_ids(league: str) -> list[int]:
-    """All item ids in the 'currency' category for a league — the set we sum over
-    for the economy market cap."""
-    enc = urllib.parse.quote(league)
-    data = await _get(f"/Leagues/{enc}/Currencies/ByCategory?category=currency&perPage=250")
-    return [x["ItemId"] for x in data.get("Items", []) if x.get("ItemId")]
-
-
 async def _category_apiids(league: str) -> list[str]:
     """Every currency category poe2scout exposes for a league (live discovery);
     falls back to the static CATEGORIES list if the call fails."""
@@ -179,6 +171,19 @@ async def _category_apiids(league: str) -> list[str]:
         return CATEGORIES
 
 
+async def category_items(league: str, cat: str) -> list[dict]:
+    """Every item poe2scout lists in one category, following `Pages` (the largest category held
+    142 items in Forbidden Rites; one page is 250, but a bigger one must not lose its tail). Raises
+    if any page fails, so a caller never mistakes a partial listing for the whole."""
+    enc, items, page = urllib.parse.quote(league), [], 1
+    while True:
+        data = await _get(f"/Leagues/{enc}/Currencies/ByCategory?category={cat}&perPage=250&page={page}")
+        items += data.get("Items", [])
+        if page >= int(data.get("Pages") or 1):
+            return items
+        page += 1
+
+
 async def _universe(league: str) -> set[int]:
     """Item ids to track for a league: the named anchors plus everything in EVERY
     currency category above the price floor. Also upserts item_meta (name, category)
@@ -186,14 +191,13 @@ async def _universe(league: str) -> set[int]:
     ids = set(ITEMS)
     meta = []
     bridge_new: dict[str, str] = {}   # GGG BaseItemTypeId -> trade ApiId (authoritative)
-    enc = urllib.parse.quote(league)
     for cat in await _category_apiids(league):
         try:
-            data = await _get(f"/Leagues/{enc}/Currencies/ByCategory?category={cat}&perPage=250")
+            listed = await category_items(league, cat)
         except Exception as exc:
             log.warning("poe2scout category %s/%s failed: %s", league, cat, exc)
             continue
-        for x in data.get("Items", []):
+        for x in listed:
             iid = x.get("ItemId")
             if not iid:
                 continue
@@ -232,6 +236,28 @@ def _merge_meta_bridge(new: dict[str, str]) -> None:
         from . import arbitrage   # lazy: arbitrage imports this module (the one genuine cycle)
         arbitrage.invalidate_caches()
     log.info("meta_bridge: %d total mappings (%d new/changed this pass)", len(cur), changed)
+
+
+async def fetch_item(name: str, item_id: int, current: bool) -> int:
+    """Pull one item's daily history into league_daily and stamp it. Returns the rows stored; raises
+    on a failed request (nothing is stamped then). For a league still running, a stored day inside
+    the returned span that poe2scout no longer reports is removed, so a withdrawn row cannot ship."""
+    data = await _get(f"/Leagues/{urllib.parse.quote(name)}/Items/{item_id}/DailyStatsHistory?dayCount=500")
+    rows = [(name, item_id, s["Time"], s.get("Close"), s.get("Average"), s.get("Volume"))
+            for s in data.get("DailyStats", []) if s.get("Time")]
+    if rows:
+        with db.tx() as c:
+            if current:
+                days = [r[2] for r in rows]
+                c.execute(f"DELETE FROM league_daily WHERE league=? AND item_id=? AND day BETWEEN ? AND ? "
+                          f"AND day NOT IN ({','.join('?' * len(days))})", (name, item_id, min(days), max(days), *days))
+            c.executemany("INSERT OR REPLACE INTO league_daily VALUES (?,?,?,?,?,?)", rows)
+    db.kv_set(f"lh_fetch:{name}:{item_id}", time.time())
+    # A past league with no more pages is fully captured, rows or none: mark it final (an item
+    # poe2scout has no history for would otherwise be refetched every crawl).
+    if not current and not data.get("HasMore"):
+        db.kv_set(f"lh_complete:{name}:{item_id}", True)
+    return len(rows)
 
 
 def crawl_verdict(current: bool, items: int, fetched: int, stored_hits: int, was_current: bool = False) -> str | None:
@@ -322,7 +348,13 @@ async def backfill(force: bool = False, full: bool = True) -> dict:
                 except Exception as exc:
                     log.warning("poe2scout universe %s failed: %s", name, exc)
             complete, fetched_at = _marks(name)
-            todo, tally = plan_league(item_ids, current, force, {i for (lg, i) in stored if lg == name}, complete, fetched_at, time.time())
+            have = {i for (lg, i) in stored if lg == name}
+            if current and full:
+                # Sticky: an item this league already holds history for keeps being crawled after its
+                # spot price dips under the floor, so its series never silently stops. The floor only
+                # decides which new items join.
+                item_ids |= have
+            todo, tally = plan_league(item_ids, current, force, have, complete, fetched_at, time.time())
             tally.update({"fetched": 0, "errors": 0, "empty": 0})
             progress.update({"league": name, "league_total": len(todo), "league_done": 0,
                              "leagues_done": li, "phase": "crawling", "updated": time.time()})
@@ -331,26 +363,16 @@ async def backfill(force: bool = False, full: bool = True) -> dict:
                 progress["league_done"] += 1
                 progress["updated"] = time.time()
                 try:
-                    enc = urllib.parse.quote(name)
-                    data = await _get(f"/Leagues/{enc}/Items/{item_id}/DailyStatsHistory?dayCount=500")
+                    n = await fetch_item(name, item_id, current)
                     tally["fetched"] += 1
                 except Exception as exc:
                     tally["errors"] += 1
                     log.warning("poe2scout history %s/%s failed: %s", name, item_id, exc)
                     continue
-                rows = [(name, item_id, s["Time"], s.get("Close"), s.get("Average"), s.get("Volume"))
-                        for s in data.get("DailyStats", []) if s.get("Time")]
-                if not rows:
+                if n:
+                    fetched[f"{name}/{item_id}"] = n
+                else:
                     tally["empty"] += 1
-                if rows:
-                    with db.tx() as c:
-                        c.executemany("INSERT OR REPLACE INTO league_daily VALUES (?,?,?,?,?,?)", rows)
-                    fetched[f"{name}/{item_id}"] = len(rows)
-                db.kv_set(f"lh_fetch:{name}:{item_id}", time.time())
-                # A past league with no more pages is fully captured, rows or none: mark it final
-                # (an item poe2scout has no history for would otherwise be refetched every crawl).
-                if not current and not data.get("HasMore"):
-                    db.kv_set(f"lh_complete:{name}:{item_id}", True)
             # Beta telemetry: why this league did or did not crawl (counts only), and whether that
             # was a full-sync fallback (a T0 blocker).
             devtelemetry.tlog("lh", f"league={name!r} current={current} was_current={name in was_current} items={len(item_ids)} complete={tally['complete']} fresh={tally['fresh']} fetched={tally['fetched']} empty={tally['empty']} errors={tally['errors']} s={time.time() - t0:.0f}")

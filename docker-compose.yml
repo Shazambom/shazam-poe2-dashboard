@@ -5,6 +5,9 @@ services:
     env_file: .env
     environment:
       DATA_DIR: /data
+      # This server publishes the market seed: verify each current league's newest day hourly
+      # (app/seedready.py). Desktop apps never set it.
+      ARBITER_SEED_POLL: "1"
     volumes:
       - ./data:/data
     ports:

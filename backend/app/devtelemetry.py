@@ -36,6 +36,7 @@ T0_KINDS = frozenset({
     "league-full-crawl",  # the league-history crawl refetches a league it should have had
     "mods-empty",         # a seed is bundled yet there are no mod tables
     "crawl-lost",         # a seed replace could not carry the client's newer crawl over
+    "seed-partial",       # the seed ships a current league's days past the day verified final
 })
 
 
