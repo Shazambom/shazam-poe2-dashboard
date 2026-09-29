@@ -22,7 +22,18 @@ def test_it_is_off_unless_the_server_turns_it_on(monkeypatch):
     assert main.seed_poll_enabled()
 
 
-def test_the_loop_polls_then_waits_an_hour_and_survives_a_failed_poll(monkeypatch):
+def test_the_next_poll_is_at_five_past_the_hour_before_the_17_past_publish():
+    """A fixed minute, not an hour after the last poll ended: that drifted a minute an hour until the
+    :17 publisher read an answer almost an hour old (2026-09-29)."""
+    hour = 1790694000  # 2026-09-29 15:00:00 UTC
+    assert main.seconds_to_next_poll(hour) == 5 * 60
+    assert main.seconds_to_next_poll(hour + 2 * 60 + 30) == 2 * 60 + 30
+    assert main.seconds_to_next_poll(hour + 5 * 60) == 3600          # just polled: wait the full hour
+    assert main.seconds_to_next_poll(hour + 7 * 60 + 12) == 3600 - 2 * 60 - 12
+    assert main.seconds_to_next_poll(hour + 27 * 60) == 38 * 60
+
+
+def test_the_loop_polls_then_waits_for_the_next_slot_and_survives_a_failed_poll(monkeypatch):
     calls, sleeps = [], []
 
     async def fake_poll():
@@ -37,9 +48,10 @@ def test_the_loop_polls_then_waits_an_hour_and_survives_a_failed_poll(monkeypatc
             raise asyncio.CancelledError
     monkeypatch.setattr(seedready, "poll", fake_poll)
     monkeypatch.setattr(main.asyncio, "sleep", fake_sleep)
+    monkeypatch.setattr(main.time, "time", lambda: 1790694000 + 27 * 60)   # a poll that ended at :27
     with pytest.raises(asyncio.CancelledError):
         asyncio.run(main._seed_poll_loop())
-    assert calls == [1, 1] and sleeps == [3600, 3600]
+    assert calls == [1, 1] and sleeps == [38 * 60, 38 * 60]
 
 
 def test_a_crawl_skipped_for_the_seed_poll_retries_soon_not_in_12_hours(monkeypatch):

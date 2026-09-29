@@ -93,12 +93,18 @@ async def _league_history_loop():
 
 
 SEED_POLL_S = 3600   # hourly: slow on purpose, poe2scout is a free community site
+SEED_POLL_AT_S = 5 * 60   # :05, so the answer is fresh when the seed publisher runs at :17 (root's cron)
 
 
 def seed_poll_enabled() -> bool:
     """Only the server that publishes the market seed sets ARBITER_SEED_POLL (docker-compose.yml);
     a desktop app never does, so it makes no calls beyond its own crawl."""
     return os.environ.get("ARBITER_SEED_POLL") == "1"
+
+
+def seconds_to_next_poll(now: float) -> float:
+    """Until the next :05. Sleeping an hour after each poll drifted a minute an hour past the publisher."""
+    return (SEED_POLL_AT_S - now) % SEED_POLL_S or SEED_POLL_S
 
 
 async def _seed_poll_loop():
@@ -109,7 +115,7 @@ async def _seed_poll_loop():
             await seedready.poll()
         except Exception as exc:
             log.exception("seed poll error: %s", exc)
-        await asyncio.sleep(SEED_POLL_S)
+        await asyncio.sleep(seconds_to_next_poll(time.time()))
 
 
 async def _analytics_loop():

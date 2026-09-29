@@ -211,6 +211,8 @@ publisher retries until the seed is complete; it does not give up and keep the o
    - Every day the publisher publishes: with the newest day if every item passes, otherwise with each
      league cut at its last day that every item passes (a fresh seed, never a half-finished day).
    - If it had to cut, it **polls once an hour** (owner, 2026-09-29: retry slowly, never spam poe2scout),
+     at :05 (it first slept an hour after each poll, drifted a minute an hour, and by 15:00 finished
+     after the :17 publish, which then shipped an answer nearly an hour old; fixed 2026-09-29),
      working from what we already store: each item's rows and when each was last fetched. The category
      listing we already call (17 requests per league) carries every item's last 7 daily prices and
      quantities, which shows per item whether poe2scout has moved past D and whether it now differs from

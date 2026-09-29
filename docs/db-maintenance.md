@@ -117,7 +117,7 @@ sidecar so the client can compare `snapshot_version` without decompressing on ev
   digest-freshness guard), `--only-if-newer <published .cut>` (the hourly retry: exit 3 unless it is a
   new UTC day or a league verified a newer day).
 - **Only verified days ship** (docs/bugs/2026-09-28-partial-sync-data.md). Each current league ends on
-  the day the server's **seed poll** (`app/seedready.py`, hourly, on only when `ARBITER_SEED_POLL=1`,
+  the day the server's **seed poll** (`app/seedready.py`, hourly at :05 so the :17 publish reads a fresh answer, on only when `ARBITER_SEED_POLL=1`,
   set in `docker-compose.yml`) verified final for every tracked item: poe2scout's category listing
   carries each item's last week of daily Price/Quantity (= our average/volume), a day is final once
   most of the items that traded it report a later day, and an item's row is final when it matches
