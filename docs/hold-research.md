@@ -138,6 +138,375 @@ it rests on one league per item — revisit when Forbidden Rites becomes the sec
 in any past league: early in a league the whole basket crashes 40–50% of the time, and the 14d choice
 ranks on a 7-day board. A per-phase threshold would read more honestly; left unchanged.
 
+## Improvement loop, 2026-09-28
+
+Goal (owner: generalize to any new league, don't overfit one): over all five leagues × four horizons
+(20 cells, each league scored with only earlier leagues), reach beat ≥ 0.55 in 18/20, crash ratio ≤ 0.75
+in 18/20 and never > 1.0, kept ≥ 0.75 in 14/20, list checks 20/20, and keep passing the current-league
+smoke test. A change is accepted only if ≥ 80% of the leagues it moves get better (at least 2), none gets
+clearly worse, and the scorecard gains. Stop on target, after 3 straight iterations without an accepted
+gain, or after 10. Beta 0.3.6-beta.10 telemetry was clean before it started (win32: seed kept, crawl
+complete, no T0; `[hold] day=24 … top5=Her Declaration; Emergent Possibility; Raven-Touched Shard;
+Perfect Flux; Hinekora's Lock`, identical to the backtest).
+
+Baseline (hold_rank as shipped in beta.10): beat 14/20, crash ≤ 0.75 13/20, crash ≤ 1.0 19/20, kept 11/20,
+list checks 20/20. Its top 10 beat the basket by a wide margin in league-days 1–14 of every league and
+fall behind it from ~day 15 (Fate of the Vaal 14d, days 15–30: −38 points).
+
+| # | change | result | verdict |
+|---|---|---|---|
+| 1 | drop kept/trend after league-day 30 (measured to stop predicting there) | scorecard ±0; Runes better, Fate of the Vaal worse | rejected |
+| 2 | price ranks only through league-day 14 (7d IC +.21/+.12 early, −.09 days 15–30) | +4 cells (beat 17/20, crash 15/20); Fate 14d +15 → +24 points, Runes 14d +3.6 → +9.6; but Rise of the Abyssal's crash ratio worsens at every horizon (24h 0.38 → 0.56) and Runes' owner coverage drops 100% → 81% | rejected (Rise regresses) |
+| 3 | the record reads the same league phase (±5 days) instead of days 7–60 | −2 cells; three leagues worse | rejected |
+
+**Stopped after 3 iterations without an accepted gain** (the agreed rule). The lead worth pursuing: price
+helps safety early and costs return from mid-league (iteration 2) — but in Rise of the Abyssal it was
+still doing safety work mid-league, so dropping it outright trades one league's safety for others'
+return. A phase-aware treatment of price needs a principled reason for *how much* it should fade, not a
+weight picked to pass these five leagues.
+
+## Regimes, 2026-09-28 (loop 2)
+
+Hold won the first two weeks of every league and trailed the eligible basket from ~day 15. The fix is
+to rank each league **regime** its own way.
+
+**Detecting the regime from the market, not the calendar** (`backend/app/leagueregime.py`). Two
+signals, each against the league's own history, boundaries from what they measure:
+- *persistence* — cross-sectional Spearman between each liquid item's return over the last 3 days and
+  the 3 days before (weekly median). Positive while prices are still being discovered (a re-priced item
+  keeps going), ≤ 0 once they are found (moves are noise and partly reverse). EARLY ↔ MID at 0.
+- *activity* — traded value in Divine (weekly median) over its running peak; LATE as it falls past half.
+Memberships blend (early = R·a, mid = R·(1−a), late = 1−R, weekly mean). Detected EARLY→MID: Forbidden
+Rites 19, Runes of Aldur 24, Fate of the Vaal 28, Dawn of the Hunt 30, **Rise of the Abyssal 32** (the
+league the fixed day-14 cut broke); MID→LATE 57–133. Rejected inputs: cross-sectional dispersion (no
+common boundary; rises again late), Divine velocity (doesn't track phase), new-item entry (done by day
+2–4). Sources: Lo & MacKinlay 1988 (variance ratio), Jegadeesh 1990 (reversal in settled markets),
+Cooper, Gutierrez & Hameed 2004 (momentum depends on market state), Dobrynskaya (2–4 weeks of momentum
+in young markets), Page 1954 / Adams & MacKay 2007 (change-point methods, not adopted: tuned thresholds
+or hazard models); community: arpgseasons.com league cycle (secondary).
+
+**What works in each regime** (walk-forward, each league with only earlier leagues, per-league sign
+agreement, 7d/14d holds):
+- *Early (1–14, 5 leagues)*: the 2026-09-28 set is best — record (IC .46/.50, 4/4), price (safest top 10,
+  crash ratio .41), dip; trend and recent return have spike tops early.
+- *Mid (15–45, 4 leagues)*: **price flips** (IC −.11, 0/4) and the early set is ≈ 0. Positive in 4/4 on
+  return and safety: trend, kept, haven (safe-haven reading), traded-value trend, Sharpe-style
+  steadiness, near-peak. The basket's mid lead came from cheap items (bottom two price fifths +17.5 points
+  at 14d), Uncut Spirit Gems and Fate fragments, concentrated in a few items a day.
+- *Late (46+, 3 leagues, small boards)*: nothing is 3/3 on both; momentum reverses; price and haven
+  protect.
+
+**The ranking** (`holdscore.REGIME_SETS`, blended by the memberships):
+early = kept ½, trend ½, dip, price, record · mid = kept ½, trend ½, haven, volume trend, steadiness,
+dip, record · late = price, haven, efficiency ratio, dip.
+
+**Result vs the first 2026-09-28 ranking** (20 cells): beat ≥ 0.55 **14 → 19** (target 18 met), crash
+ratio ≤ 0.75 13 → 14, kept 11 → 11, list checks 20/20; Fate of the Vaal and Runes of Aldur better (their
+14d beat 0.27 → 0.37 and 0.39 → 0.61), Dawn unchanged (all its graded days are early), Rise and Forbidden
+Rites within noise (≤ 0.2%). Current league passes every horizon.
+
+**After regimes (loop stopped: 3 straight iterations without a gain).** Near-peak (price / its running
+peak) in the early and mid sets — 0 cells, Fate and Rise clearly worse. The record in the late set — no
+effect (late graded days are rare). The record matched to the regime (holds from past-league days the
+detector gave the same label) — −3 cells, Runes clearly worse.
+
+Where it stands (20 cells): beat 19/20 (target 18 ✓), crash ≤ 0.75 14/20 (18), crash ≤ 1.0 19/20 (20),
+kept 11/20 (14), list checks 20/20 ✓, current league passes ✓. The remaining misses: **Dawn of the Hunt,
+4 cells** — the first league: no earlier league to learn from, 8 graded days, all in price discovery; even
+"most expensive first" crashes more there (0.76–1.17), so these cells look unreachable for any ranking;
+**Runes of Aldur kept, 4 cells** — its long late league deflates nearly everything against Divine;
+Fate of the Vaal 14d (crash 0.90, beat 0.32) and Runes 14d crash 0.96 — the basket's mid-league lead there
+is a few cheap multi-baggers a safety list is built to skip. A per-regime target (the owner's open
+threshold question) would read these more honestly than one bar for every day.
+
+**Loop record.** Rejected: the −40% eligibility cap on the smoothed dip instead of the raw whole-league
+drawdown (board grows, Runes 21–195 items vs 21–135, but kept 11 → 8 and Dawn/Fate worse — the items it
+kept out do lose value); the first regime blend (mid set without kept: +5 cells but 2 of 4 moved
+leagues better). **Rule change made during the loop:** a league counts as "moved" only when its value
+changes by more than 0.005 (half the 0.01 "clearly worse" line); smaller is noise. Under the original
+1e-6 line the accepted change read as "2 of 4 moved leagues better" with Rise −0.0023 and Forbidden Rites
+−0.0007.
+
+## Research for the remaining gaps, 2026-09-28
+
+Web research after the regime loop (reading status: **[P]** primary text read · **[A]** abstract/index only ·
+**[S]** secondary · **[Press]** press release). Proposals ranked by expected impact vs overfitting risk;
+each is testable with `ops/hold-backtest.py --scorer`. None implemented yet.
+
+1. **Divine is a candidate (late league).** An absolute trend filter: in the late membership an item keeps
+   its slot only while its 14-day smoothed Divine slope (skip 2) is positive; failed slots are held in Divine
+   (return 0). Evidence: time- vs cross-sectional momentum differ mostly by the net-long / cash decision
+   (Goyal & Jegadeesh [A]); moving-average filters to cash cut drawdowns (Faber 2007 [S]; Antonacci [S]);
+   trend following held up in 8 of 10 largest crises (Hurst, Ooi & Pedersen [A]); cross-sectional momentum
+   crashes after declines (Daniel & Moskowitz 2016 [A]). No new parameters. Targets Runes of Aldur's kept cells.
+2. **Price-neutral mid ranking.** Rank mid signals within price terciles and fill the top 10 across them (no
+   price weight, no item list), with a lottery veto in the cheap tercile (top decile of max daily return or
+   of top-2-day share of the 14-day gain). Evidence: cheapest coins out-earn dearest in a young asset class
+   (Liu, Tsyvinski & Wu 2022 [P]); common CS skins out-earn rare ones (Dobrynskaya & Strelnikov 2026 [Press];
+   Reichenbach 2025 [P]); lottery-like assets underperform (Bali, Cakici & Whitelaw; Boyer, Mitton & Vorkink
+   2010 [A]; Birru & Wang 2016 [A]) — but MAX is positive in crypto (Ozdamar et al.), hence a veto, not a
+   signal. Constraints and 1/N beat fitted weights (Jagannathan & Ma 2003 [A]; DeMiguel et al.).
+3. **Charge execution costs in the backtest; cap by depth.** Roll (1984) / Abdi & Ranaldo (2017) spread from
+   closes [A]; Amihud (2002) illiquidity [A]; fees make short-term skin trading unprofitable (Reichenbach [P]).
+   Tests whether the basket's mid lead from cheap multi-baggers survives costs.
+4. **Downside beta in the late set.** β⁻ over 21 days, rank low (Ang, Chen & Xing 2006 [A]; Clarke, de Silva
+   & Thorley 2006 [A]). Distinct from low volatility, which runs backwards here.
+5. **Class shrinkage for thin records.** record* = (n·r + m·r̄_class)/(n + m) with m from leave-one-league-out
+   variance (Efron & Morris 1975 [A]). Small expected effect; the first league still has nothing to pool.
+6. **A stronger acceptance test.** Hansen SPA / White Reality Check over every variant tried, league-block
+   bootstrap, deflated metrics (White 2000; Hansen 2005; Harvey, Liu & Zhu 2016; Bailey & López de Prado
+   2014 [A]); factor timing is hard to do robustly (Asness et al. 2017 [A]); equal-weight combining wins in
+   small samples (Smith & Wallis 2009; Rapach, Strauss & Zhou 2010 [A]).
+
+**Tested (against the regime ranking, 20 cells; all rejected, nothing kept):**
+
+| # | experiment | result |
+|---|---|---|
+| 1 | trend filter to Divine (failed slots held in Divine), late-dominant / from mid on | 0 / −1 cells, one league moved — Hold's top picks are almost always still trending up, so the filter rarely fires |
+| 2 | price-neutral mid ranking (price terciles, round-robin, MAX14 veto in the cheap tercile), mid-dominant / from mid on | beat 19 → 20/20 and Fate and Runes better, but crash ≤ 0.75 14 → 13: net 0 / −1 |
+| 4 | downside beta in place of the efficiency ratio (late) | −2 cells, Runes clearly worse |
+| 5 | record shrunk toward its category mean (prior = RECORD_MIN_WINDOWS) | −1 cell; Fate, Rise and Forbidden Rites clearly worse |
+
+#2 is the nearest miss: it buys return mid-league at one crash cell. #3 (costs) and #6 (a stricter
+acceptance test) change how Hold is graded, not what it ranks, and were not run.
+
+Game economies: an item sink raised luxury prices 7–14% with no volume effect (OSRS; Hogan-Hennessy,
+Xenopoulos & Silva 2022, §4.1–4.2 [P]); new CS items fall hard for months, then recover (Reichenbach [P]);
+EVE PLEX −20% over a year [S]. No data-backed PoE2 retention study exists (searched again); community
+advice "keep wealth in the highest denomination" matches proposal 1.
+
+Sources (full list): Liu, Tsyvinski & Wu JF 77(2) doi:10.1111/jofi.13119 https://www.nber.org/papers/w25882 ·
+Dobrynskaya & Strelnikov QJF doi:10.1142/S201013922640001X https://www.eurekalert.org/news-releases/1113802 ·
+Reichenbach FRL 83:107670 https://depositonce.tu-berlin.de/items/f0f81c28-3c67-496e-820e-93de53e2b8ab ·
+Hogan-Hennessy et al. https://arxiv.org/abs/2210.07970 · Scholten et al. 2019 https://arxiv.org/abs/1905.06721 ·
+Goyal & Jegadeesh doi:10.2139/ssrn.2610288 · Faber 2007 https://papers.ssrn.com/sol3/papers.cfm?abstract_id=962461 ·
+Antonacci (secondary) https://awealthofcommonsense.com/2015/07/my-thoughts-on-gary-antonaccis-dual-momentum/ ·
+Hurst, Ooi & Pedersen https://papers.ssrn.com/sol3/papers.cfm?abstract_id=2993026 ·
+Daniel & Moskowitz JFE 122(2) https://www.nber.org/papers/w20439 · Ang, Chen & Xing RFS 19(4) https://www.nber.org/papers/w11824 ·
+Clarke, de Silva & Thorley JPM 33(1) doi:10.3905/jpm.2006.661366 · Jagannathan & Ma JF 58(4) https://www.nber.org/papers/w8922 ·
+Boyer, Mitton & Vorkink RFS 23 https://academic.oup.com/rfs/article-abstract/23/1/169/1578688 ·
+Birru & Wang JFE 119(3) https://ideas.repec.org/a/eee/jfinec/v119y2016i3p578-598.html ·
+Amihud 2002 https://www.cis.upenn.edu/~mkearns/finread/amihud.pdf · Abdi & Ranaldo RFS 30(12) https://academic.oup.com/rfs/article/30/12/4437/4047344 ·
+Efron & Morris JASA 70(350) https://www.tandfonline.com/doi/abs/10.1080/01621459.1975.10479864 ·
+Bayesian hierarchical factor investing https://arxiv.org/abs/1902.01015 (index only) ·
+Asness et al. JPM 43(5) https://www.aqr.com/Insights/Research/Journal-Article/Contrarian-Factor-Timing-is-Deceptively-Difficult ·
+Smith & Wallis OBES 71(3) https://onlinelibrary.wiley.com/doi/abs/10.1111/j.1468-0084.2008.00541.x ·
+Rapach, Strauss & Zhou RFS 23(2) https://academic.oup.com/rfs/article-abstract/23/2/821/1604687 ·
+White 2000 https://users.ssc.wisc.edu/~bhansen/718/White2000.pdf · Hansen 2005 https://papers.ssrn.com/sol3/papers.cfm?abstract_id=264569 ·
+Harvey, Liu & Zhu RFS 29(1) https://www.nber.org/papers/w20592 · Bailey & López de Prado https://ssrn.com/abstract=2460551 ·
+EVE PLEX (blog) https://nosygamer.blogspot.com/2026/07/the-june-2026-monthly-economic-report.html.
+
+## Academic review, round 3, 2026-09-28
+
+Two parallel reviews (Opus), academic sources only, skipping what the doc already cites or tested.
+**[P]** primary text read (quotes verbatim with page) · **[A]** abstract only. None implemented yet.
+
+**The grading itself is biased against a 10-item list.** The backtest scores both the top 10 and the
+basket buy-and-hold, so the basket's lead is skew plus a cheap-item tilt, not rebalancing alpha
+(Plyakha, Uppal & Vilkov 2012 [P]: equal weight's alpha "arises … from the monthly rebalancing"). With
+right-skewed payoffs a skill-free 10-item draw beats the basket mean less than half the time (Bessembinder
+2018 [P]: "the best-performing 4% of listed companies explain the net gain for the entire US stock market";
+portfolios of 25 beat the market in 48.7% of annual outcomes). So "beat ≥ 0.55" and the crash ratio carry a
+handicap that is largest mid-league. Proposed: grade against ~2,000 random 10-item portfolios per day
+(percentile of the top 10, random-10 beat rate as the null) — the per-regime targets the doc already asks for.
+
+**Proposals, ranked (impact ÷ overfit risk):**
+1. *Random-10 null* for grading (above). No ranking risk.
+2. *Placebo critical values* — permute item labels within each day, push placebo signals through the same
+   "keep the best k" rule ~200 times; the distribution of cells gained is the bar a real change must clear
+   (Novy-Marx 2015 [P]: combining the best k of n signals is nearly as biased as picking the best of n^k;
+   Hou, Xue & Zhang 2020 [P]: 64–85% of anomalies fail to replicate).
+3. *Cheap among non-junk, mid-league* — screen out items below the median of the mid composite, then rank
+   survivors by cheapness (price's measured mid-league sign). Quality controls rescue the size effect
+   (Asness, Frazzini & Pedersen QMJ [P]; Asness et al. 2018 "Size matters, if you control your junk" [P]);
+   anomalies live mostly in the short leg (Stambaugh, Yu & Yuan 2012 [P]). First a diagnostic: is the
+   composite's power in avoiding the bottom third rather than picking the top?
+4. *Signals switch on and off by their own recent performance* — within the league, keep a signal only while
+   its top-minus-bottom-third forward return over the last 7–14 completed days is positive (Ehsani &
+   Linnainmaa 2022 [P]; Gupta & Kelly 2019 [A]; Arnott, Kalesnik & Linnainmaa 2023 [A]). Needs no past league.
+5. *Price-to-activity valuation* — Δ14 log price − Δ14 log traded volume per item (rank low), and at the
+   market level the basket price over total volume as a late-league timing signal (Borri, Liu & Tsyvinski
+   2022 NFTs [P]: the index-to-transaction ratio predicts −19.1% at 5 weeks per s.d., R² 20.6%).
+6. *Breadth-gated regime* — while the share of rising items is above earlier leagues' median, let cheap items
+   in (experiment #2's price-neutral ranking); below it, weight price (Franses & Knecht 2016 stamp bubble [P]:
+   cheap abundant stamps join the bubble and crash first; rare ones suffer less).
+7. *Volume-conditioned spikes* — a jump on high volume in a liquid item reverses; in a thin item it may
+   continue (Campbell, Grossman & Wang 1993 [P]; Llorente et al. 2002 [P]).
+8. *Stress-only haven over a recent window* — the basket's worst-decile days in the last 14–21; havens are
+   short-lived (Baur & Lucey 2010 [P]); no asset hedges broad inflation well (Bekaert & Wang 2010 [P]) — an
+   argument for a per-regime "kept" target, not a ranking fix.
+9. *Next-league announcement as a lockup expiry* — a known end date drives selling (Field & Hanka 2001 [A];
+   the Glitch shutdown: 50% of items fell and 12% rose in the last four weeks, Drachen et al. [P]). Needs the
+   announcement date as calendar data.
+
+Corroborating, not new signals: masterpieces and expensive NFTs underperform (Mei & Moses 2002 [P]; Borri
+et al. [P]) — the same price trade-off; new game worlds settle their price structure fast (Castronova et al.
+2009 [A]; Morrison & Fontenla 2013 [A]) — cross-sectional signals work even in a first league; early-season
+betting lines are biased (Baryla et al. 2007 [A]). Not recommended: volatility-managed exposure (Cederburg
+et al. 2020 [P]: fails out of sample from structural instability); ML interaction models (five leagues are
+too few independent periods).
+
+Sources: Bessembinder JFE 129(3) doi:10.1016/j.jfineco.2018.06.004 https://papers.ssrn.com/sol3/papers.cfm?abstract_id=2900447 ·
+Plyakha, Uppal & Vilkov doi:10.2139/ssrn.2724535 · Stambaugh, Yu & Yuan JFE 104(2) doi:10.1016/j.jfineco.2011.12.001 ·
+Asness, Frazzini & Pedersen QMJ https://www.aqr.com/-/media/AQR/Documents/Insights/Working-Papers/Quality-Minus-Junk.pdf ·
+Asness et al. JFE 129(3) "Size matters, if you control your junk" · Novy-Marx https://www.nber.org/papers/w21329 ·
+Hou, Xue & Zhang RFS 33(5) https://www.nber.org/papers/w23394 · Ehsani & Linnainmaa JF 77(3) https://www.nber.org/papers/w25551 ·
+Gupta & Kelly JPM 45(3) doi:10.3905/jpm.2019.45.3.013 · Arnott, Kalesnik & Linnainmaa RFS 36(8) https://academic.oup.com/rfs/article-abstract/36/8/3034/6988043 ·
+Baur & Lucey doi:10.1111/j.1540-6288.2010.00244.x · Bekaert & Wang Economic Policy 25(64) · Conlon & McGee FRL 35 doi:10.1016/j.frl.2020.101607 ·
+Moreira & Muir JF 72(4) https://www.nber.org/papers/w22208 · Cederburg et al. JFE 138(1) · Borri, Liu & Tsyvinski https://papers.ssrn.com/sol3/papers.cfm?abstract_id=4052045 ·
+Franses & Knecht Empirical Economics 50(4) doi:10.1007/s00181-015-0974-3 · Mei & Moses AER 92(5) doi:10.1257/000282802762024719 ·
+Campbell, Grossman & Wang QJE 108(4) https://academic.oup.com/qje/article-abstract/108/4/905/1899978 ·
+Llorente, Michaely, Saar & Wang RFS 15(4) doi:10.1093/rfs/15.4.1005 · Drachen et al. https://arxiv.org/abs/1603.07610 ·
+Field & Hanka JF 56(2) doi:10.1111/0022-1082.00334 · Baryla et al. FRL 4(3) https://ideas.repec.org/a/eee/finlet/v4y2007i3p155-164.html ·
+Castronova et al. New Media & Society 11(5) doi:10.1177/1461444809105346 · Morrison & Fontenla Empirical Economics 44 doi:10.1007/s00181-012-0567-3 ·
+Dobrynskaya & Kishilova (LEGO) https://papers.ssrn.com/sol3/papers.cfm?abstract_id=3291456 · Dimson, Rousseau & Spaenjers JFE 118(2) https://papers.ssrn.com/sol3/papers.cfm?abstract_id=2321573.
+
+## Loop 4 — a fair yardstick, 2026-09-28
+
+**Grading added** (`ops/hold-backtest.py` `random_null`, tested in `backend/tests/test_hold_backtest_null.py`):
+each graded day the top 10's percentile among 2,000 random 10-item lists from the same eligible board, on
+return (higher is better) and crash share (lower is better). A skill-free list sits near 50; the basket
+mean is the wrong bar when a few winners carry it (Bessembinder 2018). Existing metrics unchanged.
+
+**Chance bar.** Twenty runs with a random signal added to every regime set gained −5 … +1 cells on the
+yardstick scorecard, so a real change must gain at least 2.
+
+**Finish line:** return percentile ≥ 60 in 16/20 cells, crash percentile ≤ 40 in 16/20, list checks
+20/20, current league passes. **Baseline (regime-aware hold_rank): 13/20 and 8/20.** By league the top 10
+sits at the 57–88th return percentile and the 15–59th crash percentile — clearly better than random in
+Rise of the Abyssal and Forbidden Rites, marginal in Fate of the Vaal and Runes of Aldur, and Dawn of the
+Hunt's 14d crash percentile is 59 (worse than random).
+
+| # | change | result | verdict |
+|---|---|---|---|
+| 1 | cheap among non-junk, mid-league (quality screen = the Hold score's median, then cheapest first) | +4 cells (return 17/20), but Forbidden Rites and Rise clearly worse, owner 20 → 16 | rejected |
+| 2 | signals switch themselves on/off by their own last-14-days in-league performance | +5 cells (return 18/20), lists intact, none clearly worse — but the gain is all Runes of Aldur (+0.077), Forbidden Rites −0.007: 1 of 2 moved leagues better | rejected (single-league) |
+| 3 | price-to-activity valuation in the mid and late sets | 0 cells, Runes clearly worse | rejected |
+
+Stopped: 3 straight iterations without an accepted change. Crash percentile (8/20) is the stubborn target:
+no candidate moved it. #2 is the one to revisit when Forbidden Rites has run long enough to show whether
+its Runes-only gain generalizes.
+
+## Loop 5 — crashes, 2026-09-28
+
+Pattern: find the weakest spot, one hypothesis, one test; keep what passes (yardstick gain ≥ 2 cells —
+the chance bar — ≥ 80% of moved leagues better, none clearly worse, lists intact, current league passes);
+research when stuck. Owner's caution: some crashes are unpredictable (patches, bugs, new tech, a
+replacement, randomness), so a crash-side gain must survive removing each league's three worst
+market-wide crash days.
+
+**Where Hold's crashes come from.** Its top 10 already crash half as often as the eligible board (9% vs
+19% over 7 days); the picks that did crash had stalled the week before (mid-league 7-day return +15% vs
++33% for picks that held) with trading slowing. Crash rates track the regime, not how long an item has
+traded.
+
+| # | hypothesis → change | result |
+|---|---|---|
+| H1 | stalls are invisible to `kept` (skips 3 days) → last-7-day return in the mid set | 0 cells, Rise clearly worse — rejected |
+| H2 | a crash starts as a fall → veto items whose price fell over the last 3 days | −5 cells, 4 leagues worse (3-day falls rebound) — rejected |
+| — | **research** (crash prediction; sources below). Diagnostic, per league, AUC for "falls below 80% of entry within the hold": downside volatility flags crashes **5/5** leagues (7d) and 4/4 (14d); run-up, acceleration and volume-backed gains are the *opposite* sign (0/3) — the equity bubble literature doesn't transfer; an illiquidity shock is mixed (2/4) | |
+| H3 | downside-volatility veto (top fifth of the board out of the top 10, ≤ 3 a day, refill) | +3 cells; Dawn, Fate, Runes better; Rise clearly worse — rejected |
+| H4 | …only once prices have settled | +3; Rise still worse — rejected |
+| H5 | low downside volatility as a mid/late signal instead of a veto | +1; Rise and Runes worse — rejected |
+| — | **audit**: in Rise the veto removed Hinekora's Lock, Mirror and Reliquary Keys — thin, noisy both ways — which then rose +40% (median); their refills rose +1% and crashed more. Downside volatility confuses thin-market noise with a slide. | |
+| H6 | down-vs-up volatility (DUVOL: symmetric noise ≈ 0, a slide falls harder than it rises) veto, always | +5; Fate and Runes better, Forbidden Rites and Rise worse — rejected |
+| **H7** | **DUVOL veto only once prices have settled** | **+5 cells (return 13 → 17/20 ✓, crash 8 → 9/20); Fate, Rise, Runes better; none worse; survives dropping each league's 3 worst crash days (+3, same leagues); current league passes — ACCEPTED** |
+
+Shipped as `holdscore._duvol` / `_crash_flags` / `_apply_veto` (VETO_TOP 10, VETO_MAX 3, VETO_QUANTILE 0.8,
+VETO_DAYS 14), after `_hold_scores`, only when the regime is no longer mostly early. The first port let a
+flagged item just below the list take a freed slot (shipped scored +2, not +5); the "shipped equals the
+accepted experiment" check caught it, and `_apply_veto` now rebuilds the order (kept, refills, rest).
+
+**After H7 (loop stopped: two research rounds in a row without an accepted change; 13 changes tested,
+1 accepted).** At a 24h hold the eligible board crashes 1–5% (no crash at all on 28–67% of days), so crash
+percentiles tie near 50. *Correction, measured exactly afterwards* (best possible = 50 × P(a random 10 from
+the day's board has zero crashes), averaged over graded days): only **3** 24h cells are out of reach for any
+list (Fate of the Vaal 42.3, Runes of Aldur 42.3, Forbidden Rites 43.8); Dawn 24h (30.0) and Rise 24h (37.9)
+are reachable — so 17/20 cells are reachable and the original 16/20 target was possible. My first estimate
+("every 24h cell is unreachable") was wrong. Every 3d/7d/14d cell has large headroom (best possible 0–29 vs
+Hold's 21–60).
+
+| # | hypothesis → change | result |
+|---|---|---|
+| H8 | late boards are too small → cap on the smoothed dip (re-graded on the yardstick) | −5; Fate, Rise, Runes worse — rejected |
+| H9 | downside-vol residual after thinness, added to the veto | −3; three leagues worse — rejected |
+| H10 | early relative 3-day stall veto | −4; Dawn, Rise worse — rejected |
+| — | **research round 2** (early-life crashes: Miller 1977 [P]; Ritter & Welch 2002 [P]; Purnanandam & Swaminathan 2004; Krigman, Shaw & Womack 1999; Dufwenberg, Lindqvist & Moore 2005; Smith, Suchanek & Williams 1988 [A]). Diagnostic: items **overvalued vs their own past leagues crash less** (AUC 0.40–0.48, 0/4) and **big early gainers crash much less** (0.27–0.40, 0/5) — the IPO pattern doesn't transfer; winners keep winning early. Noise collapsing and turnover fading near the high: AUC ≈ 0.50 (no signal). | |
+| H11 | early veto of the laggards (bottom fifth of gain since day 3) | fires almost only in Dawn (the top 10 has few laggards); −5 — rejected |
+| H12 | early set: price counts double | −3; four leagues worse — rejected |
+| H13 | veto without the 3-a-day cap | no effect (more than 3 flagged in a top 10 is rare) — rejected |
+| — | **research round 3** (settled/late: Daniel & Moskowitz 2016 [P]; Kelly & Jiang 2014 [P]; Ang, Chen & Xing 2006 [P]; Acharya & Pedersen 2005 [P]; Karolyi, Lee & van Dijk 2012 [P]; Coval & Stafford 2007 [P]; Llorente et al. 2002 [P]; Hou 2007; Field & Hanka 2001 [A]). Diagnostic: a fall on heavy traded value — AUC 0.34/0.46/0.55 (mixed); lagging its most-correlated peers — 0.50 everywhere. Not built. Late days are almost all small boards (≤ 30 items; Runes late small-board crash percentile 57): a top 10 of ≤ 30 overlaps any random 10 heavily, so the yardstick can't separate them much. Crash prediction is weak even in rich equity data (crash-skewness R² 0.03–0.08, Chen, Hong & Stein Table 2). | |
+
+Two last tests after the stop (the budget's final two): H14, a 7-day down-vs-up flag added to the veto
+(to catch slides that just began; the 3d cells sit at 40.1) — −2, Rise worse; H15, flag the top 30% instead
+of the top fifth (the veto rarely fires) — 0, Rise worse. Both rejected; 15 of 15 tests used.
+
+**How much crash risk is left to predict?** A pooled crash model (ridge logistic regression on each item's
+board percentile of down-vs-up volatility, downside volatility, traded value, price, trend, dip, 14-day and
+since-discovery return, kept value, plus each × early membership; trained walk-forward on earlier leagues
+only — Jang & Kang 2019; Campbell et al. 2008; Kelly & Jiang 2014) predicts crashes across the whole board
+out of sample: AUC 0.57 / 0.73 / 0.76 / 0.67 (Rise / Fate / Runes / Forbidden Rites), early 0.58–0.75, settled
+≈ 0.5. As an early-regime veto (H16) it changed nothing but Rise (worse) — because **within Hold's own top 10
+its AUC is 0.55 / 0.60 / 0.47**. Hold's ranking already spends the predictable crash risk (its top 10 crash
+9% vs the board's 19%); the crashes left inside its picks are not predictable from price and traded value —
+the owner's "some crashes are unpredictable" (patches, bugs, new tech, randomness), measured. Retrained on
+Hold's own earlier top picks only (H17, the population the veto acts on), the model scores AUC 0.47 within
+the top 10 in both leagues it can be tested on (Fate of the Vaal, Runes of Aldur) — no signal at all.
+
+Resumed on the owner's standing instruction ("keep this pattern going"): H18, the dip weight scaled with
+the holding period (2× at 14 days) — −1, Fate, Rise and Runes worse; H19, late-regime hold-Divine (a pick
+keeps its slot only if kept > 0 and trend > 0, otherwise Divine; Faber 2007, Antonacci) — fires only in
+Runes (13 of 69 days), −3, Runes worse: even late, items that lost ground beat Divine often enough.
+
+H20, a veto on items that crashed at the same league phase (±5 days) in earlier leagues — −5, Fate and
+Forbidden Rites worse: an item's crash timing doesn't repeat across leagues.
+
+H21, scoring on today alone instead of the 3-day settle (the settle lags a slide) — −3, Fate, Forbidden
+Rites and Runes worse: the settle's stability is worth more than its lag.
+
+H22, starting the settled-market veto at early membership < 0.8 (to offset the detector's ~3-day lag) — 0
+cells, Rise worse: the veto still hurts while prices are being discovered.
+
+**Crash anatomy (7-day holds).** Fate of the Vaal's 29 crashed top-10 picks come from ~8 items
+(Hedgewitch Assandra's Rune of Wisdom 8, Jiquani's Thesis 6), 13 of them in the league's first week; Runes
+of Aldur's 62 from a few (Ancient Collarbone 8, Ancient Jawbone 8, Core Destabiliser 6), bunched in weeks 2,
+7 and 9. One drop is counted on every day the item sits in the top 10 before it, so the crash cells rest on
+roughly a dozen item-level events per league. H23 reacted instead of predicting — an item that fell > 20%
+over 7 days in the last 10 leaves the list — −3, Runes worse: fallen items rebound.
+
+**Research round 5 (jump risk).** Single-asset jumps come with unscheduled news (Lee & Mykland 2008 RFS
+21(6) [P]: "the majority of jumps occur with unscheduled news"; "jumps do not occur regularly"); jump risk
+concentrates in small illiquid assets (Jiang & Yao 2013 [A]) — already in Hold's inputs; jumps cluster and
+co-jump across assets (Aït-Sahalia, Cacho-Diaz & Laeven 2015 [P]; Bormetti et al. 2015 [P]; Chen 2024 [A]);
+an asset's own skewness/kurtosis barely forecasts its future tails (Boyer, Mitton & Vorkink 2010 [A];
+Amaya et al. 2015 [A]); CVaR-optimal selection is unreliable with few observations (Lim, Shanthikumar &
+Vahn 2011 [A]). Within Hold's top 10 the jump share of variance scores AUC 0.49 / 0.25 / 0.54 and a decayed
+jump intensity 0.57 / 0.25 / 0.46 (Rise / Fate / Runes) — no consistent sign; not built.
+
+A family cojump flag (another item in the same game category fell > 15% over 3 days while this one hasn't
+yet) scores AUC 0.52 / 0.51 / 0.49 / 0.49 within Hold's top 10 (Dawn / Rise / Fate / Runes) — no signal.
+
+**Is the crash target even measurable here?** Resampling each league's graded days in 7-day blocks, the
+count of crash cells passing ≤ 40 ranges 8–12 (90%; median 10) for the *same* Hold; it reaches 12 in 14% of
+resamples. The 9-vs-12 gap sits inside the noise of five leagues — each crash cell rests on about a dozen
+item events — so it cannot separate a genuinely safer Hold from luck.
+
+**Where Hold stands:** return percentile ≥ 60 in **17/20** cells (target 16 ✓); crash percentile ≤ 40 in
+**9/15** (target 12); list checks 20/20; current league passes. The unmet crash cells are Dawn of the Hunt 14d
+(first league, no history, all price discovery), Fate of the Vaal 14d and Runes of Aldur 3d/7d/14d (two sit at
+40.1 against the 40 line; the late Runes days are small boards). Likely remaining levers: grade late small
+boards on a shorter list; accept that part of the crash rate is exogenous (patches, bugs, new tech).
+
+Crash-prediction sources: Chen, Hong & Stein 2001 JFE 61(3) doi:10.1016/S0304-405X(01)00066-6
+https://www.nber.org/papers/w7687 [P] (DUVOL, p.12); Jang & Kang 2019 JFE 132(1) [P] (volatility has the
+largest effect on crash odds; turnover not significant); Campbell, Hilscher & Szilagyi 2008 JF 63(6)
+https://www.nber.org/papers/w12362 [P] (volatility robust across horizons); Greenwood, Shleifer & You 2019
+JFE 131(1) https://www.nber.org/papers/w23191 [P] (run-ups predict crashes in equities — not here);
+Hong & Stein 2003 RFS 16(2) [A]; Amihud 2002 [P]; Brunnermeier & Pedersen 2009 [A]; Kelly & Jiang 2014 RFS
+27(10) [A]; crypto pump-and-dump studies (Kamps & Kleinberg 2018; La Morgia et al. 2023; Xu & Livshits 2019;
+Hamrick et al. 2021; arXiv 2309.06608); CS2 knife trade-up patch crash, Oct 2025 (press). No study predicts
+patch-driven crashes from market data — they are exogenous.
+
 ## Measurements, 2026-09-28
 
 Walk-forward on the owner's DB, production functions imported, prices in Divine, entry at t+2, the

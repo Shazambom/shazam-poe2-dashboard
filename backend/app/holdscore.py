@@ -19,7 +19,7 @@ from __future__ import annotations
 import math
 import statistics
 
-from . import analytics, cache, db, devtelemetry, marketseries
+from . import analytics, cache, db, devtelemetry, leagueregime, marketseries
 from .marketseries import league_age as _age
 from .settings import get_settings
 
@@ -212,7 +212,20 @@ def _signals(series: dict[int, tuple[float, float]], t: int) -> dict | None:
         sxy = sum((x - mx) * (y - my) for x, y in zip(win, ys))
         syy = sum((y - my) ** 2 for y in ys)
         trend = (sxy / sxx) * (sxy * sxy / (sxx * syy)) if sxx and syy else 0.0
-    return {"kept": kept, "dip": dip, "trend": trend, "price": math.log(s[ages[-1]][0])}
+    # steadiness of the settled climb: mean/sd of daily moves (Sharpe-style) and net/total movement
+    # (efficiency ratio), both from DISCOVERY_DAY to SKIP_DAYS ago
+    moves = [math.log(sm[b] / sm[a]) for a, b in zip(ages, ages[1:])
+             if b - a == 1 and DISCOVERY_DAY <= a and b <= t - SKIP_DAYS]
+    sd = statistics.pstdev(moves) if len(moves) >= 4 else 0.0
+    steady = (statistics.fmean(moves) / sd if sd > 0 else 0.0) if len(moves) >= 4 else None
+    total = sum(abs(x) for x in moves)
+    eff = sum(moves) / total if len(moves) >= 5 and total > 0 else None
+    # is trading in it picking up? traded value this week vs the week before
+    now = [s[a][1] for a in range(t - 6, t + 1) if a in s]
+    before = [s[a][1] for a in range(t - 13, t - 6) if a in s]
+    vol_trend = math.log((sum(now) + 1) / (sum(before) + 1)) if len(now) >= 3 and len(before) >= 3 else None
+    return {"kept": kept, "dip": dip, "trend": trend, "price": math.log(s[ages[-1]][0]),
+            "steady": steady, "eff": eff, "vol_trend": vol_trend}
 
 
 def _pct_ranks(vals: list[float]) -> list[float]:
@@ -252,30 +265,82 @@ def _record(iid, past) -> float | None:
     return ok / n if n >= RECORD_MIN_WINDOWS else None
 
 
-def _weights(t: int, k: float) -> dict:
-    """kept and trend both measure this league's climb, so they share one unit; the dip carries the
-    Caution dial. Before discovery settles there is no climb to measure."""
-    w = {"kept": 0.5, "trend": 0.5, "dip": k / CAUTION_K, "price": 1.0, "record": 1.0}
-    if t < DISCOVERY_DAY:
-        del w["kept"], w["trend"]
+# Each league regime (leagueregime: EARLY price discovery, MID settled, LATE winding down) ranks on
+# the signals measured to work in it across the leagues (docs/hold-research.md "Regimes"); each set's
+# weights sum to its own scale and the day's weights are the regime memberships' blend. Early is the
+# 2026-09-28 ranking; mid drops price (it predicts LOWER returns once prices settle, 0/4 leagues) for
+# signals positive in 4/4; late keeps what protects when momentum reverses.
+REGIME_SETS = {
+    "early": {"kept": 0.5, "trend": 0.5, "dip": 1.0, "price": 1.0, "record": 1.0},
+    "mid": {"kept": 0.5, "trend": 0.5, "haven": 1.0, "vol_trend": 1.0, "steady": 1.0, "dip": 1.0,
+            "record": 1.0},
+    "late": {"price": 1.0, "haven": 1.0, "eff": 1.0, "dip": 1.0},
+}
+_EARLY_ONLY = {"early": 1.0, "mid": 0.0, "late": 0.0}
+
+
+def _regime_weights(reg: dict, k: float, t: int) -> dict:
+    """The day's signal weights: each regime's set scaled to sum 1, blended by `reg`'s memberships.
+    The dip carries the Caution dial (k / CAUTION_K); before discovery settles there is no climb."""
+    w: dict = {}
+    for r, share in reg.items():
+        if share <= 0:
+            continue
+        st = dict(REGIME_SETS[r])
+        if t < DISCOVERY_DAY:
+            st.pop("kept", None)
+            st.pop("trend", None)
+        tot = sum(st.values())
+        for name, v in st.items():
+            w[name] = w.get(name, 0.0) + share * v / tot
+    if "dip" in w:
+        w["dip"] *= k / CAUTION_K
     return w
 
 
-def _rank_day(entries, t: int, k: float, past=()) -> dict:
-    """One day's composite: {item_id: 0..1}. `entries` = [(item_id, series, ...)]."""
+def _haven(entries, t: int) -> dict:
+    """Safe-haven reading (Baur & Lucey 2010): each asset's mean daily log move relative to the board's
+    median on the board's worst third of days since DISCOVERY_DAY. {item_id: value}."""
+    moves = {}
+    for e in entries:
+        s = {a: v for a, v in e[1].items() if a <= t}
+        sm = {a: _smooth(s, a) for a in s if a >= DISCOVERY_DAY - 1}
+        moves[e[0]] = {b: math.log(sm[b] / sm[b - 1]) for b in sm if b - 1 in sm and sm[b] > 0 and sm[b - 1] > 0}
+    board = {}
+    for d in range(DISCOVERY_DAY, t + 1):
+        rs = [m[d] for m in moves.values() if d in m]
+        if len(rs) >= 10:
+            board[d] = statistics.median(rs)
+    if len(board) < 3:
+        return {}
+    worst = sorted(board, key=lambda d: (board[d], d))[:max(3, len(board) // 3)]
+    out = {}
+    for iid, m in moves.items():
+        rel = [m[d] - board[d] for d in worst if d in m]
+        if len(rel) >= 3:
+            out[iid] = statistics.fmean(rel)
+    return out
+
+
+def _rank_day(entries, t: int, k: float, past=(), reg: dict | None = None) -> dict:
+    """One day's composite: {item_id: 0..1}. `entries` = [(item_id, series, ...)]; `reg` = the day's
+    regime memberships (None: early)."""
     sig = [(e[0], _signals(e[1], t)) for e in entries]
     sig = [(i, x) for i, x in sig if x]
     if not sig:
         return {}
+    weights = _regime_weights(reg or _EARLY_ONLY, k, t)
+    haven = _haven(entries, t) if weights.get("haven") else {}
     for iid, x in sig:
-        x["record"] = _record(iid, past) if past else None
+        x["record"] = _record(iid, past) if past and weights.get("record") else None
+        x["haven"] = haven.get(iid)
     # Each signal is ranked among the assets it can be measured for; an asset's score averages the
     # signals it has. A signal nobody has yet (early league) simply doesn't weigh. The record is the
     # exception once earlier leagues exist: no record is a neutral rank, not a missing one, so a new
     # item gets neither credit nor blame for a history it doesn't have.
     num = [0.0] * len(sig)
     den = [0.0] * len(sig)
-    for name, w in _weights(t, k).items():
+    for name, w in weights.items():
         if not w:
             continue
         have = [i for i, (_iid, x) in enumerate(sig) if x[name] is not None]
@@ -291,11 +356,12 @@ def _rank_day(entries, t: int, k: float, past=()) -> dict:
     return {iid: (num[i] / den[i] if den[i] else 0.5) for i, (iid, _x) in enumerate(sig)}
 
 
-def hold_rank(entries, t: int, k: float | None = None, past=()) -> dict:
+def _hold_scores(entries, t: int, k: float | None = None, past=(), regime=None) -> dict:
     """Hold's ranking as of league-day t: {item_id: score in 0..1}, higher first. `entries` =
-    [(item_id, series, ...)] — the day's eligible board; `past` = earlier leagues [(league, per)].
-    Each asset's score is its mean composite over the last SETTLE_DAYS days (its series as it stood
-    each day), so the list settles."""
+    [(item_id, series, ...)] — the day's eligible board; `past` = earlier leagues [(league, per)];
+    `regime` = a function league-day -> memberships (leagueregime), None for the early set. Each
+    asset's score is its mean composite over the last SETTLE_DAYS days (its series as it stood each
+    day), so the list settles."""
     k = CAUTION_K if k is None else k
     acc: dict = {}
     for back in range(SETTLE_DAYS):
@@ -303,9 +369,76 @@ def hold_rank(entries, t: int, k: float | None = None, past=()) -> dict:
         # an earlier day counts for an asset only if it traded that day (a stale close isn't a read);
         # today counts for every eligible asset
         day = [e for e in entries if tt in e[1]] if back else list(entries)
-        for iid, v in _rank_day(day, tt, k, past).items():
+        for iid, v in _rank_day(day, tt, k, past, regime(tt) if regime else None).items():
             acc.setdefault(iid, []).append(v)
     return {iid: statistics.fmean(v) for iid, v in acc.items()}
+
+
+# A settled market vetoes items that are sliding (docs/hold-research.md "Loop 5"). Down-vs-up volatility
+# (Chen, Hong & Stein 2001 DUVOL) flags future crashes in every league; thin-market noise is symmetric,
+# so it doesn't flag a rarely traded hedge the way plain downside volatility did. During price discovery
+# every price swings, so the veto waits until the regime is no longer mostly early.
+VETO_TOP = 10         # the list a player acts on
+VETO_MAX = 3          # at most this many swapped out a day (keeps the list settled)
+VETO_QUANTILE = 0.8   # flagged: the board's top fifth by down-vs-up volatility
+VETO_DAYS = 14
+
+
+def _duvol(series, t: int) -> float | None:
+    """log(σ_down / σ_up) of the last VETO_DAYS daily log moves of the smoothed price, split at their
+    mean. ≈ 0 for symmetric noise; > 0 when it falls harder than it rises."""
+    s = {a: v for a, v in series.items() if a <= t}
+    sm = {a: _smooth(s, a) for a in s if a >= t - VETO_DAYS - 1}
+    r = [math.log(sm[a] / sm[a - 1]) for a in range(t - VETO_DAYS + 1, t + 1)
+         if a in sm and a - 1 in sm and sm[a] > 0 and sm[a - 1] > 0]
+    if len(r) < 7:
+        return None
+    m = statistics.fmean(r)
+    down = [x - m for x in r if x < m]
+    up = [x - m for x in r if x >= m]
+    if len(down) < 2 or len(up) < 2:
+        return None
+    sd = math.sqrt(statistics.fmean(x * x for x in down))
+    su = math.sqrt(statistics.fmean(x * x for x in up))
+    return math.log(sd / su) if sd > 0 and su > 0 else None
+
+
+def _crash_flags(entries, t: int) -> dict:
+    """{item_id: True/False}: in the board's top VETO_QUANTILE by down-vs-up volatility."""
+    d = {e[0]: _duvol(e[1], t) for e in entries}
+    vals = sorted(v for v in d.values() if v is not None)
+    if len(vals) < 10:
+        return {}
+    cut = vals[int(VETO_QUANTILE * (len(vals) - 1))]
+    return {i: (v is not None and v > cut) for i, v in d.items()}
+
+
+def hold_rank(entries, t: int, k: float | None = None, past=(), regime=None) -> dict:
+    """Hold's ranking as of league-day t: {item_id: score in 0..1}, higher first (`_hold_scores`), then,
+    once prices have settled, up to VETO_MAX sliding items leave the top VETO_TOP for the next unflagged
+    ones below them."""
+    sc = _hold_scores(entries, t, k, past, regime)
+    reg = regime(t) if regime else None
+    if not reg or reg.get("early", 1.0) >= 0.5:
+        return sc
+    return _apply_veto(sc, _crash_flags([e for e in entries if e[0] in sc], t))
+
+
+def _apply_veto(sc: dict, flags: dict) -> dict:
+    """Up to VETO_MAX flagged items leave the top VETO_TOP for the next UNFLAGGED items below it; the new
+    order is kept, then the refills, then everyone else in their old order. The day's score values are
+    reassigned down the new order, so the list stays 0..1 and monotone."""
+    order = sorted(sc, key=lambda i: -sc[i])
+    vetoed = [i for i in order[:VETO_TOP] if flags.get(i)][:VETO_MAX]
+    refill = [i for i in order[VETO_TOP:] if not flags.get(i)][:len(vetoed)]
+    if not refill:
+        return sc
+    vetoed = vetoed[:len(refill)]
+    keep = [i for i in order[:VETO_TOP] if i not in vetoed]
+    moved = set(keep) | set(refill)
+    new = keep + refill + [i for i in order if i not in moved]
+    values = [sc[i] for i in order]
+    return {i: values[p] for p, i in enumerate(new)}
 
 
 def value_cut(rows) -> float:
@@ -324,7 +457,7 @@ def eligible(m: dict, cut: float) -> bool:
     return m["valvol"] >= cut and m["n"] >= MIN_DAYS and m["mdd"] >= MDD_CAP
 
 
-def _rank(entries, k: float, cut: float | None = None, t: int | None = None, past=()):
+def _rank(entries, k: float, cut: float | None = None, t: int | None = None, past=(), regime=None):
     """[(iid, name, cat, metrics, series)] → (the ones worth ranking, best first, {iid: score}).
 
     Eligibility is a HARD gate, not a weight: an asset either trades enough value to park wealth
@@ -337,7 +470,7 @@ def _rank(entries, k: float, cut: float | None = None, t: int | None = None, pas
     keep = [e for e in entries if eligible(e[3], cut)]
     if t is None:
         t = max((max(e[4]) for e in keep), default=0)
-    score = hold_rank([(e[0], e[4]) for e in keep], t, k, past)
+    score = hold_rank([(e[0], e[4]) for e in keep], t, k, past, regime)
     keep = [e for e in keep if e[0] in score]
     keep.sort(key=lambda e: -score[e[0]])
     return keep, score
@@ -436,6 +569,19 @@ def _build_context(preferred: str, num_id: int):
     return cur_name, cur, past, meta
 
 
+def regime_of(league: str | None):
+    """The league's regime as a function league-day -> memberships (leagueregime), from its raw
+    exalted rows. Memoized with the league context, so every board and the arc share one timeline."""
+    if not league:
+        return None
+
+    def build():
+        with db.q() as c:
+            per = leagueregime.from_rows(marketseries.read_rows(c, league))
+        return lambda t: leagueregime.regime(per, t)
+    return cache.memo(_ctx_cache, ("regime", league), _CTX_TTL, build, max_entries=8)
+
+
 def movers_current_leagues() -> list:
     """The game's currently-live leagues as poe2scout reports them (operational kv)."""
     return db.kv_get(marketseries.CURRENT_LEAGUES_KEY, []) or []
@@ -502,7 +648,8 @@ def _leaderboard(horizon: str, category: str, numeraire: str, num_id: int, num_n
     cut = value_cut([e[3] for e in entries])    # the day's threshold, over everything
     cats = sorted({e[2] for e in entries})      # dropdown reads the full universe
     today = max((m["cur_age"] for _i, _n, _c, m, _s in entries), default=0)
-    board, score = _rank(entries, k, cut, today, past)   # the whole day's ranked board, every category
+    regime = regime_of(cur_name)
+    board, score = _rank(entries, k, cut, today, past, regime)   # the whole day's ranked board, every category
     # The forecast column exists only through ARROW_LAST_DAY, and carries arrows only on
     # ARROW_HORIZONS (1d keeps the column, all dashes). Arrows rank each forecast against the WHOLE
     # board, so viewing one category can't restyle an asset.
@@ -515,7 +662,9 @@ def _leaderboard(horizon: str, category: str, numeraire: str, num_id: int, num_n
 
     # beta telemetry (gated off in stable builds): what the board showed, so a beta Hold list can be
     # checked from the log
+    reg = regime(today) if regime else {}
     devtelemetry.tlog("hold", f"day={today} hz={horizon} k={k:g} eligible={len(board)} "
+                              f"regime={'/'.join(f'{reg.get(r, 0):.2f}' for r in ('early', 'mid', 'late'))} "
                               f"top5={'; '.join(e[1] for e in board[:5])}")
     assets = []
     for iid, name, cat, m, series in board:

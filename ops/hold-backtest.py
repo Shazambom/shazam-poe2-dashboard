@@ -31,6 +31,9 @@ The portfolio (a player holding the top N, equal parts, bought on the board's da
   * churn    — share of today's top N that wasn't in yesterday's (a hold list should settle)
   * blue     — share of the top N in the board's most expensive fifth
   * owner    — share of days at least one of the owner's named stores of value is in the top N
+  * ret_pct / crash_pct — the top N's percentile among NULL_DRAWS random N-item lists from the same day's
+               board (return: higher is better; crash share: lower is better). A skill-free list sits
+               near 50 — the fair bar when a few big winners carry the basket's average
   * chase    — share of the top N that JUMPED: their rise over the board's horizon, above the pace of
                their own trend before it, is in the board's top tenth. A steady climber is on the
                upswing (wanted); a jump is "just went up" (owner: don't over-weight it)
@@ -41,7 +44,7 @@ falls back to. The metrics, value floor, drawdown cap and `hold_score` are produ
 
 A --scorer is `file.py:function`, called as fn(entries, ctx) -> {item_id: score} (higher first).
 `entries` = [(item_id, name, category, metrics, series)] for every asset production's gate admits
-on day t; `series` = {age: (price_div, value_ex)} cut at age <= t. `ctx` = {"t", "hz", "hold", "past", "k"}:
+on day t; `series` = {age: (price_div, value_ex)} cut at age <= t. `ctx` = {"t", "hz", "hold", "past", "k", "league", "regime"}:
 `hz` the board's day horizon, `hold` the days the player picked, `past` the earlier leagues [(league, per)] most recent first.
 """
 from __future__ import annotations
@@ -61,7 +64,7 @@ ROOT = Path(__file__).resolve().parent.parent
 os.environ.setdefault("DATA_DIR", tempfile.mkdtemp(prefix="hold-backtest-"))   # never the app's dir
 sys.path.insert(0, str(ROOT / "backend"))
 
-from app import holdscore as H, marketseries as M   # noqa: E402
+from app import holdscore as H, leagueregime as LR, marketseries as M   # noqa: E402
 
 # The topbar's choices (frontend/src/lib/horizonStore.js HORIZONS): label -> window hours.
 SELECTIONS = {"24h": 24, "3d": 72, "7d": 168, "14d": 336}
@@ -90,6 +93,9 @@ THRESHOLDS = {
 }
 
 
+_RAW: dict = {}   # raw (exalted) rows per league, for the regime detector
+
+
 def load(db: str):
     c = sqlite3.connect(f"file:{db}?mode=ro", uri=True)
     meta = M.read_meta(c)
@@ -101,7 +107,7 @@ def load(db: str):
 
 def production(entries, ctx):
     """What ships: `holdscore.hold_rank`, the ranking /api/hold orders its board by."""
-    return H.hold_rank([(e[0], e[4]) for e in entries], ctx["t"], ctx["k"], ctx["past"])
+    return H.hold_rank([(e[0], e[4]) for e in entries], ctx["t"], ctx["k"], ctx["past"], ctx.get("regime"))
 
 
 def by_price(entries, ctx):
@@ -136,7 +142,7 @@ def path(series, t, days):
     return pts if pts[0] > 0 and pts[-1] > 0 else None
 
 
-def board_for_day(per, meta, t, hz, scorer, past, k, hold=None):
+def board_for_day(per, meta, t, hz, scorer, past, k, hold=None, league=None, regime=None):
     """The board Hold would have shown on league-day t: production metrics and gate, then `scorer`."""
     entries = []
     for iid, full in per.items():
@@ -149,10 +155,38 @@ def board_for_day(per, meta, t, hz, scorer, past, k, hold=None):
             entries.append((iid, name, cat, m, s))
     cut = H.value_cut([e[3] for e in entries])
     elig = [e for e in entries if H.eligible(e[3], cut)]
-    scores = scorer(elig, {"t": t, "hz": hz, "hold": hold or hz, "past": past, "k": k})
+    scores = scorer(elig, {"t": t, "hz": hz, "hold": hold or hz, "past": past, "k": k, "league": league,
+                           "regime": regime})
     elig = [e for e in elig if scores.get(e[0]) is not None]
     elig.sort(key=lambda e: -scores[e[0]])
     return elig
+
+
+NULL_DRAWS = 2000
+
+
+def random_null(rets, crashed, top, n=NULL_DRAWS, seed=0):
+    """Where the top list sits among `n` random lists of the same size drawn from the same board:
+    (return percentile — higher is better, crash-share percentile — higher means it crashed MORE).
+    `rets`/`crashed` are per board item (simple return over the hold, lost > 20%); `top` = the
+    list's indices into them. Ties count half. A skill-free list lands near 50 on both
+    (Bessembinder 2018: a few big winners carry the average, so the mean is the wrong bar)."""
+    import random
+    k = len(top)
+    if k == 0 or len(rets) <= k:
+        return None, None
+    r_top = statistics.fmean(rets[i] for i in top)
+    c_top = sum(crashed[i] for i in top) / k
+    rnd = random.Random(seed)
+    idx = range(len(rets))
+    below_r = below_c = 0.0
+    for _ in range(n):
+        pick = rnd.sample(idx, k)
+        r = statistics.fmean(rets[i] for i in pick)
+        c = sum(crashed[i] for i in pick) / k
+        below_r += 1.0 if r < r_top else 0.5 if r == r_top else 0.0
+        below_c += 1.0 if c < c_top else 0.5 if c == c_top else 0.0
+    return 100 * below_r / n, 100 * below_c / n
 
 
 def portfolio(paths):
@@ -181,7 +215,7 @@ def jump(series, t, hz, trend_days=TREND_DAYS):
 
 
 BOARD_KEYS = ("churn", "blue", "owner", "chase")                 # what the list is: every day
-OUTCOME_KEYS = ("ret", "vs_board", "beat", "kept", "crash")      # what holding it did: days whose hold has ended
+OUTCOME_KEYS = ("ret", "vs_board", "beat", "kept", "crash", "ret_pct", "crash_pct")      # what holding it did: days whose hold has ended
 
 
 def grade_day(board, per, t, days, top, prev_top, hz=None):
@@ -214,6 +248,10 @@ def grade_day(board, per, t, days, top, prev_top, hz=None):
     crash = lambda es: sum(paths[e[0]][-1] / paths[e[0]][0] - 1 < CRASH for e in es) / len(es)
     g.update(graded=True, ret=ret, vs_board=ret - base, beat=float(ret > base), kept=float(ret >= 0), dd=dd,
              crash=crash(picks), board_crash=crash(live))
+    rets = [paths[e[0]][-1] / paths[e[0]][0] - 1 for e in live]
+    pos = {e[0]: i for i, e in enumerate(live)}
+    g["ret_pct"], g["crash_pct"] = random_null(rets, [r < CRASH for r in rets],
+                                               [pos[e[0]] for e in picks], seed=t)
     return g
 
 
@@ -260,7 +298,7 @@ def _league_ctx(league):
         per.pop(_W["num_id"], None)
         past = sorted(((lg, built[lg][0]) for lg in day0 if day0[lg] < day0[league]),
                       key=lambda x: day0[x[0]], reverse=True)
-        _W[key] = (per, past)
+        _W[key] = (per, past, regime_for(_RAW, league))
     return _W[key]
 
 
@@ -268,9 +306,9 @@ def _day(task):
     """One (league, horizon, day): the board and its grade (churn is filled in by the caller,
     which sees the days in order)."""
     league, hz, hold, t = task
-    per, past = _league_ctx(league)
+    per, past, regime = _league_ctx(league)
     top = _W["top"]
-    board = board_for_day(per, _W["meta"], t, hz, _W["scorer"], past, _W["k"], hold)
+    board = board_for_day(per, _W["meta"], t, hz, _W["scorer"], past, _W["k"], hold, league, regime)
     g = grade_day(board, per, t, hold, top, None, hz) if board else None
     # Churn compares against a board worth reading: one with enough eligible assets to be graded
     # itself (a league's first days have a handful, and every name "changes" then).
@@ -286,7 +324,7 @@ def grade_leagues(db, leagues, scorer_spec="production", numeraire="divine", k=H
     _init(db, numeraire, scorer_spec, k, top)          # the parent needs the league calendars too
     tasks = []
     for league in leagues:
-        per, _ = _league_ctx(league)
+        per, _p, _r = _league_ctx(league)
         last = max(max(s) for s in per.values())
         for wh in selections.values():
             tasks += [(league, board_days(wh), wh // 24, t) for t in range(1, last + 1)]
@@ -299,7 +337,7 @@ def grade_leagues(db, leagues, scorer_spec="production", numeraire="divine", k=H
     by = dict(zip(tasks, results))
     out = {}
     for league in leagues:
-        per, _ = _league_ctx(league)
+        per, _p, _r = _league_ctx(league)
         last = max(max(s) for s in per.values())
         out[league] = {}
         for label, wh in selections.items():
@@ -320,8 +358,15 @@ def grade_leagues(db, leagues, scorer_spec="production", numeraire="divine", k=H
     return out
 
 
+def regime_for(by, league):
+    """The league's market-state regime (leagueregime), from its raw exalted rows."""
+    per = LR.from_rows(by.get(league, []))
+    return lambda t: LR.regime(per, t)
+
+
 def build(db, numeraire="divine"):
     meta, by = load(db)
+    _RAW.update(by)
     num_id = M.ANCHORS[numeraire].item_id
     built = {lg: H._build_league(rws, num_id) for lg, rws in by.items()}
     day0 = {lg: d0 for lg, (_p, d0) in built.items() if d0}
@@ -336,7 +381,7 @@ def _row(label, s, miss=None):
     f = lambda v, p=True: "–" if v is None else (f"{v * 100:+.1f}" if p == "s" else f"{v * 100:.0f}%")
     tail = "" if miss is None else ("  PASS" if not miss else "  FAIL: " + "; ".join(miss))
     return (f"{label:>7} {str(s['days']) + '/' + str(s['graded']):>7} {f(s['ret'], 's'):>7} {f(s['vs_board'], 's'):>8} {f(s['beat']):>5} {f(s['kept']):>5} "
-            f"{f(s['crash']):>6} {'–' if s['crash_ratio'] is None else f"{s['crash_ratio']:.2f}":>6} {f(s['dd'], 's'):>6} {f(s['churn']):>6} {f(s['blue']):>5} {f(s['owner']):>6} {f(s['chase']):>6}{tail}")
+            f"{f(s['crash']):>6} {'–' if s['crash_ratio'] is None else f"{s['crash_ratio']:.2f}":>6} {f(s['dd'], 's'):>6} {f(s['churn']):>6} {f(s['blue']):>5} {f(s['owner']):>6} {f(s['chase']):>6} {'–' if s['ret_pct'] is None else f"{s['ret_pct']:.0f}":>5} {'–' if s['crash_pct'] is None else f"{s['crash_pct']:.0f}":>5}{tail}")
 
 
 def main():
@@ -363,7 +408,8 @@ def main():
         hz, hold = board_days(SELECTIONS[label]), SELECTIONS[label] // 24
         per = dict(built[league][0]); per.pop(num_id, None)
         past = sorted(((lg, built[lg][0]) for lg in day0 if day0[lg] < day0[league]), key=lambda x: day0[x[0]], reverse=True)
-        board = board_for_day(per, meta, a.show_day, hz, scorer, past, a.k, hold)
+        board = board_for_day(per, meta, a.show_day, hz, scorer, past, a.k, hold, league,
+                              regime_for(_RAW, league))
         print(f"{league} · day {a.show_day} · {label} (board {hz}d, hold {hold}d) · {a.scorer} · {len(board)} eligible")
         for i, e in enumerate(board[:max(a.top, 25)], 1):
             p = path(per[e[0]], a.show_day, hold)
@@ -374,7 +420,7 @@ def main():
 
     leagues = sorted(day0, key=day0.get) if a.league == "all" else [a.league or current_league(day0)]
     report, failed = {"scorer": a.scorer, "top": a.top, "thresholds": THRESHOLDS, "leagues": {}}, False
-    head = f"{'':>7} {'days/out':>7} {'ret':>7} {'vs board':>8} {'beat':>5} {'kept':>5} {'crash':>6} {'×bd':>6} {'dd':>6} {'churn':>6} {'blue':>5} {'owner':>6} {'chase':>6}"
+    head = f"{'':>7} {'days/out':>7} {'ret':>7} {'vs board':>8} {'beat':>5} {'kept':>5} {'crash':>6} {'×bd':>6} {'dd':>6} {'churn':>6} {'blue':>5} {'owner':>6} {'chase':>6} {'r%ile':>5} {'c%ile':>5}"
     graded = grade_leagues(a.db, leagues, a.scorer, a.numeraire, a.k, a.top, sels, a.workers)
     for league in leagues:
         res = graded[league]
