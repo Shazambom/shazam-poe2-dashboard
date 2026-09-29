@@ -1,6 +1,6 @@
 # BUG — the market sync leaves partial data: a half-crawled last day in the seed, and item histories that silently stop
 
-**Status:** FIX BUILT 2026-09-29 (steps 1, 3, 5, 6; tests + fake-poe2scout simulation + real-data dry run green), NOT deployed to shazam yet · **Found:** 2026-09-28 (data-integrity check before a stable
+**Status:** FIXED — shipped in desktop-v0.3.6 (2026-09-29); production publishes hourly through the seed poll · **Found:** 2026-09-28 (data-integrity check before a stable
 ship) · **Owner's rule:** sync bugs are T0 blockers for stable (`docs/release-runbook.md` "T0 gate";
 feedback memory "sync bugs are T0 blockers") — decide whether this blocks 0.3.6 · **Affects:** the
 published market seed (every fresh install and every seed replace) and every client's league-history crawl.
@@ -169,6 +169,16 @@ the league-wide judgement stays, and each item's own row must still match poe2sc
 assumption is watched, not trusted: `changed_after_final` counts items fetched more than a full day after
 a day ended whose row for it no longer matches (poe2scout changed a finished day). The poll logs it and
 records it in `seed_cut:<league>.revised`. The live count is 0; if it ever is not, the rule is too early.
+
+### Rollout (2026-09-29)
+
+- Test env on shazam (`/home/shazam/seedtest`, a copy of production's DB, archiving instead of uploading) ran
+  beside production; `ops/seedtest-scenarios.py` passed 25/25 against real poe2scout on the final code.
+- Promoted in the order below; first production seed v1790659367 (both leagues through 09-27, complete).
+- 0.3.6-beta.12: Mac + Windows replaced the seed cleanly, carried their own newer crawl (1,086 / 1,089
+  items), no T0; Windows' first crawl fetched only the ~110 formerly frozen items per league.
+- Stable desktop-v0.3.6 published. Test env removed (cron line + container; files left in
+  `/home/shazam/seedtest`). Still to observe live: poe2scout finishing 09-28 and the seed advancing to it.
 
 ### Promotion order (production)
 
