@@ -45,6 +45,11 @@ league's worst peak-to-trough drop, k ≈ 2.
 4. **Divine itself moved** (≈28 → ≈500 exalted this league), so early "rises" in Divine are partly the
    numeraire settling.
 
+**Re-running the crash conclusions:** `ops/hold-diagnostics.py` — `signals` (does a warning sign flag
+crashes, per league), `topten` (within Hold's own top 10), `floor` (the best crash percentile any list
+could get) and `noise` (how much the crash-cell count moves by chance). Pure pieces tested in
+`backend/tests/test_hold_diagnostics.py`.
+
 ## The smoke test — `ops/hold-backtest.py`
 
 Replays Hold day by day through a league for every horizon the app offers (24h/3d/7d/14d), holds the
