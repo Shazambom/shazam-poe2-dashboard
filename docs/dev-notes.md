@@ -304,6 +304,36 @@ publisher) and reach installs in the seed. A backend with a seed bundled (every 
 the dev app included) refuses `POST /api/mods/refresh` (403). To rebuild locally, run the same CLI
 against the data dir: `cd backend && DATA_DIR=<dir> ../.venv-test/bin/python -m app.modpool --force`.
 
+### Crafting recipes in route search (added 2026-09-30)
+
+Route search uses three kinds of recipe step, merged in `recipes.edges()`. The graph, lot sizing,
+`traded_rate` and the route glyphs already handled recipes; only the data was missing.
+
+| Recipe | Where it comes from |
+|---|---|
+| **Disenchant (orbs)** | A rule in `recipes.disenchant_recipes`, applied to the currency names. |
+| **Reforge (bench)** | `modpool.refresh()` on shazam parses poe2db's `Reforging_Bench` 3-to-1 list (`bench_recipes_from`) into kv_ops `bench_recipes`, which rides the seed. |
+| **The user's own `recipes.json`** | The Recipes editor. It wins over a derived recipe with the same id. |
+
+- **⚠️ Disenchant is INTENDED behaviour, not a bug. Do not remove it.** The owner confirmed it
+  in-game on 2026-09-30:
+  - a Greater orb disenchants into exactly 3 of its orb, and a Perfect orb into 3 Greater;
+  - it applies to orbs only. Jeweller's Orbs and runes do not disenchant; essences are untested.
+
+  No guide or patch note documents it (they only describe gear → shards), so do not "correct" it
+  against online sources.
+- **Reforge:** essences are left out because the bench turns 3 essences into a *random* one. An
+  empty parse keeps the last good list and fails the cron.
+- **The editor stays user-only** (`load`/`save`). Derived recipes never land in the user's file, and
+  a new install's file is `[]`.
+
+- **Convert** exempts only a recipe's own value gain from the 2% "phantom gain" cap (a recipe really
+  makes value; the exchange steps are still capped). "Direct market" is always the market, never a
+  recipe.
+Tests: `backend/tests/test_crafting_recipes.py`. They parse the real bench page
+(`fixtures/mods/reforging-bench.html.gz`) and include the owner's disenchant loop and a reforge loop,
+run through the real `Graph.build` and route search.
+
 ## Deploying a desktop release (mechanics)
 
 Full runbook: [`release-runbook.md`](./release-runbook.md). Shape: bump `desktop/package.json`,

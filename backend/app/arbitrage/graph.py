@@ -56,6 +56,9 @@ class Edge:
     lot: float = 1.0                # recipe input lot size
     vol_in_per_h: float | None = None   # executed src units per hour (digest); None for recipes
     meta: dict = field(default_factory=dict)
+    # A recipe that took a market's step keeps that market here (never in `meta`, which the screens
+    # get as JSON), so `traded_rate` still prices the pair at what the market traded at.
+    market: "Edge | None" = None
 
     def capacity_in(self) -> float:
         """Max src units this edge can absorb."""
@@ -172,16 +175,14 @@ class Graph:
 
     def add_recipe(self, r: dict) -> None:
         """A recipe conversion, unless the market already beats it. When it takes a market's slot
-        (routes want the better conversion), the market's edge rides along in `meta["market"]` so
+        (routes want the better conversion), the market's edge rides along in `market` so
         `traded_rate` still prices the thing at what the market traded at."""
         key = (r["from"], r["to"])
         market = self.edges.get(key)
         if market and market.rate >= r["rate"]:
             return  # exchange already beats the recipe
         meta = {"recipe_id": r["recipe_id"], "name": r["name"], "kind": r["kind"]}
-        if market:
-            meta["market"] = market
-        self.add(Edge(r["from"], r["to"], "recipe", r["rate"], [], 0.0, lot=r["lot"], meta=meta))
+        self.add(Edge(r["from"], r["to"], "recipe", r["rate"], [], 0.0, lot=r["lot"], meta=meta, market=market))
 
     # ------------------------------------------------------------ values
     def direct_rate(self, c: str, n: str) -> float | None:
@@ -202,7 +203,7 @@ class Graph:
         for key, inv in (((c, n), False), ((n, c), True)):
             e = self.edges.get(key)
             if e and e.kind == "recipe":
-                e = e.meta.get("market")      # a recipe is a conversion, not a market price
+                e = e.market                  # a recipe is a conversion, not a market price
             if not e:
                 continue
             r = e.meta.get("quoted_rate") if e.meta.get("inactive") else None

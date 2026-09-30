@@ -1,6 +1,6 @@
 # BUG — route search has no crafting recipes: the reforge data we fetch is unused, and we have no disenchant data at all
 
-**Status:** OPEN · **Found:** 2026-09-29 (audit follow-up) · **Affects:** Arbitrage route search, Convert and
+**Status:** FIXED in code 2026-09-30, not yet deployed (the shazam side needs the side-by-side proof, then a seed publish; the app side ships in a beta) — disenchant is INTENDED behaviour, owner-confirmed in-game; see docs/dev-notes.md → "Crafting recipes in route search" · **Found:** 2026-09-29 (audit follow-up) · **Affects:** Arbitrage route search, Convert and
 cash-out (every install), the value of every tiered currency (essences, and any other item with a
 bench conversion)
 
@@ -32,6 +32,63 @@ Checked 2026-09-29 on the owner's Mac (read-only):
   3→1 upgrade into them. Pages are fetched only for guaranteed-modifier currencies, so the currencies
   where a disenchant would appear (augments / soul cores / runes and others) are never fetched.
 
+### Investigation 2026-09-30
+
+- **One page lists every bench recipe.** poe2db `Reforging_Bench`, "Forge Recipe /93" (a From / To table,
+  "Used in Three to One Reforge"). It has 93 recipes, all 3→1:
+  - runes: Lesser→normal→Greater;
+  - essences: Lesser→normal→Greater, with no Greater→Perfect;
+  - the distilled emotions chain (Diluted Liquid Ire → … → Concentrated Liquid Isolation);
+  - Waystone tiers 1→15.
+
+  The game's own table is `ThreeToOneRecipes.datc64`. It is listed on ggpk.exposed, but its download
+  returns a Cloudflare 1101 error, so poe2db is the source.
+- **Names map to trade ids by name:** 91 of 93 map through the trade static list. Tempered Rune is
+  not listed.
+- **No disenchant exists in any source we can reach:** not on the bench page, not in any cached
+  currency page, and not in RePoE. The one hint is `ItemDisenchantValues` (a 120-byte table:
+  rarity, base item, value), which is not downloadable and does not describe tier splits. The
+  "Perfect → 3 Greater" idea matches only the shipped **template** `example-disenchant` in
+  `backend/data/recipes.json`.
+- **Measured on a copy of the owner's data** (Forbidden Rites), with the 91 recipes loaded:
+  - 77 recipes have both ends priced;
+  - 8 recipe loops have a positive margin, and 4 pass every default filter. The best is
+    ex → Concentrated Liquid Suffering → Isolation → ex: +90%, 226 ex, 3 min per step;
+  - they rank about 317th of 414 on the default score, because the exchange gold fee on the
+    buy and sell steps is large (62,640 gold);
+  - search cost is negligible: +20 un-culled market edges, and 5313 → 5381 candidates.
+
+### Every recipe kind, as far as the sources go (2026-09-30, patch 4.5.5.3)
+
+- **Reforging Bench.** poe2db `Reforging_Bench` has four groups: Equip /68, Gem /2, Unique Item /2, and
+  X of a Kind /93 (the 3→1 list above). maxroll's bench guide (0.5.4) says:
+  - **fixed next tier:** runes (Lesser→normal→Greater) and distilled emotions;
+  - **waystones:** 3 of a tier give 1 random waystone of the next tier;
+  - **essences:** 3 of the same essence give 1 *random* essence, with a very small chance of a Greater.
+    poe2db shows fixed essence outputs instead; the game table `ThreeToOneRecipes` has an unnamed i32
+    column that could be a chance. **Essence recipes are not deterministic edges until this is settled.**
+  - **random output of the same type:** soul cores, catalysts, relics, precursor tablets, gear and
+    uniques. None of these is a fixed conversion.
+- **Gear disenchant (vendor).** `ItemDisenchantValues`, read from GGG's patch CDN:
+  - magic item → Transmutation Shard (`CurrencyUpgradeToMagicShard`);
+  - rare → Regal Shard (`CurrencyUpgradeMagicToRareShard`);
+  - unique → Chance Shard (`CurrencyUpgradeRandomlyShard`).
+
+  Each row has BaseValue 1. The input is an item, not an exchange currency, so these are not
+  route edges.
+- **Currency tier links.** The table `TieredCurrency` holds `BaseItemType, Tier, MinimumModLevel,
+  LowerTierBaseItemType`, the Perfect → Greater → base chain of the orbs. It is the one place in the
+  game data that links a tier to the one below it. It is unread: its bundle (`Tiny.V6.1`) returns 404
+  on patch-poe2.poecdn.com 4.5.5.3, and ggpk.exposed (still on 4.5.5.2) returns error 1101.
+- **Not found:** a Perfect → 3 Greater (or any higher → lower) disenchant. It is absent from:
+  - poe2db's bench page and its Perfect Orb of Augmentation and Perfect Desert Rune pages;
+  - maxroll's bench guide and the 0.5.0 and 0.5.5 patch notes;
+  - the fextralife rune page, and the timesaver tiered-currency and perfect-rune guides.
+
+  timesaver says Perfect runes come only from a Masterwork Rune on a socketed Greater rune.
+  Owner, 2026-09-30: "disenchant recipes are legitimate". The source is needed (which NPC or window,
+  and what goes in and comes out).
+
 ## Impact
 
 - **Missed arbitrage.** A loop through a bench conversion (buy 3 lower-tier, reforge, sell the higher
@@ -50,24 +107,75 @@ data is derived on shazam and rides the market seed (feedback "game data rides t
 never hand-list or ship game tables as repo JSON). The mod-pool pipeline later started fetching the
 very pages that list the reforge recipes, but only mined them for modifiers.
 
-## Fix plan
+## Fix plan (simplified 2026-09-30)
 
-1. **Derive the reforge recipes on shazam** in `modpool.refresh()` (or a sibling module), from the
-   poe2db pages it already caches: parse the "Three to One Reforge" table into
-   `{inputs: {trade_id: 3}, outputs: {trade_id: 1}, kind: "reforge"}`, map names to trade ids through the
-   registry (as `prices()` does for grants), and store them in a market-side table that ships in the seed
-   (add it to `datapolicy.SEED_TABLES`; per CLAUDE.md, verify the exporter and publish after a market-side
-   change).
-2. **Find and fetch the disenchant data.** Identify where the game defines disenchants (the owner's
-   example: Perfect augment → 3 Greater) — a poe2db page or table beyond the guaranteed-modifier set,
-   or a RePoE / ggpk table (`gamedata` already reads `currencyexchange.datc64`) — and derive
-   `{inputs: {perfect: 1}, outputs: {greater: 3}, kind: "disenchant"}` the same way. Validate the list
-   against the owner's example before building on it (feedback "validate rules on the owner's examples").
-3. **Route search reads derived recipes** alongside the user's own `recipes.json` (user entries still
-   win for the same id), with `allow_recipe_edges` as today. Include each recipe's gold cost if the bench
-   charges one.
-4. **Drop the shipped templates** from the seed `recipes.json` once real recipes exist (restraint: no
-   placeholder data on screen).
+1. **Shazam: derive, store in kv_ops.** `modpool.refresh()` fetches one more page (`Reforging_Bench`),
+   parses the "Three to One Reforge" From / To table into `[{from, from_qty, to, to_qty}]` by name,
+   and writes kv_ops `bench_recipes`.
+   - No new table: kv_ops already ships in the seed, so there is no `SEED_TABLES`, exporter or
+     snapshot-version change. Still, run the publisher and confirm the key is in the seed (CLAUDE.md).
+   - A parse that yields nothing keeps the last good value and logs, as `stored_grants` does.
+2. **Client: `recipes.edges()` = derived + user.**
+   - Map names to trade ids at read time through the registry, with kind "reforge". Unmapped
+     recipes are dropped and counted in a log line.
+   - A user recipe with the same id wins.
+   - `load()` / `save()` (the editor) stay user-only, so game data never gets written into the
+     user's file.
+   - The graph, cull exemption, lot sizing, `traded_rate` and the ⟳ glyph already handle the rest.
+3. **Seed `recipes.json` → `[]`** for new installs. Existing installs' disabled templates are user
+   data: leave them.
+4. **Disenchant: derived by rule, in the app** (owner, 2026-09-30). For every tiered currency named
+   Perfect X / Greater X / X:
+   - Perfect X → 3 Greater X;
+   - Greater X → 3 X.
+
+   The rule applies only where both names exist in the registry. It is a rule over names, not a
+   table of facts, so it needs no sync: `recipes.edges()` derives it from the registry.
+   - On the owner's data it gives 39 full families (79 recipes):
+     - orbs: Transmutation, Augmentation, Regal, Chaos and Exalted;
+     - 15 runes and 19 essences;
+     - Jeweller's, where only Perfect → 3 Greater applies, because its tiers are Lesser / Greater /
+       Perfect.
+   - Perfect Flux has no Greater tier, so it gives nothing. Normal → 3 Lesser is not part of the rule.
+   - Measured: 31 profitable disenchant loops, 11 passing every default filter. The best, by default
+     score, is chaos → Greater Orb of Augmentation → 3 Aug → chaos: +41.7%, 2152 ex, rank 53 of 421.
+   - With reforge as well: 39 profitable loops, 15 passing every filter. Search cost is still small
+     (5313 → 5464 candidates).
+
+**Online check (2026-09-30): no published list of currency disenchants exists.**
+
+- The only "disenchant" documented anywhere is **gear at a caster vendor** (Una, Zarka, Servi):
+  magic → Transmutation Shards, rare → Regal Shards. Sources: game8, videogamer, gamerguides,
+  sportskeeda. This matches `ItemDisenchantValues`.
+- Checked for tier splits and found none: GGG's official 0.5.0 notes, poe2.dev's 0.3 / 0.4 / 0.5
+  summaries, maxroll's 0.5.0 and 0.5.5 notes, the maxroll bench guide, timesaver's tiered-currency
+  guide, and the forum thread "New tiered orb system is horrible", which says disenchanting was
+  "basically deleted from the game".
+- The tiers themselves check out against the trade list:
+  - Transmutation, Augmentation, Regal, Chaos and Exalted are normal / Greater / Perfect, with no
+    Lesser;
+  - Jeweller's is Lesser / Greater / Perfect;
+  - Flux is normal / Perfect.
+- The owner says currency disenchant is real and may be orbs only. Until the owner confirms in-game
+  which families disenchant, the table must not include families nobody has confirmed (accuracy
+  first).
+
+**In-game check by the owner (2026-09-30):**
+- a Greater orb disenchants;
+- a Jeweller's Orb does not;
+- runes do not;
+- essences and Perfect orbs were not tested.
+
+Disenchant table, **orbs only**, for Transmutation, Augmentation, Regal, Chaos and Exalted:
+- Greater X → 3 X: confirmed in-game;
+- Perfect X → 3 Greater X: the owner's rule, not yet tried in-game.
+
+Out of the table: Jeweller's and runes (confirmed not to disenchant), and essences (untested).
+The derivation keys on the "Orb" families that have normal / Greater / Perfect tiers, which excludes
+Jeweller's by construction (it has no normal tier).
+
+Order: shazam first (old clients ignore the key; installs get it on the next seed poll), then the
+client change in a beta.
 
 ## Tests to write first
 

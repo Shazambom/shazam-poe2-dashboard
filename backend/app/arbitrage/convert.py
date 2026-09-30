@@ -37,7 +37,13 @@ def _convert_path(g: Graph, path: list[Edge], amount: float, ref_value: dict[str
     # The internal sanity cap stays on the reference cross (independent of the pair's own
     # quotes): a path whose reference value GROWS beyond tolerance is a digest inconsistency.
     value_out = sim["end_amount"] * ref_value.get(want, 0.0)
-    gain_cross_pct = ((value_out - value_in) / value_in * 100.0) if value_in else 0.0
+    # A recipe's gain is real (3 Aug from 1 Greater Aug), not a quote inconsistency: only the
+    # exchange steps are held to the cap, so the recipe's own value factor is divided out.
+    recipe_gain = 1.0
+    for e in path:
+        if e.kind == "recipe" and ref_value.get(e.src) and ref_value.get(e.dst):
+            recipe_gain *= e.rate * ref_value[e.dst] / ref_value[e.src]
+    gain_cross_pct = ((value_out / recipe_gain - value_in) / value_in * 100.0) if value_in else 0.0
     out = int(sim["end_amount"])
     gold = sim["gold"]
     return {
@@ -104,6 +110,8 @@ def _best_conversions(g: Graph, ref_value: dict[str, float], have: str, want: st
                     reverse=True)
     best = ranked[0] if ranked else None
     direct_edge = g.edges.get((have, want))
+    if direct_edge is not None and direct_edge.kind == "recipe":
+        direct_edge = direct_edge.market      # "direct" is the market; a recipe is a route
     direct = _convert_path(g, [direct_edge], amount, ref_value, have, want) if direct_edge else None
     alternatives = [r for r in ranked if best is None or r["id"] != best["id"]]
     return {"have": have, "want": want, "amount": amount, "reference": g.s["reference"],

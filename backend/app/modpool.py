@@ -9,8 +9,9 @@ again; the rules below are the game's rules, not a table of its facts.
 The pipeline: `refresh()` runs on shazam before the seed is published (a CLI entry the cron
 calls), fetches through the gateway with the same on-disk cache the gold-fee loader uses, and
 writes `mod_pools` / `mod_currencies` (market tables in `datapolicy.SEED_TABLES`, so every
-install gets them with the seed) and a `mods_meta` watermark in kv_ops. Desktop installs never
-fetch; the endpoints only read.
+install gets them with the seed), a `mods_meta` watermark in kv_ops, and the Reforging Bench's
+3-to-1 list (kv_ops `bench_recipes`, route search's reforge steps: `recipes.derived`). Desktop
+installs never fetch; the endpoints only read.
 
 Derivations, each one a rule the export supports:
 - An item class's pool domain is the mod domain its released bases' tags reach under the
@@ -508,6 +509,9 @@ _LEVEL = re.compile(r"(Minimum Modifier Level|Maximum Item Level)</a>:\s*<span[^
 _TABLE = re.compile(r"<table[^>]*>.*?<th>Class</th><th>Modifier</th><th>Pre/Suf</th><th>Required Level</th>.*?<tbody[^>]*>(.*?)</tbody>", re.S)
 _ROW = re.compile(r"<tr>(.*?)</tr>", re.S)
 _CELL = re.compile(r"<td>(.*?)</td>", re.S)
+# The Reforging Bench's "Three to One" list: the card that says so, then its From / To table.
+_BENCH = re.compile(r"Used in Three to One Reforge.*?<table[^>]*><thead><tr><th>From</th><th>To</th></tr></thead><tbody[^>]*>(.*?)</tbody>", re.S)
+_QTY = re.compile(r"^(.+) x(\d+)$")
 _TAGS = re.compile(r"<[^>]+>")
 
 
@@ -556,6 +560,23 @@ def grant_from(name: str, page: str) -> dict | None:
     kind = "alloy" if "Alloy" in name else "essence"
     tier = 0 if name.startswith("Lesser ") else 2 if name.startswith("Greater ") else 3 if name.startswith("Perfect ") else 1
     return {"name": name, "kind": kind, "tier": tier, "rows": rows}
+
+
+def bench_recipes_from(page: str) -> list:
+    """The Reforging Bench's 3-to-1 list from poe2db's Reforging_Bench page, by name:
+    [{from, from_qty, to, to_qty}]. A page without the list, or with a layout we do not recognise,
+    gives nothing (never a wrong recipe)."""
+    m = _BENCH.search(page)
+    if not m:
+        log.warning("bench recipes: no Three to One table on the page (layout changed?)")
+        return []
+    out = []
+    for row in _ROW.findall(m.group(1)):
+        cells = [_QTY.match(_text(c)) for c in _CELL.findall(row)]
+        if len(cells) == 2 and all(cells):
+            (a, qa), (b, qb) = (c.groups() for c in cells)
+            out.append({"from": a, "from_qty": int(qa), "to": b, "to_qty": int(qb)})
+    return out
 
 
 # ------------------------------------------------------------------ assembly and storage
@@ -721,6 +742,17 @@ async def refresh(force: bool = False) -> dict:
         cur, grants = stored_grants()
         pages_error = str(exc)
         log.warning("mod pool refresh: poe2db unreachable (%s); keeping %d currencies and %d grant pages from the last build", exc, len(cur), len(grants))
+    # The Reforging Bench's 3-to-1 list (route search's reforge steps, `recipes.derived`). Nothing
+    # parsed keeps the last good list in kv_ops and fails the run so the cron shows it.
+    try:
+        bench = bench_recipes_from(await _page("Reforging_Bench", max_age))
+    except Exception as exc:
+        bench = []
+        log.warning("bench recipes: poe2db unreachable (%s)", exc)
+    if bench:
+        db.kv_set("bench_recipes", bench)
+    else:
+        pages_error = "; ".join(filter(None, [pages_error, "bench recipes: nothing parsed; kept the last good list"]))
     derived = derive(export)
     import hashlib
     source = {f: hashlib.sha256(raw[f]).hexdigest()[:16] for f in REPOE_FILES}
