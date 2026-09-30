@@ -8,9 +8,14 @@ const { looksLikeItem } = require('./integrations/exiled-exchange/clipboard-watc
 
 const MAX_CLIP = 8000
 
+// A pathofexile.com link copied out of a wrapped chat or terminal carries line breaks and spaces; a
+// URL never holds raw whitespace, so a clipboard that STARTS with one is read with them removed.
+const POE_LINK = /^https?:\/\/(www\.)?pathofexile\.com\//i
+
 function classify(raw) {
-  const text = String(raw || '').slice(0, MAX_CLIP).trim()
+  let text = String(raw || '').slice(0, MAX_CLIP).trim()
   if (!text) return { kind: 'none', len: 0 }
+  if (POE_LINK.test(text)) text = text.replace(/\s+/g, '')
   if (isExchangeUrl(text)) return { kind: 'exchange' }
   const p = parseTradeUrl(text)
   if (p && p.slug) return { kind: 'trade-url', parsed: p }

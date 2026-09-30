@@ -178,3 +178,17 @@ test('beta lines say which EE2 settings the history read and how many filters ea
   const built = lines.find(l => l.startsWith('history-build'))
   assert.ok(/ on=2 off=1/.test(built), built)
 })
+
+test('waystone searches are refined by default ("Match waystone stats"); switching it off leaves EE2\'s search as built', async () => {
+  const WAY = 'Item Class: Waystones\nRarity: Rare\nArid Vector\nWaystone (Tier 15)\n--------\nItem Rarity: +12% (augmented)\nPack Size: +29% (augmented)\nWaystone Drop Chance: +105% (augmented)\n--------\nCorrupted\n'
+  const built = JSON.stringify({ query: { filters: { map_filters: { filters: { map_tier: { min: 15, max: 15 } } } } } })
+  const worker = { spawn() { return { build: async () => ({ q: built, name: 'Arid Vector Waystone (Tier 15)', item: { name: 'Arid Vector', baseType: 'Waystone (Tier 15)', rarity: 'Rare', itemClass: 'Waystones' }, host: 'www.pathofexile.com', buildMs: 1 }), kill() {} } } }
+  const lines = []
+  const c = createHistoryConsumer({ manager: new EventEmitter(), worker, prefs: () => ({ prefs: { leagueId: 'L', language: 'en', searchStatRange: 10 }, source: 'ee2' }), send: () => {}, log: (l) => lines.push(l) })
+  const on = await c.buildIntent(WAY, 'clipboard')
+  assert.deepEqual(JSON.parse(on.q).query.filters.map_filters.filters.map_packsize, { min: 26 })
+  assert.ok(lines.some(l => /history-build .*waystone=refined/.test(l)))
+  c.setSearchPrefs({ waystoneStats: false })
+  const off = await c.buildIntent(WAY, 'clipboard')
+  assert.equal(off.q, built)
+})

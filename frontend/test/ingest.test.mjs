@@ -79,3 +79,29 @@ test('clipboard item rung: an intent from main lands in the chosen folder (never
   const r2 = st().ingest({ source: 'clipboard', origin: 'clipboard', q: Q.replace('Headhunter', 'X'), name: 'X', folder: null, targetId: 'h' })
   assert.equal(st().nodeById('h').children.length, 0, 'history folder is never a clipboard target'); assert.ok(st().tree.some(n => n.id === r2.id))
 })
+
+test('a pasted item already in History becomes a new saved search, not a re-selected History row', async () => {
+  // Beta telemetry 2026-09-30: every Ctrl+C paste logged clipboard-add result=dup — the passive clipboard
+  // watcher had already filed the item into History, so the paste only re-selected that row and no tab opened.
+  const hist = { id: 'hq', kind: 'search', type: 'search', slug: '', q: Q, name: 'Headhunter', origin: 'clipboard' }
+  st().hydrate({ version: 2, tree: [{ id: 'h', kind: 'folder', sys: HISTORY_SYS, name: 'H', children: [hist] }], layout: null, openTabs: [] }); await sleep(5)
+  const r = st().ingest({ source: 'clipboard', origin: 'clipboard', q: Q, name: 'Headhunter', folder: null, targetId: null })
+  assert.equal(r.result, 'added')
+  assert.notEqual(r.id, 'hq')
+  assert.ok(st().tree.some(n => n.id === r.id), 'lands outside History')
+  assert.equal(st().activeId, r.id)
+  assert.equal(st().nodeById('h').children.length, 1, 'History keeps its row')
+})
+
+test('a pasted search already saved in a folder of your own is selected, not duplicated', async () => {
+  st().hydrate({ version: 2, tree: [{ id: 'f', kind: 'folder', name: 'F', children: [{ id: 'mine', kind: 'search', type: 'search', slug: '', q: Q, name: 'Headhunter' }] }], layout: null, openTabs: [] }); await sleep(5)
+  const r = st().ingest({ source: 'clipboard', origin: 'clipboard', q: Q, name: 'Headhunter', folder: null, targetId: null })
+  assert.deepEqual([r.result, r.id, st().activeId], ['dup', 'mine', 'mine'])
+})
+
+test('History moved inside another folder is still not a duplicate source', async () => {
+  const hist = { id: 'hq', kind: 'search', type: 'search', slug: '', q: Q, name: 'Headhunter', origin: 'clipboard' }
+  st().hydrate({ version: 2, tree: [{ id: 'g', kind: 'folder', name: 'G', children: [{ id: 'h', kind: 'folder', sys: HISTORY_SYS, name: 'H', children: [hist] }] }], layout: null, openTabs: [] }); await sleep(5)
+  const r = st().ingest({ source: 'clipboard', origin: 'clipboard', q: Q, name: 'Headhunter', folder: null, targetId: null })
+  assert.equal(r.result, 'added')
+})

@@ -8,6 +8,7 @@
 //     prefs():  { prefs, source }                        send(channel, payload) | null while no window
 //     log(line): telemetry (marker ee2)                  now(): clock (tests)
 'use strict'
+const { refineQuery } = require('./refine.js')
 
 const NO_WINDOW_BUFFER = 20
 const RESTART_MIN_MS = 5 * 60 * 1000
@@ -34,6 +35,7 @@ function createHistoryConsumer({ manager, worker, prefs, send = null, log = () =
   let status = { present: false, running: false, configRead: false, leagueId: null, warm: false }
 
   const readPrefs = () => { if (!cachedPrefs) cachedPrefs = prefs(); return cachedPrefs }
+  let searchPrefs = { waystoneStats: true }
   const invalidatePrefs = () => { cachedPrefs = null }
 
   function ensureWorker() {
@@ -78,8 +80,11 @@ function createHistoryConsumer({ manager, worker, prefs, send = null, log = () =
       log(`history-degraded stage=${r.error.stage} name="${name}"`)
       return { ...base, q: null, degraded: true, stage: r.error.stage, name, item: { name: item?.name || '', baseType: item?.baseType || '', rarity: item?.rarity || '', itemClass: item?.itemClass || '' } }
     }
-    log(`history-build origin=${origin} rarity=${r.item?.rarity || item?.rarity || '?'} name="${String(r.name).slice(0, 40)}" ms=${base.buildMs} qb=${Buffer.byteLength(r.q, 'utf8')} ${ticks(r.q)}`)
-    const intent = { ...base, q: r.q, degraded: false, stage: null, name: r.name, item: r.item }
+    // Our refinement on top of EE2's search (refine.js): a waystone also requires its priced stats.
+    const q = refineQuery(r.q, raw, { waystoneStats: searchPrefs.waystoneStats, range: pf.searchStatRange })
+    const refined = q !== r.q ? ' waystone=refined' : ''
+    log(`history-build origin=${origin} rarity=${r.item?.rarity || item?.rarity || '?'} name="${String(r.name).slice(0, 40)}" ms=${base.buildMs} qb=${Buffer.byteLength(q, 'utf8')} ${ticks(q)}${refined}`)
+    const intent = { ...base, q, degraded: false, stage: null, name: r.name, item: r.item }
     if (onBuilt) { try { onBuilt(intent) } catch {} }
     return intent
   }
@@ -113,6 +118,8 @@ function createHistoryConsumer({ manager, worker, prefs, send = null, log = () =
 
   return {
     onItem, warm, invalidatePrefs,
+    // Settings → Trading → ExiledExchange2 searches (the renderer sends it on load and on change).
+    setSearchPrefs: (p) => { searchPrefs = { ...searchPrefs, waystoneStats: p?.waystoneStats !== false } },
     buildIntent: (raw, origin = 'clipboard') => buildIntent(String(raw || ''), origin, { folder: null, source: 'clipboard' }),
     // Trading → Mods: the compact parse of an item (never the text) as { item, reason }: reason
     // 'not-item' when the parser refuses the text, 'worker' when there is no worker or it failed,

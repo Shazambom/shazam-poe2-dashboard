@@ -585,6 +585,7 @@ function stopEe2Integration() {
 
 // Renderer ↔ history consumer (batch 3). The renderer owns the setting; main only skips builds.
 ipcMain.on('ee2:set-enabled', (_e, p) => { _history?.setEnabled(p?.enabled !== false) })
+ipcMain.on('ee2:set-search', (_e, p) => { _history?.setSearchPrefs(p) })
 ipcMain.handle('ee2:status', () => (_history ? _history.status() : { present: false, running: false, configRead: false, leagueId: null, warm: false, enabled: true }))
 ipcMain.on('trade:ingest-ack', (_e, ack) => { if (ack && ack.result === 'dropped') telemetry.installLog('ee2', `ingest-drop reason=${ack.reason || '?'}`) })
 // Settings → Trading → Export searches: the sandboxed renderer cannot download a blob, so main writes the

@@ -48,3 +48,12 @@ test('classify: PoE item text → item (the worker builds the intent in main; te
   assert.deepEqual(classify(raw), { kind: 'item' })
   assert.deepEqual(classify('Rarity: Rare\nFoe Slicer\nBastard Sword\n--------\nItem Level: 80\n'), { kind: 'item' })
 })
+
+test('a trade link copied with line breaks or spaces in it (chat, terminal wrap) still classifies', () => {
+  // 2026-09-30: a 923-char search URL copied out of a wrapped chat window arrived as 935 chars with
+  // line breaks and was refused ("That's not a trade link"). A URL never holds raw whitespace.
+  const url = 'https://www.pathofexile.com/trade2/search/poe2/Forbidden%20Rites?q=%7B%22query%22%3A%7B%22status%22%3A%7B%22option%22%3A%22securable%22%7D%7D%2C%22sort%22%3A%7B%22price%22%3A%22asc%22%7D%7D'
+  const wrapped = url.match(/.{1,40}/g).join('\n  ')
+  assert.equal(classify(wrapped).kind, 'query-url')
+  assert.equal(classify(' ' + 'https://www.pathofexile.com/trade2/search/poe2/Standard/ab cd' + '\r\n').kind, 'trade-url')
+})

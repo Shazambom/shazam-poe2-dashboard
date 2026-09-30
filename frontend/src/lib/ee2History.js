@@ -21,7 +21,7 @@ export function clearHistoryWithUndo() {
 export function historyPrefsFromSettings(s) {
   const h = s?.ee2History || {}
   const clamp = (v, lo, hi, d) => { const n = Number(v); return Number.isFinite(n) ? Math.min(hi, Math.max(lo, Math.round(n))) : d }
-  return { enabled: h.enabled !== false, max: clamp(h.max, 20, HISTORY_MAX_LIMIT, HISTORY_PREFS.max), retentionDays: clamp(h.retentionDays, 7, 90, HISTORY_PREFS.retentionDays) }
+  return { enabled: h.enabled !== false, max: clamp(h.max, 20, HISTORY_MAX_LIMIT, HISTORY_PREFS.max), retentionDays: clamp(h.retentionDays, 7, 90, HISTORY_PREFS.retentionDays), waystoneStats: h.waystoneStats !== false }
 }
 
 // The ONE writer of settings.ee2History: rail slider, Settings sliders and the ⌘K/🗑 actions all go
@@ -31,6 +31,7 @@ export async function saveHistoryPrefs(patch) {
   const next = { ...ws.historyPrefs, ...patch }
   ws.setHistoryPrefs(next)
   window.poe2desktop?.ee2?.setEnabled?.(next.enabled)
+  window.poe2desktop?.ee2?.setSearchPrefs?.({ waystoneStats: next.waystoneStats })
   try { await useStatus.getState().saveSettings({ ee2History: next }) } catch {}
   return next
 }
@@ -65,7 +66,11 @@ export function useEe2History() {
     const pollPresence = () => window.poe2desktop.ee2?.status?.().then(st => useWorkspace.getState().setEe2Present(!!st?.present)).catch(() => {})
     pollPresence(); const presenceTimer = setInterval(pollPresence, 30000)
     window.poe2desktop.ee2?.setEnabled?.(useWorkspace.getState().historyPrefs.enabled)
-    const offEnabled = useWorkspace.subscribe((s, prev) => { if (s.historyPrefs.enabled !== prev.historyPrefs.enabled) window.poe2desktop.ee2?.setEnabled?.(s.historyPrefs.enabled) })
+    window.poe2desktop.ee2?.setSearchPrefs?.({ waystoneStats: useWorkspace.getState().historyPrefs.waystoneStats })
+    const offEnabled = useWorkspace.subscribe((s, prev) => {
+      if (s.historyPrefs.enabled !== prev.historyPrefs.enabled) window.poe2desktop.ee2?.setEnabled?.(s.historyPrefs.enabled)
+      if (s.historyPrefs.waystoneStats !== prev.historyPrefs.waystoneStats) window.poe2desktop.ee2?.setSearchPrefs?.({ waystoneStats: s.historyPrefs.waystoneStats })
+    })
     return () => { offEvent(); clearInterval(hourly); clearInterval(presenceTimer); offIngest?.(); offEnabled() }
   }, [])
 }

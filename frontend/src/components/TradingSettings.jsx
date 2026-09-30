@@ -49,7 +49,8 @@ function WorkspaceTransfer() {
 }
 
 // Settings → Trading → ExiledExchange2 history: the same slider as the workspace rail (one setting),
-// the cap and retention, clear, and a status line from main's consumer.
+// the cap and retention, clear, and a status line from main's consumer; then ExiledExchange2 searches:
+// how a price check's search is refined (desktop/src/ee2-history/refine.js).
 function Ee2HistorySettings() {
   const prefs = useWorkspace(s => s.historyPrefs)
   const [status, setStatus] = useState(null)
@@ -68,6 +69,8 @@ function Ee2HistorySettings() {
       <div className="set-row"><span style={{ width: 120 }}>Keep last</span><input type="number" min={20} max={1000} step={10} defaultValue={prefs.max} key={`max${prefs.max}`} onBlur={num('max', 20, 1000)} style={{ width: 90 }} /><span className="muted" style={{ fontSize: 12 }}>entries (20–1000)</span></div>
       <div className="set-row"><span style={{ width: 120 }}>Keep for</span><input type="number" min={7} max={90} defaultValue={prefs.retentionDays} key={`ret${prefs.retentionDays}`} onBlur={num('retentionDays', 7, 90)} style={{ width: 90 }} /><span className="muted" style={{ fontSize: 12 }}>days (7–90)</span></div>
       <div className="set-row"><span style={{ width: 120 }} /><button className="btn small" onClick={() => clearHistoryWithUndo()}>Clear history</button><span className="muted ee2-status" style={{ fontSize: 12 }}>{line}</span></div>
+      <h4 className="settings-sub">ExiledExchange2 searches</h4>
+      <div className="set-row"><Toggle checked={prefs.waystoneStats} onChange={v => saveHistoryPrefs({ waystoneStats: v })} label="Match waystone pack size, rarity and drop chance" /></div>
     </>
   )
 }

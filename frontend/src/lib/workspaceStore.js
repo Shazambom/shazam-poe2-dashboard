@@ -24,6 +24,9 @@ let armed = false   // don't PUT while hydrating the initial load
 
 // The ExiledExchange2 History folder: found by `sys` at any depth (the user may rename/move it).
 export const HISTORY_SYS = 'ee2-history'
+// The tree minus the History folder wherever it sits (it may be renamed or moved into a group).
+const withoutHistory = (nodes) => (nodes || []).filter(n => !(n.kind === 'folder' && n.sys === HISTORY_SYS))
+  .map(n => (n.children ? { ...n, children: withoutHistory(n.children) } : n))
 
 // Which folders start open when the tree mounts: as the store remembers them, except the
 // ExiledExchange2 History folder, which always starts collapsed (it's a log, not the work).
@@ -35,7 +38,7 @@ export function initialOpenState(tree) {
 export const HISTORY_NAME = 'ExiledExchange2 History'
 export const HISTORY_CAP = 200       // default rows kept in the history folder (newest first); Settings can change it
 export const HISTORY_RETENTION_DAYS = 14
-export const HISTORY_PREFS = Object.freeze({ enabled: true, max: HISTORY_CAP, retentionDays: HISTORY_RETENTION_DAYS })
+export const HISTORY_PREFS = Object.freeze({ enabled: true, max: HISTORY_CAP, retentionDays: HISTORY_RETENTION_DAYS, waystoneStats: true })
 export const HISTORY_MAX_LIMIT = 1000  // the backend's 5000-node guard leaves room; Settings clamps 20…1000
 export const MAX_Q_BYTES = 16 * 1024 // a q larger than this is dropped (degraded row), never PUT
 const DAY = 86400000
@@ -269,9 +272,12 @@ export const useWorkspace = create((set, get) => ({
     if (intent.q && intent.q.length > MAX_Q_BYTES) return { result: 'dropped', reason: 'oversize' }
     if (intent.folder === HISTORY_SYS) return get()._ingestHistory(intent)
     const st = get()
+    // A duplicate is a search the user SAVED; History is the automatic log (the passive clipboard
+    // watcher files every Ctrl+C there), so a paste of something only in History adds a real search.
+    const saved = withoutHistory(st.tree)
     const same = intent.q
-      ? findWhere(st.tree, n => n.kind === 'search' && n.q === intent.q)
-      : intent.slug ? findWhere(st.tree, n => n.kind === 'search' && n.slug === intent.slug) : null
+      ? findWhere(saved, n => n.kind === 'search' && n.q === intent.q)
+      : intent.slug ? findWhere(saved, n => n.kind === 'search' && n.slug === intent.slug) : null
     if (same) { set({ activeId: same.id }); persist(get, set); return { result: 'dup', id: same.id } }
     const node = {
       ...searchNode({ type: intent.type || 'search', slug: intent.slug || '', live: !!intent.live }, intent.name),

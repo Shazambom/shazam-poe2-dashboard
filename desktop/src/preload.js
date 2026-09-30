@@ -53,6 +53,7 @@ contextBridge.exposeInMainWorld('poe2desktop', {
   sales: { fetch: (league) => ipcRenderer.invoke('sales:fetch', { league }) },
   ee2: {
     setEnabled: (enabled) => ipcRenderer.send('ee2:set-enabled', { enabled }),
+    setSearchPrefs: (p) => ipcRenderer.send('ee2:set-search', { waystoneStats: p?.waystoneStats !== false }),
     status: () => ipcRenderer.invoke('ee2:status'),
   },
   // DEV ONLY (main refuses when packaged): push a fixture item through the real consumer + worker.
