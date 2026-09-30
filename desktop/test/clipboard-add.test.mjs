@@ -1,7 +1,7 @@
 // Pins desktop/src/clipboard-add.js — main classifies the clipboard; the text never leaves main.
 import test from 'node:test'
 import assert from 'node:assert/strict'
-const { classify, classifyClipboard } = await import('../src/clipboard-add.js')
+const { classify } = await import('../src/clipboard-add.js')
 const Q = JSON.stringify({ query: { name: 'Headhunter', type: 'Heavy Belt' }, sort: { price: 'asc' } })
 
 test('classify: search id link → trade-url with slug/live; league dropped', () => {
@@ -18,12 +18,10 @@ test('classify: ?q= link → query-url with the exact q; exchange → exchange; 
   assert.deepEqual(classify('   '), { kind: 'none', len: 0 })
 })
 
-test('classifyClipboard reads via the injected reader, caps at 8000 chars, and never returns the text', () => {
-  const junk = 'x'.repeat(20000)
-  const r = classifyClipboard(() => junk)
+test('classify caps at 8000 chars and never returns the text', () => {
+  const r = classify('x'.repeat(20000))
   assert.deepEqual(r, { kind: 'none', len: 8000 })
   assert.ok(!JSON.stringify(r).includes('xxxx'))
-  assert.deepEqual(classifyClipboard(() => { throw new Error('no clipboard') }), { kind: 'none', len: 0 })
 })
 
 test('the desktop URL helpers agree with the frontend ones on every fixture', async () => {

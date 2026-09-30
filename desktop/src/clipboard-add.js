@@ -1,5 +1,5 @@
 // Clipboard-add classification, run in MAIN so the clipboard text never crosses into the renderer
-// (roadmap §4.7). classify(text) is pure; classifyClipboard(readText) wraps the reader. Returns
+// (roadmap §4.7). classify(text) is pure; main reads the clipboard once and classifies that. Returns
 // only a classification: { kind: 'trade-url' | 'query-url' | 'exchange' | 'none' … }. The 'item'
 // rung is the PoE item text itself: main asks the history consumer's worker for the query (batch 4-A).
 'use strict'
@@ -20,10 +20,4 @@ function classify(raw) {
   return { kind: 'none', len: text.length }
 }
 
-function classifyClipboard(readText) {
-  let text = ''
-  try { text = String(readText() || '') } catch { text = '' }
-  return classify(text.slice(0, MAX_CLIP))
-}
-
-module.exports = { MAX_CLIP, classify, classifyClipboard }
+module.exports = { MAX_CLIP, classify }

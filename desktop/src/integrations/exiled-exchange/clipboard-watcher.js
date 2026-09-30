@@ -28,6 +28,13 @@ function clip() {
   if (!_clipboard) _clipboard = require('electron').clipboard
   return _clipboard
 }
+// Tests inject a fake clipboard (no Electron runtime).
+function _useClipboard(c) { _clipboard = c }
+// Electron 44's clipboard.readText() returns a Promise (older Electron returned the text); await either.
+// Never throws: an unreadable clipboard reads as ''.
+async function readClip() {
+  try { return String((await clip().readText()) || '') } catch { return '' }
+}
 
 // Leading markers that identify copied PoE/PoE2 item text, for a cheap presence
 // check. Modern PoE2 items lead with "Item Class:"; some simple copies lead
@@ -131,14 +138,20 @@ class ClipboardWatcher {
   _clamp(ms) { return Math.min(Math.max(ms | 0, 60), 2000) }
 
   start() {
-    if (this._timer) return
+    if (this._timer || this._starting) return
     // Seed with current clipboard so an item copied BEFORE we started doesn't
-    // fire a phantom event on the first tick.
-    try { this._lastHash = this._hash(clip().readText()) } catch {}
-    this._arm()
+    // fire a phantom event on the first tick; poll only once the seed is in.
+    this._starting = true
+    readClip().then((text) => {
+      if (!this._starting) return             // stopped before the seed came back
+      this._starting = false
+      this._lastHash = this._hash(text)
+      this._arm()
+    })
   }
 
   stop() {
+    this._starting = false
     if (this._timer) { clearInterval(this._timer); this._timer = null }
     this._lastHash = null
   }
@@ -161,10 +174,12 @@ class ClipboardWatcher {
 
   _hash(text) { return `${text.length}:${text.slice(0, 64)}` }
 
-  _tick() {
-    let text = ''
-    try { text = clip().readText() } catch { return }
-    if (!text) return
+  async _tick() {
+    if (this._reading) return                 // a slow read is still out: never stack reads
+    this._reading = true
+    const text = await readClip()
+    this._reading = false
+    if (!text || !this._timer) return
     const h = this._hash(text)
     if (h === this._lastHash) return          // dedupe repeats
     this._lastHash = h
@@ -186,28 +201,30 @@ class ClipboardWatcher {
 // item doesn't get re-emitted when the current hover yields nothing.
 function captureItemBurst({ intervalMs = 15, durationMs = 250, onItem } = {}) {
   const cb = typeof onItem === 'function' ? onItem : () => {}
-  let baseline = null
-  try { baseline = `${clip().readText().length}` } catch {}
-  const startText = (() => { try { return clip().readText() } catch { return '' } })()
-  const baseHash = `${startText.length}:${startText.slice(0, 64)}`
+  const hash = (t) => `${t.length}:${t.slice(0, 64)}`
+  // The baseline read is issued NOW, before EE2 swaps the clipboard; the burst compares against it once in.
+  let baseHash = null
+  let reading = true
+  let done = false
+  readClip().then((t) => { baseHash = hash(t); reading = false })
   let elapsed = 0
-  const timer = setInterval(() => {
-    let text = ''
-    try { text = clip().readText() } catch {}
-    const h = `${text.length}:${text.slice(0, 64)}`
-    if (text && h !== baseHash && looksLikeItem(text)) {
-      let item
-      try { item = parseItem(text) } catch {}
-      if (item && item.name) { clearInterval(timer); try { cb(item) } catch {}; return }
-    }
+  const timer = setInterval(async () => {
     elapsed += intervalMs
     if (elapsed >= durationMs) clearInterval(timer)
+    if (reading || done) return               // one read at a time; the next tick picks up
+    reading = true
+    const text = await readClip()
+    reading = false
+    if (done || !text || hash(text) === baseHash || !looksLikeItem(text)) return
+    let item
+    try { item = parseItem(text) } catch {}
+    if (item && item.name) { done = true; clearInterval(timer); try { cb(item) } catch {} }
   }, intervalMs)
   if (timer.unref) timer.unref()
-  return () => clearInterval(timer)
+  return () => { done = true; clearInterval(timer) }
 }
 
-module.exports = { ClipboardWatcher, parseItem, looksLikeItem, captureItemBurst }
+module.exports = { ClipboardWatcher, parseItem, looksLikeItem, captureItemBurst, _useClipboard }
 
 // --- tiny self-test: `node clipboard-watcher.js` (pure parser, no Electron) ---
 // Guards against parser regressions for the common PoE2 item shapes.

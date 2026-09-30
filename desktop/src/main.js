@@ -314,7 +314,7 @@ function connectPoeFlow() {
     wc.on('did-navigate', (_e, u) => log(`navigated ${u}`))
     wc.on('did-navigate-in-page', (_e, u, isMain) => { if (isMain) log(`in-page ${u}`) })
     wc.on('did-fail-load', (_e, code, desc, u) => log(`FAIL-LOAD ${code} ${desc} ${u}`))
-    wc.on('console-message', (_e, level, message) => log(`console[${level}] ${String(message).slice(0, 300)}`))
+    wc.on('console-message', ({ level, message }) => log(`console[${level}] ${String(message).slice(0, 300)}`))
     login.loadURL(`${POE}/login`)
     let settled = false
     const finish = (result) => { if (!settled) { settled = true; reportLogin(buf); resolve(result) } }
@@ -712,12 +712,13 @@ const diagLog = require('./diag-bridge.js').makeDiagBridge({ installLog: telemet
 ipcMain.handle('diag:log', (_e, p) => diagLog(p?.marker, p?.line))
 // Clipboard-add: MAIN reads and classifies; only the classification crosses (never the text).
 ipcMain.handle('clipboard:classify', async () => {
-  const { classifyClipboard, MAX_CLIP } = require('./clipboard-add.js')
-  const cls = classifyClipboard(() => clipboard.readText())
+  const { classify, MAX_CLIP } = require('./clipboard-add.js')
+  let text = ''
+  try { text = String((await clipboard.readText()) || '').slice(0, MAX_CLIP) } catch { text = '' }   // read once: classify and build see one text
+  const cls = classify(text)
   if (cls.kind !== 'item') return cls
   // 4-A: the item rung — the history consumer's worker builds the query here; the text stays in main.
   if (!_history) return { kind: 'none', len: 0 }
-  const text = String(clipboard.readText() || '').slice(0, MAX_CLIP)
   postItemText('clipboard', text)
   const intent = await _history.buildIntent(text, 'clipboard')
   return intent ? { kind: 'item', intent } : { kind: 'none', len: 0, currency: true }
@@ -728,7 +729,7 @@ ipcMain.handle('clipboard:classify', async () => {
 ipcMain.handle('mods:item', async () => {
   const { classify, MAX_CLIP } = require('./clipboard-add.js')
   let text = ''
-  try { text = String(clipboard.readText() || '').slice(0, MAX_CLIP) } catch { text = '' }   // read once: classify and parse see one text
+  try { text = String((await clipboard.readText()) || '').slice(0, MAX_CLIP) } catch { text = '' }   // read once: classify and parse see one text
   const cls = classify(text)
   if (cls.kind !== 'item') return { item: null, reason: cls.kind === 'none' && !cls.len ? 'empty' : 'not-item' }
   if (!_history) return { item: null, reason: 'worker' }

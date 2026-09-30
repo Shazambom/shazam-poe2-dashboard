@@ -18,9 +18,12 @@
     "publish": "./publish-github.sh"
   },
   "devDependencies": {
-    "electron": "^33.0.0",
-    "electron-builder": "^25.1.8",
+    "electron": "^44.5.0",
+    "electron-builder": "^26.15.3",
     "esbuild": "^0.25.12"
+  },
+  "engines": {
+    "node": ">=22.12.0"
   },
   "dependencies": {
     "electron-updater": "^6.3.9",
@@ -56,7 +59,7 @@
         "dmg"
       ],
       "category": "public.app-category.games",
-      "identity": null
+      "identity": "-"
     },
     "win": {
       "target": [
