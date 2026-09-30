@@ -14,7 +14,8 @@ The contract (`holdscore.hold_rank`), every signal measured on smoothed prices (
              value (the item's place in the economy carries over; no record = a neutral rank)
     score  = weighted mean of each signal's percentile rank on the day: kept and trend ½ each (one
              climb), dip k / CAUTION_K (the Caution slider), price 1, record 1. Before discovery
-             settles, kept and trend don't rank.
+             settles, kept and trend don't rank. The holding period (the window) adds its own terms:
+             backend/tests/test_hold_window.py.
              The list settles: an asset's score is its mean over the last SETTLE_DAYS days.
 
     python -m pytest backend/tests/test_hold_rank.py -q
@@ -327,5 +328,7 @@ def test_hold_passes_its_smoke_test_on_the_current_league_at_every_horizon():
     _meta, _built, day0, _num = bt.build(str(PROD_DB))
     league = bt.current_league(day0)
     res = bt.grade_leagues(str(PROD_DB), [league], workers=1)[league]
+    window = res.pop("window")
     misses = {label: bt.verdict(r["all"]) for label, r in res.items() if r["all"]}
     assert misses and all(not m for m in misses.values()), f"{league}: {misses}"
+    assert bt.window_verdict(window) == [], f"{league}: the window must move the board ({window})"

@@ -561,8 +561,9 @@ def _ask_backfill(league: str | None) -> bool:
 @app.get("/api/hold")
 async def hold(window_h: int | None = None, horizon: str | None = None, category: str = "all",
                numeraire: str = "divine", k: float | None = None):
-    """Store-of-value leaderboard over the app-wide window (`window_h`, clamped to 7d — hold
-    scores are tuned to a week; `horizon=1d|3d|7d` is the legacy spelling). Served from the
+    """Store-of-value leaderboard for the app-wide window (`window_h`), which on Hold is how long the
+    player plans to hold: the ranking is for that holding period (`horizon=1d|3d|7d|14d` is the
+    legacy spelling). Served from the
     stored full-currency backfill; kicks the background crawl if nothing's stored yet."""
     hz = holdscore.horizon_for(window_h, horizon)
     # `k` = the Hold page's CAUTION slider (0 = return alone, higher = favour the steadier

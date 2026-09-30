@@ -31,8 +31,8 @@ def counterparts_by_volume(g, rv: dict[str, float] | None = None) -> dict[str, l
     the value table (`Graph.quote_busiest_markets`, `Graph._widest_values`) all walk this
     ranking; nothing else defines "the market that trades a currency"."""
     units: dict[tuple[str, str], float] = {}          # (currency, counterpart) -> units of currency per hour
-    for (a, b), e in g.edges.items():
-        if e.kind == "recipe" or not e.vol_in_per_h or e.rate <= 0:
+    for (a, b), e in g.market_edges():
+        if not e.vol_in_per_h or e.rate <= 0:
             continue
         units[(a, b)] = units.get((a, b), 0.0) + e.vol_in_per_h                 # a sold for b
         units[(b, a)] = units.get((b, a), 0.0) + e.vol_in_per_h * e.rate        # b bought with that a
@@ -114,6 +114,21 @@ class Graph:
         self.priced_by = {}          # the parent map belongs to the table it was built with
         self.sources[e.kind] += 1
 
+    # Recipes never change market data (docs/bugs/2026-09-29-crafting-recipes-missing-from-routes.md):
+    # route search walks `edges`/`adj`, where a recipe may hold a pair's slot; everything that prices,
+    # ranks or describes a MARKET reads these two, which give the market itself.
+    def market_edge(self, a: str, b: str) -> "Edge | None":
+        """The a->b exchange market: the edge, or the market a recipe took the slot from."""
+        e = self.edges.get((a, b))
+        return e.market if (e is not None and e.kind == "recipe") else e
+
+    def market_edges(self):
+        """((a, b), market edge) for every exchange market, including one a recipe took the slot from."""
+        for k, e in self.edges.items():
+            m = e.market if e.kind == "recipe" else e
+            if m is not None:
+                yield k, m
+
     # ------------------------------------------------------------ build
     @classmethod
     def build(cls) -> "Graph":
@@ -143,16 +158,10 @@ class Graph:
         min_vol = float(s.get("min_edge_volume_ref_per_h") or 0)
         if min_depth or min_vol:
             rv = g.ref_values()
-            # Markets adjacent to an enabled recipe stay: they're how a recipe hop is
-            # entered/exited, and the route-level liquidity filter still applies.
-            recipe_ends: set[str] = set()
-            if s["allow_recipe_edges"]:
-                for r in recipes.edges():
-                    recipe_ends.add(r["from"])
-                    recipe_ends.add(r["to"])
+            # Recipes never spare a market: the cull shapes the value table, and a recipe must not
+            # change market data (the orb disenchants make chaos and exalted recipe ends, which
+            # once kept every thin market touching them).
             def _thin(e: Edge) -> bool:
-                if e.src in recipe_ends or e.dst in recipe_ends:
-                    return False
                 if min_depth and e.kind == "live" and len(e.ladder) < min_depth:
                     return True
                 if min_vol and (e.vol_in_per_h or 0.0) * rv.get(e.src, 0.0) < min_vol:
@@ -188,10 +197,10 @@ class Graph:
     def direct_rate(self, c: str, n: str) -> float | None:
         """Price of 1 `c` in `n` from the c↔n market itself: the c→n edge's rate, else the
         inverse of n→c, else None. Whether that market PRICES c is values()'s answer (priced_by)."""
-        e = self.edges.get((c, n))
+        e = self.market_edge(c, n)
         if e and e.rate > 0:
             return e.rate
-        e = self.edges.get((n, c))
+        e = self.market_edge(n, c)
         if e and e.rate > 0:
             return 1.0 / e.rate
         return None
@@ -201,9 +210,7 @@ class Graph:
         market's edge holds its worst-case side for the route search, so its `quoted_rate` (the window
         rate) stands in. For showing a price (native_price); routes keep `direct_rate`."""
         for key, inv in (((c, n), False), ((n, c), True)):
-            e = self.edges.get(key)
-            if e and e.kind == "recipe":
-                e = e.market                  # a recipe is a conversion, not a market price
+            e = self.market_edge(*key)        # a recipe is a conversion, not a market price
             if not e:
                 continue
             r = e.meta.get("quoted_rate") if e.meta.get("inactive") else None
@@ -226,8 +233,8 @@ class Graph:
         changed = False
         for c, other in self.busiest.items():
             for key in ((c, other), (other, c)):
-                e = self.edges.get(key)
-                if e and e.kind != "recipe" and e.meta.get("inactive") and e.meta.get("quoted_rate"):
+                e = self.market_edge(*key)
+                if e and e.meta.get("inactive") and e.meta.get("quoted_rate"):
                     e.rate = e.meta["quoted_rate"]
                     if e.ladder:
                         e.ladder[0]["rate"] = e.rate
@@ -263,16 +270,16 @@ class Graph:
     def _widest_values(self) -> dict[str, float]:
         ref = self.s["reference"]
         nbrs: dict[str, set[str]] = {}
-        for (a, b), e in self.edges.items():
-            if e.kind != "recipe" and e.rate > 0:
+        for (a, b), e in self.market_edges():
+            if e.rate > 0:
                 nbrs.setdefault(a, set()).add(b)
                 nbrs.setdefault(b, set()).add(a)
 
         def market(a: str, b: str):
             """The a->b EXCHANGE edge (never a vendor recipe: a recipe is a fixed rate nobody
             trades at, and pricing a shard off one read it at half its market price)."""
-            e = self.edges.get((a, b))
-            return e if (e and e.kind != "recipe" and e.rate > 0) else None
+            e = self.market_edge(a, b)
+            return e if (e and e.rate > 0) else None
 
         def market_rate(a: str, b: str) -> float:
             """b per a from the a<->b market itself, either direction, recipes ignored."""
@@ -404,7 +411,7 @@ class Graph:
         """
         ref = self.s["reference"]
         best: dict[tuple[str, str], float] = {}
-        for (a, b), e in self.edges.items():
+        for (a, b), e in self.market_edges():
             if e.rate > 0:
                 best[(a, b)] = max(best.get((a, b), 0.0), e.rate)
                 best[(b, a)] = max(best.get((b, a), 0.0), 1.0 / e.rate)

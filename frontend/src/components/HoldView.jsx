@@ -10,10 +10,10 @@ import { arrowCell } from '../lib/arrows.js'
 
 // "What to hold" leaderboard: good, safe places to park currency against inflation, priced in
 // Divine, with a cross-league forward-return prediction. The order is the backend's hold_rank
-// (docs/hold-research.md); the horizon sets the return column and the forecast.
-// Horizon is the app-wide one (topbar), sent as hours; the backend maps it to Hold's day
-// horizon (daily poe2scout data can't resolve sub-day) and clamps it to 7d, reporting the
-// effective `horizon` back. Numeraires come from the response (the backend's anchor table).
+// (docs/hold-research.md). On this page the app-wide window (topbar) is how long the player plans
+// to hold: the ranking, the return column and the forecast are all for that holding period. It is
+// sent as hours; the backend maps it to whole days (daily poe2scout data can't resolve sub-day)
+// and reports the effective `horizon` back. Numeraires come from the response (the backend's anchor table).
 const MOVERS_N = 50  // "all of the top movers" — a full leaderboard, not the board's top-3 pulse
 
 function PredArrows({ code }) {
@@ -46,7 +46,7 @@ export default function HoldView() {
   const rows = useMemo(() => data?.assets ?? [], [data])
   const mvRows = useMemo(() => movers?.assets ?? [], [movers])
   const delta = data?.delta_days ?? 30
-  const horizon = data?.horizon ?? '3d'       // the EFFECTIVE hold horizon (backend-clamped)
+  const horizon = data?.horizon ?? '3d'       // the holding period the board was ranked for
   const numeraires = data?.numeraires ?? [{ id: 'divine', name: 'Divine Orb' }]
   const numName = data?.numeraire_name ?? 'Divine'
   const unit = { divine: 'Div', mirror: 'Mir', lock: 'Lock' }[numeraire] || 'Div'
@@ -58,7 +58,7 @@ export default function HoldView() {
       <div className="board-bar">
         {isMovers
           ? <h2 style={{ margin: 0 }}>Positive movers <span className="muted" style={{ fontWeight: 400 }}>· biggest upward swings across all currencies over {horizon}{movers?.league ? ` · ${movers.league}` : ''}</span></h2>
-          : <h2 style={{ margin: 0 }}>What to hold <span className="muted" style={{ fontWeight: 400 }}>· safe places to park currency, vs {numName}{data?.league ? ` · ${data.league}` : ''}</span></h2>}
+          : <h2 style={{ margin: 0 }}>What to hold <span className="muted" style={{ fontWeight: 400 }}>· safe places to park currency for {horizon}, vs {numName}{data?.league ? ` · ${data.league}` : ''}</span></h2>}
         <span className="spacer" />
         {/* Hold is the primary board; Positive movers is the secondary alternate view. */}
         <div className="seg" title="Hold = stores of value; Movers = biggest upward price swings">
@@ -95,7 +95,7 @@ export default function HoldView() {
                 <th>#</th><th>Asset</th><th>Category</th>
                 <th className="num" title={`Return in ${numName} over the past ${delta}d`}>Past {delta}d ({unit})</th>
                 <th className="num" title="Worst drop since the league's prices settled">Max drawdown</th>
-                <th className="num" title="Value kept, steadiness, a steady climb, price and how it held in past leagues, each ranked against today's board (0–100). Caution sets how much steadiness counts.">Hold score</th>
+                <th className="num" title={`Value kept, steadiness, a steady climb, price, how it held in past leagues and what it did next at this point in them, for a hold of ${delta}d, each ranked against today's board (0–100). Caution sets how much steadiness counts.`}>Hold score</th>
                 {showPred && <th className="num" title={`Likely direction over the next ${delta}d — more arrows, stronger`}>Predicted +{delta}d</th>}
                 <th className="num" title="Data depth × liquidity (0–100). Low = thin/obscure, treat with caution">Conf.</th>
               </tr>

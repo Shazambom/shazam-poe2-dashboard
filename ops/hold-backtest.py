@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """Hold smoke test: replay the Hold board day by day through a league, hold its top 10, and grade it.
 
-For every league-day t and every horizon the app offers (24h / 3d / 7d / 14d — the topbar picker,
-`frontend/src/lib/horizonStore.js`), rebuild the board Hold would have shown from the prices known
-on day t, buy its top N in equal parts, hold them for that horizon, and see what happened. The
-board is scored at Hold's own day horizon (`holdscore.horizon_for`, which clamps 14d to 7d); the
-holding period is what the player picked. Read-only: the DB opens with mode=ro and DATA_DIR points
+The window (24h / 3d / 7d / 14d — the topbar picker, `frontend/src/lib/horizonStore.js`) is how long
+the player plans to hold (owner, 2026-09-30). For every league-day t and every window, rebuild the
+board Hold would have shown FOR THAT WINDOW from the prices known on day t, buy its top N in equal
+parts, hold them for exactly that window, and see what happened. A ranking the window doesn't move
+fails (`window_grade`). Read-only: the DB opens with mode=ro and DATA_DIR points
 at a throwaway dir.
 
     python3 ops/hold-backtest.py --db market.sqlite                     # current league, all horizons, verdict
@@ -34,6 +34,9 @@ The portfolio (a player holding the top N, equal parts, bought on the board's da
   * ret_pct / crash_pct — the top N's percentile among NULL_DRAWS random N-item lists from the same day's
                board (return: higher is better; crash share: lower is better). A skill-free list sits
                near 50 — the fair bar when a few big winners carry the basket's average
+  * window_overlap — per league: the share of the top N ranks that carry the same name on the 24h
+               board and the 14d board, averaged over days. window_same — the share of (day, pair of windows) with identical scores.
+               A ranking that ignores the holding period has both at 1
   * chase    — share of the top N that JUMPED: their rise over the board's horizon, above the pace of
                their own trend before it, is in the board's top tenth. A steady climber is on the
                upswing (wanted); a jump is "just went up" (owner: don't over-weight it)
@@ -45,7 +48,7 @@ falls back to. The metrics, value floor, drawdown cap and `hold_score` are produ
 A --scorer is `file.py:function`, called as fn(entries, ctx) -> {item_id: score} (higher first).
 `entries` = [(item_id, name, category, metrics, series)] for every asset production's gate admits
 on day t; `series` = {age: (price_div, value_ex)} cut at age <= t. `ctx` = {"t", "hz", "hold", "past", "k", "league", "regime"}:
-`hz` the board's day horizon, `hold` the days the player picked, `past` the earlier leagues [(league, per)] most recent first.
+`hz` = `hold` = the days the player plans to hold (the window), `past` the earlier leagues [(league, per)] most recent first.
 """
 from __future__ import annotations
 
@@ -90,7 +93,13 @@ THRESHOLDS = {
     "owner": ("min", 0.50),      # one of the owner's stores of value is on the list most days
     "chase": ("max", 0.20),      # at most 2 of the 10 are the board's biggest recent jumps (owner:
                                  # Hold must not over-weight what just went up)
+    # The window is the holding period, so it must move the board (owner, 2026-09-30). Per league:
+    "window_overlap": ("max", 0.60),  # the 24h and 14d top 10s agree on at most 6 of 10 ranks (measured
+                                      # 2026-09-30: 0.27–0.46 per league; a window-blind ranking is 1)
+    "window_same": ("max", 0.0),      # no two windows ever show the same scores
 }
+WINDOW_KEYS = ("window_overlap", "window_same")   # graded per league (`window_verdict`), not per window
+FAR_PAIR = ("24h", "14d")
 
 
 _RAW: dict = {}   # raw (exalted) rows per league, for the regime detector
@@ -107,7 +116,8 @@ def load(db: str):
 
 def production(entries, ctx):
     """What ships: `holdscore.hold_rank`, the ranking /api/hold orders its board by."""
-    return H.hold_rank([(e[0], e[4]) for e in entries], ctx["t"], ctx["k"], ctx["past"], ctx.get("regime"))
+    return H.hold_rank([(e[0], e[4]) for e in entries], ctx["t"], ctx["k"], ctx["past"], ctx.get("regime"),
+                       hold=ctx.get("hold"))
 
 
 def by_price(entries, ctx):
@@ -129,7 +139,8 @@ def load_scorer(spec: str):
 
 
 def board_days(window_h: int) -> int:
-    return H.HORIZON_DAYS[H.horizon_for(window_h)]
+    """The window's own board: the days the player plans to hold."""
+    return window_h // 24
 
 
 def path(series, t, days):
@@ -142,8 +153,9 @@ def path(series, t, days):
     return pts if pts[0] > 0 and pts[-1] > 0 else None
 
 
-def board_for_day(per, meta, t, hz, scorer, past, k, hold=None, league=None, regime=None):
-    """The board Hold would have shown on league-day t: production metrics and gate, then `scorer`."""
+def board_for_day(per, meta, t, hz, scorer, past, k, hold=None, league=None, regime=None, scores_out=None):
+    """The board Hold would have shown on league-day t: production metrics and gate, then `scorer`.
+    `scores_out` (a dict) receives the scores the board was ordered by."""
     entries = []
     for iid, full in per.items():
         if t not in full:
@@ -158,6 +170,8 @@ def board_for_day(per, meta, t, hz, scorer, past, k, hold=None, league=None, reg
     scores = scorer(elig, {"t": t, "hz": hz, "hold": hold or hz, "past": past, "k": k, "league": league,
                            "regime": regime})
     elig = [e for e in elig if scores.get(e[0]) is not None]
+    if scores_out is not None:
+        scores_out.update({e[0]: scores[e[0]] for e in elig})
     elig.sort(key=lambda e: -scores[e[0]])
     return elig
 
@@ -271,9 +285,35 @@ def verdict(summary) -> list[str]:
     """The thresholds `summary` misses, as readable lines ([] = pass)."""
     miss = []
     for k, (way, lim) in THRESHOLDS.items():
+        if k in WINDOW_KEYS:
+            continue
         v = summary.get(k)
         if v is None or (v < lim if way == "min" else v > lim):
             miss.append(f"{k} {'—' if v is None else f'{v:+.3f}'} ({'≥' if way == 'min' else '≤'} {lim:+.2f})")
+    return miss
+
+
+def window_grade(boards, top=TOP):
+    """Does the window move the board? `boards` = {label: {day: (top ids, {item_id: score})}}.
+    window_overlap: the mean, over days both exist, of the share of FAR_PAIR's top ranks with the same name.
+    window_same: the share of (day, pair of windows) whose scores are identical. None when unmeasured."""
+    a, b = (boards.get(x, {}) for x in FAR_PAIR)
+    over = [sum(x == y for x, y in zip(a[t][0], b[t][0])) / top for t in a if t in b]
+    labels = list(boards)
+    pairs = [(x, y, t) for i, x in enumerate(labels) for y in labels[i + 1:] for t in boards[x] if t in boards[y]]
+    same = [boards[x][t][1] == boards[y][t][1] for x, y, t in pairs]
+    return {"window_overlap": statistics.fmean(over) if over else None,
+            "window_same": sum(same) / len(same) if same else None}
+
+
+def window_verdict(w) -> list[str]:
+    """The window thresholds `w` (a `window_grade`) misses, as readable lines ([] = pass)."""
+    miss = []
+    for k in WINDOW_KEYS:
+        way, lim = THRESHOLDS[k]
+        v = w.get(k)
+        if v is None or (v < lim if way == "min" else v > lim):
+            miss.append(f"{k} {'—' if v is None else f'{v:.2f}'} ({'≥' if way == 'min' else '≤'} {lim:.2f})")
     return miss
 
 
@@ -308,18 +348,20 @@ def _day(task):
     league, hz, hold, t = task
     per, past, regime = _league_ctx(league)
     top = _W["top"]
-    board = board_for_day(per, _W["meta"], t, hz, _W["scorer"], past, _W["k"], hold, league, regime)
+    scores: dict = {}
+    board = board_for_day(per, _W["meta"], t, hz, _W["scorer"], past, _W["k"], hold, league, regime, scores)
     g = grade_day(board, per, t, hold, top, None, hz) if board else None
     # Churn compares against a board worth reading: one with enough eligible assets to be graded
     # itself (a league's first days have a handful, and every name "changes" then).
     ids = [e[0] for e in board[:top]] if len(board) >= 2 * top else None
-    return g, ids
+    return g, ids, scores
 
 
 def grade_leagues(db, leagues, scorer_spec="production", numeraire="divine", k=H.CAUTION_K, top=TOP,
                   selections=SELECTIONS, workers=None):
-    """{league: {selection: {"days": [...], "all": summary, "by_phase": {...}}}}. Every
-    (league, horizon, day) board is independent, so they run across processes."""
+    """{league: {selection: {"days": [...], "all": summary, "by_phase": {...}}, "window": window_grade}}
+    ("window" only when every window is graded). Every (league, window, day) board is independent,
+    so they run across processes."""
     from concurrent.futures import ProcessPoolExecutor
     _init(db, numeraire, scorer_spec, k, top)          # the parent needs the league calendars too
     tasks = []
@@ -340,11 +382,14 @@ def grade_leagues(db, leagues, scorer_spec="production", numeraire="divine", k=H
         per, _p, _r = _league_ctx(league)
         last = max(max(s) for s in per.values())
         out[league] = {}
+        boards: dict = {}
         for label, wh in selections.items():
             hz, hold = board_days(wh), wh // 24
             days, prev = [], None
             for t in range(1, last + 1):
-                g, ids = by[(league, hz, hold, t)]
+                g, ids, scores = by[(league, hz, hold, t)]
+                if ids:
+                    boards.setdefault(label, {})[t] = (ids, scores)
                 if g:
                     g["churn"] = None if prev is None else len(set(ids) - prev) / len(ids)
                     days.append(g)
@@ -355,6 +400,8 @@ def grade_leagues(db, leagues, scorer_spec="production", numeraire="divine", k=H
             out[league][label] = {"board_hz": hz, "hold_days": hold, "days": days,
                                   "all": summarize(days) if days else None,
                                   "by_phase": {p: summarize(ds) for p, ds in phases.items()}}
+        if all(x in selections for x in FAR_PAIR):
+            out[league]["window"] = window_grade(boards, top)
     return out
 
 
@@ -424,8 +471,16 @@ def main():
     graded = grade_leagues(a.db, leagues, a.scorer, a.numeraire, a.k, a.top, sels, a.workers)
     for league in leagues:
         res = graded[league]
-        report["leagues"][league] = res
         print(f"\n═══ {league} · scorer {a.scorer} · hold the top {a.top} · prices in {a.numeraire}")
+        win = res.pop("window", None)
+        report["leagues"][league] = {**res, "window": win}
+        if win:
+            miss = window_verdict(win)
+            failed |= bool(miss)
+            f2 = lambda v: "–" if v is None else f"{v:.2f}"
+            print(f"── windows: 24h vs 14d top {a.top}, same name at the same rank {f2(win['window_overlap'])} · "
+                  f"identical scores {f2(win['window_same'])} of window pairs"
+                  f"  {'PASS' if not miss else 'FAIL: ' + '; '.join(miss)}")
         for label, r in res.items():
             if not r["all"]:
                 print(f"── {label}: no graded days yet")

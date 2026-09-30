@@ -59,6 +59,11 @@ authorization (see "Web vs desktop" below).
 `publish-github.sh` refuses a stable release while the version's beta line has one or has no
 healthy beta client since the last beta (`ops/t0-check.sh`). See the runbook's "T0 gate".
 
+**A regression gate in `publish-github.sh` stops any release** (owner, 2026-09-30) whose users would see
+a difference (prices, busiest markets, price cards, Market, Hold, loops, the Arbitrage pool, Convert)
+not accepted for that exact version in `ops/regression-accept.txt`. Before-publish checks are enforced
+in the scripts, never only in docs. See the runbook's "Regression gate".
+
 **Tests gate the deploy scripts, not GitHub Actions** (owner directive 2026-09-16):
 `ops/run-tests.sh` (pytest + node tests + style lint) runs at the top of `ops/deploy-web.sh`
 and `desktop/publish-github.sh`, and a red test aborts before any rsync, tag push or upload.

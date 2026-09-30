@@ -275,7 +275,7 @@ def _diag(cached: bool, routes: int, after_filters: int, candidates: int, t0: fl
     "jumping between a few offerings and many"; not reproducible on a copy of the data, and
     stable is blind. Off the request thread; never raises."""
     try:
-        quoted = sum(1 for e in g.edges.values() if e.meta.get("quoted_by_volume_rule"))
+        quoted = sum(1 for _k, e in g.market_edges() if e.meta.get("quoted_by_volume_rule"))
         msg = (f"cached={cached} routes={routes} after_filters={after_filters} candidates={candidates} "
                f"ms={int((time.time() - t0) * 1000)} notional={bool(notional)} "
                f"starts={len(starts or ())} edges={len(g.edges)} quoted={quoted}")

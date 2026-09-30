@@ -143,3 +143,16 @@ def test_telemetry_is_gated_throttled_and_carries_no_currency_names(monkeypatch)
     assert len(sent) == 1 and sent[0][0] == "deepscan"
     assert "numpy=ok" in sent[0][1] and "loops=1" in sent[0][1] and "hops=[5]" in sent[0][1]
     assert not any(name in sent[0][1] for name in ("exalted", "divine", "chaos", "regal", "vaal"))
+
+
+# ---------------------------------------------------------------- recipes never crowd out market loops
+def test_the_deep_scan_reads_markets_only_so_recipes_never_crowd_out_a_market_loop():
+    """Found by ops/regression-diff.py (2026-09-30): with recipe edges in the scan, a recipe loop took
+    one of the MAX_LOOPS runs and its dropped edge changed what later runs found. The scan reads markets
+    only (as before recipes existed); recipe loops come from the DFS. Here a recipe loop (x -> y at 3,
+    back at 0.5: +50% a lap) is the most profitable cycle, and the scan still returns the market loop."""
+    g = _graph(_ring(list("abcde"), 1.05) + [("y", "x", 0.5)])
+    g.add_recipe({"from": "x", "to": "y", "rate": 3.0, "lot": 1, "recipe_id": "r", "name": "r", "kind": "disenchant"})
+    loops = deepscan.deep_loops(g, {n: 1.0 for n in "abcdexy"}, max_loops=1)
+    assert len(loops) == 1 and {e.src for e in loops[0]} == set("abcde")
+    assert all(e.kind != "recipe" for loop in deepscan.deep_loops(g, {}) for e in loop)

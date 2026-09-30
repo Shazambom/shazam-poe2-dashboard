@@ -57,7 +57,9 @@ def deep_loops(g: Graph, ref_value: dict[str, float], max_loops: int = MAX_LOOPS
     """Up to `max_loops` distinct profitable loops (by top-of-book rate), each a closed chain of
     the graph's own Edges: loop[i].dst == loop[i+1].src, and the last hops back to the first."""
     loaded = _load()
-    edges = [e for e in g.edges.values() if e.rate > 0]
+    # Markets only (a recipe's pair reads the market it took the slot from): recipes never crowd a market
+    # loop out of the MAX_LOOPS runs. Recipe loops come from the DFS (routes._iter_candidates).
+    edges = [e for _k, e in g.market_edges() if e.rate > 0]
     if loaded is None:
         _report("numpy=missing (scan skipped)")
         return []
@@ -83,7 +85,7 @@ def deep_loops(g: Graph, ref_value: dict[str, float], max_loops: int = MAX_LOOPS
         cyc = negcycle.find_negative_cycle(len(ids), src[alive], dst[alive], w[alive], None, MIN_GAIN)
         if cyc is None:
             break
-        loop = [g.edges[(names[a], names[b])] for a, b in zip(cyc, cyc[1:] + cyc[:1])]
+        loop = [edges[index[(names[a], names[b])]] for a, b in zip(cyc, cyc[1:] + cyc[:1])]
         loops.append(loop)
         worst = max(loop, key=overpay)
         alive[index[(worst.src, worst.dst)]] = False

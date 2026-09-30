@@ -1,6 +1,8 @@
 # BUG — route search has no crafting recipes: the reforge data we fetch is unused, and we have no disenchant data at all
 
-**Status:** FIXED in code 2026-09-30, not yet deployed (the shazam side needs the side-by-side proof, then a seed publish; the app side ships in a beta) — disenchant is INTENDED behaviour, owner-confirmed in-game; see docs/dev-notes.md → "Crafting recipes in route search" · **Found:** 2026-09-29 (audit follow-up) · **Affects:** Arbitrage route search, Convert and
+**Status:** 0.3.8-beta.1/2 shipped this with REGRESSIONS (below); fixed in code 2026-09-30, not yet
+released. Stable (desktop-v0.3.7) never had it. Disenchant is INTENDED behaviour, confirmed in-game by the
+owner; see docs/dev-notes.md → "Crafting recipes in route search".
 cash-out (every install), the value of every tiered currency (essences, and any other item with a
 bench conversion)
 
@@ -194,3 +196,52 @@ client change in a beta.
   ranges (a range cannot be a single edge rate).
 - Whether reforge / disenchant cost gold at the bench (poe2db shows the Currency Exchange gold fee, not
   a bench fee).
+
+## Regressions in 0.3.8-beta.1/2, and the fix (2026-09-30)
+
+The owner asked for an audit ("I think you may have broken some of arbitrage"). Measured with
+`ops/regression-diff.py`, stable 0.3.7 against beta.2, on the owner's data:
+- **17 prices moved, by up to 4300%.** Essence of Alacrity went 0.5 → 22 ex, and Tawhoa's Tending and
+  Rune of Vital Flame fell about 99%. The busiest market and the price card changed for the same 17
+  currencies.
+- **Convert chaos → divine detoured** through a Greater Orb of Transmutation disenchant.
+
+Causes:
+1. **The cull exemption.** The thin-market cull spared every market touching a recipe's ends. The orb
+   disenchants make chaos and exalted recipe ends, so 19 filtered markets came back and priced things.
+2. **A recipe hid the market it replaced.** A recipe that took a market's pair hid that market (for
+   example Greater Chaos → Chaos, about 5k/h) from the value table, the volume ranking, centrality, the
+   Board's cards and the Market table.
+3. **The naive price walk read recipe ratios.** `ref_values`, behind the value table, used recipe
+   ratios as exchange rates, so the Perfect Chaos Orb got a price with no market at all.
+4. **The Convert exemption was too broad.** It applied to any recipe in a path.
+5. **Recipes took deep-scan runs.** Found by the gate on newer data: recipe loops used some of the deep
+   scan's 12 runs, so a market loop it used to return disappeared. The scan now reads markets only.
+
+Fix:
+- `Graph.market_edge` / `market_edges` for every market reader.
+- No recipe exemption in the cull.
+- Convert exempts only leading recipe steps.
+
+Proof:
+- **Tests:** `test_recipes_never_change_the_market_data`,
+  `test_convert_does_not_detour_a_plain_swap_through_a_recipe` and
+  `test_the_market_table_still_lists_a_market_a_recipe_took_over`, each seen failing first.
+- **Stable 0.3.7 vs the fix, on real data:** 0 differences in values (635), busiest markets, price
+  cards, the Market table (2774 rows) and Hold. The only differences are the intended ones: Greater
+  Chaos → Chaos and Greater Aug → Aug in Convert, and 2 recipe loops joining the Arbitrage pool.
+  All 5171 exchange-only loops are identical, and every extra kept loop uses a recipe. On newer data
+  (5212 loops) it's the same after the deep-scan fix.
+- **In the packaged app** on the owner's data (2026-09-30), each confirmed on screen:
+  - eight broken currencies' Board cards show stable's prices (Rune of Vital Flame and Cirel's
+    Cultivation at 1.00 chaos);
+  - Arbitrage loads and draws recipe loops with the disenchant step;
+  - Convert Greater Aug → Aug gives 10 → 30 with "Direct market: 20";
+  - chaos → divine has no recipe step;
+  - the Market table lists Greater Chaos → Chaos beside its disenchant;
+  - Hold's list matches stable.
+
+Why tests missed it: they checked the new feature and never the outputs that must not change. The
+regression diff is now a gate inside `desktop/publish-github.sh` (docs/release-runbook.md →
+"Regression gate"). With 0.3.8-beta.3's acceptance it blocks beta.2's code with 106 unaccepted
+differences.

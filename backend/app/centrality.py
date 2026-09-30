@@ -33,9 +33,7 @@ def _weights(g, rv: dict[str, float]) -> dict[tuple[str, str], float]:
     source). Recipes and zero-volume/valueless edges carry no flow. This is exactly the
     measure board() already ranks counterpart markets by."""
     w: dict[tuple[str, str], float] = {}
-    for (a, b), e in g.edges.items():
-        if e.kind == "recipe":
-            continue
+    for (a, b), e in g.market_edges():      # markets only; a recipe carries no flow
         val = (e.vol_in_per_h or 0.0) * (rv.get(a) or 0.0)
         if val > 0:
             w[(a, b)] = val

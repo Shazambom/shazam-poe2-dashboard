@@ -322,14 +322,27 @@ Route search uses three kinds of recipe step, merged in `recipes.edges()`. The g
 
   No guide or patch note documents it (they only describe gear → shards), so do not "correct" it
   against online sources.
+- **⚠️ Recipes never change market data.** A recipe may take a market's pair in `Graph.edges` /
+  `adj`, which is what route search and Convert walk. Everything that prices, ranks or describes a
+  market reads `Graph.market_edge(a, b)` / `Graph.market_edges()` instead, which give the market
+  itself:
+  - the value table and `ref_values`, `direct_rate` and `traded_rate`;
+  - the busiest-market ranking and centrality;
+  - the Board's price cards and the Market table;
+  - the deep scan, so recipe loops never take one of its runs from a market loop (recipe loops come
+    from the 3-step search).
+
+  The thin-market cull spares no recipe end. `test_recipes_never_change_the_market_data` pins this,
+  and `ops/regression-diff.py` checks it on real data.
 - **Reforge:** essences are left out because the bench turns 3 essences into a *random* one. An
   empty parse keeps the last good list and fails the cron.
 - **The editor stays user-only** (`load`/`save`). Derived recipes never land in the user's file, and
   a new install's file is `[]`.
 
-- **Convert** exempts only a recipe's own value gain from the 2% "phantom gain" cap (a recipe really
-  makes value; the exchange steps are still capped). "Direct market" is always the market, never a
-  recipe.
+- **Convert** exempts a recipe's value gain from the 2% "phantom gain" cap only when the conversion
+  starts by using the recipe on what you hold (Greater Aug -> Aug). A recipe met later in a path
+  stays capped: that's arbitrage, and it belongs on the Arbitrage page. "Direct market" is always the
+  market, never a recipe.
 Tests: `backend/tests/test_crafting_recipes.py`. They parse the real bench page
 (`fixtures/mods/reforging-bench.html.gz`) and include the owner's disenchant loop and a reforge loop,
 run through the real `Graph.build` and route search.

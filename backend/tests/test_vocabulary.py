@@ -47,11 +47,11 @@ def test_inflation_accepts_both_spellings_and_answers_canonically():
     assert client.get("/api/inflation", params={"anchor": "nope"}).json()["anchor"] == "lock"
 
 
-def test_hold_takes_window_hours_and_clamps_to_7d():
+def test_hold_takes_window_hours_as_the_holding_period():
     r = client.get("/api/hold", params={"window_h": 72}).json()
     assert r["horizon"] == "3d" and r["delta_days"] == 3 and r["window_h"] == 72
     r = client.get("/api/hold", params={"window_h": 336}).json()
-    assert r["horizon"] == "7d" and r["window_h"] == 168          # clamped: hold is tuned to 7d
+    assert r["horizon"] == "14d" and r["delta_days"] == 14 and r["window_h"] == 336   # 14d is a real window
     r = client.get("/api/hold", params={"horizon": "1d"}).json()   # legacy spelling still works
     assert r["horizon"] == "1d" and r["window_h"] == 24
     assert client.get("/api/hold").json()["horizon"] == "3d"

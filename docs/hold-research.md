@@ -52,8 +52,9 @@ could get) and `noise` (how much the crash-cell count moves by chance). Pure pie
 
 ## The smoke test — `ops/hold-backtest.py`
 
-Replays Hold day by day through a league for every horizon the app offers (24h/3d/7d/14d), holds the
-top 10 in equal parts from t+2 for that horizon, and grades the portfolio against `THRESHOLDS`: it must
+Replays Hold day by day through a league for every window the app offers (24h/3d/7d/14d): it builds the
+board Hold shows FOR that window (since 2026-09-30; before, one board was reused for every window), holds
+its top 10 in equal parts from t+2 for exactly that long, and grades the portfolio against `THRESHOLDS`: it must
 out-earn holding every eligible asset, on most days; keep its value in Divine; crash (lose > 20%) at most
 half as often as the eligible basket; settle (≤ 30% of names change day to day); and carry one of the
 owner's named hedges most days. `--league all` grades the four past leagues as a holdout; `--scorer
@@ -78,8 +79,9 @@ fixed weights:
 Before league-day 7 kept and trend don't rank. A signal an asset can't be measured on yet is left out
 of its score (never counted as 0 — that made the order depend on arbitrary ties); the record is the
 exception once earlier leagues exist: no record is a neutral rank. The list settles (mean of the last
-3 days). The eligibility gate (value floor, 4 days, −40% cap) is unchanged. The horizon sets the return
-column and the forecast, not the order.
+3 days). The eligibility gate (value floor, 4 days, −40% cap) is unchanged. ~~The horizon sets the return
+column and the forecast, not the order.~~ Superseded 2026-09-30: the window is the holding period and the
+ranking answers it — see "The window is the holding period" at the end of this file.
 
 ## Arena, 2026-09-28
 
@@ -609,3 +611,109 @@ No cap wins both: tighter caps buy returns, looser ones avoid crashes. Owner, 20
 → −40% stays, now on its own evidence. Caveat: it is a sharp peak (−35% and −45% score 13 and 11), so it
 may be partly noise; re-run this sweep when a new league's data lands. Still open: the gate measures the
 drawdown on raw closes from league-day 0 while the Drawdown column shows the smoothed dip since day 7.
+
+## The window is the holding period (2026-09-30)
+
+Owner: "The window is asking 'how long I want to hold this asset for'" … "And the hold should tell you the
+best currency to hold for that duration" … "Or do its best good faith attempt" … "the window should
+influence the scoring." Bug: [`bugs/2026-09-30-hold-ignores-the-time-window.md`](bugs/2026-09-30-hold-ignores-the-time-window.md).
+Before this, `hold_rank` never received the window and 14d was a copy of the 7d board.
+
+**The smoke test changed first.** `ops/hold-backtest.py` now builds each window's own board and holds it
+for that window, and grades two new things per league (`window_grade`): `window_same`, the share of
+(day, pair of windows) with identical scores (must be 0), and `window_overlap`, the share of the top 10
+ranks that carry the same name on the 24h and the 14d board (must be ≤ 0.60). Baseline (the 2026-09-28
+ranking): both 1.00 in every league — FAIL.
+
+**What was measured** (DB copy of 2026-09-30 18:00; 5 leagues × 4 windows = 20 cells; every run one at a
+time; scratch scorers, repo untouched until the end):
+
+1. *Which signals order the board by its forward H-day return* (daily rank correlation, per league and
+   window). Every existing signal works in the same direction at every window; their relative strength
+   barely changes. Price is the exception: weakly positive over 1–3 days, negative over 14 (−0.05, 1 of 5
+   leagues positive). The cross-league forecast for H days is a coin flip at 1 day and strongest at 14
+   (current league +0.06 / +0.03 / +0.13 / +0.34 at 1 / 3 / 7 / 14 days), and with only two earlier
+   leagues it misleads (Fate of the Vaal −0.10 … −0.20).
+2. *The chance band.* Ten runs with a random per-item signal added (weight 0.25): 18–27 cells clearly
+   worse (> 1 point), 3–9 better; mean return percentile 68.4 → 65.3–66.7. So a window-dependence that
+   isn't real costs about two points.
+3. *About 90 candidates*, each graded on all 20 cells against the 2026-09-28 ranking (better / worse =
+   cells moving by more than 1 percentile point):
+
+| idea | result |
+|---|---|
+| the record reads H-day holds (keep 0.8^(H/14)), or H-day holds that kept ≥ 0 | 2 / 9, 7 / 16 — worse at short windows |
+| kept = the median or the mean/sd of this league's H-day holds | 4 / 9, 5 / 12 |
+| dip = this league's worst H-day hold | 5 / 8 — helps 14d, hurts 7d |
+| trend over max(5, 2H) days | 3 / 4 — the short lookbacks hurt 24h and 3d |
+| safety-first score (μH + d) / (σ√H) (Roy 1952) in place of steadiness, added, or in place of kept | 3 / 6, 6 / 12, 5 / 17 |
+| liquidity (traded value) weighing more for short holds | 3 / 12; −11 points of return at 3d–14d (liquid items return less) |
+| short-term reversal (−1-day return) for short holds, after discovery | 2 / 2 — no clear effect |
+| veto strength scaled to the hold (VETO_MAX × √(H/7)) | 1 / 1 |
+| weights of climb / safety / price groups × {0.67, 1, 1.5}, per window (26 runs) | 24h: more price +1.8 (3 leagues up, 0 down); 3d, 7d, 14d: the tuned weights are the best of the grid |
+| each signal dropped or doubled, per window (30 runs) | price wants more weight at 24h and less by 14d; climb the reverse; trading activity ×2 helps a little everywhere |
+| price × (7/H)^a and climb × (H/7)^a, a ∈ {0.25, 0.5, 0.75} | 24h gains, 14d loses (Rise of the Abyssal −6.6 crash) |
+| **price × (1 + 0.6/H²)** | 24h better in 4 of 5 leagues, nothing else moves |
+| **trend over max(14, 2H) days** | 1 / 0 (Runes of Aldur 14d +1.4) |
+| forecast for H days as a signal, ≥ 2 earlier leagues | 3 / 10 — Fate and Runes worse at every window |
+| **forecast for H days, ≥ 3 earlier leagues, weight 0.25** | 7 / 2 |
+| the same at weight 0.5 / 1.0 | 6 / 5; 4 / 7 and the current league misses crash ratio at 24h |
+| **forecast weight 0.25 × H/7** | 6 / 1 |
+
+**Finding.** What makes an item hold its value is mostly the same from a day to a fortnight: expected
+return is drift, and drift persists. Three things do depend on the holding period, and only those went in.
+
+**The ranking** (`holdscore.hold_rank(..., hold=days)`; constants `PRICE_SHORT`, `FORECAST_W`,
+`FORECAST_MIN_LEAGUES`; tests `backend/tests/test_hold_window.py`):
+
+| term | rule | why |
+|---|---|---|
+| price | weight × (1 + 0.6 / H²) | over a day the price level protects and the climb hasn't time to pay; from 3 days on it is the tuned weight |
+| forecast | what the item did over the next H days from this league-day in earlier leagues (`_predict`, ±5 days, ≥ 3 leagues), weight 0.25 × H / 7 | a league-phase pattern needs time to play out; the arrows were already known to be a coin flip at 1 day |
+| trend | read over max(14, 2H) days | a two-week hold is judged on a month of climb |
+
+14d is a real window: `HORIZON_DAYS["14d"] = 14`, `MAX_HORIZON_DAYS` is gone.
+
+**Result** (2026-09-28 ranking → this one; `ret_pct` higher is better, `crash_pct` lower is better):
+
+| league | window | return percentile | crash percentile | vs board | same name at the same rank, 24h vs 14d |
+|---|---|---|---|---|---|
+| Dawn of the Hunt | 24h | 59.4 → 63.2 | 49.4 → 49.6 | +3.5 → +3.9 | 0.39 |
+|  | 3d | 62.4 → 62.7 | 37.9 → 38.0 | +14.3 → +14.3 |  |
+|  | 7d | 67.1 → 67.2 | 38.3 → 38.3 | +22.6 → +22.6 |  |
+|  | 14d | 61.3 → 61.4 | 59.3 → 59.2 | +30.3 → +30.3 |  |
+| Rise of the Abyssal | 24h | 68.3 → 70.5 | 44.8 → 43.5 | +2.4 → +2.7 | 0.38 |
+|  | 3d | 75.8 → 75.7 | 31.1 → 31.2 | +8.1 → +8.0 |  |
+|  | 7d | 80.9 → 80.9 | 29.0 → 29.0 | +15.6 → +15.6 |  |
+|  | 14d | 80.2 → 79.9 | 20.8 → 20.7 | +26.7 → +26.4 |  |
+| Fate of the Vaal | 24h | 62.6 → 64.5 | 47.8 → 47.1 | +1.8 → +1.8 | 0.47 |
+|  | 3d | 66.4 → 66.6 | 40.1 → 39.6 | +5.8 → +5.8 |  |
+|  | 7d | 64.3 → 64.3 | 37.0 → 37.0 | +11.1 → +11.1 |  |
+|  | 14d | 48.4 → 48.6 | 41.8 → 42.6 | +21.5 → +21.2 |  |
+| Runes of Aldur | 24h | 59.1 → 58.8 | 44.9 → 45.7 | +1.5 → +1.3 | 0.31 |
+|  | 3d | 60.3 → 61.4 | 40.1 → 40.3 | +4.3 → +4.3 |  |
+|  | 7d | 60.6 → 60.6 | 45.3 → 43.7 | +6.4 → +6.8 |  |
+|  | 14d | 60.8 → 67.6 | 47.2 → 40.0 | +9.3 → +12.4 |  |
+| Forbidden Rites (current) | 24h | 72.6 → 73.2 | 43.1 → 43.0 | +3.0 → +2.8 | 0.27 |
+|  | 3d | 79.4 → 82.7 | 27.9 → 27.9 | +8.1 → +8.5 |  |
+|  | 7d | 88.7 → 91.1 | 19.9 → 23.0 | +20.3 → +22.7 |  |
+|  | 14d | 89.3 → 91.3 | 13.5 → 13.7 | +45.2 → +46.6 |  |
+
+- 11 cells better by more than a point, **1 worse**: Forbidden Rites 7d crash percentile 19.9 → 23.0. That
+  is one pick on one day (league-day 12: 1 of 10 lost more than 20%; 1 of 140 picks over the league); the
+  same window's return percentile rose 2.4 and its crash ratio is 0.08 against a limit of 0.50. Not tuned away.
+- Return percentile ≥ 60 in 18 of 20 cells (was 17), crash percentile ≤ 40 in 11 of 20 (was 9); means
+  68.4 → 69.6 and 38.0 → 37.7.
+- Current league: every threshold passes at 24h, 3d, 7d and 14d; `window_same` 0.00; `window_overlap` 0.27.
+- `window_same` is 0.00 in every league and `window_overlap` 0.27–0.47.
+
+**Limits, stated plainly.**
+- The lists overlap a lot: on the current league the 24h and 14d top 10 share about 8 names, and the first
+  few places are usually the same, because the same items are the best holds over any of these periods.
+  Forcing more difference costs returns (the chance band, and forecast weights 0.5 / 1.0 above).
+- The forecast has three or more earlier leagues behind it in only two leagues (Runes of Aldur, Forbidden
+  Rites), so its evidence is two leagues, both positive. Re-run `--league all` when the next league lands.
+- In a league with fewer than three earlier leagues the windows differ only by the price and trend terms.
+- The window check's first definition (median count of shared names) read 0.8–1.0 for every candidate and
+  couldn't tell them apart; it now counts names at the same rank, which a player reading the list top down
+  actually sees.

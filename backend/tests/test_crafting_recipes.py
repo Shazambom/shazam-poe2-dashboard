@@ -213,7 +213,8 @@ def test_route_search_finds_a_reforge_loop(game_names, monkeypatch, tmp_path):
     from app import recipes
     monkeypatch.setattr(recipes, "RECIPES_PATH", tmp_path / "recipes.json")
     _market(monkeypatch, {("chaos", "liquid-paranoia"): 1.0, ("liquid-paranoia", "chaos"): 0.9,
-                          ("liquid-envy", "chaos"): 4.0, ("chaos", "liquid-envy"): 1 / 4.5})
+                          ("liquid-envy", "chaos"): 4.0, ("chaos", "liquid-envy"): 1 / 4.5,
+                          ("chaos", "exalted"): 0.1, ("exalted", "chaos"): 9.9})   # values them (the cull needs it)
     r = _loops()[("chaos", "liquid-paranoia", "liquid-envy", "chaos")]
     assert r["steps"][1]["meta"]["kind"] == "reforge"
     assert r["start_amount"] % 3 == 0, "the bench takes whole lots of 3"
@@ -289,3 +290,81 @@ def test_convert_still_rejects_a_glitch_on_the_exchange_steps_of_a_recipe_path()
     res = arbitrage._best_conversions(g, rv, "greater-orb-of-augmentation", "chaos", 10)
     assert res["best"] is None or not res["best"]["uses_recipe"], "the recipe's gain is exempt, the exchange glitch is not"
 
+
+
+# ------------------------------------------------------------------ recipes never change market data
+# Found by ops/regression-diff.py on 0.3.8-beta.2 (2026-09-30): recipes moved 17 prices by up to 4300%.
+# (1) The thin-market cull spared every market touching a recipe's ends, and the orb disenchants make
+# Chaos and Exalted recipe ends; (2) a recipe that took a market's pair hid that market from the value
+# table and the volume ranking; (3) the naive walk behind the value table read recipe ratios as rates.
+def _build(monkeypatch, rates, vols, with_recipes):
+    """Graph.build over a fixture digest: rates {(a, b): b per a}, vols {(a, b): a units/h}."""
+    from app import arbitrage, digest, gamedata, recipes
+    from app.arbitrage import graph as G
+    monkeypatch.setattr(digest, "latest_rates", lambda league, age: {
+        k: {"rate": r, "stock": 1_000_000, "age_s": 0.0, "hour": 0, "volume_to": 1_000} for k, r in rates.items()})
+    monkeypatch.setattr(digest, "pair_volume", lambda league, hours: dict(vols))
+    monkeypatch.setattr(gamedata, "fees", lambda: {"by_trade": {}})
+    real = recipes.edges
+    monkeypatch.setattr(G.recipes, "edges", real if with_recipes else (lambda: []))
+    arbitrage.invalidate_caches()
+    g = G.Graph.build()
+    monkeypatch.setattr(G.recipes, "edges", real)
+    return g
+
+
+# A market touching exalted too thin to keep (0.001 thin-rune an hour), and a Greater Chaos Orb
+# whose ONLY market is the one its disenchant beats (2.4 chaos, against the recipe's 3).
+MARKET = {("chaos", "exalted"): 0.1, ("exalted", "chaos"): 9.9,
+          ("greater-chaos-orb", "chaos"): 2.4,
+          ("thin-rune", "exalted"): 50.0, ("exalted", "thin-rune"): 1 / 60.0,
+          ("thin-rune", "chaos"): 0.2, ("chaos", "thin-rune"): 4.0}
+VOLS = {("chaos", "exalted"): 5000.0, ("exalted", "chaos"): 500.0, ("greater-chaos-orb", "chaos"): 300.0,
+        ("thin-rune", "exalted"): 0.001, ("exalted", "thin-rune"): 0.0,
+        ("thin-rune", "chaos"): 40.0, ("chaos", "thin-rune"): 30.0}
+
+
+def test_recipes_never_change_the_market_data(game_names, monkeypatch, tmp_path):
+    from app import centrality, recipes
+    from app.arbitrage import graph as G
+    monkeypatch.setattr(recipes, "RECIPES_PATH", tmp_path / "recipes.json")
+    off = _build(monkeypatch, MARKET, VOLS, with_recipes=False)
+    on = _build(monkeypatch, MARKET, VOLS, with_recipes=True)
+    assert any(e.kind == "recipe" for e in on.edges.values()), "the fixture has recipe edges to test"
+    assert ("thin-rune", "exalted") not in off.edges, "the fixture's thin market is culled without recipes"
+    assert on.values() == off.values()
+    assert on.busiest == off.busiest and on.priced_by == off.priced_by
+    assert G.counterparts_by_volume(on, on.values()) == G.counterparts_by_volume(off, off.values())
+    assert on.ref_values() == off.ref_values()
+    assert on.direct_rate("greater-chaos-orb", "chaos") == off.direct_rate("greater-chaos-orb", "chaos") == 2.4
+    assert centrality._weights(on, on.values()) == centrality._weights(off, off.values())
+    assert on.edges[("greater-chaos-orb", "chaos")].kind == "recipe", "routes still take the disenchant"
+
+
+# ------------------------------------------------------------------ Convert: only the recipe you start with
+def test_convert_does_not_detour_a_plain_swap_through_a_recipe():
+    """Found by ops/regression-diff.py (2026-09-30): chaos -> divine came back as chaos -> Greater Orb of
+    Transmutation -> disenchant -> Transmutation -> divine, arbitrage dressed as a conversion. A
+    recipe's gain is exempt from the cap only when the conversion starts by using it on what you hold."""
+    from app import arbitrage
+    from app.arbitrage import Edge
+    g, rv = _convert_graph()
+    g.add(Edge("exalted", "greater-orb-of-augmentation", "digest", 1 / 2.62, [{"rate": 1 / 2.62, "stock": 1_000_000}], vol_in_per_h=1000.0))
+    g.add(Edge("aug", "exalted", "digest", 1.0, [{"rate": 1.0, "stock": 1_000_000}], vol_in_per_h=1000.0))
+    res = arbitrage._best_conversions(g, rv, "exalted", "aug", 129)      # sizes to whole lots: a full conversion
+    assert res["best"] is not None and not res["best"]["uses_recipe"], res["best"] and res["best"]["id"]
+    assert arbitrage._best_conversions(g, rv, "greater-orb-of-augmentation", "aug", 10)["best"]["uses_recipe"]
+
+
+def test_the_market_table_still_lists_a_market_a_recipe_took_over(monkeypatch):
+    """Economy -> Market's "Edges in the current graph" lists every market, and each recipe beside it:
+    the Greater Aug -> Aug market (2 each) did not vanish behind its disenchant (3 each)."""
+    import importlib
+    board = importlib.import_module("app.arbitrage.board")
+    from app.arbitrage import graph as G
+    g, _rv = _convert_graph()
+    g.values = lambda: dict(_rv)
+    monkeypatch.setattr(G, "cached_graph", lambda: g)
+    rows = [(r["from"], r["to"], r["kind"], r["rate"]) for r in board.edge_table()]
+    assert ("greater-orb-of-augmentation", "aug", "digest", 2.0) in rows
+    assert ("greater-orb-of-augmentation", "aug", "recipe", 3.0) in rows

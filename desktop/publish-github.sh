@@ -34,6 +34,14 @@ git diff --cached --quiet || git commit -q -m "chore(ee2-query): sync vendored E
 # the release here; GitHub Actions never sees it (owner directive: tests gate the deploy
 # scripts, not CI).
 ../ops/run-tests.sh
+
+# REGRESSION GATE (owner, 2026-09-30) — also before anything remote. The last stable version and this
+# code run on the same snapshot of the owner's data; every difference in what users see (prices, busiest
+# markets, price cards, Market, Hold, exchange-only loops, the Arbitrage pool, Convert) must be accepted
+# for THIS version in ops/regression-accept.txt, or the release stops. Fails closed without the data.
+# 0.3.8-beta.1/2 passed every test and moved 17 prices by up to 4300%; this is what would have caught it.
+python3 ../ops/regression-diff.py --version "$VER" --accept ../ops/regression-accept.txt \
+  || { echo "FATAL: regression diff: an unaccepted difference (or no data to compare); not publishing $VER"; exit 1; }
 # Stable tags are `desktop-v<ver>`; BETA tags are the bare semver `<ver>` (e.g. 0.2.54-beta.1).
 # Why: electron-updater's GitHub provider parses the TAG as semver on the prerelease/channel path
 # (`if (!semver.valid(hrefTag)) continue`), and the `desktop-v` prefix makes every tag invalid →

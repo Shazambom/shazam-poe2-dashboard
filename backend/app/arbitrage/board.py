@@ -276,8 +276,8 @@ def _row(g, rv: dict[str, float], ranked, hub_ids, c: str, pick: str | None, win
     # failed on every live pair with a spread, and those cards fell back to the reference market.
     own_market = shown != R and (g.priced_by.get(c) == shown or g.priced_by.get(shown) == c)
     mkt = shown if own_market else R
-    buy_edge = g.edges.get((mkt, c))     # c per mkt
-    sell_edge = g.edges.get((c, mkt))    # mkt per c
+    buy_edge = g.market_edge(mkt, c)     # c per mkt (the market, never a recipe)
+    sell_edge = g.market_edge(c, mkt)    # mkt per c
     edges = [e for e in (buy_edge, sell_edge) if e]
     # Source label + freshness: live/digest exchange data; a currency the exchange graph
     # doesn't cover is priced from poe2scout ("scout"); anything else valued only via
@@ -393,7 +393,10 @@ def edge_table() -> list[dict]:
     g = graph.cached_graph()
     ref = g.values()
     rows = []
-    for (a, b), e in g.edges.items():
+    # Every market (one a recipe took the slot from included), then each recipe beside it.
+    shown = [e for _k, e in g.market_edges()] + [e for e in g.edges.values() if e.kind == "recipe"]
+    for e in shown:
+        a, b = e.src, e.dst
         rows.append({
             "from": a, "to": b, "from_name": registry.name(a), "to_name": registry.name(b),
             "kind": e.kind, "rate": e.rate, "age_s": e.age_s,
@@ -401,5 +404,5 @@ def edge_table() -> list[dict]:
             "capacity_ref": None if e.capacity_ref(ref) == INF else e.capacity_ref(ref),
             "depth": len(e.ladder), "meta": e.meta,
         })
-    rows.sort(key=lambda r: (r["from_name"], r["to_name"]))
+    rows.sort(key=lambda r: (r["from_name"], r["to_name"], r["kind"] == "recipe"))
     return rows

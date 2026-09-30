@@ -19,6 +19,8 @@ test('the Hold score tooltip describes the ranking that ships', () => {
   // each ranked against the day's board (docs/hold-research.md)
   assert.ok(!hold.includes('Return × confidence'), 'the pre-0.3.2 `ret * conf` formula is gone')
   assert.ok(!hold.includes('Past return weighed against max drawdown'), 'the 0.3.2 score is gone')
-  assert.ok(hold.includes('title="Value kept, steadiness, a steady climb, price and how it held in past leagues, each ranked against today\'s board (0–100). Caution sets how much steadiness counts."'))
+  // since 2026-09-30 the window is the holding period and the score is for it
+  assert.ok(hold.includes("title={`Value kept, steadiness, a steady climb, price, how it held in past leagues and what it did next at this point in them, for a hold of ${delta}d, each ranked against today's board (0–100). Caution sets how much steadiness counts.`}"))
+  assert.ok(hold.includes('safe places to park currency for {horizon}, vs {numName}'), 'the heading names the holding period')
   assert.ok(hold.includes('title="Worst drop since the league\'s prices settled"'))
 })

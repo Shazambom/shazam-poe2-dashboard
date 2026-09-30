@@ -7,7 +7,9 @@ smoke test: ops/hold-backtest.py.
 - Ranking = `hold_rank`: value kept since the league's prices settled and a steady climb (one
   signal), a smooth path, a high price, and the item's record in earlier leagues, each ranked on the
   day and averaged; the list settles over a few days.
-  The horizon sets the return column and the forecast, not the order.
+- The window (24h / 3d / 7d / 14d) is how long the player plans to hold, and the ranking answers it
+  (owner, 2026-09-30): the price level counts for more over a short hold, the forecast for the holding
+  period and a longer trend for a long one. It also sets the return column and the arrows.
 - Prediction = the league-phase analog: at the current league's day N, average each
   asset's forward Δ-day return from the days around N (±PRED_WINDOW) across PAST
   leagues (recency-weighted), with the dispersion as a confidence band.
@@ -27,17 +29,18 @@ DIVINE_ID = marketseries.DIVINE_ID
 # Numeraires to price "held value" against. Divine = liquid default; Mirror & Lock
 # (Hinekora's Lock) are the hardest anchors but trade thinly, so coverage is lower.
 NUMERAIRES = {k: (a.item_id, a.name) for k, a in marketseries.ANCHORS.items() if k != "chaos"}
-HORIZON_DAYS = {"1d": 1, "3d": 3, "7d": 7}   # fast-league day horizons (daily poe2scout data)
-MAX_HORIZON_DAYS = 7                          # hold scores are tuned to a week; longer windows clamp
+# The holding periods the app offers (the topbar window, in days; daily poe2scout data).
+HORIZON_DAYS = {"1d": 1, "3d": 3, "7d": 7, "14d": 14}
+HOLD_DEFAULT = 7   # a caller that names no holding period gets the week the signal weights were tuned at
 
 
 def horizon_for(window_h: int | None = None, horizon: str | None = None) -> str:
-    """The app-wide window (hours) → Hold's day-horizon string, clamped to MAX_HORIZON_DAYS.
-    `horizon` (1d|3d|7d) is the legacy spelling and wins when given."""
+    """The app-wide window (hours) → Hold's holding period (the longest one offered that fits in it).
+    `horizon` (1d|3d|7d|14d) is the legacy spelling and wins when given."""
     if horizon in HORIZON_DAYS:
         return horizon
     if window_h:
-        days = min(MAX_HORIZON_DAYS, marketseries.win_days(window_h))
+        days = marketseries.win_days(window_h)
         return max((h for h, d in HORIZON_DAYS.items() if d <= days), key=HORIZON_DAYS.get)
     return "3d"
 SHRINK_K = 8            # data-count shrinkage: confidence = n/(n+K)
@@ -183,11 +186,21 @@ RECORD_KEEP = 0.80
 RECORD_TO = 60
 RECORD_MIN_WINDOWS = 20   # about three weeks of one league
 _record_cache: dict = {}
+# The window is the holding period, H days (owner, 2026-09-30). Three terms follow it, each measured on
+# every league at every window (docs/hold-research.md "The window is the holding period"); everything
+# else — what makes an item hold its value — turned out the same from a day to a fortnight.
+PRICE_SHORT = 0.6           # price weighs 1 + PRICE_SHORT / H²: over a day the price level protects and
+                            # the climb hasn't time to pay; from 3 days on it is the tuned weight
+FORECAST_W = 0.25           # the forecast for the next H days (`_predict`) weighs FORECAST_W × H / 7: a
+                            # league-phase pattern needs time to play out (over 1 day it is a coin flip)
+FORECAST_MIN_LEAGUES = 3    # ...and only with this many earlier leagues behind it (two misled)
+# ...and the trend is read over max(TREND_DAYS, 2 × H) days.
 
 
-def _signals(series: dict[int, tuple[float, float]], t: int) -> dict | None:
+def _signals(series: dict[int, tuple[float, float]], t: int, hold: int = HOLD_DEFAULT) -> dict | None:
     """kept / dip / trend / price for one asset as of league-day t, on smoothed prices (`_smooth`:
-    a thin asset's single odd close is neither a crash nor a gain)."""
+    a thin asset's single odd close is neither a crash nor a gain). `hold` = the holding period in
+    days: the trend is read over max(TREND_DAYS, 2 × hold) days."""
     s = {a: v for a, v in series.items() if a <= t}
     if len(s) < 2:
         return None
@@ -204,7 +217,8 @@ def _signals(series: dict[int, tuple[float, float]], t: int) -> dict | None:
         if a >= min(base, DISCOVERY_DAY):
             peak = sm[a] if peak is None else max(peak, sm[a])
             dip = min(dip, sm[a] / peak - 1)
-    win = [a for a in ages if t - TREND_DAYS - TREND_SKIP <= a <= t - TREND_SKIP]
+    span = max(TREND_DAYS, 2 * hold)
+    win = [a for a in ages if t - span - TREND_SKIP <= a <= t - TREND_SKIP]
     trend = None
     if len(win) >= 5:
         ys = [math.log(sm[a]) for a in win]
@@ -280,9 +294,10 @@ REGIME_SETS = {
 _EARLY_ONLY = {"early": 1.0, "mid": 0.0, "late": 0.0}
 
 
-def _regime_weights(reg: dict, k: float, t: int) -> dict:
+def _regime_weights(reg: dict, k: float, t: int, hold: int = HOLD_DEFAULT) -> dict:
     """The day's signal weights: each regime's set scaled to sum 1, blended by `reg`'s memberships.
-    The dip carries the Caution dial (k / CAUTION_K); before discovery settles there is no climb."""
+    The dip carries the Caution dial (k / CAUTION_K); before discovery settles there is no climb.
+    The holding period `hold` (days) tilts the price and adds the forecast for that period."""
     w: dict = {}
     for r, share in reg.items():
         if share <= 0:
@@ -296,6 +311,9 @@ def _regime_weights(reg: dict, k: float, t: int) -> dict:
             w[name] = w.get(name, 0.0) + share * v / tot
     if "dip" in w:
         w["dip"] *= k / CAUTION_K
+    if "price" in w:
+        w["price"] *= 1 + PRICE_SHORT / hold ** 2
+    w["forecast"] = FORECAST_W * hold / HOLD_DEFAULT
     return w
 
 
@@ -323,18 +341,28 @@ def _haven(entries, t: int) -> dict:
     return out
 
 
-def _rank_day(entries, t: int, k: float, past=(), reg: dict | None = None) -> dict:
-    """One day's composite: {item_id: 0..1}. `entries` = [(item_id, series, ...)]; `reg` = the day's
-    regime memberships (None: early)."""
-    sig = [(e[0], _signals(e[1], t)) for e in entries]
+def _rank_signals(entries, t: int, past, weights: dict, hold: int) -> list:
+    """[(item_id, signals)] for the day's board: `_signals`, plus the signals that read the whole board
+    or earlier leagues — haven, record, and the forecast for the next `hold` days."""
+    sig = [(e[0], _signals(e[1], t, hold)) for e in entries]
     sig = [(i, x) for i, x in sig if x]
-    if not sig:
-        return {}
-    weights = _regime_weights(reg or _EARLY_ONLY, k, t)
     haven = _haven(entries, t) if weights.get("haven") else {}
     for iid, x in sig:
         x["record"] = _record(iid, past) if past and weights.get("record") else None
         x["haven"] = haven.get(iid)
+        pred = (_predict(iid, t, hold, past, None, min_leagues=FORECAST_MIN_LEAGUES, window=PRED_WINDOW)
+                if past and weights.get("forecast") else None)
+        x["forecast"] = pred["pred"] if pred else None
+    return sig
+
+
+def _rank_day(entries, t: int, k: float, past=(), reg: dict | None = None, hold: int = HOLD_DEFAULT) -> dict:
+    """One day's composite: {item_id: 0..1}. `entries` = [(item_id, series, ...)]; `reg` = the day's
+    regime memberships (None: early); `hold` = the holding period in days."""
+    weights = _regime_weights(reg or _EARLY_ONLY, k, t, hold)
+    sig = _rank_signals(entries, t, past, weights, hold)
+    if not sig:
+        return {}
     # Each signal is ranked among the assets it can be measured for; an asset's score averages the
     # signals it has. A signal nobody has yet (early league) simply doesn't weigh. The record is the
     # exception once earlier leagues exist: no record is a neutral rank, not a missing one, so a new
@@ -357,10 +385,11 @@ def _rank_day(entries, t: int, k: float, past=(), reg: dict | None = None) -> di
     return {iid: (num[i] / den[i] if den[i] else 0.5) for i, (iid, _x) in enumerate(sig)}
 
 
-def _hold_scores(entries, t: int, k: float | None = None, past=(), regime=None) -> dict:
+def _hold_scores(entries, t: int, k: float | None = None, past=(), regime=None, hold: int = HOLD_DEFAULT) -> dict:
     """Hold's ranking as of league-day t: {item_id: score in 0..1}, higher first. `entries` =
     [(item_id, series, ...)] — the day's eligible board; `past` = earlier leagues [(league, per)];
-    `regime` = a function league-day -> memberships (leagueregime), None for the early set. Each
+    `regime` = a function league-day -> memberships (leagueregime), None for the early set; `hold` =
+    the holding period in days. Each
     asset's score is its mean composite over the last SETTLE_DAYS days (its series as it stood each
     day), so the list settles."""
     k = CAUTION_K if k is None else k
@@ -370,7 +399,7 @@ def _hold_scores(entries, t: int, k: float | None = None, past=(), regime=None) 
         # an earlier day counts for an asset only if it traded that day (a stale close isn't a read);
         # today counts for every eligible asset
         day = [e for e in entries if tt in e[1]] if back else list(entries)
-        for iid, v in _rank_day(day, tt, k, past, regime(tt) if regime else None).items():
+        for iid, v in _rank_day(day, tt, k, past, regime(tt) if regime else None, hold).items():
             acc.setdefault(iid, []).append(v)
     return {iid: statistics.fmean(v) for iid, v in acc.items()}
 
@@ -414,11 +443,11 @@ def _crash_flags(entries, t: int) -> dict:
     return {i: (v is not None and v > cut) for i, v in d.items()}
 
 
-def hold_rank(entries, t: int, k: float | None = None, past=(), regime=None) -> dict:
-    """Hold's ranking as of league-day t: {item_id: score in 0..1}, higher first (`_hold_scores`), then,
-    once prices have settled, up to VETO_MAX sliding items leave the top VETO_TOP for the next unflagged
-    ones below them."""
-    sc = _hold_scores(entries, t, k, past, regime)
+def hold_rank(entries, t: int, k: float | None = None, past=(), regime=None, hold: int | None = None) -> dict:
+    """Hold's ranking as of league-day t for a holding period of `hold` days (None: HOLD_DEFAULT):
+    {item_id: score in 0..1}, higher first (`_hold_scores`), then, once prices have settled, up to
+    VETO_MAX sliding items leave the top VETO_TOP for the next unflagged ones below them."""
+    sc = _hold_scores(entries, t, k, past, regime, hold or HOLD_DEFAULT)
     reg = regime(t) if regime else None
     if not reg or reg.get("early", 1.0) >= 0.5:
         return sc
@@ -458,20 +487,21 @@ def eligible(m: dict, cut: float) -> bool:
     return m["valvol"] >= cut and m["n"] >= MIN_DAYS and m["mdd"] >= MDD_CAP
 
 
-def _rank(entries, k: float, cut: float | None = None, t: int | None = None, past=(), regime=None):
+def _rank(entries, k: float, cut: float | None = None, t: int | None = None, past=(), regime=None,
+          hold: int | None = None):
     """[(iid, name, cat, metrics, series)] → (the ones worth ranking, best first, {iid: score}).
 
     Eligibility is a HARD gate, not a weight: an asset either trades enough value to park wealth
     in, has enough days behind it and hasn't already fallen off a cliff — or it is not an answer
     to "what should I hold" at all. `cut` is the day's value threshold; computed over `entries`
     when the caller doesn't pass the whole-universe one. The order is `hold_rank` as of league-day
-    `t` (default: the newest day any entry has)."""
+    `t` (default: the newest day any entry has) for a holding period of `hold` days."""
     if cut is None:
         cut = value_cut([e[3] for e in entries])
     keep = [e for e in entries if eligible(e[3], cut)]
     if t is None:
         t = max((max(e[4]) for e in keep), default=0)
-    score = hold_rank([(e[0], e[4]) for e in keep], t, k, past, regime)
+    score = hold_rank([(e[0], e[4]) for e in keep], t, k, past, regime, hold)
     keep = [e for e in keep if e[0] in score]
     keep.sort(key=lambda e: -score[e[0]])
     return keep, score
@@ -650,7 +680,8 @@ def _leaderboard(horizon: str, category: str, numeraire: str, num_id: int, num_n
     cats = sorted({e[2] for e in entries})      # dropdown reads the full universe
     today = max((m["cur_age"] for _i, _n, _c, m, _s in entries), default=0)
     regime = regime_of(cur_name)
-    board, score = _rank(entries, k, cut, today, past, regime)   # the whole day's ranked board, every category
+    # the whole day's board, every category, ranked for a hold of `hz` days
+    board, score = _rank(entries, k, cut, today, past, regime, hz)
     # The forecast column exists only through ARROW_LAST_DAY, and carries arrows only on
     # ARROW_HORIZONS (1d keeps the column, all dashes). Arrows rank each forecast against the WHOLE
     # board, so viewing one category can't restyle an asset.

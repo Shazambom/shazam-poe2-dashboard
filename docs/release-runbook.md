@@ -67,6 +67,34 @@ Then read `p=sidecar` / `p=backend` telemetry once the tester's app updates.
 **Promote beta → stable:** when a dev build is good, cut the SAME code as a plain `x.y.z` stable release
 (no `-beta`). Nothing else changes.
 
+## ⚠️ Regression gate — enforced by `publish-github.sh` (owner, 2026-09-30)
+
+`publish-github.sh` runs `ops/regression-diff.py` right after the test gate, before anything remote. It
+runs the last stable version (the newest `desktop-v*` tag) and the release's code on one snapshot of the
+owner's desktop data, and diffs what users see:
+- every currency's value, busiest market and price card;
+- the Economy -> Market table;
+- Hold at 1d / 3d / 7d;
+- every exchange-only loop the route search finds;
+- the Arbitrage pool;
+- a fixed set of Convert pairs.
+
+The script stops the release on any difference that `ops/regression-accept.txt` doesn't accept.
+- The acceptance is valid only for the exact `version:` it names.
+- Every line in it must still match a reported difference, so a stale line blocks too.
+- It fails closed when the data is missing or too thin to compare.
+
+For each release, write the accept file for its version:
+1. Run `python3 ops/regression-diff.py` to see the differences.
+2. Accept only the ones the change intends, with a comment saying why.
+3. Tell the owner what was accepted.
+
+Its tests are `backend/tests/test_regression_gate.py`, which also pins the gate's place in the script.
+
+**Why:** 0.3.8-beta.1/2 (crafting recipes) passed every test and moved 17 prices by up to 4300%. The
+tests checked the new feature, never what must not change. With 0.3.8-beta.3's acceptance, this gate
+blocks beta.2's code with 106 unaccepted differences.
+
 ## ⚠️ T0 gate — a full-sync fallback on beta blocks stable (owner directive 2026-09-25)
 
 A client rebuilding market data it should have received from the seed (seed failed or
