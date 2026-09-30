@@ -307,10 +307,8 @@ def test_one_day_does_not_reshuffle_the_list():
 
 # ---------------------------------------------------------------- 4. the smoke test, real DB
 
-PROD_DB = Path(os.environ.get(
-    "ARBITER_PROD_MARKET_DB",
-    Path.home() / "Library/Application Support/Arbiter/data/market.sqlite"))
-_prod = pytest.mark.skipif(not PROD_DB.exists(), reason=f"no production market DB at {PROD_DB}")
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _proddb import PROD_DB, prod as _prod  # noqa: E402  (opt-in: ARBITER_PROD_TESTS=1)
 
 
 def _backtest():

@@ -48,8 +48,9 @@ CAUTION_K = 2.0         # the Caution dial's default. The dip's weight in `hold_
 # `hold_caution` setting. 0 = the dip doesn't count; higher = favour the steadier asset. The rank
 # is monotone in every signal at every position, so the dial changes preference, never sense.
 CAUTION_RANGE = (0.0, 6.0)
-MDD_CAP = -0.40         # exclude anything that fell worse than this. Tightest cap that still
-                        # spares Mirror/Hinekora (at -35% they drop out 25%/27% of early days).
+MDD_CAP = -0.40         # exclude anything that fell worse than this. Chosen for returns (owner,
+                        # 2026-09-29): the best ret_pct of a -30%..no-cap sweep over every league
+                        # and horizon (docs/hold-research.md, "Drawdown cap re-derived").
 MIN_DAYS = 4            # a score needs at least this many days behind it
 VALUE_PERCENTILE = 0.50  # keep the top half of the DAY's traded value — RELATIVE, because the
                         # value scale shifts ~14x between leagues and an absolute floor is either

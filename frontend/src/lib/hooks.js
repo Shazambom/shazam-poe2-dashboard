@@ -1,3 +1,4 @@
+import { startPoll } from './poll.js'
 import { useEffect, useRef, useState } from 'react'
 import { cleanErr, toast } from './api.js'
 import { useSync } from './syncStore.js'
@@ -54,4 +55,19 @@ export function useAutosave(saver, delay = 700) {
     }, delay)
   }
   return { state, save, arm: () => { armed.current = true } }
+}
+
+// `value`, once it has held still for `ms`: typing in a filter box re-runs a search once, not per keystroke.
+export function useDebounced(value, ms = 500) {
+  const [v, setV] = useState(value)
+  useEffect(() => { const t = setTimeout(() => setV(value), ms); return () => clearTimeout(t) }, [value, ms])
+  return v
+}
+
+// Poll `fn` every `ms` while the window is visible, and at once when the user comes back to it
+// (lib/poll.js). Restarts when `deps` change.
+export function usePoll(fn, ms, deps = []) {
+  const ref = useRef(fn)
+  ref.current = fn
+  useEffect(() => startPoll(() => ref.current(), ms), [ms, ...deps]) // eslint-disable-line
 }

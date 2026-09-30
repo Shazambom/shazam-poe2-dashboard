@@ -128,7 +128,9 @@ Threading a new user setting all the way through (as `hub_count` did):
   `test_convert.py`, `test_centrality.py`). Prefer extracting a pure helper and testing that over
   trying to test `board()`/endpoints directly. `tests/golden/*.json` pin the arbitrage core's
   full JSON output (routes, stream==direct, convert, board) — a deliberate behaviour change
-  regenerates them with `UPDATE_GOLDEN=1`.
+  regenerates them with `UPDATE_GOLDEN=1`. A few replays check a rule against the owner's own
+  market DB (`tests/_proddb.py`); they are opt-in (`ARBITER_PROD_TESTS=1`) so the gate never depends
+  on whether this machine's app ran recently.
 - **Drive the real renderer** for any UI/data claim (`desktop-debugging.md`): `build:frontend` →
   launch with `--remote-debugging-port=9222` → `node scripts/cdp.mjs "<js>"` / `scripts/shot.mjs`
   / `scripts/console.mjs` (reload + capture renderer exceptions — a blank page after a rebuild
@@ -177,7 +179,7 @@ CLAUDE.md. The mechanics:
   history search URL the worker built (`p=ee2-query`). `./ops/pull-ee2-items.sh` pulls them from
   shazam's log into `desktop/test/fixtures/ee2/live/` (gitignored): one file per item plus
   `queries.txt`. Tests: `desktop/test/ee2-item-telemetry.test.mjs`.
-- Existing markers: `p=init` (installer self-heal), `p=backend` (spawn/exit/bind + the analytics
+- Existing markers: `p=backend` (spawn/exit/bind + the analytics
   probe), `p=login` (PoE/Steam login), `p=update` (auto-updater events), `p=ee2` (EE2 hooks),
   `p=sidecar` (sidecar + supervisor lifecycle).
 - This is the **one sanctioned exception** to the desktop "server-for-updates-only" contract, and it

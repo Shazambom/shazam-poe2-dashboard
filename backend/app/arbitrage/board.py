@@ -271,7 +271,6 @@ def _row(g, rv: dict[str, float], ranked, hub_ids, c: str, pick: str | None, win
     # table)? Then source, freshness and the trend all describe THAT market; otherwise they all
     # describe the reference market. (Bid/ask/spread were cut on 2026-09-23: with the bulk-exchange
     # books gone the digest gives one window rate both ways, so they were the number twice.)
-    direct = g.direct_rate(c, shown)
     # The card's own market prices it when that market is the one the value table used (either
     # orientation — Graph.priced_by says so). Deriving it from a float identity instead silently
     # failed on every live pair with a spread, and those cards fell back to the reference market.
@@ -359,9 +358,9 @@ def native_price(g, c: str, rv: dict[str, float], ranked: dict, R: str) -> tuple
     if not rv.get(c):
         return None
     cur = default_numeraire(c, rv, ranked, R)
-    rate = g.direct_rate(c, cur)
+    rate = g.traded_rate(c, cur)
     if rate is None:
-        cur, rate = R, g.direct_rate(c, R) or rv[c]
+        cur, rate = R, g.traded_rate(c, R) or rv[c]
     return float(rate), cur
 
 

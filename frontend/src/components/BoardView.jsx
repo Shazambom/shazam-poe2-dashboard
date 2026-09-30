@@ -10,6 +10,7 @@ import { useStatus, ensureSettings } from '../lib/statusStore.js'
 import CurrencyPicker from './CurrencyPicker.jsx'
 import { useHorizon } from '../lib/horizonStore.js'
 import { useSync } from '../lib/syncStore.js'
+import { usePoll } from '../lib/hooks.js'
 import { factorFor, trendIn, valueIn } from '../lib/price.js'
 import AnimatedNumber from '../lib/animatedNumber.js'
 
@@ -118,23 +119,18 @@ export default function BoardView({ status }) {
     await load()
     setBusy(false); setSyncBusy(false)
   }
-  useEffect(() => { load(); const t = setInterval(load, 30000); return () => clearInterval(t) }, [winH, numsParam]) // eslint-disable-line
+  usePoll(load, 30000, [winH, numsParam])
   // command palette → open a currency's detail here
   useEffect(() => nav.on(e => { if (e.type === 'openCurrency') setOpenId(e.id) }), [])
   // Hold leaderboard powers the pulse strip's top-3 holds + the full-universe top mover.
-  useEffect(() => {
-    // Holds = top stores of value (divine-denominated hold score). Movers = biggest |% change|
-    // over the SAME window as the board, full universe — a genuinely different ranking.
-    const load = () => {
-      api.hold(winH, 'all', 'divine').then(setHold).catch(() => setHold(null))
-      api.movers(winH, 3).then(setMovers).catch(() => setMovers(null))
-    }
-    load()
-    // Same refresh as the tiles beside them — chips that only reloaded on a window change sat
-    // stale next to a board that polls.
-    const t = setInterval(load, 30000)
-    return () => clearInterval(t)
-  }, [winH, tick])
+  // Holds = top stores of value (divine-denominated hold score). Movers = biggest |% change| over the
+  // SAME window as the board, full universe — a genuinely different ranking. Both come from daily and
+  // hourly data, so every 5 minutes while visible (and on coming back to the window) is fresh enough.
+  const loadPulse = () => {
+    api.hold(winH, 'all', 'divine').then(setHold).catch(() => setHold(null))
+    api.movers(winH, 3).then(setMovers).catch(() => setMovers(null))
+  }
+  usePoll(loadPulse, 5 * 60 * 1000, [winH, tick])
   // Expand a pulse-strip item into the shared detail modal (enlarged graph + volume + change
   // over time), identical to clicking a board currency — via /api/asset (the hourly exchange card).
   const openAsset = (name, inNum) => assetModal.open(name, inNum)

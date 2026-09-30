@@ -10,14 +10,11 @@ import Toggle from './Toggle.jsx'
 import { Detail, Loop } from './RouteSteps.jsx'
 import Wealth from './Wealth.jsx'
 import { useSync } from '../lib/syncStore.js'
-import { ensureSettings } from '../lib/statusStore.js'
+import { ensureSettings, useStatus } from '../lib/statusStore.js'
+import { useAutosave, useDebounced } from '../lib/hooks.js'
+import { DEFAULT_FILTERS, filtersFromSettings, filtersToSave, streamQuery } from '../lib/routeFilters.js'
 
 const INF = Infinity
-
-const DEFAULT_FILTERS = {
-  min_margin_pct: 0.5, min_margin_ref: 0, max_gold: '', min_margin_per_1k_gold: '',
-  min_liquidity_ref: '', min_volume_ref_per_h: '', max_fill_hours: '', max_step_minutes: '', min_velocity: '', exclude_recipes: false, limit: 100, start: '',
-}
 
 // Column definitions: [key, label, accessor, defaultDir, title]
 const COLS = [
@@ -46,14 +43,15 @@ export default function RoutesView({ capital, status, currencies, onCapitalSaved
   const tick = useSync(s => s.tick)              // topbar ⟳ → refresh loops
   const esRef = useRef(null)
   const accRef = useRef([])
-  const filterKey = JSON.stringify([f.min_margin_pct, f.min_margin_ref, f.max_gold, f.min_margin_per_1k_gold,
-    f.min_liquidity_ref, f.min_volume_ref_per_h, f.max_fill_hours, f.max_step_minutes, f.min_velocity, f.exclude_recipes, f.start])
+  // The search sends exactly what the form shows (a cleared box as 0 = off), never leaving a blank
+  // for the server to fill from the saved settings, and re-runs when any of it changes.
+  const filterKey = JSON.stringify(filtersToSave(f))
 
   const load = () => {
     esRef.current?.close()
     accRef.current = []
     setCounts(null); setErr(null); setStreaming(true)
-    const es = new EventSource(api.routesStreamUrl({ ...f, sort: undefined, limit: undefined }))
+    const es = new EventSource(api.routesStreamUrl(streamQuery(f)))
     esRef.current = es
     // The server scores as it streams (provisional `scores` after each batch, authoritative on
     // `done`) — one ranking implementation, in the backend. The table shows the PREVIOUS result
@@ -78,17 +76,21 @@ export default function RoutesView({ capital, status, currencies, onCapitalSaved
     })
   }
 
-  useEffect(() => { ensureSettings().then(s => { const g = { ...s.filters }; delete g.sort; ['max_gold','min_margin_per_1k_gold','min_liquidity_ref','min_volume_ref_per_h','max_fill_hours','max_step_minutes','min_velocity'].forEach(k => { if (!g[k]) g[k] = '' }); setF(x => ({ ...x, ...g }))}).catch(() => {}) }, [])
-  useEffect(() => { load(); return () => esRef.current?.close() }, [filterKey]) // eslint-disable-line
+  // The filters live in the user's settings: loaded once, saved (debounced) on every edit.
+  const { save, arm } = useAutosave(next => useStatus.getState().saveSettings({ filters: filtersToSave(next) }), 800)
+  useEffect(() => { ensureSettings().then(s => { setF(filtersFromSettings(s.filters)); arm() }).catch(() => {}) }, []) // eslint-disable-line
+  const searchKey = useDebounced(filterKey, 500)
+  useEffect(() => { load(); return () => esRef.current?.close() }, [searchKey]) // eslint-disable-line
   useEffect(() => {
     const t = setInterval(() => { if (document.visibilityState === 'visible' && !streaming) load() }, 120000)
     return () => clearInterval(t)
-  }, [filterKey, streaming]) // eslint-disable-line
+  }, [searchKey, streaming]) // eslint-disable-line
 
   // Manual refresh from the topbar ⟳ re-runs the search.
   useEffect(() => { if (tick > 0) load() }, [tick]) // eslint-disable-line
 
-  const set = (k) => (e) => setF(x => ({ ...x, [k]: e.target.type === 'checkbox' ? e.target.checked : e.target.value }))
+  const update = (k, v) => { const next = { ...f, [k]: v }; setF(next); save(next) }
+  const set = (k) => (e) => update(k, e.target.type === 'checkbox' ? e.target.checked : e.target.value)
   const clickSort = (key, defDir) => setSort(s => s.key === key ? { key, dir: s.dir === 'desc' ? 'asc' : 'desc' } : { key, dir: defDir })
   const ref = meta?.reference ?? capital?.reference ?? 'ref'
   // Surface only the standout loops: those at least 1σ better-than-mean on the SELECTED metric
@@ -152,7 +154,7 @@ export default function RoutesView({ capital, status, currencies, onCapitalSaved
           <div className="field"><label>Maximum minutes per step</label><input type="number" step="5" placeholder="no limit" value={f.max_step_minutes} onChange={set('max_step_minutes')}
             title="How long the slowest step would take at that market's own trading pace: the units you push in ÷ the units it trades per hour." /></div>
           <div className="field"><label>Maximum estimated fill time, hours</label><input type="number" step="0.5" placeholder="no limit" value={f.max_fill_hours} onChange={set('max_fill_hours')} /></div>
-          <div className="check"><Toggle checked={!!f.exclude_recipes} onChange={v => setF(x => ({ ...x, exclude_recipes: v }))} label="Exchange steps only" /></div>
+          <div className="check"><Toggle checked={!!f.exclude_recipes} onChange={v => update('exclude_recipes', v)} label="Exchange steps only" /></div>
           <div className="field"><label>Show at most</label><input type="number" value={f.limit} onChange={set('limit')} /></div>
         </details>
         <ArbitrageAlgorithm onSaved={load} />

@@ -151,6 +151,12 @@ async def _leagues() -> list[dict]:
     return [l for l in rows if not any(l.get("Value", "").startswith(s) or l.get("Value") == s for s in SKIP)]
 
 
+def _has_history() -> bool:
+    """Whether the install holds any league history (a first build vs a routine refresh)."""
+    with db.q() as c:
+        return c.execute("SELECT 1 FROM league_daily LIMIT 1").fetchone() is not None
+
+
 def _stored_counts() -> dict[tuple[str, int], int]:
     """One grouped read of stored day-counts per (league, item) — avoids a COUNT(*)
     probe per item during backfill."""
@@ -323,8 +329,10 @@ async def backfill(force: bool = False, full: bool = True) -> dict:
     if _backfill_lock.locked() and not force:
         return {"skipped": "backfill already running"}
     async with _backfill_lock:
-        fetched = {}
-        progress.update({"running": True, "phase": "leagues", "started": time.time(),
+        fetched, attempted, errors = {}, 0, 0
+        # `building`: the install holds no history yet (a first build, not a refresh) — the header
+        # says "Building your dashboard" only then.
+        progress.update({"running": True, "phase": "leagues", "building": not _has_history(), "started": time.time(),
                          "updated": time.time(), "league": None, "last": None,
                          "league_done": 0, "league_total": 0, "leagues_done": 0, "leagues_total": 0})
         try:
@@ -362,11 +370,13 @@ async def backfill(force: bool = False, full: bool = True) -> dict:
             for item_id in todo:
                 progress["league_done"] += 1
                 progress["updated"] = time.time()
+                attempted += 1
                 try:
                     n = await fetch_item(name, item_id, current)
                     tally["fetched"] += 1
                 except Exception as exc:
                     tally["errors"] += 1
+                    errors += 1
                     log.warning("poe2scout history %s/%s failed: %s", name, item_id, exc)
                     continue
                 if n:
@@ -383,7 +393,7 @@ async def backfill(force: bool = False, full: bool = True) -> dict:
         _cache.clear()   # fresh data → drop cross()/marketcap() caches
         progress.update({"running": False, "phase": "done", "updated": time.time(),
                          "leagues_done": len(leagues)})
-        return {"fetched": fetched, "leagues": len(leagues)}
+        return {"fetched": fetched, "leagues": len(leagues), "attempted": attempted, "errors": errors}
 
 
 # cross()/marketcap() only change on the 12h backfill; cache their aggregation

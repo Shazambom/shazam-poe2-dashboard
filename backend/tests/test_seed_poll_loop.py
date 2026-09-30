@@ -73,5 +73,51 @@ def test_a_crawl_skipped_for_the_seed_poll_retries_soon_not_in_12_hours(monkeypa
     assert sleeps[0] <= 300 and sleeps[1] == 12 * 3600
 
 
+@pytest.mark.parametrize("outcome", [{"error": "ConnectError: poe2scout unreachable"}, RuntimeError("boom")])
+def test_a_failed_crawl_retries_in_30_minutes_not_12_hours(monkeypatch, outcome):
+    """An app started before the network is up kept stale current-league data for 12 hours of awake
+    time (audit 2026-09-29, S1). Owner: retry about every 30 minutes, never more often."""
+    from app import leaguehistory
+    sleeps = []
+
+    async def fake_backfill():
+        if isinstance(outcome, Exception):
+            raise outcome
+        return outcome
+
+    async def fake_sleep(s):
+        sleeps.append(s)
+        raise asyncio.CancelledError
+    monkeypatch.setattr(leaguehistory, "backfill", fake_backfill)
+    monkeypatch.setattr(main.asyncio, "sleep", fake_sleep)
+    with pytest.raises(asyncio.CancelledError):
+        asyncio.run(main._league_history_loop())
+    assert sleeps == [30 * 60]
+
+
+@pytest.mark.parametrize("res,wait", [
+    ({"fetched": {}, "leagues": 5, "errors": 40, "attempted": 40}, 30 * 60),   # every item fetch failed
+    ({"fetched": {"L/1": 3}, "leagues": 5, "errors": 2, "attempted": 40}, 12 * 3600),   # a few blips
+    ({"fetched": {}, "leagues": 5, "errors": 0, "attempted": 0}, 12 * 3600),   # nothing was due
+])
+def test_a_crawl_whose_every_fetch_failed_retries_in_30_minutes(monkeypatch, res, wait):
+    """/Leagues answered but poe2scout's history endpoint failed every item (network dropped, 5xx):
+    the same stale-for-12-hours symptom as a failed /Leagues (code review 2026-09-29)."""
+    from app import leaguehistory
+    sleeps = []
+
+    async def fake_backfill():
+        return res
+
+    async def fake_sleep(s):
+        sleeps.append(s)
+        raise asyncio.CancelledError
+    monkeypatch.setattr(leaguehistory, "backfill", fake_backfill)
+    monkeypatch.setattr(main.asyncio, "sleep", fake_sleep)
+    with pytest.raises(asyncio.CancelledError):
+        asyncio.run(main._league_history_loop())
+    assert sleeps == [wait]
+
+
 def test_the_server_compose_turns_it_on():
     assert 'ARBITER_SEED_POLL: "1"' in (ROOT / "docker-compose.yml").read_text()

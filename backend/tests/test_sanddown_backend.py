@@ -94,10 +94,11 @@ def test_build_context_reads_via_marketseries_and_is_memoized(monkeypatch):
 
 def test_marketcap_uses_the_shared_reader():
     src = (APP / "leaguehistory.py").read_text()
-    # only the poe2scout name-joins (one with a subquery) and the crawl watermark count select league_daily
-    # directly; cross()/marketcap() go through marketseries.item_rows/read_rows. (Writes don't count:
-    # fetch_item removes rows poe2scout withdrew.)
-    assert src.count("FROM league_daily") - src.count("DELETE FROM league_daily") == 4
+    # only the poe2scout name-joins (one with a subquery), the crawl watermark count and the crawl's
+    # "any history yet?" probe (_has_history) select league_daily directly; cross()/marketcap() go
+    # through marketseries.item_rows/read_rows. (Writes don't count: fetch_item removes rows poe2scout
+    # withdrew.)
+    assert src.count("FROM league_daily") - src.count("DELETE FROM league_daily") == 5
     assert "SELECT league, item_id, day, close, volume FROM league_daily" not in src
     assert "SELECT league, day, close FROM league_daily" not in src
 

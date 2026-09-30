@@ -584,3 +584,28 @@ composites (OECD/JRC; CFA/Israelsen), shrinkage and ranking (Lin & Louis), uncer
 pinned open-source library functions (empyrical, quantstats, ffn, vectorbt, PyPortfolioOpt) — are in
 [`research/hold-research-recovered.md` §6](research/hold-research-recovered.md#6-sources), including
 §6.13, four places where the old records disagree about what was verified.
+
+## Drawdown cap re-derived (2026-09-29)
+
+The cap's comment said it was the "tightest cap that still spares Mirror/Hinekora": a value picked by
+looking at two named items, against the no-hardcoded-bias rule (audit 2026-09-29, A4). Re-derived on the
+data alone: `holdscore.MDD_CAP` swept through `ops/hold-backtest.py --league all --workers 1` (the worker
+pool re-imports holdscore, so a patched cap only reaches a serial run), graded on the random-list
+yardstick only (the `owner` named-item check deliberately left out). 20 cells = 5 leagues × 4 horizons.
+
+| cap | cells ret_pct ≥ 60 | cells crash_pct ≤ 40 | mean ret_pct | mean crash_pct | eligible |
+|---|---|---|---|---|---|
+| −30% | 14 | 9 | 65.3 | 43.3 | 51 |
+| −35% | 13 | 6 | 63.5 | 44.2 | 53 |
+| **−40%** | **17** | 9 | **68.2** | 38.1 | 56 |
+| −45% | 11 | 8 | 64.7 | 38.9 | 61 |
+| −50% | 11 | 9 | 64.6 | 37.8 | 67 |
+| −60% | 12 | 9 | 63.9 | 37.3 | 80 |
+| −70% | 12 | 14 | 65.1 | 33.2 | 96 |
+| −85% | 11 | 17 | 60.9 | 29.5 | 131 |
+| none | 5 | 20 | 55.5 | 24.3 | 203 |
+
+No cap wins both: tighter caps buy returns, looser ones avoid crashes. Owner, 2026-09-29: "favor returns"
+→ −40% stays, now on its own evidence. Caveat: it is a sharp peak (−35% and −45% score 13 and 11), so it
+may be partly noise; re-run this sweep when a new league's data lands. Still open: the gate measures the
+drawdown on raw closes from league-day 0 while the Drawdown column shows the smoothed dip since day 7.

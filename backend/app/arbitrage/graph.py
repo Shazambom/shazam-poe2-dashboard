@@ -167,11 +167,21 @@ class Graph:
         g.quote_busiest_markets()
         if s["allow_recipe_edges"]:
             for r in recipes.edges():
-                if (r["from"], r["to"]) in g.edges and g.edges[(r["from"], r["to"])].rate >= r["rate"]:
-                    continue  # exchange already beats the recipe
-                g.add(Edge(r["from"], r["to"], "recipe", r["rate"], [], 0.0, lot=r["lot"],
-                           meta={"recipe_id": r["recipe_id"], "name": r["name"], "kind": r["kind"]}))
+                g.add_recipe(r)
         return g
+
+    def add_recipe(self, r: dict) -> None:
+        """A recipe conversion, unless the market already beats it. When it takes a market's slot
+        (routes want the better conversion), the market's edge rides along in `meta["market"]` so
+        `traded_rate` still prices the thing at what the market traded at."""
+        key = (r["from"], r["to"])
+        market = self.edges.get(key)
+        if market and market.rate >= r["rate"]:
+            return  # exchange already beats the recipe
+        meta = {"recipe_id": r["recipe_id"], "name": r["name"], "kind": r["kind"]}
+        if market:
+            meta["market"] = market
+        self.add(Edge(r["from"], r["to"], "recipe", r["rate"], [], 0.0, lot=r["lot"], meta=meta))
 
     # ------------------------------------------------------------ values
     def direct_rate(self, c: str, n: str) -> float | None:
@@ -183,6 +193,22 @@ class Graph:
         e = self.edges.get((n, c))
         if e and e.rate > 0:
             return 1.0 / e.rate
+        return None
+
+    def traded_rate(self, c: str, n: str) -> float | None:
+        """Price of 1 `c` in `n` at what the c↔n market TRADED at: `direct_rate`, except that a dead
+        market's edge holds its worst-case side for the route search, so its `quoted_rate` (the window
+        rate) stands in. For showing a price (native_price); routes keep `direct_rate`."""
+        for key, inv in (((c, n), False), ((n, c), True)):
+            e = self.edges.get(key)
+            if e and e.kind == "recipe":
+                e = e.meta.get("market")      # a recipe is a conversion, not a market price
+            if not e:
+                continue
+            r = e.meta.get("quoted_rate") if e.meta.get("inactive") else None
+            r = r if r and r > 0 else e.rate
+            if r > 0:
+                return 1.0 / r if inv else r
         return None
 
     def quote_busiest_markets(self) -> None:

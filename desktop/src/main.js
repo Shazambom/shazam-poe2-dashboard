@@ -15,6 +15,8 @@ const path = require('path')
 const telemetry = require('./telemetry.js')
 const { postItemText, postQuery } = require('./dev-ee2-telemetry.js')   // beta/dev-gated inside installLog
 const { makeRing } = require('./feedback/ring.js')
+const { applyChannel } = require('./updater-channel.js')
+const { createRespawner, onceGone } = require('./respawn.js')
 
 // Log rings for "Report a problem" (local only — a report is a file the user drags into Discord):
 // every console.log line of this process, the updater's lines, and the backend's output tail.
@@ -131,29 +133,46 @@ async function startBackend() {
     // (packaging regression) instead of silently disabling analytics.
     const sidecarBin = sc.found || sc.expected
     console.log('[backend] sidecar bin:', sidecarBin, sc.found ? '' : '(expected; not found)')
-    backendProc = spawn(bin, [], {
-      // ARBITER_PARENT_PID lets the backend die with us if Electron hard-crashes (parent-pid
-      // watchdog); the web/server env never sets it, so servers are unaffected.
-      env: { ...process.env, DATA_DIR: dataDir, PORT: String(LOCAL_BACKEND_PORT), MARKET_SEED: marketSeed,
-             SIDECAR_BIN: sidecarBin, ARBITER_PARENT_PID: String(process.pid),
-             ARBITER_VERSION: app.getVersion(),
-             // Diagnostics telemetry (backend + sidecar) fires only on the beta/dev channel.
-             ARBITER_TELEMETRY: diagTelemetryOn() ? '1' : '' },
-      stdio: ['ignore', 'pipe', 'pipe'],
-    })
-    // DEV DIAGNOSTIC: keep a rolling tail of backend output so a crash/hang on Windows is visible.
-    const capture = (d) => { bkBuf = (bkBuf + String(d)).slice(-65536); console.log('[backend]', String(d).trimEnd()) }
-    backendProc.stdout.on('data', capture)
-    backendProc.stderr.on('data', capture)
-    backendProc.on('error', e => bkLog(`proc-error ${String(e && e.message || e)}`))
-    backendProc.on('exit', (code, signal) => {
-      console.log('[backend] exited', code, signal)
-      // The output tail is for crashes. On an exit we asked for (quit / update install) it is only
-      // access-log noise — it was half of every telemetry window — so post the one line without it.
-      if (backendStopping) bkLog(`EXITED code=${code} signal=${signal} (requested)`)
-      else bkLog(`EXITED code=${code} signal=${signal}\n--- output tail ---\n${bkBuf.slice(-3000)}`)
+    // Restarted when it dies on its own (respawn.js); never after stopBackend().
+    const respawner = backendRespawner = createRespawner({ start: () => startOnce() })
+    const gone = (why) => {
       backendProc = null
-    })
+      const wait = respawner.exited({ requested: backendStopping })
+      if (wait != null) bkLog(`restarting in ${wait / 1000}s (${why})`)
+    }
+    // A spawn that throws (a bad path, EACCES) is a failed start: retried like a crash, never an
+    // uncaught exception in the main process.
+    const startOnce = () => {
+      respawner.started()
+      try { launch() } catch (e) { bkLog(`spawn-threw ${String(e && e.message || e)}`); gone('spawn threw') }
+    }
+    const launch = () => {
+      backendProc = spawn(bin, [], {
+        // ARBITER_PARENT_PID lets the backend die with us if Electron hard-crashes (parent-pid
+        // watchdog); the web/server env never sets it, so servers are unaffected.
+        env: { ...process.env, DATA_DIR: dataDir, PORT: String(LOCAL_BACKEND_PORT), MARKET_SEED: marketSeed,
+               SIDECAR_BIN: sidecarBin, ARBITER_PARENT_PID: String(process.pid),
+               ARBITER_VERSION: app.getVersion(),
+               // Diagnostics telemetry (backend + sidecar) fires only on the beta/dev channel.
+               ARBITER_TELEMETRY: diagTelemetryOn() ? '1' : '' },
+        stdio: ['ignore', 'pipe', 'pipe'],
+      })
+      // DEV DIAGNOSTIC: keep a rolling tail of backend output so a crash/hang on Windows is visible.
+      const capture = (d) => { bkBuf = (bkBuf + String(d)).slice(-65536); console.log('[backend]', String(d).trimEnd()) }
+      backendProc.stdout.on('data', capture)
+      backendProc.stderr.on('data', capture)
+      backendProc.on('error', e => bkLog(`proc-error ${String(e && e.message || e)}`))
+      // Gone = exited, or never started (a spawn error emits no 'exit').
+      onceGone(backendProc, ({ code, signal, error }) => {
+        console.log('[backend] exited', code, signal, error || '')
+        // The output tail is for crashes. On an exit we asked for (quit / update install) it is only
+        // access-log noise — it was half of every telemetry window — so post the one line without it.
+        if (backendStopping) bkLog(`EXITED code=${code} signal=${signal} (requested)`)
+        else bkLog(`EXITED code=${code} signal=${signal}${error ? ` error=${error}` : ''}\n--- output tail ---\n${bkBuf.slice(-3000)}`)
+        gone(error ? `spawn failed: ${error}` : 'exited')
+      })
+    }
+    startOnce()
     const t0 = Date.now()
     if (await waitFor(`${localUrl}/api/status`, 240)) {   // ~2min: cover a slow first-boot re-seed before declaring failure
       bkLog(`bound after ${Math.round((Date.now() - t0) / 1000)}s`)
@@ -191,7 +210,9 @@ async function startBackend() {
 }
 
 let backendStopping = false    // set by stopBackend(): the exit that follows is expected, not a crash
+let backendRespawner = null    // restarts a backend that dies on its own (respawn.js)
 function stopBackend() {
+  backendRespawner?.stop()
   if (!backendProc) return
   backendStopping = true
   const pid = backendProc.pid
@@ -410,10 +431,7 @@ function macDmgUrl(v) { return `${GH_RELEASES}/${relTag(v)}/Arbiter-${v}-arm64.d
 
 function _applyChannel(au) {
   const beta = onBetaChannel()
-  try {
-    au.allowPrerelease = beta
-    au.channel = beta ? 'beta' : 'latest'
-  } catch {}
+  try { applyChannel(au, beta) } catch {}
   return beta
 }
 

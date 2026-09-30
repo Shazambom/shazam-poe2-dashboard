@@ -54,6 +54,9 @@ def _sidecar_cmd() -> Optional[list[str]]:
     return None
 
 
+HEALTHY_RUN_S = 60.0   # a child that lived this long earns a quick restart; one that dies sooner backs off
+
+
 def _supervise(cmd: list[str]) -> None:
     global _proc
     backoff = 1.0
@@ -64,7 +67,7 @@ def _supervise(cmd: list[str]) -> None:
             # visible instead of being discarded — the death was invisible in v0.2.50.
             _proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stderr=subprocess.PIPE, env=env)
             log.info("analytics sidecar started pid=%s (%s)", _proc.pid, cmd[0])
-            backoff = 1.0                           # a clean start resets the backoff
+            started = time.monotonic()
             err_tail = b""
             try:                                    # drain stderr so a chatty child can't block
                 err_tail = (_proc.stderr.read() or b"") if _proc.stderr else b""
@@ -73,6 +76,8 @@ def _supervise(cmd: list[str]) -> None:
             rc = _proc.wait()
             if _stop:
                 break
+            if time.monotonic() - started >= HEALTHY_RUN_S:
+                backoff = 1.0                       # it ran a while: restart it promptly
             log.info("analytics sidecar exited rc=%s — restarting", rc)
             # rc=3221225477 (0xC0000005) = native access violation; a clean rc=0 with jobs stuck
             # usually means a watchdog os._exit. Either way, surface it.

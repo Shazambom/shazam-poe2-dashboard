@@ -33,10 +33,3 @@
   Pop $0
   skip_heal_preinit:
 !macroend
-
-; customInit runs after preInit — report the (now cleaned-up) state to the server so
-; we can confirm the self-heal worked and diagnose anything that still slips through.
-!macro customInit
-  nsExec::Exec "powershell -NoProfile -ExecutionPolicy Bypass -Command $\"$$ErrorActionPreference='SilentlyContinue'; $$r=@(); $$r+='os='+[Environment]::OSVersion.VersionString; $$r+='user='+$$env:USERNAME; $$r+='== running procs (post-heal) =='; $$r+=(Get-Process | ? { $$_.ProcessName -match 'PoE2|electron|dashboard' } | Select Id,ProcessName,Path | Format-Table -Auto | Out-String); $$r+='== existing install (post-heal) =='; $$r+=(Get-ChildItem (Join-Path $$env:LOCALAPPDATA 'Programs') -EA 0 | ? { $$_.Name -match 'poe2|dashboard' } | Select Name | Out-String); try { Invoke-RestMethod -Uri 'http://192.168.1.250:8080/api/installlog?p=init' -Method Post -Body ($$r -join [Environment]::NewLine) -TimeoutSec 8 } catch {}$\""
-  Pop $0
-!macroend

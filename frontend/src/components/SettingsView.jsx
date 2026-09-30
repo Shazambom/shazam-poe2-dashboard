@@ -20,6 +20,7 @@ export default function SettingsView({ currencies, status, onSaved, onReportProb
   const [mapTo, setMapTo] = useState({})
   const [fees, setFees] = useState(null)
   const [busy, setBusy] = useState(false)
+  const [diagOpen, setDiagOpen] = useState(false)
 
   // The PUT payload: the editable subset, numbers coerced (blank → the default).
   const num = (v, fb) => { const n = Number(v); return Number.isFinite(n) ? n : fb }
@@ -132,10 +133,10 @@ export default function SettingsView({ currencies, status, onSaved, onReportProb
             </details>
           )}
 
-          <details className="adv">
+          <details className="adv" onToggle={e => setDiagOpen(e.currentTarget.open)}>
             <summary>Diagnostics</summary>
             <BetaChannelToggle />
-            <DiagPanel />
+            <DiagPanel open={diagOpen} />
           </details>
         </div>
       </div>
@@ -172,7 +173,7 @@ function BetaChannelToggle() {
 // Local self-diagnostics (no data leaves the machine): backend health, DB row counts,
 // backfill/digest state, and a live connectivity probe — to see why prices are/aren't
 // flowing on the self-contained desktop build.
-function DiagPanel() {
+function DiagPanel({ open }) {
   const [d, setD] = useState(null)
   const [err, setErr] = useState(null)
   const [busy, setBusy] = useState(false)
@@ -181,7 +182,8 @@ function DiagPanel() {
     try { setD(await api.diag()) } catch (e) { setErr(String(e.message || e)) }
     setBusy(false)
   }
-  useEffect(() => { run() }, [])
+  // The probe counts the market tables and checks outbound connectivity: only when asked to look.
+  useEffect(() => { if (open && !d) run() }, [open]) // eslint-disable-line
   const text = d ? JSON.stringify(d, null, 2) : ''
   return (
     <div>

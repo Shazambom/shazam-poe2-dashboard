@@ -4,10 +4,10 @@ import asyncio
 import logging
 import os
 import time
+from urllib.parse import urlsplit
 from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, HTTPException, Request
-from fastapi.middleware.cors import CORSMiddleware
 from starlette.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field, model_validator
 
@@ -78,6 +78,7 @@ async def _gold_fee_loop():
 
 
 CRAWL_RETRY_S = 120   # the seed poll holds the crawl lock for minutes at most
+CRAWL_FAILED_RETRY_S = 30 * 60   # poe2scout unreachable: try again soon, never hammer it (owner)
 
 
 async def _league_history_loop():
@@ -87,9 +88,13 @@ async def _league_history_loop():
             res = await leaguehistory.backfill()
         except Exception as exc:
             log.exception("league history backfill error: %s", exc)
-        # A crawl that found the lock held (the seed poll, or a UI-kicked crawl) retries shortly
-        # instead of losing its turn for 12 hours.
-        await asyncio.sleep(CRAWL_RETRY_S if (res or {}).get("skipped") else 12 * 3600)
+            res = {"error": str(exc)}
+        # A crawl that found the lock held (the seed poll, or a UI-kicked crawl) retries shortly, and
+        # one that failed (offline at launch, poe2scout down: /Leagues or every item fetch) in half an
+        # hour, instead of losing its turn for 12 hours.
+        res = res or {}
+        failed = bool(res.get("error")) or (res.get("attempted", 0) > 0 and res.get("errors") == res.get("attempted"))
+        await asyncio.sleep(CRAWL_RETRY_S if res.get("skipped") else CRAWL_FAILED_RETRY_S if failed else 12 * 3600)
 
 
 SEED_POLL_S = 3600   # hourly: slow on purpose, poe2scout is a free community site
@@ -141,7 +146,28 @@ async def _analytics_loop():
 
 
 app = FastAPI(title="PoE2 currency arbitrage", lifespan=lifespan)
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+# No CORS: every client reaches /api through a same-origin proxy (Electron UI server, nginx, vite), so
+# no other website may call the loopback backend (audit 2026-09-29, D2; tests/test_no_cross_origin.py).
+_LOOPBACK = {"127.0.0.1", "localhost", "[::1]"}
+
+
+def _hostname(netloc: str) -> str:
+    v = (netloc or "").strip().lower()
+    return v[: v.find("]") + 1] if v.startswith("[") else v.split(":", 1)[0]
+
+
+@app.middleware("http")
+async def loopback_only(request: Request, call_next):
+    """The desktop backend (`run_desktop.py` sets ARBITER_LOOPBACK_ONLY) answers only its own app. Without
+    CORS a page can still fire a simple POST (`mode: 'no-cors'`), and a DNS-rebinding page can read
+    GETs, so refuse a non-loopback Host and any Origin that is not the loopback UI server (Electron's
+    main process sends none). The web env sits behind nginx and does not set the flag."""
+    if os.environ.get("ARBITER_LOOPBACK_ONLY") == "1":
+        origin = request.headers.get("origin")
+        if _hostname(request.headers.get("host", "")) not in _LOOPBACK or (
+                origin is not None and _hostname(urlsplit(origin).netloc) not in _LOOPBACK):
+            return PlainTextResponse("forbidden", status_code=403)
+    return await call_next(request)
 
 
 # ------------------------------------------------------------------ status

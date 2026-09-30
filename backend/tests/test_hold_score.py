@@ -107,10 +107,8 @@ def test_the_constants_match_the_backtest():
 
 # --------------------------------------------------------- 4. the whole production DB
 
-PROD_DB = Path(os.environ.get(
-    "ARBITER_PROD_MARKET_DB",
-    Path.home() / "Library/Application Support/Arbiter/data/market.sqlite"))
-_prod = pytest.mark.skipif(not PROD_DB.exists(), reason=f"no production market DB at {PROD_DB}")
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _proddb import PROD_DB, prod as _prod  # noqa: E402  (opt-in: ARBITER_PROD_TESTS=1)
 
 
 # ------------------------------------------------ 5. k as a user-facing dial (owner directive)
