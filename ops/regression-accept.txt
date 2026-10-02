@@ -1,7 +1,7 @@
 # The differences the next release intends, checked by ops/regression-diff.py inside
 # desktop/publish-github.sh. It is valid for ONE version, and every line must still match a reported
 # difference. Anything not listed blocks the release. Whole-line comments only.
-version: 0.3.9-beta.1
+version: 0.3.9
 
 # Nothing accepted: the Strat Calculator work (tablet setups, linked trade searches, sharing) changes no
 # price, busiest market, price card, Market row, Hold row, loop, Arbitrage pool route or conversion.
