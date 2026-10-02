@@ -51,3 +51,25 @@ test('the hand-ported rateGate is gone and the engine uses the budget client', (
   assert.ok(!engine.includes('rateGate'))
   assert.ok(engine.includes("budget.acquire('trade-fetch')") && engine.includes("budget.acquire('trade-whisper')"))
 })
+
+// One budgeted trade request (simplify pass, 2026-10-01): reserve → request → observe → classify, shared
+// by the sales fetcher and the unique pricer so "rate"/"auth"/"HTTP n" mean the same everywhere.
+test('budgeted: reserves, requests, observes and parses; a refusal is classified the same for every caller', async () => {
+  const { budgeted } = budget
+  const calls = []
+  const deps = (status, body = '{"result":[1]}', refuse = false) => ({
+    request: async (r) => { calls.push(['req', r.path]); return { status, headers: { 'retry-after': '20' }, body } },
+    budget: { acquire: async (p) => { calls.push(['acq', p]); if (refuse) { const e = new Error('rl'); e.retryAfter = 9; throw e } }, observe: (p, s) => calls.push(['obs', p, s]) },
+  })
+  assert.deepEqual(await budgeted(deps(200), 'trade-search', { path: '/x' }), { ok: true, status: 200, data: { result: [1] } })
+  assert.deepEqual(calls, [['acq', 'trade-search'], ['req', '/x'], ['obs', 'trade-search', 200]])
+  assert.deepEqual(await budgeted(deps(429), 'p', { path: '/x' }), { ok: false, error: 'rate', status: 429, retryAfter: 20 })
+  assert.deepEqual(await budgeted(deps(403), 'p', { path: '/x' }), { ok: false, error: 'auth', status: 403 })
+  assert.deepEqual(await budgeted(deps(500), 'p', { path: '/x' }), { ok: false, error: 'HTTP 500', status: 500 })
+  calls.length = 0
+  assert.deepEqual(await budgeted(deps(200, '', true), 'p', { path: '/x' }), { ok: false, error: 'rate', retryAfter: 9 })
+  assert.deepEqual(calls, [['acq', 'p']], 'a refused slot never reaches the site')
+  assert.deepEqual(await budgeted(deps(200, 'not json'), 'p', { path: '/x' }), { ok: true, status: 200, data: null })
+  const boom = { request: async () => { throw new Error('offline') }, budget: { acquire: async () => {}, observe: () => {} } }
+  assert.deepEqual(await budgeted(boom, 'p', { path: '/x' }), { ok: false, error: 'offline' })
+})

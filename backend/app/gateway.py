@@ -153,6 +153,11 @@ POLICIES: dict[str, Policy] = {p.name: p for p in [
     # resolves to "trade" above). Conservative starts; re-derived from headers like the rest.
     Policy("trade-fetch", [Rate(1, Duration.SECOND), Rate(20, Duration.MINUTE)], ("www.pathofexile.com",)),
     Policy("trade-whisper", [Rate(1, Duration.SECOND * 2), Rate(10, Duration.MINUTE)], ("www.pathofexile.com",)),
+    # Trade-site item search (POST /api/trade2/search) on the account: the unique price floor
+    # (desktop/src/trade/uniqueprice.js) spends it, and an ExiledExchange2 price check reports its search
+    # here too (ee2-history hint). A conservative start (one per 10 s, four a minute) until the site's
+    # headers re-derive it.
+    Policy("trade-search", [Rate(1, Duration.SECOND * 10), Rate(4, Duration.MINUTE)], ("www.pathofexile.com",)),
     # Merchant History (/api/trade2/history) for the Sales tab. Observed 2026-09-17: a handful of GETs
     # across two machines on one account → 429 with retry-after ≈ 1 h. The budget is per ACCOUNT, so start
     # far below anything that could trip it (one per 5 min, six per hour); headers can only loosen it. The

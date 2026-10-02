@@ -9,6 +9,8 @@ export const nav = {
   // target so a freshly-mounting TradingView lands there even if it missed the event.
   openTrading(sub) { pendingTrading = sub; subs.forEach(f => { try { f({ type: 'openTrading', sub }) } catch {} }) },
   consumePendingTrading() { const s = pendingTrading; pendingTrading = null; return s },
+  // Ask the app to show Trading → Workspace (the Strat Calculator's "Open in Trading").
+  goTrading() { subs.forEach(f => { try { f({ type: 'goTrading' }) } catch {} }) },
   // Ask a section container (Strategy/Economy) to switch to a sub-view.
   openSub(section, sub) { subs.forEach(f => { try { f({ type: 'openSub', section, sub }) } catch {} }) },
 }

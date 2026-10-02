@@ -3,8 +3,12 @@
 // copies are pinned identical by desktop/test/clipboard-add.test.mjs. Change both together.
 'use strict'
 const TRADE_BASE = 'https://www.pathofexile.com/trade2'
+const FETCH_MAX = 10   // /api/trade2/fetch takes at most ten listing ids per call
 
-const tradeHome = (league) => `${TRADE_BASE}/search/poe2/${encodeURIComponent(league || 'Standard')}`
+// A new tab always opens on Instant Buyout: the status rides in the URL's query (frontend twin).
+const INSTANT_BUYOUT = { option: 'securable' }   // a price is what a buyer can pay now
+const INSTANT_BUYOUT_Q = JSON.stringify({ query: { status: INSTANT_BUYOUT } })
+const tradeHome = (league) => `${TRADE_BASE}/search/poe2/${encodeURIComponent(league || 'Standard')}?q=${encodeURIComponent(INSTANT_BUYOUT_Q)}`
 
 function tradeUrl({ type, slug }, league, live) {
   const u = `${TRADE_BASE}/${type || 'search'}/poe2/${encodeURIComponent(league)}/${slug}`
@@ -35,4 +39,4 @@ const queryUrl = ({ q }, league) => `${TRADE_BASE}/search/poe2/${encodeURICompon
 
 const isExchangeUrl = (url) => { try { return /\/trade2?\/exchange\//i.test(new URL(String(url), TRADE_BASE).pathname) } catch { return false } }
 
-module.exports = { TRADE_BASE, tradeHome, tradeUrl, parseTradeUrl, parseTradeQueryUrl, queryUrl, isExchangeUrl }
+module.exports = { TRADE_BASE, FETCH_MAX, INSTANT_BUYOUT, tradeHome, tradeUrl, parseTradeUrl, parseTradeQueryUrl, queryUrl, isExchangeUrl }

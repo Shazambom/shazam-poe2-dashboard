@@ -27,6 +27,14 @@ function registerTrade(getWin, getBackendUrl) {
     log: (line) => { try { require('../telemetry.js').installLog('sales', line) } catch {} },
   })
   ipcMain.handle('sales:fetch', (_e, p) => salesFetch(p?.league).catch(e => ({ ok: false, error: String(e && e.message || e) })))
+  ipcMain.handle('trade:uniques', () => require('./uniqueprice.js').uniques())
+  // Strat Calculator: a search's cheapest listings (a unique's floor, a linked tablet or waystone search).
+  const priceQuery = require('./uniqueprice.js').makeQueryPricer({
+    request: (r) => require('./proxy.js').poeRequest(r),
+    budget: require('./budget.js'),
+    log: (line) => { try { require('../telemetry.js').installLog('query-price', line) } catch {} },
+  })
+  ipcMain.handle('trade:query-price', (_e, p) => priceQuery(p || {}).catch(e => ({ ok: false, error: String(e && e.message || e) })))
   ipcMain.handle('trade:teleport', async (_e, { token }) => {
     try { return await engine.teleport(token) }
     catch (e) { return { success: false, error: e.code || 'error', message: String(e.message || e), retryAfter: e.retryAfter } }

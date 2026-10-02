@@ -1,11 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useWorkspace, loadWorkspace, HISTORY_SYS } from '../lib/workspaceStore.js'
 import { tradeUrl, tradeHome, queryUrl, parseTradeUrl, openTrade, isDesktop } from '../lib/session.js'
-import { shouldAcceptNav } from '../lib/webview.js'
+import { shouldAcceptNav, homeCapture } from '../lib/webview.js'
 import { SNAP } from '../lib/dests.js'
 import { addFromClipboard } from '../lib/clipboardAdd.js'
 import { findWhere, flatten, locate } from '../lib/tree.js'
-import { bus, toast, copyText } from '../lib/api.js'
+import { toast, copyText, undoToast } from '../lib/api.js'
 import { diag } from '../lib/diag.js'
 import SearchTree from './SearchTree.jsx'
 import ContextMenu from './ContextMenu.jsx'
@@ -34,7 +34,6 @@ function headMinWidth(head) {
   return Math.ceil(kids.reduce((a, k) => a + k.getBoundingClientRect().width, 0) + gap * Math.max(0, kids.length - 1)
     + (parseFloat(cs.paddingLeft) || 0) + (parseFloat(cs.paddingRight) || 0) + 2)
 }
-const UNDO_TTL = 10000
 
 // One empty state, shared by the rail and the pane.
 export const EMPTY_HINT = 'Press + to build a search · Paste a trade URL'
@@ -203,11 +202,7 @@ export default function WorkspaceView({ league }) {
     const label = where.node.name || (where.node.kind === 'folder' ? 'group' : 'search')
     const n = flatten(where.node.children || [], x => x.kind === 'search').length
     diag('ws', `ws-undo n=${n || 1}`)
-    bus.emit({ id: 'ws-undo', ttl: UNDO_TTL, node: (
-      <div className="ws-undo">
-        <span className="ws-undo-text">Deleted “{label}”{n ? ` (${n} search${n === 1 ? '' : 'es'})` : ''}</span>
-        <button className="btn small primary" onClick={() => { restore(where); bus.emit({ id: 'ws-undo', dismiss: true }) }}>Undo</button>
-      </div>) })
+    undoToast('ws-undo', `Deleted “${label}”${n ? ` (${n} search${n === 1 ? '' : 'es'})` : ''}`, () => restore(where))
   }, [remove, restore])
   const requestDelete = useCallback((d) => {
     if (d.kind === 'folder' && (d.children || []).length) setConfirmId(d.id)
@@ -218,11 +213,7 @@ export default function WorkspaceView({ league }) {
     const recs = removeMany(ids)
     if (!recs.length) return
     diag('ws', `ws-undo n=${recs.length}`)
-    bus.emit({ id: 'ws-undo', ttl: UNDO_TTL, node: (
-      <div className="ws-undo">
-        <span className="ws-undo-text">Deleted {recs.length} items</span>
-        <button className="btn small primary" onClick={() => { restoreMany(recs); bus.emit({ id: 'ws-undo', dismiss: true }) }}>Undo</button>
-      </div>) })
+    undoToast('ws-undo', `Deleted ${recs.length} items`, () => restoreMany(recs))
   }, [removeMany, restoreMany])
   const goLiveAll = useCallback((folderId) => {
     const eng = usePings.getState().engine
@@ -324,18 +315,22 @@ export default function WorkspaceView({ league }) {
     return n?.slug ? tradeUrl(n, league, n.live) : (n?.q && !n.degraded) ? queryUrl(n, league) : tradeHome(league)
   }, [activeId, league, rerunTick])
 
+  // A tab mounted on the Instant Buyout home: the site's own landing slug for it is not the user's search.
+  const homeNav = useRef(homeCapture.start(false))
+  useEffect(() => { homeNav.current = homeCapture.start(mountUrl === tradeHome(league)) }, [mountUrl, league, wvNonce])
+
   // Default each freshly-mounted trade window to Instant Buyout (the mode travel-to-hideout
   // needs). Re-attaches per webview instance (keyed remount).
   useEffect(() => {
     const el = wv.current
     if (!isDesktop || !el) return
-    // A q-mounted node already carries status.option — forcing the dropdown would rewrite EE2's query.
-    const n = activeId ? useWorkspace.getState().nodeById(activeId) : null
-    if (n?.q && !n.slug) return
+    // A ?q= mount (a new tab, an EE2 query) already carries its status — forcing the dropdown would
+    // rewrite the query; only a saved search (slug) opens on whatever status the site stored.
+    if (/[?&]q=/.test(mountUrl)) return
     const onReady = () => ensureInstantBuyout(el).then(r => { if (r === 'other') setNavState(s => ({ ...s, hint: 'Set delivery to Instant Buyout for travel-to-hideout' })) })
     el.addEventListener('dom-ready', onReady)
     return () => el.removeEventListener('dom-ready', onReady)
-  }, [activeId, league, wvNonce])
+  }, [activeId, league, wvNonce, mountUrl])
 
   // Capture a run search into the active entry. The trade SPA doesn't fire <webview> DOM
   // navigation events, but the guest webContents DOES — main forwards them here as
@@ -355,6 +350,9 @@ export default function WorkspaceView({ league }) {
       const parsed = parseTradeUrl(url)
       const id = activeRef.current
       if (!parsed || !parsed.slug || !id) return
+      const step = homeCapture.next(homeNav.current, parsed.slug)
+      homeNav.current = step.state
+      if (!step.capture) return
       // Race guard: the nav IPC is global (one channel for whatever webview is live). If this
       // slug already belongs to a DIFFERENT node, it's a stale event from a search we've since
       // switched away from — never let it overwrite the now-active node. Read fresh store state.

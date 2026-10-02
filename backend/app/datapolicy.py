@@ -17,6 +17,7 @@ USER_KV = frozenset({
     "meta_overrides",     # user currency metadata→trade-id overrides
     "trading_workspace",  # the Trading workspace tree (folders/searches)
     "signals_ack",        # which fired signals the user has dismissed
+    "strat_calc",         # Strategy → Strat Calculator: the session timer, loot and costs
 })
 
 

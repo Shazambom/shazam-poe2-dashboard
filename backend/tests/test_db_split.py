@@ -26,7 +26,7 @@ from app import db, migrations_user  # noqa: E402
 
 # ----------------------------------------------------------------- kv routing
 USER_KEYS = ["settings", "watches", "oauth_pending", "meta_overrides", "trading_workspace",
-             "signals_ack", "secret:poesessid", "secret:oauth"]
+             "signals_ack", "strat_calc", "secret:poesessid", "secret:oauth"]
 OPS_KEYS = ["lh_current", "meta_bridge", "digest_cursor", "trade_leagues", "lh_fetch:Standard"]
 
 

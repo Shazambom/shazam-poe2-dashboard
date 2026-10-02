@@ -39,6 +39,9 @@ contextBridge.exposeInMainWorld('poe2desktop', {
     modLookup: (p) => ipcRenderer.invoke('mods:lookup', p),   // Mods tab: a family's stat ids + the pool's category
     modItem: () => ipcRenderer.invoke('mods:item'),           // Mods tab: the copied item's compact parse (main reads the clipboard)
     teleport: (token) => ipcRenderer.invoke('trade:teleport', { token }),
+    // Strategy → Strat Calculator: every unique (name + base), and one unique's cheapest unidentified listings.
+    uniques: () => ipcRenderer.invoke('trade:uniques'),
+    priceQuery: (p) => ipcRenderer.invoke('trade:query-price', p),
     onPing: sub('trade:ping'),
     onEngineState: sub('trade:engine-state'),
     onSearchState: sub('trade:search-state'),   // per-search: live | auth | reconnecting | error

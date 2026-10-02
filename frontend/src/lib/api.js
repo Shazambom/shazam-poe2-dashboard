@@ -1,3 +1,4 @@
+import React from 'react'
 // Tiny pub/sub for toasts. Anything can emit { text, ok }; App renders them.
 const listeners = new Set()
 export const bus = {
@@ -5,6 +6,13 @@ export const bus = {
   emit(t) { listeners.forEach(fn => fn(t)) },
 }
 export const toast = (text, ok = true) => bus.emit({ text, ok })
+
+// A destructive action's toast: "<text> · Undo" for 10 s; Undo runs `undo` and dismisses it. `id` keys
+// the toast so a newer one of the same kind replaces it. (Plain createElement: this file is not JSX.)
+export const UNDO_TTL = 10_000
+export const undoToast = (id, text, undo) => bus.emit({ id, ttl: UNDO_TTL, node: React.createElement('div', { className: 'ws-undo' },
+  React.createElement('span', { className: 'ws-undo-text' }, text),
+  React.createElement('button', { className: 'btn small primary', onClick: () => { undo(); bus.emit({ id, dismiss: true }) } }, 'Undo')) })
 
 // Copy text and say so; `quiet` skips the toasts (a copy the user did not click for).
 export const copyText = (text, what = 'Link', quiet = false) =>
@@ -61,6 +69,10 @@ export const api = {
   workspace: () => fetch('/api/trading/workspace').then(j),
   sales: (league) => fetch('/api/sales' + qs({ league })).then(j),
   putWorkspace: (workspace) => put('/api/trading/workspace', { workspace }),
+  // Strategy → Strat Calculator: the saved session + divines per unit (backend/app/stratcalc.py).
+  stratCalc: () => fetch('/api/strategy/calc').then(j),
+  stratPrices: () => fetch('/api/strategy/calc?prices=1').then(j),
+  putStratCalc: (calc) => put('/api/strategy/calc', { calc }),
   board: (window_h, nums) => fetch('/api/board' + qs({ window_h, nums: nums || undefined })).then(j),
   boardRefresh: (window_h) => post('/api/board/refresh' + qs({ window_h })),
   edges: () => fetch('/api/market/edges').then(j),

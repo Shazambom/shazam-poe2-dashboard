@@ -3,6 +3,7 @@
 // to the bundled backend's ledger (POST /api/sales/ingest on loopback). Nothing is written to the
 // trade site. Dependencies are injectable for tests.
 'use strict'
+const { budgeted } = require('./budget.js')
 
 const POLICY = 'trade-history'
 
@@ -11,17 +12,14 @@ function makeSalesFetcher({ request, budget, backendUrl, log = () => {} }) {
   return async function fetchSales(league) {
     const lg = String(league || '').trim()
     if (!lg) return { ok: false, error: 'no league' }
-    try { await budget.acquire(POLICY) } catch (e) { log(`sales-fetch status=budget n=0 policy="${POLICY}" retry=${e.retryAfter || '?'}`); return { ok: false, error: 'rate', retryAfter: e.retryAfter } }
-    let resp
-    try { resp = await request({ path: `/api/trade2/history/poe2/${encodeURIComponent(lg)}`, referer: `https://www.pathofexile.com/trade2/history` }) } catch (e) { log(`sales-fetch status=error n=0 policy="${POLICY}"`); return { ok: false, error: String(e && e.message || e) } }
-    budget.observe(POLICY, resp.status, resp.headers)
-    let data = null
-    try { data = JSON.parse(resp.body) } catch {}
-    const rows = Array.isArray(data?.result) ? data.result : []
-    log(`sales-fetch status=${resp.status} n=${rows.length} policy="${POLICY}"`)
-    if (resp.status === 429) return { ok: false, error: 'rate', status: 429, retryAfter: Number(resp.headers?.['retry-after'] || 60) }
-    if (resp.status === 401 || resp.status === 403) return { ok: false, error: 'auth', status: resp.status }
-    if (resp.status !== 200) return { ok: false, error: `HTTP ${resp.status}`, status: resp.status }
+    const res = await budgeted({ request, budget }, POLICY, { path: `/api/trade2/history/poe2/${encodeURIComponent(lg)}`, referer: `https://www.pathofexile.com/trade2/history` })
+    if (!res.ok && res.status == null) {   // refused by the budget, or the request never got an answer
+      log(`sales-fetch status=${res.error === 'rate' ? 'budget' : 'error'} n=0 policy="${POLICY}"${res.error === 'rate' ? ` retry=${res.retryAfter || '?'}` : ''}`)
+      return res.error === 'rate' ? { ok: false, error: 'rate', retryAfter: res.retryAfter } : { ok: false, error: res.error }
+    }
+    const rows = res.ok && Array.isArray(res.data?.result) ? res.data.result : []
+    log(`sales-fetch status=${res.status} n=${rows.length} policy="${POLICY}"`)
+    if (!res.ok) return res
     // Only the fields the ledger stores cross to the backend (never the account block).
     const result = rows.filter(r => r && r.item_id && r.time).map(r => ({ item_id: String(r.item_id), time: String(r.time), item: r.item || {}, price: r.price ? { amount: r.price.amount, currency: r.price.currency } : null }))
     let ingest = { new: 0, total: 0 }

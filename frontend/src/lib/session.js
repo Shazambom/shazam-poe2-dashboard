@@ -5,6 +5,7 @@
 //                    login window and reads the HttpOnly cookie natively)
 //   * plain browser → no bridge; caller falls back to paste / tools/connect.py
 import { toast } from './api.js'
+import { INSTANT_BUYOUT } from './regex/trade.js'
 
 // The ONE "are we in the desktop app" predicate (and its trade-engine refinement).
 export const isDesktop = typeof window !== 'undefined' && !!window.poe2desktop
@@ -29,8 +30,10 @@ const TRADE_BASE = 'https://www.pathofexile.com/trade2'
 export const uid = () => Math.random().toString(36).slice(2, 9)
 
 // The trade search page for a league (the Trade tab's home). PoE2 URLs carry a `poe2`
-// realm segment: /trade2/search/poe2/{league}[/{slug}].
-export const tradeHome = (league) => `${TRADE_BASE}/search/poe2/${encodeURIComponent(league || 'Standard')}`
+// realm segment: /trade2/search/poe2/{league}[/{slug}]. A new tab always opens on Instant Buyout
+// (owner, 2026-10-01: "no matter what"): the status rides in the URL's query, so it doesn't depend on
+// what the site last remembered or on clicking its dropdown after load.
+export const tradeHome = (league) => queryUrl({ q: JSON.stringify({ query: { status: INSTANT_BUYOUT } }) }, league)
 
 // Reconstruct a trade-search URL from a stored {type, slug}, injecting the league
 // at open time (never stored). live=true → GGG's native live search.
@@ -64,6 +67,23 @@ export function parseTradeQueryUrl(url) {
   if (!q) return null
   try { const j = JSON.parse(q); if (!j || typeof j !== 'object') return null } catch { return null }
   return { q }
+}
+
+// The search a trade link carries, read from the link itself — no request: a saved search's slug is
+// its query gzipped and base64'd (measured 2026-10-01); a ?q= link carries the JSON. Returns the
+// site's search body ({ query, sort? }), or null for anything else (an exchange link, a short id).
+export async function searchOfLink(url) {
+  const q = parseTradeQueryUrl(url)
+  if (q) { const j = JSON.parse(q.q); return j.query && typeof j.query === 'object' ? j : { query: j } }
+  const p = parseTradeUrl(url)
+  if (!p || p.type !== 'search' || !p.slug.startsWith('H4sI')) return null
+  try {
+    const b64 = p.slug.replace(/-/g, '+').replace(/_/g, '/')
+    const bytes = Uint8Array.from(atob(b64 + '='.repeat((4 - b64.length % 4) % 4)), c => c.charCodeAt(0))
+    const text = await new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'))).text()
+    const j = JSON.parse(text)
+    return j && typeof j === 'object' && !Array.isArray(j) ? { query: j } : null
+  } catch { return null }
 }
 
 // A query link for a stored { q }, league injected at open time (never stored). Both parts are

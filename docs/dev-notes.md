@@ -347,6 +347,50 @@ Tests: `backend/tests/test_crafting_recipes.py`. They parse the real bench page
 (`fixtures/mods/reforging-bench.html.gz`) and include the owner's disenchant loop and a reforge loop,
 run through the real `Graph.build` and route search.
 
+### Strategy → Strat Calculator (added 2026-10-01)
+
+Tracks a farming session's net divines per hour. The pure model is `frontend/src/lib/stratcalc.js`; the
+view is `StratCalcView.jsx`; the strats are the user kv `strat_calc`, checked by `backend/app/stratcalc.py`
+`validate` (the model clamps to the same limits, so a save is never refused).
+
+- **Tablet setups.** A strat's tablets are lines (`{ id, base, name, slots, price, cur, link? }`), four slots
+  in all. A tablet's cost is spread over its **full uses**, which come from data, never a list in code:
+  `modpool.refresh_tablet_uses` (part of `modpool.refresh`, run by the seed publisher on shazam) reads
+  poe2db's Tablet page (normal bases: 10) and each unique's page. For a unique it reads the **sample item**
+  (`implicitMods … \n<n> uses remaining`), not the tooltip or the Stats row, which show the base's 10 for the
+  5-use uniques. The result is kv_ops `tablet_uses`; it rides the seed and reaches the view as `uses` from
+  `GET /api/strategy/calc`. A unique without a sample item (Forgotten By Time) is unknown: it is not offered,
+  and never guessed. Local rebuild: `cd backend && DATA_DIR=<dir> ../.venv-test/bin/python -m app.modpool`.
+- **Linked trade searches** (Per map and each tablet line). The 🔗 opens `TradeBuilder.jsx`, the real trade
+  site in a dialog:
+  - **Reading the search:** the window's own address is its search. It opens on a `?q=` link, and a run
+    search lands on a gzip slug. The dialog follows the address through the app's existing
+    `trade:webview-nav` event, filtered to its own webview (`shouldAcceptNav`), and reads it with
+    `searchOfLink`. There is no request interception.
+  - **Pasted links and saved searches:** a pasted link or a Trading-tab search is read the same way
+    (`session.searchOfLink`; `workspaceStore.savedSearches` / `searchOfNode`, never History rows): a saved
+    search's slug is its query, gzipped and base64'd.
+  - **Pricing:** the average of the cheapest 10 listings, in divines, refreshed hourly. It goes through
+    `trade:query-price` (`makeQueryPricer`) under the shared budget. That one engine prices everything:
+    unique floors (`regex/trade.js` `uniqueQuery`), tablets and waystones. It sends every query Instant
+    Buyout, cheapest first. A typed price wins.
+  - **⚠️ Full uses:** every tablet price search is held to the tablet's full uses and to uncorrupted
+    (`regex/trade.js` `fullTabletQuery`; `withFullUses` is shared with the Regex tab). Waystone searches
+    are only forced to Instant Buyout.
+- **⟳ per strat** (`restale`): that strat's floors and links become due now.
+- **Open in Trading** (`lib/stratTrading.js`): selects the saved search with the same filters (key order
+  ignored; History skipped) or adds it to a "From strats" folder. It waits for the workspace to load.
+- **Sharing:** `.arbiterstrat` files (`exportStrats` / `importStrats`).
+  - **Export** carries the setup and the results, but no market prices and no running clock. It is saved to
+    Downloads through `ws.exportFile`.
+  - **Import** (⤓ or dropping a file on the sidebar) gives copies in an "Imported" folder, repaired like
+    saved data. A file that cannot be read whole imports nothing.
+
+Tests: `frontend/test/stratcalc*.test.mjs`, `tablet-price-query`, `trade-link`, `strat-trading`;
+`backend/tests/test_stratcalc*.py` (the e2e fuzz drives the real JS through save and reload),
+`test_tablet_uses.py` (poe2db fixtures in `tests/fixtures/mods/poe2db-*.html.gz`);
+`desktop/test/uniqueprice.test.mjs`.
+
 ## Deploying a desktop release (mechanics)
 
 Full runbook: [`release-runbook.md`](./release-runbook.md). Shape: bump `desktop/package.json`,

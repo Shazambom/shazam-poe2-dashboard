@@ -1,29 +1,8 @@
 # The differences the next release intends, checked by ops/regression-diff.py inside
 # desktop/publish-github.sh. It is valid for ONE version, and every line must still match a reported
 # difference. Anything not listed blocks the release. Whole-line comments only.
-version: 0.3.8
+version: 0.3.9-beta.1
 
-# Crafting recipes are new in 0.3.8: orb disenchants and Reforging Bench upgrades as route steps.
-# (Exchange-only loops, prices, busiest markets, price cards, the Market table and Hold must not change,
-# so none of those is accepted here.)
-loops    recipe loop: *
-
-# The new recipe loops join the Arbitrage pool and push out loops at its very bottom only.
-pool     joined (recipe): *
-pool     left: #9? *
-pool     score/rank shifts only (margins unchanged): *
-
-# Convert uses the recipe on what you hold: disenchant a Greater orb (10 Greater -> 30), and upgrade
-# 3 Lesser Desert Runes into 1 Desert Rune at the bench.
-convert  greater-chaos-orb>chaos: *
-convert  greater-orb-of-augmentation>aug: *
-convert  lesser-desert-rune>desert-rune: *
-
-# Hold's window is now the holding period (owner, 2026-09-30; docs/bugs/2026-09-30-hold-ignores-the-time-window.md):
-# the board is ranked for a hold of 24h / 3d / 7d / 14d, and 14d is its own board instead of a copy of 7d.
-# So the order and scores change at every window. Backtest: docs/hold-research.md "The window is the
-# holding period".
-hold     24h: order changed *
-hold     3d: order changed *
-hold     7d: order changed *
-hold     14d: order changed *
+# Nothing accepted: the Strat Calculator work (tablet setups, linked trade searches, sharing) changes no
+# price, busiest market, price card, Market row, Hold row, loop, Arbitrage pool route or conversion.
+# Checked 2026-10-02: python3 ops/regression-diff.py -> NO DIFFERENCES.

@@ -97,13 +97,13 @@ test('buildIntent (clipboard paste): folder null, source clipboard, currency →
   assert.ok(await h3.c.buildIntent(RAW, 'clipboard'), 'paste works even when the automatic stream is off')
 })
 
-test('rate-budget hint: an EE2-originated price check spends one trade-fetch slot; clipboard copies do not', async () => {
+test('rate-budget hint: an EE2-originated price check spends one trade-search and one trade-fetch slot; clipboard copies do not', async () => {
   const hints = []
   const pkg = new EventEmitter()
   const c = createHistoryConsumer({ manager: pkg, worker: { spawn: () => ({ build: async () => ({ q: '{}', name: 'x', item: {} }) }) }, prefs: () => ({ prefs: {}, source: 'default' }), send: () => {}, log: () => {}, hint: (p) => hints.push(p) })
   pkg.emit('item-checked', item('ee2')); pkg.emit('item-checked', item('clipboard'))
   await new Promise(r => setTimeout(r, 10))
-  assert.deepEqual(hints, ['trade-fetch'])
+  assert.deepEqual(hints, ['trade-search', 'trade-fetch'], 'a price check is a search then a fetch on the same account')
   c.stop()
 })
 

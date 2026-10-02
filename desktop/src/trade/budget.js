@@ -52,4 +52,21 @@ function hint(policy) {
   } catch {}
 }
 
-module.exports = { RateLimitError, configure, acquire, observe, hint }
+// One trade-site request under the shared budget: reserve a slot, send, report the headers, classify.
+// Every caller (Sales, the unique pricer) reads the same answer: { ok: true, status, data } or
+// { ok: false, error: 'rate' | 'auth' | 'HTTP n' | message, status?, retryAfter? }.
+// deps: { request(req) → { status, headers, body }, budget: { acquire, observe } } (injectable for tests).
+async function budgeted({ request, budget }, policy, req) {
+  try { await budget.acquire(policy) } catch (e) { return { ok: false, error: 'rate', retryAfter: e.retryAfter } }
+  let resp
+  try { resp = await request(req) } catch (e) { return { ok: false, error: String(e && e.message || e) } }
+  budget.observe(policy, resp.status, resp.headers)
+  if (resp.status === 429) return { ok: false, error: 'rate', status: 429, retryAfter: Number(resp.headers?.['retry-after'] || 60) }
+  if (resp.status === 401 || resp.status === 403) return { ok: false, error: 'auth', status: resp.status }
+  if (resp.status !== 200) return { ok: false, error: `HTTP ${resp.status}`, status: resp.status }
+  let data = null
+  try { data = JSON.parse(resp.body) } catch {}
+  return { ok: true, status: 200, data }
+}
+
+module.exports = { RateLimitError, configure, acquire, observe, hint, budgeted }

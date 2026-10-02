@@ -5,7 +5,7 @@ import { normalizePrice } from './number.js'
 // Every search is Instant Buyout ("securable"): the app's rule for the trade site, and what
 // travel-to-hideout needs. The Workspace forces the site's delivery dropdown only for searches
 // typed there; a query it mounts must carry the status itself.
-const INSTANT_BUYOUT = { option: 'securable' }
+export const INSTANT_BUYOUT = { option: 'securable' }
 const DELIRIOUS = 'enchant.stat_1715784068'
 const USES = 'pseudo.pseudo_number_of_uses_remaining'
 
@@ -80,12 +80,50 @@ export function waystoneQuery(s, table) {
   })
 }
 
+// A tablet search only ever sees full tablets: any uses filter it had is replaced by "at least the
+// tablet's full uses" (owner, 2026-09-24 and 2026-10-01: never a used-up tablet passed off as whole).
+// 10 for a normal tablet; a unique's own (kv_ops tablet_uses).
+export function withFullUses(stats, uses) {
+  const kept = (stats || []).map(g => ({ ...g, filters: (g.filters || []).filter(f => f.id !== USES) }))
+    .filter(g => g.filters.length || g.type !== 'and')
+  return [...kept, { type: 'and', filters: [{ id: USES, value: { min: uses } }] }]
+}
+
+// A linked tablet search as the Strat Calculator prices it: the user's filters, held to full uses,
+// uncorrupted (owner, 2026-10-01), Instant Buyout, cheapest first. null when it cannot be priced.
+export function fullTabletQuery(linked, uses) {
+  if (!linked?.query || typeof linked.query !== 'object' || !(uses > 0)) return null
+  const q = linked.query
+  const misc = q.filters?.misc_filters?.filters ?? {}
+  return {
+    query: {
+      ...q, status: INSTANT_BUYOUT, stats: withFullUses(q.stats, uses),
+      filters: { ...q.filters, misc_filters: { ...q.filters?.misc_filters, filters: { ...misc, corrupted: { option: 'false' } } } },
+    },
+    sort: { price: 'asc' },
+  }
+}
+
+// A unique's price floor (owner, 2026-10-01): by name and base, unidentified (the baseline copy every
+// unique trades as), no corrupted filter (some uniques, Voices, only come corrupted).
+export const uniqueQuery = (name, type) => ({
+  query: { status: INSTANT_BUYOUT, name, type, filters: { misc_filters: { filters: { identified: { option: 'false' } } } } },
+  sort: { price: 'asc' },
+})
+
+// A linked waystone search as the Strat Calculator prices it: the user's filters as they are (no uses on
+// a waystone; a corrupted one is ordinary stock), Instant Buyout, cheapest first. null when unusable.
+export function waystonePriceQuery(linked) {
+  if (!linked?.query || typeof linked.query !== 'object') return null
+  return { query: { ...JSON.parse(JSON.stringify(linked.query)), status: INSTANT_BUYOUT }, sort: { price: 'asc' } }
+}
+
 export function tabletQuery(s, table) {
   const kinds = table.kinds || []
   const picked = kinds.filter(k => s.type[k.key])
   const rarity = rarityFilter(s.rarity)
   // Always 10 uses remaining, whatever the string asks for (owner, 2026-09-24).
-  const stats = [...wantGroups(s.want, s.wantMode, table), { type: 'and', filters: [{ id: USES, value: { min: 10 } }] }]
+  const stats = withFullUses(wantGroups(s.want, s.wantMode, table), 10)
   const q = baseQuery({ category: { option: 'map.tablet' }, ...(rarity ? { rarity } : {}) }, stats, priceFilter(s.price))
   // The trade site takes one base type; several picked kinds leave the category-only filter.
   if (picked.length === 1) q.query.type = picked[0].base

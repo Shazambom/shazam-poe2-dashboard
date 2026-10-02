@@ -579,6 +579,67 @@ def bench_recipes_from(page: str) -> list:
     return out
 
 
+# A tablet's full uses (the Strat Calculator prices only full tablets and spreads a price over the
+# maps it lasts). Normal bases from the Tablet page's "Tablet Item" list; each unique from the sample
+# item on its own page, never the popup or Stats row, which print the base's 10 for the 5-use uniques.
+_PANE = r'id="{}" class="tab-pane[^"]*">(.*?)(?=<div id="[A-Za-z]+" class="tab-pane|\Z)'
+_BASE_CARD = re.compile(r'<a class="whiteitem TowerAugmentation"[^>]*href="[A-Za-z_]+">([^<]+Tablet)</a>.*?<span class=\'mod-value\'>(\d+)</span> uses? remaining', re.S)
+_UNIQUE_LINK = re.compile(r'<a class="UniqueItem"[^>]*href="(?:/us/)?([A-Za-z_]+)"><span class="uniqueName">([^<]+)</span>')
+_SAMPLE = re.compile(r'"name": "([^"]+)",\s*"typeLine": "[^"]*",\s*"baseType": "([^"]+Tablet)",(.*?)"implicitMods": \[\s*"[^"]*?\\n(\d+) uses? remaining"', re.S)
+
+
+def _pane(page: str, pane_id: str) -> str:
+    m = re.search(_PANE.format(pane_id), page, re.S)
+    return m.group(1) if m else ""
+
+
+def tablet_bases_from(page: str) -> list:
+    """Every normal tablet base and its uses, from poe2db's Tablet page: [{name: None, base, uses}]."""
+    out = {b: int(n) for b, n in _BASE_CARD.findall(_pane(page, "TabletItem"))}
+    return [{"name": None, "base": b, "uses": n} for b, n in out.items()]
+
+
+def tablet_unique_pages(page: str) -> list:
+    """The unique tablets poe2db lists on its Tablet page, as (page slug, name)."""
+    return list(dict.fromkeys(_UNIQUE_LINK.findall(_pane(page, "TabletUnique"))))
+
+
+def unique_tablet_uses_from(page: str) -> dict | None:
+    """A unique tablet's full uses from the sample item on its poe2db page, or None when the page has
+    no sample or the sample is corrupted (a corrupted tablet's uses are not the full uses)."""
+    m = _SAMPLE.search(page)
+    if not m or re.search(r'"corrupted":\s*true', m.group(3)):
+        return None
+    return {"name": html_lib.unescape(m.group(1)), "base": m.group(2), "uses": int(m.group(4))}
+
+
+TABLET_USES = "tablet_uses"   # kv_ops key: the tablets' full uses (read by GET /api/strategy/calc)
+
+
+async def refresh_tablet_uses(max_age: int) -> str | None:
+    """Rebuild kv_ops `tablet_uses` (rides the seed). An unreadable Tablet page keeps the last good
+    list and returns the error for the cron; a unique page that cannot be read is left out."""
+    try:
+        listing = await _page("Tablet", max_age)
+    except Exception as exc:
+        listing = ""
+        log.warning("tablet uses: poe2db unreachable (%s)", exc)
+    bases = tablet_bases_from(listing)
+    if not bases:
+        return "tablet uses: nothing parsed; kept the last good list"
+    uniques = []
+    for slug_, name in tablet_unique_pages(listing):
+        try:
+            u = unique_tablet_uses_from(await _page(slug_, max_age))
+        except Exception as exc:
+            log.warning("tablet uses: %s unreachable (%s)", name, exc)
+            continue
+        if u:
+            uniques.append(u)
+    db.kv_set(TABLET_USES, bases + uniques)
+    return None
+
+
 # ------------------------------------------------------------------ assembly and storage
 def _augments(export: Export, plural: dict) -> list:
     out = []
@@ -753,6 +814,7 @@ async def refresh(force: bool = False) -> dict:
         db.kv_set("bench_recipes", bench)
     else:
         pages_error = "; ".join(filter(None, [pages_error, "bench recipes: nothing parsed; kept the last good list"]))
+    pages_error = "; ".join(filter(None, [pages_error, await refresh_tablet_uses(max_age)])) or None
     derived = derive(export)
     import hashlib
     source = {f: hashlib.sha256(raw[f]).hexdigest()[:16] for f in REPOE_FILES}

@@ -90,3 +90,13 @@ def test_trade_history_policy_starts_very_conservative():
     assert "www.pathofexile.com" in p.hosts
     slowest = max(r.interval for r in p.rates)
     assert slowest >= gateway.Duration.MINUTE * 5, "no more than one history fetch per 5 minutes by default"
+
+
+def test_trade_search_policy_is_slow_and_reachable_from_electron():
+    """Strat Calculator's unique price floor: one item search per unique, background-only, so it starts
+    slower than anything a person clicking would do; headers can only tighten or loosen it from there."""
+    p = _fresh("trade-search")
+    assert "www.pathofexile.com" in p.hosts
+    assert min(r.interval / 1000 / r.limit for r in p.rates) >= 10, "at most one search per 10 s on any rule"
+    assert client.post("/api/ratelimits/acquire", json={"policy": "trade-search"}).json()["ok"] is True
+    assert client.post("/api/ratelimits/acquire", json={"policy": "trade-search"}).json()["ok"] is False, "the second waits"

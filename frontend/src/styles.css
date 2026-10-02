@@ -677,6 +677,95 @@ details.adv[open] summary { color: var(--ink-2); margin-bottom: 8px; }
 .cap-sub { font-size: 11px; color: var(--muted); margin-top: 1px; display: flex; align-items: center; flex-wrap: wrap; gap: 1px 3px; line-height: 1.3; }
 .cap-ghost { color: var(--loss); white-space: nowrap; cursor: help; }
 
+/* ---------- strat calculator (Strategy → Strat Calculator) ---------- */
+/* Layout is .workspace (the Arbitrage rail + main); cards are .capcard; the hero is .stat-label/.stat-val;
+   the sidebar tree's rows are the trade-search tree's (.ws-tree / .ws-node). */
+.scalc-rail { display: flex; flex-direction: column; }
+.scalc-stratcard { flex: 1; min-height: 0; display: flex; flex-direction: column; margin-bottom: 0; }
+.scalc-stratcard h2 { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
+.scalc-stratcard h2 .spacer { flex: 1; }
+.scalc-tree { flex: 1; min-height: 12rem; padding: 0; margin: 0 -6px; }   /* rows reach the card's edges, measured exactly */
+.scalc-tree .ws-node { gap: 6px; padding: 0 8px 0 4px; }
+.scalc-rate { margin-left: auto; padding-left: 8px; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.scalc-rate .muted { opacity: .6; }
+.ws-node.active .scalc-rate { color: var(--ink-2); }
+.scalc-tree .dot.ok { margin-left: 4px; }
+/* the row's delete: red, shown on hover and on the open strat (like the trade tree's row buttons) */
+.scalc-x { all: unset; flex: 0 0 auto; width: 1.25rem; text-align: center; line-height: 1.25rem; font-size: 15px; border-radius: var(--radius);
+  color: var(--loss); cursor: pointer; display: none; }
+/* the row's buttons take no room until shown, so a name at rest has the whole row */
+.ws-node:hover .scalc-x, .ws-node.active .scalc-x, .scalc-x:focus-visible { display: inline-block; }
+/* the row's ⟳: the app's refresh button, row-sized, shown like the × */
+.scalc-tree .refresh-btn.scalc-refresh { width: 1.375rem; height: 1.375rem; border: 0; background: transparent; display: none; }
+.scalc-tree .refresh-btn.scalc-refresh svg { width: 0.8rem; height: 0.8rem; }
+.ws-node:hover .scalc-refresh, .ws-node.active .scalc-refresh, .scalc-refresh:focus-visible, .scalc-tree .scalc-refresh.spinning { display: inline-flex; }
+.scalc-x:hover { background: rgba(var(--loss-rgb), .16); }
+.scalc-x:focus-visible { outline: 2px solid var(--gold); outline-offset: 1px; }
+.ws-node.folder .scalc-x { margin-left: auto; }
+.scalc-tree .ws-name { flex: 1 1 auto !important; }   /* a name takes the row; long ones end in … */
+.workspace.scalc { flex: 1; min-height: 0; grid-template-columns: clamp(14rem, 18vw, 22rem) minmax(0, 1fr); }   /* fill the window under the sub-tabs; the sidebar grows with it */
+/* the open strat's name, edited in its row: text until hovered or focused (beats the global input rule) */
+.scalc-tree .ws-node input.scalc-strat-input { flex: 1 1 0; min-width: 4ch; width: auto; height: auto; font: inherit; color: inherit;
+  background: transparent; border: 1px solid transparent; box-shadow: none; border-radius: var(--radius); padding: 1px 4px; margin: -2px 0 -2px -5px; cursor: text; }
+.scalc-tree .ws-node input.scalc-strat-input:hover { border-color: var(--line); }
+.scalc-tree .ws-node input.scalc-strat-input:focus { border-color: var(--gold-dim); background: var(--bg); color: var(--ink); }
+.scalc-hm { display: flex; align-items: center; gap: 6px; }
+.scalc-hm input.scalc-in { width: 4.5rem; font-size: 16px; }
+.scalc-top { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 16px; }
+.scalc-timer { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.scalc-clock { all: unset; font-size: 27px; font-weight: 700; letter-spacing: -.02em; min-width: 6.2ch; color: var(--muted);
+  cursor: text; border-radius: var(--radius); transition: color .15s var(--ease); }
+.scalc-clock.on { color: var(--ink); }
+.scalc-clock:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+input.scalc-clock-in { width: 7.5ch; padding: 0 6px; color: var(--ink); }
+.scalc-result { text-align: right; }
+.scalc-result .stat-val .cur-img { vertical-align: -3px; }
+.scalc-sums { display: flex; gap: 14px; justify-content: flex-end; flex-wrap: wrap; color: var(--muted); font-size: 12px; }
+.scalc-sums .wealth { color: var(--ink-2); }
+.scalc-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 24rem), 1fr)); gap: 16px; align-items: start; }
+.scalc-cols .capcard { margin-bottom: 0; }
+.scalc-row { display: grid; grid-template-columns: minmax(0, 1fr) clamp(4.5rem, 18%, 9rem) clamp(4.5rem, 20%, 10rem) 1.25rem; align-items: center; column-gap: 8px; padding: 3px 0; }
+.scalc-name { min-width: 0; overflow: hidden; }
+.scalc-line { display: grid; grid-template-columns: clamp(6rem, 22%, 9rem) clamp(4.5rem, 18%, 9rem) minmax(0, 1fr) minmax(3.5rem, auto); align-items: center; column-gap: 8px; padding: 4px 0; }
+.scalc-line .curpick { min-width: 0; }
+.scalc-line .seg, .scalc-line .toggle { grid-column: 2 / -1; justify-self: start; }
+.scalc-label { color: var(--ink-2); }
+input.scalc-in { width: 100%; min-width: 0; box-sizing: border-box; text-align: right; padding: 4px 6px; }
+.scalc-plus { grid-column: 3; justify-self: start; min-width: 4rem; align-self: stretch; font-weight: 600; }
+.scalc-val { text-align: right; white-space: nowrap; }
+.scalc-val-btn { all: unset; text-align: right; white-space: nowrap; cursor: text; min-height: 1.25rem; border-radius: var(--radius); }
+.scalc-val-btn:hover .wealth { color: var(--ink); }
+.scalc-val-btn:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+.scalc-add { margin-top: 6px; }
+/* A tablet line: which tablet (and ×), then how many a map, the price of one and its currency. */
+.scalc-tablet { display: grid; grid-template-columns: auto clamp(4.5rem, 18%, 9rem) minmax(0, 1fr) auto 1.25rem; align-items: center; gap: 4px 8px; padding: 6px 0 6px clamp(0.5rem, 3%, 1rem); border-left: 2px solid var(--line); margin: 2px 0; }
+.scalc-tablet > .curpick:first-child { grid-column: 1 / 4; min-width: 0; }
+.scalc-tablet > .curpick:last-child { grid-column: 3 / 6; }
+.scalc-link { width: 2rem; height: 1.75rem; }
+.scalc-line.scalc-mapline { grid-template-columns: clamp(6rem, 22%, 9rem) clamp(4.5rem, 18%, 9rem) minmax(0, 1fr) auto minmax(3.5rem, auto); }
+.scalc-link.on { background: rgba(var(--accent-rgb), .22); color: var(--gold); }
+/* Build on trade: the trade site in the app's dialog, as tall as the window allows. */
+.card-detail.tb-dialog { width: min(1200px, 94vw); height: 88vh; display: flex; flex-direction: column; overflow: hidden; }
+.tb-webview { flex: 1 1 auto; min-height: 0; margin-top: 10px; border-radius: var(--radius); overflow: hidden; }
+.tb-foot { display: flex; align-items: center; gap: 10px; justify-content: flex-end; padding-top: 10px; }
+.tb-foot .muted { margin-right: auto; }
+.tb-paste { width: clamp(10rem, 22vw, 18rem); text-align: left; }
+.tb-paste[aria-invalid] { border-color: var(--loss); }
+.tb-saved { width: clamp(10rem, 20vw, 16rem); }
+.scalc-tablet .curpick { min-width: 0; }
+.scalc-addtab-cell { grid-column: 2 / 4; }
+.scalc-addtab { white-space: nowrap; }
+.scalc-micro { color: var(--muted); margin: 14px 0 4px; }   /* the type is .pulse-group-label's */
+.scalc-flash.up { animation: flash-gain .3s var(--ease); }
+.scalc-flash.down { animation: flash-loss .3s var(--ease); }
+@media (prefers-reduced-motion: reduce) {
+  .scalc-flash.up, .scalc-flash.down { animation: none; }
+  .scalc-clock { transition: none; }
+}
+@media (max-width: 900px) {
+  .scalc-tree { min-height: 0; height: 30vh; }
+}
+
 /* ---------- notifications panel ---------- */
 .notif-table { border-collapse: collapse; margin: 6px 0 10px; }
 .notif-table th { font-weight: 500; color: var(--muted); font-size: 12px; text-align: center; padding: 4px 14px; }
@@ -903,6 +992,7 @@ code { background: var(--bg); padding: 1px 5px; border-radius: 3px; font-size: 1
 .curpick-box.open, .curpick-box:focus-within { border-color: var(--gold-dim); box-shadow: 0 0 0 3px rgba(var(--accent-rgb),.12); }
 .curpick-input { flex: 1; min-width: 0; border: 0; background: transparent; color: var(--ink); outline: none; padding: 2px 0; }
 .curpick-input::placeholder { color: var(--muted); }
+.curpick-pop.up { top: auto; bottom: calc(100% + 4px); margin-top: 0; }
 .curpick-pop { position: absolute; z-index: 40; left: 0; right: 0; margin-top: 4px; background: var(--surface-pop); border: 1px solid var(--line-strong); border-radius: 10px; box-shadow: var(--shadow-2); max-height: 44vh; overflow: auto; padding: 6px; }
 .convert-form .btn { min-width: 104px; }   /* fixed width so "Finding…" doesn't reflow the pickers */
 

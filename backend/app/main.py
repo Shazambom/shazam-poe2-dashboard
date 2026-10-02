@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field, model_validator
 
 from fastapi.responses import RedirectResponse, PlainTextResponse
 
-from . import analytics, arbitrage, db, devtelemetry, diag, digest, gamedata, gateway, holdscore, inflation, leaguearc, leaguehistory, liquidity, migrations_user, modpool, movers, oauth, orderbook, recipes, seedready, session, sidecar_supervisor, signalsack, watchdog, workspace
+from . import analytics, arbitrage, db, devtelemetry, diag, digest, gamedata, gateway, holdscore, inflation, leaguearc, leaguehistory, liquidity, migrations_user, modpool, movers, oauth, orderbook, recipes, seedready, session, sidecar_supervisor, signalsack, stratcalc, watchdog, workspace
 from .config import INSTALL_LOG_PATH
 from .currencies import registry
 from .settings import get_settings, save_settings
@@ -525,6 +525,40 @@ def put_workspace(body: WorkspaceBody):
         raise HTTPException(status_code=err.status, detail=err.detail)
     db.kv_set("trading_workspace", ws)
     return {"workspace": ws}
+
+
+# Strategy → Strat Calculator (backend/app/stratcalc.py): the saved strats (user kv `strat_calc`) and
+# divines per unit of every currency, off the one value table (Graph.values). The math and the
+# wall-clock timers are the view's (frontend/src/lib/stratcalc.js).
+def _strat_prices() -> dict:
+    try:
+        g = arbitrage.cached_graph()
+        return stratcalc.divine_prices(g.values(), g.s["reference"])
+    except Exception as exc:      # a cold graph must not hide the saved strats
+        log.warning("strat calc prices unavailable: %s", exc)
+        return {}
+
+
+class StratCalcBody(BaseModel):
+    calc: dict
+
+
+@app.get("/api/strategy/calc")
+def get_strat_calc(prices: int = 0):
+    # ?prices=1: the view's minute poll, which needs only the prices (the strats are read once)
+    # `uses`: the tablets' full uses (kv_ops tablet_uses, from the pipeline via the seed)
+    if prices:
+        return {"prices": _strat_prices()}
+    return {"calc": db.kv_get(stratcalc.KEY), "prices": _strat_prices(), "uses": db.kv_get(modpool.TABLET_USES, []) or []}
+
+
+@app.put("/api/strategy/calc")
+def put_strat_calc(body: StratCalcBody):
+    err = stratcalc.validate(body.calc)
+    if err:
+        raise HTTPException(422, err)
+    db.kv_set(stratcalc.KEY, body.calc)
+    return {"calc": body.calc}
 
 
 @app.get("/api/inflation")

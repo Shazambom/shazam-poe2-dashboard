@@ -1,0 +1,1395 @@
+{
+ "_doc": "Real PoE2 farming sessions for the Strat Calculator's end-to-end tests (backend/tests/test_stratcalc_e2e.py). Built 2026-10-01 from Farm of Exile's per-strategy data, XTheFarmerX's public 'Strat Data' sheet and creators' guides (each profile lists its sources). prices_div are the prices on the day the source recorded the session. A profile whose source counts more tablets than a map has slots uses the override, as a player would. Ranges are the source's own net ÷ hours, ±10% (±0.25 div/h near zero).",
+ "envelope": {
+  "minutes": [
+   5,
+   840
+  ],
+  "maps_per_hour": [
+   2,
+   20
+  ],
+  "tablets_per_map": [
+   0,
+   4
+  ],
+  "map_cost_div": [
+   0,
+   3
+  ],
+  "tablet_cost_div": [
+   0,
+   25
+  ],
+  "loot_lines": [
+   1,
+   30
+  ],
+  "loot_count": [
+   1,
+   100000
+  ],
+  "unit_price_div": [
+   0.0003,
+   300
+  ],
+  "fixed_lines": [
+   0,
+   6
+  ],
+  "fixed_count": [
+   1,
+   200
+  ],
+  "ex_per_div": [
+   243,
+   1063
+  ]
+ },
+ "profiles": [
+  {
+   "name": "Omen of Light abyss, 3 Abyss tablets (MisoxShiru, 0.5.5)",
+   "patch": "0.5.5 Forbidden Rites",
+   "from_spreadsheet": false,
+   "source_urls": [
+    "https://farmofexile.com/poe2/article/omen-of-light-abyss-farming",
+    "https://youtu.be/OnqkjzeEgjw"
+   ],
+   "minutes": 184,
+   "maps": {
+    "count": 31,
+    "price": 0.5,
+    "cur": "chaos"
+   },
+   "tablets": {
+    "perMap": 3,
+    "price": 1.2,
+    "cur": "chaos"
+   },
+   "override": null,
+   "fixed": [],
+   "loot": [
+    {
+     "cur": "ancient-jawbone",
+     "qty": 1
+    },
+    {
+     "cur": "ancient-rib",
+     "qty": 2
+    },
+    {
+     "cur": "omen-of-light",
+     "qty": 8
+    },
+    {
+     "cur": "omen-of-abyssal-echoes",
+     "qty": 34
+    },
+    {
+     "name": "Heart of the Well",
+     "qty": 17,
+     "price": 0.59091
+    }
+   ],
+   "prices_div": {
+    "ancient-jawbone": 11.0,
+    "ancient-rib": 4.72727,
+    "omen-of-light": 8.03636,
+    "omen-of-abyssal-echoes": 0.83636,
+    "chaos": 0.09091,
+    "divine": 1.0
+   },
+   "expected_net_div_per_hour": [
+    35.46,
+    43.34
+   ],
+   "source_claim": "FoE 35.5 div/h initial (27.3 at current prices); creator 20-30 div/h at ~10 maps/h"
+  },
+  {
+   "name": "Abyssal Trove cranium farm (MisoxShiru, 0.5)",
+   "patch": "0.5 Runes of Aldur / 0.5.5",
+   "from_spreadsheet": false,
+   "source_urls": [
+    "https://farmofexile.com/poe2/article/abyssal-trove-cranium-farming",
+    "https://www.youtube.com/watch?v=_Ig-0iiksAU"
+   ],
+   "minutes": 210,
+   "maps": {
+    "count": 35,
+    "price": 0,
+    "cur": "chaos"
+   },
+   "tablets": {
+    "perMap": 0,
+    "price": 0,
+    "cur": "chaos"
+   },
+   "override": {
+    "amount": 139.86,
+    "cur": "chaos"
+   },
+   "fixed": [],
+   "loot": [
+    {
+     "cur": "omen-of-light",
+     "qty": 10
+    },
+    {
+     "cur": "omen-of-abyssal-echoes",
+     "qty": 21
+    },
+    {
+     "cur": "ancient-rib",
+     "qty": 4
+    },
+    {
+     "cur": "ancient-jawbone",
+     "qty": 4
+    },
+    {
+     "cur": "preserved-cranium",
+     "qty": 6
+    },
+    {
+     "cur": "kulemak-s-invitation",
+     "qty": 5
+    }
+   ],
+   "prices_div": {
+    "omen-of-light": 4.79091,
+    "omen-of-abyssal-echoes": 0.18364,
+    "ancient-rib": 5.02273,
+    "ancient-jawbone": 6.37545,
+    "preserved-cranium": 10.56091,
+    "kulemak-s-invitation": 3.86364,
+    "chaos": 0.09091,
+    "divine": 1.0
+   },
+   "expected_net_div_per_hour": [
+    43.03,
+    52.59
+   ],
+   "source_claim": "creator title '55+ div/hr'; FoE 485.7 chaos/h = 44.2 div/h initial, 64.9 current"
+  },
+  {
+   "name": "Budget breach -> Genesis tree catalysts (DEADRABB1T, 0.5.5)",
+   "patch": "0.5.5 Forbidden Rites",
+   "from_spreadsheet": false,
+   "source_urls": [
+    "https://farmofexile.com/poe2/article/budget-breach-catalyst-farming",
+    "https://www.youtube.com/watch?v=77Y2K_fn6no"
+   ],
+   "minutes": 300,
+   "maps": {
+    "count": 50,
+    "price": 0,
+    "cur": "exalted"
+   },
+   "tablets": {
+    "perMap": 3,
+    "price": 20,
+    "cur": "exalted"
+   },
+   "override": null,
+   "fixed": [],
+   "loot": [
+    {
+     "cur": "divine",
+     "qty": 32
+    },
+    {
+     "cur": "perfect-exalted-orb",
+     "qty": 3
+    },
+    {
+     "cur": "perfect-chaos-orb",
+     "qty": 1
+    },
+    {
+     "cur": "fracturing-orb",
+     "qty": 5
+    },
+    {
+     "cur": "perfect-jeweller-s-orb",
+     "qty": 2
+    },
+    {
+     "cur": "orb-of-annulment",
+     "qty": 3
+    },
+    {
+     "cur": "reaver-catalyst",
+     "qty": 27
+    },
+    {
+     "cur": "sibilant-catalyst",
+     "qty": 49
+    },
+    {
+     "cur": "necrotic-catalyst",
+     "qty": 29
+    },
+    {
+     "cur": "tul-s-catalyst",
+     "qty": 58
+    },
+    {
+     "cur": "esh-s-catalyst",
+     "qty": 55
+    },
+    {
+     "cur": "xoph-s-catalyst",
+     "qty": 55
+    },
+    {
+     "cur": "neural-catalyst",
+     "qty": 72
+    },
+    {
+     "cur": "carapace-catalyst",
+     "qty": 69
+    },
+    {
+     "cur": "flesh-catalyst",
+     "qty": 69
+    },
+    {
+     "cur": "uul-netol-s-catalyst",
+     "qty": 46
+    }
+   ],
+   "prices_div": {
+    "divine": 1.0,
+    "perfect-exalted-orb": 2.33333,
+    "perfect-chaos-orb": 3.0,
+    "fracturing-orb": 3.8,
+    "perfect-jeweller-s-orb": 0.5,
+    "orb-of-annulment": 0.33333,
+    "reaver-catalyst": 0.25167,
+    "sibilant-catalyst": 0.09667,
+    "necrotic-catalyst": 0.05333,
+    "tul-s-catalyst": 0.03833,
+    "esh-s-catalyst": 0.03333,
+    "xoph-s-catalyst": 0.02667,
+    "neural-catalyst": 0.01167,
+    "carapace-catalyst": 0.00917,
+    "flesh-catalyst": 0.00833,
+    "uul-netol-s-catalyst": 0.0075,
+    "exalted": 0.0025
+   },
+   "expected_net_div_per_hour": [
+    14.98,
+    18.31
+   ],
+   "source_claim": "FoE 17.3 div/h initial (25.8 current)"
+  },
+  {
+   "name": "Breach catalyst farm, 4-tablet city maps (Masterer Mitch, 0.5)",
+   "patch": "0.5 Runes of Aldur",
+   "from_spreadsheet": false,
+   "source_urls": [
+    "https://farmofexile.com/poe2/article/breach-catalyst-farming",
+    "https://www.youtube.com/watch?v=BIxn4Vz_6LY"
+   ],
+   "minutes": 60,
+   "maps": {
+    "count": 10,
+    "price": 0,
+    "cur": "chaos"
+   },
+   "tablets": {
+    "perMap": 3,
+    "price": 45,
+    "cur": "chaos"
+   },
+   "override": null,
+   "fixed": [],
+   "loot": [
+    {
+     "cur": "flesh-catalyst",
+     "qty": 86
+    },
+    {
+     "cur": "neural-catalyst",
+     "qty": 69
+    },
+    {
+     "cur": "adaptive-catalyst",
+     "qty": 29
+    },
+    {
+     "cur": "uul-netol-s-catalyst",
+     "qty": 27
+    },
+    {
+     "cur": "xoph-s-catalyst",
+     "qty": 52
+    },
+    {
+     "cur": "tul-s-catalyst",
+     "qty": 37
+    },
+    {
+     "cur": "esh-s-catalyst",
+     "qty": 50
+    },
+    {
+     "cur": "chayula-s-catalyst",
+     "qty": 16
+    },
+    {
+     "cur": "carapace-catalyst",
+     "qty": 70
+    },
+    {
+     "cur": "reaver-catalyst",
+     "qty": 20
+    },
+    {
+     "cur": "sibilant-catalyst",
+     "qty": 24
+    },
+    {
+     "cur": "skittering-catalyst",
+     "qty": 15
+    },
+    {
+     "cur": "necrotic-catalyst",
+     "qty": 28
+    },
+    {
+     "cur": "refined-flesh-catalyst",
+     "qty": 11
+    },
+    {
+     "cur": "refined-neural-catalyst",
+     "qty": 8
+    },
+    {
+     "cur": "refined-adaptive-catalyst",
+     "qty": 10
+    },
+    {
+     "cur": "refined-uul-netol-s-catalyst",
+     "qty": 2
+    },
+    {
+     "cur": "refined-xoph-s-catalyst",
+     "qty": 2
+    },
+    {
+     "cur": "refined-tul-s-catalyst",
+     "qty": 12
+    },
+    {
+     "cur": "refined-esh-s-catalyst",
+     "qty": 17
+    },
+    {
+     "cur": "refined-chayula-s-catalyst",
+     "qty": 8
+    },
+    {
+     "cur": "refined-skittering-catalyst",
+     "qty": 9
+    },
+    {
+     "cur": "refined-reaver-catalyst",
+     "qty": 9
+    },
+    {
+     "cur": "refined-necrotic-catalyst",
+     "qty": 3
+    }
+   ],
+   "prices_div": {
+    "flesh-catalyst": 0.02,
+    "neural-catalyst": 0.04273,
+    "adaptive-catalyst": 0.01545,
+    "uul-netol-s-catalyst": 0.01455,
+    "xoph-s-catalyst": 0.04,
+    "tul-s-catalyst": 0.03455,
+    "esh-s-catalyst": 0.04091,
+    "chayula-s-catalyst": 0.02273,
+    "carapace-catalyst": 0.02182,
+    "reaver-catalyst": 0.25,
+    "sibilant-catalyst": 0.66,
+    "skittering-catalyst": 0.16,
+    "necrotic-catalyst": 0.06,
+    "refined-flesh-catalyst": 0.12091,
+    "refined-neural-catalyst": 0.13727,
+    "refined-adaptive-catalyst": 0.11091,
+    "refined-uul-netol-s-catalyst": 0.10909,
+    "refined-xoph-s-catalyst": 0.17636,
+    "refined-tul-s-catalyst": 0.17818,
+    "refined-esh-s-catalyst": 0.16818,
+    "refined-chayula-s-catalyst": 0.15364,
+    "refined-skittering-catalyst": 0.16091,
+    "refined-reaver-catalyst": 2.77909,
+    "refined-necrotic-catalyst": 0.97727,
+    "chaos": 0.09091,
+    "divine": 1.0
+   },
+   "expected_net_div_per_hour": [
+    58.66,
+    71.7
+   ],
+   "source_claim": "creator: 617 catalysts worth just under 86 div in ~1 h; FoE 418 chaos/h = 38 div/h"
+  },
+  {
+   "name": "200% Delirium city, 4 Delirium tablets (DEADRABB1T, 0.5.5)",
+   "patch": "0.5.5 Forbidden Rites",
+   "from_spreadsheet": false,
+   "source_urls": [
+    "https://farmofexile.com/poe2/article/200-delirium-splinter-farm",
+    "https://youtu.be/4KXuoTEcGbI"
+   ],
+   "minutes": 90,
+   "maps": {
+    "count": 15,
+    "price": 2,
+    "cur": "chaos"
+   },
+   "tablets": {
+    "perMap": 4,
+    "price": 5,
+    "cur": "divine"
+   },
+   "override": null,
+   "fixed": [],
+   "loot": [
+    {
+     "cur": "simulacrum",
+     "qty": 29
+    }
+   ],
+   "prices_div": {
+    "simulacrum": 3.1,
+    "chaos": 0.09091,
+    "divine": 1.0
+   },
+   "expected_net_div_per_hour": [
+    34.3,
+    41.93
+   ],
+   "source_claim": "creator: 29 Simulacrums ~90 div, tablets ~30 div, ~60 div profit from Simulacrums alone over 15 maps; FoE 30.7 div/h initial (55.3 current)"
+  },
+  {
+   "name": "Budget Delirium Simulacrum splinters (DEADRABB1T, 0.5.3)",
+   "patch": "0.5.3 Runes of Aldur",
+   "from_spreadsheet": false,
+   "source_urls": [
+    "https://farmofexile.com/poe2/article/budget-delirium-splinters-farm",
+    "https://www.youtube.com/watch?v=2Xa4IBd11f0",
+    "https://exile.codex-wiki.com/guides/150-splinters-per-map-on-a-budget-simulacrum-splinter/"
+   ],
+   "minutes": 270,
+   "maps": {
+    "count": 50,
+    "price": 0,
+    "cur": "chaos"
+   },
+   "tablets": {
+    "perMap": 0,
+    "price": 0,
+    "cur": "chaos"
+   },
+   "override": {
+    "amount": 100,
+    "cur": "chaos"
+   },
+   "fixed": [],
+   "loot": [
+    {
+     "cur": "simulacrum",
+     "qty": 26
+    },
+    {
+     "cur": "simulacrum-splinter",
+     "qty": 73
+    },
+    {
+     "cur": "divine",
+     "qty": 31
+    },
+    {
+     "cur": "orb-of-annulment",
+     "qty": 8
+    }
+   ],
+   "prices_div": {
+    "simulacrum": 2.7,
+    "simulacrum-splinter": 0.009,
+    "divine": 1.0,
+    "orb-of-annulment": 0.6,
+    "chaos": 0.10309
+   },
+   "expected_net_div_per_hour": [
+    19.27,
+    23.55
+   ],
+   "source_claim": "creator: 50 maps in 4-5 h, 26 Sims + 73 splinters (~70 div of Sims) + 31 raw div; ~1 div cost per 10 maps; FoE 29.7 div/h initial"
+  },
+  {
+   "name": "Ritual omens, Rite of the Nameless city chains (XTheFarmerX sheet, 0.5.5)",
+   "patch": "0.5.5 Forbidden Rites",
+   "from_spreadsheet": true,
+   "source_urls": [
+    "https://docs.google.com/spreadsheets/d/1WpZMCG51_eGj2M32RSy0jiyH1gMVzLoFckpYwjClu_g/edit?gid=1747781434",
+    "https://www.youtube.com/watch?v=9geBdXsPi0A",
+    "https://farmofexile.com/poe2/article/ritual-omen-farming-in-rite-of-the-nameless-city-chains"
+   ],
+   "minutes": 330,
+   "maps": {
+    "count": 35,
+    "price": 0,
+    "cur": "divine"
+   },
+   "tablets": {
+    "perMap": 0,
+    "price": 0,
+    "cur": "divine"
+   },
+   "override": {
+    "amount": 138.242,
+    "cur": "divine"
+   },
+   "fixed": [
+    {
+     "cur": "head-of-the-king",
+     "qty": 7
+    }
+   ],
+   "loot": [
+    {
+     "cur": "omen-of-chaotic-rarity",
+     "qty": 90
+    },
+    {
+     "cur": "omen-of-chaotic-effectiveness",
+     "qty": 84
+    },
+    {
+     "cur": "omen-of-chaotic-quantity",
+     "qty": 81
+    },
+    {
+     "cur": "omen-of-chaotic-monsters",
+     "qty": 74
+    },
+    {
+     "cur": "omen-of-whittling",
+     "qty": 19
+    },
+    {
+     "cur": "omen-of-sinistral-annulment",
+     "qty": 5
+    },
+    {
+     "cur": "omen-of-sinistral-erasure",
+     "qty": 4
+    },
+    {
+     "cur": "omen-of-dextral-annulment",
+     "qty": 4
+    },
+    {
+     "cur": "omen-of-dextral-erasure",
+     "qty": 2
+    },
+    {
+     "cur": "call-of-the-shadows",
+     "qty": 52
+    },
+    {
+     "cur": "omen-of-dextral-crystallisation",
+     "qty": 15
+    },
+    {
+     "cur": "omen-of-sinistral-crystallisation",
+     "qty": 8
+    },
+    {
+     "cur": "omen-of-bartering",
+     "qty": 190
+    },
+    {
+     "cur": "divine",
+     "qty": 20
+    }
+   ],
+   "prices_div": {
+    "omen-of-chaotic-rarity": 0.571,
+    "omen-of-chaotic-effectiveness": 0.143,
+    "omen-of-chaotic-quantity": 0.769,
+    "omen-of-chaotic-monsters": 0.0905,
+    "omen-of-whittling": 12.5,
+    "omen-of-sinistral-annulment": 18.5,
+    "omen-of-sinistral-erasure": 18.0,
+    "omen-of-dextral-annulment": 10.75,
+    "omen-of-dextral-erasure": 10.75,
+    "call-of-the-shadows": 0.1923,
+    "omen-of-dextral-crystallisation": 0.9067,
+    "omen-of-sinistral-crystallisation": 0.5,
+    "omen-of-bartering": 0.0868,
+    "divine": 1.0,
+    "head-of-the-king": 1
+   },
+   "expected_net_div_per_hour": [
+    84.72,
+    103.55
+   ],
+   "source_claim": "sheet: revenue 706.1, cost 145.25, profit 560.9, 5.5 h, 101.98 D/HR (includes 35D tablets sold, 3D misc, 5D uniques)"
+  },
+  {
+   "name": "Abyss Omen of Light/Echo test, 10 maps (XTheFarmerX sheet, 0.5.5)",
+   "patch": "0.5.5 Forbidden Rites",
+   "from_spreadsheet": true,
+   "source_urls": [
+    "https://docs.google.com/spreadsheets/d/1WpZMCG51_eGj2M32RSy0jiyH1gMVzLoFckpYwjClu_g/edit?gid=1621328546"
+   ],
+   "minutes": 120,
+   "maps": {
+    "count": 10,
+    "price": 0,
+    "cur": "divine"
+   },
+   "tablets": {
+    "perMap": 0,
+    "price": 0,
+    "cur": "divine"
+   },
+   "override": {
+    "amount": 20,
+    "cur": "divine"
+   },
+   "fixed": [
+    {
+     "cur": "divine",
+     "qty": 17
+    }
+   ],
+   "loot": [
+    {
+     "cur": "fracturing-orb",
+     "qty": 1
+    },
+    {
+     "cur": "omen-of-light",
+     "qty": 11
+    },
+    {
+     "cur": "omen-of-abyssal-echoes",
+     "qty": 25
+    },
+    {
+     "cur": "divine",
+     "qty": 43
+    },
+    {
+     "cur": "chaos",
+     "qty": 75
+    },
+    {
+     "cur": "orb-of-annulment",
+     "qty": 6
+    },
+    {
+     "cur": "ancient-collarbone",
+     "qty": 3
+    },
+    {
+     "cur": "kulemak-s-invitation",
+     "qty": 1
+    }
+   ],
+   "prices_div": {
+    "fracturing-orb": 7.5,
+    "omen-of-light": 7.6667,
+    "omen-of-abyssal-echoes": 0.14286,
+    "divine": 1.0,
+    "chaos": 0.087719,
+    "orb-of-annulment": 0.5,
+    "ancient-collarbone": 0.3333,
+    "kulemak-s-invitation": 6
+   },
+   "expected_net_div_per_hour": [
+    53.09,
+    64.89
+   ],
+   "source_claim": "sheet: revenue 147.48, cost 37, profit 110.48, 2 h, 55.24 div/h (sheet sum bug: rows add to 154.98)"
+  },
+  {
+   "name": "Max-juice Aldur's Saga Grand Expeditions, raw currency only (XTheFarmerX, 0.5)",
+   "patch": "0.5 Runes of Aldur",
+   "from_spreadsheet": false,
+   "source_urls": [
+    "https://farmofexile.com/poe2/article/expensive-aldurs-saga-grand-expedition",
+    "https://www.youtube.com/watch?v=3hF0Om74UJ0",
+    "https://www.mmoexp.com/News/poe-2-expedition-farming-guide-how-to-farm-75-divines-per-hour-with-maximum-juice.html"
+   ],
+   "minutes": 795,
+   "maps": {
+    "count": 40,
+    "price": 0,
+    "cur": "divine"
+   },
+   "tablets": {
+    "perMap": 0,
+    "price": 0,
+    "cur": "divine"
+   },
+   "override": {
+    "amount": 200.0,
+    "cur": "divine"
+   },
+   "fixed": [],
+   "loot": [
+    {
+     "cur": "divine",
+     "qty": 352
+    },
+    {
+     "cur": "orb-of-annulment",
+     "qty": 92
+    },
+    {
+     "cur": "perfect-exalted-orb",
+     "qty": 17
+    },
+    {
+     "cur": "perfect-chaos-orb",
+     "qty": 29
+    },
+    {
+     "cur": "greater-chaos-orb",
+     "qty": 115
+    },
+    {
+     "cur": "chaos",
+     "qty": 639
+    }
+   ],
+   "prices_div": {
+    "divine": 1.0,
+    "orb-of-annulment": 0.59524,
+    "perfect-exalted-orb": 2.97619,
+    "perfect-chaos-orb": 5.47619,
+    "greater-chaos-orb": 0.35714,
+    "chaos": 0.11905
+   },
+   "expected_net_div_per_hour": [
+    36.22,
+    44.27
+   ],
+   "source_claim": "13 h 15 min; raw currency 733.5 div = 56 div/h gross raw; total revenue 1,200-1,600, costs ~200, net 1,070-1,350 -> 75-100 div/h incl. items"
+  },
+  {
+   "name": "Grand Expedition remnant rush, fast character (KingPinUwU, 0.5.5)",
+   "patch": "0.5.5 Forbidden Rites",
+   "from_spreadsheet": false,
+   "source_urls": [
+    "https://farmofexile.com/poe2/article/grand-expedition-remnant-rush",
+    "https://www.youtube.com/watch?v=dxJBGuX01u8"
+   ],
+   "minutes": 60,
+   "maps": {
+    "count": 12,
+    "price": 0,
+    "cur": "chaos"
+   },
+   "tablets": {
+    "perMap": 0,
+    "price": 0,
+    "cur": "chaos"
+   },
+   "override": null,
+   "fixed": [
+    {
+     "cur": "olroth-s-saga",
+     "qty": 1
+    },
+    {
+     "cur": "uhtred-s-saga",
+     "qty": 1
+    },
+    {
+     "cur": "expedition-logbook",
+     "qty": 1
+    }
+   ],
+   "loot": [
+    {
+     "cur": "divine",
+     "qty": 16
+    },
+    {
+     "cur": "chaos",
+     "qty": 23
+    },
+    {
+     "cur": "astrid-s-creativity",
+     "qty": 2
+    },
+    {
+     "cur": "uhtred-s-saga",
+     "qty": 2
+    },
+    {
+     "cur": "perfect-chaos-orb",
+     "qty": 1
+    },
+    {
+     "cur": "greater-chaos-orb",
+     "qty": 12
+    },
+    {
+     "cur": "perfect-orb-of-augmentation",
+     "qty": 5
+    },
+    {
+     "cur": "orb-of-annulment",
+     "qty": 2
+    }
+   ],
+   "prices_div": {
+    "divine": 1.0,
+    "chaos": 0.09091,
+    "astrid-s-creativity": 3.71909,
+    "uhtred-s-saga": 1.24,
+    "perfect-chaos-orb": 3.45455,
+    "greater-chaos-orb": 0.26545,
+    "perfect-orb-of-augmentation": 0.25455,
+    "orb-of-annulment": 0.5,
+    "olroth-s-saga": 0.40909,
+    "expedition-logbook": 0.03545
+   },
+   "expected_net_div_per_hour": [
+    31.71,
+    38.76
+   ],
+   "source_claim": "FoE 454.6 chaos/h = 41.3 div/h (one-hour run, Uhtred's Omen and 10-slot reward excluded)"
+  },
+  {
+   "name": "Budget Grand Expedition logbooks, 3 Irradiated tablets (LilBotQ, 0.5.4)",
+   "patch": "0.5.4 Runes of Aldur",
+   "from_spreadsheet": false,
+   "source_urls": [
+    "https://farmofexile.com/poe2/article/budget-expedition",
+    "https://youtu.be/gwiwn7DB0h0"
+   ],
+   "minutes": 109,
+   "maps": {
+    "count": 9,
+    "price": 0,
+    "cur": "chaos"
+   },
+   "tablets": {
+    "perMap": 0,
+    "price": 0,
+    "cur": "chaos"
+   },
+   "override": {
+    "amount": 12.06,
+    "cur": "chaos"
+   },
+   "fixed": [
+    {
+     "cur": "expedition-logbook",
+     "qty": 6
+    }
+   ],
+   "loot": [
+    {
+     "cur": "divine",
+     "qty": 53
+    },
+    {
+     "cur": "perfect-exalted-orb",
+     "qty": 2
+    },
+    {
+     "cur": "orb-of-annulment",
+     "qty": 9
+    },
+    {
+     "name": "Aldur's Saga",
+     "qty": 1,
+     "price": 30.0
+    },
+    {
+     "cur": "greater-chaos-orb",
+     "qty": 16
+    },
+    {
+     "cur": "perfect-chaos-orb",
+     "qty": 2
+    }
+   ],
+   "prices_div": {
+    "divine": 1.0,
+    "perfect-exalted-orb": 2.5,
+    "orb-of-annulment": 0.5,
+    "greater-chaos-orb": 0.33299,
+    "perfect-chaos-orb": 3.0,
+    "chaos": 0.10309,
+    "expedition-logbook": 1.5
+   },
+   "expected_net_div_per_hour": [
+    46.36,
+    56.67
+   ],
+   "source_claim": "FoE 545.5 chaos/h (= 56 div/h at 9.7c/div, 49.6 at 11)"
+  },
+  {
+   "name": "Fracturing Orbs in cleansed area with Sacred Bloom (KingPinUwU, 0.5.5)",
+   "patch": "0.5.5 Forbidden Rites",
+   "from_spreadsheet": false,
+   "source_urls": [
+    "https://farmofexile.com/poe2/article/fracturing-orb-farming-with-sacred-bloom",
+    "https://www.youtube.com/watch?v=5J_UrM9pdYo"
+   ],
+   "minutes": 63,
+   "maps": {
+    "count": 14,
+    "price": 0,
+    "cur": "chaos"
+   },
+   "tablets": {
+    "perMap": 3,
+    "price": 15,
+    "cur": "chaos"
+   },
+   "override": null,
+   "fixed": [
+    {
+     "cur": "sacred-bloom",
+     "qty": 1
+    }
+   ],
+   "loot": [
+    {
+     "cur": "fracturing-orb",
+     "qty": 11
+    },
+    {
+     "cur": "orb-of-annulment",
+     "qty": 4
+    },
+    {
+     "cur": "omen-of-catalysing-exaltation",
+     "qty": 1
+    },
+    {
+     "cur": "omen-of-the-hunt",
+     "qty": 3
+    },
+    {
+     "cur": "omen-of-secret-compartments",
+     "qty": 1
+    },
+    {
+     "cur": "greater-chaos-orb",
+     "qty": 3
+    },
+    {
+     "cur": "perfect-jeweller-s-orb",
+     "qty": 2
+    },
+    {
+     "cur": "divine",
+     "qty": 21
+    }
+   ],
+   "prices_div": {
+    "fracturing-orb": 8.45467,
+    "orb-of-annulment": 0.75067,
+    "omen-of-catalysing-exaltation": 0.072,
+    "omen-of-the-hunt": 5.0,
+    "omen-of-secret-compartments": 0.48267,
+    "greater-chaos-orb": 0.33333,
+    "perfect-jeweller-s-orb": 0.44133,
+    "divine": 1.0,
+    "chaos": 0.13333,
+    "sacred-bloom": 0.13333
+   },
+   "expected_net_div_per_hour": [
+    108.26,
+    132.32
+   ],
+   "source_claim": "creator: ~120 div pure profit from ~14 maps in just over an hour; FoE initial 878.6 chaos/h; FoE current -8.8 div/h after Ritual tablets went 15c -> 132c and Omen of the Hunt crashed"
+  },
+  {
+   "name": "Budget Ritual omens, Audience with the King (DeadR4bb1t, 0.5)",
+   "patch": "0.5 Runes of Aldur",
+   "from_spreadsheet": false,
+   "source_urls": [
+    "https://farmofexile.com/poe2/article/budget-ritual-omen-farming",
+    "https://youtu.be/VC_rPujhEl8"
+   ],
+   "minutes": 360,
+   "maps": {
+    "count": 36,
+    "price": 0,
+    "cur": "chaos"
+   },
+   "tablets": {
+    "perMap": 3,
+    "price": 5,
+    "cur": "chaos"
+   },
+   "override": null,
+   "fixed": [
+    {
+     "cur": "an-audience-with-the-king",
+     "qty": 5
+    }
+   ],
+   "loot": [
+    {
+     "cur": "omen-of-whittling",
+     "qty": 12
+    },
+    {
+     "cur": "omen-of-dextral-erasure",
+     "qty": 4
+    },
+    {
+     "cur": "omen-of-sinistral-erasure",
+     "qty": 4
+    },
+    {
+     "cur": "omen-of-dextral-annulment",
+     "qty": 2
+    },
+    {
+     "cur": "fracturing-orb",
+     "qty": 2
+    }
+   ],
+   "prices_div": {
+    "omen-of-whittling": 4.7337,
+    "omen-of-dextral-erasure": 4.142,
+    "omen-of-sinistral-erasure": 7.3373,
+    "omen-of-dextral-annulment": 4.142,
+    "fracturing-orb": 7.75,
+    "chaos": 0.11834,
+    "an-audience-with-the-king": 0.15266,
+    "divine": 1.0
+   },
+   "expected_net_div_per_hour": [
+    18.06,
+    22.08
+   ],
+   "source_claim": "creator: 6 h test, ~111 div from omens + ~15-16 div of Fracturing Orbs; FoE 250 chaos/h"
+  },
+  {
+   "name": "Triple-breach T15, 150 maps (r/PathOfExile2, 0.4)",
+   "patch": "0.4 Fate of the Vaal",
+   "from_spreadsheet": false,
+   "source_urls": [
+    "https://www.reddit.com/r/PathOfExile2/comments/1qbzccm/150_breach_maps_37dhr_anyone_can_make_100s_of/",
+    "https://www.aoeah.com/news/4302--poe-2-04-best-breach-atlas-tree-strategy"
+   ],
+   "minutes": 525,
+   "maps": {
+    "count": 150,
+    "price": 10,
+    "cur": "exalted"
+   },
+   "tablets": {
+    "perMap": 3,
+    "price": 1,
+    "cur": "divine"
+   },
+   "override": null,
+   "fixed": [],
+   "loot": [
+    {
+     "cur": "breach-splinter",
+     "qty": 90000
+    },
+    {
+     "cur": "divine",
+     "qty": 25
+    },
+    {
+     "cur": "exalted",
+     "qty": 1500
+    }
+   ],
+   "prices_div": {
+    "breach-splinter": 0.004,
+    "divine": 1.0,
+    "exalted": 0.004115
+   },
+   "expected_net_div_per_hour": [
+    34.97,
+    42.74
+   ],
+   "source_claim": "reddit (search snippet only; post not readable here): 150 maps, triple breach tablets, 3-3.5 min maps, ~37 div/h from breach drops, 56 selling everything; aoeah 0.4: tablets ~1 div each, 600-800 splinters/map"
+  },
+  {
+   "name": "Budget triple breach, 6-min maps (aoeah + MMOPIXEL, 0.5)",
+   "patch": "0.5 Runes of Aldur",
+   "from_spreadsheet": false,
+   "source_urls": [
+    "https://www.aoeah.com/news/4626--how-to-get--combine-breach-splinters-in-poe-2-05",
+    "https://www.mmopixel.com/news/poe-2-0-5-triple-breach-farming-how-much-currency-can-you-make"
+   ],
+   "minutes": 60,
+   "maps": {
+    "count": 10,
+    "price": 0,
+    "cur": "exalted"
+   },
+   "tablets": {
+    "perMap": 3,
+    "price": 1.2,
+    "cur": "divine"
+   },
+   "override": null,
+   "fixed": [],
+   "loot": [
+    {
+     "cur": "breach-splinter",
+     "qty": 1500
+    },
+    {
+     "cur": "exalted",
+     "qty": 300
+    },
+    {
+     "cur": "divine",
+     "qty": 1
+    }
+   ],
+   "prices_div": {
+    "breach-splinter": 0.005,
+    "exalted": 0.003333,
+    "divine": 1.0
+   },
+   "expected_net_div_per_hour": [
+    5.31,
+    6.49
+   ],
+   "source_claim": "aoeah: ~6 min/map, up to 5 div/h; ~3 min/map ~1,500 ex/h = 5 div/h; 200 splinters per div; MMOPIXEL: tablet cost 3-4 div per 10-map rotation (0.33-0.4 div/map)"
+  },
+  {
+   "name": "Expedition logbooks bought, T15 (poecurrency, 0.3)",
+   "patch": "0.3 Rise of the Abyssal",
+   "from_spreadsheet": false,
+   "source_urls": [
+    "https://www.poecurrency.com/news/poe-2-patch-0-3-0-is-farming-expedition-logbooks-profitable"
+   ],
+   "minutes": 60,
+   "maps": {
+    "count": 6,
+    "price": 30,
+    "cur": "exalted"
+   },
+   "tablets": {
+    "perMap": 0,
+    "price": 0,
+    "cur": "exalted"
+   },
+   "override": null,
+   "fixed": [
+    {
+     "cur": "exalted",
+     "qty": 75
+    }
+   ],
+   "loot": [
+    {
+     "cur": "divine",
+     "qty": 5
+    },
+    {
+     "cur": "exalted",
+     "qty": 2500
+    },
+    {
+     "cur": "orb-of-annulment",
+     "qty": 4
+    },
+    {
+     "cur": "runic-splinter",
+     "qty": 120
+    }
+   ],
+   "prices_div": {
+    "divine": 1.0,
+    "exalted": 0.0009407,
+    "orb-of-annulment": 0.37,
+    "runic-splinter": 0.0113
+   },
+   "expected_net_div_per_hour": [
+    8.95,
+    10.94
+   ],
+   "source_claim": "6-12 div/h depending on RNG; logbooks 10-15 ex each (lvl 80+); 4-5 min per mission"
+  },
+  {
+   "name": "Expedition T15 mapping, rates per map (MMOJUGG, 0.2.0g)",
+   "patch": "0.2 Dawn of the Hunt",
+   "from_spreadsheet": false,
+   "source_urls": [
+    "https://www.mmojugg.com/news/poe2-expedition-farming-guide-after-patch-020g.html"
+   ],
+   "minutes": 60,
+   "maps": {
+    "count": 15,
+    "price": 45,
+    "cur": "chaos"
+   },
+   "tablets": {
+    "perMap": 2,
+    "price": 0.4,
+    "cur": "divine"
+   },
+   "override": null,
+   "fixed": [],
+   "loot": [
+    {
+     "cur": "exalted",
+     "qty": 150
+    },
+    {
+     "cur": "chaos",
+     "qty": 450
+    },
+    {
+     "cur": "divine",
+     "qty": 7
+    },
+    {
+     "cur": "exotic-coinage",
+     "qty": 225
+    },
+    {
+     "cur": "expedition-logbook",
+     "qty": 7
+    }
+   ],
+   "prices_div": {
+    "exalted": 0.0013774,
+    "chaos": 0.0521,
+    "divine": 1.0,
+    "exotic-coinage": 0.00227,
+    "expedition-logbook": 0.75
+   },
+   "expected_net_div_per_hour": [
+    -0.21,
+    0.29
+   ],
+   "source_claim": "'~1-5 div per map (avg 2-3)' incl. rares 1-3 div each; '24-60 div/h, averaging ~3-5 div/h' (self-contradictory)"
+  },
+  {
+   "name": "Casual non-meta T15 mapping, no juice (official forum + Reddit, 0.1)",
+   "patch": "0.1 Early Access",
+   "from_spreadsheet": false,
+   "source_urls": [
+    "https://www.pathofexile.com/forum/view-thread/3701901",
+    "https://www.reddit.com/r/PathOfExile2/comments/1i21g5w/farming_1_to_4_divines_per_day/"
+   ],
+   "minutes": 120,
+   "maps": {
+    "count": 16,
+    "price": 2,
+    "cur": "exalted"
+   },
+   "tablets": {
+    "perMap": 1,
+    "price": 5,
+    "cur": "exalted"
+   },
+   "override": null,
+   "fixed": [],
+   "loot": [
+    {
+     "cur": "exalted",
+     "qty": 70
+    },
+    {
+     "cur": "regal-orb",
+     "qty": 12
+    },
+    {
+     "cur": "chaos",
+     "qty": 6
+    },
+    {
+     "cur": "orb-of-alchemy",
+     "qty": 20
+    },
+    {
+     "cur": "vaal-orb",
+     "qty": 8
+    }
+   ],
+   "prices_div": {
+    "exalted": 0.006,
+    "regal-orb": 0.002,
+    "chaos": 0.04,
+    "orb-of-alchemy": 0.001,
+    "vaal-orb": 0.003,
+    "divine": 1.0
+   },
+   "expected_net_div_per_hour": [
+    -0.01,
+    0.49
+   ],
+   "source_claim": "forum: '0.125-0.25 div/h' on non-meta builds; reddit title 'Farming 1 to 4 divines per day'"
+  },
+  {
+   "name": "200% Delirium citadel, 4 tablets, 10 maps in 55 min (MMOexp, 0.5)",
+   "patch": "0.5 Runes of Aldur",
+   "from_spreadsheet": false,
+   "source_urls": [
+    "https://www.mmoexp.com/News/poe-2-patch-0-5-best-delirium-farming-strategy-100-divine-orbs-hour-currency-guide.html"
+   ],
+   "minutes": 55,
+   "maps": {
+    "count": 10,
+    "price": 0,
+    "cur": "chaos"
+   },
+   "tablets": {
+    "perMap": 0,
+    "price": 0,
+    "cur": "chaos"
+   },
+   "override": {
+    "amount": 130.0,
+    "cur": "chaos"
+   },
+   "fixed": [],
+   "loot": [
+    {
+     "cur": "simulacrum",
+     "qty": 20
+    },
+    {
+     "cur": "divine",
+     "qty": 15
+    },
+    {
+     "cur": "simulacrum-splinter",
+     "qty": 1200
+    }
+   ],
+   "prices_div": {
+    "simulacrum": 2.7,
+    "divine": 1.0,
+    "simulacrum-splinter": 0.009,
+    "chaos": 0.11
+   },
+   "expected_net_div_per_hour": [
+    64.31,
+    78.6
+   ],
+   "source_claim": "85-90 div in ~55 min over 10 maps; 80-100 div/h (fast builds), 60-80 (average 7-8 min maps)"
+  }
+ ]
+}

@@ -40,6 +40,7 @@ test('the desktop URL helpers agree with the frontend ones on every fixture', as
   }
   assert.equal(d.queryUrl({ q: Q }, 'A B'), f.queryUrl({ q: Q }, 'A B'))
   assert.equal(d.tradeUrl({ type: 'search', slug: 's' }, 'A B', true), f.tradeUrl({ type: 'search', slug: 's' }, 'A B', true))
+  assert.equal(d.tradeHome('A B'), f.tradeHome('A B'), 'a new tab opens the same Instant Buyout page from either side')
 })
 
 // ---- Batch 4-A: the item rung ----

@@ -7,7 +7,7 @@ const { POE, poeRequest, poeJson, cookieHeader, userAgent } = require('./proxy.j
 const budget = require('./budget.js')
 
 const MAX_SOCKETS = 20          // GGG closes excess live searches with code 1013
-const FETCH_CHUNK = 10          // /fetch takes at most 10 ids per call
+const { FETCH_MAX: FETCH_CHUNK } = require('./urls.js')   // /fetch takes at most 10 ids per call
 const BACKOFF_BASE = 2000
 const BACKOFF_MAX = 60000
 

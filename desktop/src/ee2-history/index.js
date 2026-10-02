@@ -91,8 +91,9 @@ function createHistoryConsumer({ manager, worker, prefs, send = null, log = () =
 
   async function onItem(item) {
     const origin = item && item.origin ? item.origin : 'clipboard'
-    // 4-B: an EE2 price check hits GGG's trade API on the same account/IP — spend a slot of the shared budget.
-    if (origin === 'ee2' && hint) { try { hint('trade-fetch') } catch {} }
+    // 4-B: an EE2 price check hits GGG's trade API on the same account/IP — a search, then a fetch —
+    // so it spends a slot of each shared budget.
+    if (origin === 'ee2' && hint) { try { hint('trade-search'); hint('trade-fetch') } catch {} }
     if (!enabled) { log(`history-skip reason=disabled origin=${origin}`); return }
     const raw = item && typeof item.raw === 'string' ? item.raw : ''
     if (!raw) { log(`history-skip reason=empty origin=${origin}`); return }

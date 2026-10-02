@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { api, cleanErr, toast } from './api.js'
-import { uid } from './session.js'
+import { searchOfLink, tradeUrl, uid } from './session.js'
 import { find as findNode, findWhere, locate, flatten, mapNode, mapAll, removeNode, insertAt } from './tree.js'
 import { diag } from './diag.js'
 import { SNAP } from './dests.js'
@@ -26,7 +26,24 @@ let armed = false   // don't PUT while hydrating the initial load
 export const HISTORY_SYS = 'ee2-history'
 // The tree minus the History folder wherever it sits (it may be renamed or moved into a group).
 const withoutHistory = (nodes) => (nodes || []).filter(n => !(n.kind === 'folder' && n.sys === HISTORY_SYS))
+
   .map(n => (n.children ? { ...n, children: withoutHistory(n.children) } : n))
+
+// The user's saved searches, each with its folder path: never the History folder (the automatic log).
+export function savedSearches(tree, path = []) {
+  const out = []
+  for (const n of withoutHistory(tree)) {
+    if (n.kind === 'folder') out.push(...savedSearches(n.children, [...path, n.name]))
+    else if (n.kind === 'search') out.push({ node: n, path })
+  }
+  return out
+}
+
+// A saved row's search ({ query, sort? }): a ?q= row is its JSON; a slug row is read from its slug.
+export async function searchOfNode(n, league) {
+  if (n.q) { try { const j = JSON.parse(n.q); return j?.query && typeof j.query === 'object' ? j : j && typeof j === 'object' ? { query: j } : null } catch { return null } }
+  return n.slug ? searchOfLink(tradeUrl(n, league)) : null
+}
 
 // Which folders start open when the tree mounts: as the store remembers them, except the
 // ExiledExchange2 History folder, which always starts collapsed (it's a log, not the work).

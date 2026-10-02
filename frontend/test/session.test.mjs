@@ -28,8 +28,16 @@ test('tradeUrl round-trips through parseTradeUrl and injects the league', () => 
   const u = tradeUrl({ type: 'search', slug: 'abc' }, 'My League', true)
   assert.equal(u, 'https://www.pathofexile.com/trade2/search/poe2/My%20League/abc/live')
   assert.deepEqual(parseTradeUrl(u), { type: 'search', slug: 'abc', live: true })
-  assert.equal(tradeHome('Standard'), 'https://www.pathofexile.com/trade2/search/poe2/Standard')
-  assert.equal(tradeHome(), 'https://www.pathofexile.com/trade2/search/poe2/Standard')
+})
+
+test('a new trade tab always opens on Instant Buyout (owner, 2026-10-01: "no matter what")', async () => {
+  const { parseTradeQueryUrl } = await import('../src/lib/session.js')
+  for (const [lg, path] of [['Standard', 'Standard'], [undefined, 'Standard'], ['Forbidden Rites', 'Forbidden%20Rites']]) {
+    const u = tradeHome(lg)
+    assert.ok(u.startsWith(`https://www.pathofexile.com/trade2/search/poe2/${path}?q=`), u)
+    assert.deepEqual(JSON.parse(parseTradeQueryUrl(u).q), { query: { status: { option: 'securable' } } })
+    assert.equal(parseTradeUrl(u), null, 'a fresh tab is not a saved search: nothing is captured from it')
+  }
 })
 
 // ---- Batch 1: pathname-only parsing, ?q= links, queryUrl ----
@@ -54,4 +62,15 @@ test('parseTradeQueryUrl returns the exact q string and drops the league', () =>
   assert.equal(parseTradeQueryUrl('https://www.pathofexile.com/trade2/search/poe2/Standard?q=not-json'), null)
   assert.equal(parseTradeQueryUrl('https://www.pathofexile.com/trade2/search/poe2/Standard/abc'), null)
   assert.equal(parseTradeQueryUrl('https://www.pathofexile.com/trade2/exchange/poe2/Standard?q=' + Q), null, 'exchange links are not searches')
+})
+
+test('Instant Buyout is defined once; a tab opened from a ?q= URL already has it, so only saved searches get the dropdown click', async () => {
+  const { readFileSync } = await import('node:fs')
+  const session = readFileSync(new URL('../src/lib/session.js', import.meta.url), 'utf8')
+  const trade = readFileSync(new URL('../src/lib/regex/trade.js', import.meta.url), 'utf8')
+  assert.ok(trade.includes("export const INSTANT_BUYOUT = { option: 'securable' }"), 'one definition, with the query builder')
+  assert.ok(session.includes("import { INSTANT_BUYOUT } from './regex/trade.js'") && !session.includes("'securable'"), 'the home page uses it')
+  assert.ok(/export const tradeHome = \(league\) => queryUrl\(/.test(session), 'the home page is a ?q= URL built by queryUrl')
+  const ws = readFileSync(new URL('../src/components/WorkspaceView.jsx', import.meta.url), 'utf8')
+  assert.ok(/if \(\/\[\?&\]q=\/\.test\(mountUrl\)\) return/.test(ws), 'the DOM click runs only when the URL does not carry the status')
 })

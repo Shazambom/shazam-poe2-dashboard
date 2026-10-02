@@ -133,6 +133,7 @@ export default function App() {
 
   // ⌘K workspace commands: each lands on Trading → Workspace and mutates the store directly.
   const goWorkspace = React.useCallback(() => { setTab('Trading'); setTimeout(() => nav.openTrading('workspace'), 0) }, [])
+  useEffect(() => nav.on(e => { if (e.type === 'goTrading') goWorkspace() }), [goWorkspace])
   const ee2Present = useWorkspace(s => s.ee2Present)
   const hasHistoryRows = useWorkspace(s => !!(findWhere(s.tree, n => n.kind === 'folder' && n.sys === HISTORY_SYS)?.children || []).length)
   const customThemes = useTheme(s => s.customs)
