@@ -7,11 +7,13 @@ Two id spaces exist:
 
 Metadata ids are linked to trade ids in this precedence (low → high):
   1. seed override file (`data/currency_map.json`) — a small offline fallback.
-  2. **poe2scout bridge** (`meta_bridge` in kv_ops) — AUTHORITATIVE. poe2scout returns
+  2. the catalog (`meta_catalog` in kv_ops, `catalog.py`) — the game's item table joined to the trade
+     site's list by exact name on shazam; names the exchange items the bridge doesn't list.
+  3. **poe2scout bridge** (`meta_bridge` in kv_ops) — AUTHORITATIVE. poe2scout returns
      each currency's GGG `BaseItemTypeId` alongside its trade `ApiId`, giving an exact
      metadata→trade map; the crawl persists it. This is the real source of truth.
-  3. user overrides (`meta_overrides` kv) — an explicit human mapping wins over everything.
-  4. fallback heuristic (icon-filename-stem / tiered suffix) — only for ids none of the
+  4. user overrides (`meta_overrides` kv) — an explicit human mapping wins over everything.
+  5. fallback heuristic (icon-filename-stem / tiered suffix) — only for ids none of the
      above cover (e.g. league-mechanic items poe2scout doesn't list). Anything still
      unmatched is kept in `unmapped_meta` and logged so gaps are visible, never silent.
 """
@@ -50,6 +52,7 @@ class Registry:
         self._seed_overrides: dict[str, str] = {}   # currency_map.json (offline fallback)
         self._bridge: dict[str, str] = {}           # kv meta_bridge (poe2scout, authoritative)
         self._user_overrides: dict[str, str] = {}   # kv meta_overrides (human, highest)
+        self._catalog: dict[str, dict] = {}         # kv meta_catalog (the game's item table, pipeline-built)
         self._load_seed()
         self.load_bridge()                          # db is booted at import; safe to read kv
 
@@ -72,6 +75,7 @@ class Registry:
         """(Re)load the authoritative poe2scout metadata→trade bridge from kv_ops (written by
         the crawl, shipped in the market snapshot) and rebuild all links. Call after a crawl."""
         self._bridge = db.kv_get("meta_bridge", {}) or {}
+        self._catalog = db.kv_get("meta_catalog", {}) or {}
         self._rebuild_links()
 
     # -------------------------------------------------------------- static
@@ -128,15 +132,21 @@ class Registry:
 
     def _rebuild_links(self) -> None:
         """Rebuild meta→trade links from all sources in precedence order (later wins):
-        seed file < poe2scout bridge < user overrides. Clears learned/heuristic links and the
+        seed file < catalog < poe2scout bridge < user overrides. Clears learned/heuristic links and the
         negative cache so a freshly-loaded bridge re-evaluates previously-unmapped ids."""
         self.meta_to_trade.clear()
         self.unmapped_meta.clear()
-        for source in (self._seed_overrides, self._bridge, self._user_overrides):
+        # The catalog names what the others don't: an id the bridge or a user maps is theirs.
+        catalog = {m: e for m, e in self._catalog.items()
+                   if isinstance(e, dict) and e.get("id") and m not in self._bridge and m not in self._user_overrides}
+        for e in catalog.values():
+            if e.get("name") and e["id"] not in self.by_id:      # not on the trade site: the game's own name/icon
+                self.by_id[e["id"]] = Currency(id=e["id"], name=e["name"], icon=e.get("icon"), category=e.get("category"))
+        for source in (self._seed_overrides, {m: e["id"] for m, e in catalog.items()}, self._bridge, self._user_overrides):
             for meta, tid in source.items():
                 self._link(meta, tid)
-        log.info("registry links rebuilt: seed=%d bridge=%d user=%d → %d metadata ids mapped",
-                 len(self._seed_overrides), len(self._bridge), len(self._user_overrides),
+        log.info("registry links rebuilt: seed=%d catalog=%d bridge=%d user=%d → %d metadata ids mapped",
+                 len(self._seed_overrides), len(catalog), len(self._bridge), len(self._user_overrides),
                  len(self.meta_to_trade))
 
     def _link(self, meta: str, tid: str) -> None:

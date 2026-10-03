@@ -31,7 +31,7 @@ export default function Num({ label, value, min, max, onChange, placeholder, ste
     <div className="field rx-num">
       <label>{label}</label>
       <input type="number" inputMode="numeric" min={min} max={max} step={step} value={shown} placeholder={placeholder}
-             onChange={onType} onBlur={onBlur} onKeyDown={onKey} onFocus={e => e.target.select()} />
+             onChange={onType} onBlur={onBlur} onKeyDown={onKey} />
     </div>
   )
 }

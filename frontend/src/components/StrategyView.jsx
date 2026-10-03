@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import SubTabs from './SubTabs.jsx'
+import { subsOf } from '../lib/dests.js'
 import { nav } from '../lib/nav.js'
 import HoldView from './HoldView.jsx'
 import RoutesView from './RoutesView.jsx'
@@ -8,11 +9,7 @@ import StratCalcView from './StratCalcView.jsx'
 // "Strategy" tab: what to do with capital. Hold = long-term stores of value that beat
 // inflation; Arbitrage = active exchange-loop routes (which also hosts the Convert tool);
 // Strat Calculator = what a farming strategy earns, in divines per hour.
-const SUBS = [
-  { id: 'arbitrage', label: 'Arbitrage' },
-  { id: 'hold', label: 'Hold' },
-  { id: 'calc', label: 'Strat Calculator' },
-]
+const SUBS = subsOf('Strategy')
 
 export default function StrategyView({ league, capital, status, currencies, onCapitalSaved }) {
   const [sub, setSub] = useState('arbitrage')

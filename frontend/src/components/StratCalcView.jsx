@@ -60,7 +60,7 @@ function NumBox({ value, onChange, whole = false, label, autoFocus = false, plac
   return (
     <input className="scalc-in" type="text" inputMode="decimal" aria-label={label} placeholder={placeholder}
       autoFocus={autoFocus} value={draft ?? shownNum(value)}
-      onFocus={e => e.target.select()}
+     
       onChange={e => { setDraft(e.target.value); const n = sc.parseNum(e.target.value); if (n != null) onChange(fix(n)) }}
       onBlur={settle} onKeyDown={onKey} />
   )
@@ -110,7 +110,7 @@ function ClockBox({ ms, on, onSet }) {
   const done = () => { const v = sc.parseDuration(draft); if (v != null) onSet(v); setDraft(null) }
   return (
     <input className="scalc-clock scalc-clock-in" type="text" aria-label="Session time" autoFocus value={draft}
-      onFocus={e => e.target.select()} onChange={e => setDraft(e.target.value)} onBlur={done}
+      onChange={e => setDraft(e.target.value)} onBlur={done}
       onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); if (e.key === 'Escape') setDraft(null) }} />
   )
 }
@@ -183,12 +183,12 @@ function StratRow({ node, style, dragHandle }) {
       <span className="ws-caret">{folder ? (node.isOpen ? '▾' : '▸') : ''}</span>
       <span className="ws-icon">{folder ? '📁' : '📈'}</span>
       {folder && node.isEditing
-        ? <input className="ws-edit" autoFocus defaultValue={d.name} aria-label="Folder name" onFocus={e => e.target.select()} onClick={e => e.stopPropagation()}
+        ? <input className="ws-edit" autoFocus defaultValue={d.name} aria-label="Folder name" onClick={e => e.stopPropagation()}
             onBlur={e => node.submit(e.target.value)}
             onKeyDown={e => { e.stopPropagation(); if (e.key === 'Enter') node.submit(e.currentTarget.value); if (e.key === 'Escape') node.reset() }} />
         : active
           ? <input ref={nameBox} key={`${d.id}:${d.name}`} className="scalc-strat-input" type="text" aria-label="Strat name" defaultValue={d.name}
-              onClick={e => e.stopPropagation()} onFocus={e => e.target.select()}
+              onClick={e => e.stopPropagation()}
               onBlur={e => onRename(d.id, e.target.value, d.name)}
               onKeyDown={e => { e.stopPropagation(); if (e.key === 'Enter') e.currentTarget.blur(); if (e.key === 'Escape') { e.currentTarget.value = d.name; e.currentTarget.blur() } }} />
           : <span className="ws-name">{d.name}</span>}

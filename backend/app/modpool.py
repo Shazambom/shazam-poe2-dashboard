@@ -38,7 +38,7 @@ import time
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 
-from . import db, gamedata, gateway
+from . import catalog, db, gamedata, gateway
 
 log = logging.getLogger("poe2arb.modpool")
 
@@ -815,6 +815,8 @@ async def refresh(force: bool = False) -> dict:
     else:
         pages_error = "; ".join(filter(None, [pages_error, "bench recipes: nothing parsed; kept the last good list"]))
     pages_error = "; ".join(filter(None, [pages_error, await refresh_tablet_uses(max_age)])) or None
+    # The exchange's items named the game's way (the digest trades items no other source names).
+    pages_error = "; ".join(filter(None, [pages_error, await catalog.refresh(export.bases, max_age=max_age)])) or None
     derived = derive(export)
     import hashlib
     source = {f: hashlib.sha256(raw[f]).hexdigest()[:16] for f in REPOE_FILES}

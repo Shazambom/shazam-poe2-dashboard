@@ -298,7 +298,9 @@ a { color: var(--live); }
 .sales-head { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-1); }
 .sales-last { font-size: 12px; }
 .sales-body { display: flex; gap: 18px; align-items: flex-start; }
-.sales-capital { flex: 0 0 340px; min-width: 0; position: sticky; top: 0; }
+/* Pinned while the ledger scrolls, so it must fit the window and scroll its own overflow: a long holdings
+   list otherwise ran off the bottom with no way to reach it (bug report XWZGZ0). .app is the scroller. */
+.sales-capital { flex: 0 0 340px; min-width: 0; position: sticky; top: 0; max-height: 100vh; overflow-y: auto; }
 .sales-list { display: flex; flex-direction: column; gap: 6px; flex: 1 1 auto; min-width: 0; max-width: 960px; }
 .sales-body > .empty { flex: 1; }
 .sale-row { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-1); box-shadow: var(--shadow-1); transition: border-color .15s var(--ease); }

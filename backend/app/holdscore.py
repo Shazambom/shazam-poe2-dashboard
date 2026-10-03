@@ -635,9 +635,11 @@ def leaderboard(horizon: str = "3d", category: str = "all", numeraire: str = "di
     if numeraire not in NUMERAIRES:
         numeraire = "divine"
     num_id, num_name = NUMERAIRES[numeraire]
-    # The dial is part of the cache key: without it the slider would appear dead for the TTL.
-    k = clamp_k(get_settings().get("hold_caution") if k is None else k)
-    return cache.memo(_cache, f"{horizon}|{category}|{numeraire}|{k:g}", _TTL,
+    # The dial and the league are part of the cache key: without them the slider would appear dead,
+    # and a league switch would be served the old league's board, for the TTL (bug report FY0M4R).
+    s = get_settings()
+    k = clamp_k(s.get("hold_caution") if k is None else k)
+    return cache.memo(_cache, f"{s['league']}|{horizon}|{category}|{numeraire}|{k:g}", _TTL,
                       lambda: _leaderboard(horizon, category, numeraire, num_id, num_name, k))
 
 

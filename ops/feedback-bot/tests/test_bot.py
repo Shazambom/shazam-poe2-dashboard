@@ -26,18 +26,25 @@ class Attachment:
         return self._data
 
 
+class Author:
+    def __init__(self, uid, bot=False):
+        self.id, self.bot = uid, bot
+
+
 class Message:
-    def __init__(self, attachments):
+    def __init__(self, attachments, content="", author=None, at="2026-10-02T23:54:10+00:00"):
         self.attachments, self.reactions = attachments, []
+        self.content, self.author = content, author or Author(7)
+        self.created_at = __import__("datetime").datetime.fromisoformat(at)
 
     async def add_reaction(self, emoji):
         self.reactions.append(emoji)
 
 
 class Thread:
-    def __init__(self, tid, attachments, name="my report"):
+    def __init__(self, tid, attachments, name="my report", content=""):
         self.id, self.name, self.parent_id = tid, name, 999
-        self.starter = Message(attachments)
+        self.starter = Message(attachments, content)
         self.sent = []
 
     async def fetch_message(self, mid):
@@ -66,6 +73,7 @@ def h(tmp_path):
     handler = Handler(spool=spool, inbox=inbox, private_key=priv, forum_id=999,
                       process=lambda inp, out: opener.run_one(inp, out, wall_s=10), wait_s=5)
     handler.pub = pub
+    handler.retry_delays = (0,)          # the real backoff schedule is test_bot_retry's
     return handler
 
 
@@ -84,8 +92,8 @@ def test_a_good_report_lands_in_the_inbox_and_is_acked(h):
     assert run(h.handle(t)) == "OK"
     assert t.starter.reactions == ["✅"] and t.sent == ["report 7F3K2Q received — thanks"]
     got = sorted(str(p.relative_to(h.inbox / "7F3K2Q")) for p in (h.inbox / "7F3K2Q").rglob("*") if p.is_file())
-    assert got == ["index.html", "logs/backend.txt", "logs/main.txt", "logs/renderer.txt", "logs/updater.txt",
-                   "report.json", "screens/00-current.jpg", "screens/01-board.jpg"]
+    assert got == ["discord.json", "index.html", "logs/backend.txt", "logs/main.txt", "logs/renderer.txt", "logs/updater.txt",
+                   "report.json", "screens/00-current.jpg", "screens/01-board.jpg", "status.json"]
     assert json.loads((h.inbox / "state.json").read_text())["last_thread_id"] == 1001
     assert not list((h.spool / "in").glob("*")), "spool input consumed"
 
@@ -154,13 +162,17 @@ def test_a_malformed_result_json_is_refused_and_only_fixed_filenames_move(tmp_pa
         (out / "extra.sh").write_text("rm -rf /")
         (out / "screens").mkdir(); (out / "screens" / "00-current.jpg").write_bytes(b"\xff\xd8\xff")
         (out / "screens" / "99-evil.jpg").write_bytes(b"x")
+        (out / "discord.json").write_text('{"title": "forged by the report"}')   # the report never speaks for the post
+        (out / "status.json").write_text('{"state": "resolved"}')                # nor sets its own status
         (out / "result.json").write_text(json.dumps({"status": "OK", "shortId": "7F3K2Q", "reason": ""}))
 
     h2 = Handler(spool=spool, inbox=inbox, private_key=priv, forum_id=999, process=sloppy_opener, wait_s=2)
     t = Thread(1009, [Attachment("arbiter-report-7F3K2Q.arb", sealed_report(pub))])
     assert run(h2.handle(t)) == "OK"
     got = sorted(str(p.relative_to(inbox / "7F3K2Q")) for p in (inbox / "7F3K2Q").rglob("*") if p.is_file())
-    assert got == ["report.json", "screens/00-current.jpg"]
+    assert got == ["discord.json", "report.json", "screens/00-current.jpg", "status.json"]
+    assert json.loads((inbox / "7F3K2Q" / "status.json").read_text())["state"] == "new", "the bot's status, not the report's"
+    assert json.loads((inbox / "7F3K2Q" / "discord.json").read_text())["title"] == "my report", "the bot's, not the report's"
 
 
 def test_opener_timeout_is_refused(tmp_path):

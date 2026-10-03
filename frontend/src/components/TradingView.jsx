@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import SubTabs from './SubTabs.jsx'
+import { subsOf } from '../lib/dests.js'
 import { nav } from '../lib/nav.js'
 import WorkspaceView from './WorkspaceView.jsx'
 import LiveView from './LiveView.jsx'
@@ -10,13 +11,7 @@ import ModsView from './ModsView.jsx'
 // The Trading tab: Workspace (file tree of searches + the embedded trade site), Live (pings +
 // one-click travel-to-hideout), Sales, Regex (the in-game search-string builder) and Mods (the
 // modifier pool viewer). The trade site lives INSIDE the workspace — no separate Browse tab.
-const SUBS = [
-  { id: 'workspace', label: 'Workspace' },
-  { id: 'live', label: 'Live' },
-  { id: 'sales', label: 'Sales' },
-  { id: 'regex', label: 'Regex' },
-  { id: 'mods', label: 'Mods' },
-]
+const SUBS = subsOf('Trading')
 
 export default function TradingView({ league }) {
   const [sub, setSub] = useState(() => nav.consumePendingTrading() || 'workspace')

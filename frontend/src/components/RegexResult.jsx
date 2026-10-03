@@ -10,7 +10,7 @@ export default function RegexResult({ lead, text, onCopy, onReset, onTrade, auto
     <div className="rx-result rx-surface">
       <div className="rx-bar">
         {lead}
-        <input className="rx-string" readOnly value={text} onFocus={e => e.target.select()} spellCheck={false}
+        <input className="rx-string" readOnly value={text} spellCheck={false}
                placeholder="Choose what to match below, then paste the string into the in-game search box." />
         <span className={`hint rx-len ${over ? 'over' : ''}`}>{text.length} / {LIMIT}</span>
         <button className="btn small primary" disabled={!text} onClick={onCopy}>Copy</button>

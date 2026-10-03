@@ -1,15 +1,13 @@
 import React, { useEffect, useState } from 'react'
 import SubTabs from './SubTabs.jsx'
+import { subsOf } from '../lib/dests.js'
 import { nav } from '../lib/nav.js'
 import InflationView from './InflationView.jsx'
 import MarketView from './MarketView.jsx'
 
 // "Economy" tab: the macro view. Inflation = cross-league price trends vs hard-currency
 // anchors; Market = market cap / top markets / exchange edges.
-const SUBS = [
-  { id: 'inflation', label: 'Inflation' },
-  { id: 'market', label: 'Market' },
-]
+const SUBS = subsOf('Economy')
 
 export default function EconomyView({ league, currencies }) {
   const [sub, setSub] = useState('inflation')

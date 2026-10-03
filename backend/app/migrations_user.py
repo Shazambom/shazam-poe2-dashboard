@@ -251,6 +251,28 @@ def _m5_sales(conn: sqlite3.Connection) -> None:
     conn.executescript(SALES_DDL)
 
 
+def _m7_league_default(conn: sqlite3.Connection) -> None:
+    """One-time (owner, 2026-10-02): free a saved "Standard" so the league reads as the youngest
+    current one. Every settings save used to store the whole merged blob, so installs that never
+    picked a league kept the old default, Standard, which has no league history (an empty Hold page,
+    bug report FY0M4R). Who chose Standard on purpose can't be told apart; they pick it again once
+    and it sticks (idempotent on `_league_default_v1`). Any other league is the user's choice: kept."""
+    row = conn.execute("SELECT value FROM kv WHERE key='settings'").fetchone()
+    if not row:
+        return
+    try:
+        s = json.loads(row[0])
+    except (ValueError, TypeError):
+        return
+    if not isinstance(s, dict) or s.get("_league_default_v1"):
+        return
+    if s.get("league") == "Standard":
+        del s["league"]
+    s["_league_default_v1"] = True
+    conn.execute("UPDATE kv SET value=? WHERE key='settings'", (json.dumps(s),))
+    log.info("m7: league default freed")
+
+
 USER_MIGRATIONS: list[tuple[int, str, object]] = [
     (1, "initial split from legacy poe2arb.sqlite", _m1_split_from_legacy),
     (2, "derive trading_workspace tree from flat watches", _m2_watches_to_workspace),
@@ -258,4 +280,5 @@ USER_MIGRATIONS: list[tuple[int, str, object]] = [
     (4, "fold ping_sound/ping_volume into settings.notifications", _m4_notifications),
     (5, "sales ledger table (Merchant History)", _m5_sales),
     (6, "raise the saved liquidity filter floor to 200", _m6_liq_floor_200),
+    (7, "free a saved Standard league so the youngest league is the default", _m7_league_default),
 ]

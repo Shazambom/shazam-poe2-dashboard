@@ -35,7 +35,7 @@ MAX_KEYS = 10_000
 MAX_STR = 2000            # any string inside state
 MAX_STATE_DEPTH = 8
 MAX_STATE_NODES = 20_000
-MAX_LOG_LINES = 400
+MAX_LOG_LINES = 2000      # the backend's 64 KB tail, now that successful polls aren't logged
 MAX_LOG_LINE = 1024
 MAX_SCREEN_BYTES = 2 * 1024 * 1024
 MAX_PIXELS = 4_000_000
@@ -173,6 +173,23 @@ def _text(v):
     return _lines(v.splitlines()[-MAX_LOG_LINES:])
 
 
+SCREEN_NAME = re.compile(r"^[a-z][a-z-]{0,39}$")
+MAX_MISSING = 30
+
+
+def _missing(v) -> dict:
+    """The app's {screen: why it was not taken}: slug names and short string reasons only, bounded."""
+    if not isinstance(v, dict):
+        return {}
+    out = {}
+    for k, why in v.items():
+        if len(out) >= MAX_MISSING:
+            break
+        if isinstance(k, str) and SCREEN_NAME.match(k) and isinstance(why, str):
+            out[k] = why[:80]
+    return out
+
+
 def rebuild(doc: dict) -> dict:
     m = doc.get("manifest")
     s = doc.get("state")
@@ -189,6 +206,7 @@ def rebuild(doc: dict) -> dict:
         "osRelease": _str(m.get("osRelease"), 64), "electron": _str(m.get("electron"), 32),
         "installId": _str(m.get("installId"), 64), "theme": _str(m.get("theme"), 64), "shortId": short_id,
         "screensPartial": _bool(m.get("screensPartial", False)),
+        "screensMissing": _missing(m.get("screensMissing")),
     }
     state = {k: _bounded(s.get(k)) for k in ("diag", "status", "backfill", "settings", "desktopSettings", "bounds")}
     logs = {"main": _lines(l.get("main", [])), "backend": _text(l.get("backend", "")),
@@ -215,17 +233,31 @@ def reencode(b64) -> bytes | None:
         return None
 
 
-def screens_of(doc: dict) -> list[tuple[int, str, bytes]]:
+def screens_of(doc: dict) -> tuple[list[tuple[int, str, bytes]], dict]:
+    """The kept screens, and {name: why} for each one the report held that did not come out (a
+    hostile name is counted, never echoed)."""
     sc = doc.get("screens")
     if not isinstance(sc, dict):
-        return []
-    out = []
+        return [], {}
+    out, dropped = [], {}
     for i, name in enumerate(SCREENS):        # order and names from the schema, never the report
         if name in sc:
             data = reencode(sc[name])
             if data:
                 out.append((i, name, data))
-    return out
+            else:
+                dropped[name] = "not a readable JPEG"
+    invalid = 0
+    for name in sc:
+        if name in SCREENS:
+            continue
+        if isinstance(name, str) and SCREEN_NAME.match(name) and len(dropped) < MAX_MISSING:
+            dropped[name] = "not a screen this opener knows"
+        else:
+            invalid += 1
+    if invalid:
+        dropped["(invalid names)"] = str(invalid)
+    return out, dropped
 
 
 # ---------------------------------------------------------------- 5. write
@@ -236,7 +268,7 @@ def _under(outdir: Path, rel: str) -> Path:
     return p
 
 
-def write_out(rebuilt: dict, screens: list[tuple[int, str, bytes]], outdir: Path) -> None:
+def write_out(rebuilt: dict, screens: list[tuple[int, str, bytes]], outdir: Path, dropped: dict | None = None) -> None:
     outdir.mkdir(parents=True, exist_ok=True)
     (outdir / "logs").mkdir(exist_ok=True)
     if screens:
@@ -249,7 +281,7 @@ def write_out(rebuilt: dict, screens: list[tuple[int, str, bytes]], outdir: Path
     for k in ("main", "backend", "renderer", "updater"):
         _under(outdir, f"logs/{k}.txt").write_text("".join(line + "\n" for line in rebuilt["logs"][k]))
     report = {"manifest": rebuilt["manifest"], "state": rebuilt["state"], "logs": {k: f"logs/{k}.txt" for k in rebuilt["logs"]},
-              "screens": names}
+              "screens": names, "screensDropped": dropped or {}}
     _under(outdir, "report.json").write_text(json.dumps(report, indent=1))
     _under(outdir, "index.html").write_text(render_html(rebuilt, names))
 
@@ -277,8 +309,8 @@ def run(in_path: Path, outdir: Path) -> int:
         plain = decompress_capped(Path(in_path).read_bytes(), MAX_PLAIN)
         doc = parse_json(plain)
         rebuilt = rebuild(doc)
-        shots = screens_of(doc)
-        write_out(rebuilt, shots, Path(outdir))
+        shots, dropped = screens_of(doc)
+        write_out(rebuilt, shots, Path(outdir), dropped)
         return OK
     except (Refused, zlib.error, UnicodeDecodeError):
         return QUARANTINE

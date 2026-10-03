@@ -158,7 +158,7 @@ def test_index_html_escapes_everything_and_forbids_scripts(tmp_path):
 
 def test_logs_are_capped_per_line_and_per_file(tmp_path):
     d = valid_doc()
-    d["logs"]["main"] = ["x" * 5000] * 1000
+    d["logs"]["main"] = ["x" * 5000] * (cell.MAX_LOG_LINES + 500)
     d["logs"]["backend"] = "y" * 500_000
     code, out = run(tmp_path, d)
     main = (out / "logs" / "main.txt").read_text().splitlines()

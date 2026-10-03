@@ -11,7 +11,9 @@ let _index = null                 // { byId: Map<id,rec>, byName: Map<lcname,rec
 let _promise = null
 const subs = new Set()
 
-const toUrl = (icon) => (!icon ? null : icon.startsWith('http') ? icon : CDN + icon)
+// A CDN path is hotlinked; a full URL, or the game art the market pipeline carries as data for an item
+// the trade site does not list (catalog.py), is used as it is.
+export const iconUrl = (icon) => (!icon ? null : /^(https?:|data:)/.test(icon) ? icon : CDN + icon)
 
 export function loadIcons() {
   if (_index) return Promise.resolve(_index)
@@ -20,7 +22,7 @@ export function loadIcons() {
     const items = Array.isArray(d) ? d : (d.currencies || d.items || [])
     const byId = new Map(), byName = new Map()
     for (const c of items) {
-      const rec = { name: c.name, icon: toUrl(c.icon) }
+      const rec = { name: c.name, icon: iconUrl(c.icon) }
       if (c.id) byId.set(c.id, rec)
       if (c.name) byName.set(c.name.toLowerCase(), rec)
     }

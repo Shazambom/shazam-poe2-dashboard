@@ -1,18 +1,25 @@
-// The app's screens, as one list: the Board, the seven sub-views inside the consolidated tabs, and
-// Settings. ⌘K lists the sub-views from it; the desktop's "Report a problem" sweep walks all nine
-// (in `?snap=1` mode), and the report opener on the owner's side accepts exactly these ids
-// (ops/feedback-bot/opener/dests.py, pinned to this file by a test).
+// The app's screens, as ONE list: the Board, every sub-view inside the consolidated tabs (in the order
+// the tabs show them) and Settings. Each section's sub-tabs are its slice (`subsOf`), ⌘K lists the
+// sub-views from it, the desktop's "Report a problem" sweep walks all of them (in `?snap=1` mode), and
+// the report opener on the owner's side accepts exactly these ids (ops/feedback-bot/opener/dests.py,
+// pinned to this file by a test). A sub-view added anywhere else is missing from reports and ⌘K.
 export const DESTS = [
   { id: 'board', section: 'Board', sub: null, label: 'Board' },
-  { id: 'strategy-hold', section: 'Strategy', sub: 'hold', label: 'Hold' },
   { id: 'strategy-arbitrage', section: 'Strategy', sub: 'arbitrage', label: 'Arbitrage' },
+  { id: 'strategy-hold', section: 'Strategy', sub: 'hold', label: 'Hold' },
+  { id: 'strategy-calc', section: 'Strategy', sub: 'calc', label: 'Strat Calculator' },
   { id: 'economy-inflation', section: 'Economy', sub: 'inflation', label: 'Inflation' },
   { id: 'economy-market', section: 'Economy', sub: 'market', label: 'Market' },
   { id: 'trading-workspace', section: 'Trading', sub: 'workspace', label: 'Workspace' },
   { id: 'trading-live', section: 'Trading', sub: 'live', label: 'Live' },
   { id: 'trading-sales', section: 'Trading', sub: 'sales', label: 'Sales' },
+  { id: 'trading-regex', section: 'Trading', sub: 'regex', label: 'Regex' },
+  { id: 'trading-mods', section: 'Trading', sub: 'mods', label: 'Mods' },
   { id: 'settings', section: 'Settings', sub: null, label: 'Settings' },
 ]
+
+// One section's sub-tabs, for its SubTabs bar.
+export const subsOf = (section) => DESTS.filter(d => d.section === section && d.sub).map(d => ({ id: d.sub, label: d.label }))
 
 // Sub-views inside the consolidated tabs, surfaced in ⌘K so they stay one keystroke away.
 export const SUB_DESTS = DESTS.filter(d => d.sub).map(({ section, sub, label }) => ({ section, sub, label }))

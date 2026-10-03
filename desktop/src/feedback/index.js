@@ -65,6 +65,7 @@ function registerFeedback({ ipcMain, BrowserWindow, session, win, uiUrl, backend
         id: randomUUID(), ts: new Date(now()).toISOString(), appVersion: version, channel, platform: process.platform,
         arch: process.arch, osRelease: os.release(), electron: process.versions.electron || null,
         installId: installId(path.join(userData, 'data')), theme: theme(), shortId: id,
+        screensMissing: shots.missing || {},
       }
       const src = { ...(sources() || {}), renderer: await rendererErrors() }
       const body = await bundle({ meta, sources: src, get: fetchJson, readJson: readDesktopSettings, bounds, screens: shots.screens })

@@ -18,10 +18,12 @@ const QUALITY = 60
 
 const withTimeout = (p, ms) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), ms))])
 const jpeg = (img) => img.resize({ width: WIDTH }).toJPEG(QUALITY)
+const whyNot = (e) => (e && e.message === 'timeout' ? 'timeout' : `error: ${String(e && e.message || e).slice(0, 80)}`)
 
 async function sweepScreens({ uiUrl, bounds, dests, BrowserWindow, session, visibleWin, backgroundColor,
                               perScreenMs = 2500, totalMs = 20000 }) {
   const screens = {}
+  const missing = {}   // screenId → why it was not taken (the report's manifest carries it)
   let partial = false
   const deadline = Date.now() + totalMs
   try { screens.current = jpeg(await withTimeout(visibleWin.webContents.capturePage(), perScreenMs)) } catch { partial = true }
@@ -40,19 +42,22 @@ async function sweepScreens({ uiUrl, bounds, dests, BrowserWindow, session, visi
     await withTimeout(snap.loadURL(`${uiUrl}${SNAP_URL_SUFFIX}`), perScreenMs * 2)
     for (const d of dests) {
       const budget = Math.min(perScreenMs, deadline - Date.now())   // a screen never outlives the sweep
-      if (budget <= 0) { partial = true; break }
+      if (budget <= 0) { partial = true; missing[d.id] = 'no time left'; continue }
       try {
         const go = `window.__arbiterSnap(${JSON.stringify({ section: d.section, sub: d.sub })})`
         await withTimeout(snap.webContents.executeJavaScript(go), budget)
         screens[d.id] = jpeg(await withTimeout(snap.webContents.capturePage(undefined, { stayHidden: true }), budget))
-      } catch { partial = true }
+      } catch (e) { partial = true; missing[d.id] = whyNot(e) }
     }
-  } catch { partial = true }
+  } catch (e) {
+    partial = true
+    for (const d of dests) if (!screens[d.id] && !missing[d.id]) missing[d.id] = whyNot(e)
+  }
   finally {
     try { session.webRequest.onBeforeRequest({ urls }, null) } catch {}
     try { if (snap && !snap.isDestroyed()) snap.destroy() } catch {}
   }
-  return { screens, partial }
+  return { screens, partial, missing }
 }
 
 module.exports = { sweepScreens, SNAP_URL_SUFFIX, WIDTH, QUALITY }

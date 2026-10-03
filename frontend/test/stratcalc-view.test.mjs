@@ -3,6 +3,7 @@
 // and that it follows the styleguide (docs/ui-styleguide.md).
 import test from 'node:test'
 import assert from 'node:assert/strict'
+const { DESTS } = await import('../src/lib/dests.js')
 import { readFileSync } from 'node:fs'
 
 const read = (p) => readFileSync(new URL(p, import.meta.url), 'utf8')
@@ -13,7 +14,8 @@ const scCss = css.slice(css.indexOf('/* ---------- strat calculator'), css.index
 
 test('Strategy has a Strat Calculator sub-tab', () => {
   const sv = read('../src/components/StrategyView.jsx')
-  assert.ok(sv.includes("label: 'Strat Calculator'") && sv.includes('<StratCalcView'))
+  assert.ok(sv.includes("subsOf('Strategy')") && sv.includes('<StratCalcView'))
+  assert.ok(DESTS.some(d => d.section === 'Strategy' && d.sub === 'calc' && d.label === 'Strat Calculator'), 'the tab, in the one screen list')
 })
 
 test('the sidebar: a "Strats" card with a drag-and-drop folder tree, like trade searches (owner, 2026-10-01)', () => {
@@ -150,7 +152,7 @@ test('the time override: hours and minutes in place of the timer, with the house
 })
 
 test('a folder\'s name box selects its text; open/closed is saved from what the tree shows, never flipped blind', () => {
-  assert.ok(/aria-label="Folder name"[^>]*onFocus=\{e => e\.target\.select\(\)\}/.test(code), 'typing replaces "New folder"')
+  assert.ok(/<input[^>]*autoFocus[^>]*aria-label="Folder name"/.test(code), 'typing replaces "New folder": it takes focus, and every box selects on focus (select-on-focus.test)')
   assert.ok(/setTimeout\(\(\) => change\(d => sc\.setOpen\(d, id, !!treeRef\.current\?\.get\(id\)\?\.isOpen\)\)/.test(code), 'the tree\'s own state, read once its toggle has landed (onToggle fires before it)')
   assert.ok(code.includes('openByDefault={true}') || code.includes('openByDefault'), 'a new folder opens')
 })

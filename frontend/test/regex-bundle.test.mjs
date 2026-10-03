@@ -3,6 +3,7 @@
 // the app's own modules. A packaged build must gain no outbound host from this feature.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+const { subsOf } = await import('../src/lib/dests.js')
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -41,7 +42,8 @@ test('the view imports the tables as data and reaches only the app', () => {
 
 test('the tab is mounted under Trading, after the trading tabs and beside Mods, and only while selected', () => {
   const tv = read('components/TradingView.jsx')
-  const subs = [...tv.matchAll(/id: '([a-z]+)', label:/g)].map(m => m[1])
+  const subs = subsOf('Trading').map(s => s.id)
+  assert.ok(tv.includes("subsOf('Trading')"), 'the tabs come from the one screen list')
   assert.deepEqual(subs.slice(-2), ['regex', 'mods'], `sub-tabs: ${subs}`)
   assert.ok(/sub === 'regex'\s*&&\s*<RegexView/.test(tv), 'mounted on selection')
 })

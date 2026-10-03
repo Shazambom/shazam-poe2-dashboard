@@ -1,11 +1,16 @@
 from __future__ import annotations
 
 import copy
+import logging
 
-from . import db
+from . import cache, db, marketseries
 from .config import LEAGUE
 
+log = logging.getLogger(__name__)
+
 DEFAULTS: dict = {
+    # Not a stored default: an unset league reads as the youngest current league (`youngest_league`),
+    # and only the league dropdown stores one. LEAGUE is the fallback when no league is known.
     "league": LEAGUE,
     # Reference currency every value is quoted in.
     "reference": "exalted",
@@ -112,7 +117,35 @@ DEFAULTS: dict = {
 def _merged(stored: dict | None) -> dict:
     merged = copy.deepcopy(DEFAULTS)
     _deep_update(merged, stored or {})
+    if not (stored or {}).get("league"):
+        merged["league"] = youngest_league()
     return merged
+
+
+_youngest: dict = {}
+_YOUNGEST_TTL_S = 300
+
+
+def youngest_league() -> str:
+    """The default league (owner, 2026-10-02): of the leagues poe2scout marks current (`lh_current`,
+    never Standard or Hardcore), the one whose history starts latest; one with no dailies yet is the
+    newest of all. LEAGUE when none is known."""
+    return cache.memo(_youngest, "league", _YOUNGEST_TTL_S, _youngest_now)
+
+
+def _youngest_now() -> str:
+    current = [lg for lg in db.kv_get(marketseries.CURRENT_LEAGUES_KEY, []) or [] if lg]
+    if not current:
+        return LEAGUE
+    with db.q() as c:
+        first = {r[0]: r[1] for r in c.execute(
+            f"SELECT league, MIN(day) FROM league_daily WHERE league IN ({','.join('?' * len(current))}) GROUP BY league",
+            current)}
+    return max(current, key=lambda lg: first.get(lg) or "9999-12-31")
+
+
+def forget_youngest() -> None:
+    cache.clear(_youngest)
 
 
 def get_settings() -> dict:
@@ -123,11 +156,31 @@ def get_settings() -> dict:
 def save_settings(patch: dict) -> dict:
     """Deep-merge `patch` into the stored settings atomically (read → merge → write under the
     write lock, so two concurrent saves never drop each other's keys)."""
+    before: dict = {}
+
     def apply(stored):
-        current = _merged(stored)
+        nonlocal before
+        before = _merged(stored)
+        current = copy.deepcopy(before)
         _deep_update(current, patch)
+        if "league" not in patch and not (stored or {}).get("league"):
+            current.pop("league", None)   # the default is read, never stored: the next league reaches everyone
         return current
-    return db.kv_update("settings", apply, {})
+    saved = db.kv_update("settings", apply, {})
+    _log_changes(before, _merged(saved))
+    return saved
+
+
+def _log_changes(before: dict, after: dict) -> None:
+    """One line per changed setting (when the user switched league is a report's first question)."""
+    for k in sorted(set(before) | set(after)):
+        a, b = before.get(k), after.get(k)
+        if a == b:
+            continue
+        if isinstance(a, (dict, list)) or isinstance(b, (dict, list)):
+            log.info("settings: %s changed", k)
+        else:
+            log.info("settings: %s %s → %s", k, repr(a)[:80], repr(b)[:80])
 
 
 # Read-site clamps for tunables the UI can save as 0/blank — one home, not per caller.
