@@ -68,3 +68,49 @@ def test_the_command_line(tmp_path):
     assert [r["report"] for r in json.loads(out)] == ["BBBBBB"]
     subprocess.run([sys.executable, str(HERE / "bugs.py"), "--inbox", str(ib), "act", "BBBBBB", "triage"], check=True, capture_output=True)
     assert len(list((ib / "actions").glob("*.json"))) == 1
+
+
+def with_ideas(tmp_path):
+    """The inbox above plus an idea (with a reply) and a feedback post, as the bot keeps them."""
+    ib = inbox(tmp_path)
+    st = json.loads((ib / "state.json").read_text())
+    for d, tid, title in (("ideas/20", 20, "Include/Exclude items"), ("feedback/21", 21, "Love it")):
+        (ib / d).mkdir(parents=True)
+        (ib / d / "discord.json").write_text(json.dumps({"title": title, "messages": [
+            {"at": "2026-10-03T01:00:00+00:00", "from": "reporter", "text": f"{title} words"},
+            {"at": "2026-10-03T02:00:00+00:00", "from": "other", "text": "+1"}]}))
+        st["posts"][str(tid)] = {"dir": d, "reporter": 5}
+    (ib / "state.json").write_text(json.dumps(st))
+    return ib
+
+
+def test_bug_listings_never_show_idea_or_feedback_posts(tmp_path):
+    ib = with_ideas(tmp_path)
+    assert {r["report"] for r in bugs.listing(ib, "all")} == {"AAAAAA", "BBBBBB", "posts/9"}
+
+
+def test_kind_lists_ideas_or_feedback_with_their_first_words_date_and_replies(tmp_path):
+    ib = with_ideas(tmp_path)
+    [row] = bugs.listing(ib, "new", kind="ideas")
+    assert (row["report"], row["thread"], row["title"], row["text"], row["at"], row["replies"]) == (
+        "ideas/20", 20, "Include/Exclude items", "Include/Exclude items words", "2026-10-03T01:00:00+00:00", 1)
+    assert [r["report"] for r in bugs.listing(ib, "all", kind="feedback")] == ["feedback/21"]
+
+
+def test_an_idea_can_only_be_marked_seen_never_resolved_or_closed(tmp_path):
+    """Resolve / close post a bug-report reply in the thread; an idea's thread gets nothing."""
+    ib = with_ideas(tmp_path)
+    assert json.loads(bugs.act(ib, "ideas/20", "triage").read_text())["action"] == "triage"
+    for action in ("resolve", "close"):
+        try:
+            bugs.act(ib, "feedback/21", action)
+        except ValueError:
+            continue
+        raise AssertionError(f"accepted {action} on a feedback post")
+
+
+def test_the_command_line_takes_a_kind(tmp_path):
+    ib = with_ideas(tmp_path)
+    out = subprocess.run([sys.executable, str(HERE / "bugs.py"), "--inbox", str(ib), "list", "--state", "all", "--kind", "ideas"],
+                         capture_output=True, text=True, check=True).stdout
+    assert [r["report"] for r in json.loads(out)] == ["ideas/20"]

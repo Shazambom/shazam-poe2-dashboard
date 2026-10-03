@@ -254,7 +254,8 @@ app, no new outbound call (the invite opens in the OS browser); nothing can bill
 - **Discord (once):** a server with a forum channel `#bug-reports`; an invite that targets that
   channel → `DISCORD_INVITE` in `desktop/src/feedback/index.js` (placeholder until then). A bot
   application with *View Channel*, *Read Message History*, *Send Messages in Threads*, *Add
-  Reactions*, and the **Message Content** intent (needed to see attachments). Token →
+  Reactions*, and the **Message Content** intent (needed to see attachments). It also needs *View Channel* +
+  *Read Message History* on `#feature-ideas` and `#feedback` (word-only forums, read silently). Token →
   `/etc/arbiter/discord-token` (root-owned, 0600); the forum channel id → `FEEDBACK_FORUM_ID` in
   shazam's `.env`.
 - **Deploy** (the deploy rules and the web env's "Before you run" apply; audit afterwards, lessons go in the web env's
@@ -269,12 +270,21 @@ app, no new outbound call (the invite opens in the OS browser); nothing can bill
 - **Triage, resolve, close (2026-10-03):** the `triage-bugs` skill (`.claude/skills/triage-bugs`) and
   `ops/bugs.sh` (list / pull / triage / resolve / close / resolve-shipped; through sshshazambom → host
   `ops/feedback-bot/bugs.py`). Each report/post has `status.json` (new → triaged → resolved/closed)
-  and `discord.json` (the post title + thread messages, from reporter/other — text only, never the
-  reporter's uploads). The bot stays the inbox's only writer: owner actions are files in
+  and `discord.json` (the post title + the WHOLE thread, from reporter/other — text only, never the
+  reporter's uploads, never the bot's own messages). Keeping a post reads its thread's history; each catch-up
+  re-reads a kept thread whose newest message moved (`state.json` posts' `last`), so replies posted while the
+  bot was down land too. The bot's own replies move `last` themselves and never cause a read (owner, 2026-10-03). The bot stays the inbox's only writer: owner actions are files in
   `inbox/actions/` it applies every minute; resolve/close reply in the thread with FIXED texts
   (`bot.REPLY`) and archive where permitted. A fix commit carries `Fixes-Report: <id>`; only a STABLE
   release resolves it (owner, 2026-10-03: beta is development only): `publish-github.sh` runs
   `ops/bugs.sh resolve-shipped desktop-v<ver>` once a stable release is live; betas never do.
+- **Feature ideas and feedback (2026-10-03):** the bot also reads the `#feature-ideas` and `#feedback` forums
+  (found by name in the bug forum's server: `bot.TEXT_FORUMS`). Their posts are words only, kept silently (no
+  attachment fetched, no reaction, no reply) under `feedback-inbox/ideas/<threadId>/` and `feedback/<threadId>/`
+  (`discord.json` + `status.json`). They never move the bug forum's catch-up mark, and catch-up keeps any post it
+  doesn't hold yet, however old. `ops/ideas.sh` (list / pull / seen, through `bugs.py --kind`) is the interface;
+  the `pull-ideas` and `pull-feedback` skills drive it. Those posts can only be marked seen: resolve/close reply
+  with a bug-report text, so `bugs.py` refuses them there, and bug listings never show them.
 - **Missed posts:** the starter message can 404 for seconds after its thread appears (uploads still
   processing — report XWZGZ0 was lost to a single fetch at +2 s). The bot retries with backoff
   (`RETRY_DELAYS`), keeps a still-failing thread in `state.json` `pending`, and catches up every

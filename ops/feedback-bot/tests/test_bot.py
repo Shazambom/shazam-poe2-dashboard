@@ -45,7 +45,30 @@ class Thread:
     def __init__(self, tid, attachments, name="my report", content=""):
         self.id, self.name, self.parent_id = tid, name, 999
         self.starter = Message(attachments, content)
+        self.starter.id = tid                       # a forum post's starter shares its thread's id
+        self.messages = [self.starter]              # the thread on Discord, oldest first
         self.sent = []
+        self.history_reads = 0
+
+    @property
+    def last_message_id(self):
+        return self.messages[-1].id
+
+    def say(self, text, author, at="2026-10-03T00:10:00+00:00"):
+        """A message posted in the thread on Discord (whether or not the bot saw it live)."""
+        m = Message([], text, author, at)
+        m.id, m.channel = self.messages[-1].id + 1, self
+        self.messages.append(m)
+        return m
+
+    def history(self, limit=None, oldest_first=False):
+        self.history_reads += 1
+        msgs = self.messages if oldest_first else self.messages[::-1]
+
+        async def gen():
+            for m in msgs[:limit]:
+                yield m
+        return gen()
 
     async def fetch_message(self, mid):
         assert mid == self.id
@@ -53,6 +76,7 @@ class Thread:
 
     async def send(self, text):
         self.sent.append(text)
+        return self.say(text, Author(1, bot=True))
 
 
 def keys():

@@ -1,9 +1,10 @@
 """The feedback listener: watches the #bug-reports forum, downloads each new post's
 arbiter-report-*.arb, opens it with the owner's private key (pure math — a bad tag stops here),
 hands the plaintext to the opener cell through the spool, and acks in the thread. The post's title and
-the thread's messages are kept as plain JSON beside the report (`discord.json`; the reporter's words,
+the WHOLE thread's messages (never the bot's own) are kept as plain JSON beside the report (`discord.json`; the reporter's words,
 owner 2026-10-02) — data only: never rendered, parsed, followed or executed; authors are kept only as
-reporter / other / bot. It never follows links, never executes anything.
+reporter / other / bot. It never follows links, never executes anything. It also keeps the posts of
+the word-only forums (#feature-ideas, #feedback: TEXT_FORUMS) as words only, silently.
 
     Discord ──► Handler.handle(thread) ──► SPOOL/in/<threadId>.gz ──► (opener container) ──►
     SPOOL/out/<threadId>/result.json ──► INBOX/<shortId>/ (fixed filenames only) ──► ✅ / ⚠️
@@ -52,6 +53,10 @@ STATUS_FILE = "status.json"
 ACTIONS = {"triage": "triaged", "resolve": "resolved", "close": "closed"}
 REPLY = {"resolve": "Fixed — the fix ships in the next Arbiter update. Thanks for reporting it!",
          "close": "Closed — thanks for the report."}
+# The word-only forums, by channel name in the bug forum's server → the inbox folder their posts go in
+# (owner 2026-10-03). Their posts are kept like a bug post without a report: title + messages + status;
+# the bot never fetches an attachment, reacts or replies there.
+TEXT_FORUMS = {"feature-ideas": "ideas", "feedback": "feedback"}
 
 
 def _log(msg):
@@ -65,6 +70,7 @@ class Handler:
         self.wait_s = wait_s
         self.retry_delays, self.sleep = RETRY_DELAYS, asyncio.sleep
         self._busy: set[int] = set()
+        self.text_forums: dict[int, str] = {}       # forum id → inbox folder (TEXT_FORUMS, resolved at login)
 
     # ---- state
     def _state(self) -> dict:
@@ -73,10 +79,11 @@ class Handler:
         except Exception:
             return {}
 
-    def _record(self, thread_id: int, pending: bool = False):
+    def _record(self, thread_id: int, pending: bool = False, mark: bool = True):
         self.inbox.mkdir(parents=True, exist_ok=True)
         st = self._state()
-        st["last_thread_id"] = max(int(st.get("last_thread_id") or 0), int(thread_id))
+        if mark:                                    # only the bug forum's threads move its catch-up mark
+            st["last_thread_id"] = max(int(st.get("last_thread_id") or 0), int(thread_id))
         left = [t for t in st.get("pending", []) if t != int(thread_id)]
         st["pending"] = sorted(left + [int(thread_id)]) if pending else left
         (self.inbox / "state.json").write_text(json.dumps(st))
@@ -129,7 +136,7 @@ class Handler:
                 if now != ACTIONS[kind]:
                     if kind in REPLY:
                         thread = await get_thread(posts[rel])
-                        await thread.send(REPLY[kind])
+                        await self._say(thread, REPLY[kind])
                         try:
                             await thread.edit(archived=True)
                         except Exception as e:                        # no Manage Threads: the reply still stands
@@ -152,6 +159,36 @@ class Handler:
             doc["messages"].append(self._entry(msg, reporter_id))
         (d / POST_FILE).write_text(json.dumps(doc, ensure_ascii=False, indent=1))
 
+    def _seen(self, thread_id, message_id):
+        """The newest message the post's words account for: catch-up reads the thread again only when it moves."""
+        st = self._state()
+        post = (st.get("posts") or {}).get(str(thread_id))
+        if post is not None and message_id is not None:
+            post["last"] = int(message_id)
+            (self.inbox / "state.json").write_text(json.dumps(st))
+
+    async def _sync(self, thread):
+        """The whole thread, oldest first, rebuilt from Discord (the bot's own messages never kept). A failed
+        read keeps what is there; the next catch-up tries again."""
+        d, reporter = self._post_dir(thread.id)
+        if d is None:
+            return
+        doc = {"title": str(getattr(thread, "name", ""))[:200], "messages": []}
+        try:
+            async for m in thread.history(limit=None, oldest_first=True):
+                if not m.author.bot and len(doc["messages"]) < MAX_MESSAGES:
+                    doc["messages"].append(self._entry(m, reporter))
+        except Exception as e:
+            _log(f"thread {thread.id}: history unavailable ({e!r}); kept what is there")
+            return
+        (d / POST_FILE).write_text(json.dumps(doc, ensure_ascii=False, indent=1))
+        self._seen(thread.id, getattr(thread, "last_message_id", None))
+
+    async def _say(self, thread, text):
+        """A message from the bot. Its own words are never news, so they never cause a read of the thread."""
+        sent = await thread.send(text)
+        self._seen(thread.id, getattr(sent, "id", None))
+
     async def on_reply(self, msg):
         """A later message in a thread the bot handled (the bot's own acks are not kept)."""
         if msg.author.bot:
@@ -160,6 +197,7 @@ class Handler:
         if d is None or not (d / POST_FILE).is_file():
             return
         self._append(d, json.loads((d / POST_FILE).read_text()), msg, reporter)
+        self._seen(msg.channel.id, getattr(msg, "id", None))
 
     # ---- one thread
     async def handle(self, thread) -> str:
@@ -173,26 +211,36 @@ class Handler:
 
     async def _handle(self, thread) -> str:
         _log(f"thread {thread.id}: {str(getattr(thread, 'name', ''))[:80]!r}")
+        kind = self.text_forums.get(getattr(thread, "parent_id", None))
         msg = await self._starter(thread)                             # the forum post's starter message
         if msg is None:
-            self._record(thread.id, pending=True)
+            self._record(thread.id, pending=True, mark=kind is None)
             return "PENDING"
+        if kind:                                                      # an idea / feedback post: words only
+            rel = f"{kind}/{thread.id}"
+            self._start_post(thread, msg, rel)
+            await self._sync(thread)
+            self._record(thread.id, mark=False)
+            return "TEXT"
         att = next((a for a in msg.attachments if ATTACHMENT_RE.match(a.filename) and a.size <= MAX_ATTACHMENT), None)
         if att is None:
             self._start_post(thread, msg, f"posts/{thread.id}")
+            await self._sync(thread)
             self._record(thread.id)
             return "SKIP"
         data = await att.read()
         verdict = await self._process(thread.id, data)
         if verdict["status"] == "OK":
             self._start_post(thread, msg, verdict["dir"])
+            await self._sync(thread)
             await msg.add_reaction("✅")
-            await thread.send(ACK_OK.format(sid=verdict["shortId"]))
+            await self._say(thread, ACK_OK.format(sid=verdict["shortId"]))
         else:
             self._quarantine(thread.id, data)
             self._start_post(thread, msg, f"posts/{thread.id}")
+            await self._sync(thread)
             await msg.add_reaction("⚠️")
-            await thread.send(ACK_BAD)
+            await self._say(thread, ACK_BAD)
         self._record(thread.id)
         return verdict["status"]
 
@@ -258,16 +306,25 @@ class Handler:
         q.mkdir(parents=True, exist_ok=True)
         (q / f"{thread_id}.arb").write_bytes(data)
 
-    # ---- catch-up (at login and on a timer): every thread newer than the last one recorded, newest
-    # first, and every pending one whatever its age
+    # ---- catch-up (at login and on a timer): the bug forum's threads newer than the last one recorded,
+    # a word-only forum's threads not kept yet, newest first, and every pending one whatever its age; a kept
+    # thread whose newest message moved is read again whole
     async def catch_up(self, forum):
         st = self._state()
         last, pending = int(st.get("last_thread_id") or 0), set(st.get("pending", []))
+        posts = st.get("posts") or {}
+        kept = {int(t) for t in posts}
+        text = getattr(forum, "id", None) in self.text_forums
         threads = {t.id: t for t in list(getattr(forum, "threads", []))}
         async for t in forum.archived_threads(limit=None):
             threads.setdefault(t.id, t)
         for tid in sorted(threads, reverse=True):
-            if tid <= last and tid not in pending:
+            moved = getattr(threads[tid], "last_message_id", None)
+            if tid in kept and tid not in pending:
+                if moved is not None and moved != posts[str(tid)].get("last"):
+                    await self._sync(threads[tid])
+                continue
+            if tid not in pending and not text and tid <= last:
                 continue
             try:
                 await self.handle(threads[tid])
@@ -288,11 +345,23 @@ def main():
 
     intents = discord.Intents.none()
     intents.guilds = True
-    intents.guild_messages = True     # replies in the forum's threads (kept beside the report)
+    intents.guild_messages = True     # replies in the forums' threads (kept beside the report / post)
     intents.message_content = True
     client = discord.Client(intents=intents)
 
     timer = None
+
+    def forums():
+        return {forum_id, *handler.text_forums}
+
+    async def catch_up_all():
+        bug = client.get_channel(forum_id) or await client.fetch_channel(forum_id)
+        handler.text_forums = {c.id: TEXT_FORUMS[c.name] for c in bug.guild.forums if c.name in TEXT_FORUMS}
+        for fid in sorted(forums()):
+            try:
+                await handler.catch_up(client.get_channel(fid) or await client.fetch_channel(fid))
+            except Exception as e:                                    # one forum never stops the others
+                _log(f"catch-up of forum {fid} failed: {e!r}")
 
     async def every():
         tick = 0
@@ -305,8 +374,7 @@ def main():
                 _log(f"actions failed: {e!r}")
             if tick * ACTIONS_EVERY_S % CATCH_UP_EVERY_S == 0:
                 try:
-                    forum = client.get_channel(forum_id) or await client.fetch_channel(forum_id)
-                    await handler.catch_up(forum)
+                    await catch_up_all()
                 except Exception as e:
                     _log(f"catch-up failed: {e!r}")
 
@@ -314,14 +382,14 @@ def main():
     async def on_ready():
         nonlocal timer
         _log(f"ready as {client.user}; catching up on forum {forum_id}")
-        forum = client.get_channel(forum_id) or await client.fetch_channel(forum_id)
-        await handler.catch_up(forum)
+        await catch_up_all()
+        _log(f"word-only forums: {handler.text_forums}")
         if timer is None:
             timer = asyncio.create_task(every())
 
     @client.event
     async def on_message(message):
-        if getattr(getattr(message, "channel", None), "parent_id", None) != forum_id or message.id == message.channel.id:
+        if getattr(getattr(message, "channel", None), "parent_id", None) not in forums() or message.id == message.channel.id:
             return                                                    # not a reply in the forum (the starter is handle()'s)
         try:
             await handler.on_reply(message)
@@ -330,7 +398,7 @@ def main():
 
     @client.event
     async def on_thread_create(thread):
-        if getattr(thread, "parent_id", None) != forum_id:
+        if getattr(thread, "parent_id", None) not in forums():
             return
         try:
             await handler.handle(thread)
