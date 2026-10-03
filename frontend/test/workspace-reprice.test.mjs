@@ -68,3 +68,15 @@ test('an armed row stays armed and is live-searchable on the new slug at once', 
   st().repriceSearch('a', NEW)
   assert.equal(st().nodeById('a').armed, true); assert.equal(st().nodeById('a').slug, 'H4sIREPRICED')
 })
+
+// Review (2026-10-03): Undo pressed after moving to another row must not remount that row's trade window (it lost the
+// search being edited there). The window reloads only when the restored row is the one showing.
+test('undo after switching rows restores the row without remounting the window', async () => {
+  await fresh([S('a', 'A'), S('b', 'B')])
+  const prev = st().repriceSearch('a', NEW)
+  st().setActive('b')
+  const tick = st().rerunTick
+  st().restoreSearch('a', prev)
+  assert.equal(st().nodeById('a').slug, 'sa')
+  assert.equal(st().rerunTick, tick, 'the open row (B) keeps its window')
+})

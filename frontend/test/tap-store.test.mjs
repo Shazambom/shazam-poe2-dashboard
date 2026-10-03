@@ -92,3 +92,13 @@ test('freshPages: only pages whose search was seen in the last 5 minutes', () =>
   st.drop(2)
   assert.deepEqual(st.freshPages(t0 + 4 * 60_000 + 1).map(x => x.page.search.id), ['OLD'])
 })
+
+// Review (2026-10-03): remembered pages older than 5 minutes are dropped, so a long session doesn't keep every search.
+test('recent pages older than 5 minutes are pruned', () => {
+  const st = S.makeTapStore()
+  const t0 = 4_000_000
+  st.ingest(search(1, 'OLD'), P, t0)
+  st.ingest({ ...search(2, 'NEW'), body: { query: { type: 'Y' }, sort: { price: 'asc' } } }, P, t0 + 6 * 60_000)
+  assert.equal(st.recentSize(), 1, 'the 6-minute-old page is gone')
+  assert.equal(st.recentFor('L', { type: 'Y' }, t0 + 6 * 60_000).search.id, 'NEW')
+})

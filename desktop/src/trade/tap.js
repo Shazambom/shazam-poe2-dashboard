@@ -27,7 +27,7 @@ function kindOf(url) {
   if (!String(url).startsWith(HOST)) return null
   const rest = url.slice(HOST.length)
   const s = rest.match(SEARCH)
-  if (s) return { kind: 'search', league: decodeURIComponent(s[1]) }
+  if (s) { try { return { kind: 'search', league: decodeURIComponent(s[1]) } } catch { return null } }   // a malformed escape: ignored
   const f = rest.match(FETCH)
   if (f) return { kind: 'fetch', searchId: new URLSearchParams(f[1]).get('query') }
   if (rest === 'data/filters') return { kind: 'options' }
@@ -66,7 +66,9 @@ function attachTap(contents, send, log = () => {}, observe = () => {}) {
     } else if (method === 'Network.responseReceived') {
       const r = pending.get(p?.requestId)
       const policy = r && { search: 'trade-search', fetch: 'trade-fetch' }[r.k.kind]
-      if (policy) { try { observe(policy, p.response?.status, p.response?.headers || {}) } catch {} }
+      // A cached response carries old X-Rate-Limit state: only what the site just answered is current.
+      const cached = p.response?.fromDiskCache || p.response?.fromPrefetchCache || p.response?.fromServiceWorker
+      if (policy && !cached) { try { observe(policy, p.response?.status, p.response?.headers || {}) } catch {} }
     } else if (method === 'Network.loadingFailed') {
       pending.delete(p?.requestId)
     } else if (method === 'Network.loadingFinished') {

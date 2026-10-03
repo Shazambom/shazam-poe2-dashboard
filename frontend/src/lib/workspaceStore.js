@@ -366,7 +366,9 @@ export const useWorkspace = create((set, get) => ({
   restoreSearch: (id, prev) => {
     if (get().loadError || !prev) return
     // In place, so the row comes back byte-identical (key order included).
-    set(s => ({ tree: mapNode(s.tree, id, n => { const out = { ...n }; if (!('q' in prev)) delete out.q; return Object.assign(out, prev) }), rerunTick: s.rerunTick + 1 }))
+    // The window reloads only when the restored row is the one showing (review 2026-10-03: an undo after moving on
+    // reloaded the other row and lost the search being edited there).
+    set(s => ({ tree: mapNode(s.tree, id, n => { const out = { ...n }; if (!('q' in prev)) delete out.q; return Object.assign(out, prev) }), rerunTick: s.rerunTick + (s.activeId === id ? 1 : 0) }))
     persist(get, set)
   },
   // Folders first, then A–Z (case-insensitive); `null` sorts the root.

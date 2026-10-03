@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 from urllib.parse import urlparse
 
 import httpx
-from pyrate_limiter import Duration, Limiter, Rate
+from pyrate_limiter import Duration, Limiter, Rate, RateItem
 
 from .config import USER_AGENT
 
@@ -100,11 +100,21 @@ class Policy:
             if wait > 0:
                 return wait
         if not self.limiter.try_acquire(self.name, blocking=False):
-            # The shortest window is the soonest a slot can free; the longest (3 h) made every refusal "30 s".
-            win = min((r.interval for r in self.rates), default=1000) / 1000.0
-            return max(1.0, min(win, 30.0))
+            return max(1.0, min(self._refused_wait(now), 30.0))
         self.requests += 1
         return 0.0
+
+    def _refused_wait(self, now: float) -> float:
+        """Seconds until the limiter has a slot again — from the bucket that is full (a long rule can be the one), not
+        a guess from the windows. Falls back to the shortest window if the library cannot say."""
+        try:
+            bucket = self.limiter.bucket_factory.get(RateItem(self.name, 0))
+            ms = bucket.waiting(RateItem(self.name, bucket.now()))   # the bucket's own (monotonic) clock
+            if ms and ms > 0:
+                return ms / 1000.0
+        except Exception:      # an internal of the rate library changed: still answer
+            pass
+        return min((r.interval for r in self.rates), default=1000) / 1000.0
 
     def hint(self) -> None:
         """A request made by ANOTHER process on the same account/IP (an EE2 price check) just spent a
@@ -171,21 +181,31 @@ class Policy:
 
 def _rate_chain(rules: list[tuple[int, int]]) -> list[Rate]:
     """(limit, window_s) rules → a rate list pyrate-limiter accepts (longer windows: larger limits, a rate that never
-    rises), keeping every rule that can bind. Equal windows keep the strictest limit; a shorter rule whose limit a
-    longer one already matches is dropped (the longer is stricter); a longer rule allowing a higher rate than the
-    rule before it is dropped (that rule already caps it: 1 per 5 s is at most 2 per 10 s, under 4 per 10 s)."""
+    rises) that never loosens a rule. Equal windows keep the strictest limit; a shorter rule whose limit a longer one
+    already matches is dropped (the longer is stricter); a longer rule allowing a higher rate than the rule before it
+    is dropped only when that rule implies it (1 per 5 s is at most 2 per 10 s, under 4 per 10 s) — otherwise the
+    shorter rule is tightened until it does (3 per 4 s can put 6 inside 5 s; 2 per 4 s holds 4 per 5 s)."""
     by_win: dict[int, int] = {}
     for lim, win in rules:
         if win > 0 and lim > 0:
             by_win[win] = min(lim, by_win.get(win, lim))
     kept: list[tuple[int, int]] = []
-    for win in sorted(by_win):
-        lim = by_win[win]
-        while kept and lim <= kept[-1][0]:
+
+    def add(lim: int, win: int) -> None:
+        while kept and lim <= kept[-1][0]:      # the new, longer rule is stricter: the shorter one is redundant
             kept.pop()
         if kept and lim / win > kept[-1][0] / kept[-1][1]:
-            continue
+            short_lim, short_win = kept[-1]
+            k = -(-win // short_win)            # how many shorter windows can touch one longer window
+            if short_lim * k <= lim:
+                return                          # implied: the shorter rule already holds the longer one
+            kept.pop()                          # not implied: tighten the shorter rule until it is (never loosen)
+            add(max(1, lim // k), short_win)
+            return
         kept.append((lim, win))
+
+    for win in sorted(by_win):
+        add(by_win[win], win)
     return [Rate(lim, Duration.SECOND * win) for lim, win in kept]
 
 

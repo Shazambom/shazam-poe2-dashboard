@@ -162,3 +162,18 @@ test('the page\'s own search/fetch rate-limit headers are reported to the budget
   await tick()
   assert.deepEqual(seen, [['trade-search', 200, '3:4:0'], ['trade-fetch', 429, '3:4:0']])
 })
+
+// Review (2026-10-03): a response Chromium served from its cache carries old X-Rate-Limit state; it must not be fed to
+// the budget as current. And a malformed URL can never throw in main ("any failure is silence").
+test('cached responses are not reported to the budget; a malformed league escape is ignored, not thrown', async () => {
+  const f = fakeContents({ bodies: {} })
+  const seen = []
+  T._resetForTests()
+  T.attachTap(f.contents, () => {}, () => {}, (policy) => seen.push(policy))
+  const res = (requestId, extra) => f.dbg.emit('message', {}, 'Network.responseReceived', { requestId, response: { status: 200, headers: { 'X-Rate-Limit-Rules': 'Ip' }, ...extra } })
+  req(f.dbg, 'f1', `${POE}/api/trade2/fetch/b?query=Q1&realm=poe2`); res('f1', { fromDiskCache: true })
+  req(f.dbg, 'f2', `${POE}/api/trade2/fetch/b?query=Q1&realm=poe2`); res('f2', { fromPrefetchCache: true })
+  req(f.dbg, 'f3', `${POE}/api/trade2/fetch/b?query=Q1&realm=poe2`); res('f3', {})
+  assert.deepEqual(seen, ['trade-fetch'], 'only the network response')
+  assert.doesNotThrow(() => req(f.dbg, 'bad', `${POE}/api/trade2/search/poe2/Std%E0%`, 'POST', '{}'))
+})

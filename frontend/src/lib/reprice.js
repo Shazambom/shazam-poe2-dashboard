@@ -48,10 +48,17 @@ export function verdict(page, latest, { siblings = null, now = Date.now() } = {}
   const P = page.prices || latest
   const body = page.search?.body
   if (!P || !page.options || !body || canon(body.sort) !== canon({ price: 'asc' })) return null
+  const sib = siblings && lookup(siblings, siblingKey(page.search.league, body.query), now)
+  // A search with no results (e.g. filtered to a currency nobody lists in): the cheapest currency that has listings.
+  if (!page.search.ids?.length) {
+    const own = body.query?.filters?.trade_filters?.filters?.price?.option   // never "reprice" into the page's own currency
+    let b = null
+    for (const [c, m] of Object.entries(sib || {})) if (c !== own && priced(P, c) && (!b || m * P[c] < b.v)) b = { c, v: m * P[c] }
+    return b && { currency: b.c, text: page.options.find(o => o.id === b.c)?.text || b.c, lead: null, gap: null }
+  }
   const top = page.rows && sortedRows(page)[0]
   if (!top || top.rank !== 0 || !priced(P, top.currency)) return null    // what the user sees first, priced
   const mins = minsOf(page, P)
-  const sib = siblings && lookup(siblings, siblingKey(page.search.league, body.query), now)
   for (const [c, m] of Object.entries(sib || {})) if (priced(P, c) && (mins[c] == null || m < mins[c])) mins[c] = m
   let best = null
   for (const [c, m] of Object.entries(mins)) if (!best || m * P[c] < best.v) best = { c, v: m * P[c] }
@@ -65,12 +72,12 @@ export function verdict(page, latest, { siblings = null, now = Date.now() } = {}
 // app fetches ids the search already returned (desktop/src/trade/listings.js; never a new search):
 const PAGE = 10
 const sortsByPrice = (body) => canon(body?.sort) === canon({ price: 'asc' })
-const oneCurrency = (body) => { const o = body?.query?.filters?.trade_filters?.filters?.price?.option; return !!o && o !== 'exalted_divine' }
+export const currencyFiltered = (body) => { const o = body?.query?.filters?.trade_filters?.filters?.price?.option; return !!o && o !== 'exalted_divine' }
 
 // 1. a sample — every 10th rank past the first page, and the last — skipping rows already loaded.
 export function samplePlan(page) {
   const s = page.search
-  if (!s || !sortsByPrice(s.body) || oneCurrency(s.body) || s.ids.length <= PAGE) return []
+  if (!s || !sortsByPrice(s.body) || currencyFiltered(s.body) || s.ids.length <= PAGE) return []
   const want = []
   for (let r = PAGE; r < s.ids.length; r += PAGE) want.push(r)
   if (want[want.length - 1] !== s.ids.length - 1) want.push(s.ids.length - 1)
@@ -129,18 +136,15 @@ export function pageFromRecheck(result, league, query, options, prices) {
   return observe(p, { kind: 'fetch', searchId: result.searchId, rows: result.rows || [] })
 }
 
-// The search filters the price to one currency (not the site's Exalted Orb Equivalent, nor its "Exalted/Divine" mode).
-export const currencyFiltered = (body) => oneCurrency(body)
-
 // What the strip shows — one thing at a time (owner, 2026-10-03). The swap button wins anywhere. Only a page filtered
 // to one currency gets the rest: "Checking…" while a check runs, "Already cheapest" when the app knows (a check the
 // user asked for, or the automatic check — e.g. right after a reprice), else the "Find cheapest" button.
-export function findState({ shown, filtered, offer, checking, checked, known }) {
+export function findState({ shown, filtered, judgeable = true, empty, offer, checking, checked, known }) {
   if (!shown) return null
   if (offer) return 'reprice'
-  if (!filtered) return null
+  if (!filtered || !judgeable) return null   // no answer the rule could stand behind: no button, no note (review 2026-10-03)
   if (checking) return 'checking'
-  if (checked || known) return 'cheapest'
+  if (checked || known) return empty ? null : 'cheapest'   // nothing listed anywhere: nothing to say (QA 2026-10-03)
   return 'find'
 }
 
@@ -212,3 +216,20 @@ export async function encodeSlug(query) {
   for (const b of gz) bin += String.fromCharCode(b)
   return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
 }
+
+// The rule can judge this page: sorted by price, the site's price options known, and the listing shown first priced —
+// or no results at all. Elsewhere neither "Already cheapest" nor "Find cheapest" may show (review, 2026-10-03).
+export function judgeable(page, latest) {
+  const P = page.prices || latest
+  if (!page.search || !page.options || canon(page.search.body?.sort) !== canon({ price: 'asc' })) return false
+  if (!page.search.ids?.length) return true
+  const top = sortedRows(page)[0]
+  return !!top && top.rank === 0 && priced(P, top.currency)
+}
+
+// The automatic sample runs only on the window's own page: a page redrawn from the site's cache belongs to an earlier
+// window, and rows fetched for it could not land here.
+export const sampleTarget = (own, rowQuery) => (own && pageIsRows(own, rowQuery) ? own : null)
+
+// After a sample or fill-in fetch: a cancel (the user moved away and back) is tried again; a budget refusal is final.
+export const stepAfter = (r) => (!r?.ok && r?.error === 'cancelled' ? 'todo' : 'done')

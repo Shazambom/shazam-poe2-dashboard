@@ -216,3 +216,50 @@ test('recheck is registered over IPC and cancelled with the listings', async () 
   const pre = readFileSync(new URL('../src/preload.js', import.meta.url), 'utf8')
   assert.match(pre, /recheck: \(p\) => ipcRenderer\.invoke\('trade:recheck', p\)/)
 })
+
+// QA (2026-10-03): double-clicking "Find cheapest" ran two background searches (the click guard is React state, which
+// a second click reaches before it updates). The checker itself shares one in-flight check between identical requests,
+// so no caller can spend two searches on the same question.
+test('recheck: identical checks already in flight share one search', async () => {
+  const { f, calls } = rechecker()
+  const [r1, r2] = await Promise.all([f({ league: 'L', query: Q }), f({ league: 'L', query: { ...Q } })])
+  assert.equal(calls.requests.filter(r => r.method === 'POST').length, 1, 'one search')
+  assert.deepEqual(r1, r2)
+  await f({ league: 'L', query: Q })
+  assert.equal(calls.requests.filter(r => r.method === 'POST').length, 2, 'a later, separate check runs again')
+})
+
+// Review (2026-10-03): a cancel that arrives while the search is in flight must stop the check — no fetch afterwards —
+// and a new click on the same search after a cancel starts a fresh check (not the cancelled one).
+test('recheck: cancelled while the search is in flight → no fetch is sent; a later click runs fresh', async () => {
+  const sent = []
+  let f
+  f = L.makeRechecker({
+    request: async (r) => {
+      sent.push(r.method)
+      if (r.method === 'POST') { f.cancel(); return { status: 200, headers: {}, body: JSON.stringify({ id: 'S1', result: [ID(1), ID(2)], total: 2 }) } }
+      return { status: 200, headers: {}, body: JSON.stringify({ result: [listing(ID(1), 15, 'chaos')] }) }
+    },
+    budget: { acquire: async () => {}, observe: () => {} },
+    wait: async () => {},
+  })
+  assert.deepEqual(await f({ league: 'L', query: Q }), { ok: false, error: 'cancelled' })
+  assert.deepEqual(sent, ['POST'], 'nothing after the cancel')
+  sent.length = 0
+  const again = L.makeRechecker({
+    request: async (r) => (r.method === 'POST' ? { status: 200, headers: {}, body: JSON.stringify({ id: 'S2', result: [ID(1)], total: 1 }) } : { status: 200, headers: {}, body: JSON.stringify({ result: [listing(ID(1), 15, 'chaos')] }) }),
+    budget: { acquire: async () => {}, observe: () => {} }, wait: async () => {},
+  })
+  const p1 = again({ league: 'L', query: Q })
+  again.cancel()
+  const p2 = again({ league: 'L', query: Q })
+  assert.notEqual(p1, p2, 'a click after a cancel does not get the cancelled check')
+  assert.equal((await p2).ok, true)
+})
+
+// Review: the budget wait-once policy lives in one helper used by both the listings fetcher and the rechecker.
+test('one wait-once helper serves both fetchers', async () => {
+  const { readFileSync } = await import('node:fs')
+  const src = readFileSync(new URL('../src/trade/listings.js', import.meta.url), 'utf8')
+  assert.equal((src.match(/await wait\(Math\.min\(WAIT_CAP_MS/g) || []).length, 1)
+})

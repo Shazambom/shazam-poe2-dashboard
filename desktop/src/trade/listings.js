@@ -20,6 +20,20 @@ function projectRows(json) {
 const WAIT_CAP_MS = 10_000
 const defaultWait = (ms, signal) => new Promise(r => { const t = setTimeout(r, ms); signal?.addEventListener('abort', () => { clearTimeout(t); r() }, { once: true }) })
 const SPARE = 0.5   // reprice is a nice-to-have: only with half of every rate window free (owner: "be aware of our headroom")
+const CANCELLED = Object.freeze({ ok: false, error: 'cancelled' })
+
+// One budgeted request, a budget "not yet" waited out once (capped, abortable), never sent once cancelled. The one
+// wait policy both the listings fetcher and the rechecker use.
+async function waitedBudgeted(deps, policy, req, signal, wait, opts) {
+  if (signal.aborted) return CANCELLED
+  let r = await budgeted(deps, policy, req, opts)
+  if (!r.ok && r.error === 'rate' && r.status == null && !signal.aborted) {   // refused by the budget before any request
+    await wait(Math.min(WAIT_CAP_MS, (Number(r.retryAfter) || 2) * 1000), signal)
+    if (signal.aborted) return CANCELLED
+    r = await budgeted(deps, policy, req, opts)
+  }
+  return signal.aborted && !r.ok ? CANCELLED : r
+}
 
 // wait(ms, signal): how a budget "not yet" is waited out — once, capped — so the caller awaits one answer, never
 // polls. cancel() drops every fetch still waiting (the user switched rows, reloaded or left the tab): it resolves
@@ -36,13 +50,7 @@ function makeListingFetcher({ request, budget, log = () => {}, wait = defaultWai
     const signal = drop.signal
     const home = `${TRADE_BASE}/search/poe2/${encodeURIComponent(lg)}`
     const req = { method: 'GET', path: `/api/trade2/fetch/${ids.join(',')}?query=${searchId}&realm=poe2`, referer: `${home}/${searchId}` }
-    let r = await budgeted(deps, FETCH_POLICY, req, { spare: SPARE })
-    if (!r.ok && r.error === 'rate' && r.status == null && !signal.aborted) {   // refused by the budget before any request
-      await wait(Math.min(WAIT_CAP_MS, (Number(r.retryAfter) || 2) * 1000), signal)
-      if (signal.aborted) return { ok: false, error: 'cancelled' }
-      r = await budgeted(deps, FETCH_POLICY, req, { spare: SPARE })
-    }
-    if (signal.aborted && !r.ok) return { ok: false, error: 'cancelled' }
+    const r = await waitedBudgeted(deps, FETCH_POLICY, req, signal, wait, { spare: SPARE })
     if (!r.ok) { log(`listings status=${r.status ?? r.error}`); return r }
     const rows = projectRows(r.data)
     log(`listings status=200 n=${ids.length} rows=${rows.length}`)
@@ -61,18 +69,19 @@ const SEARCH_POLICY = 'trade-search'
 function makeRechecker({ request, budget, log = () => {}, wait = defaultWait }) {
   const deps = { request, budget }
   let drop = new AbortController()
-  const once = async (policy, req, signal) => {
-    let r = await budgeted(deps, policy, req)
-    if (!r.ok && r.error === 'rate' && r.status == null && !signal.aborted) {
-      await wait(Math.min(WAIT_CAP_MS, (Number(r.retryAfter) || 2) * 1000), signal)
-      if (signal.aborted) return { ok: false, error: 'cancelled' }
-      r = await budgeted(deps, policy, req)
-    }
-    return signal.aborted && !r.ok ? { ok: false, error: 'cancelled' } : r
-  }
+  const inFlight = new Map()   // identical checks share one search (a double click must not spend two; QA 2026-10-03)
+  const canon = (v) => (Array.isArray(v) ? `[${v.map(canon).join(',')}]` : v && typeof v === 'object' ? `{${Object.keys(v).sort().map(k => `${JSON.stringify(k)}:${canon(v[k])}`).join(',')}}` : JSON.stringify(v))
+  const once = (policy, req, signal) => waitedBudgeted(deps, policy, req, signal, wait)
   async function recheck({ league, query } = {}) {
     const lg = String(league ?? '').trim()
     if (!lg || !query || typeof query !== 'object' || Array.isArray(query)) return { ok: false, error: 'bad request' }
+    const key = `${lg}|${canon(query)}`
+    if (inFlight.has(key)) return inFlight.get(key)
+    const p = run(lg, query).finally(() => { if (inFlight.get(key) === p) inFlight.delete(key) })
+    inFlight.set(key, p)
+    return p
+  }
+  async function run(lg, query) {
     const signal = drop.signal
     const home = `${TRADE_BASE}/search/poe2/${encodeURIComponent(lg)}`
     const body = { query: { ...query, status: INSTANT_BUYOUT }, sort: { price: 'asc' } }
@@ -92,7 +101,7 @@ function makeRechecker({ request, budget, log = () => {}, wait = defaultWait }) 
     log(`recheck status=200 total=${total} rows=${rows.length}`)
     return { ok: true, searchId, ids, total, rows }
   }
-  recheck.cancel = () => { drop.abort(); drop = new AbortController() }
+  recheck.cancel = () => { drop.abort(); drop = new AbortController(); inFlight.clear() }   // a later click runs fresh
   return recheck
 }
 

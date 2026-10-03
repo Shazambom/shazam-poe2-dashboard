@@ -372,3 +372,50 @@ test('Find cheapest only on a page filtered to one currency', () => {
   assert.equal(R.currencyFiltered(q(null)), false, 'a price range without a currency is still the exalted equivalent')
   assert.equal(R.currencyFiltered(BODY), false)
 })
+
+// QA (2026-10-03): a currency-filtered search with no results said "Already cheapest". With no listings in the filtered
+// currency, the cheapest currency that HAS listings is the answer; with none anywhere, there is nothing to say.
+test('a filtered search with no results: offer the cheapest currency that has listings, else nothing', () => {
+  const sib = new Map(), t0 = 9_500_000
+  R.remember(sib, R.pageFromRecheck(recheckResult([['vaal', 139], ['chaos', 15]]), 'Forbidden Rites', QUERY, OPTIONS.price, P), t0, P, { sampled: true })
+  const exaltedEmpty = R.observe(R.observe(R.EMPTY, OPTIONS), { kind: 'search', wcId: 1, league: 'Forbidden Rites', id: 'E0', body: { query: { ...QUERY, filters: { trade_filters: { filters: { price: { option: 'exalted' } } } } }, sort: { price: 'asc' } }, ids: [], total: 0 }, P)
+  assert.equal(offer(exaltedEmpty, P, { siblings: sib, now: t0 + 1000 }), 'chaos')
+  assert.equal(offer(exaltedEmpty, P, { siblings: new Map(), now: t0 + 1000 }), null)
+  assert.equal(R.findState({ shown: true, filtered: true, empty: true, known: true }), null, 'checked, nothing anywhere: no note')
+  assert.equal(R.findState({ shown: true, filtered: true, empty: true }), 'find', 'not yet checked: the button')
+})
+
+// Review (2026-10-03): "Already cheapest" (and the button) only where the rule can judge the page: sorted by price,
+// the site's price options known, the first listing priced — or no results at all.
+test('judgeable: price-sorted, options known, and the top row priced (or no results)', () => {
+  assert.equal(R.judgeable(page([['vaal', 10], ['chaos', 1]]), P), true)
+  assert.equal(R.judgeable(page([['vaal', 10]], { body: { query: QUERY, sort: { 'stat.x': 'desc' } } }), P), false, 'a stat sort')
+  const noOpts = R.observe(R.EMPTY, { kind: 'search', wcId: 1, league: 'L', id: 'N1', body: BODY, ids: ['r0'], total: 1 }, P)
+  assert.equal(R.judgeable(noOpts, P), false, 'price options never seen')
+  assert.equal(R.judgeable(page([['gold', 5]]), P), false, 'the top row has no price')
+  const empty = R.observe(R.observe(R.EMPTY, OPTIONS), { kind: 'search', wcId: 1, league: 'L', id: 'E1', body: BODY, ids: [], total: 0 }, P)
+  assert.equal(R.judgeable(empty, P), true, 'no results is judgeable')
+  assert.equal(R.findState({ shown: true, filtered: true, judgeable: false, known: true }), null)
+  assert.equal(R.findState({ shown: true, filtered: true, judgeable: false }), null, 'no button where the answer would be meaningless')
+  assert.equal(R.findState({ shown: true, filtered: true, judgeable: true, known: true }), 'cheapest')
+})
+
+// Review: on a filtered page with no results, never offer the currency the page is already filtered to.
+test('the empty-page offer never names the page\'s own currency', () => {
+  const sib = new Map(), t0 = 9_700_000
+  R.remember(sib, R.pageFromRecheck(recheckResult([['divine', 5], ['chaos', 60]]), 'L', QUERY, OPTIONS.price, P), t0, P, { sampled: true })
+  const divineEmpty = R.observe(R.observe(R.EMPTY, OPTIONS), { kind: 'search', wcId: 1, league: 'L', id: 'D0', body: { query: { ...QUERY, filters: { trade_filters: { filters: { price: { option: 'divine', max: 1 } } } } }, sort: { price: 'asc' } }, ids: [], total: 0 }, P)
+  assert.equal(offer(divineEmpty, P, { siblings: sib, now: t0 + 1000 }), 'chaos', 'not divine')
+})
+
+// Review: the automatic sample runs only on the window's own page (a page redrawn from the site's cache belongs to an
+// earlier window — its rows could not land here); a cancelled sample is tried again later, a refusal is final.
+test('sampleTarget and stepAfter', () => {
+  const own = page([['vaal', 1]])
+  assert.equal(R.sampleTarget(own, QUERY), own)
+  assert.equal(R.sampleTarget(own, { ...QUERY, type: 'Other' }), null, 'the window shows another search')
+  assert.equal(R.sampleTarget(R.EMPTY, QUERY), null)
+  assert.equal(R.stepAfter({ ok: true, rows: [] }), 'done')
+  assert.equal(R.stepAfter({ ok: false, error: 'cancelled' }), 'todo', 'moved away and back: try again')
+  assert.equal(R.stepAfter({ ok: false, error: 'rate' }), 'done', 'the budget said no: not this search')
+})

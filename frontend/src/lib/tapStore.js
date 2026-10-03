@@ -19,7 +19,11 @@ export function makeTapStore() {
   let prices = null
   const notify = () => subs.forEach(f => { try { f() } catch {} })
   const get = (wcId) => pages.get(wcId) || EMPTY
-  const keep = (page, now) => { if (page.search) recent.set(keyOf(page.search.league, page.search.body?.query), { page, at: now }) }
+  const keep = (page, now) => {
+    if (!page.search) return
+    for (const [k, e] of recent) if (now - e.at > RECENT_TTL_MS) recent.delete(k)   // a long session keeps only the last 5 minutes
+    recent.set(keyOf(page.search.league, page.search.body?.query), { page, at: now })
+  }
 
   return {
     ingest(evt, latest = prices, now = Date.now()) {
@@ -47,6 +51,7 @@ export function makeTapStore() {
       notify()
     },
     pageOf: get,
+    recentSize: () => recent.size,
     seenAtOf: (wcId) => seenAt.get(wcId) ?? null,
     recentFor(league, query, now = Date.now()) {
       const e = query ? recent.get(keyOf(league, query)) : null

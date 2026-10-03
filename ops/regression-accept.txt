@@ -1,7 +1,7 @@
 # The differences the next release intends, checked by ops/regression-diff.py inside
 # desktop/publish-github.sh. It is valid for ONE version, and every line must still match a reported
 # difference. Anything not listed blocks the release. Whole-line comments only.
-version: 0.3.11-beta.2
+version: 0.3.11-beta.3
 
 # Trading → Workspace "Reprice in <currency>" and "Find cheapest" (docs/reprice-design.md), the trade tap, the
 # rate-limit safety and the limiter adopting the site's real rules change no price, busiest market, price card, Market or Hold row, loop, pool route or conversion:

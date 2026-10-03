@@ -183,3 +183,29 @@ def test_a_full_limiter_says_retry_after_its_shortest_window_not_thirty_seconds(
     assert client.post("/api/ratelimits/acquire", json={"policy": "trade-search"}).json()["ok"] is True
     r = client.post("/api/ratelimits/acquire", json={"policy": "trade-search"}).json()
     assert r["ok"] is False and r["retry_after_s"] == 5.0, r
+
+
+# Review (2026-10-03): when a longer rule is the full one, "retry in" must be how long until a slot really frees — not
+# the shortest window (callers came back early and were refused again). pyrate-limiter reports the exact wait.
+def test_retry_after_is_the_real_wait_when_a_long_rule_is_full():
+    p = _fresh("trade-search")
+    p.rates = gateway._rate_chain([(1, 2), (3, 60)])
+    p.limiter = gateway.Limiter(p.rates)
+    p.last_states = []
+    for _ in range(3):
+        while p.try_acquire_now() > 0:
+            time.sleep(0.2)
+    time.sleep(2.2)                                           # the 2 s rule has room again; only the 60 s rule is full
+    r = client.post("/api/ratelimits/acquire", json={"policy": "trade-search"}).json()
+    assert r["ok"] is False and r["retry_after_s"] >= 25, r   # the 60 s rule is the full one (capped at 30)
+
+
+# Review: a rule a shorter one does not imply must not be dropped. When windows don't divide, a sliding shorter rule
+# can let more through than the longer allows (3/4s puts 6 inside 5 s); the shorter rule is tightened instead so the
+# longer one holds, and the chain stays one pyrate-limiter accepts.
+def test_rate_chain_never_loosens_a_rule_it_drops():
+    assert [(r.limit, r.interval // 1000) for r in gateway._rate_chain([(3, 4), (4, 5)])] == [(2, 4)]     # ≤4 in any 5 s
+    assert [(r.limit, r.interval // 1000) for r in gateway._rate_chain([(7, 4), (20, 10)])] == [(6, 4)]   # ≤18 ≤ 20 in 10 s
+    # today's real rules are unchanged: 1 per 5 s already implies ≤ 2 in 10 s (under 4)
+    assert [(r.limit, r.interval // 1000) for r in gateway._rate_chain([(1, 5), (4, 10), (7, 60), (30, 300), (300, 10800)])] == [(1, 5), (7, 60), (30, 300), (300, 10800)]
+    assert [(r.limit, r.interval // 1000) for r in gateway._rate_chain([(3, 4), (6, 4), (8, 12), (50, 300), (500, 10800)])] == [(3, 4), (8, 12), (50, 300), (500, 10800)]

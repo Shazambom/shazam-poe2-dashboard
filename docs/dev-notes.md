@@ -443,6 +443,10 @@ Design and arena record: [`reprice-design.md`](./reprice-design.md).
     anything is sent.
   - 5-minute cache: a search whose deeper listings were fetched in the last 5 minutes is not fetched again
     (`sampledRecently`); evidence (siblings) lives 5 minutes too.
+- **The trade-window drive helper** `desktop/scripts/webview.mjs` (nav / click / type / key / wheel / shot / url): Input
+  events, Page.navigate and screenshots only — never Runtime or Page.reload. nav/click/type/key take `--row <data-id>`
+  and are refused unless that row is the active one (or none is): the Workspace saves every search into the active row,
+  which on a dev or packaged launch is the owner's (`scripts/webview-guard.mjs`). A local permission rule allows it.
 - **Driving it:** a throwaway row made with the + button, one default-sort search for a mixed-currency stackable
   (Revelatory Wombgift: vaal on top, cheaper chaos from rank ~26) → the chip appears without scrolling → click → the
   page leads with the cheapest currency. Delete the row after and diff `/api/trading/workspace` against a snapshot.

@@ -201,6 +201,10 @@ canon-equal to the POST body · (1) extract `captureStep` and `listings.js`, gol
    spends (the probe saw the site's 3-hour counter climb 16 → 27 across a few page loads, invisible to the budget).
    Own test; not part of the reprice feature.
 
+Known edge case, kept on purpose (owner, 2026-10-03: "leave as is, that sounds like a pretty opaque edge case"): running,
+in one row, the exact search another saved row already holds leaves the row unchanged and the bar empty — the
+workspace's capture ignores a slug that belongs to another row (a stale-event guard since v0.2.34).
+
 Still open: a filtered page with no earlier default run shows nothing (v1 accepts this); τ = 5% until beta
 telemetry says otherwise.
 
