@@ -73,3 +73,15 @@ test('budgeted: reserves, requests, observes and parses; a refusal is classified
   const boom = { request: async () => { throw new Error('offline') }, budget: { acquire: async () => {}, observe: () => {} } }
   assert.deepEqual(await budgeted(boom, 'p', { path: '/x' }), { ok: false, error: 'offline' })
 })
+
+// Headroom (owner, 2026-10-03): a low-priority request asks for spare capacity; ordinary requests send nothing new.
+test('acquire sends `spare` only when asked; budgeted passes its options through', async () => {
+  const calls = stub(() => jsonRes({ ok: true }))
+  await budget.acquire('trade-fetch', { spare: 0.5 })
+  assert.deepEqual(JSON.parse(calls[0].opts.body), { policy: 'trade-fetch', spare: 0.5 })
+  await budget.acquire('trade-fetch')
+  assert.deepEqual(JSON.parse(calls[1].opts.body), { policy: 'trade-fetch' }, 'unchanged for every existing caller')
+  const seen = []
+  await budget.budgeted({ request: async () => ({ status: 200, headers: {}, body: '{}' }), budget: { acquire: async (p, o) => seen.push([p, o]), observe: () => {} } }, 'trade-fetch', { path: '/x' }, { spare: 0.5 })
+  assert.deepEqual(seen, [['trade-fetch', { spare: 0.5 }]])
+})

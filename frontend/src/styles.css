@@ -293,6 +293,10 @@ a { color: var(--live); }
 .ws-webhint-name { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .ws-chip { display: inline-flex; align-items: center; gap: 4px; border-radius: 999px; padding: 1px 8px; font-size: 11px; color: var(--muted); border: 1px solid var(--line); white-space: nowrap; }
 .ws-chip.ok { color: var(--gain); border-color: rgba(var(--gain-rgb),.35); }
+/* Reprice in the cheapest currency: the one actionable chip in the strip (docs/reprice-design.md) */
+.ws-chip.act { color: var(--gold); border-color: rgba(var(--accent-rgb),.45); background: none; cursor: pointer; font: inherit; font-size: 11px; }
+.ws-chip.act:hover { border-color: var(--gold); background: rgba(var(--accent-rgb),.08); }
+.ws-chip.act:focus-visible { outline: 2px solid rgba(var(--accent-rgb),.6); outline-offset: 1px; }
 /* ---------- Sales tab + item card ---------- */
 .sales-view { display: flex; flex-direction: column; gap: 14px; padding: 14px 24px 48px; }
 .sales-head { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-1); }

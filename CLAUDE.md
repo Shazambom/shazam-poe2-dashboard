@@ -209,12 +209,28 @@ streamlined; nothing on screen may distract the user.
   and what it is measured against when that isn't obvious. Provenance, counts, diagnostics and
   caveats go to docs, logs and beta telemetry — never the screen. Depth belongs one level down
   (zoomed card / expanded row), not on the base card.
-- A new rule gets a **setting with a sane default**, not an on-screen narration of what it did.
+- A new rule is **not narrated on screen**, and does not get an on/off setting either (see "Configuration").
 Full statement in [`docs/ui-styleguide.md`](docs/ui-styleguide.md) → "§0 Restraint".
 
 Rules of thumb: **reuse UI relentlessly** — new data flows into existing components
 (`CardDetail`, board sparkline/graph, chips, capital card) first. Features should cross-link
 and share data through the fewest new surfaces. Think ecosystem, not screens.
+
+## Configuration (owner directive 2026-10-02)
+
+- **Minimize config.** Choose the simplest safe, correct design. No speculative settings or abstractions.
+- **Defaults and tuning values live in code constants** (`TAU`, TTLs, limits). Making one user-adjustable requires a
+  concrete need and explicit owner approval, never an AI decision.
+- **No environment variables for configuration — banned.** The desktop app is configured by code constants and the
+  user's settings, nothing else. The few variables `main.js` passes to the bundled backend/sidecar at spawn (`DATA_DIR`,
+  `PORT`, `ARBITER_PARENT_PID`, …) are process plumbing, not a config surface: never add a variable that changes
+  product behaviour, and never read a feature switch from one.
+- **User settings hold only what a user genuinely needs to choose.** No on/off switches for features: a feature that
+  is worth shipping is simply on (owner, 2026-10-02: "don't add settings to disable features like this").
+- **Look for an existing home before adding config.** A new setting never justifies a new table or a new kv key when
+  the settings blob or an existing key fits.
+- **Check related settings before adding one.** Two booleans mean four states: raise invalid combinations,
+  prerequisites and chances to merge settings with the owner before implementing.
 
 ## Which currency to show an amount in: the volume rule
 

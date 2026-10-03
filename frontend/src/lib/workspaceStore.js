@@ -350,6 +350,25 @@ export const useWorkspace = create((set, get) => ({
     set(s => ({ tree: mapNode(s.tree, id, x => ({ ...x, slug: '' })), activeId: id, rerunTick: s.rerunTick + 1 }))
     persist(get, set); return true
   },
+  // Trading → Workspace "Reprice in <currency>" (docs/reprice-design.md): the repriced search REPLACES the saved
+  // search. Its slug (the query, gzipped: reprice.encodeSlug) is saved at once and the window remounts on it, so
+  // nothing waits on the site. A row with its own query gets the repriced query too, so the two agree. Returns the
+  // previous fields for undo (restoreSearch), or null when refused.
+  repriceSearch: (id, { slug, q }) => {
+    const n = findNode(get().tree, id)
+    const parent = locate(get().tree, id)?.parentId
+    if (get().loadError || !n || n.kind !== 'search' || !slug || (parent && findNode(get().tree, parent)?.sys === HISTORY_SYS)) return null
+    const prev = { type: n.type, slug: n.slug, live: n.live, ...('q' in n ? { q: n.q } : {}) }
+    set(s => ({ tree: mapNode(s.tree, id, x => ({ ...x, type: 'search', slug, live: false, ...('q' in x ? { q } : {}) })), activeId: id, rerunTick: s.rerunTick + 1 }))
+    persist(get, set)
+    return prev
+  },
+  restoreSearch: (id, prev) => {
+    if (get().loadError || !prev) return
+    // In place, so the row comes back byte-identical (key order included).
+    set(s => ({ tree: mapNode(s.tree, id, n => { const out = { ...n }; if (!('q' in prev)) delete out.q; return Object.assign(out, prev) }), rerunTick: s.rerunTick + 1 }))
+    persist(get, set)
+  },
   // Folders first, then A–Z (case-insensitive); `null` sorts the root.
   sortChildren: (folderId) => {
     if (get().loadError) return

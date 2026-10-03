@@ -105,7 +105,7 @@ function runTree(t) {
       // Realistic drop targets: root (null) or a folder — mirrors react-arborist, which never
       // drops a node INTO a leaf search.
       const parent = () => (fIds.length && chance(0.6)) ? pick(fIds) : null
-      const kind = pick(['addSearch', 'addFolder', 'rename', 'setField', 'move', 'toggleOpen', 'setActive', 'remove', 'ingest', 'ingest', 'ensureFolder', 'clearHistory', 'expireHistory', 'setLeague'])
+      const kind = pick(['addSearch', 'addFolder', 'rename', 'setField', 'move', 'toggleOpen', 'setActive', 'remove', 'ingest', 'ingest', 'ensureFolder', 'clearHistory', 'expireHistory', 'setLeague', 'reprice'])
       try {
         if (kind === 'addSearch') {
           const n = uniqueSearch()
@@ -130,6 +130,16 @@ function runTree(t) {
           const u = s.clearHistory(); if (u && chance(0.5)) s.restoreHistory(u)
         } else if (kind === 'expireHistory') {
           s.expireHistory(Date.now() + (chance(0.2) ? 30 * 86400000 : 0))
+        } else if (kind === 'reprice' && sIds.length) {
+          // Reprice → the site's capture → undo: a round trip that must give back the exact row.
+          const id = pick(sIds), before = clone(findById(s.tree, id))
+          const prev = s.repriceSearch(id, { slug: 'H4sIfuzz' + opsRun, q: JSON.stringify({ query: { filters: { trade_filters: { filters: { price: { option: 'vaal' } } } } } }) })
+          if (prev) {
+            store().setField(id, { type: 'search', slug: 'fuzz-' + opsRun, live: false })   // the site's capture
+            store().restoreSearch(id, prev)
+            const after = findById(store().tree, id)
+            if (JSON.stringify(after) !== JSON.stringify(before)) throw new Error(`reprice round trip changed ${id}: ${JSON.stringify(before)} → ${JSON.stringify(after)}`)
+          }
         } else if (kind === 'setLeague') {
           s.setLeague(pick(['Standard', 'Forbidden Rites']))
         } else if (kind === 'remove' && ids.length > 1 && chance(0.5)) {

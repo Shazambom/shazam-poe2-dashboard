@@ -8,11 +8,13 @@ import { findWhere, flatten, locate } from '../lib/tree.js'
 import { toast, copyText, undoToast } from '../lib/api.js'
 import { diag } from '../lib/diag.js'
 import SearchTree from './SearchTree.jsx'
+import Cur from './Cur.jsx'
 import ContextMenu from './ContextMenu.jsx'
 import Toggle from './Toggle.jsx'
 import { saveHistoryPrefs, clearHistoryWithUndo } from '../lib/ee2History.js'
 import { usePings } from '../lib/pingStore.js'
 import { useStatus } from '../lib/statusStore.js'
+import { useReprice } from '../lib/useReprice.js'
 
 // The Trading workspace: a file-tree of saved searches on the left, the live trade site
 // embedded on the right. Press + → a new entry is created and the trade window opens; you
@@ -109,7 +111,7 @@ async function readSearchName(el) {
   } catch { return '' }
 }
 
-export default function WorkspaceView({ league }) {
+export default function WorkspaceView({ league, visible = true }) {
   const tree = useWorkspace(s => s.tree)
   const loaded = useWorkspace(s => s.loaded)
   const loadError = useWorkspace(s => s.loadError)
@@ -153,6 +155,9 @@ export default function WorkspaceView({ league }) {
     const n = useWorkspace.getState().nodeById(id)
     if (n && n.ts && inHistory(id)) diag('ee2', `history-open age=${Math.round((Date.now() - n.ts) / 60000)}m`)
   }, [setActive, inHistory])
+  // Reprice in the cheapest currency (docs/reprice-design.md): at most one chip in the strip above the window.
+  const shownNode = useWorkspace(s => (s.activeId ? s.nodeById(s.activeId) : null))
+  const reprice = useReprice({ wv, node: shownNode, navUrl: navState.url, inHistory: shownNode ? inHistory(shownNode.id) : false, remountKey: `${activeId}:${wvNonce}:${rerunTick}`, league, visible })
   const collapsed = !!layout?.collapsed
   const railWidth = Math.min(RAIL_MAX, Math.max(RAIL_MIN, layout?.railWidth || RAIL_DEFAULT))
   const [dragWidth, setDragWidth] = useState(null)   // live width while the divider is being dragged
@@ -313,7 +318,7 @@ export default function WorkspaceView({ league }) {
   const mountUrl = useMemo(() => {
     const n = activeId ? useWorkspace.getState().nodeById(activeId) : null
     return n?.slug ? tradeUrl(n, league, n.live) : (n?.q && !n.degraded) ? queryUrl(n, league) : tradeHome(league)
-  }, [activeId, league, rerunTick])
+  }, [activeId, league, rerunTick, wvNonce])   // ↻ reloads the row's saved search, not the address it first opened on
 
   // A tab mounted on the Instant Buyout home: the site's own landing slug for it is not the user's search.
   const homeNav = useRef(homeCapture.start(false))
@@ -454,6 +459,8 @@ export default function WorkspaceView({ league }) {
                 ? <>
                     <span className="ws-chip ok">{activeNode.q ? 'from item' : 'captured'}</span>
                     {activeNode.live && <span className="ws-chip live">live</span>}
+                    {reprice.offer && <button className="ws-chip act" title={`Re-run this search priced in ${reprice.offer.text} and save it`} onClick={reprice.apply}>
+                      <Cur id={reprice.offer.currency} size={14} />Reprice in {reprice.offer.text}</button>}
                   </>
                 : <span className="ws-chip">build your search — it captures automatically</span>)}
               <span className="spacer" />

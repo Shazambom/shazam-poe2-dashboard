@@ -100,3 +100,45 @@ def test_trade_search_policy_is_slow_and_reachable_from_electron():
     assert min(r.interval / 1000 / r.limit for r in p.rates) >= 10, "at most one search per 10 s on any rule"
     assert client.post("/api/ratelimits/acquire", json={"policy": "trade-search"}).json()["ok"] is True
     assert client.post("/api/ratelimits/acquire", json={"policy": "trade-search"}).json()["ok"] is False, "the second waits"
+
+
+# Headroom (owner, 2026-10-03: "we should be aware of our headroom"). Reprice's extra listing fetches are a
+# nice-to-have, so they ask for spare capacity: refused unless every window the site reports has at least that
+# share free. The counts come from the site's own state headers — including the user's own browsing, which the
+# trade tap reports through /observe — and a window that has rolled over since it was reported counts as free.
+def _observe(p, state, limits="6:4:60,12:12:120", ago=0.0):
+    p.observe_headers(200, {"X-Rate-Limit-Rules": "Account", "X-Rate-Limit-Account": limits, "X-Rate-Limit-Account-State": state})
+    p.penalty_until = 0.0
+    p.last_states_at -= ago
+
+
+def test_headroom_is_the_tightest_reported_window():
+    p = _fresh("trade-fetch")
+    _observe(p, "3:4:0,2:12:0")
+    assert abs(p.headroom() - 0.5) < 1e-9          # 3 of 6 in the 4 s window; 2 of 12 in the 12 s window
+    p2 = _fresh("trade-whisper"); p2.last_states = []
+    assert p2.headroom() == 1.0, "nothing reported yet"
+
+
+def test_a_window_that_rolled_over_since_it_was_reported_counts_as_free():
+    p = _fresh("trade-fetch")
+    _observe(p, "3:4:0,2:12:0", ago=5)               # 5 s ago: the 4 s window has rolled, the 12 s one has not
+    assert abs(p.headroom() - (1 - 2 / 12)) < 1e-9
+    _observe(p, "3:4:0,2:12:0", ago=13)
+    assert p.headroom() == 1.0
+
+
+def test_a_spare_request_is_refused_without_headroom_and_takes_no_slot():
+    p = _fresh("trade-fetch")
+    _observe(p, "4:4:0,2:12:0")                       # 4 of 6: a third free
+    before = p.requests
+    r = client.post("/api/ratelimits/acquire", json={"policy": "trade-fetch", "spare": 0.5}).json()
+    assert r["ok"] is False and 1 <= r["retry_after_s"] <= 4, r
+    assert p.requests == before, "a refusal spends nothing"
+    assert client.post("/api/ratelimits/acquire", json={"policy": "trade-fetch"}).json()["ok"] is True, "ordinary requests are unaffected"
+
+
+def test_a_spare_request_goes_through_with_headroom():
+    p = _fresh("trade-fetch")
+    _observe(p, "1:4:0,1:12:0")
+    assert client.post("/api/ratelimits/acquire", json={"policy": "trade-fetch", "spare": 0.5}).json()["ok"] is True

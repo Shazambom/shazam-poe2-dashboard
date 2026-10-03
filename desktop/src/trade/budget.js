@@ -15,11 +15,12 @@ class RateLimitError extends Error {
 let _backendUrl = () => 'http://127.0.0.1:8210'
 function configure({ backendUrl }) { if (backendUrl) _backendUrl = backendUrl }
 
-async function acquire(policy) {
+// opts.spare (0–1): a low-priority request — only with that share of every window free (gateway.Policy.headroom).
+async function acquire(policy, opts = {}) {
   let r
   try {
     const resp = await fetch(`${_backendUrl()}/api/ratelimits/acquire`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ policy }),
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(opts.spare ? { policy, spare: opts.spare } : { policy }),
       signal: AbortSignal.timeout(3000),
     })
     r = await resp.json()
@@ -56,8 +57,8 @@ function hint(policy) {
 // Every caller (Sales, the unique pricer) reads the same answer: { ok: true, status, data } or
 // { ok: false, error: 'rate' | 'auth' | 'HTTP n' | message, status?, retryAfter? }.
 // deps: { request(req) → { status, headers, body }, budget: { acquire, observe } } (injectable for tests).
-async function budgeted({ request, budget }, policy, req) {
-  try { await budget.acquire(policy) } catch (e) { return { ok: false, error: 'rate', retryAfter: e.retryAfter } }
+async function budgeted({ request, budget }, policy, req, opts) {
+  try { await (opts ? budget.acquire(policy, opts) : budget.acquire(policy)) } catch (e) { return { ok: false, error: 'rate', retryAfter: e.retryAfter } }
   let resp
   try { resp = await request(req) } catch (e) { return { ok: false, error: String(e && e.message || e) } }
   budget.observe(policy, resp.status, resp.headers)

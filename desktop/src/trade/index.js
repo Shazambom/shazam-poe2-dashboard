@@ -34,6 +34,15 @@ function registerTrade(getWin, getBackendUrl) {
     budget: require('./budget.js'),
     log: (line) => { try { require('../telemetry.js').installLog('query-price', line) } catch {} },
   })
+  // Trading → Workspace reprice: a few listings of a search the page already ran (ids it returned), so one search
+  // is enough to see which currencies sit deeper than the page has loaded (trade/listings.js).
+  const fetchListings = require('./listings.js').makeListingFetcher({
+    request: (r) => require('./proxy.js').poeRequest(r),
+    budget: require('./budget.js'),
+    log: (line) => { try { require('../telemetry.js').installLog('tap', line) } catch {} },
+  })
+  ipcMain.handle('trade:listings', (_e, p) => fetchListings(p || {}).catch(e => ({ ok: false, error: String(e && e.message || e) })))
+  ipcMain.handle('trade:listings-cancel', () => { fetchListings.cancel(); return { ok: true } })
   ipcMain.handle('trade:query-price', (_e, p) => priceQuery(p || {}).catch(e => ({ ok: false, error: String(e && e.message || e) })))
   ipcMain.handle('trade:teleport', async (_e, { token }) => {
     try { return await engine.teleport(token) }

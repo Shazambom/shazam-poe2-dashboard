@@ -47,6 +47,8 @@ class Policy:
     requests: int = 0
     throttled: int = 0
     advertised: list[tuple[int, int, int]] = field(default_factory=list)
+    last_states: list[tuple[int, int, int]] = field(default_factory=list)   # (hits, window_s, limit) as the site last reported
+    last_states_at: float = 0.0
     lock: asyncio.Lock = field(default_factory=asyncio.Lock)
 
     def __post_init__(self) -> None:
@@ -69,13 +71,34 @@ class Policy:
         self.throttled += 1
         log.warning("%s: holding %.0fs (%s)", self.name, seconds, why)
 
-    def try_acquire_now(self) -> float:
+    def headroom(self, now: float | None = None) -> float:
+        """The free share of the tightest window the site last reported (its state headers count every
+        request on the account/IP — the user's own browsing too, via the trade tap's /observe). A window
+        that has rolled over since it was reported counts as free; nothing reported = 1.0."""
+        now = time.time() if now is None else now
+        free = [1 - hits / lim for hits, win, lim in self.last_states if lim and now - self.last_states_at < win]
+        return max(0.0, min(free, default=1.0))
+
+    def _spare_wait(self, spare: float, now: float) -> float:
+        """Seconds until every window has `spare` of its share free again (0 when it has)."""
+        elapsed = now - self.last_states_at
+        waits = [win - elapsed for hits, win, lim in self.last_states if lim and elapsed < win and 1 - hits / lim < spare]
+        return max(1.0, min(min(waits), 30.0)) if waits else 0.0
+
+    def try_acquire_now(self, spare: float = 0.0) -> float:
         """Non-blocking reservation for an out-of-process caller (the Electron live-search engine):
         0.0 when a slot was taken, else the seconds to wait. Never sleeps — request threads stay
-        snappy; the caller decides whether to retry."""
-        hold = self.penalty_until - time.time()
+        snappy; the caller decides whether to retry. `spare` (0–1): a low-priority request (reprice's
+        extra listings) is refused unless every reported window has at least that share free; a
+        refusal spends nothing."""
+        now = time.time()
+        hold = self.penalty_until - now
         if hold > 0:
             return hold
+        if spare > 0:
+            wait = self._spare_wait(spare, now)
+            if wait > 0:
+                return wait
         if not self.limiter.try_acquire(self.name, blocking=False):
             win = max((r.interval for r in self.rates), default=1000) / 1000.0
             return max(1.0, min(win, 30.0))
@@ -105,6 +128,7 @@ class Policy:
         if not rules:
             return
         advertised: list[tuple[int, int, int]] = []
+        reported: list[tuple[int, int, int]] = []
         hold = 0.0
         for rule in rules:
             limits = _triples(h.get(f"x-rate-limit-{rule}", ""))
@@ -112,10 +136,13 @@ class Policy:
             advertised += limits
             for (lim, win, pen), st in zip(limits, states + [(0, 0, 0)] * len(limits)):
                 hits, _, pen_active = st
+                reported.append((hits, win, lim))
                 if pen_active:
                     hold = max(hold, pen_active)
                 elif lim and hits >= max(1, int(lim * STATE_HOLD)):
                     hold = max(hold, min(win, 30))
+        if reported:
+            self.last_states, self.last_states_at = reported, time.time()
         if hold:
             self.penalize(hold, "window nearly spent")
         if advertised and advertised != self.advertised:

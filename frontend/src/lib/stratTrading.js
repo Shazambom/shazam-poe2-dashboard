@@ -4,12 +4,9 @@
 // the sort is not a filter. The History folder is the automatic log, never a match. Nothing is written
 // before the workspace has loaded: an early write would replace the saved tree.
 import { savedSearches, searchOfNode } from './workspaceStore.js'
+import { canon } from './canon.js'
 
 export const FROM_STRATS = 'From strats'
-
-const canon = (v) => (Array.isArray(v) ? `[${v.map(canon).join(',')}]`
-  : v && typeof v === 'object' ? `{${Object.keys(v).sort().map(k => `${JSON.stringify(k)}:${canon(v[k])}`).join(',')}}`
-  : JSON.stringify(v))
 
 async function sameSearch(tree, query, league) {
   const want = canon(query.query)

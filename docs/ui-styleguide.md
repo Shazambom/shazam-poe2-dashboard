@@ -32,8 +32,8 @@ anything that doesn't is a distraction from the numbers the user came for.
   caveats are not — they belong in docs, logs and beta telemetry.
 - **Detail lives one level down.** The base card/row shows the essentials; depth (ask/bid,
   per-step turnover, fills) belongs in the zoomed card or the expanded row, never at the top level.
-- **A filter is UI the user asked for; a readout is not.** A new rule usually deserves a *setting*
-  with a sane default (so it can be changed) and no on-screen narration of what it did.
+- **A filter is UI the user asked for; a readout is not.** A new rule gets no on-screen narration of what it did,
+  and no on/off setting either: its tuning lives in code constants (CLAUDE.md → "Configuration").
 
 Learned the hard way in 0.2.58: a "deep scan: 12 loops, 0 new" summary, a "DEEP" chip, a
 "168 hidden as implausible" counter, an edge-count readout and a live/hourly legend all shipped

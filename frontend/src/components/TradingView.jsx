@@ -24,7 +24,7 @@ export default function TradingView({ league }) {
       <SubTabs subs={SUBS} value={sub} onChange={setSub} layoutId="subtab-underline-trading" />
       {/* Keep Workspace mounted (its <webview> is costly to recreate); just hide it. */}
       <div style={{ display: sub === 'workspace' ? 'flex' : 'none', flex: 1, minHeight: 0 }}>
-        <WorkspaceView league={league} />
+        <WorkspaceView league={league} visible={sub === 'workspace'} />
       </div>
       {sub === 'regex' && <RegexView />}
       {sub === 'mods' && <ModsView />}

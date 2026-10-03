@@ -44,6 +44,9 @@ doc and the code disagree, the code wins — fix the doc.
   the Trading tab's live half: desktop-only, never auto-fire a teleport, a sound on every ping,
   human-in-the-loop throughout. These still govern `desktop/src/trade/`. The staged PR plan that
   consumed this brief was deleted once every PR shipped; this is the durable half.
+- [`reprice-design.md`](./reprice-design.md) — Trading → Workspace "Reprice in <currency>" on the trade tap
+  (Electron's debugger, CDP Network only), plus 1–2 budgeted listing fetches per search so one search is enough. The feature is **built**, with the rate-limit safety (the page's headers into the budget,
+  headroom-only fetches, a 5-minute cache, cancel on moving on); the refactor of the other trade-site reads (§5) is next.
 - [`trading-workspace-roadmap.md`](./trading-workspace-roadmap.md) — the `/arena`-synthesized plan for
   the ExiledExchange2 History folder (vendored EE2 query port, zero-network `?q=` links, one ingest
   intent), clipboard-add and the QOL catalogue, further EE2 integrations, the zoom fix and UI polish,

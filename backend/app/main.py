@@ -752,6 +752,7 @@ def rate_limits():
 
 class RateAcquire(BaseModel):
     policy: str
+    spare: float = 0.0   # a low-priority request: only with this share of every window free (gateway.Policy.headroom)
 
 
 class RateObserve(BaseModel):
@@ -772,7 +773,7 @@ def rate_acquire(body: RateAcquire):
     """Reserve one slot of a pathofexile.com budget for the desktop live-search engine (the backend
     is the single owner of the budget both processes share). Non-blocking: {ok} or {ok:false,
     retry_after_s} — the caller fails fast instead of the request thread sleeping."""
-    wait = _policy_or_404(body.policy).try_acquire_now()
+    wait = _policy_or_404(body.policy).try_acquire_now(max(0.0, min(1.0, body.spare)))
     return {"ok": True} if wait <= 0 else {"ok": False, "retry_after_s": round(wait, 1)}
 
 

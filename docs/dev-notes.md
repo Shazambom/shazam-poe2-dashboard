@@ -360,6 +360,54 @@ Tests: `backend/tests/test_crafting_recipes.py`. They parse the real bench page
 (`fixtures/mods/reforging-bench.html.gz`) and include the owner's disenchant loop and a reforge loop,
 run through the real `Graph.build` and route search.
 
+### Trade tap + Reprice in the cheapest currency (Trading → Workspace, added 2026-10-02)
+
+Design and arena record: [`reprice-design.md`](./reprice-design.md).
+
+- **The trade tap** (`desktop/src/trade/tap.js`): Electron's debugger on every trade webview, attached from
+  `app.on('web-contents-created')`. It may only send `Network.enable` and `Network.getResponseBody` (a test fails on
+  anything else: a `Page.reload` sent to a webview reloads the whole app). It reads the page's own
+  `api/trade2/search`, `fetch` and `data/filters` responses and sends `trade:tap` projections (`search` body + result
+  ids, `fetch` rows `{id, amount, currency}`, `options` = the price filter's currencies). No account, stash, token,
+  whisper or item data leaves main. Re-attaches when DevTools releases the slot; a remount ends it (`target closed`)
+  and the new window is attached on creation. Telemetry marker `tap`.
+- **Measured facts** (5 probe runs, 2026-10-02): no Cloudflare effect with the debugger attached; the site sends no
+  exchange rates; the price filter's option ids are the listings' currency ids (plus `exalted_divine`, a mode); a run
+  search's gzip slug decodes byte-equal to the query the page POSTs; the site re-serializes filters in its own shape
+  (`{min:null, max:null, option}`), so compare decisions, never bytes, against a page's echo.
+- **Found proving it (2026-10-03):** a search's id is the same gzip+base64url form as its slug (~140 chars with `-`/`_`),
+  not a short code; and the window's address switches ~60 ms *before* the tap reports the new search, so the page
+  counts as the row's only once its query equals the row's decoded link (`pageIsRows`). A budget "not yet" is waited
+  out once inside `listings.js` (capped 10 s): the window awaits one answer, never polls.
+- **Reprice** (`frontend/src/lib/reprice.js`, pure; `useReprice.js` wires it): offer when the listing shown first is
+  not the cheapest loaded currency at Arbiter's rates (`/api/strategy/calc?prices=1`) by more than 5% (`TAU`). Each
+  currency's first loaded row is its minimum (the site's sort is exact within a currency). Sibling evidence: the same
+  search under another price filter, 10 minutes, memory only. The action writes the repriced query through
+  `workspaceStore.repriceSearch` as an app-built slug (`encodeSlug`: the query gzipped, the same form the site uses),
+  saved at once so nothing waits on the site. Undo: `restoreSearch`, byte-identical. No setting (CLAUDE.md → Configuration).
+  Beta telemetry (`ws`): `reprice-offer lead= best= gap=`, `reprice-click`, `reprice-verify ok|mismatch`.
+- **Search once, click once:** after the row's own search, `samplePlan` fetches every 10th of the ids the search
+  returned (plus the last) and `gapPlan`, only if undecided, the ≤9 ids before a currency's first sampled row —
+  `trade:listings` (`desktop/src/trade/listings.js`, budgeted `trade-fetch`, never a new search). 1–2 fetches a search.
+- **Rate-limit safety (owner, 2026-10-03: "I'm worried about rate limits"):**
+  - The tap reports the page's own `search`/`fetch` X-Rate-Limit headers to the budget (`budget.observe`), so
+    `gateway.Policy` sees the user's browsing, not only the app's requests.
+  - Reprice listings are low priority: `acquire(policy, { spare: 0.5 })` → `Policy.try_acquire_now(spare)` refuses
+    unless every window the site last reported has half its share free (`Policy.headroom()`; a window that has
+    rolled over since counts as free). A refusal spends nothing.
+  - One retry: a budget "not yet" is waited out once inside `listings.js`. Moving on — another row, ↻, a hidden
+    Workspace sub-tab, leaving Trading — calls `trade:listings-cancel`, which drops every fetch still waiting before
+    anything is sent.
+  - 5-minute cache: a search whose deeper listings were fetched in the last 5 minutes is not fetched again
+    (`sampledRecently`); evidence (siblings) lives 5 minutes too.
+- **Driving it:** a throwaway row made with the + button, one default-sort search for a mixed-currency stackable
+  (Revelatory Wombgift: vaal on top, cheaper chaos from rank ~26) → the chip appears without scrolling → click → the
+  page leads with the cheapest currency. Delete the row after and diff `/api/trading/workspace` against a snapshot.
+
+Tests: `desktop/test/tap.test.mjs`, `desktop/test/listings.test.mjs`, `desktop/test/budget.test.mjs`,
+`backend/tests/test_ratelimits_api.py` (headroom), `frontend/test/reprice.test.mjs`,
+`frontend/test/workspace-reprice.test.mjs`, the store fuzz's reprice round trip.
+
 ### Strategy → Strat Calculator (added 2026-10-01)
 
 Tracks a farming session's net divines per hour. The pure model is `frontend/src/lib/stratcalc.js`; the

@@ -683,6 +683,8 @@ app.whenReady().then(async () => {
 // Trade tab too); anything else (forum links, wiki, etc.) opens externally.
 app.on('web-contents-created', (_e, contents) => {
   if (contents.getType() !== 'webview') return
+  // The trade tap (trade/tap.js): passively reads the page's own search and listings (CDP Network only).
+  try { require('./trade/tap.js').attachTap(contents, (ch, p) => win?.webContents.send(ch, p), (l) => telemetry.installLog('tap', l), require('./trade/budget.js').observe) } catch (e) { console.log('[tap]', String(e)) }
   // Pin the guest's zoom: Chromium persists zoom per origin on the shared session and syncs the
   // guest to the embedder on navigation, which is how a stray ⌘+ used to stick across restarts.
   try { contents.setZoomFactor(1); contents.setVisualZoomLevelLimits(1, 1) } catch {}
