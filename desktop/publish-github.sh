@@ -139,3 +139,9 @@ node scripts/release-assets.mjs publish "$TAG"
 git fetch -q origin "refs/tags/$TAG:refs/tags/$TAG"
 [ "$(git rev-parse "$TAG^{commit}")" = "$SHA" ] || { echo "WARNING: tag $TAG is not at $SHA"; exit 1; }
 echo "release $TAG is live on both platforms"
+
+# A STABLE release resolves the bug reports its commits fix ("Fixes-Report: <id>"): the bot replies in
+# each thread with its fixed "ships in the next update" text. A beta never does — beta is development
+# only (owner, 2026-10-03). A failure here never fails the release that is already live.
+case "$VER" in *-beta*) ;; *) ../ops/bugs.sh resolve-shipped "$TAG" \
+  || echo "WARNING: could not resolve the shipped bug reports; run ops/bugs.sh resolve-shipped $TAG" ;; esac

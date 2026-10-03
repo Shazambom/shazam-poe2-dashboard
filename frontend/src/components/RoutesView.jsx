@@ -12,7 +12,7 @@ import Wealth from './Wealth.jsx'
 import { useSync } from '../lib/syncStore.js'
 import { ensureSettings, useStatus } from '../lib/statusStore.js'
 import { useAutosave, useDebounced } from '../lib/hooks.js'
-import { DEFAULT_FILTERS, filtersFromSettings, filtersToSave, streamQuery } from '../lib/routeFilters.js'
+import { DEFAULT_FILTERS, filtersFromSettings, filtersToSave, searchKeyOf, streamQuery } from '../lib/routeFilters.js'
 
 const INF = Infinity
 
@@ -33,6 +33,7 @@ const COLS = [
 
 export default function RoutesView({ capital, status, currencies, onCapitalSaved }) {
   const [f, setF] = useState(DEFAULT_FILTERS)
+  const [loaded, setLoaded] = useState(false)    // the saved filters are in: only then search
   const [routes, setRoutes] = useState([])
   const [meta, setMeta] = useState(null)
   const [counts, setCounts] = useState(null)
@@ -44,8 +45,10 @@ export default function RoutesView({ capital, status, currencies, onCapitalSaved
   const esRef = useRef(null)
   const accRef = useRef([])
   // The search sends exactly what the form shows (a cleared box as 0 = off), never leaving a blank
-  // for the server to fill from the saved settings, and re-runs when any of it changes.
-  const filterKey = JSON.stringify(filtersToSave(f))
+  // for the server to fill from the saved settings, and re-runs when any of it changes — but not
+  // before the saved filters have loaded (a search with the defaults first swapped the table a
+  // second later).
+  const filterKey = searchKeyOf(f, loaded)
 
   const load = () => {
     esRef.current?.close()
@@ -78,16 +81,25 @@ export default function RoutesView({ capital, status, currencies, onCapitalSaved
 
   // The filters live in the user's settings: loaded once, saved (debounced) on every edit.
   const { save, arm } = useAutosave(next => useStatus.getState().saveSettings({ filters: filtersToSave(next) }), 800)
-  useEffect(() => { ensureSettings().then(s => { setF(filtersFromSettings(s.filters)); arm() }).catch(() => {}) }, []) // eslint-disable-line
-  const searchKey = useDebounced(filterKey, 500)
-  useEffect(() => { load(); return () => esRef.current?.close() }, [searchKey]) // eslint-disable-line
   useEffect(() => {
+    ensureSettings().then(s => { setF(filtersFromSettings(s.filters)); setLoaded(true); arm() })
+      .catch(() => setLoaded(true))              // no settings: search with the defaults, once
+  }, []) // eslint-disable-line
+  // The first key applies at once; later edits are debounced.
+  const searchKey = useDebounced(filterKey, 500) ?? filterKey
+  useEffect(() => {
+    if (searchKey == null) return
+    load()
+    return () => esRef.current?.close()
+  }, [searchKey]) // eslint-disable-line
+  useEffect(() => {
+    if (searchKey == null) return
     const t = setInterval(() => { if (document.visibilityState === 'visible' && !streaming) load() }, 120000)
     return () => clearInterval(t)
   }, [searchKey, streaming]) // eslint-disable-line
 
   // Manual refresh from the topbar ⟳ re-runs the search.
-  useEffect(() => { if (tick > 0) load() }, [tick]) // eslint-disable-line
+  useEffect(() => { if (tick > 0 && searchKey != null) load() }, [tick]) // eslint-disable-line
 
   const update = (k, v) => { const next = { ...f, [k]: v }; setF(next); save(next) }
   const set = (k) => (e) => update(k, e.target.type === 'checkbox' ? e.target.checked : e.target.value)

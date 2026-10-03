@@ -1,6 +1,6 @@
 ---
 name: triage-bugs
-description: Pull every new (not yet looked at) bug report from the Discord feedback inbox and start one subagent per report to reproduce it in a small isolated failing test; also resolve or close reports, and resolve the ones fixed by merged commits. Use when the owner asks to triage, look at, reproduce, close or resolve bug reports.
+description: Pull every new (not yet looked at) bug report from the Discord feedback inbox and start one subagent per report to reproduce it in a small isolated failing test; also close reports, and resolve the ones a stable release fixed. Use when the owner asks to triage, look at, reproduce, close or resolve bug reports.
 ---
 
 # Triage bug reports
@@ -22,9 +22,10 @@ the inbox's only writer: an action asks the bot, and the bot applies it within a
 
 - none, or `new`: triage every new report.
 - `<report>`: triage that one, e.g. `XWZGZ0` or `posts/1555…`.
-- `resolve <report>` / `close <report>`: mark it resolved or closed. The bot replies in the thread
-  with a fixed text and archives the thread where it can.
-- `resolve-merged`: resolve every open report named by a merged commit's `Fixes-Report: <id>` trailer.
+- `close <report>`: close a report that won't be fixed. The bot replies in the thread with a fixed text
+  and archives the thread where it can. There's no hand "resolve": only a stable release resolves.
+- `resolve-shipped`: resolve every open report named by a `Fixes-Report: <id>` trailer in the newest STABLE
+  release. `publish-github.sh` already does this when a stable release goes live.
 
 ## Triage: one agent per report
 
@@ -84,7 +85,9 @@ Reply in <= 250 words:
 
 - **Fixing:** a fix goes through /tdd, starting from the agent's red test. The commit carries a trailer
   `Fixes-Report: <report>`, one line per report it fixes.
-- **Resolving:** once the fix is merged to main, run `ops/bugs.sh resolve-merged`. Each named report
+- **Resolving:** only a STABLE release resolves a report (owner, 2026-10-03: beta is development only).
+  A merge or a beta never does. When a stable release goes live, `publish-github.sh` runs
+  `ops/bugs.sh resolve-shipped desktop-v<ver>`. Each named report
   gets the bot's fixed "the fix ships in the next Arbiter update" reply.
 - **Closing:** run `ops/bugs.sh close <report>` for a report that won't be fixed (a duplicate, not a
   bug, or the reporter's own setup). Only on the owner's say-so: it replies in their Discord.
@@ -92,7 +95,7 @@ Reply in <= 250 words:
 
 ## Notes
 
-- `resolve` and `close` post in a public thread, so run them only when the owner asked, or via
-  `resolve-merged` after a merge the owner made.
+- `close` posts in a public thread, so run it only when the owner asks. Resolving happens only
+  through the stable release itself.
 - The reporter's Discord screenshots aren't kept. The bot keeps text only, never the reporter's
   bytes. The report's own screens are the app's.

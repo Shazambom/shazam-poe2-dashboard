@@ -4,7 +4,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { filtersFromSettings, filtersToSave, streamQuery } from '../src/lib/routeFilters.js'
+import { filtersFromSettings, searchKeyOf, filtersToSave, streamQuery } from '../src/lib/routeFilters.js'
 
 test('settings → form: "off" (0 / missing) shows as a blank box, sort stays out of the form', () => {
   const form = filtersFromSettings({ min_margin_pct: 3, max_gold: 0, min_liquidity_ref: 200, max_fill_hours: 24, sort: 'score', limit: 100 })
@@ -41,7 +41,9 @@ test('the search sends what the form shows, and re-runs on any of it (code revie
   // save lands 300 ms after the search); and "Show at most" never re-ran the search at all.
   const src = readFileSync(new URL('../src/components/RoutesView.jsx', import.meta.url), 'utf8')
   assert.match(src, /routesStreamUrl\(streamQuery\(f\)\)/)
-  assert.match(src, /const filterKey = JSON\.stringify\(filtersToSave\(f\)\)/)
+  assert.match(src, /const filterKey = searchKeyOf\(f, loaded\)/)
+  const form = filtersFromSettings({ max_fill_hours: 24 })
+  assert.equal(searchKeyOf(form, true), JSON.stringify(filtersToSave(form)), 'keyed on every saved field')
   const sent = filtersToSave({ ...filtersFromSettings({ max_fill_hours: 24 }), max_fill_hours: '' })
   assert.equal(sent.max_fill_hours, 0, 'a cleared box is sent as off, not left for the server to fill')
 })

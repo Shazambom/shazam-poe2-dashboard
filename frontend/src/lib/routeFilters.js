@@ -31,3 +31,8 @@ export function streamQuery(form) {
   const q = filtersToSave(form)
   return { ...q, limit: Math.max(DEFAULT_FILTERS.limit, q.limit) }
 }
+
+// What the route search is keyed on: the form as saved — or nothing until the saved filters have
+// loaded, so the page never searches with filters the user did not choose and then swaps the table
+// a second later (two searches per visit, owner 2026-10-03).
+export const searchKeyOf = (form, loaded) => (loaded ? JSON.stringify(filtersToSave(form)) : null)

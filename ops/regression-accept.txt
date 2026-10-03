@@ -1,13 +1,13 @@
 # The differences the next release intends, checked by ops/regression-diff.py inside
 # desktop/publish-github.sh. It is valid for ONE version, and every line must still match a reported
 # difference. Anything not listed blocks the release. Whole-line comments only.
-version: 0.3.10-beta.1
+version: 0.3.10-beta.2
 
 # The exchange catalog (backend/app/catalog.py, bug report FY0M4R): items the hourly digest trades but no
 # source named are now named the game's way, so they gain a value, busiest market, price card, Market rows
-# and loops. Every accepted line is a NEW entry ("None -> …"); no existing currency's value, card, busiest
-# market, Market row, Hold row or loop changes. Checked 2026-10-03 against desktop-v0.3.9 on the owner's data:
-# 354 differences, all new entries for these 25 items, except the pool lines below.
+# and loops. Every accepted line below is a NEW entry ("None -> …"); no existing currency's value, card,
+# busiest market, Market row or Hold row changes. Checked 2026-10-03 against desktop-v0.3.9 on the owner's
+# data: 360 differences, all new entries for these 25 items except the deep-scan lines.
 
 values   atziris-soul-core-of-alacrity: None -> *
 values   atziris-soul-core-of-devotion: None -> *
@@ -127,14 +127,16 @@ loops    exchange-only loop changed: *jiquanis-soul-core-of-rippling*: None -> *
 loops    exchange-only loop changed: *jiquanis-soul-core-of-severing*: None -> *
 loops    exchange-only loop changed: *jiquanis-soul-core-of-squalls*: None -> *
 loops    exchange-only loop changed: *jiquanis-soul-core-of-thundering*: None -> *
-loops    exchange-only loop changed: *panther-idol*: None -> *
 loops    exchange-only loop changed: *ravens-reflection*: None -> *
 loops    exchange-only loop changed: *sacred-bloom*: None -> *
 loops    exchange-only loop changed: *shattered-triskelion*: None -> *
 loops    exchange-only loop changed: *the-triskelion-reforged*: None -> *
 
-# The Arbitrage pool: a new-item loop joins the top 100 (Raven's Reflection), the 100th route leaves, and
-# the other 99 shift score <= 0.0017 / rank <= 2 with margins unchanged (ranks are relative to the pool).
-pool     left: #* *
-pool     joined: #* *ravens-reflection*
+# The deep scan (arbitrage/deepscan.py) finds at most MAX_LOOPS=12 loops per search, greedily; the new items'
+# markets change which 12 it lands on, displacing six 5-hop candidates through chaos>uncut-skill-gem-8>divine
+# (4 already unfillable at -100%, 2 at impossible +8417%/+11924% margins — mispriced quotes). No price,
+# market or card of those currencies changes.
+loops    exchange-only loop changed: exalted>*|*>chaos|chaos>uncut-skill-gem-8|uncut-skill-gem-8>divine|divine>exalted: * -> None
+
+# The Arbitrage pool: score/rank shifts only, margins unchanged (ranks are relative to the pool).
 pool     score/rank shifts only (margins unchanged): *

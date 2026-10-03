@@ -236,13 +236,14 @@ app, no new outbound call (the invite opens in the OS browser); nothing can bill
   512 MB, CPU 20 s, FSIZE 64 MB, NPROC 0, NOFILE 16, 30 s wall clock). `RLIMIT_AS` is a Linux
   guarantee — macOS ignores it, so that one sandbox test skips on a Mac.
 - **Triage, resolve, close (2026-10-03):** the `triage-bugs` skill (`.claude/skills/triage-bugs`) and
-  `ops/bugs.sh` (list / pull / triage / resolve / close / resolve-merged; through sshshazambom → host
+  `ops/bugs.sh` (list / pull / triage / resolve / close / resolve-shipped; through sshshazambom → host
   `ops/feedback-bot/bugs.py`). Each report/post has `status.json` (new → triaged → resolved/closed)
   and `discord.json` (the post title + thread messages, from reporter/other — text only, never the
   reporter's uploads). The bot stays the inbox's only writer: owner actions are files in
   `inbox/actions/` it applies every minute; resolve/close reply in the thread with FIXED texts
-  (`bot.REPLY`) and archive where permitted. A fix commit carries `Fixes-Report: <id>`; after the
-  merge `ops/bugs.sh resolve-merged` resolves those reports.
+  (`bot.REPLY`) and archive where permitted. A fix commit carries `Fixes-Report: <id>`; only a STABLE
+  release resolves it (owner, 2026-10-03: beta is development only): `publish-github.sh` runs
+  `ops/bugs.sh resolve-shipped desktop-v<ver>` once a stable release is live; betas never do.
 - **Missed posts:** the starter message can 404 for seconds after its thread appears (uploads still
   processing — report XWZGZ0 was lost to a single fetch at +2 s). The bot retries with backoff
   (`RETRY_DELAYS`), keeps a still-failing thread in `state.json` `pending`, and catches up every

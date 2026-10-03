@@ -5,9 +5,13 @@
 #
 #   ops/bugs.sh list [new|triaged|open|resolved|closed|all]   # JSON, newest first (default: new)
 #   ops/bugs.sh pull <report> <dest-dir>                      # copy one report folder here
-#   ops/bugs.sh triage|resolve|close <report>                 # ask the bot to set it
-#   ops/bugs.sh resolve-merged [ref]                          # resolve every open report a commit on
-#                                                             # <ref> (default main) names: "Fixes-Report: <id>"
+#   ops/bugs.sh triage|close <report>                         # ask the bot to set it (no hand "resolve")
+#   ops/bugs.sh resolve-shipped [desktop-v<x.y.z>]            # resolve every open report a commit in that
+#                                                             # STABLE release (default: the newest) names
+#                                                             # "Fixes-Report: <id>"; publish-github.sh runs it
+#                                                             # once a stable release is live
+# Only a stable release resolves a report (owner, 2026-10-03: "beta is only for development"): main,
+# branches and beta tags are refused.
 set -euo pipefail
 REMOTE=${REMOTE:-/home/shazam/shazam-poe2-dashboard}
 CLI="python3 $REMOTE/ops/feedback-bot/bugs.py --inbox $REMOTE/feedback-inbox"
@@ -25,12 +29,13 @@ case "$cmd" in
     check_id "$1"; mkdir -p "$2"
     sshshazambom sudo "tar czf - -C $REMOTE/feedback-inbox $1" | tar xzf - -C "$2"
     echo "$2/$1" ;;
-  triage|resolve|close)
+  triage|close)
     check_id "$1"
     sshshazambom sudo "$CLI act $1 $cmd" ;;
-  resolve-merged)
-    ref=${1:-main}
-    git rev-parse --verify -q "$ref" >/dev/null || { echo "no such ref: $ref" >&2; exit 2; }
+  resolve-shipped)
+    ref=${1:-$(git tag --list 'desktop-v*' --sort=-v:refname | head -1)}
+    [[ "$ref" =~ ^desktop-v[0-9]+\.[0-9]+\.[0-9]+$ ]] && git rev-parse --verify -q "refs/tags/$ref" >/dev/null \
+      || { echo "not a stable release tag: ${ref:-none} (only a stable desktop-v<x.y.z> release resolves reports)" >&2; exit 2; }
     for r in $(sshshazambom sudo "$CLI list --state open" | python3 -c 'import json,sys; [print(r["report"]) for r in json.load(sys.stdin)]'); do
       check_id "$r"
       if [ -n "$(git log "$ref" -F --grep "Fixes-Report: $r" --format=%h)" ]; then
