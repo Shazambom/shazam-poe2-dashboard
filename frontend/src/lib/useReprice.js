@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api, undoToast } from './api.js'
 import { diag } from './diag.js'
 import { useWorkspace } from './workspaceStore.js'
-import { verdict, remember, applies, repriceQuery, ranRepriced, samplePlan, gapPlan, pageIsRows, encodeSlug, sampledRecently } from './reprice.js'
+import { verdict, remember, applies, repriceQuery, ranRepriced, samplePlan, gapPlan, pageIsRows, encodeSlug, sampledRecently, equivalentQuery, pageFromRecheck, findState, siblingKey, currencyFiltered } from './reprice.js'
 import { makeTapStore } from './tapStore.js'
 import { searchOfLink } from './session.js'
 
@@ -45,6 +45,8 @@ export function useReprice({ wv, node, navUrl, inHistory, remountKey, league, vi
   const verify = useRef(null)     // { currency, after: search id }: the next search should filter on it
   const deeper = useRef({ id: null, sample: 'todo', gap: 'todo' })   // per search: the sample, then one fill-in
   const [tick, setTick] = useState(0)
+  const [checking, setChecking] = useState(null)   // the search key a "Find cheapest" is running for
+  const checked = useRef(new Set())                 // search keys the user checked (answer shown until they move on)
 
   useEffect(() => { listen(); return TAP.subscribe(() => setTick(t => t + 1)) }, [])
   // Moving on (another row, ↻, a hidden sub-tab, leaving Trading) drops every fetch still waiting, so the new
@@ -127,5 +129,26 @@ export function useReprice({ wv, node, navUrl, inHistory, remountKey, league, vi
     undoToast('ws-reprice', `Repriced “${node.name}” in ${offer.text}`, () => useWorkspace.getState().restoreSearch(node.id, prev))
   }, [offer, node, page])
 
-  return { offer, apply }
+  // "Find cheapest" (owner, 2026-10-03): the check on demand — the page's search without its currency filter, run in
+  // the background (desktop trade:recheck: one budgeted search + two fetches); its listings become evidence for this
+  // search and the ordinary rule decides. Moving on cancels it (listingsCancel).
+  const key = page?.search ? siblingKey(page.search.league, page.search.body?.query) : null
+  const find = useCallback(async () => {
+    const s = page?.search
+    const recheck = window.poe2desktop?.trade?.recheck
+    if (!s || !recheck || checking) return
+    const k = siblingKey(s.league, s.body?.query)
+    setChecking(k)
+    const t0 = Date.now()
+    const r = await recheck({ league: s.league, query: equivalentQuery(s.body?.query) }).catch(() => null)
+    setChecking(null)
+    if (!r?.ok) { if (r?.error !== 'cancelled') diag('ws', `reprice-find fail=${r?.error} ms=${Date.now() - t0}`); return }
+    remember(SIBLINGS, pageFromRecheck(r, s.league, s.body?.query, page.options, prices.P), Date.now(), prices.P, { sampled: true })
+    checked.current.add(k)
+    setTick(t => t + 1)
+    diag('ws', `reprice-find rows=${r.rows.length} ms=${Date.now() - t0}`)   // how long the user saw "Checking…"
+  }, [page, checking])
+  const state = findState({ shown, filtered: !!page?.search && currencyFiltered(page.search.body), offer, checking: checking != null && checking === key, checked: key != null && checked.current.has(key) && sampledRecently(SIBLINGS, page.search.league, page.search.body?.query), known: key != null && sampledRecently(SIBLINGS, page.search.league, page.search.body?.query) })
+
+  return { offer, apply, state, find }
 }

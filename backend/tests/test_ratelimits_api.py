@@ -142,3 +142,44 @@ def test_a_spare_request_goes_through_with_headroom():
     p = _fresh("trade-fetch")
     _observe(p, "1:4:0,1:12:0")
     assert client.post("/api/ratelimits/acquire", json={"policy": "trade-fetch", "spare": 0.5}).json()["ok"] is True
+
+
+# Found measuring "Find cheapest" (2026-10-03): the site's real rules, halved, are not a rate list pyrate-limiter accepts
+# (it wants longer windows to have larger limits and a lower rate), so building the limiter threw and the policy kept
+# its defaults while reporting the new rules. Search: 3/5s 8/10s 15/60s 60/300s 600/3h → halved 1/5s 4/10s …; fetch has
+# two 4-second rules. The derived list keeps every rule that can bind and drops only the ones a stricter rule implies.
+SEARCH_HEADERS = {"X-Rate-Limit-Rules": "Ip", "X-Rate-Limit-Ip": "3:5:60,8:10:60,15:60:120,60:300:1800,600:10800:3600",
+                  "X-Rate-Limit-Ip-State": "1:5:0,1:10:0,1:60:0,1:300:0,1:10800:0"}
+FETCH_HEADERS = {"X-Rate-Limit-Rules": "Account,Ip", "X-Rate-Limit-Account": "6:4:10,16:12:60",
+                 "X-Rate-Limit-Account-State": "1:4:0,1:12:0", "X-Rate-Limit-Ip": "12:4:60,100:300:300,1000:10800:1800",
+                 "X-Rate-Limit-Ip-State": "1:4:0,1:300:0,1:10800:0"}
+
+
+def _rates(p):
+    return [(r.limit, r.interval // 1000) for r in p.rates]
+
+
+def test_the_sites_real_search_rules_become_a_working_limiter():
+    p = _fresh("trade-search")
+    p.observe_headers(200, SEARCH_HEADERS)
+    p.penalty_until = 0.0
+    assert _rates(p) == [(1, 5), (7, 60), (30, 300), (300, 10800)]   # 4/10s is implied by 1/5s
+    assert p.limiter.try_acquire("trade-search", blocking=False) is True
+    assert p.limiter.try_acquire("trade-search", blocking=False) is False, "the limiter really is the new one (1 per 5 s)"
+
+
+def test_the_sites_real_fetch_rules_become_a_working_limiter():
+    p = _fresh("trade-fetch")
+    p.observe_headers(200, FETCH_HEADERS)
+    p.penalty_until = 0.0
+    assert _rates(p) == [(3, 4), (8, 12), (50, 300), (500, 10800)]   # the two 4-second rules: the stricter one
+    assert [p.limiter.try_acquire("trade-fetch", blocking=False) for _ in range(4)] == [True, True, True, False]
+
+
+def test_a_full_limiter_says_retry_after_its_shortest_window_not_thirty_seconds():
+    p = _fresh("trade-search")
+    p.observe_headers(200, SEARCH_HEADERS)
+    p.penalty_until = 0.0
+    assert client.post("/api/ratelimits/acquire", json={"policy": "trade-search"}).json()["ok"] is True
+    r = client.post("/api/ratelimits/acquire", json={"policy": "trade-search"}).json()
+    assert r["ok"] is False and r["retry_after_s"] == 5.0, r

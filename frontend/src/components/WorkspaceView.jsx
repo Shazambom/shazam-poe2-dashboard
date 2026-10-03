@@ -459,8 +459,11 @@ export default function WorkspaceView({ league, visible = true }) {
                 ? <>
                     <span className="ws-chip ok">{activeNode.q ? 'from item' : 'captured'}</span>
                     {activeNode.live && <span className="ws-chip live">live</span>}
-                    {reprice.offer && <button className="ws-chip act" title={`Re-run this search priced in ${reprice.offer.text} and save it`} onClick={reprice.apply}>
+                    {reprice.state === 'reprice' && <button className="ws-chip act" title={`Re-run this search priced in ${reprice.offer.text} and save it`} onClick={reprice.apply}>
                       <Cur id={reprice.offer.currency} size={14} />Reprice in {reprice.offer.text}</button>}
+                    {reprice.state === 'find' && <button className="ws-chip find" title="Check whether this search is cheaper in another currency" onClick={reprice.find}>Find cheapest</button>}
+                    {reprice.state === 'checking' && <span className="ws-chip" role="status">Checking…</span>}
+                    {reprice.state === 'cheapest' && <span className="ws-chip ok" role="status">Already cheapest</span>}
                   </>
                 : <span className="ws-chip">build your search — it captures automatically</span>)}
               <span className="spacer" />

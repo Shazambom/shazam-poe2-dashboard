@@ -297,6 +297,10 @@ a { color: var(--live); }
 .ws-chip.act { color: var(--gold); border-color: rgba(var(--accent-rgb),.45); background: none; cursor: pointer; font: inherit; font-size: 11px; }
 .ws-chip.act:hover { border-color: var(--gold); background: rgba(var(--accent-rgb),.08); }
 .ws-chip.act:focus-visible { outline: 2px solid rgba(var(--accent-rgb),.6); outline-offset: 1px; }
+/* Find cheapest: the check on demand — quieter than the swap button it can lead to */
+.ws-chip.find { background: none; cursor: pointer; font: inherit; font-size: 11px; }
+.ws-chip.find:hover { color: var(--ink); border-color: var(--line-strong); }
+.ws-chip.find:focus-visible { outline: 2px solid rgba(var(--accent-rgb),.6); outline-offset: 1px; }
 /* ---------- Sales tab + item card ---------- */
 .sales-view { display: flex; flex-direction: column; gap: 14px; padding: 14px 24px 48px; }
 .sales-head { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-1); }

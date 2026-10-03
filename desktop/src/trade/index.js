@@ -42,7 +42,14 @@ function registerTrade(getWin, getBackendUrl) {
     log: (line) => { try { require('../telemetry.js').installLog('tap', line) } catch {} },
   })
   ipcMain.handle('trade:listings', (_e, p) => fetchListings(p || {}).catch(e => ({ ok: false, error: String(e && e.message || e) })))
-  ipcMain.handle('trade:listings-cancel', () => { fetchListings.cancel(); return { ok: true } })
+  // "Find cheapest": the reprice check on demand (one budgeted search + two fetches; user-triggered only).
+  const recheck = require('./listings.js').makeRechecker({
+    request: (r) => require('./proxy.js').poeRequest(r),
+    budget: require('./budget.js'),
+    log: (line) => { try { require('../telemetry.js').installLog('tap', line) } catch {} },
+  })
+  ipcMain.handle('trade:recheck', (_e, p) => recheck(p || {}).catch(e => ({ ok: false, error: String(e && e.message || e) })))
+  ipcMain.handle('trade:listings-cancel', () => { fetchListings.cancel(); recheck.cancel(); return { ok: true } })
   ipcMain.handle('trade:query-price', (_e, p) => priceQuery(p || {}).catch(e => ({ ok: false, error: String(e && e.message || e) })))
   ipcMain.handle('trade:teleport', async (_e, { token }) => {
     try { return await engine.teleport(token) }

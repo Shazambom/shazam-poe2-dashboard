@@ -36,6 +36,7 @@ contextBridge.exposeInMainWorld('poe2desktop', {
     onWebviewNav: sub('trade:webview-nav'),
     onTap: sub('trade:tap'),   // the trade tap: the embedded page's own search, listing prices and price options
     listings: (p) => ipcRenderer.invoke('trade:listings', p),   // reprice: a few listings of a search the page ran
+    recheck: (p) => ipcRenderer.invoke('trade:recheck', p),   // "Find cheapest": the reprice check on demand (1 search + 2 fetches)
     listingsCancel: () => ipcRenderer.invoke('trade:listings-cancel'),   // drop reprice fetches still waiting (row/tab switched)
     startSearch: (itemId, league, slug, type) => ipcRenderer.invoke('trade:start-search', { itemId, league, slug, type }),
     stopSearch: (itemId) => ipcRenderer.invoke('trade:stop-search', { itemId }),

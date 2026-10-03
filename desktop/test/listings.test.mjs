@@ -137,7 +137,82 @@ test('cancel() drops a fetch that is still waiting on the budget — nothing is 
 test('cancel is exposed to the window over IPC', async () => {
   const { readFileSync } = await import('node:fs')
   const idx = readFileSync(new URL('../src/trade/index.js', import.meta.url), 'utf8')
-  assert.match(idx, /ipcMain\.handle\('trade:listings-cancel', \(\) => \{ fetchListings\.cancel\(\); return \{ ok: true \} \}\)/)
+  assert.match(idx, /ipcMain\.handle\('trade:listings-cancel'/)
   const pre = readFileSync(new URL('../src/preload.js', import.meta.url), 'utf8')
   assert.match(pre, /listingsCancel: \(\) => ipcRenderer\.invoke\('trade:listings-cancel'\)/)
+})
+
+// "Find cheapest" (owner, 2026-10-03): a button that does the reprice check on demand — the page's search without its
+// currency filter (the window builds that query), run in the background: ONE budgeted search, then the first ten
+// listings and a sample across the rest (two fetches). Only ids and prices come back. Never automatic.
+function rechecker({ searchRes = { id: 'S7', result: Array.from({ length: 100 }, (_, i) => ID(i + 1)), total: 300 }, refuse = 0 } = {}) {
+  const calls = { acquire: [], requests: [] }
+  const f = L.makeRechecker({
+    request: async (r) => {
+      calls.requests.push(r)
+      if (r.method === 'POST') return { status: 200, headers: {}, body: JSON.stringify(searchRes) }
+      const ids = r.path.split('/fetch/')[1].split('?')[0].split(',')
+      return { status: 200, headers: {}, body: JSON.stringify({ result: ids.map((id, k) => listing(id, 100 + k, k % 2 ? 'chaos' : 'vaal')) }) }
+    },
+    budget: { acquire: async (p, o) => { calls.acquire.push([p, o]); if (refuse-- > 0) { const e = new Error('rl'); e.retryAfter = 2; throw e } }, observe: () => {} },
+    wait: async () => {},
+  })
+  return { f, calls }
+}
+const Q = { status: { option: 'securable' }, type: 'Revelatory Wombgift', stats: [{ type: 'and', filters: [] }] }
+
+test('recheck: one search (Instant Buyout, cheapest first), then the first ten and a sample of the rest', async () => {
+  const { f, calls } = rechecker()
+  const r = await f({ league: 'Forbidden Rites', query: { ...Q, status: { option: 'online' } } })
+  assert.equal(r.ok, true)
+  assert.equal(r.searchId, 'S7'); assert.equal(r.ids.length, 100); assert.equal(r.total, 300)
+  assert.deepEqual(calls.acquire.map(([p]) => p), ['trade-search', 'trade-fetch', 'trade-fetch'])
+  const [search, first, sample] = calls.requests
+  assert.equal(search.method, 'POST'); assert.equal(search.path, '/api/trade2/search/poe2/Forbidden%20Rites')
+  assert.deepEqual(search.body.query.status, { option: 'securable' }, 'always Instant Buyout')
+  assert.deepEqual(search.body.sort, { price: 'asc' })
+  assert.equal(search.body.query.type, 'Revelatory Wombgift')
+  assert.equal(first.path.split('/fetch/')[1].split('?')[0], Array.from({ length: 10 }, (_, i) => ID(i + 1)).join(','))
+  const sampleRanks = sample.path.split('/fetch/')[1].split('?')[0].split(',').map(id => parseInt(id, 16) - 1)
+  assert.deepEqual(sampleRanks, [10, 20, 30, 40, 50, 60, 70, 80, 90, 99])
+  assert.match(first.path, /\?query=S7&realm=poe2$/)
+  assert.equal(r.rows.length, 20)
+  assert.doesNotMatch(JSON.stringify(r), /SECRET|TOKEN|Hidden/)
+})
+
+test('recheck: a short result is fetched once; nothing found is an answer; a bad request sends nothing', async () => {
+  const short = rechecker({ searchRes: { id: 'S8', result: [ID(1), ID(2)], total: 2 } })
+  const r = await short.f({ league: 'L', query: Q })
+  assert.equal(r.ok, true); assert.equal(short.calls.requests.length, 2, 'search + one fetch')
+  const none = rechecker({ searchRes: { id: 'S9', result: [], total: 0 } })
+  assert.deepEqual(await none.f({ league: 'L', query: Q }), { ok: true, searchId: 'S9', ids: [], total: 0, rows: [] })
+  const bad = rechecker()
+  assert.equal((await bad.f({ league: '', query: Q })).ok, false)
+  assert.equal((await bad.f({ league: 'L', query: null })).ok, false)
+  assert.equal(bad.calls.requests.length, 0)
+})
+
+test('recheck: a budget "not yet" is waited out once; cancel drops it before anything is sent', async () => {
+  const once = rechecker({ refuse: 1 })
+  assert.equal((await once.f({ league: 'L', query: Q })).ok, true)
+  let release
+  const f = L.makeRechecker({
+    request: async () => { throw new Error('must not be sent') },
+    budget: { acquire: async () => { const e = new Error('rl'); e.retryAfter = 5; throw e }, observe: () => {} },
+    wait: (ms, signal) => new Promise(res => { release = res; signal?.addEventListener('abort', () => res(), { once: true }) }),
+  })
+  const pending = f({ league: 'L', query: Q })
+  await new Promise(r => setImmediate(r))
+  f.cancel()
+  assert.deepEqual(await pending, { ok: false, error: 'cancelled' })
+  void release
+})
+
+test('recheck is registered over IPC and cancelled with the listings', async () => {
+  const { readFileSync } = await import('node:fs')
+  const idx = readFileSync(new URL('../src/trade/index.js', import.meta.url), 'utf8')
+  assert.match(idx, /ipcMain\.handle\('trade:recheck'/)
+  assert.match(idx, /ipcMain\.handle\('trade:listings-cancel', \(\) => \{ fetchListings\.cancel\(\); recheck\.cancel\(\); return \{ ok: true \} \}\)/)
+  const pre = readFileSync(new URL('../src/preload.js', import.meta.url), 'utf8')
+  assert.match(pre, /recheck: \(p\) => ipcRenderer\.invoke\('trade:recheck', p\)/)
 })

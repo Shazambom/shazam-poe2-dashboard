@@ -5,7 +5,7 @@
 // shared rate budget (policy trade-fetch). docs/reprice-design.md.
 'use strict'
 const { budgeted } = require('./budget.js')
-const { TRADE_BASE, FETCH_MAX } = require('./urls.js')
+const { TRADE_BASE, FETCH_MAX, INSTANT_BUYOUT } = require('./urls.js')
 
 const FETCH_POLICY = 'trade-fetch'
 const LISTING_ID = /^[0-9a-f]{16,128}$/
@@ -18,13 +18,14 @@ function projectRows(json) {
 }
 
 const WAIT_CAP_MS = 10_000
+const defaultWait = (ms, signal) => new Promise(r => { const t = setTimeout(r, ms); signal?.addEventListener('abort', () => { clearTimeout(t); r() }, { once: true }) })
 const SPARE = 0.5   // reprice is a nice-to-have: only with half of every rate window free (owner: "be aware of our headroom")
 
 // wait(ms, signal): how a budget "not yet" is waited out — once, capped — so the caller awaits one answer, never
 // polls. cancel() drops every fetch still waiting (the user switched rows, reloaded or left the tab): it resolves
 // { ok:false, error:'cancelled' } and nothing is sent (owner: "aggressively drop searches that were triggered
 // previously to make space for the new queries").
-function makeListingFetcher({ request, budget, log = () => {}, wait = (ms, signal) => new Promise(r => { const t = setTimeout(r, ms); signal?.addEventListener('abort', () => { clearTimeout(t); r() }, { once: true }) }) }) {
+function makeListingFetcher({ request, budget, log = () => {}, wait = defaultWait }) {
   const deps = { request, budget }
   let drop = new AbortController()
   async function fetchListings({ league, searchId, ids } = {}) {
@@ -51,4 +52,48 @@ function makeListingFetcher({ request, budget, log = () => {}, wait = (ms, signa
   return fetchListings
 }
 
-module.exports = { projectRows, makeListingFetcher, FETCH_POLICY }
+const SEARCH_POLICY = 'trade-search'
+
+// "Find cheapest" (owner, 2026-10-03): the reprice check on demand. The window passes the page's search without its
+// currency filter; this runs it once in the background — one budgeted search (Instant Buyout, cheapest first), then
+// the first ten listings and a sample across the rest (two fetches). User-triggered, so ordinary priority; a budget
+// "not yet" is waited out once; cancel() drops it before anything is sent. Only ids and prices come back.
+function makeRechecker({ request, budget, log = () => {}, wait = defaultWait }) {
+  const deps = { request, budget }
+  let drop = new AbortController()
+  const once = async (policy, req, signal) => {
+    let r = await budgeted(deps, policy, req)
+    if (!r.ok && r.error === 'rate' && r.status == null && !signal.aborted) {
+      await wait(Math.min(WAIT_CAP_MS, (Number(r.retryAfter) || 2) * 1000), signal)
+      if (signal.aborted) return { ok: false, error: 'cancelled' }
+      r = await budgeted(deps, policy, req)
+    }
+    return signal.aborted && !r.ok ? { ok: false, error: 'cancelled' } : r
+  }
+  async function recheck({ league, query } = {}) {
+    const lg = String(league ?? '').trim()
+    if (!lg || !query || typeof query !== 'object' || Array.isArray(query)) return { ok: false, error: 'bad request' }
+    const signal = drop.signal
+    const home = `${TRADE_BASE}/search/poe2/${encodeURIComponent(lg)}`
+    const body = { query: { ...query, status: INSTANT_BUYOUT }, sort: { price: 'asc' } }
+    const s = await once(SEARCH_POLICY, { method: 'POST', path: `/api/trade2/search/poe2/${encodeURIComponent(lg)}`, body, referer: home }, signal)
+    if (!s.ok) { log(`recheck status=${s.status ?? s.error} step=search`); return s }
+    const searchId = s.data?.id, ids = Array.isArray(s.data?.result) ? s.data.result.filter(i => LISTING_ID.test(String(i))) : [], total = Number(s.data?.total) || 0
+    if (!searchId || !ids.length) { log('recheck status=200 total=0'); return { ok: true, searchId: searchId || '', ids: [], total, rows: [] } }
+    const sample = []
+    for (let r = FETCH_MAX; r < ids.length; r += FETCH_MAX) sample.push(ids[r])
+    if (ids.length > FETCH_MAX && sample[sample.length - 1] !== ids[ids.length - 1]) sample.push(ids[ids.length - 1])
+    const rows = []
+    for (const batch of [ids.slice(0, FETCH_MAX), sample.slice(0, FETCH_MAX)].filter(b => b.length)) {
+      const f = await once(FETCH_POLICY, { method: 'GET', path: `/api/trade2/fetch/${batch.join(',')}?query=${searchId}&realm=poe2`, referer: `${home}/${searchId}` }, signal)
+      if (!f.ok) { log(`recheck status=${f.status ?? f.error} step=fetch`); return f }
+      rows.push(...projectRows(f.data))
+    }
+    log(`recheck status=200 total=${total} rows=${rows.length}`)
+    return { ok: true, searchId, ids, total, rows }
+  }
+  recheck.cancel = () => { drop.abort(); drop = new AbortController() }
+  return recheck
+}
+
+module.exports = { projectRows, makeListingFetcher, makeRechecker, FETCH_POLICY, SEARCH_POLICY }

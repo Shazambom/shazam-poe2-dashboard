@@ -420,6 +420,18 @@ Design and arena record: [`reprice-design.md`](./reprice-design.md).
 - **Search once, click once:** after the row's own search, `samplePlan` fetches every 10th of the ids the search
   returned (plus the last) and `gapPlan`, only if undecided, the ≤9 ids before a currency's first sampled row —
   `trade:listings` (`desktop/src/trade/listings.js`, budgeted `trade-fetch`, never a new search). 1–2 fetches a search.
+- **Find cheapest** (owner, 2026-10-03): the check on demand, mainly for a page filtered to one currency (the
+  automatic check never samples those). The strip shows one thing at a time (`reprice.findState`): **Find cheapest**
+  → **Checking…** → **Reprice in X**, or **Already cheapest** (kept while on that search). The click sends the page's
+  search without its currency filter (`equivalentQuery`) to `trade:recheck` (`listings.makeRechecker`): one budgeted
+  search + two fetches (first ten, sample), ordinary priority, one wait, cancelled on moving on. Its listings become
+  5-minute evidence for the search (`pageFromRecheck` → `remember`). Telemetry `reprice-find rows= ms=` (how long the
+  user saw "Checking…").
+- **The limiter adopts the site's real rules** (found measuring Find cheapest, 2026-10-03): pyrate-limiter rejects a
+  rate list whose longer windows allow a higher rate or repeat a window, and the site's halved rules are exactly that,
+  so `Limiter(...)` threw and every policy silently kept its defaults (searches 1 per 10 s). `gateway._rate_chain`
+  turns the rules into a valid list without loosening any (equal windows → the stricter limit; a rule a stricter one
+  implies is dropped). A full limiter now says "retry in" its shortest window, not 30 s.
 - **Rate-limit safety (owner, 2026-10-03: "I'm worried about rate limits"):**
   - The tap reports the page's own `search`/`fetch` X-Rate-Limit headers to the budget (`budget.observe`), so
     `gateway.Policy` sees the user's browsing, not only the app's requests.
@@ -436,7 +448,7 @@ Design and arena record: [`reprice-design.md`](./reprice-design.md).
   page leads with the cheapest currency. Delete the row after and diff `/api/trading/workspace` against a snapshot.
 
 Tests: `desktop/test/tap.test.mjs`, `desktop/test/listings.test.mjs`, `desktop/test/budget.test.mjs`,
-`backend/tests/test_ratelimits_api.py` (headroom), `frontend/test/reprice.test.mjs`,
+`backend/tests/test_ratelimits_api.py` (headroom, the real rules as a working limiter), `frontend/test/reprice.test.mjs`,
 `frontend/test/workspace-reprice.test.mjs`, the store fuzz's reprice round trip.
 
 ### Strategy → Strat Calculator (added 2026-10-01)

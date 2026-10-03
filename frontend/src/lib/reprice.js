@@ -106,7 +106,11 @@ export function applies({ node, inHistory, navUrl }) {
 
 // Sibling evidence: the same search under any price filter (the price filter and key order ignored), so a page
 // filtered to one currency can know another is cheaper from an earlier page of that search. Memory only.
-export function siblingKey(league, query) {
+export const siblingKey = (league, query) => `${league}|${canon(equivalentQuery(query))}`
+
+// The search without its currency filter — what the site sorts by Exalted Orb Equivalent. A copy; groups left
+// empty are dropped.
+export function equivalentQuery(query) {
   const q = structuredClone(query || {})
   const tf = q.filters?.trade_filters
   if (tf?.filters) {
@@ -114,7 +118,30 @@ export function siblingKey(league, query) {
     if (!Object.keys(tf.filters).length) delete q.filters.trade_filters
     if (!Object.keys(q.filters).length) delete q.filters
   }
-  return `${league}|${canon(q)}`
+  return q
+}
+
+// "Find cheapest" (owner, 2026-10-03): the background search's answer (desktop trade:recheck — its ids and the
+// listings of its first ten and a sample of the rest) as a page, so its evidence feeds the ordinary rule.
+export function pageFromRecheck(result, league, query, options, prices) {
+  let p = observe(EMPTY, { kind: 'options', price: options || [] })
+  p = observe(p, { kind: 'search', id: result.searchId, league, body: { query: equivalentQuery(query), sort: { price: 'asc' } }, ids: result.ids || [] }, prices)
+  return observe(p, { kind: 'fetch', searchId: result.searchId, rows: result.rows || [] })
+}
+
+// The search filters the price to one currency (not the site's Exalted Orb Equivalent, nor its "Exalted/Divine" mode).
+export const currencyFiltered = (body) => oneCurrency(body)
+
+// What the strip shows — one thing at a time (owner, 2026-10-03). The swap button wins anywhere. Only a page filtered
+// to one currency gets the rest: "Checking…" while a check runs, "Already cheapest" when the app knows (a check the
+// user asked for, or the automatic check — e.g. right after a reprice), else the "Find cheapest" button.
+export function findState({ shown, filtered, offer, checking, checked, known }) {
+  if (!shown) return null
+  if (offer) return 'reprice'
+  if (!filtered) return null
+  if (checking) return 'checking'
+  if (checked || known) return 'cheapest'
+  return 'find'
 }
 
 // `latest`: the current price table, for a page whose search arrived before any prices were loaded.

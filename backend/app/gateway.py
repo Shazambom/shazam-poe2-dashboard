@@ -100,7 +100,8 @@ class Policy:
             if wait > 0:
                 return wait
         if not self.limiter.try_acquire(self.name, blocking=False):
-            win = max((r.interval for r in self.rates), default=1000) / 1000.0
+            # The shortest window is the soonest a slot can free; the longest (3 h) made every refusal "30 s".
+            win = min((r.interval for r in self.rates), default=1000) / 1000.0
             return max(1.0, min(win, 30.0))
         self.requests += 1
         return 0.0
@@ -147,8 +148,13 @@ class Policy:
             self.penalize(hold, "window nearly spent")
         if advertised and advertised != self.advertised:
             self.advertised = advertised
-            self.rates = [Rate(max(1, int(lim * SAFETY)), Duration.SECOND * win) for lim, win, _ in advertised]
-            self.limiter = Limiter(self.rates)
+            rates = _rate_chain([(max(1, int(lim * SAFETY)), win) for lim, win, _ in advertised])
+            try:
+                limiter = Limiter(rates)
+            except ValueError as exc:      # never keep reporting rules the limiter does not enforce
+                log.warning("%s: kept the previous rates; %s rejected (%s)", self.name, [(r.limit, r.interval // 1000) for r in rates], exc)
+                return
+            self.rates, self.limiter = rates, limiter
             log.info("%s: rates now %s", self.name, [(r.limit, r.interval // 1000) for r in self.rates])
 
     def to_json(self) -> dict:
@@ -161,6 +167,26 @@ class Policy:
             "throttled": self.throttled,
             "state": self.last_headers.get("x-rate-limit-ip-state") or self.last_headers.get("x-rate-limit-account-state"),
         }
+
+
+def _rate_chain(rules: list[tuple[int, int]]) -> list[Rate]:
+    """(limit, window_s) rules → a rate list pyrate-limiter accepts (longer windows: larger limits, a rate that never
+    rises), keeping every rule that can bind. Equal windows keep the strictest limit; a shorter rule whose limit a
+    longer one already matches is dropped (the longer is stricter); a longer rule allowing a higher rate than the
+    rule before it is dropped (that rule already caps it: 1 per 5 s is at most 2 per 10 s, under 4 per 10 s)."""
+    by_win: dict[int, int] = {}
+    for lim, win in rules:
+        if win > 0 and lim > 0:
+            by_win[win] = min(lim, by_win.get(win, lim))
+    kept: list[tuple[int, int]] = []
+    for win in sorted(by_win):
+        lim = by_win[win]
+        while kept and lim <= kept[-1][0]:
+            kept.pop()
+        if kept and lim / win > kept[-1][0] / kept[-1][1]:
+            continue
+        kept.append((lim, win))
+    return [Rate(lim, Duration.SECOND * win) for lim, win in kept]
 
 
 def _triples(s: str) -> list[tuple[int, int, int]]:

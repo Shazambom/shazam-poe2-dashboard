@@ -316,3 +316,59 @@ test('remember with an old "seen" time cannot make stale evidence fresh', () => 
   const vaalOnly = page([['vaal', 139], ['vaal', 140]], { id: 'V9' })
   assert.equal(offer(vaalOnly, P, { siblings: sib, now: t0 + 5 * 60_000 + 1 }), null, 'no offer from 5-minute-old evidence')
 })
+
+// "Find cheapest" (owner, 2026-10-03): the check on demand for a page the automatic check cannot help — usually one
+// filtered to a single currency. The page's search without its currency filter (the exalted-equivalent search) is
+// run in the background; its listings become evidence for the same search, and the ordinary rule decides.
+test('equivalentQuery drops only the currency filter (and empty groups left behind)', () => {
+  const filtered = { ...QUERY, filters: { trade_filters: { filters: { price: { option: 'chaos', min: 10 }, fee: { max: 5 } } }, misc_filters: { filters: { corrupted: { option: 'false' } } } } }
+  assert.deepEqual(R.equivalentQuery(filtered), { ...QUERY, filters: { trade_filters: { filters: { fee: { max: 5 } } }, misc_filters: { filters: { corrupted: { option: 'false' } } } } })
+  assert.deepEqual(R.equivalentQuery({ ...QUERY, filters: { trade_filters: { filters: { price: { option: 'vaal' } } } } }), QUERY)
+  assert.deepEqual(R.equivalentQuery(QUERY), QUERY)
+  assert.notEqual(R.equivalentQuery(QUERY), QUERY, 'a copy, never the page\'s own object')
+})
+
+const recheckResult = (rows) => ({ ok: true, searchId: 'RC1', ids: rows.map((_, i) => `x${i}`), total: rows.length, rows: rows.map(([currency, amount], i) => ({ id: `x${i}`, amount, currency })) })
+const chaosFiltered = { query: { ...QUERY, filters: { trade_filters: { filters: { price: { option: 'chaos' } } } } }, sort: { price: 'asc' } }
+
+test('pageFromRecheck: the background search\'s listings decide a chaos-filtered page — vaal cheaper → offer vaal', () => {
+  const sib = new Map(), t0 = 7_000_000
+  const rc = R.pageFromRecheck(recheckResult([['vaal', 105], ['vaal', 110], ['chaos', 17]]), 'Forbidden Rites', QUERY, OPTIONS.price, P)
+  R.remember(sib, rc, t0, P, { sampled: true })
+  const chaosPage = page([['chaos', 17], ['chaos', 18]], { body: chaosFiltered, id: 'C2' })
+  assert.equal(offer(chaosPage, P, { siblings: sib, now: t0 + 1000 }), 'vaal')
+  assert.equal(R.sampledRecently(sib, 'Forbidden Rites', chaosFiltered.query, t0 + 1000), true, 'the same search now counts as checked')
+})
+
+test('pageFromRecheck: chaos already the cheapest → no offer (the strip says "Already cheapest")', () => {
+  const sib = new Map(), t0 = 8_000_000
+  R.remember(sib, R.pageFromRecheck(recheckResult([['vaal', 139], ['chaos', 15]]), 'Forbidden Rites', QUERY, OPTIONS.price, P), t0, P, { sampled: true })
+  const chaosPage = page([['chaos', 15], ['chaos', 16]], { body: chaosFiltered, id: 'C3' })
+  assert.equal(offer(chaosPage, P, { siblings: sib, now: t0 + 1000 }), null)
+})
+
+test('findState: one thing in the strip at a time', () => {
+  assert.equal(R.findState({ shown: false, filtered: true }), null, 'not the row\'s own priced search: nothing')
+  assert.equal(R.findState({ shown: true, filtered: true, offer: { currency: 'vaal' } }), 'reprice')
+  assert.equal(R.findState({ shown: true, filtered: true, checking: true }), 'checking')
+  assert.equal(R.findState({ shown: true, filtered: true, checked: true }), 'cheapest', 'checked on request, nothing cheaper')
+  assert.equal(R.findState({ shown: true, filtered: true }), 'find')
+  assert.equal(R.findState({ shown: true, filtered: true, checking: true, offer: { currency: 'vaal' } }), 'reprice', 'an offer wins')
+})
+
+// Owner, 2026-10-03: "The find cheapest button should only show up on pages where a price currency filter was applied.
+// I.e. not exalted orb equivalent." The site's "Exalted/Divine" mode is not one currency either.
+test('Find cheapest only on a page filtered to one currency', () => {
+  assert.equal(R.findState({ shown: true, filtered: false }), null, 'Exalted Orb Equivalent: no button')
+  assert.equal(R.findState({ shown: true, filtered: false, known: true }), null, 'and no note')
+  assert.equal(R.findState({ shown: true, filtered: false, offer: { currency: 'vaal' } }), 'reprice', 'the swap still shows there')
+  assert.equal(R.findState({ shown: true, filtered: true }), 'find')
+  // The owner's Atziri's Disdain page (2026-10-03): repriced to Exalted moments ago, so the app already knows it is the
+  // cheapest — a filtered page always answers: "Already cheapest", with no new request.
+  assert.equal(R.findState({ shown: true, filtered: true, known: true }), 'cheapest')
+  const q = (option) => ({ query: { ...QUERY, filters: { trade_filters: { filters: { price: option ? { option } : { max: 5 } } } } }, sort: { price: 'asc' } })
+  assert.equal(R.currencyFiltered(q('chaos')), true)
+  assert.equal(R.currencyFiltered(q('exalted_divine')), false)
+  assert.equal(R.currencyFiltered(q(null)), false, 'a price range without a currency is still the exalted equivalent')
+  assert.equal(R.currencyFiltered(BODY), false)
+})
