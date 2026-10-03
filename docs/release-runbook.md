@@ -138,6 +138,28 @@ exporter's mid-sync guard enforces this): the publisher (`ops/publish-market-sna
 > (`meta_bridge`) that rides the snapshot — so the snapshot needed rebuilding even though there
 > was no schema change. Patched via desktop-v0.2.45.
 
+## ⚠️ Before you run `publish-github.sh` — the traps that have caught us
+
+Check these every time; each one has cost a deploy before. (The general rules every deploy playbook follows are in
+[`dev-notes.md`](./dev-notes.md) → "Deploy rules — every playbook".)
+- **Node 22+ on PATH.** The test gate globs `"frontend/test/*.test.mjs"`, which only Node ≥ 22 expands; an nvm
+  Node 18 first on PATH fails the gate with "Could not find …" before a single test runs. Run the script as
+  `PATH=/opt/homebrew/bin:$PATH ./publish-github.sh`.
+- **`desktop/release/` is shared by every Mac build.** `publish-github.sh`, `dist:mac` and a test app launched
+  from `release/mac-arm64/Arbiter.app` all use it. Stop any test build or test run first; let the script build;
+  test *that* build only once the log says `watching Windows CI run` (the Mac half is done and `release/` is
+  stable while CI runs).
+- **The regression accept file is for exactly one version.** Set its `version:` line to the new version and
+  drop the previous release's lines (a stale line fails the gate). A release that changes no user-visible data
+  has an accept file with only its `version:` line.
+- **Version and tag:** a beta is `x.y.z-beta.N` in `desktop/package.json` (bare-semver tag); stable is `x.y.z`
+  (tag `desktop-v…`). Bump, commit on `main`, then run — the script pushes `main` itself.
+- **Run it in the background and wait on its own lines**, anchored to the line start: `^watching Windows CI run`,
+  `^release .* is live`, `^FATAL`, `^EXIT`. Never match loose words (a test's name contains "missing"), and never
+  chain sleeps.
+- **A local `-beta` build forces the beta channel**, so its diagnostics telemetry is on — useful for checking the
+  release build itself while CI runs.
+
 ## Steps, in order
 
 1. **Pre-flight (before committing).** Confirm no leftover debug/test scaffolding in the
@@ -225,6 +247,14 @@ exporter's mid-sync guard enforces this): the publisher (`ops/publish-market-sna
    the installers — that is what the `github` updater provider resolves against. A `404` in the
    live check means the installer name and the yml url disagree.
 
+8. **Audit the deploy — every deploy, beta or stable.** Before reporting it done, look back over the session:
+   - Did any gate fail, any step retry, any wait or command need a second try?
+   - Did anything need a manual fix, a workaround, or a guess? Did anything take far longer than expected?
+   - Did the release run into other work (a test build, a running app, another script)?
+   For each "yes", write one **condensed, general** lesson into "Lessons from deploys" below: dated, one or two
+   lines, phrased as a rule for next time (not a story of this one). If the lesson is a check, also add it to
+   "Before you run" above. If nothing went wrong, say so in the report — no entry needed.
+
 ### If a release goes wrong
 
 - **An upload hangs or 500s** (`Error saving asset`): nothing is exposed — the release is still a
@@ -235,3 +265,14 @@ exporter's mid-sync guard enforces this): the publisher (`ops/publish-market-sna
   fix second.** Removing `latest*.yml` / `beta*.yml` makes clients see "no update" and stay put;
   or `gh release edit <tag> --draft=true` to pull the whole release. Then upload, `verify`, restore.
 - **Two drafts share a tag** (`ensure-draft` refuses): delete the stray one in the GitHub UI.
+
+## Lessons from deploys
+
+Condensed and general, newest first; each came from a post-deploy audit (step 8).
+
+- **2026-10-03 (0.3.11-beta.1):** a deploy requested mid-testing collides with any test build or app running from
+  `release/`. Stop the testing, cut the release, and resume testing on the release's own build once the log says
+  `watching Windows CI run`.
+- **2026-10-03 (0.3.11-beta.1):** wait on the script's own anchored lines. A loose match ("missing") hit a test name
+  in the gate's output and started the next step before the Mac build was done.
+

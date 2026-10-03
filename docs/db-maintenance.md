@@ -143,6 +143,20 @@ sidecar so the client can compare `snapshot_version` without decompressing on ev
     re-run the script. Editing an existing fine-grained PAT's permissions keeps the same value, so
     no re-run is needed for a permission fix.
 
+### Before you run a publish (and after)
+
+The deploy rules in [`dev-notes.md`](./dev-notes.md) → "Deploy rules — every playbook" apply.
+- Run it through `sshshazambom sudo` (never raw ssh); it is also root's hourly cron at :17, so a manual run near
+  :17 can overlap the scheduled one — check `poe2-snapshot.log` first.
+- A pipeline change is proven side by side first (copy the DB, archive, don't publish; see memory
+  "prove in a side-by-side test env"), then published with the owner's approval.
+- Success is the `market-seed-latest` asset's version advancing (`gh release view market-seed-latest`), not the
+  script's exit code alone.
+- **After:** audit it (deploy rule 4) and record any lesson below.
+
+**Lessons (market seed)** — condensed, newest first:
+- *(none recorded yet)*
+
 ### Consuming the snapshot in builds
 
 - **Mac** (local): `desktop/fetch-seed.sh` pulls `market-seed.sqlite.gz` (+ `.version`) from

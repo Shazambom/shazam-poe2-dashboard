@@ -28,6 +28,24 @@ actually move:
 per-change authorization** (CLAUDE.md). A desktop **user check** is always the *packaged* app
 launched in place (`dist:mac` → `open …/Arbiter.app`), never the dev launch or the web env.
 
+### Deploy rules — every playbook (owner, 2026-10-03)
+
+Every deploy follows these, whatever it ships (desktop release, web test env, feedback bot, market seed):
+1. **Before:** read that playbook's **"Before you run"** traps and check each one. They are the things that have
+   already cost a deploy.
+2. **Run it in the background and wait on the script's own lines**, matched from the start of the line (a
+   `FATAL`, a "done" line, its exit). Never match loose words, never chain sleeps.
+3. **Don't let it collide with other work** using the same outputs (a build folder, a running app, a container,
+   a test run). Stop the other work, or wait until the deploy no longer needs them.
+4. **After: audit it.** Did any gate fail, any step retry, any wait or command need a second try, anything need a
+   workaround or a guess, anything take far longer than expected, anything collide? For each "yes", add one
+   **condensed, general** lesson to that playbook's **"Lessons"** list: dated, one or two lines, a rule for next
+   time rather than a story. If it is a check, add it to "Before you run" too. Say in the report whether the
+   audit found anything.
+
+Playbooks: desktop release → [`release-runbook.md`](./release-runbook.md); web test env and feedback bot → below;
+market seed → [`db-maintenance.md`](./db-maintenance.md) → "Building / refreshing the market snapshot".
+
 ### Deploy to the web test env (fast iteration)
 
 ```bash
@@ -43,6 +61,18 @@ in the docker group, so compound commands need `sudo bash -c`).
   commands need `sudo bash -c '…'` (note the nested quoting above). Plain `docker` fails with a
   permission error (not in the docker group). See [[reference_sshshazambom]] in memory.
 - Rebuild only the service that changed (`backend` and/or `frontend`) to save time.
+
+**Before you run** (the deploy rules above apply):
+- Node 22+ first on PATH: the script's test gate globs `"frontend/test/*.test.mjs"`, which Node 18 cannot expand
+  (`PATH=/opt/homebrew/bin:$PATH ./ops/deploy-web.sh …`).
+- The web env is the **test** surface; deploying it is not shipping, but it is shared with whoever else is
+  testing there — don't redeploy under a run that is using it.
+- Compound commands on shazam need `sshshazambom sudo bash -c '…'`.
+
+**After:** audit it (deploy rule 4).
+
+**Lessons (web test env and feedback bot)** — condensed, newest first:
+- *(none recorded yet)*
 
 ---
 
@@ -227,7 +257,8 @@ app, no new outbound call (the invite opens in the OS browser); nothing can bill
   Reactions*, and the **Message Content** intent (needed to see attachments). Token →
   `/etc/arbiter/discord-token` (root-owned, 0600); the forum channel id → `FEEDBACK_FORUM_ID` in
   shazam's `.env`.
-- **Deploy:** `./ops/deploy-web.sh bot` (test gate → rsync `ops/feedback-bot/` + compose → builds and
+- **Deploy** (the deploy rules and the web env's "Before you run" apply; audit afterwards, lessons go in the web env's
+  list): `./ops/deploy-web.sh bot` (test gate → rsync `ops/feedback-bot/` + compose → builds and
   starts `feedback-opener`, and `feedback-bot` too once `/etc/arbiter/discord-token` exists on the box;
   pre-creates `feedback-inbox/` owned by uid 10001). Verified 2026-09-18: a report from the Mac app
   handled by the bot container against the live opener on shazam → ✅ + all 10 screens in the inbox;
@@ -454,7 +485,8 @@ Tests: `frontend/test/stratcalc*.test.mjs`, `tablet-price-query`, `trade-link`, 
 
 ## Deploying a desktop release (mechanics)
 
-Full runbook: [`release-runbook.md`](./release-runbook.md). Shape: bump `desktop/package.json`,
+Full runbook: [`release-runbook.md`](./release-runbook.md) — check its "Before you run" traps first and audit the
+deploy after (step 8; the deploy rules above). Shape: bump `desktop/package.json`,
 commit on `main`, then `cd desktop && ./publish-github.sh` — it runs the test gate, pushes `main`,
 dispatches the Windows CI (no tag is pushed — publishing the draft creates it; CI builds the `.exe`s with the shared `build-*.sh` scripts), builds
 the Mac app, waits on the CI run via `gh run watch`, and uploads both platforms into the same

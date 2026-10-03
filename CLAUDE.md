@@ -50,7 +50,10 @@ in CI, Mac built + uploaded locally). electron-updater's `github` provider resol
 dots and the updater 404s.
 
 **How to cut a release** (the mechanics, verification, and gotchas): step-by-step in
-[`docs/release-runbook.md`](docs/release-runbook.md); shorter shape in
+[`docs/release-runbook.md`](docs/release-runbook.md) — read its "Before you run" traps first, and **audit every
+deploy afterwards** (step 8), recording any lesson in its "Lessons from deploys". The same before/after rules
+apply to every deploy playbook (web test env, feedback bot, market seed): [`docs/dev-notes.md`](docs/dev-notes.md) →
+"Deploy rules — every playbook"; shorter shape in
 [`docs/dev-notes.md`](docs/dev-notes.md) → "Deploying a desktop release". Shipping is gated on
 authorization (see "Web vs desktop" below).
 
