@@ -275,6 +275,9 @@ Condensed and general, newest first; each came from a post-deploy audit (step 8)
   Both platforms now fetch through `desktop/fetch-seed.sh` (it retries until a valid snapshot is there, else fails).
   `publish-github.sh` refuses a CI run whose log lacks its `seed ready (` line. After every beta, confirm each
   platform's first telemetry says `[seed]: replacing local …`, never `no seed bundled`.
+- **2026-10-04 (0.3.12-beta.3):** in a `set -o pipefail` script, never pipe a long output into `grep -q`: grep exits at
+  the first match, the writer gets SIGPIPE, and the pipeline "fails" on success. Save the output to a file, then grep it.
+  A check that only runs when CI was dispatched also skips on a `--no-build` re-run; checks run on every path.
 
 - **2026-10-03 (0.3.11-beta.1):** a deploy requested mid-testing collides with any test build or app running from
   `release/`. Stop the testing, cut the release, and resume testing on the release's own build once the log says

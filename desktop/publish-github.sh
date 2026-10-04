@@ -129,10 +129,20 @@ if [ "$NEED_CI" = 1 ]; then
   # Event-driven wait: streams status, blocks until the run finishes, exits nonzero if it failed.
   echo "watching Windows CI run $RID (blocks until it finishes) ..."
   gh run watch "$RID" --repo "$REPO" --exit-status --interval 10
-  # Never publish a seedless Windows build (0.3.12-beta.2 did): its log must show fetch-seed.sh's check.
-  gh run view "$RID" --repo "$REPO" --log | grep -q 'seed ready (' \
-    || { echo "FATAL: Windows CI run $RID bundled no checked market snapshot (no 'seed ready' in its log)"; exit 1; }
 fi
+
+# Never publish a seedless Windows build (0.3.12-beta.2 did): the run that built the draft's Windows files
+# must show fetch-seed.sh's check. On a re-run that reused those files, find that run by its title. The log
+# is saved before it is searched: piping it straight into grep -q fails under pipefail on the match itself.
+[ -n "$RID" ] || RID=$(gh run list --repo "$REPO" --workflow=release-desktop-win.yml --limit 20 \
+      --json databaseId,displayTitle,conclusion \
+      -q "map(select(.displayTitle==\"Windows build $TAG\" and .conclusion==\"success\")) | .[0].databaseId // empty")
+[ -n "$RID" ] || { echo "FATAL: no successful Windows CI run found for $TAG to check its market snapshot"; exit 1; }
+CILOG=$(mktemp)
+gh run view "$RID" --repo "$REPO" --log > "$CILOG"
+grep -q 'seed ready (' "$CILOG" \
+  || { echo "FATAL: Windows CI run $RID bundled no checked market snapshot (no 'seed ready' in its log)"; exit 1; }
+echo "Windows CI run $RID bundled a checked market snapshot"
 
 # CI has put the Windows assets in the draft; add the Mac assets (manifest last, retried, each
 # checked against GitHub's own sha256), then the single go-live flip with verify + auto-rollback.

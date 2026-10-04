@@ -68,6 +68,14 @@ test('Windows CI fetches the seed through the same script as the Mac build', () 
   assert.doesNotMatch(ci, /gh release download market-seed-latest/, 'no second, unchecked download path')
 })
 
-test('publish refuses a Windows build whose CI log shows no checked seed', () => {
-  assert.match(publish, /gh run view "\$RID"[^\n]*--log \| grep -q 'seed ready \('/)
+test('publish refuses a Windows build whose CI log shows no checked seed, on every run', () => {
+  // The log is saved before it is searched: `gh … --log | grep -q` under pipefail fails on the match
+  // itself (grep exits early, gh gets SIGPIPE) — that refused 0.3.12-beta.3's good build.
+  assert.doesNotMatch(publish, /--log \| grep -q/)
+  assert.match(publish, /gh run view "\$RID" --repo "\$REPO" --log > "\$CILOG"/)
+  assert.match(publish, /grep -q 'seed ready \(' "\$CILOG"/)
+  // A re-run that finds the Windows files already in the draft skips CI; the check must still run.
+  const check = publish.indexOf('grep -q \'seed ready (\'')
+  const ciBlockEnd = publish.indexOf('\nfi\n', publish.indexOf('if [ "$NEED_CI" = 1 ]; then'))
+  assert.ok(check > ciBlockEnd, 'the seed check sits outside the "CI was dispatched" block')
 })
