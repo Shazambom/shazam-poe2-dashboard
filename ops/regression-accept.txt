@@ -1,7 +1,7 @@
 # The differences the next release intends, checked by ops/regression-diff.py inside
 # desktop/publish-github.sh. It is valid for ONE version, and every line must still match a reported
 # difference. Anything not listed blocks the release. Whole-line comments only.
-version: 0.3.12-beta.3
+version: 0.3.12
 
 # Arbitrage trades only from the default cash (chaos/exalted/divine) plus the top-10 hub currencies, minus
 # any holding switched off on Stash (owner, 2026-10-03; arbitrage.loop_currencies). Loops that started from
