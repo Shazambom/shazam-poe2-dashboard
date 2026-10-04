@@ -152,6 +152,8 @@ def realizable(g: "arbitrage.Graph", ref_value: dict[str, float], currency: str,
     # paper so ghost is never negative.
     if paper is not None:
         realizable_ref = min(realizable_ref, paper)
+    # A sale whose gold costs more than it fetches is one nobody makes: it realizes nothing, not a debt.
+    realizable_ref = max(0.0, realizable_ref)
     ghost = (paper - realizable_ref) if paper is not None else None
     return {"paper_ref": paper, "realizable_ref": realizable_ref, "ghost_ref": ghost,
             "slippage_pct": max(0.0, best["loss_pct"]), "fill_hours": best["fill_hours"],
@@ -168,30 +170,35 @@ def capital_rows(caps: dict[str, float], g: "arbitrage.Graph", ref_value: dict[s
     # up. Worth still counts (the value table has poe2scout); a cash-out, a hub or a market rate
     # judged now would be nonsense, so none is made and the view says it is syncing.
     if not any(e.kind != "recipe" for e in g.edges.values()):
+        usable = arbitrage.loop_currencies(g, ref_value, base=set(arbitrage.CASH))   # no market: no hubs judged
         rows = [{"currency": c, "name": registry.name(c), "qty": q,
                  "ref_value": 1.0 if c == ref else ref_value.get(c),
                  "value_ref": q * (1.0 if c == ref else ref_value.get(c)) if (c == ref or ref_value.get(c)) else None,
                  "realizable_ref": None, "slippage_pct": None, "fill_hours": None, "source": "none",
-                 "full_fill": None, "cashout_path": None, "native": None, "realizable_native": None}
+                 "full_fill": None, "cashout_path": None, "native": None, "realizable_native": None,
+                 "arbitrage": c in usable}
                 for c, q in caps.items()]
         return {"rows": rows, "total_ref": sum(r["value_ref"] for r in rows if r["value_ref"] is not None),
-                "realizable_total_ref": None, "ghost_ref": None, "reference": ref, "syncing": True}
+                "realizable_total_ref": None, "ghost_ref": None, "reference": ref, "syncing": True,
+                "counted_by_default": settings.STASH_COUNTED_BY_DEFAULT}
     gv = settings.gold_value_per_1k(g.s)
     cash = cash_set(g, ref_value)          # hub currencies = cash-like; derived once (PageRank)
+    usable = arbitrage.loop_currencies(g, ref_value)       # what a loop may start from (routes' one rule)
     ranked = arbitrage.counterparts_by_volume(g, ref_value)
     rows = []
     for c, q in caps.items():
         px = 1.0 if c == g.s["reference"] else ref_value.get(c)
         row = {"currency": c, "name": registry.name(c), "qty": q, "ref_value": px,
-               "value_ref": (q * px) if px else None}
+               "value_ref": (q * px) if px else None, "arbitrage": c in usable}
         liq = realizable(g, ref_value, c, q, cash=cash, gold_value_per_1k=gv)
         row.update(realizable_ref=liq["realizable_ref"], slippage_pct=liq["slippage_pct"],
                    fill_hours=liq["fill_hours"], source=liq["source"], full_fill=liq["full_fill"],
                    cashout_path=liq["path"])
-        # The volume rule (CLAUDE.md): cash IS native money, worth its own raw amount; anything else
+        # The volume rule (CLAUDE.md): the default cash IS native money, worth its own raw amount; anything
+        # else (a hub like an omen included)
         # is worth its quantity at the rate of the market that trades it. A cash-out's result is
         # what the sale hands over (`out`: whole units of the cash it ends in), not its ex value.
-        if c == ref or c in cash:
+        if c == ref or c in arbitrage.CASH:
             row["native"] = {"amount": q, "cur": c}
         else:
             native = arbitrage.native_price(g, c, ref_value, ranked, ref)
@@ -200,5 +207,21 @@ def capital_rows(caps: dict[str, float], g: "arbitrage.Graph", ref_value: dict[s
         rows.append(row)
     total = sum(r["value_ref"] for r in rows if r["value_ref"] is not None)
     realizable_total = sum(r["realizable_ref"] for r in rows if r["realizable_ref"] is not None)
+    # `counted_by_default`: whether a holding the user never switched counts as liquid (the one default,
+    # settings.STASH_COUNTED_BY_DEFAULT; the Stash reads it from here).
     return {"rows": rows, "total_ref": total, "realizable_total_ref": realizable_total,
-            "ghost_ref": total - realizable_total, "reference": ref, "syncing": False}
+            "ghost_ref": total - realizable_total, "reference": ref, "syncing": False,
+            "counted_by_default": settings.STASH_COUNTED_BY_DEFAULT}
+
+
+def group_icons(g: "arbitrage.Graph", ref_value: dict[str, float], group_of: dict[str, str]) -> dict[str, str]:
+    """{group: its most-traded currency} — the item that stands for a Stash group, derived from the
+    market (centrality.traded_value: executed value per hour out of each currency). A group with
+    nothing traded has no entry."""
+    traded = centrality.traded_value(g, ref_value)
+    best: dict[str, str] = {}
+    for c, v in traded.items():
+        grp = group_of.get(c)
+        if grp and (grp not in best or v > traded[best[grp]]):
+            best[grp] = c
+    return best

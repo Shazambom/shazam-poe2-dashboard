@@ -102,6 +102,13 @@ app (`~/Library/Application Support/Arbiter/data`): probe `/api` read-only, exer
 through the UI as a user would, never `PUT`/`POST` synthetic payloads at user-data endpoints
 (a write probe once wiped the owner's saved searches; `user.sqlite.bak-N` was the safety net).
 
+## Building a feature — the flow (owner directive 2026-10-03)
+
+**Plan → TDD → QA → code review → send to the owner to review locally.** The plan is decided per feature
+(exploration, research, an arena or a mockup, as needed). Each step finishes, and its findings are fixed,
+before the next starts; nothing ships without an explicit "ship". What each step must
+produce and the skills that run it: [`docs/feature-flow.md`](docs/feature-flow.md).
+
 ## UI styleguide — the visual contract
 
 The frontend's design system (dark "vault" theme: slate surfaces, one gold accent, IBM

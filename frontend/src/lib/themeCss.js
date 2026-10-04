@@ -9,6 +9,12 @@ export const NEVER_THEMED = new Set([
   '--radius', '--radius-lg', '--shadow-1', '--shadow-2', '--ease', '--font', '--mono', '--card-gradient', '--glow-gold',
 ])
 
+// Never themed: the set above, plus every --grp-* token — the Stash's league-mechanic accents are game
+// semantics like rarity, and each theme tunes only how much of the hue survives (--grp-mix, set per theme
+// outside the preset blocks: it is a percentage, not a colour). One rule, so a new category's token needs
+// no second list.
+export const isNeverThemed = (k) => NEVER_THEMED.has(k) || k.startsWith('--grp-')
+
 // { root: Map(token → value), presets: { id: Map(token → value) } } in source order.
 export function parseThemeBlocks(cssText) {
   const lines = cssText.split('\n')
@@ -31,7 +37,7 @@ export function parseThemeBlocks(cssText) {
 // themed keys, in :root order, so an export writes the same key set the linter demands.
 export function presetTables(cssText) {
   const { root, presets } = parseThemeBlocks(cssText)
-  const keys = [...root.keys()].filter(k => !NEVER_THEMED.has(k))
+  const keys = [...root.keys()].filter(k => !isNeverThemed(k))
   const pick = (map) => Object.fromEntries(keys.map(k => [k, (map.get(k) ?? root.get(k)).replace(/\s+/g, '')]))
   const tables = { vault: pick(root) }
   for (const [id, map] of Object.entries(presets)) tables[id] = pick(map)

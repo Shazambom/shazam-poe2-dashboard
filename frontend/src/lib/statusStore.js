@@ -12,10 +12,13 @@ export const useStatus = create((set, get) => ({
   rl: null,          // /api/ratelimits (trade budget for the topbar cluster)
   settings: null,    // /api/settings (the saved user settings)
 
+  capitalSaving: false,   // a holdings write is in flight (the Stash re-reads holdings only after it lands)
+  capitalWrites: 0,       // bumped by every holdings write: a poll that started before one never overwrites it
   refresh: async () => {
+    const writes = get().capitalWrites
     try {
       const [s, c] = await Promise.all([api.status(), api.capital()])
-      set({ status: s, capital: c })
+      set(get().capitalWrites === writes ? { status: s, capital: c } : { status: s })
     } catch (e) { console.error(e) }
     api.rateLimits().then(rl => set({ rl })).catch(() => {})
   },
@@ -24,6 +27,15 @@ export const useStatus = create((set, get) => ({
     set({ settings: s })
     syncTheme?.(s.theme, s.custom_themes)
     return s
+  },
+  // The one holdings write: PUT /api/capital, then hold the server's answer as THE capital.
+  saveCapital: async (entries) => {
+    set(st => ({ capitalSaving: true, capitalWrites: st.capitalWrites + 1 }))
+    try {
+      const c = await api.putCapital(entries)
+      set(st => ({ capital: c, capitalWrites: st.capitalWrites + 1 }))
+      return c
+    } finally { set({ capitalSaving: false }) }
   },
   saveSettings: async (patch) => {
     const s = await api.putSettings(patch)

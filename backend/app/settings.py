@@ -27,6 +27,10 @@ DEFAULTS: dict = {
     # The same token table a preset in styles.css defines (colour only). `theme` may hold a custom id.
     # A list, so a PUT replaces it wholesale (no per-row merge).
     "custom_themes": [],
+    # Stash: which holdings are liquid, {trade id: bool} — they count toward liquid net worth and are
+    # capital arbitrage may trade from. Only a user's choices are stored (null = cleared); a currency
+    # without one takes STASH_COUNTED_BY_DEFAULT (served to the client on /api/capital).
+    "stash_counted": {},
     # Gold fee model. Per-unit fees come from the game's CurrencyExchange table
     # (GoldPurchaseFee), fetched automatically. `per_unit` is only for manual
     # overrides; `per_ref_unit` is the fallback for items missing from the table.
@@ -226,6 +230,15 @@ def depth_hours(s: dict) -> float:
 def depth_balance(s: dict) -> float:
     """The thin side of a deep book holds at least this share of the deep side's units."""
     return _positive(s, "depth_balance")
+
+
+STASH_COUNTED_BY_DEFAULT = True     # every holding is liquid until the user switches it off
+
+
+def stash_counted(s: dict, currency: str) -> bool:
+    """Whether a holding is liquid: the user's Stash switch, else the default."""
+    v = (s.get("stash_counted") or {}).get(currency)
+    return STASH_COUNTED_BY_DEFAULT if v is None else bool(v)
 
 
 def hub_count(s: dict) -> int:

@@ -98,10 +98,29 @@ def betweenness_lite(g, rv: dict[str, float], top_k: int = BRIDGE_TOP_K,
     return {k: v / total for k, v in counts.items()}
 
 
-def hubs(g, rv: dict[str, float], n: int = HUB_N) -> set[str]:
-    """The top-`n` most central currencies by PageRank — the set the Board hub chip lights."""
+def _rank(g, rv: dict[str, float]) -> list[str]:
     pr = pagerank(g, rv)
-    return set(sorted(pr, key=pr.get, reverse=True)[:n])
+    return sorted(pr, key=pr.get, reverse=True)
+
+
+def hubs(g, rv: dict[str, float], n: int = HUB_N) -> set[str]:
+    """The top-`n` most central currencies by PageRank — the set the Board hub chip lights. The ranking
+    is computed once per graph state (the Board, Capital and the route search all ask for it, at
+    different `n`); a graph that gains or loses edges, or a different value table, ranks again."""
+    memo = getattr(g, "_hub_rank", None)      # (value table, edge count, ranking); holding rv keeps its id unique
+    if not memo or memo[0] is not rv or memo[1] != len(g.edges):
+        memo = (rv, len(g.edges), _rank(g, rv))
+        g._hub_rank = memo
+    return set(memo[2][:n])
+
+
+def traded_value(g, rv: dict[str, float]) -> dict[str, float]:
+    """Executed reference value per hour flowing OUT of each currency (the weights PageRank runs over,
+    summed per source): how much of a thing actually trades."""
+    out: dict[str, float] = {}
+    for (a, _b), w in _weights(g, rv).items():
+        out[a] = out.get(a, 0.0) + w
+    return out
 
 
 def seed_missing(watchlist: list[str], hub_ids: set[str], reference: str) -> list[str]:

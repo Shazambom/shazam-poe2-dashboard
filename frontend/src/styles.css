@@ -49,6 +49,14 @@
   --ease: cubic-bezier(.22,.61,.36,1);
   --font: 'IBM Plex Sans', 'Segoe UI', system-ui, -apple-system, sans-serif;
   --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;   /* a search string is read character by character */
+  /* League-mechanic accents (Trading → Stash), one per Currency Exchange category the game has. A group
+     names its token after its category (lib/stash.js groupAccent); one the game adds later falls back to
+     --muted. Only ever a 3px edge, the icon's glow and a faint header wash — never a number's colour.
+     Each theme blends the hue toward its own --ink-2 by --grp-mix (set per theme below the presets). */
+  --grp-mix: 85%;
+  --grp-currency: #aa9e82; --grp-ritual: #cf645e; --grp-abyss: #86ad5a; --grp-breach: #9384d8; --grp-delirium: #c9ccd3;
+  --grp-essences: #bf6bbd; --grp-expedition: #c8845a; --grp-fragments: #8494b0; --grp-runes: #c79bb0;
+  --grp-soul-cores: #d4a58c; --grp-atziri-s-temple: #d0607f; --grp-gems: #78bfd6; --grp-uncut-gems: #45aaa6; --grp-idols: #5fae78;
 }
 
 /* ---- Theme presets: COLOUR ONLY. Each block re-assigns every themed token (lint:style checks the set,
@@ -105,6 +113,11 @@
   --accent-rgb: 241,204,140; --gain-rgb: 152,226,168; --loss-rgb: 255,195,189; --live-rgb: 251,254,255; --digest-rgb: 254,253,255; --wash-rgb: 149,115,45;
   --backdrop: #2f3640;
 }
+/* How much of a league-mechanic hue survives per theme (a percentage, so not a preset token): the bright
+   ember/bronze panels of Ash and Azmeri and the parchment of Divinity pull the accents toward their own ink. */
+html[data-theme="ash"], html[data-theme="azmeri"] { --grp-mix: 55%; }
+html[data-theme="divinity"] { --grp-mix: 62%; }
+html[data-theme="vaal"] { --grp-mix: 78%; }
 /* The light preset: the few translucent-white fills that give depth on dark surfaces become translucent-black. */
 :root[data-theme="divinity"] .sk { background: linear-gradient(100deg, rgba(0,0,0,.04) 30%, rgba(0,0,0,.09) 50%, rgba(0,0,0,.04) 70%); background-size: 220% 100%; }
 :root[data-theme="divinity"] .pulse-rank, :root[data-theme="divinity"] .cd-stat, :root[data-theme="divinity"] .pt-src, :root[data-theme="divinity"] .pulse-group { background-color: rgba(0,0,0,.05); }
@@ -154,8 +167,7 @@ a { color: var(--live); }
 ::-webkit-scrollbar-thumb:hover { background: var(--line-hover); background-clip: content-box; }
 .cur-img { filter: drop-shadow(0 1px 2px rgba(0,0,0,.5)); }
 /* gold focus ring on inputs/selects for a cohesive, tactile feel */
-.field input, .field select, .field textarea, .league-select, .cap-row input[type="number"] { transition: border-color .12s var(--ease), box-shadow .12s var(--ease); }
-
+.field input, .field select, .field textarea, .league-select { transition: border-color .12s var(--ease), box-shadow .12s var(--ease); }
 .app { display: grid; grid-template-rows: auto 1fr; height: 100%; overflow-x: hidden; }
 
 /* ---------- top bar ---------- */
@@ -301,16 +313,60 @@ a { color: var(--live); }
 .ws-chip.find { background: none; cursor: pointer; font: inherit; font-size: 11px; }
 .ws-chip.find:hover { color: var(--ink); border-color: var(--line-strong); }
 .ws-chip.find:focus-visible { outline: 2px solid rgba(var(--accent-rgb),.6); outline-offset: 1px; }
-/* ---------- Sales tab + item card ---------- */
-.sales-view { display: flex; flex-direction: column; gap: 14px; padding: 14px 24px 48px; }
+/* ---------- Stash tab (holdings by league mechanic + sales) + item card ---------- */
+/* The Mods tab's section headers share this head style (ModSection: .sales-head.mods-sec-head). */
 .sales-head { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-1); }
+.stash-view { display: flex; flex-direction: column; gap: 14px; padding: 14px 24px 48px; }
+.stash-head { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-1); flex-wrap: wrap;
+  position: sticky; top: 0; z-index: 4; box-shadow: var(--shadow-1); }   /* pinned: the add bar stays at hand */
+.stash-addbar { display: flex; align-items: center; gap: 6px; }
+.stash-addbar .curpick { width: 240px; }
+.stash-addbar input { width: 64px; text-align: right; padding: 4px 6px !important; }   /* !important: the global input rule's :not() chain outranks a class */
+.stash-search { display: flex; align-items: center; gap: 6px; background: var(--bg); border: 1px solid var(--line-strong); border-radius: 8px; padding: 3px 8px; }
+.stash-search:focus-within { border-color: var(--gold-dim); box-shadow: 0 0 0 3px rgba(var(--accent-rgb),.12); }
+.stash-search input { background: none !important; border: 0 !important; box-shadow: none !important; padding: 2px 0 !important; width: 170px; font-size: 13px; }
+.stash-worth { display: grid; grid-template-columns: auto auto minmax(0, 1fr); align-items: center; gap: 8px 32px; padding: 12px 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--card-gradient); box-shadow: var(--shadow-1); }
+.stash-stat { display: flex; flex-direction: column; gap: 2px; }
+.stash-stat .stat-label { font-size: 11px; letter-spacing: .07em; text-transform: uppercase; }
+.stash-stat .stat-val { margin: 0; line-height: 1.15; }
+.stash-stat.liquid .stat-val { color: var(--gold-2); }
+.stash-bar { display: flex; height: 10px; border-radius: 5px; overflow: hidden; background: var(--panel-2); box-shadow: 0 0 0 1px var(--line) inset; min-width: 0; }
+.stash-bar i { display: block; min-width: 0; background: linear-gradient(90deg, var(--gold-2), var(--gold)); transition: flex-grow .35s var(--ease); }
+.stash-bar i.off { background: repeating-linear-gradient(135deg, var(--line-strong) 0 3px, transparent 3px 6px); }
+.stash-body { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 18px; align-items: start; }
+.stash-groups { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 14px; align-items: start; min-width: 0; }
+.stash-group { --g: color-mix(in oklab, var(--grp) var(--grp-mix), var(--ink-2));
+  border: 1px solid var(--line); border-left: 3px solid var(--g); border-radius: 10px;
+  background: var(--surface-1); box-shadow: var(--shadow-1); overflow: hidden; transition: border-color .15s var(--ease); }
+.stash-group:hover { border-color: var(--line-strong); border-left-color: var(--g); }
+.stash-group-head { display: flex; align-items: center; gap: 10px; padding: 6px 12px 6px 8px;
+  background: linear-gradient(90deg, color-mix(in oklab, var(--g) 13%, transparent), transparent 70%); }
+.stash-fold { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; background: none; border: 0; padding: 0; color: var(--ink); cursor: pointer; text-align: left; font: inherit; }
+.stash-icon { width: 28px; height: 28px; flex: 0 0 28px; display: grid; place-items: center; border-radius: 6px;
+  background: radial-gradient(circle at 50% 55%, color-mix(in oklab, var(--g) 28%, transparent), transparent 70%); }
+.stash-chev { color: var(--muted); flex: 0 0 auto; transition: transform .15s var(--ease); }
+.stash-group.folded .stash-chev { transform: rotate(-90deg); }
+.stash-name { font-weight: 600; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.stash-share { color: var(--muted); font-size: 11.5px; }
+.stash-total { font-weight: 600; font-size: 13px; white-space: nowrap; }
+.stash-group.dim .stash-total { color: var(--muted); }
+.stash-rows { border-top: 1px solid var(--line); }
+.stash-row { display: grid; grid-template-columns: minmax(0, 1fr) 66px minmax(64px, auto) 30px 16px; align-items: center; gap: 8px; padding: 4px 10px 4px 10px; transition: background .12s var(--ease); }
+.stash-row + .stash-row { border-top: 1px solid color-mix(in srgb, var(--line) 55%, transparent); }
+.stash-row:hover { background: rgba(var(--accent-rgb),.05); }
+.stash-row.off .stash-cur, .stash-row.off .stash-worth-cell { opacity: .45; }
+.stash-cur { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 13px; }
+.stash-cur .cur { min-width: 0; } .stash-cur .cur-name { overflow: hidden; text-overflow: ellipsis; }
+.stash-hub { font-size: 12px; line-height: 1; color: var(--gold); opacity: .85; cursor: help; }
+.stash-row input[type="number"] { width: 100%; text-align: right; padding: 3px 6px !important; font-size: 12.5px; }   /* compact: see .stash-addbar input */
+.stash-worth-cell { text-align: right; font-size: 12.5px; color: var(--ink-2); white-space: nowrap; }
+/* Pinned while the holdings scroll, so it must fit the window and scroll its own overflow: a long list
+   otherwise ran off the bottom with no way to reach it (bug report XWZGZ0). .app is the scroller. */
+.stash-sales { position: sticky; top: calc(var(--stash-head-h, 72px) + 8px); max-height: calc(100vh - var(--stash-head-h, 72px) - 8px); overflow-y: auto; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.stash-sales-head { display: flex; align-items: center; gap: 8px; }
+.stash-sales-head h2 { font-size: 13px; font-weight: 600; color: var(--ink-2); margin: 0; }
 .sales-last { font-size: 12px; }
-.sales-body { display: flex; gap: 18px; align-items: flex-start; }
-/* Pinned while the ledger scrolls, so it must fit the window and scroll its own overflow: a long holdings
-   list otherwise ran off the bottom with no way to reach it (bug report XWZGZ0). .app is the scroller. */
-.sales-capital { flex: 0 0 340px; min-width: 0; position: sticky; top: 0; max-height: 100vh; overflow-y: auto; }
-.sales-list { display: flex; flex-direction: column; gap: 6px; flex: 1 1 auto; min-width: 0; max-width: 960px; }
-.sales-body > .empty { flex: 1; }
+@media (max-width: 1100px) { .stash-body { grid-template-columns: 1fr; } .stash-sales { position: static; max-height: none; } .stash-worth { grid-template-columns: 1fr 1fr; } .stash-bar { grid-column: 1 / -1; } }
 .sale-row { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-1); box-shadow: var(--shadow-1); transition: border-color .15s var(--ease); }
 .sale-row:hover { border-color: var(--line-strong); }
 .sale-row.open { border-color: var(--gold-dim); }
@@ -504,7 +560,7 @@ a { color: var(--live); }
 .field label { color: var(--muted); font-size: 12.5px; }
 /* EVERY native text control is themed at the element level, so nothing can fall through to Chromium's
    default chrome (which is dark, whatever the theme). Classed variants (.btn, .league-select, .cmdk-input,
-   .curpick-input, .ws-filter-input, .cap-row, .pt-num-row) override this by specificity. */
+   .curpick-input, .ws-filter-input, .pt-num-row) override this by specificity. */
 input:not([type="range"]):not([type="file"]):not([type="checkbox"]), select, textarea {
   background: var(--bg); border: 1px solid var(--line-strong); border-radius: var(--radius);
   padding: 6px 8px; color: var(--ink);
@@ -531,6 +587,12 @@ input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; marg
   background: var(--ink-2); box-shadow: var(--shadow-1); transition: transform .16s var(--ease), background .16s var(--ease); }
 .toggle.on .toggle-thumb { transform: translateX(14px); background: var(--ink-on-gold); }
 .toggle:hover:not(:disabled) .toggle-track { border-color: var(--gold-dim); }
+/* the half state of a switch that sets a group, and the compact switch for dense rows */
+.toggle.some .toggle-track { background: linear-gradient(90deg, rgba(var(--accent-rgb),.55), var(--panel-2)); border-color: var(--gold-dim); }
+.toggle.some .toggle-thumb { transform: translateX(7px); }
+.toggle.sm .toggle-track { width: 26px; height: 15px; }
+.toggle.sm .toggle-thumb { width: 9px; height: 9px; }
+.toggle.sm.on .toggle-thumb { transform: translateX(11px); }
 .toggle:focus-visible { outline: none; }
 .toggle:focus-visible .toggle-track { box-shadow: 0 0 0 3px rgba(var(--accent-rgb),.28); }
 .toggle-label { user-select: none; font-size: 13px; }
@@ -672,20 +734,16 @@ details.adv[open] summary { color: var(--ink-2); margin-bottom: 8px; }
 /* ---------- capital card (Routes rail) ---------- */
 .capcard { border: 1px solid var(--line); border-radius: 10px; background: var(--card-gradient); box-shadow: var(--shadow-1); padding: 11px 13px 13px; margin-bottom: 16px; }
 .capcard h2 { margin-top: 0; }
-.cap-row { display: grid; grid-template-columns: minmax(0, 1fr) 64px 18px; align-items: center; column-gap: 6px; padding: 3px 0; }
+.cap-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: 6px; padding: 3px 0; }
 .cap-name { min-width: 0; overflow-wrap: anywhere; line-height: 1.25; }   /* long names wrap; they never clip or push */
 .cap-name .cur { max-width: 100%; align-items: flex-start; }
 .cap-name .cur-name { white-space: normal; min-width: 0; }
-.cap-row input[type="number"] {
-  width: 100%; min-width: 0; box-sizing: border-box; text-align: right; background: var(--bg); color: inherit;
-  border: 1px solid var(--line-strong); border-radius: var(--radius); padding: 4px 6px;
-}
 .cap-x { all: unset; cursor: pointer; text-align: center; color: var(--muted); font-size: 15px; line-height: 1; border-radius: var(--radius); }
 .cap-x:hover, .cap-x:focus-visible { color: var(--ink); background: var(--line); }
-.cap-row .cap-sub { grid-column: 1 / -1; }
 .save-state { color: var(--muted); font-weight: 400; font-size: 12px; margin-left: 6px; }
-.cap-sub { font-size: 11px; color: var(--muted); margin-top: 1px; display: flex; align-items: center; flex-wrap: wrap; gap: 1px 3px; line-height: 1.3; }
-.cap-ghost { color: var(--loss); white-space: nowrap; cursor: help; }
+.cap-q { font-weight: 500; text-align: right; }
+.cap-foot { display: flex; align-items: center; gap: 6px; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--line); font-size: 12px; color: var(--muted); }
+.cap-foot .link-btn { margin-left: auto; }
 
 /* ---------- strat calculator (Strategy → Strat Calculator) ---------- */
 /* Layout is .workspace (the Arbitrage rail + main); cards are .capcard; the hero is .stat-label/.stat-val;
@@ -734,6 +792,13 @@ input.scalc-clock-in { width: 7.5ch; padding: 0 6px; color: var(--ink); }
 .scalc-sums .wealth { color: var(--ink-2); }
 .scalc-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 24rem), 1fr)); gap: 16px; align-items: start; }
 .scalc-cols .capcard { margin-bottom: 0; }
+/* the count cell: the number, and on loot rows a small "+" (the row's × glyph style, no bigger) */
+.scalc-qty { display: flex; align-items: center; gap: 4px; min-width: 0; }
+.scalc-qty > :first-child { flex: 1; min-width: 0; }
+.scalc-inc { width: 1.1rem; font-size: 15px; font-weight: 600; color: var(--ink-2); }
+/* a price a linked search found shows in the box as a price (typing over it still wins) */
+.scalc-found::placeholder { color: var(--ink-2); opacity: 1; }
+.scalc-inc:hover, .scalc-inc:focus-visible { color: var(--gold-2); }
 .scalc-row { display: grid; grid-template-columns: minmax(0, 1fr) clamp(4.5rem, 18%, 9rem) clamp(4.5rem, 20%, 10rem) 1.25rem; align-items: center; column-gap: 8px; padding: 3px 0; }
 .scalc-name { min-width: 0; overflow: hidden; }
 .scalc-line { display: grid; grid-template-columns: clamp(6rem, 22%, 9rem) clamp(4.5rem, 18%, 9rem) minmax(0, 1fr) minmax(3.5rem, auto); align-items: center; column-gap: 8px; padding: 4px 0; }

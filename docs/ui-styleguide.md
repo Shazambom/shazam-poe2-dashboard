@@ -125,6 +125,14 @@ down), `--offline` (alert/offline), `#c8403e` (whisper-hot gradient partner), `#
 from (a 2px left border on tiles, a dot in the loop, a source pill). Reuse them only for
 provenance, never as decoration.
 
+**League-mechanic accents** (`--grp-<category>`, owner-approved 2026-10-03: "it is okay to put some UI
+color flair that matches the mechanic as long as it doesn't clash with the themes"). One muted hue per
+Currency Exchange category, used ONLY on the Stash's groups: a 3px left edge, the group icon's glow and a
+~13% header wash. Never on text or numbers (those stay ink / gain / loss). Like rarity they are game
+semantics (never themed); each theme instead sets `--grp-mix`, how much of the hue survives the blend
+toward its own `--ink-2` (`html[data-theme]` rules under the presets). A category the game adds later
+falls back to `--muted` until it is given a token; the category itself always comes from game data.
+
 ### Shape, elevation, motion, type
 
 | Token | Value | Use |

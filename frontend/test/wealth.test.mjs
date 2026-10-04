@@ -44,7 +44,7 @@ test('wealthText is the tooltip form: display + the raw reference amount', () =>
 test('wealth display sites use the shared component', () => {
   const src = (p) => readFileSync(new URL(`../src/${p}`, import.meta.url), 'utf8')
   for (const [f, needle] of [
-    ['App.jsx', 'capital <b>'], ['components/CapitalCard.jsx', 'Total <b>'], ['components/CardDetail.jsx', 'realizable'],
+    ['App.jsx', 'net worth <b>'], ['components/StashView.jsx', 'Net worth'], ['components/CardDetail.jsx', 'realizable'],
     ['components/RouteSteps.jsx', 'value through loop'], ['components/RoutesView.jsx', 'margin_ref'],
     ['components/MarketView.jsx', 'value_ex'], ['components/HoldView.jsx', 'medvol'],
   ]) {
@@ -72,4 +72,24 @@ test('the Mods cost renders the native price, not the reference value', () => {
   const s = readFileSync(new URL('../src/components/ModSection.jsx', import.meta.url), 'utf8')
   assert.ok(s.includes('<Native'), 'ModSection renders <Native>')
   assert.ok(!/fmt\.rate\(value\)/.test(s) && !s.includes('<Wealth'), 'no reference-only or converted price')
+})
+
+// Two figures shown side by side (net worth · liquid) keep one scale (CLAUDE.md: "Comparisons keep a common
+// scale"): both in the unit the larger one would take, so 0.4 mirror never sits next to 1,459 divine.
+test('wealthAs shows an amount in a given unit; the side-by-side figures share the larger one\'s unit', async () => {
+  const { wealthAs, wealthUnit: wu } = await import('../src/lib/wealth.js')
+  const prices = { mirror: 3_700_000, divine: 700, chaos: 65 }
+  const total = 1_450_000, liquid = 990_000
+  const unit = wu(Math.max(total, liquid), 'exalted', prices).unit
+  assert.equal(unit, 'mirror')
+  assert.deepEqual(wealthAs(liquid, 'exalted', prices, unit), { value: liquid / 3_700_000, unit: 'mirror' })
+  assert.deepEqual(wealthAs(50, 'exalted', prices, 'exalted'), { value: 50, unit: 'exalted' })
+  assert.deepEqual(wealthAs(50, 'exalted', {}, 'divine'), wu(50, 'exalted', {}), 'no price for the unit: the usual rule')
+})
+
+test('the paired figures (top bar, Stash) render in one unit', () => {
+  const src = (p) => readFileSync(new URL(`../src/${p}`, import.meta.url), 'utf8')
+  assert.match(src('App.jsx'), /unit=\{pairUnit\}[\s\S]*unit=\{pairUnit\}/)
+  assert.match(src('components/StashView.jsx'), /unit=\{pairUnit\}[\s\S]*unit=\{pairUnit\}/)
+  assert.match(src('components/Wealth.jsx'), /unit = null/)
 })

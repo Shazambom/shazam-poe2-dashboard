@@ -12,7 +12,7 @@ export const DESTS = [
   { id: 'economy-market', section: 'Economy', sub: 'market', label: 'Market' },
   { id: 'trading-workspace', section: 'Trading', sub: 'workspace', label: 'Workspace' },
   { id: 'trading-live', section: 'Trading', sub: 'live', label: 'Live' },
-  { id: 'trading-sales', section: 'Trading', sub: 'sales', label: 'Sales' },
+  { id: 'trading-sales', section: 'Trading', sub: 'sales', label: 'Stash', aka: ['Sales'] },   // renamed 2026-10-03; ⌘K still finds the old name
   { id: 'trading-regex', section: 'Trading', sub: 'regex', label: 'Regex' },
   { id: 'trading-mods', section: 'Trading', sub: 'mods', label: 'Mods' },
   { id: 'settings', section: 'Settings', sub: null, label: 'Settings' },
@@ -22,7 +22,7 @@ export const DESTS = [
 export const subsOf = (section) => DESTS.filter(d => d.section === section && d.sub).map(d => ({ id: d.sub, label: d.label }))
 
 // Sub-views inside the consolidated tabs, surfaced in ⌘K so they stay one keystroke away.
-export const SUB_DESTS = DESTS.filter(d => d.sub).map(({ section, sub, label }) => ({ section, sub, label }))
+export const SUB_DESTS = DESTS.filter(d => d.sub).map(({ section, sub, label, aka }) => ({ section, sub, label, aka }))
 
 // `?snap=1`: the hidden window the feedback sweep photographs. Under it the app renders every screen
 // but never polls, notifies, persists or mounts the trade <webview>.

@@ -21,6 +21,7 @@ test('each section\'s sub-tabs are its slice of the list, in the order the tabs 
   assert.deepEqual(subsOf('Strategy'), [{ id: 'arbitrage', label: 'Arbitrage' }, { id: 'hold', label: 'Hold' }, { id: 'calc', label: 'Strat Calculator' }])
   assert.deepEqual(subsOf('Economy'), [{ id: 'inflation', label: 'Inflation' }, { id: 'market', label: 'Market' }])
   assert.deepEqual(subsOf('Trading').map(s => s.id), ['workspace', 'live', 'sales', 'regex', 'mods'])
+  assert.equal(subsOf('Trading')[2].label, 'Stash')
   for (const [file, section] of [['StrategyView', 'Strategy'], ['EconomyView', 'Economy'], ['TradingView', 'Trading']]) {
     const src = readFileSync(new URL(`../src/components/${file}.jsx`, import.meta.url), 'utf8')
     assert.match(src, new RegExp(`const SUBS = subsOf\\('${section}'\\)`), `${file} reads its tabs from the one list`)

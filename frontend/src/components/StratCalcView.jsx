@@ -6,6 +6,7 @@ import { uid } from '../lib/session.js'
 import { find } from '../lib/tree.js'
 import { useSync } from '../lib/syncStore.js'
 import * as sc from '../lib/stratcalc.js'
+import * as SP from '../lib/stratPricing.js'
 import ContextMenu from './ContextMenu.jsx'
 import Cur from './Cur.jsx'
 import CurrencyPicker from './CurrencyPicker.jsx'
@@ -13,7 +14,7 @@ import RefreshButton from './RefreshButton.jsx'
 import Seg from './Seg.jsx'
 import Toggle from './Toggle.jsx'
 import TradeBuilder from './TradeBuilder.jsx'
-import { baseQuery, fullTabletQuery, uniqueQuery, waystonePriceQuery } from '../lib/regex/trade.js'
+import { baseQuery, fullTabletQuery, waystonePriceQuery } from '../lib/regex/trade.js'
 import { queryUrl } from '../lib/session.js'
 import { nav } from '../lib/nav.js'
 import { openInTrading } from '../lib/stratTrading.js'
@@ -35,7 +36,8 @@ const shownNum = (v) => (v ? String(Math.round(v * 1e4) / 1e4) : '')
 // A number box that takes what people type (lib/stratcalc.js parseNum: 1,5 · 3*12 · 40k): applies
 // as soon as it reads as a number, settles on blur or Enter, goes back to the last value on garbage.
 // ↑/↓ step by one, Shift by ten. A text box, so a scroll never changes a value.
-function NumBox({ value, onChange, whole = false, label, autoFocus = false, placeholder = '0', onEnter, onBlank }) {
+// `found`: the placeholder is a price a search found (it reads as a price, not an empty box).
+function NumBox({ value, onChange, whole = false, label, autoFocus = false, placeholder = '0', onEnter, onBlank, found = false }) {
   const [draft, setDraft] = useState(null)
   const cancelled = useRef(false)   // Escape: the blur it causes must not settle (it would see the old draft)
   const fix = (n) => (whole ? Math.floor(n) : n)
@@ -58,7 +60,7 @@ function NumBox({ value, onChange, whole = false, label, autoFocus = false, plac
     }
   }
   return (
-    <input className="scalc-in" type="text" inputMode="decimal" aria-label={label} placeholder={placeholder}
+    <input className={`scalc-in${found ? ' scalc-found' : ''}`} type="text" inputMode="decimal" aria-label={label} placeholder={placeholder}
       autoFocus={autoFocus} value={draft ?? shownNum(value)}
      
       onChange={e => { setDraft(e.target.value); const n = sc.parseNum(e.target.value); if (n != null) onChange(fix(n)) }}
@@ -135,7 +137,8 @@ function PriceCell({ r, prices, onPrice, pending }) {
 }
 
 // A currency × count list (loot, fixed costs), with "Add currency or item…" under it.
-function Rows({ rows, prices, options, names, added, onAdd, onCreate, onQty, onPrice, onRemove, what, addRef, onEnter, pending, renderIcon, known }) {
+// `bump`: each row's count gets a small "+" (right-click: one back) — loot, counted as it drops.
+function Rows({ rows, prices, options, names, added, onAdd, onCreate, onQty, onBump, onPrice, onRemove, what, addRef, onEnter, pending, renderIcon, known, bump = false }) {
   const avail = useMemo(() => { const taken = new Set(rows.map(sc.rowKey)); return options.filter(o => !taken.has(o.id)) }, [options, rows])
   return (
     <>
@@ -147,8 +150,12 @@ function Rows({ rows, prices, options, names, added, onAdd, onCreate, onQty, onP
             <span className="scalc-name">
               {r.cur ? <Cur id={r.cur} name={names[r.cur]} text size={16} /> : <span className="cur cur-text">{r.name}</span>}
             </span>
-            <NumBox whole value={r.qty} label={`${label} ${what}`} autoFocus={key === added}
-              onChange={n => onQty(key, n)} onEnter={onEnter} />
+            <span className="scalc-qty">
+              <NumBox whole value={r.qty} label={`${label} ${what}`} autoFocus={key === added}
+                onChange={n => onQty(key, n)} onEnter={onEnter} />
+              {bump && <button type="button" className="cap-x scalc-inc" title="Add one (right-click: take one back)" aria-label={`Add one ${label}`}
+                onClick={() => onBump(key, 1)} onContextMenu={e => { e.preventDefault(); onBump(key, -1) }}>+</button>}
+            </span>
             <PriceCell r={r} prices={prices} onPrice={p => onPrice(key, p)} pending={pending === key} />
             <button type="button" className="cap-x" title="Remove" aria-label={`Remove ${label}`} onClick={() => onRemove(key)}>×</button>
           </div>
@@ -247,7 +254,9 @@ function tabletOptions(uses) {
 }
 
 // What a linked search found, in the thing's own currency: an empty price box shows it.
-const foundIn = (x, prices) => (x.link?.div != null && prices[x.cur] > 0 ? shownNum(x.link.div / prices[x.cur]) : '')
+const foundIn = (x, prices) => { const v = SP.shownPrice(x, prices); return Number.isFinite(v) ? shownNum(v) : '' }
+// The price box of a linked line: "…" while its search runs, else the price it found (styled as one).
+const foundBox = (x, prices, pending) => { const f = pending ? '' : foundIn(x, prices); return { placeholder: pending ? '…' : f || '0', found: !!f } }
 
 // 🔗 on a priced cost (Per map, a tablet line): builds its trade search, gold once linked.
 const LinkBtn = ({ linked, label, onClick }) => (
@@ -267,7 +276,7 @@ function TabletLine({ l, free, options, costOptions, prices, pending, onEdit, on
       <LinkBtn linked={!!l.link} label={label} onClick={onLink} />
       <button type="button" className="cap-x" title="Remove" aria-label={`Remove ${label}`} onClick={onRemove}>×</button>
       <Seg value={l.slots} options={SLOT_CHOICES.slice(0, l.slots + free)} title="In each map" onChange={n => onEdit({ slots: n })} />
-      <NumBox value={l.price} label={`Price of one ${label}`} placeholder={pending ? '…' : foundIn(l, prices) || '0'}
+      <NumBox value={l.price} label={`Price of one ${label}`} {...foundBox(l, prices, pending)}
         onChange={p => onEdit({ price: p })} onBlank={l.link ? () => onEdit({ price: null }) : undefined} />
       <CurrencyPicker value={l.cur} options={costOptions} onChange={c => onEdit({ cur: c })} />
     </div>
@@ -359,28 +368,24 @@ export default function StratCalcView({ league, currencies }) {
     if (!trade?.priceQuery || !open || !league || pending || blocked.current) return
     const t = Date.now()
     if (t < pauseUntil.current) return
-    const waiting = (key) => t < (retryAt.current.get(key) ?? 0)
-    const r = [...open.loot, ...open.fixed].find(x => sc.needsFloor(x, t) && !waiting(sc.rowKey(x)))
-    const l = r ? null : open.tablets.lines.find(x => sc.needsLinkPrice(x, t) && !waiting(`link:${x.id}`) && sc.usesOf(x, uses) != null)
-    const m = !r && !l && sc.needsLinkPrice(open.maps, t) && !waiting('link:maps') ? open.maps : null
-    if (!r && !l && !m) return
-    const key = r ? sc.rowKey(r) : l ? `link:${l.id}` : 'link:maps', stratId = open.id
-    retryAt.current.set(key, t + sc.FLOOR_TTL_MS)
+    // The queue and what a found price does: lib/stratPricing.js (tested against a fake trade site).
+    const job = SP.nextPricing(open, { now: t, retryAt: retryAt.current, uses })
+    if (!job) return
+    const key = job.key, stratId = open.id
+    SP.started(retryAt.current, job, t)
     setPending(key)
-    const query = r ? uniqueQuery(r.name, r.base) : l ? fullTabletQuery(l.link.query, sc.usesOf(l, uses)) : waystonePriceQuery(m.link.query)
-    trade.priceQuery({ query, league }).then(res => {
+    trade.priceQuery({ query: job.query, league }).then(res => {
       if (res?.ok) {
-        const div = r ? sc.floorDiv(res.listings, pricesRef.current) : sc.avgDiv(res.listings, pricesRef.current)
-        const now = Date.now()
-        if (div != null) change(d => (r ? sc.recordFloor(d, stratId, key, div, now) : l ? sc.recordLinkPrice(d, stratId, l.id, div, now) : sc.recordMapsPrice(d, stratId, div, now)))
-        else if (res.listings.length) retryAt.current.set(key, Date.now() + 60_000)   // no prices yet: again in a minute
+        const found = SP.priceFound(job, res, pricesRef.current), now = Date.now()
+        if (found.div != null) change(d => SP.recordFound(d, stratId, job, found, now))
+        else if (found.retry) SP.retryLater(retryAt.current, job, found.retry, now)   // no prices yet: again in a minute
       } else if (res?.error === 'auth') blocked.current = true
       else if (res?.error === 'rate') {
         // every search waits, not just this one; this one is due again when the wait ends (not an hour
         // later), and nothing else would re-run the queue then
         const until = Date.now() + (res.retryAfter || 60) * 1000
         pauseUntil.current = until
-        retryAt.current.set(key, until)
+        SP.retryLater(retryAt.current, job, until - Date.now(), Date.now())
         clearTimeout(wakeTimer.current)
         wakeTimer.current = setTimeout(() => setWake(w => w + 1), until - Date.now() + 250)
       }
@@ -516,6 +521,7 @@ export default function StratCalcView({ league, currencies }) {
 
   const rowsEdit = (part) => ({
     onQty: (key, n) => editActive(x => ({ ...x, [part]: sc.setQty(x[part], key, n) })),
+    onBump: (key, k) => editActive(x => ({ ...x, [part]: sc.bump(x[part], key, k) })),
     onPrice: (key, p) => editActive(x => ({ ...x, [part]: sc.setPrice(x[part], key, p > 0 ? p : null) })),
     onAdd: (id) => {
       const u = options.find(o => o.id === id)?.unique
@@ -539,7 +545,6 @@ export default function StratCalcView({ league, currencies }) {
   const costCur = (part) => (cur) => editDoc(d => sc.setCostCur(d, d.active, part, cur, Date.now()))
   const free = sc.MAX_TABLETS - sc.tabletSlots(s)
   const editTablet = (lid) => (patch) => editDoc(d => sc.editTablet(d, d.active, lid, patch, Date.now()))
-  // What a linked search found, in the thing's own currency (the empty price box shows it).
   // The trade window's job (Build on trade): the map price or a tablet line. A linked one reopens its own
   // search; a new one starts on waystones, or on its tablet. `priced` is the search as it is priced (a
   // tablet held to full uses): what the window opens on and what Open in Trading shows.
@@ -548,11 +553,11 @@ export default function StratCalcView({ league, currencies }) {
   const n = built && sc.usesOf(built, uses)
   const target = building === 'maps' ? {
     title: 'Waystones', x: s.maps, base: baseQuery({ category: { option: 'map.waystone' } }, []),
-    priced: waystonePriceQuery, link: (d, f) => sc.linkMaps(d, d.active, f, Date.now()), unlink: (d) => sc.unlinkMaps(d, d.active, Date.now()),
+    priced: waystonePriceQuery, link: (d, f) => sc.linkMaps(d, d.active, f, Date.now()), unlink: (d) => sc.unlinkMaps(d, d.active, Date.now(), prices),
   } : built ? {
     title: tabletName(built), x: built,
     base: { query: { ...baseQuery({ category: { option: 'map.tablet' } }, []).query, ...(built.base ? { type: built.base } : {}), ...(built.name ? { name: built.name } : {}) } },
-    priced: (q) => fullTabletQuery(q, n ?? 10), link: (d, f) => sc.linkTablet(d, d.active, built.id, f, Date.now()), unlink: (d) => sc.unlinkTablet(d, d.active, built.id, Date.now()),
+    priced: (q) => fullTabletQuery(q, n ?? 10), link: (d, f) => sc.linkTablet(d, d.active, built.id, f, Date.now()), unlink: (d) => sc.unlinkTablet(d, d.active, built.id, Date.now(), prices),
   } : null
   const toTrading = (query, name) => { setBuilding(null); openInTrading({ query, name, league, store: useWorkspace.getState, go: () => nav.goTrading() }) }
   const backToAdd = () => lootAdd.current?.querySelector('.curpick-input')?.focus()
@@ -599,7 +604,7 @@ export default function StratCalcView({ league, currencies }) {
           <section className="capcard">
             <h2>Loot</h2>
             <Rows rows={s.loot} prices={prices} options={options} names={names} added={added} what="looted"
-              addRef={lootAdd} onEnter={backToAdd} pending={pending} renderIcon={pickIcon} known={known} {...rowsEdit('loot')} />
+              addRef={lootAdd} onEnter={backToAdd} pending={pending} renderIcon={pickIcon} known={known} {...rowsEdit('loot')} bump />
           </section>
 
           <section className="capcard scalc-costs">
@@ -615,7 +620,7 @@ export default function StratCalcView({ league, currencies }) {
             {!s.override.on && <>
               <div className="scalc-line scalc-mapline">
                 <span className="scalc-label">Per map</span>
-                <NumBox value={s.maps.price} label="Price per map" placeholder={pending === 'link:maps' ? '…' : foundIn(s.maps, prices) || '0'}
+                <NumBox value={s.maps.price} label="Price per map" {...foundBox(s.maps, prices, pending === SP.linkKey('maps'))}
                   onChange={p => editActive(x => ({ ...x, maps: { ...x.maps, price: p } }))}
                   onBlank={s.maps.link ? () => editActive(x => ({ ...x, maps: { ...x.maps, price: null } })) : undefined} />
                 <CurrencyPicker value={s.maps.cur} options={costOptions} onChange={costCur('maps')} />
@@ -631,7 +636,7 @@ export default function StratCalcView({ league, currencies }) {
               </div>
               {s.tablets.lines.map(l => (
                 <TabletLine key={l.id} l={l} free={free} options={tablets} costOptions={costOptions} prices={prices}
-                  pending={pending === `link:${l.id}`} onLink={() => setBuilding(l.id)}
+                  pending={pending === SP.linkKey(l.id)} onLink={() => setBuilding(l.id)}
                   onEdit={editTablet(l.id)} onRemove={() => editDoc(d => sc.removeTablet(d, d.active, l.id, Date.now()))} />
               ))}
             </>}
@@ -660,7 +665,14 @@ export default function StratCalcView({ league, currencies }) {
           onUnlink={target.x.link ? () => { editDoc(target.unlink); setBuilding(null) } : null}
           onOpenTrading={target.x.link && (building === 'maps' || n != null)
             ? () => toTrading(target.priced(target.x.link.query), target.x.link.query.query?.type ?? target.title) : null}
-          onUse={(f) => { editDoc(d => target.link(d, f)); setBuilding(null) }} />
+          onUse={(f) => {
+            // the search it already holds (as linked, or as the window opened it): keep its price, spend no search
+            const held = target.x.link
+            if (!(held && (SP.sameSearch(f, held.query) || SP.sameSearch(f, target.priced(held.query))))) {
+              SP.relinked(retryAt.current, building); editDoc(d => target.link(d, f))
+            }
+            setBuilding(null)
+          }} />
       )}
     </div>
   )

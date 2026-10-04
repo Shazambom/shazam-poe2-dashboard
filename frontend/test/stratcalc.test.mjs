@@ -877,3 +877,30 @@ test('a broken, foreign, too-large or too-deep file imports nothing (never half 
   assert.equal(s.name.length, sc.MAX_NAME, 'repaired like saved data')
   assert.deepEqual(s.loot, [{ cur: 'divine', name: null, qty: 0, price: null }])
 })
+
+// Owner (2026-10-03): "a plus button that is small and adds one to the count instead of having to plug in
+// the numbers directly" — on a loot row; right-click takes one back (like the Maps run +1).
+test('bumping a row adds one (or takes one back), never below zero, and leaves the other rows alone', () => {
+  const rows = [{ cur: 'divine', qty: 2, price: null }, { cur: 'chaos', qty: 0, price: null }]
+  assert.deepEqual(sc.bump(rows, 'divine', 1).map(r => r.qty), [3, 0])
+  assert.deepEqual(sc.bump(rows, 'chaos', -1).map(r => r.qty), [2, 0])
+  assert.deepEqual(sc.bump(rows, 'divine', -1).map(r => r.qty), [1, 0])
+  assert.deepEqual(sc.bump([{ cur: 'vaal', qty: null }], 'vaal', 1).map(r => r.qty), [1], 'an empty count starts from zero')
+})
+
+// QA (2026-10-03): a line that followed its search into Vaal Orbs came back as "0.84 Divine Orb" on unlink.
+test('unlinking keeps the last price in the line\'s own currency (divine only when that currency has no price)', () => {
+  let d = mk(sc.blankDoc(), 'a', 'A')
+  d = sc.edit(d, 'a', s => ({ ...s, maps: { ...s.maps, count: 3 } }), 1)
+  d = sc.linkMaps(d, 'a', { query: WAY_Q, league: 'L' }, 2)
+  d = sc.recordMapsPrice(d, 'a', 0.5, 3, 'chaos')
+  const kept = sc.activeStrat(sc.unlinkMaps(d, 'a', 4, P)).maps
+  assert.equal(kept.cur, 'chaos')
+  near(kept.price, 0.5 / P.chaos)
+  near(sc.tally(sc.activeStrat(sc.unlinkMaps(d, 'a', 4, P)), P, 0, USES).maps, 3 * 0.5, 'the cost does not move')
+  d = sc.addTablet(d, 'a', { id: 't1', now: 5 })
+  d = sc.linkTablet(d, 'a', 't1', { query: BREACH_Q, league: 'L' }, 6)
+  d = sc.recordLinkPrice(d, 'a', 't1', 0.4, 7, 'mystery-orb')
+  const l = sc.activeStrat(sc.unlinkTablet(d, 'a', 't1', 8, P)).tablets.lines[0]
+  assert.deepEqual([l.price, l.cur], [0.4, 'divine'], 'a currency with no price falls back to divines')
+})

@@ -13,6 +13,8 @@ import { SyncMetrics, RefreshControls } from './components/SyncControls.jsx'
 import { useSignals, startSignalPolling } from './lib/signalStore.js'
 import { notify } from './lib/notifications.js'
 import Wealth from './components/Wealth.jsx'
+import { liquidNetWorth } from './lib/stash.js'
+import { wealthUnit } from './lib/wealth.js'
 import { useAssetModal } from './components/CardDetail.jsx'
 import CommandPalette from './components/CommandPalette.jsx'
 import { connectBridge, connectSessionWithToast } from './lib/session.js'
@@ -38,6 +40,11 @@ export default function App() {
   const [tab, setTab] = useState('Board')
   const status = useStatus(s => s.status)
   const capital = useStatus(s => s.capital)
+  const settings = useStatus(s => s.settings)
+  // The Stash's two figures (owner, 2026-10-03): net worth, and liquid net worth — the switched-on holdings
+  // at what they would sell for; none until the market has synced.
+  const liquidTop = capital?.syncing ? null : liquidNetWorth(capital?.rows, settings?.stash_counted, capital?.counted_by_default)
+  const pairUnit = wealthUnit(capital?.total_ref, capital?.reference || 'exalted', status?.wealth_prices)?.unit   // one scale for both
   const rl = useStatus(s => s.rl)              // trade-API rate/queue budget — surfaced in the topbar sync cluster
   const refreshHeader = useStatus(s => s.refresh)
   const { raw: currencies } = useCurrencies()
@@ -133,7 +140,9 @@ export default function App() {
 
   // ⌘K workspace commands: each lands on Trading → Workspace and mutates the store directly.
   const goWorkspace = React.useCallback(() => { setTab('Trading'); setTimeout(() => nav.openTrading('workspace'), 0) }, [])
-  useEffect(() => nav.on(e => { if (e.type === 'goTrading') goWorkspace() }), [goWorkspace])
+  useEffect(() => nav.on(e => {
+    if (e.type === 'goTrading') { setTab('Trading'); setTimeout(() => nav.openTrading(e.sub || 'workspace'), 0) }
+  }), [])
   const ee2Present = useWorkspace(s => s.ee2Present)
   const hasHistoryRows = useWorkspace(s => !!(findWhere(s.tree, n => n.kind === 'folder' && n.sys === HISTORY_SYS)?.children || []).length)
   const customThemes = useTheme(s => s.customs)
@@ -224,7 +233,7 @@ export default function App() {
           <span className="tb-spacer" />
           <SyncMetrics status={status} bridge={bridge} connecting={connecting} onConnect={doConnect} rl={rl} />
           <span className="capital-pill">
-            capital <b><Wealth v={capital?.total_ref} cur={ref} /></b></span>
+            net worth <b><Wealth v={capital?.total_ref} cur={ref} unit={pairUnit} /></b> · liquid <b><Wealth v={liquidTop} cur={ref} unit={pairUnit} /></b></span>
           {status?.oauth?.logged_in && <span className="muted oauth-user">{status.oauth.username}</span>}
           <DiscordLink />
           <UpdateStatus version={appVersion} />
@@ -233,7 +242,7 @@ export default function App() {
       </header>
 
       {tab === 'Board' && <BoardView key={league} status={status} />}
-      {tab === 'Strategy' && <StrategyView key={league} league={league} capital={capital} status={status} currencies={currencies} onCapitalSaved={refreshHeader} />}
+      {tab === 'Strategy' && <StrategyView key={league} league={league} capital={capital} status={status} currencies={currencies} />}
       {tab === 'Economy' && <EconomyView key={league} league={league} currencies={currencies} />}
       {tab === 'Trading' && <TradingView league={league} />}
       {tab === 'Settings' && <SettingsView currencies={currencies} status={status} onSaved={refreshHeader} onReportProblem={() => setFeedbackOpen(true)} />}

@@ -1,17 +1,18 @@
 import React from 'react'
 import { fmt } from '../lib/api.js'
 import { useStatus } from '../lib/statusStore.js'
-import { nativeAmount, wealthUnit, wealthDigits, wealthText } from '../lib/wealth.js'
+import { nativeAmount, wealthAs, wealthUnit, wealthDigits, wealthText } from '../lib/wealth.js'
 import Cur from './Cur.jsx'
 
 // The one way to show an amount of wealth: `<Wealth v={amountInRef} />` renders the
 // re-denominated value + its currency icon (see lib/wealth.js for the rule), with the raw
 // reference amount on hover. `cur` (the currency `v` is denominated in) defaults to the app's
 // reference currency; `suffix` renders after the icon (e.g. "/h", "/day"); `digits` overrides the magnitude-scaled default.
-export default function Wealth({ v, cur = null, size = 14, suffix = null, digits = null, className = '' }) {
+// `unit`: show it in this unit instead of its own tier (two figures side by side share one scale).
+export default function Wealth({ v, cur = null, size = 14, suffix = null, digits = null, className = '', unit = null }) {
   const status = useStatus(s => s.status)
   const ref = cur || status?.reference || 'exalted'
-  const w = wealthUnit(v, ref, status?.wealth_prices)
+  const w = unit ? wealthAs(v, ref, status?.wealth_prices, unit) : wealthUnit(v, ref, status?.wealth_prices)
   if (!w) return <span className={`muted ${className}`}>–</span>
   return (
     <span className={`wealth ${className}`} title={wealthText(v, ref, status?.wealth_prices)}>

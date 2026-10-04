@@ -217,7 +217,22 @@ class Registry:
         cur = self.by_id.get(tid)
         return cur.name if cur else tid
 
-    def to_json(self) -> dict:
+    def groups(self, categories: dict | None = None) -> dict[str, str]:
+        """{trade id: Stash group} — the game's own Currency Exchange category for the item
+        (gamedata.categories(), keyed by metadata id), else the trade site's category for an item the
+        exchange doesn't list. Never a hand-written list: the game decides what belongs to which mechanic.
+        `categories` ({metadata id: category}) is for tests."""
+        if categories is None:
+            from . import gamedata
+            categories = gamedata.categories()
+        out = {}
+        for c in self.by_id.values():
+            game = next((categories[m] for m in c.metadata_ids if categories.get(m)), None)
+            out[c.id] = game or c.category
+        return out
+
+    def to_json(self, categories: dict | None = None) -> dict:
+        groups = self.groups(categories)
         return {
             "loaded_at": self.loaded_at,
             "currencies": [
@@ -226,6 +241,7 @@ class Registry:
                     "name": c.name,
                     "icon": c.icon,
                     "category": c.category,
+                    "group": groups.get(c.id),
                     "metadata_ids": c.metadata_ids,
                 }
                 for c in sorted(self.by_id.values(), key=lambda c: c.name)

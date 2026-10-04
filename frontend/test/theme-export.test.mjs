@@ -9,12 +9,12 @@ import { dirname, join } from 'node:path'
 
 const SRC = join(dirname(fileURLToPath(import.meta.url)), '..', 'src')
 const css = readFileSync(join(SRC, 'styles.css'), 'utf8')
-const { presetTables, parseThemeBlocks, NEVER_THEMED } = await import('../src/lib/themeCss.js')
+const { presetTables, parseThemeBlocks, isNeverThemed } = await import('../src/lib/themeCss.js')
 const D = await import('../src/lib/themeDerive.js')
 const { keys, tables } = presetTables(css)
 
-// The linter's reading of the themed set: every :root token minus NEVER_THEMED.
-const lintKeys = [...parseThemeBlocks(css).root.keys()].filter(k => !NEVER_THEMED.has(k))
+// The linter's reading of the themed set: every :root token that is themed (isNeverThemed).
+const lintKeys = [...parseThemeBlocks(css).root.keys()].filter(k => !isNeverThemed(k))
 
 test('themeCss reads Vault (bare :root) and every preset block', () => {
   assert.deepEqual(Object.keys(tables), ['vault', 'ash', 'divinity', 'sekhemas', 'vaal', 'azmeri'])

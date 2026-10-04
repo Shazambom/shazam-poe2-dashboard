@@ -178,6 +178,12 @@ async def refresh(force: bool = False) -> dict:
 
 
 # ------------------------------------------------------------------ queries
+def categories() -> dict[str, str]:
+    """{metadata id: the game's Currency Exchange category} — the one reader of the table's categories."""
+    return {meta: e["category"] for meta, e in (db.kv_get("gold_fees_meta", {}) or {}).items()
+            if isinstance(e, dict) and e.get("category")}
+
+
 def fees() -> dict:
     """Fees keyed by trade id (where mapped) plus the raw metadata-keyed table."""
     from .currencies import registry

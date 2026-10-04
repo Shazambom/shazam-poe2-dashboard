@@ -21,6 +21,16 @@ export function wealthUnit(amount, ref, prices) {
   return { value: a, unit: ref }
 }
 
+// An amount of wealth in a given display unit — for figures shown side by side, which keep one scale
+// (CLAUDE.md "Comparisons keep a common scale"): pass the unit the larger one takes (wealthUnit). No price
+// for that unit: the usual rule.
+export function wealthAs(amount, ref, prices, unit) {
+  if (amount == null || !Number.isFinite(Number(amount))) return null
+  if (unit === ref) return { value: Number(amount), unit }
+  const px = prices?.[unit]
+  return px > 0 ? { value: Number(amount) / px, unit } : wealthUnit(amount, ref, prices)
+}
+
 // The volume rule (CLAUDE.md): an amount native to a currency (a price in the market that trades
 // the thing, a holding) shows in that currency, precisely. Only a native number too large to read
 // (≥ NATIVE_MAX of its own unit, the tiers' own boundary) falls back to the wealth rule over its

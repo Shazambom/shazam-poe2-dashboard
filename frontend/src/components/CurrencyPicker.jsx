@@ -1,6 +1,7 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { opensUp, room } from '../lib/dropdown.js'
 import Cur from './Cur.jsx'
+import { rankMatches } from '../lib/pickerMatch.js'
 
 const defaultIcon = (o, size) => <Cur id={o.id} name={o.name} size={size} />
 const CREATE = '\u0000create'   // the "Add “…”" row's id: never a real option's
@@ -12,7 +13,8 @@ const CREATE = '\u0000create'   // the "Add “…”" row's id: never a real op
 // An option's `keywords` (hidden aliases, e.g. the base names behind a mod pool) match the query too.
 // `onCreate(text)`, when given, offers a typed name that matches no option as a new entry ("Add “…”");
 // `known` (a Set of lowercased names) lists names that exist even when not offered, so they are never "added".
-export default function CurrencyPicker({ value, onChange, options = [], placeholder = 'search…', renderIcon = defaultIcon, onCreate = null, known = null }) {
+// `onClear`, when given: the user typed over a pick (it is dropped until they choose again).
+export default function CurrencyPicker({ value, onChange, options = [], placeholder = 'search…', renderIcon = defaultIcon, onCreate = null, known = null, onClear = null }) {
   const [open, setOpen] = useState(false)
   const [q, setQ] = useState('')
   const [sel, setSel] = useState(0)
@@ -24,10 +26,7 @@ export default function CurrencyPicker({ value, onChange, options = [], placehol
   const matches = useMemo(() => {
     const t = q.trim().toLowerCase()
     if (!t) return options
-    // A hit on the name or id outranks a hidden keyword hit ("ruby" is the Ruby jewel before the Ruby Charm).
-    const direct = options.filter(o => o.name.toLowerCase().includes(t) || String(o.id).toLowerCase().includes(t))
-    const viaKeyword = options.filter(o => !direct.includes(o) && o.keywords?.some(k => k.toLowerCase().includes(t)))
-    const found = [...direct, ...viaKeyword]
+    const found = rankMatches(options, t)   // exact name, then prefix, then contains, then keyword hits
     const exact = found.some(o => o.name.toLowerCase() === t) || !!known?.has(t)
     return onCreate && t && !exact ? [...found, { id: CREATE, name: `Add “${q.trim()}”`, create: q.trim() }] : found
   }, [options, q, onCreate, known])
@@ -55,7 +54,7 @@ export default function CurrencyPicker({ value, onChange, options = [], placehol
   const onKey = (e) => {
     if (e.key === 'ArrowDown') { e.preventDefault(); setOpen(true); setSel(s => Math.min(s + 1, matches.length - 1)) }
     else if (e.key === 'ArrowUp') { e.preventDefault(); setSel(s => Math.max(s - 1, 0)) }
-    else if (e.key === 'Enter') { e.preventDefault(); choose(matches[sel]) }
+    else if (e.key === 'Enter') { e.preventDefault(); if (open) choose(matches[sel]) }   // closed: a pick already made stays
     else if (e.key === 'Escape') { e.preventDefault(); setOpen(false); setQ('') }
   }
 
@@ -67,7 +66,7 @@ export default function CurrencyPicker({ value, onChange, options = [], placehol
           value={open ? q : (selected?.name ?? '')}
           placeholder={placeholder}
           onFocus={() => { setOpen(true); setSel(0) }}
-          onChange={e => { setQ(e.target.value); setSel(0); setOpen(true) }}
+          onChange={e => { setQ(e.target.value); setSel(0); setOpen(true); if (value) onClear?.() }}   // typing replaces the pick
           onKeyDown={onKey} />
       </div>
       {open && (

@@ -4,12 +4,12 @@ import { subsOf } from '../lib/dests.js'
 import { nav } from '../lib/nav.js'
 import WorkspaceView from './WorkspaceView.jsx'
 import LiveView from './LiveView.jsx'
-import SalesView from './SalesView.jsx'
+import StashView from './StashView.jsx'
 import RegexView from './RegexView.jsx'
 import ModsView from './ModsView.jsx'
 
 // The Trading tab: Workspace (file tree of searches + the embedded trade site), Live (pings +
-// one-click travel-to-hideout), Sales, Regex (the in-game search-string builder) and Mods (the
+// one-click travel-to-hideout), Stash (holdings + sales), Regex (the in-game search-string builder) and Mods (the
 // modifier pool viewer). The trade site lives INSIDE the workspace — no separate Browse tab.
 const SUBS = subsOf('Trading')
 
@@ -29,7 +29,7 @@ export default function TradingView({ league }) {
       {sub === 'regex' && <RegexView />}
       {sub === 'mods' && <ModsView />}
       {sub === 'live' && <LiveView league={league} />}
-      {sub === 'sales' && <SalesView league={league} />}
+      {sub === 'sales' && <StashView league={league} />}
     </div>
   )
 }

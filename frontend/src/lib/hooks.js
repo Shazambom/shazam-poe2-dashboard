@@ -38,23 +38,35 @@ export function useAutosave(saver, delay = 700) {
   const pending = useRef(null)
   // An edit made in the last `delay` ms before the view unmounts (a tab switch) is saved, not
   // dropped with the timer.
-  useEffect(() => () => { if (timer.current) { clearTimeout(timer.current); timer.current = null; if (pending.current) saver(pending.current.payload).catch(() => {}) } }, []) // eslint-disable-line
+  useEffect(() => () => { clearTimeout(timer.current); timer.current = null; if (pending.current) saver(pending.current.payload).catch(() => {}) }, []) // eslint-disable-line
+  const held = useRef(false)
+  const run = async (payload) => {
+    try {
+      await saver(payload)
+      setState('saved')
+      setTimeout(() => setState(s => (s === 'saved' ? '' : s)), 1400)
+    } catch (e) { setState(''); toast(cleanErr(e), false) }
+  }
   const save = (payload) => {
     if (!armed.current) return
     clearTimeout(timer.current)
     pending.current = { payload }
     setState('saving')
-    timer.current = setTimeout(async () => {
-      timer.current = null
-      pending.current = null
-      try {
-        await saver(payload)
-        setState('saved')
-        setTimeout(() => setState(s => (s === 'saved' ? '' : s)), 1400)
-      } catch (e) { setState(''); toast(cleanErr(e), false) }
-    }, delay)
+    if (held.current) { timer.current = null; return }   // kept until release()
+    timer.current = setTimeout(() => { timer.current = null; pending.current = null; run(payload) }, delay)
   }
-  return { state, save, arm: () => { armed.current = true } }
+  // `flush()` sends a pending edit now (and waits for it); `hold()` keeps later edits pending until
+  // `release()` — for a view that must read the server's copy without an edit racing it.
+  const flush = async () => {
+    if (!pending.current) return
+    clearTimeout(timer.current); timer.current = null
+    const { payload } = pending.current
+    pending.current = null
+    await run(payload)
+  }
+  const hold = () => { held.current = true; clearTimeout(timer.current); timer.current = null }   // a scheduled save waits too
+  const release = () => { held.current = false; if (pending.current) save(pending.current.payload) }
+  return { state, save, flush, hold, release, arm: () => { armed.current = true } }
 }
 
 // `value`, once it has held still for `ms`: typing in a filter box re-runs a search once, not per keystroke.

@@ -67,9 +67,9 @@ test('salesStats totals are raw sums per currency, the most valuable first', () 
   ], 'divine 900 ex > exalted 450 > chaos 10; mirror has no price, so last, still at its raw amount')
 })
 
-test('the Sales header shows the raw per-currency totals', async () => {
+test('the Stash sales column shows the raw per-currency totals', async () => {
   const { readFileSync } = await import('node:fs')
-  const s = readFileSync(new URL('../src/components/SalesView.jsx', import.meta.url), 'utf8')
-  assert.ok(s.includes('stats.totals.map'), 'the header lists stats.totals')
+  const s = readFileSync(new URL('../src/components/StashView.jsx', import.meta.url), 'utf8')
+  assert.ok(s.includes('stats.totals.map'), 'the sales column lists stats.totals')
   assert.ok(!s.includes('<Wealth v={stats.totalRef}'), 'no converted single total')
 })

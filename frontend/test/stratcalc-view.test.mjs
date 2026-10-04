@@ -111,9 +111,10 @@ test('controls are labelled with names people read: "Remove Divine Orb", never a
 
 test('uniques: listed in the picker, priced by one background trade search at a time, only when needed', () => {
   assert.ok(code.includes('poe2desktop?.trade?.uniques') && code.includes('sc.addUnique('), 'the trade site\'s uniques are in "Add currency or item…"')
-  assert.ok(code.includes('poe2desktop?.trade') && code.includes('uniqueQuery(r.name, r.base)'), 'the search runs in the desktop shell (the user\'s session), one pricer for everything')
+  const pricing = read('../src/lib/stratPricing.js')   // the queue (tested against a fake trade site in stratcalc-pricing.test.mjs)
+  assert.ok(code.includes('poe2desktop?.trade') && code.includes('SP.nextPricing(') && pricing.includes('uniqueQuery(r.name, r.base)'), 'the search runs in the desktop shell (the user\'s session), one pricer for everything')
   assert.ok(!code.includes('priceUnique'))
-  assert.ok(code.includes('sc.needsFloor(') && code.includes('sc.floorDiv(') && code.includes('sc.recordFloor('))
+  assert.ok(pricing.includes('sc.needsFloor(') && pricing.includes('sc.floorDiv(') && pricing.includes('sc.recordFloor('))
   assert.ok(/if \(!trade\?\.priceQuery \|\| !open \|\| !league \|\| pending/.test(code), 'one search in flight at a time (uniques and linked lines share the queue); the budget paces the rest')
   assert.ok(/error === 'auth'/.test(code), 'not logged in: stop searching, the row stays open for a typed price')
   const sv = read('../src/components/StrategyView.jsx')
@@ -238,14 +239,16 @@ test('Build on trade: the real trade site in a dialog; "Use this search" takes t
 test('a tablet line links a search, starts it at full uses, and prices it in the background', () => {
   assert.ok(code.includes('<TradeBuilder') && code.includes('sc.linkTablet(') && code.includes('sc.unlinkTablet('))
   assert.ok(/fullTabletQuery\(/.test(code), 'the window opens, and every price search runs, held to full uses')
-  assert.ok(code.includes('trade.priceQuery(') && code.includes('sc.needsLinkPrice(') && code.includes('sc.avgDiv(') && code.includes('sc.recordLinkPrice('))
+  const pricing = read('../src/lib/stratPricing.js')
+  assert.ok(code.includes('trade.priceQuery(') && pricing.includes('sc.needsLinkPrice(') && pricing.includes('sc.avgDiv(') && pricing.includes('sc.recordLinkPrice('))
 })
 
 test('"Per map" links a waystone search the same way (owner, 2026-10-01: "what about maps")', () => {
-  assert.ok(code.includes('sc.linkMaps(') && code.includes('sc.unlinkMaps(') && code.includes('sc.recordMapsPrice('))
-  assert.ok(code.includes('waystonePriceQuery('), 'priced as a buyer pays: Instant Buyout, cheapest first')
+  const pricing = read('../src/lib/stratPricing.js')
+  assert.ok(code.includes('sc.linkMaps(') && code.includes('sc.unlinkMaps(') && pricing.includes('sc.recordMapsPrice('))
+  assert.ok(code.includes('waystonePriceQuery') && pricing.includes('waystonePriceQuery('), 'priced as a buyer pays: Instant Buyout, cheapest first')
   assert.ok(code.includes("map.waystone"), 'a new map search starts on waystones')
-  assert.ok(/sc\.needsLinkPrice\(open\.maps/.test(code), 'the map search shares the one background queue')
+  assert.ok(/sc\.needsLinkPrice\(s\.maps/.test(pricing), 'the map search shares the one background queue')
 })
 
 test('the trade window also links a pasted trade link or one of the Trading tab\'s searches (no request: the link is the search)', () => {
@@ -273,7 +276,7 @@ test('"Open in Trading" in the trade window of a linked cost: the search as it i
   const app = read('../src/App.jsx')
   assert.ok(/e\.type === 'goTrading'/.test(app) && app.includes("nav.openTrading('workspace')"))
   const navSrc = read('../src/lib/nav.js')
-  assert.ok(navSrc.includes('goTrading()'))
+  assert.ok(navSrc.includes("goTrading(sub = 'workspace')"), 'no target = the Workspace')
 })
 
 test('sharing: Export… on a strat or folder (to Downloads), ⤓ Import and a dropped file (copies, "Imported")', () => {
@@ -298,7 +301,7 @@ test('Esc closes an open list inside the trade window, not the window (drive, 20
 
 test('a search the trade site asked to wait on is retried when the wait ends, and the queue wakes for it (drive, 2026-10-01: ⟳ left a line due)', () => {
   // the refused item must not keep its hour-long back-off, and nothing else would re-run the queue
-  assert.ok(/error === 'rate'\)[\s\S]{0,300}retryAt\.current\.set\(key, until\)/.test(code), 'due again at the end of the wait, not an hour later')
+  assert.ok(/error === 'rate'\)[\s\S]{0,300}SP\.retryLater\(retryAt\.current, job, until - Date\.now\(\), Date\.now\(\)\)/.test(code), 'due again at the end of the wait, not an hour later (stratPricing.retryLater: unless relinked meanwhile)')
   assert.ok(/error === 'rate'\)[\s\S]{0,400}setTimeout\(\(\) => setWake\(/.test(code), 'a wake-up at the end of the wait')
   assert.ok(/\}, \[open, league, pending, change, uses, wake\]\)/.test(code), 'the wake-up re-runs the queue')
 })
@@ -309,4 +312,46 @@ test('a row\'s ⟳ and × take no room until shown, so names are not cut short (
   assert.ok(/\.scalc-tree \.refresh-btn\.scalc-refresh\s*\{[^}]*display:\s*none/.test(scCss))
   assert.ok(/\.scalc-x\s*\{[^}]*display:\s*none/.test(scCss))
   assert.ok(/\.ws-node:hover \.scalc-x[^{]*\{[^}]*display:/.test(scCss), 'shown on hover and on the open strat')
+})
+
+test('loot rows carry a small "+" that adds one (right-click: one back); fixed costs do not', () => {
+  assert.match(code, /className="cap-x scalc-inc"/)
+  assert.match(code, /aria-label=\{`Add one \$\{label\}`\}/)
+  assert.match(code, /onContextMenu=\{e => \{ e\.preventDefault\(\); onBump\(key, -1\) \}\}/)
+  const loot = code.slice(code.indexOf('<h2>Loot</h2>'), code.indexOf('scalc-costs'))
+  const fixed = code.slice(code.indexOf('scalc-micro">Fixed'))
+  assert.match(loot, /\{\.\.\.rowsEdit\('loot'\)\} bump/)
+  assert.doesNotMatch(fixed.slice(0, fixed.indexOf('/>')), /\bbump\b/)
+  assert.match(scCss + css, /\.scalc-inc\s*\{/)
+})
+
+test('the trade window follows the page\'s own search, and linking prices the new search at once', () => {
+  const tb = read('../src/components/TradeBuilder.jsx')
+  assert.match(tb, /windowSearch\(/)
+  assert.match(tb, /trade\.onTap\?\.\(/)
+  assert.match(code, /SP\.relinked\(retryAt\.current, building\)/)
+  assert.match(code, /SP\.nextPricing\(/)
+})
+
+test('unlinking hands the prices over, and a found price reads as a price, not an empty box', () => {
+  assert.match(code, /sc\.unlinkMaps\(d, d\.active, Date\.now\(\), prices\)/)
+  assert.match(code, /sc\.unlinkTablet\(d, d\.active, built\.id, Date\.now\(\), prices\)/)
+  assert.match(code, /className=\{`scalc-in\$\{found \? ' scalc-found' : ''\}`\}/)
+  assert.match(scCss + css, /\.scalc-found::placeholder\s*\{/)
+})
+
+// code review (2026-10-03)
+test('a line re-pricing shows its "…" as pending, not as a found price', () => {
+  assert.doesNotMatch(code, /found=\{!!foundIn\(/)
+  assert.match(code, /foundBox\(/)
+})
+
+test('"Use this search" on the linked search changes nothing; any other search relinks', () => {
+  assert.match(code, /SP\.sameSearch\(/)
+})
+
+test('the view keys its pending marker with the queue\'s own keys and imports nothing it no longer uses', () => {
+  assert.match(code, /SP\.linkKey\('maps'\)/)
+  assert.match(code, /SP\.linkKey\(l\.id\)/)
+  assert.doesNotMatch(read('../src/components/StratCalcView.jsx').split('\n').find(l => l.includes("from '../lib/regex/trade.js'")), /uniqueQuery/)
 })

@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { finishRoutes } from '../lib/routesStream.js'
 import { api, fmt } from '../lib/api.js'
-import CapitalCard from './CapitalCard.jsx'
 import ConvertView from './ConvertView.jsx'
 import Cur from './Cur.jsx'
 import GoldValueSlider from './GoldValueSlider.jsx'
@@ -10,6 +9,9 @@ import Toggle from './Toggle.jsx'
 import { Detail, Loop } from './RouteSteps.jsx'
 import Wealth from './Wealth.jsx'
 import { useSync } from '../lib/syncStore.js'
+import { arbitrageHoldings, netWorth } from '../lib/stash.js'
+import { nav } from '../lib/nav.js'
+import { useCurrencies } from '../lib/icons.js'
 import { ensureSettings, useStatus } from '../lib/statusStore.js'
 import { useAutosave, useDebounced } from '../lib/hooks.js'
 import { DEFAULT_FILTERS, filtersFromSettings, filtersToSave, searchKeyOf, streamQuery } from '../lib/routeFilters.js'
@@ -31,7 +33,8 @@ const COLS = [
   ['max_age_s', 'Age', r => r.max_age_s ?? INF, 'asc'],
 ]
 
-export default function RoutesView({ capital, status, currencies, onCapitalSaved }) {
+export default function RoutesView({ capital, status, currencies }) {
+  const { nameOf } = useCurrencies()
   const [f, setF] = useState(DEFAULT_FILTERS)
   const [loaded, setLoaded] = useState(false)    // the saved filters are in: only then search
   const [routes, setRoutes] = useState([])
@@ -139,7 +142,7 @@ export default function RoutesView({ capital, status, currencies, onCapitalSaved
   return (
     <div className="workspace">
       <aside className="rail">
-        <CapitalCard currencies={currencies} status={status} onSaved={() => { onCapitalSaved?.(); load() }} />
+        <ArbitrageCapital />
 
         <h2>Gold value</h2>
         <GoldValueSlider onCommit={load} />
@@ -149,7 +152,7 @@ export default function RoutesView({ capital, status, currencies, onCapitalSaved
         <div className="field"><label>Start from</label>
           <select value={f.start} onChange={set('start')}>
             <option value="">Everything I hold</option>
-            {held.map(c => <option key={c} value={c}>{c}</option>)}
+            {held.map(c => <option key={c} value={c}>{nameOf(c)}</option>)}
           </select>
         </div>
 
@@ -180,8 +183,8 @@ export default function RoutesView({ capital, status, currencies, onCapitalSaved
           <div className="notice">Market history is still syncing ({fmt.n(status.digest.behind_h, 0)}h behind). Loops fill in as rates land — no action needed.</div>
         )}
         {meta?.notional && (
-          <div className="notice">No capital entered yet, so loops are sized to a notional 10 {ref} from every currency.
-            Enter what you hold on the left to size them to your stash.</div>
+          <div className="notice">Loops are sized to a notional 10 {ref}. Add Chaos, Exalted or Divine on
+            {' '}<button type="button" className="link-btn" onClick={() => nav.goTrading('sales')}>Stash</button> to size them to what you hold.</div>
         )}
 
         {streaming && routes.length === 0 ? (
@@ -245,6 +248,25 @@ export default function RoutesView({ capital, status, currencies, onCapitalSaved
           </table>
         )}
       </section>
+    </div>
+  )
+}
+
+// What arbitrage may trade from: the held default cash and hub currencies (the server's `arbitrage`
+// flag on /api/capital). Holdings are edited on Trading → Stash, where every holding counts.
+function ArbitrageCapital() {
+  const capital = useStatus(s => s.capital)
+  const held = arbitrageHoldings(capital)
+  return (
+    <div className="capcard">
+      <h2>What arbitrage can use</h2>
+      {held.length
+        ? held.map(r => <div className="cap-row" key={r.currency}><span className="cap-name"><Cur id={r.currency} text /></span><span className="cap-q">{fmt.n(r.qty, 0)}</span></div>)
+        : <div className="hint">You hold nothing arbitrage trades from yet. Add Chaos, Exalted or Divine on Stash.</div>}
+      <div className="cap-foot">
+        {held.length > 0 && <Wealth v={netWorth(held)} cur={capital?.reference} size={12} />}
+        <button type="button" className="link-btn" onClick={() => nav.goTrading('sales')}>Stash ›</button>
+      </div>
     </div>
   )
 }

@@ -41,7 +41,7 @@ const CHART_EXTRAS = new Set(
 // Tokens a theme preset never touches: game semantics, the alert family, and everything that
 // isn't colour. A preset must redeclare every OTHER token in :root — a missing one silently
 // falls through to the default theme, which no human spots on screen.
-import { NEVER_THEMED } from '../src/lib/themeCss.js'
+import { isNeverThemed } from '../src/lib/themeCss.js'
 // The channel triplets that must equal their colour token, per block.
 const RGB_PAIRS = [['--accent-rgb', '--gold'], ['--gain-rgb', '--gain'], ['--loss-rgb', '--loss'], ['--live-rgb', '--live'], ['--digest-rgb', '--digest']]
 // WCAG: [foreground, background, minimum ratio]. 4.5 = AA body text; 7 = AAA for the primary ink.
@@ -180,13 +180,13 @@ cssLines.forEach((ln, i) => {
 })
 
 // ---- Check 8: presets. ----
-const themedKeys = [...tokenValue.keys()].filter(k => !NEVER_THEMED.has(k))
+const themedKeys = [...tokenValue.keys()].filter(k => !isNeverThemed(k))
 for (const b of blocks) {
   if (b.name === 'root') continue
   const file = 'src/styles.css', at = b.start + 1
   const missing = themedKeys.filter(k => !b.tokens.has(k))
   const extra = [...b.tokens.keys()].filter(k => !tokenValue.has(k))
-  const forbidden = [...b.tokens.keys()].filter(k => NEVER_THEMED.has(k))
+  const forbidden = [...b.tokens.keys()].filter(k => isNeverThemed(k))
   if (missing.length) err(file, at, `preset "${b.name}" is missing ${missing.length} token(s): ${missing.join(', ')} — a preset redeclares every themed token`)
   if (extra.length) err(file, at, `preset "${b.name}" declares tokens :root does not have: ${extra.join(', ')}`)
   if (forbidden.length) err(file, at, `preset "${b.name}" may not override ${forbidden.join(', ')} (never themed)`)

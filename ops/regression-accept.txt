@@ -1,8 +1,15 @@
 # The differences the next release intends, checked by ops/regression-diff.py inside
 # desktop/publish-github.sh. It is valid for ONE version, and every line must still match a reported
 # difference. Anything not listed blocks the release. Whole-line comments only.
-version: 0.3.11
+version: 0.3.12-beta.1
 
-# Trading → Workspace "Reprice in <currency>" and "Find cheapest" (docs/reprice-design.md), the trade tap, the
-# rate-limit safety and the limiter adopting the site's real rules change no price, busiest market, price card, Market or Hold row, loop, pool route or conversion:
-# no difference is accepted.
+# Arbitrage trades only from the default cash (chaos/exalted/divine) plus the top-10 hub currencies, minus
+# any holding switched off on Stash (owner, 2026-10-03; arbitrage.loop_currencies). Loops that started from
+# any other holding are no longer searched: they vanish (-> None), none changes its margin.
+loops    exchange-only loop changed: * -> None
+loops    recipe loop gone: *
+# The Arbitrage pool loses those loops and admits the next ones; the rest only re-rank.
+pool     left: *
+pool     joined: *
+pool     score/rank shifts only (margins unchanged): *
+# No price, busiest market, price card, Market or Hold row, or conversion changes: none accepted.

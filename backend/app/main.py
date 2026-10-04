@@ -305,7 +305,9 @@ def _note_capital_sync(payload: dict) -> None:
 def capital():
     """Holdings at paper value AND at what they would realize (Ghost Wealth) — see liquidity."""
     g = arbitrage.cached_graph()
-    out = liquidity.capital_rows(db.get_capital(), g, g.values())
+    rv = g.values()
+    out = liquidity.capital_rows(db.get_capital(), g, rv)
+    out["group_icons"] = liquidity.group_icons(g, rv, registry.groups())
     _note_capital_sync(out)
     return out
 
@@ -331,10 +333,16 @@ class SettingsPatch(BaseModel):
     patch: dict
 
 
+# Settings the market graph never reads: route results are keyed on the Stash switches and Capital is
+# not cached, so flipping one rebuilds nothing.
+SETTINGS_OUTSIDE_THE_GRAPH = frozenset({"stash_counted"})
+
+
 @app.put("/api/settings")
 def put_settings(body: SettingsPatch):
     saved = save_settings(body.patch)
-    arbitrage.invalidate_caches()   # league/reference/etc. change what the graph means
+    if set(body.patch) - SETTINGS_OUTSIDE_THE_GRAPH:
+        arbitrage.invalidate_caches()   # league/reference/etc. change what the graph means
     return saved
 
 

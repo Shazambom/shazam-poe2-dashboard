@@ -14,7 +14,7 @@ from __future__ import annotations
 import json
 import math
 import time
-from .. import cache, db, devtelemetry, orderbook, pairscore
+from .. import cache, centrality, db, devtelemetry, orderbook, pairscore
 from .. import settings as settings_mod
 from ..currencies import registry
 from ..settings import get_settings
@@ -23,6 +23,32 @@ from .graph import INF, Edge, Graph, cycle_unit, route_cap, simulate
 
 _route_cache: dict = {}      # search key -> (ts, orderbook version, result); see _cache_get/_cache_put
 ROUTE_CACHE_MAX = 32
+
+# What arbitrage may trade from (owner, 2026-10-03): the default cash plus the market's most liquid
+# currencies — a wider set of hubs than the Board's ⬢, never fewer. Other holdings stay in the Stash
+# total; they just aren't capital a loop may start from.
+CASH = ("chaos", "exalted", "divine")
+ARBITRAGE_HUBS = 10
+
+
+def arbitrage_currencies(g: Graph, ref_value: dict[str, float]) -> set[str]:
+    """Arbitrage's currencies: CASH plus the top hubs by PageRank (centrality.hubs)."""
+    n = max(ARBITRAGE_HUBS, settings_mod.hub_count(g.s))
+    return set(CASH) | centrality.hubs(g, ref_value, n)
+
+
+def _switches() -> dict:
+    """The user's Stash switches as saved now (not the graph's copy of the settings), with the default."""
+    s = settings_mod.get_settings()
+    return {"choices": {c: v for c, v in (s.get("stash_counted") or {}).items() if v is not None},
+            "default": settings_mod.STASH_COUNTED_BY_DEFAULT}
+
+
+def loop_currencies(g: Graph, ref_value: dict[str, float], base: set[str] | None = None) -> set[str]:
+    """THE rule for what a loop may start from (the route search and the Stash/Arbitrage ⬢ both use it):
+    `base` (arbitrage's currencies by default), keeping only holdings the user counts as liquid on Stash."""
+    s = {"stash_counted": _switches()["choices"]}
+    return {c for c in (arbitrage_currencies(g, ref_value) if base is None else base) if settings_mod.stash_counted(s, c)}
 
 
 def _edge_list_id(edges: list[Edge]) -> str:
@@ -42,7 +68,8 @@ def route_pairs(route_id: str) -> list[tuple[str, str]]:
 
 
 def _cache_key(filters: dict | None, start_currencies: list[str] | None) -> str:
-    return json.dumps([filters or {}, start_currencies], sort_keys=True)
+    # the Stash switches decide which loops may start: a result is only good for the switches it ran with
+    return json.dumps([filters or {}, start_currencies, _switches()], sort_keys=True)
 
 
 def _cache_get(key: str, s: dict) -> dict | None:
@@ -203,11 +230,13 @@ def _search_setup(filters: dict | None, start_currencies: list[str] | None):
     s = g.s
     f = {**s["filters"], **(filters or {})}
     ref_value = g.values()
-    capital = db.get_capital()
-    starts = start_currencies or [c for c, q in capital.items() if q > 0]
+    usable = loop_currencies(g, ref_value)
+    capital = {c: q for c, q in db.get_capital().items() if c in usable}
+    # A saved "Start from" arbitrage may no longer use (a hub that left the top) falls back to the holdings.
+    starts = [c for c in (start_currencies or []) if c in usable] or [c for c, q in capital.items() if q > 0]
     notional = not starts
     if notional:
-        starts = list(g.adj.keys())
+        starts = [c for c in g.adj if c in usable]
     return g, s, f, ref_value, capital, starts, notional
 
 

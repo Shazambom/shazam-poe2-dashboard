@@ -258,6 +258,8 @@ export function clock(ms) {
 // ---------------------------------------------------------------- rows
 export const rowKey = (r) => r.cur ?? (r.base ? `unique:${r.name}|${r.base}` : `custom:${r.name}`)
 export const setQty = (rows, key, qty) => rows.map(r => (rowKey(r) === key ? { ...r, qty } : r))
+// One more (or `k` more, -1 to take one back) of a row, never below zero.
+export const bump = (rows, key, k) => rows.map(r => (rowKey(r) === key ? { ...r, qty: Math.max(0, (Number(r.qty) || 0) + k) } : r))
 // A typed price (divines per unit) for one row; null goes back to the market's.
 export const setPrice = (rows, key, price) => rows.map(r => (rowKey(r) === key ? { ...r, price } : r))
 export const removeRow = (rows, key) => rows.filter(r => rowKey(r) !== key)
@@ -278,8 +280,14 @@ export function addUnique(rows, { name, type }) {
 
 // The price floor: the cheapest listing in divines (a listing in a currency with no price is skipped).
 // Listings (the trade site's asking prices) in divines, cheapest first; unpriceable ones left out.
-const listingDivs = (listings, prices) => (listings || []).filter(l => l.amount > 0)
-  .map(l => saleValueRef(l, 'divine', prices)).filter(v => v != null).sort((a, b) => a - b)
+// The listings worth something, each with its value in divines, cheapest first (a listing in a currency
+// with no price is skipped). `cheapestListings` — the ten a linked search's price is averaged from (and
+// whose currencies its line follows: stratPricing.searchCurrency).
+const valued = (listings, prices) => (listings || []).filter(l => l.amount > 0)
+  .map(l => ({ div: saleValueRef(l, 'divine', prices), currency: l.currency })).filter(v => v.div != null).sort((a, b) => a.div - b.div)
+const listingDivs = (listings, prices) => valued(listings, prices).map(v => v.div)
+export const AVG_OF = 10
+export const cheapestListings = (listings, prices) => valued(listings, prices).slice(0, AVG_OF)
 
 export const floorDiv = (listings, prices) => listingDivs(listings, prices)[0] ?? null
 
@@ -297,7 +305,7 @@ export function recordFloor(doc, stratId, key, div, at) {
 
 // ---------------------------------------------------------------- tablet setups
 export const MAX_TABLETS = 4    // slots on a map (three, four in a city)
-const lines = (s) => s.tablets?.lines ?? []
+export const lines = (s) => s.tablets?.lines ?? []
 export const tabletSlots = (s) => lines(s).reduce((a, l) => a + l.slots, 0)
 
 // A line's slots: at least one, never past the map's four with the other lines'.
@@ -341,17 +349,27 @@ const fitsQuery = (q) => !!q && typeof q.query === 'object' && JSON.stringify(q)
 const okLink = (k) => fitsQuery(k?.query) && !!k?.league
 const okDiv = (div) => Number.isFinite(div) && div >= 0
 const linked = (x, { query, league }) => ({ ...x, price: null, link: { query, league, div: null, at: 0 } })
-const unlinked = ({ link, ...x }) => (x.price == null ? { ...x, price: link?.div ?? 0, cur: 'divine' } : x)
-const found = (div, at) => (x) => (x.link ? { ...x, link: { ...x.link, div, at } } : x)
+// Unlinked, the found price becomes a typed one in the line's own currency (the one its search
+// followed); in divines when that currency has no price.
+const unlinked = (prices) => ({ link, ...x }) => {
+  if (x.price != null) return x
+  const div = link?.div ?? 0, px = prices?.[x.cur]
+  return px > 0 ? { ...x, price: div / px } : { ...x, price: div, cur: 'divine' }
+}
+// `cur`: the currency the search priced in. The line follows it on the first price after linking
+// (stratPricing.searchCurrency) — never over a typed price, nor over a currency picked since.
+const found = (div, at, cur) => (x) => (x.link
+  ? { ...x, ...(cur && x.price == null && x.link.div == null ? { cur } : {}), link: { ...x.link, div, at } }
+  : x)
 const putLine = (lid, fn) => (x) => ({ ...x, tablets: { lines: lines(x).map(l => (l.id === lid ? fn(l) : l)) } })
 const quiet = (doc, sid, fn) => (doc.strats.some(x => x.id === sid) ? { ...doc, strats: doc.strats.map(x => (x.id === sid ? fn(x) : x)) } : doc)
 
 export const linkTablet = (doc, sid, lid, k, now) => (okLink(k) ? edit(doc, sid, putLine(lid, l => linked(l, k)), now) : doc)
-export const unlinkTablet = (doc, sid, lid, now) => edit(doc, sid, putLine(lid, unlinked), now)
-export const recordLinkPrice = (doc, sid, lid, div, at) => (okDiv(div) ? quiet(doc, sid, putLine(lid, found(div, at))) : doc)
+export const unlinkTablet = (doc, sid, lid, now, prices) => edit(doc, sid, putLine(lid, unlinked(prices)), now)
+export const recordLinkPrice = (doc, sid, lid, div, at, cur) => (okDiv(div) ? quiet(doc, sid, putLine(lid, found(div, at, cur))) : doc)
 export const linkMaps = (doc, sid, k, now) => (okLink(k) ? edit(doc, sid, x => ({ ...x, maps: linked(x.maps, k) }), now) : doc)
-export const unlinkMaps = (doc, sid, now) => edit(doc, sid, x => ({ ...x, maps: unlinked(x.maps) }), now)
-export const recordMapsPrice = (doc, sid, div, at) => (okDiv(div) ? quiet(doc, sid, x => ({ ...x, maps: found(div, at)(x.maps) })) : doc)
+export const unlinkMaps = (doc, sid, now, prices) => edit(doc, sid, x => ({ ...x, maps: unlinked(prices)(x.maps) }), now)
+export const recordMapsPrice = (doc, sid, div, at, cur) => (okDiv(div) ? quiet(doc, sid, x => ({ ...x, maps: found(div, at, cur)(x.maps) })) : doc)
 export const needsLinkPrice = (x, now) => !!x.link && x.price == null && due(x.link.at, now)
 
 // Every price a strat holds from a search — unique floors, linked maps and tablet lines — through
@@ -369,7 +387,7 @@ export const restale = (doc, sid) => quiet(doc, sid, s => searched(s,
   x => ({ ...x, link: { ...x.link, at: 0 } })))
 // The average of the cheapest ten listings, in divines (owner, 2026-10-01: "avg the cheapest 10").
 export function avgDiv(listings, prices) {
-  const vals = listingDivs(listings, prices).slice(0, 10)
+  const vals = cheapestListings(listings, prices).map(v => v.div)
   return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null
 }
 

@@ -72,7 +72,9 @@ export function verdict(page, latest, { siblings = null, now = Date.now() } = {}
 // app fetches ids the search already returned (desktop/src/trade/listings.js; never a new search):
 const PAGE = 10
 const sortsByPrice = (body) => canon(body?.sort) === canon({ price: 'asc' })
-export const currencyFiltered = (body) => { const o = body?.query?.filters?.trade_filters?.filters?.price?.option; return !!o && o !== 'exalted_divine' }
+// The one currency a search's price filter names, or null ("Exalted Orb equivalent" names none).
+export const priceOption = (body) => { const o = body?.query?.filters?.trade_filters?.filters?.price?.option; return o && o !== 'exalted_divine' ? o : null }
+export const currencyFiltered = (body) => !!priceOption(body)
 
 // 1. a sample — every 10th rank past the first page, and the last — skipping rows already loaded.
 export function samplePlan(page) {

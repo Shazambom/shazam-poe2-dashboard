@@ -306,8 +306,24 @@ app, no new outbound call (the invite opens in the OS browser); nothing can bill
   utilityProcess worker (main refuses it when packaged). Fixtures: `desktop/test/fixtures/ee2/items/*.txt`.
   The CLI form: `node desktop/src/ee2-history/worker.js --stdin --league "Standard" < item.txt`.
 - **Telemetry markers** added: `ee2` (history-*), `ws` (workspace save/undo/flush), `sales`.
-- **Sales tab** — main fetches Merchant History under policy `trade-history`; the backend's `sales` table
+- **Stash tab** (was "Sales"; id `trading-sales`, sub `sales` kept so reports, ⌘K and diag markers still
+  match) — main fetches Merchant History under policy `trade-history`; the backend's `sales` table
   (user migration 5) is the ledger. Only `POST /api/sales/ingest` writes it.
+- **Stash groups (2026-10-03)** — holdings group by the game's own Currency Exchange category:
+  `currencies.Registry.groups()` reads gamedata's `gold_fees_meta` by metadata id and serves it as
+  `group` on `/api/currencies`; an item the exchange doesn't list keeps the trade site's category. No
+  category list or mapping lives in code (the trade-site label is wrong for this: it files every omen and
+  Raven-Touched Shard under Ritual). A group's icon is its most-traded item (`liquidity.group_icons`, on
+  `/api/capital` as `group_icons`). Net worth = every holding at paper; liquid net worth = `realizable_ref`
+  of the holdings switched on. Switches are settings `stash_counted` {id: bool} (only choices stored);
+  the default is `COUNTED_BY_DEFAULT` in `frontend/src/lib/stash.js`.
+- **Arbitrage capital (2026-10-03)** — loops start only from `arbitrage.loop_currencies()`, THE rule:
+  `CASH` (chaos/exalted/divine) plus the top `ARBITRAGE_HUBS` (10, never fewer than `hub_count`) PageRank
+  hubs, minus any holding the user switched off on Stash (`stash_counted`, read fresh from settings — not
+  the graph's copy — and part of the route cache key, so a flip needs no cache clear). `_search_setup`
+  filters the capital (a notional search also starts only there); `/api/capital` rows carry `arbitrage`
+  (the same rule), which the Arbitrage rail lists, and `counted_by_default` (the one default). Stash totals still count every holding. This removes
+  loops that started from other holdings, so the next release's regression gate needs an acceptance.
 - **Drive scripts:** target workspace rows by `data-id` (never by name — names collide with real searches).
 
 ### Regex (Trading → Regex, added 2026-09-24)
@@ -481,10 +497,19 @@ view is `StratCalcView.jsx`; the strats are the user kv `strat_calc`, checked by
   and never guessed. Local rebuild: `cd backend && DATA_DIR=<dir> ../.venv-test/bin/python -m app.modpool`.
 - **Linked trade searches** (Per map and each tablet line). The 🔗 opens `TradeBuilder.jsx`, the real trade
   site in a dialog:
-  - **Reading the search:** the window's own address is its search. It opens on a `?q=` link, and a run
-    search lands on a gzip slug. The dialog follows the address through the app's existing
-    `trade:webview-nav` event, filtered to its own webview (`shouldAcceptNav`), and reads it with
-    `searchOfLink`. There is no request interception.
+  - **Reading the search:** the dialog holds the search its window shows (`stratPricing.windowSearch`). It
+    opens on a `?q=` link; it follows the address through `trade:webview-nav`, filtered to its own webview
+    (`shouldAcceptNav`), read with `searchOfLink`; and it takes the page's own search from the trade tap
+    (`trade:tap` `kind: 'search'`, matched by webContents id) — a run search can land on a short id the
+    address doesn't carry (owner bug 2026-10-03: "Use this search" linked the base search). The tap only
+    reads what the page received (CDP Network); the page is never scripted or navigated.
+  - **Linking and pricing (`lib/stratPricing.js`, tested with a fake trade site in
+    `test/stratcalc-pricing.test.mjs`):** linking a new search clears its back-off so it is priced at once;
+    "Use this search" on the search the line already holds changes nothing (`sameSearch`); a price that
+    arrives for a search the line no longer holds is dropped, and so is its "again in a minute". On the
+    first price after linking, the line's currency follows the search (its own price currency, else the one
+    most of its ten cheapest listings are in) — never over a typed price or a currency picked since.
+    Unlinking keeps the found price as a typed one in the line's currency.
   - **Pasted links and saved searches:** a pasted link or a Trading-tab search is read the same way
     (`session.searchOfLink`; `workspaceStore.savedSearches` / `searchOfNode`, never History rows): a saved
     search's slug is its query, gzipped and base64'd.
@@ -496,6 +521,8 @@ view is `StratCalcView.jsx`; the strats are the user kv `strat_calc`, checked by
     (`regex/trade.js` `fullTabletQuery`; `withFullUses` is shared with the Regex tab). Waystone searches
     are only forced to Instant Buyout.
 - **⟳ per strat** (`restale`): that strat's floors and links become due now.
+- **Loot "+"** (owner, 2026-10-03): each loot row's count has a small "+" (right-click: one back, never
+  below 0; `stratcalc.bump`). Fixed costs have none.
 - **Open in Trading** (`lib/stratTrading.js`): selects the saved search with the same filters (key order
   ignored; History skipped) or adds it to a "From strats" folder. It waits for the workspace to load.
 - **Sharing:** `.arbiterstrat` files (`exportStrats` / `importStrats`).

@@ -11,14 +11,14 @@ import StratCalcView from './StratCalcView.jsx'
 // Strat Calculator = what a farming strategy earns, in divines per hour.
 const SUBS = subsOf('Strategy')
 
-export default function StrategyView({ league, capital, status, currencies, onCapitalSaved }) {
+export default function StrategyView({ league, capital, status, currencies }) {
   const [sub, setSub] = useState('arbitrage')
   useEffect(() => nav.on(e => { if (e.type === 'openSub' && e.section === 'Strategy' && e.sub) setSub(e.sub) }), [])
   return (
     <div className="section">
       <SubTabs subs={SUBS} value={sub} onChange={setSub} layoutId="subtab-underline-strategy" />
       {sub === 'hold' && <HoldView key={league} />}
-      {sub === 'arbitrage' && <RoutesView key={league} capital={capital} status={status} currencies={currencies} onCapitalSaved={onCapitalSaved} />}
+      {sub === 'arbitrage' && <RoutesView key={league} capital={capital} status={status} currencies={currencies} />}
       {sub === 'calc' && <StratCalcView league={league} currencies={currencies} />}
     </div>
   )

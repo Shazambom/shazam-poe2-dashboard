@@ -3,13 +3,15 @@ import { motion } from 'motion/react'
 import { searchOfLink } from '../lib/session.js'
 import { savedSearches, searchOfNode, useWorkspace } from '../lib/workspaceStore.js'
 import { shouldAcceptNav } from '../lib/webview.js'
+import { windowSearch } from '../lib/stratPricing.js'
 import CurrencyPicker from './CurrencyPicker.jsx'
 
 
 // "Build on trade…" (owner, 2026-10-01): the real trade site in a dialog, opened on `url`. The user
 // picks mods and presses Search there as on the Trading tab. The window's own address is its search (a
 // run search lands on a gzip slug; the ?q= it opens on reads too): followed through the app's
-// trade:webview-nav event, filtered to this window, read with searchOfLink. "Use this search" hands the
+// trade:webview-nav event, filtered to this window, read with searchOfLink — and the page's own search
+// from the trade tap (a run search can land on a short id). "Use this search" hands the
 // last one to `onUse({ query, league })`; `onUnlink`, when given, drops a linked one.
 // A pasted trade link or one of the Trading tab's searches links at once: the link is the search.
 // `onOpenTrading`, when given, shows the linked search on the Trading tab. The page itself is never scripted or
@@ -29,15 +31,18 @@ export default function TradeBuilder({ title, url, league, onUse, onClose, onUnl
   useEffect(() => {
     const el = wv.current
     if (!el || !trade?.onWebviewNav) return
-    searchOfLink(url).then(q => { if (q) setFound(f => f ?? q) })   // the search it opens on
+    const move = (e) => setFound(f => windowSearch(f, e))   // lib/stratPricing.js (tested with a fake trade site)
+    searchOfLink(url).then(search => move({ kind: 'open', search }))   // the search it opens on
     let id = null
     const ready = () => { id = el.getWebContentsId() }
     el.addEventListener('dom-ready', ready, { once: true })
     const off = trade.onWebviewNav(p => {
       if (id == null || p.phase !== 'nav' || !shouldAcceptNav(p, id)) return
-      searchOfLink(p.url).then(q => { if (q) setFound(q) })
+      searchOfLink(p.url).then(search => move({ kind: 'nav', search }))
     })
-    return () => { el.removeEventListener('dom-ready', ready); off?.() }
+    // The page's own search (the trade tap): a run search can land on a short id its address doesn't carry.
+    const offTap = trade.onTap?.(e => { if (id != null && e?.kind === 'search' && e.wcId === id) move({ kind: 'tap', body: e.body }) })
+    return () => { el.removeEventListener('dom-ready', ready); off?.(); offTap?.() }
   }, []) // eslint-disable-line
 
   useEffect(() => {
