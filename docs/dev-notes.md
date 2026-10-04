@@ -61,6 +61,12 @@ in the docker group, so compound commands need `sudo bash -c`).
   commands need `sudo bash -c '…'` (note the nested quoting above). Plain `docker` fails with a
   permission error (not in the docker group). See [[reference_sshshazambom]] in memory.
 - Rebuild only the service that changed (`backend` and/or `frontend`) to save time.
+- **The feedback bot also announces stable releases** in Discord `#releases`, tagging `@notifier` (owner, 2026-10-04;
+  `ops/announce.sh`, `bot/announce.py`, `docs/release-notes/STYLE.md`). A change under `ops/feedback-bot/` needs
+  `./ops/deploy-web.sh bot` before the next stable release: `publish-github.sh` refuses to ship stable until shazam's
+  bot accepts the release's announcement. The bot needs, in `#releases`, Send Messages plus either a mentionable
+  `notifier` role or "Mention @everyone, @here, and All Roles". It does today, through its VIP role (checked
+  2026-10-04). Without them it holds the post and logs why.
 
 **Before you run** (the deploy rules above apply):
 - Node 22+ first on PATH: the script's test gate globs `"frontend/test/*.test.mjs"`, which Node 18 cannot expand

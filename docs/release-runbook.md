@@ -65,7 +65,22 @@ gh release view desktop-v<x.y.z-beta.N> --json isPrerelease,assets \
 Then read `p=sidecar` / `p=backend` telemetry once the tester's app updates.
 
 **Promote beta → stable:** when a dev build is good, cut the SAME code as a plain `x.y.z` stable release
-(no `-beta`). Nothing else changes.
+(no `-beta`). Besides the version, a stable release adds one file:
+
+- **Release notes** (owner, 2026-10-04): write `docs/release-notes/<x.y.z>.md` following
+  [`docs/release-notes/STYLE.md`](release-notes/STYLE.md), from the commits since the last stable release.
+- **Show the owner the draft and wait for their OK** before running the publish.
+- After every correction, ask whether it generalises, and add the rule to STYLE.md's "Lessons" section.
+- **Before anything is pushed,** `publish-github.sh` refuses a stable release unless all three hold:
+  - the notes are good;
+  - the notes are committed;
+  - shazam's feedback bot accepts the announcement (`ops/announce.sh check`). If it doesn't, run
+    `./ops/deploy-web.sh bot` first.
+- **Once the release is live,** `ops/announce.sh` confirms it (GitHub's Latest; every installer downloadable,
+  checked by `release-assets.mjs verify --live`). It hands the notes to the bot and waits until the bot reports
+  the post in Discord `#releases`, tagging `@notifier`.
+- **If the post isn't confirmed,** the release only warns: it's already live. Re-run the announcement by hand
+  with `ops/announce.sh desktop-v<x.y.z>`; the bot never posts a version twice.
 
 ## ⚠️ Regression gate — enforced by `publish-github.sh` (owner, 2026-09-30)
 

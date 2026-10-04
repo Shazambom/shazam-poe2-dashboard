@@ -9,6 +9,8 @@ the word-only forums (#feature-ideas, #feedback: TEXT_FORUMS) as words only, sil
     Discord ──► Handler.handle(thread) ──► SPOOL/in/<threadId>.gz ──► (opener container) ──►
     SPOOL/out/<threadId>/result.json ──► INBOX/<shortId>/ (fixed filenames only) ──► ✅ / ⚠️
 
+Stable releases are also announced in #releases, tagging @notifier (inbox/announce/, bot/announce.py).
+
 `Handler` is pure asyncio over duck-typed thread/message/attachment objects, so the tests fake
 Discord; `main()` binds it to discord.py. Env: DISCORD_TOKEN_FILE, FORUM_CHANNEL_ID, KEY_DIR
 (feedback-key-<keyId>.pem), SPOOL, INBOX.
@@ -25,6 +27,7 @@ from pathlib import Path
 
 from cryptography.hazmat.primitives import serialization
 
+import announce
 import arbseal
 from opener.dests import SCREENS
 
@@ -57,6 +60,10 @@ REPLY = {"resolve": "Fixed — the fix ships in the next Arbiter update. Thanks 
 # (owner 2026-10-03). Their posts are kept like a bug post without a report: title + messages + status;
 # the bot never fetches an attachment, reacts or replies there.
 TEXT_FORUMS = {"feature-ideas": "ideas", "feedback": "feedback"}
+# Stable releases are announced in this channel, tagging this role (owner 2026-10-04), both found by name in
+# the bug forum's server. The publish script drops the payload in inbox/announce/ only once the release is
+# confirmed live (bugs.py announce); the message and the payload rules are bot/announce.py's.
+RELEASES_CHANNEL, NOTIFY_ROLE = "releases", "notifier"   # the real names on the server (checked 2026-10-04)
 
 
 def _log(msg):
@@ -71,6 +78,7 @@ class Handler:
         self.retry_delays, self.sleep = RETRY_DELAYS, asyncio.sleep
         self._busy: set[int] = set()
         self.text_forums: dict[int, str] = {}       # forum id → inbox folder (TEXT_FORUMS, resolved at login)
+        self.allow_role = lambda role: None         # production: discord.AllowedMentions for that role only
 
     # ---- state
     def _state(self) -> dict:
@@ -79,14 +87,20 @@ class Handler:
         except Exception:
             return {}
 
-    def _record(self, thread_id: int, pending: bool = False, mark: bool = True):
+    def _save_state(self, st: dict):
+        """Every write of state.json: whole or not at all (a half-written file would read back as {})."""
         self.inbox.mkdir(parents=True, exist_ok=True)
+        tmp = self.inbox / ".state.json.tmp"
+        tmp.write_text(json.dumps(st))
+        os.replace(tmp, self.inbox / "state.json")
+
+    def _record(self, thread_id: int, pending: bool = False, mark: bool = True):
         st = self._state()
         if mark:                                    # only the bug forum's threads move its catch-up mark
             st["last_thread_id"] = max(int(st.get("last_thread_id") or 0), int(thread_id))
         left = [t for t in st.get("pending", []) if t != int(thread_id)]
         st["pending"] = sorted(left + [int(thread_id)]) if pending else left
-        (self.inbox / "state.json").write_text(json.dumps(st))
+        self._save_state(st)
 
     async def _starter(self, thread):
         """The forum post's starter message, fetched again while Discord answers that it is not there yet."""
@@ -108,7 +122,7 @@ class Handler:
         st = self._state()
         st.setdefault("posts", {})[str(thread.id)] = {"dir": rel, "reporter": starter.author.id}   # ids stay in state
         self.inbox.mkdir(parents=True, exist_ok=True)
-        (self.inbox / "state.json").write_text(json.dumps(st))
+        self._save_state(st)
         d = self.inbox / rel
         d.mkdir(parents=True, exist_ok=True)
         doc = {"title": str(getattr(thread, "name", ""))[:200], "messages": []}
@@ -118,6 +132,13 @@ class Handler:
     @staticmethod
     def _set_status(d: Path, state: str):
         (d / STATUS_FILE).write_text(json.dumps({"state": state, "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}))
+
+    @staticmethod
+    def _set_aside(f: Path, what: str, why):
+        """A queued file the bot will not apply: kept in rejected/ beside it, never retried."""
+        _log(f"{what} set aside: {why!r}")
+        (f.parent / "rejected").mkdir(exist_ok=True)
+        f.replace(f.parent / "rejected" / f.name)
 
     # ---- the owner's actions: triage / resolve / close
     async def process_actions(self, get_thread):
@@ -145,9 +166,49 @@ class Handler:
                     _log(f"{rel}: {ACTIONS[kind]}")
                 f.unlink()
             except Exception as e:
-                _log(f"action {f.name} set aside: {e!r}")
-                (adir / "rejected").mkdir(exist_ok=True)
-                f.replace(adir / "rejected" / f.name)
+                self._set_aside(f, f"action {f.name}", e)
+
+    # ---- stable release announcements in #releases
+    async def process_announcements(self, get_target):
+        """Post each payload in inbox/announce/ once, oldest version first. `get_target()` → (channel, role), or
+        None while the bot can't post or ping there (the files wait for the next minute). A payload that breaks
+        the rules, or that Discord refuses outright (4xx), is set aside; a temporary failure is retried."""
+        adir = self.inbox / "announce"
+        queued = []
+        for f in sorted(adir.glob("*.json")) if adir.is_dir() else []:
+            try:
+                queued.append((announce.check_payload(json.loads(f.read_text())), f))
+            except Exception as e:
+                self._set_aside(f, f"announcement {f.name}", e)
+        if not queued:
+            return
+        target = await get_target()
+        if not target:
+            return                                              # releases_target logged why
+        channel, role = target
+        for p, f in sorted(queued, key=lambda q: tuple(int(x) for x in q[0]["version"].split("."))):
+            done = set(self._state().get("announced", []))
+            if p["version"] in done:
+                f.unlink()
+                continue
+            try:
+                msg = await channel.send(announce.render(p, role.id), allowed_mentions=self.allow_role(role))
+            except Exception as e:
+                if 400 <= (getattr(e, "status", 0) or 0) < 500 and getattr(e, "status", 0) != 429:
+                    self._set_aside(f, f"announcement {p['version']} (Discord refused it)", e)
+                else:
+                    _log(f"announcement {p['version']} failed: {e!r}; retrying next minute")
+                continue
+            f.unlink()                                          # off the queue first: a later failure never reposts
+            st = self._state()
+            st["announced"] = sorted(set(st.get("announced", [])) | {p["version"]})
+            self._save_state(st)
+            _log(f"announced {p['version']} in #{RELEASES_CHANNEL}")
+            if getattr(channel, "is_news", lambda: False)():
+                try:
+                    await msg.publish()                         # to the servers that follow the channel
+                except Exception as e:
+                    _log(f"announcement {p['version']} posted but not published to followers: {e!r}")
 
     @staticmethod
     def _entry(msg, reporter_id) -> dict:
@@ -165,7 +226,7 @@ class Handler:
         post = (st.get("posts") or {}).get(str(thread_id))
         if post is not None and message_id is not None:
             post["last"] = int(message_id)
-            (self.inbox / "state.json").write_text(json.dumps(st))
+            self._save_state(st)
 
     async def _sync(self, thread):
         """The whole thread, oldest first, rebuilt from Discord (the bot's own messages never kept). A failed
@@ -342,6 +403,7 @@ def main():
     key = serialization.load_pem_private_key(key_path.read_bytes(), password=None)
     handler = Handler(spool=Path(os.environ.get("SPOOL", "/spool")), inbox=Path(os.environ.get("INBOX", "/inbox")),
                       private_key=key, forum_id=forum_id)
+    handler.allow_role = lambda role: discord.AllowedMentions(everyone=False, users=False, roles=[role], replied_user=False)
 
     intents = discord.Intents.none()
     intents.guilds = True
@@ -363,6 +425,21 @@ def main():
             except Exception as e:                                    # one forum never stops the others
                 _log(f"catch-up of forum {fid} failed: {e!r}")
 
+    async def releases_target():
+        bug = client.get_channel(forum_id) or await client.fetch_channel(forum_id)
+        guild = bug.guild
+        channel = next((c for c in guild.text_channels if c.name == RELEASES_CHANNEL), None)
+        role = next((r for r in guild.roles if r.name == NOTIFY_ROLE), None)
+        if not channel or not role:
+            _log(f"announcement waiting: no #{RELEASES_CHANNEL} channel or @{NOTIFY_ROLE} role")
+            return None
+        perms = channel.permissions_for(guild.me)
+        why = announce.target_problem(role.mentionable, perms.send_messages, perms.mention_everyone)
+        if why:
+            _log(f"announcement waiting: {why} (#{RELEASES_CHANNEL}, @{NOTIFY_ROLE})")
+            return None
+        return channel, role
+
     async def every():
         tick = 0
         while True:
@@ -372,6 +449,10 @@ def main():
                 await handler.process_actions(lambda tid: client.fetch_channel(tid))
             except Exception as e:
                 _log(f"actions failed: {e!r}")
+            try:
+                await handler.process_announcements(releases_target)
+            except Exception as e:
+                _log(f"announcements failed: {e!r}")
             if tick * ACTIONS_EVERY_S % CATCH_UP_EVERY_S == 0:
                 try:
                     await catch_up_all()

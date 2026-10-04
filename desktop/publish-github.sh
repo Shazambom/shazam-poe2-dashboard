@@ -53,6 +53,13 @@ case "$VER" in *-beta*) TAG="$VER" ;; *) TAG="desktop-v${VER}" ;; esac
 # blocker for stable. ops/t0-check.sh reads shazam's beta telemetry log for this version's beta line
 # and fails closed. Betas themselves are not gated: they are how the blockers get found.
 case "$VER" in *-beta*) ;; *) ../ops/t0-check.sh "$VER" || { echo "FATAL: T0 blocker on the beta line of $VER (or the check could not run); not shipping stable"; exit 1; } ;; esac
+# A stable release is announced in Discord #releases once live: its patch notes must exist and fit the owner's
+# format now, before anything is pushed (docs/release-notes/<x.y.z>.md, docs/release-notes/STYLE.md).
+case "$VER" in *-beta*) ;; *) python3 ../ops/release_notes.py check "$VER" || { echo "FATAL: no good release notes for $VER (docs/release-notes/$VER.md); not shipping stable"; exit 1; } ;; esac
+# ...committed exactly as they will be announced (the release commit carries them)...
+case "$VER" in *-beta*) ;; *) { (cd .. && git ls-files --error-unmatch "docs/release-notes/$VER.md" >/dev/null 2>&1 && git diff --quiet HEAD -- "docs/release-notes/$VER.md"); } || { echo "FATAL: commit docs/release-notes/$VER.md first (the release carries the notes it announces)"; exit 1; } ;; esac
+# ...and accepted by shazam's own feedback bot, so it is deployed with these rules (else: ./ops/deploy-web.sh bot).
+case "$VER" in *-beta*) ;; *) ../ops/announce.sh check "desktop-v$VER" || { echo "FATAL: shazam's feedback bot can't announce $VER; not shipping stable"; exit 1; } ;; esac
 
 # The commit this release is cut from. main goes up first (CI checks this sha out, and the workflow
 # file itself is read from main); the TAG IS NOT PUSHED — GitHub's releases.atom lists bare tags, so
@@ -158,3 +165,9 @@ echo "release $TAG is live on both platforms"
 # only (owner, 2026-10-03). A failure here never fails the release that is already live.
 case "$VER" in *-beta*) ;; *) ../ops/bugs.sh resolve-shipped "$TAG" \
   || echo "WARNING: could not resolve the shipped bug reports; run ops/bugs.sh resolve-shipped $TAG" ;; esac
+
+# A STABLE release is announced in Discord #releases, tagging @notifier, with its patch notes and installers
+# (owner, 2026-10-04: "should only fire after confirmed released"; announce.sh confirms it is live again).
+# A failure here never fails the release that is already live.
+case "$VER" in *-beta*) ;; *) ../ops/announce.sh "$TAG" \
+  || echo "WARNING: the release announcement was not sent; run ops/announce.sh $TAG" ;; esac

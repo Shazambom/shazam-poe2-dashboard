@@ -2,6 +2,8 @@
 
     sudo python3 ops/feedback-bot/bugs.py list [--state new|triaged|open|resolved|closed|all] [--kind bugs|ideas|feedback]
     sudo python3 ops/feedback-bot/bugs.py act <report> triage|resolve|close
+    sudo python3 ops/feedback-bot/bugs.py announce [--check] <base64>  # ops/announce.sh: queue (or only check) a release post
+    sudo python3 ops/feedback-bot/bugs.py announced <x.y.z>            # exit 0 once the bot has posted it
 
 `list` prints JSON: the reports and posts the bot tied to a forum thread (state.json's posts), newest
 first, with their status (no status file yet = "new"). `act` never touches a report: it drops an action
@@ -13,8 +15,11 @@ can only be marked seen ("triage"), since resolve / close reply in the thread wi
 from __future__ import annotations
 
 import argparse
+import base64
+import binascii
 import json
 import os
+import sys
 import time
 from pathlib import Path
 
@@ -65,19 +70,41 @@ def listing(inbox: Path, state: str = "open", kind: str = "bugs") -> list[dict]:
     return sorted(rows, key=lambda r: -r["thread"])
 
 
+def _drop(adir: Path, name: str, obj) -> Path:
+    """Queue a file for the bot (uid 10001): written whole under a dot-name its *.json glob skips, then renamed."""
+    adir.mkdir(exist_ok=True)
+    tmp, path = adir / f".{name}.tmp", adir / name
+    tmp.write_text(json.dumps(obj, ensure_ascii=False))
+    for q in (adir, tmp):                       # the bot consumes the file
+        try:
+            os.chown(q, BOT_UID, -1)
+        except PermissionError:
+            pass
+    os.replace(tmp, path)
+    return path
+
+
+def announce(inbox: Path, b64: str, check: bool = False) -> Path | None:
+    """Hand a stable release's post to the bot (inbox/announce/<version>.json), checked by the same rules the
+    bot posts by. `check`: only check, so the publish script learns before pushing that this copy accepts it."""
+    try:
+        p = json.loads(base64.b64decode(b64, validate=True))
+    except (binascii.Error, ValueError) as e:
+        raise ValueError(f"not a base64 JSON payload: {e}")
+    sys.path.insert(0, str(Path(__file__).resolve().parent / "bot"))
+    import announce as rules                    # the bot's own rules for a release post (only `announce` needs them)
+    p = rules.check_payload(p)
+    return None if check else _drop(inbox / "announce", f"{p['version']}.json", p)
+
+
+def announced(inbox: Path, version: str) -> bool:
+    return version in (_json(inbox / "state.json").get("announced") or [])
+
+
 def act(inbox: Path, report: str, action: str) -> Path:
     if action not in ACTIONS or report not in _posts(inbox) or (_kind(report) != "bugs" and action != "triage"):
         raise ValueError(f"unknown report or action: {report!r} {action!r}")
-    adir = inbox / "actions"
-    adir.mkdir(exist_ok=True)
-    path = adir / f"{time.time_ns()}-{report.replace('/', '_')}.json"
-    path.write_text(json.dumps({"report": report, "action": action}))
-    for p in (adir, path):                      # the bot (uid 10001) consumes the file
-        try:
-            os.chown(p, BOT_UID, -1)
-        except PermissionError:
-            pass
-    return path
+    return _drop(inbox / "actions", f"{time.time_ns()}-{report.replace('/', '_')}.json", {"report": report, "action": action})
 
 
 def main(argv=None):
@@ -90,9 +117,18 @@ def main(argv=None):
     a = sub.add_parser("act")
     a.add_argument("report")
     a.add_argument("action", choices=ACTIONS)
+    an = sub.add_parser("announce")
+    an.add_argument("--check", action="store_true", help="only check the payload against this copy's rules")
+    an.add_argument("payload", help="base64 of the announcement JSON (ops/announce.sh)")
+    ad = sub.add_parser("announced")
+    ad.add_argument("version")
     args = ap.parse_args(argv)
     if args.cmd == "list":
         print(json.dumps(listing(args.inbox, args.state, args.kind), ensure_ascii=False, indent=1))
+    elif args.cmd == "announce":
+        print(announce(args.inbox, args.payload, args.check) or "ok")
+    elif args.cmd == "announced":
+        sys.exit(0 if announced(args.inbox, args.version) else 1)
     else:
         print(act(args.inbox, args.report, args.action))
 
