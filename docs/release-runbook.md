@@ -270,6 +270,12 @@ Check these every time; each one has cost a deploy before. (The general rules ev
 
 Condensed and general, newest first; each came from a post-deploy audit (step 8).
 
+- **2026-10-04 (0.3.12-beta.2):** the Windows build shipped with no market snapshot. shazam's cron was replacing
+  `market-seed-latest` while CI downloaded it, so only the `.version` sidecar arrived, and the CI step checked nothing.
+  Both platforms now fetch through `desktop/fetch-seed.sh` (it retries until a valid snapshot is there, else fails).
+  `publish-github.sh` refuses a CI run whose log lacks its `seed ready (` line. After every beta, confirm each
+  platform's first telemetry says `[seed]: replacing local …`, never `no seed bundled`.
+
 - **2026-10-03 (0.3.11-beta.1):** a deploy requested mid-testing collides with any test build or app running from
   `release/`. Stop the testing, cut the release, and resume testing on the release's own build once the log says
   `watching Windows CI run`.

@@ -72,16 +72,10 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-        run: |
-          mkdir -p desktop/market-seed
-          if gh release download market-seed-latest \
-               --pattern 'market-seed.sqlite.gz*' \
-               --dir desktop/market-seed --clobber; then
-            ls -la desktop/market-seed
-          else
-            echo "::error::market-seed-latest release/asset not found. Publish a seed first (ops/export-market-snapshot.py -> gh release)."
-            exit 1
-          fi
+          GH_REPO: ${{ github.repository }}
+        # The SAME script as the Mac build: it waits out the cron's replace window and fails rather
+        # than build seedless; publish-github.sh requires its "seed ready" line in this run's log.
+        run: bash desktop/fetch-seed.sh
       - name: Build frontend + Windows installer (x64, backend bundled)
         # Code signing: set repo secrets WIN_CSC_LINK (base64 of your .pfx) and
         # WIN_CSC_KEY_PASSWORD to sign automatically. Without them electron-builder builds

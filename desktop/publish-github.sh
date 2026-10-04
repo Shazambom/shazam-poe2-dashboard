@@ -129,6 +129,9 @@ if [ "$NEED_CI" = 1 ]; then
   # Event-driven wait: streams status, blocks until the run finishes, exits nonzero if it failed.
   echo "watching Windows CI run $RID (blocks until it finishes) ..."
   gh run watch "$RID" --repo "$REPO" --exit-status --interval 10
+  # Never publish a seedless Windows build (0.3.12-beta.2 did): its log must show fetch-seed.sh's check.
+  gh run view "$RID" --repo "$REPO" --log | grep -q 'seed ready (' \
+    || { echo "FATAL: Windows CI run $RID bundled no checked market snapshot (no 'seed ready' in its log)"; exit 1; }
 fi
 
 # CI has put the Windows assets in the draft; add the Mac assets (manifest last, retried, each
