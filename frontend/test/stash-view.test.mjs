@@ -122,7 +122,7 @@ test('the Stash reads holdings from the store only, and a save does not re-fetch
   const v = strip(read('../src/components/StashView.jsx'))
   assert.doesNotMatch(v, /setSaved|saved \?\? shared/)
   assert.doesNotMatch(v, /saveCapital\(entries\)\)\s*\n?\s*refreshHeader\(\)/)
-  assert.match(v, /applyCredit\(/, 'a credit merges into unsaved edits')
+  assert.match(v, /addCredit\(qtyRef\.current, r\.added\)/, 'a credit merges exactly what the server added into unsaved edits')
   assert.match(v, /flush\(\)/, 'pending edits are sent before a credit is read')
 })
 
@@ -244,4 +244,15 @@ test('the pinned sales column starts below the pinned header\'s real height', ()
   assert.match(v, /--stash-head-h/)
   assert.match(css, /\.stash-sales\s*\{[^}]*top:\s*calc\(var\(--stash-head-h/)
   assert.match(css, /\.stash-sales\s*\{[^}]*max-height:\s*calc\(100vh - var\(--stash-head-h/)
+})
+
+// Sales credit only after the user last COUNTED a currency (backend/tests/test_sales_credit.py): typing a
+// total or removing a holding is a count; the add bar ("+N") and the Stash's own re-save after a credit are not.
+test('only a typed total or a removal tells the server the user counted that currency', () => {
+  const v = strip(read('../src/components/StashView.jsx'))
+  assert.match(v, /saveCapital\(entries, counted\)/, 'the save sends which totals were counted')
+  const fn = (name) => v.slice(v.indexOf(`const ${name} =`), v.indexOf('\n  const ', v.indexOf(`const ${name} =`) + 1))
+  assert.match(fn('setOne'), /recounted\.current\.add\(c\)/, 'typing a total is a count')
+  assert.match(fn('remove'), /recounted\.current\.add\(c\)/, 'removing a holding is a count (none left)')
+  assert.doesNotMatch(fn('addPicked'), /recounted/, 'the add bar adds; it is not a count')
 })

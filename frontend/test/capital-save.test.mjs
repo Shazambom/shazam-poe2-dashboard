@@ -34,3 +34,10 @@ test('a status poll that started before a save cannot overwrite the saved holdin
   await refreshing
   assert.deepEqual(useStatus.getState().capital.rows, [{ currency: 'divine', qty: 4 }])
 })
+
+test('a save passes on which totals the user counted', async () => {
+  let sent
+  api.putCapital = async (entries, counted) => { sent = { entries, counted }; return { rows: [] } }
+  await useStatus.getState().saveCapital({ divine: 4, chaos: 2 }, ['divine'])
+  assert.deepEqual(sent, { entries: { divine: 4, chaos: 2 }, counted: ['divine'] })
+})

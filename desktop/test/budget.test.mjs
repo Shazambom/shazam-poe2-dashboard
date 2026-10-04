@@ -85,3 +85,13 @@ test('acquire sends `spare` only when asked; budgeted passes its options through
   await budget.budgeted({ request: async () => ({ status: 200, headers: {}, body: '{}' }), budget: { acquire: async (p, o) => seen.push([p, o]), observe: () => {} } }, 'trade-fetch', { path: '/x' }, { spare: 0.5 })
   assert.deepEqual(seen, [['trade-fetch', { spare: 0.5 }]])
 })
+
+// Sales compares sale times with the user's last count: the site's own clock (its Date header) lets the
+// backend correct for a PC clock that runs fast or slow (backend/tests/test_sales_credit.py).
+test("budgeted: passes on the site's clock time when it answers with one", async () => {
+  const { budgeted } = budget
+  const deps = (headers) => ({ request: async () => ({ status: 200, headers, body: '{}' }), budget: { acquire: async () => {}, observe: () => {} } })
+  assert.deepEqual(await budgeted(deps({ date: 'Sun, 04 Oct 2026 02:00:00 GMT' }), 'p', { path: '/x' }),
+    { ok: true, status: 200, data: {}, date: 'Sun, 04 Oct 2026 02:00:00 GMT' })
+  assert.deepEqual(await budgeted(deps({}), 'p', { path: '/x' }), { ok: true, status: 200, data: {} })
+})

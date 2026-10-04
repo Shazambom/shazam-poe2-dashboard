@@ -110,12 +110,11 @@ test('folding is the stored choice; while searching a click changes nothing', ()
   assert.deepEqual(S.flipFold(g, {}, 1000, 'div'), {}, 'no hidden fold saved mid-search')
 })
 
-test('a sale credited while edits are unsaved keeps both: the credit is added to what was typed', () => {
-  const basis = { rows: [{ currency: 'divine', qty: 10 }, { currency: 'chaos', qty: 5 }] }
-  const post = { rows: [{ currency: 'divine', qty: 13 }, { currency: 'chaos', qty: 5 }, { currency: 'vaal', qty: 2 }] }
+test('a sale credited while edits are unsaved keeps both: exactly what the server added goes onto what was typed', () => {
   const typed = { divine: '11', chaos: '7', exalted: '0' }
-  assert.deepEqual(S.applyCredit(typed, basis, post), { divine: '14', chaos: '7', exalted: '0', vaal: '2' })
-  assert.deepEqual(S.applyCredit(typed, post, post), typed, 'no credit, nothing changes')
+  assert.deepEqual(S.addCredit(typed, { divine: 3, vaal: 2 }), { divine: '14', chaos: '7', exalted: '0', vaal: '2' })
+  assert.equal(S.addCredit(typed, {}), typed, 'no credit, nothing changes')
+  assert.equal(S.addCredit(typed, undefined), typed)
 })
 
 // Owner (2026-10-03): "move add currency to the top of the stash tab and keep it there … a box next to it to
@@ -140,4 +139,11 @@ test('the amount to add reads what people type: 40k, 1,000, 3*12', () => {
   assert.equal(S.parseAmount('-3'), null)
   assert.equal(S.parseAmount(''), null)
   assert.equal(S.parseAmount('abc'), null)
+})
+
+test('salesToast: says what happened to the holdings, never why a sale was not added', () => {
+  assert.equal(S.salesToast({ new: 0, credited: 0 }), 'Up to date')
+  assert.equal(S.salesToast({ new: 1, credited: 1 }), '1 new sale · added to your holdings')
+  assert.equal(S.salesToast({ new: 3, credited: 2 }), '3 new sales · added to your holdings')
+  assert.equal(S.salesToast({ new: 29, credited: 0 }), '29 new sales')
 })

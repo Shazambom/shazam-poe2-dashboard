@@ -6,6 +6,7 @@ import os
 import time
 from urllib.parse import urlsplit
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 
 from fastapi import Depends, FastAPI, HTTPException, Request
 from starlette.concurrency import run_in_threadpool
@@ -314,11 +315,12 @@ def capital():
 
 class CapitalBody(BaseModel):
     entries: dict[str, float]
+    counted: list[str] = []   # the currencies whose total the user typed (a recount; db.set_capital)
 
 
 @app.put("/api/capital")
 def put_capital(body: CapitalBody):
-    db.set_capital(body.entries)
+    db.set_capital(body.entries, body.counted)
     arbitrage.invalidate_caches()   # routes are sized from capital, so drop the route cache
     return capital()
 
@@ -807,6 +809,7 @@ def rate_hint(body: RateAcquire):
 class SalesIngest(BaseModel):
     league: str
     result: list[dict]
+    server_time: str | None = None   # the trade site's clock when it answered (its Date header)
 
 
 @app.post("/api/sales/ingest")
@@ -814,18 +817,22 @@ def sales_ingest(body: SalesIngest):
     league = body.league.strip()
     if not league:
         raise HTTPException(400, "league required")
-    new_rows = db.sales_upsert(league, body.result)
-    # A sale just paid out: credit its price to the holdings (NEW rows only, so a re-fetch never
-    # double-counts). The trade site never reports refunds, so nothing is ever debited here.
-    credited = 0
-    for r in new_rows:
-        price = r.get("price") or {}
-        if price.get("currency") and price.get("amount"):
-            db.capital_add(str(price["currency"]), float(price["amount"]))
-            credited += 1
-    if credited:
+    # A sale paid out: credit its price to the holdings — NEW rows only (a re-fetch never double-counts),
+    # and only one the typed amount can't already count (db.sales_ingest). The trade site never reports
+    # refunds, so nothing is ever debited here.
+    new_rows, credited, added = db.sales_ingest(league, body.result, skew_s=_clock_skew(body.server_time))
+    if added:
         arbitrage.invalidate_caches()   # routes are sized from capital
-    return {"ok": True, "new": len(new_rows), "total": db.sales_count(league), "credited": credited}
+    return {"ok": True, "new": len(new_rows), "total": db.sales_count(league), "credited": len(credited), "added": added}
+
+
+def _clock_skew(server_time: str | None) -> float:
+    """The trade site's clock minus this PC's, in seconds (0 when unknown)."""
+    try:
+        site = datetime.fromisoformat(str(server_time).replace("Z", "+00:00"))
+        return (site - datetime.now(timezone.utc)).total_seconds() if site.tzinfo else 0.0
+    except (TypeError, ValueError):
+        return 0.0
 
 
 @app.get("/api/sales")

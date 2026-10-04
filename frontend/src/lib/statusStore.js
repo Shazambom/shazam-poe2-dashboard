@@ -28,11 +28,12 @@ export const useStatus = create((set, get) => ({
     syncTheme?.(s.theme, s.custom_themes)
     return s
   },
-  // The one holdings write: PUT /api/capital, then hold the server's answer as THE capital.
-  saveCapital: async (entries) => {
+  // The one holdings write: PUT /api/capital, then hold the server's answer as THE capital. `counted`: the
+  // currencies whose total the user typed (the server credits a sale only after that count).
+  saveCapital: async (entries, counted = []) => {
     set(st => ({ capitalSaving: true, capitalWrites: st.capitalWrites + 1 }))
     try {
-      const c = await api.putCapital(entries)
+      const c = await api.putCapital(entries, counted)
       set(st => ({ capital: c, capitalWrites: st.capitalWrites + 1 }))
       return c
     } finally { set({ capitalSaving: false }) }

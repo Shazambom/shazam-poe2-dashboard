@@ -309,6 +309,17 @@ app, no new outbound call (the invite opens in the OS browser); nothing can bill
 - **Stash tab** (was "Sales"; id `trading-sales`, sub `sales` kept so reports, ⌘K and diag markers still
   match) — main fetches Merchant History under policy `trade-history`; the backend's `sales` table
   (user migration 5) is the ledger. Only `POST /api/sales/ingest` writes it.
+  A new sale credits the holdings only when it was made after the user last COUNTED that currency
+  (`db.sales_ingest`, one transaction for upsert + check + credit). A count = typing a total or removing a
+  holding: the Stash sends those as `counted` on PUT /api/capital and `db.set_capital` stamps them in kv
+  `capital_counted_at` (`"*"` = when this install began counting); the add bar and the re-save after a
+  credit send none. Sale times are on the trade site's clock: the fetch passes its `Date` header as
+  `server_time` and the backend corrects for the PC's skew. Ingest returns `added` ({currency: amount}),
+  which the Stash adds to unsaved typing (`addCredit`). A late catch-up fetch once credited sales the typed
+  amount already counted (owner, 0.3.12-beta.1: ~300 div → 1000+). Deliberate trade-off: on the first fetch
+  after this rule ships, sales older than that fetch are never credited (the app can't tell which ones the
+  typed amount counts). Spending is never debited: the user's next count re-sets the line.
+  Tests: `backend/tests/test_sales_credit.py`.
 - **Stash groups (2026-10-03)** — holdings group by the game's own Currency Exchange category:
   `currencies.Registry.groups()` reads gamedata's `gold_fees_meta` by metadata id and serves it as
   `group` on `/api/currencies`; an item the exchange doesn't list keeps the trade site's category. No

@@ -8,7 +8,7 @@ import { useWorkspace } from '../lib/workspaceStore.js'
 import { flatten } from '../lib/tree.js'
 import { salesStats, relativeTime, rarityOf } from '../lib/sales.js'
 import { holdingWorth } from '../lib/capital.js'
-import { CASH, addAmount, applyCredit, cleanQty, parseAmount, stashGroups, netWorth, liquidNetWorth, flipGroup, flipFold, isFolded, groupAccent, isCounted, matches, UNGROUPED } from '../lib/stash.js'
+import { CASH, addAmount, addCredit, cleanQty, parseAmount, stashGroups, netWorth, liquidNetWorth, flipGroup, flipFold, isFolded, groupAccent, isCounted, matches, salesToast, UNGROUPED } from '../lib/stash.js'
 import { diag } from '../lib/diag.js'
 import { hasTradeEngine as isDesktop } from '../lib/session.js'
 import { nav } from '../lib/nav.js'
@@ -44,10 +44,15 @@ export default function StashView({ league }) {
   const [qty, setQty] = useState(null)          // { currency: "qty as typed" }
   const qtyRef = useRef(null)
   qtyRef.current = qty
+  // The currencies whose total the user typed (or removed) since the last save: the server credits a sale of
+  // one only when it was made after that count. The add bar and the credit re-save are not counts.
+  const recounted = useRef(new Set())
   const { state: saveState, save, flush, hold, release, arm } = useAutosave(async (rows) => {
     const entries = {}
     Object.entries(rows).forEach(([c, v]) => { const n = Number(v); if (Number.isFinite(n) && n > 0) entries[c] = n })
-    await surface(useStatus.getState().saveCapital(entries))
+    const counted = [...recounted.current]
+    recounted.current.clear()
+    await surface(useStatus.getState().saveCapital(entries, counted))
   })
   // Seeded once from whichever copy arrives first, then owned by the inputs: a poll never overwrites typing.
   const seed = (cap) => {
@@ -60,7 +65,7 @@ export default function StashView({ league }) {
   useEffect(() => { if (!qty && data && !capitalSaving) seed(data) }, [data, qty, capitalSaving]) // eslint-disable-line
   const tick = useSync(s => s.tick)
   const tick0 = useRef(tick)
-  const setOne = (c, v) => setQty(r => { const n = { ...r, [c]: v }; save(n); return n })
+  const setOne = (c, v) => { recounted.current.add(c); setQty(r => { const n = { ...r, [c]: v }; save(n); return n }) }
 
   // ---- the "count toward liquid net worth" switches (settings `stash_counted`; only choices are stored)
   const stored = useStatus(s => s.settings?.stash_counted)
@@ -75,6 +80,7 @@ export default function StashView({ league }) {
   }
   // Removing a holding forgets its switch too: added back later, it starts at the default.
   const remove = (c) => {
+    recounted.current.add(c)
     setQty(r => { const n = { ...r }; delete n[c]; save(n); return n })
     if (choices && c in choices) choose({ [c]: null })
   }
@@ -149,7 +155,6 @@ export default function StashView({ league }) {
     await flush()
     hold()
     try {
-      const basis = useStatus.getState().capital
       const r = await window.poe2desktop.sales.fetch(sel)
       setLastFetch({ at: Date.now(), ...r })
       if (r.ok) {
@@ -157,11 +162,11 @@ export default function StashView({ league }) {
         if (r.new) {
           const post = await api.capital()
           useStatus.setState(st => ({ capital: post, capitalWrites: st.capitalWrites + 1 }))
-          const merged = qtyRef.current && applyCredit(qtyRef.current, basis, post)
+          const merged = qtyRef.current && addCredit(qtyRef.current, r.added)
           if (merged && merged !== qtyRef.current) { setQty(merged); release(); save(merged) }
           refreshHeader()
         }
-        if (!auto) toast(r.new ? `${r.new} new sale${r.new === 1 ? '' : 's'} · added to your holdings` : 'Up to date')
+        if (!auto) toast(salesToast(r))
       }
       else if (!auto) toast(r.error === 'rate' ? `Trade site rate limit — try again in ${r.retryAfter || 60}s` : r.error === 'auth' ? 'Connect your PoE session first (Settings → Accounts)' : `Fetch failed: ${r.error}`, false)
     } finally { release(); setBusy(false) }

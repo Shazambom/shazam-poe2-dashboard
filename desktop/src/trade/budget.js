@@ -54,7 +54,8 @@ function hint(policy) {
 }
 
 // One trade-site request under the shared budget: reserve a slot, send, report the headers, classify.
-// Every caller (Sales, the unique pricer) reads the same answer: { ok: true, status, data } or
+// Every caller (Sales, the unique pricer) reads the same answer: { ok: true, status, data, date? } (date:
+// the site's clock, its Date header — Sales compares sale times with it) or
 // { ok: false, error: 'rate' | 'auth' | 'HTTP n' | message, status?, retryAfter? }.
 // deps: { request(req) → { status, headers, body }, budget: { acquire, observe } } (injectable for tests).
 async function budgeted({ request, budget }, policy, req, opts) {
@@ -67,7 +68,8 @@ async function budgeted({ request, budget }, policy, req, opts) {
   if (resp.status !== 200) return { ok: false, error: `HTTP ${resp.status}`, status: resp.status }
   let data = null
   try { data = JSON.parse(resp.body) } catch {}
-  return { ok: true, status: 200, data }
+  const date = resp.headers?.date
+  return { ok: true, status: 200, data, ...(date ? { date } : {}) }
 }
 
 module.exports = { RateLimitError, configure, acquire, observe, hint, budgeted }

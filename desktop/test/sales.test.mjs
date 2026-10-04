@@ -8,9 +8,9 @@ const { makeSalesFetcher, POLICY } = require('../src/trade/sales.js')
 const ROW = { time: '2026-09-16T20:11:03Z', item_id: 'abc', item: { name: 'Hate Pelt', typeLine: 'Vaal Regalia', rarity: 'Rare' }, price: { amount: 3, currency: 'divine' }, account: { name: 'SECRET' } }
 function harness({ status = 200, body = JSON.stringify({ result: [ROW] }), acquireFails = false } = {}) {
   const calls = { acquire: [], observe: [], requests: [], posts: [] }, lines = []
-  globalThis.fetch = async (url, opts) => { calls.posts.push({ url, body: JSON.parse(opts.body) }); return { json: async () => ({ ok: true, new: 1, total: 7 }) } }
+  globalThis.fetch = async (url, opts) => { calls.posts.push({ url, body: JSON.parse(opts.body) }); return { json: async () => ({ ok: true, new: 1, total: 7, credited: 1, added: { divine: 3 } }) } }
   const f = makeSalesFetcher({
-    request: async (r) => { calls.requests.push(r); return { status, headers: { 'x-rate-limit-rules': 'ip', 'retry-after': '20' }, body } },
+    request: async (r) => { calls.requests.push(r); return { status, headers: { 'x-rate-limit-rules': 'ip', 'retry-after': '20', date: 'Sun, 04 Oct 2026 02:00:00 GMT' }, body } },
     budget: { acquire: async (p) => { calls.acquire.push(p); if (acquireFails) { const e = new Error('rl'); e.retryAfter = 9; throw e } }, observe: (p, s, h) => calls.observe.push([p, s, h]) },
     backendUrl: () => 'http://127.0.0.1:8210', log: (l) => lines.push(l),
   })
@@ -24,10 +24,10 @@ test('happy path: acquire → GET history → observe → POST ingest with only 
   assert.equal(calls.requests[0].path, '/api/trade2/history/poe2/Forbidden%20Rites')
   assert.equal(calls.observe[0][0], POLICY); assert.equal(calls.observe[0][1], 200)
   assert.equal(calls.posts[0].url, 'http://127.0.0.1:8210/api/sales/ingest')
-  assert.deepEqual(calls.posts[0].body, { league: 'Forbidden Rites', result: [{ item_id: 'abc', time: ROW.time, item: ROW.item, price: ROW.price }] })
+  assert.deepEqual(calls.posts[0].body, { league: 'Forbidden Rites', result: [{ item_id: 'abc', time: ROW.time, item: ROW.item, price: ROW.price }], server_time: '2026-10-04T02:00:00.000Z' })
   assert.ok(!JSON.stringify(calls.posts[0].body).includes('SECRET'))
-  assert.deepEqual(r, { ok: true, status: 200, fetched: 1, new: 1, total: 7 })
-  assert.ok(lines.includes(`sales-fetch status=200 n=1 policy="${POLICY}"`) && lines.includes('sales-ingest new=1 total=7'))
+  assert.deepEqual(r, { ok: true, status: 200, fetched: 1, new: 1, total: 7, credited: 1, added: { divine: 3 } })
+  assert.ok(lines.includes(`sales-fetch status=200 n=1 policy="${POLICY}"`) && lines.includes('sales-ingest new=1 credited=1 total=7'))
 })
 
 test('429 is observed and backs off with the header; auth surfaces; budget refusal never hits the site', async () => {

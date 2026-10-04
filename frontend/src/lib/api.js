@@ -49,7 +49,7 @@ export const api = {
   currencies: () => fetch('/api/currencies').then(j),
   mapCurrency: (metadata_id, trade_id) => post('/api/currencies/map', { metadata_id, trade_id }),
   capital: () => fetch('/api/capital').then(j),
-  putCapital: (entries) => put('/api/capital', { entries }),
+  putCapital: (entries, counted = []) => put('/api/capital', { entries, counted }),
   settings: () => fetch('/api/settings').then(j),
   putSettings: (patch) => put('/api/settings', { patch }),
   recipes: () => fetch('/api/recipes').then(j),

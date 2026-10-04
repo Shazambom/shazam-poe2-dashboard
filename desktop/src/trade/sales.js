@@ -22,13 +22,17 @@ function makeSalesFetcher({ request, budget, backendUrl, log = () => {} }) {
     if (!res.ok) return res
     // Only the fields the ledger stores cross to the backend (never the account block).
     const result = rows.filter(r => r && r.item_id && r.time).map(r => ({ item_id: String(r.item_id), time: String(r.time), item: r.item || {}, price: r.price ? { amount: r.price.amount, currency: r.price.currency } : null }))
-    let ingest = { new: 0, total: 0 }
+    // The site's clock (its Date header) lets the backend compare sale times with the user's last count.
+    const siteTime = res.date ? new Date(res.date) : null
+    const body = { league: lg, result, ...(siteTime && !isNaN(siteTime) ? { server_time: siteTime.toISOString() } : {}) }
+    let ingest
     try {
-      const r = await fetch(`${backendUrl()}/api/sales/ingest`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ league: lg, result }), signal: AbortSignal.timeout(5000) })
+      const r = await fetch(`${backendUrl()}/api/sales/ingest`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(5000) })
       ingest = await r.json()
     } catch (e) { return { ok: false, error: 'backend: ' + String(e && e.message || e), fetched: result.length } }
-    log(`sales-ingest new=${ingest.new} total=${ingest.total}`)
-    return { ok: true, status: 200, fetched: result.length, new: ingest.new, total: ingest.total }
+    const { new: n, total, credited = 0, added = {} } = ingest
+    log(`sales-ingest new=${n} credited=${credited} total=${total}`)
+    return { ok: true, status: 200, fetched: result.length, new: n, total, credited, added }
   }
 }
 

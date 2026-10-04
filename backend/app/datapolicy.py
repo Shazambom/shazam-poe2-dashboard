@@ -18,6 +18,7 @@ USER_KV = frozenset({
     "trading_workspace",  # the Trading workspace tree (folders/searches)
     "signals_ack",        # which fired signals the user has dismissed
     "strat_calc",         # Strategy → Strat Calculator: the session timer, loot and costs
+    "capital_counted_at", # when the user last set each holding (a sale before it is already counted)
 })
 
 

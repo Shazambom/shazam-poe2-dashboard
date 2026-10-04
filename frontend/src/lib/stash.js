@@ -90,20 +90,22 @@ export const isFolded = (group, folds, total, q) =>
 export const flipFold = (group, folds, total, q) =>
   String(q || '').trim() ? folds : { ...folds, [group.name]: !isFolded(group, folds, total, '') }
 
-// Sales credited on the server while the editor holds typed quantities: add each currency's credit
-// (`post` - `basis`, the holdings after and before the credit) to what was typed, so neither the credit
-// nor an unsaved edit is lost. Returns the same object when nothing was credited.
-export function applyCredit(typed, basis, post) {
-  const before = Object.fromEntries((basis?.rows || []).map(r => [r.currency, r.qty]))
-  let out = typed
-  for (const r of post?.rows || []) {
-    const d = r.qty - (before[r.currency] || 0)
-    if (d > 0) {
-      if (out === typed) out = { ...typed }
-      out[r.currency] = String((Number(typed[r.currency]) || 0) + d)
-    }
-  }
+// Sales credited on the server while the editor holds typed quantities: add exactly what the server added
+// (`added`: {currency: amount}) to what was typed, so neither the credit nor an unsaved edit is lost.
+// Returns the same object when nothing was added.
+export function addCredit(typed, added) {
+  const entries = Object.entries(added || {}).filter(([, a]) => a > 0)
+  if (!entries.length) return typed
+  const out = { ...typed }
+  for (const [c, a] of entries) out[c] = String((Number(typed[c]) || 0) + a)
   return out
+}
+
+// What a sales fetch says: how many sales were new, and whether the holdings changed.
+export function salesToast({ new: n = 0, credited = 0 } = {}) {
+  if (!n) return 'Up to date'
+  const sales = `${n} new sale${n === 1 ? '' : 's'}`
+  return credited ? `${sales} · added to your holdings` : sales
 }
 
 export const matches = (r, q) => {

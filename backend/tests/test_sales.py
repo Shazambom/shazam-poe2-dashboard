@@ -52,9 +52,10 @@ def test_rows_without_identity_are_skipped():
 
 def test_new_sales_credit_capital_once():
     db.set_capital({"divine": 10})
-    r = client.post("/api/sales/ingest", json={"league": "L9", "result": [{**ROW, "item_id": "cap1"}, {**ROW, "item_id": "cap2", "price": {"amount": 40, "currency": "chaos"}}]}).json()
+    sold = {**ROW, "time": "2099-01-01T00:00:00Z"}   # made after counting began (older sales: test_sales_credit.py)
+    r = client.post("/api/sales/ingest", json={"league": "L9", "result": [{**sold, "item_id": "cap1"}, {**sold, "item_id": "cap2", "price": {"amount": 40, "currency": "chaos"}}]}).json()
     assert r["new"] == 2 and r["credited"] == 2
     assert db.get_capital() == {"divine": 13, "chaos": 40}
-    client.post("/api/sales/ingest", json={"league": "L9", "result": [{**ROW, "item_id": "cap1"}]})   # same sale again
+    client.post("/api/sales/ingest", json={"league": "L9", "result": [{**sold, "item_id": "cap1"}]})   # same sale again
     assert db.get_capital() == {"divine": 13, "chaos": 40}, "a re-fetched sale never credits twice"
     db.set_capital({})

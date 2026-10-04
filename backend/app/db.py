@@ -6,6 +6,7 @@ import shutil
 import sqlite3
 import threading
 from contextlib import contextmanager
+from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Iterator
 
 from . import devtelemetry
@@ -524,20 +525,26 @@ def kv_set(key: str, value: Any) -> None:
         )
 
 
+def _kv_read(c: sqlite3.Connection, key: str, default: Any = None) -> Any:
+    """A kv value inside a transaction the caller holds (routed like kv_get)."""
+    row = c.execute(f"SELECT value FROM {_kv_table(key)} WHERE key=?", (key,)).fetchone()
+    return json.loads(row["value"]) if row else default
+
+
+def _kv_write(c: sqlite3.Connection, key: str, value: Any) -> None:
+    """A kv write inside a transaction the caller holds (routed like kv_set)."""
+    c.execute(f"INSERT INTO {_kv_table(key)}(key, value) VALUES(?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+              (key, json.dumps(value)))
+
+
 def kv_update(key: str, fn: Callable[[Any], Any], default: Any = None) -> Any:
     """Read-modify-write a kv blob inside ONE write transaction: `fn(current) -> new` runs while
     the app-wide write lock is held, so concurrent updaters (a polled GET and a POST, two threadpool
     requests) can never overwrite each other. `fn` must be pure and quick — it runs under the lock
     and must not touch the DB itself (tx() is not reentrant). Returns the stored value."""
-    table = _kv_table(key)
     with tx() as c:
-        row = c.execute(f"SELECT value FROM {table} WHERE key=?", (key,)).fetchone()
-        value = fn(json.loads(row["value"]) if row else default)
-        c.execute(
-            f"INSERT INTO {table}(key, value) VALUES(?, ?) "
-            "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
-            (key, json.dumps(value)),
-        )
+        value = fn(_kv_read(c, key, default))
+        _kv_write(c, key, value)
     return value
 
 
@@ -548,22 +555,21 @@ def get_capital() -> dict[str, float]:
 
 
 # ---------------------------------------------------------------- sales ledger (user data)
-def sales_upsert(league: str, rows: list[dict]) -> list[dict]:
+def _sales_upsert(c: sqlite3.Connection, league: str, rows: list[dict]) -> list[dict]:
     """Upsert Merchant History rows by (item_id, time); returns the rows that were NEW. Never deletes."""
     new: list[dict] = []
-    with tx() as c:
-        for r in rows:
-            item_id, t = r.get("item_id"), r.get("time")
-            if not item_id or not t:
-                continue
-            price = r.get("price") or {}
-            if not c.execute("SELECT 1 FROM sales WHERE item_id=? AND time=?", (str(item_id), str(t))).fetchone():
-                new.append(r)
-            c.execute(
-                "INSERT INTO sales(item_id, time, league, price_amount, price_currency, item_json) VALUES(?,?,?,?,?,?) "
-                "ON CONFLICT(item_id, time) DO UPDATE SET price_amount=excluded.price_amount, price_currency=excluded.price_currency, item_json=excluded.item_json",
-                (str(item_id), str(t), league, price.get("amount"), price.get("currency"), json.dumps(r.get("item") or {})),
-            )
+    for r in rows:
+        item_id, t = r.get("item_id"), r.get("time")
+        if not item_id or not t:
+            continue
+        price = r.get("price") or {}
+        if not c.execute("SELECT 1 FROM sales WHERE item_id=? AND time=?", (str(item_id), str(t))).fetchone():
+            new.append(r)
+        c.execute(
+            "INSERT INTO sales(item_id, time, league, price_amount, price_currency, item_json) VALUES(?,?,?,?,?,?) "
+            "ON CONFLICT(item_id, time) DO UPDATE SET price_amount=excluded.price_amount, price_currency=excluded.price_currency, item_json=excluded.item_json",
+            (str(item_id), str(t), league, price.get("amount"), price.get("currency"), json.dumps(r.get("item") or {})),
+        )
     return new
 
 
@@ -572,8 +578,12 @@ def capital_add(currency: str, qty: float) -> None:
     if not currency or not qty or float(qty) <= 0:
         return
     with tx() as c:
-        c.execute("INSERT INTO capital(currency, qty) VALUES(?, ?) ON CONFLICT(currency) DO UPDATE SET qty = qty + excluded.qty",
-                  (currency, float(qty)))
+        _capital_add(c, currency, qty)
+
+
+def _capital_add(c: sqlite3.Connection, currency: str, qty: float) -> None:
+    c.execute("INSERT INTO capital(currency, qty) VALUES(?, ?) ON CONFLICT(currency) DO UPDATE SET qty = qty + excluded.qty",
+              (currency, float(qty)))
 
 
 def sales_list(league: str | None = None) -> list[dict]:
@@ -603,10 +613,65 @@ def sales_count(league: str | None = None) -> int:
         return c.execute("SELECT COUNT(*) FROM sales" + (" WHERE league=?" if league else ""), (league,) if league else ()).fetchone()[0]
 
 
-def set_capital(entries: dict[str, float]) -> None:
+COUNTED_AT = "capital_counted_at"   # {currency: when the user last set it, "*": when counting began}
+
+
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def set_capital(entries: dict[str, float], counted: list[str] | tuple = ()) -> None:
+    """The user's holdings. `counted`: the currencies whose total the user typed just now (a recount): each
+    is stamped, since that amount already counts every sale of it made before now (sales_ingest). The add
+    bar and the Stash's own re-saves pass none."""
     with tx() as c:
         c.execute("DELETE FROM capital")
-        c.executemany(
-            "INSERT INTO capital(currency, qty) VALUES(?, ?)",
-            [(k, float(v)) for k, v in entries.items() if float(v) > 0],
-        )
+        c.executemany("INSERT INTO capital(currency, qty) VALUES(?, ?)",
+                      [(k, float(v)) for k, v in entries.items() if float(v) > 0])
+        if counted:
+            now = _now_iso()
+            stamps = _kv_read(c, COUNTED_AT) or {}
+            stamps.setdefault("*", now)
+            stamps.update(dict.fromkeys(counted, now))
+            _kv_write(c, COUNTED_AT, stamps)
+
+
+def _sale_time(t: Any) -> datetime | None:
+    try:
+        dt = datetime.fromisoformat(str(t).replace("Z", "+00:00"))
+    except ValueError:
+        dt = None
+    if dt is None or dt.tzinfo is None:
+        devtelemetry.tlog("sales", f"unreadable sale time {t!r}: not credited")
+        return None
+    return dt
+
+
+def sales_ingest(league: str, rows: list[dict], skew_s: float = 0.0) -> tuple[list[dict], list[dict], dict[str, float]]:
+    """Record Merchant History rows and credit the new money, in ONE transaction (no save can land between
+    the check and the credit; a crash leaves neither). Returns (the NEW rows, the ones credited,
+    {currency: amount added}).
+
+    A new sale is new money only when it was made after the user last counted that currency (or, for one
+    they never counted, after counting began: this install's first fetch or save). `skew_s` is the trade
+    site's clock minus this PC's (from the fetch), so a sale's time is compared on the PC's clock."""
+    added: dict[str, float] = {}
+    credited: list[dict] = []
+    with tx() as c:
+        new = _sales_upsert(c, league, rows)
+        stamps = _kv_read(c, COUNTED_AT) or {}
+        if "*" not in stamps:
+            stamps["*"] = _now_iso()
+            _kv_write(c, COUNTED_AT, stamps)
+        for r in new:
+            price = r.get("price") or {}
+            cur, amount = price.get("currency"), price.get("amount")
+            if not cur or not amount or float(amount) <= 0:
+                continue
+            sold = _sale_time(r.get("time"))
+            if sold is None or sold - timedelta(seconds=skew_s) <= datetime.fromisoformat(stamps.get(cur, stamps["*"])):
+                continue
+            _capital_add(c, str(cur), float(amount))
+            added[str(cur)] = added.get(str(cur), 0.0) + float(amount)
+            credited.append(r)
+    return new, credited, added
