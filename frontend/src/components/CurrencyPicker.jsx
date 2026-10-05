@@ -1,7 +1,7 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { opensUp, room } from '../lib/dropdown.js'
 import Cur from './Cur.jsx'
-import { rankMatches } from '../lib/pickerMatch.js'
+import { norm, search } from '../lib/search.js'
 
 const defaultIcon = (o, size) => <Cur id={o.id} name={o.name} size={size} />
 const CREATE = '\u0000create'   // the "Add “…”" row's id: never a real option's
@@ -10,7 +10,8 @@ const CREATE = '\u0000create'   // the "Add “…”" row's id: never a real op
 // into a type-ahead that progressively filters, listing matches as icons + names (reuses the
 // ⌘K palette's list styling so it matches the app aesthetic). Keyboard: ↑↓ move, ↵ pick, esc close.
 // `renderIcon(option)` swaps the per-row icon (default: the currency icon); pass `null` for none.
-// An option's `keywords` (hidden aliases, e.g. the base names behind a mod pool) match the query too.
+// Matching is lib/search.js: every typed word, any order, typos forgiven when nothing else matches. An option's
+// `keywords` (hidden aliases, e.g. the base names behind a mod pool) and its exact trade id match too.
 // `onCreate(text)`, when given, offers a typed name that matches no option as a new entry ("Add “…”");
 // `known` (a Set of lowercased names) lists names that exist even when not offered, so they are never "added".
 // `onClear`, when given: the user typed over a pick (it is dropped until they choose again).
@@ -26,9 +27,9 @@ export default function CurrencyPicker({ value, onChange, options = [], placehol
   const matches = useMemo(() => {
     const t = q.trim().toLowerCase()
     if (!t) return options
-    const found = rankMatches(options, t)   // exact name, then prefix, then contains, then keyword hits
-    const exact = found.some(o => o.name.toLowerCase() === t) || !!known?.has(t)
-    return onCreate && t && !exact ? [...found, { id: CREATE, name: `Add “${q.trim()}”`, create: q.trim() }] : found
+    const found = search(options, q, o => [[o.name], o.keywords, o.id])
+    const exact = found.some(o => norm(o.name) === norm(q)) || !!known?.has(t)
+    return onCreate && !exact ? [...found, { id: CREATE, name: `Add “${q.trim()}”`, create: q.trim() }] : found   // a known item always comes first
   }, [options, q, onCreate, known])
 
   // close on outside click

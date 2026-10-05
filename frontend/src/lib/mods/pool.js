@@ -7,17 +7,17 @@
 // is its tiers in the pool, the overall weight is the column's sum, and the chance is the
 // ratio. A tier is in the pool iff floor ≤ level ≤ item level: a tier below the floor cannot
 // roll (the orb's Minimum Modifier Level), one above the item level cannot either. Strict.
+import { matching } from '../search.js'
 
 export const AFFIXES = ['prefix', 'suffix', 'corrupted', 'enchant']
 
 export const tagLabel = (id) => id.split('_').filter(w => w !== 'mod').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
 
-// A fetched pool, made ready: every family gets `search` (text and tag labels, lower case) so
-// the filter box is one `includes` per row.
+// A fetched pool, made ready: every family gets `search` (its text and tag labels), what the filter box searches.
 export function prepare(pool) {
   const labels = new Map((pool.tags || []).map(t => [t.id, t.label]))
   const label = (id) => labels.get(id) || tagLabel(id)
-  for (const s of pool.sections) for (const a of AFFIXES) for (const f of s[a] || []) f.search = `${f.text} ${f.tags.map(label).join(' ')}`.toLowerCase()
+  for (const s of pool.sections) for (const a of AFFIXES) for (const f of s[a] || []) f.search = `${f.text} ${f.tags.map(label).join(' ')}`
   return pool
 }
 
@@ -59,11 +59,14 @@ export function atLevel(section, ilvl, floor, onItem = null) {
   return out
 }
 
-// Which rows show: any picked tag (OR) and the text (family text or a tag label). Never a number.
-export function visible(rows, { tags, q }) {
-  const needle = (q || '').trim().toLowerCase()
-  return rows.filter(({ family }) => (!tags || !tags.size || family.tags.some(t => tags.has(t))) && (!needle || (family.search || family.text.toLowerCase()).includes(needle)))
-}
+// The rows the filter text keeps, decided once across every list on the tab (the shared search, lib/search.js),
+// so a typo is forgiven only when nothing anywhere matches: over the family text and its tag labels.
+export const modMatches = (levels, q) =>
+  new Set(matching(levels.flatMap(level => AFFIXES.flatMap(a => level[a]?.rows || [])), q, ({ family }) => [family.search || family.text]))
+
+// Which rows show: any picked tag (OR) and the filter text (`hit`, from modMatches). Filtering never moves a number.
+export const visible = (rows, { tags, hit }) =>
+  rows.filter(r => (!tags || !tags.size || r.family.tags.some(t => tags.has(t))) && hit.has(r))
 
 // The chance the orb adds any of these rows; null when the pool is empty.
 export function shownChance(rows) {

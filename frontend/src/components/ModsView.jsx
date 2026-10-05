@@ -7,7 +7,7 @@ import { useApi, useAutosave } from '../lib/hooks.js'
 import { api, toast } from '../lib/api.js'
 import { diag } from '../lib/diag.js'
 import { sessionFor, pasted } from '../lib/mods/index.js'
-import { prepare, atLevel, visible, AFFIXES } from '../lib/mods/pool.js'
+import { prepare, atLevel, visible, modMatches, AFFIXES } from '../lib/mods/pool.js'
 import { merge } from '../lib/mods/defaults.js'
 import { familyQuery } from '../lib/mods/trade.js'
 import { stashKind, stashMods, withWanted } from '../lib/mods/stash.js'
@@ -75,7 +75,8 @@ export default function ModsView() {
   const onItem = useMemo(() => (item ? new Map(match.rolled.flatMap(r => r.ids.map(id => [id, onItemLabel(r)]))) : null), [match, item])
   const levels = useMemo(() => (pool && s ? pool.sections.map(sec => atLevel(sec, s.ilvl, sec.floored ? s.floor : 0, onItem)) : null), [pool, s?.ilvl, s?.floor, onItem])
   const tags = useMemo(() => new Set(s?.tags || []), [s?.tags])
-  const shown = useMemo(() => levels && levels.map(level => Object.fromEntries(AFFIXES.filter(a => level[a]).map(a => [a, visible(level[a].rows, { tags, q: filter })]))), [levels, tags, filter])
+  const hit = useMemo(() => levels && modMatches(levels, filter), [levels, filter])
+  const shown = useMemo(() => levels && levels.map(level => Object.fromEntries(AFFIXES.filter(a => level[a]).map(a => [a, visible(level[a].rows, { tags, hit })]))), [levels, tags, hit])
   const grants = useMemo(() => (pool ? [
     { id: 'essence', title: 'Essence', heading: 'Adds', rows: essenceRows(pool.grants.essences) },
     { id: 'alloy', title: 'Alloy', heading: 'Adds', rows: essenceRows(pool.grants.alloys) },

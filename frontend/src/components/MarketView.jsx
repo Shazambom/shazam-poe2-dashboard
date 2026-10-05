@@ -1,7 +1,8 @@
-import React, { useState } from 'react'
+import React, { useMemo, useState } from 'react'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts'
 import { api, fmt } from '../lib/api.js'
 import { useApi } from '../lib/hooks.js'
+import { matching } from '../lib/search.js'
 import { color, chart } from '../theme.js'
 import Cur from './Cur.jsx'
 import CurrencyPicker from './CurrencyPicker.jsx'
@@ -21,7 +22,8 @@ export default function MarketView({ currencies }) {
   const hist = useApi(() => api.history(pair.a, pair.b), [pair.a, pair.b]).data
 
   const names = Object.fromEntries((currencies?.currencies ?? []).map(c => [c.id, c.name]))
-  const shown = edges.filter(e => !q || `${e.from_name} ${e.to_name} ${e.from} ${e.to}`.toLowerCase().includes(q.toLowerCase()))
+  // one text per pair, so "div chaos" spans both names
+  const shown = useMemo(() => matching(edges, q, e => [`${e.from_name} ${e.to_name} ${e.from} ${e.to}`]), [edges, q])
   const digestSeries = (hist?.digest ?? []).map(p => ({ t: hourLabel(p.hour), rate: p.rate, vol: p.volume_a }))
   const liveSeries = (hist?.live ?? []).map(p => ({ t: hourLabel(p.fetched_at), rate: p.best_rate, stock: p.best_stock }))
 

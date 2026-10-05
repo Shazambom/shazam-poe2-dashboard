@@ -66,10 +66,15 @@ test('a small group starts folded: under half a percent of net worth', () => {
   assert.equal(S.foldedByDefault({ value_ref: 0 }, 0), false, 'an empty stash folds nothing')
 })
 
-test('search matches a holding by name, case-insensitively; empty search matches all', () => {
-  assert.equal(S.matches({ name: 'Omen of Light' }, 'light'), true)
-  assert.equal(S.matches({ name: 'Omen of Light' }, 'divine'), false)
-  assert.equal(S.matches({ name: 'Omen of Light' }, '  '), true)
+test('Find in stash: the shared search over holding names; a blank search keeps every holding', () => {
+  const rows = [{ name: 'Omen of Light' }, { name: 'Divine Orb' }, { currency: 'chaos' }, { name: "Xoph's Catalyst" }]
+  const names = (q) => rows.filter(r => S.stashMatches(rows, q).has(r)).map(r => r.name || r.currency)
+  assert.deepEqual(names('light'), ['Omen of Light'])
+  assert.deepEqual(names('orb divine'), ['Divine Orb'], 'words in any order')
+  assert.deepEqual(names('xophs'), ["Xoph's Catalyst"])
+  assert.deepEqual(names('devine'), ['Divine Orb'], 'a typo, when nothing matches as typed')
+  assert.deepEqual(names('CHAOS'), ['chaos'], 'a holding without a name is found by its id')
+  assert.deepEqual(names('  '), ['Omen of Light', 'Divine Orb', 'chaos', "Xoph's Catalyst"])
 })
 
 test('the Arbitrage rail lists only held arbitrage capital, biggest first', () => {

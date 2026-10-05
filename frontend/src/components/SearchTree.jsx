@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { Tree } from 'react-arborist'
 import { useWorkspace, HISTORY_SYS, initialOpenState } from '../lib/workspaceStore.js'
-import { matchesFilter } from '../lib/tree.js'
+import { filterHits } from '../lib/tree.js'
 
 const relative = (ts) => {
   const s = Math.max(0, (Date.now() - ts) / 1000)
@@ -74,6 +74,7 @@ export default function SearchTree({ onSelect = () => {}, renderTrailing = () =>
   // mount); the ExiledExchange2 History folder always starts collapsed — it's a log, not the work.
   // arborist reads this once at mount, so the tree is keyed on `loaded` to mount with the real tree.
   const initialOpen = useMemo(() => initialOpenState(tree), [loaded]) // eslint-disable-line
+  const hits = useMemo(() => filterHits(data, filter), [data, filter])
   const wrap = useRef(null)
   const [dims, setDims] = useState({ w: 260, h: 480 })
 
@@ -96,7 +97,7 @@ export default function SearchTree({ onSelect = () => {}, renderTrailing = () =>
       <RowCtx.Provider value={{ onSelect, renderTrailing, onContext, compact }}>
         <Tree key={loaded ? 'loaded' : 'loading'} ref={treeRef} data={data} idAccessor="id" childrenAccessor="children"
           width={dims.w} height={dims.h} rowHeight={30} indent={14} rowClassName="ws-row"
-          searchTerm={filter} searchMatch={(node, term) => matchesFilter(node.data, term)}
+          searchTerm={filter} searchMatch={(node) => hits.has(node.data.id)}
           openByDefault={false} initialOpenState={initialOpen} onToggle={toggleOpen}
           onMove={({ dragIds, parentId, index }) => dragIds.forEach((id, i) => move(id, parentId, index + i))}
           onRename={({ id, name }) => rename(id, name)}

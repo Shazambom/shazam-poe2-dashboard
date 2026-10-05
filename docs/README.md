@@ -23,6 +23,9 @@ doc and the code disagree, the code wins — fix the doc.
 - [`ui-styleguide.md`](./ui-styleguide.md) — the visual contract: §0 Restraint, the design tokens,
   the component vocabulary, and what `npm run lint:style` enforces.
 
+- [`search-design.md`](./search-design.md) — the one search every box uses (`lib/search.js`): words in any
+  order, today's tiers, typos only when nothing matches. **Built** 2026-10-04.
+
 ## Open bugs
 
 - [`bugs/2026-09-18-ee2-history-drops-after-idle.md`](./bugs/2026-09-18-ee2-history-drops-after-idle.md) — **OPEN**: the EE2 query worker's planned 10-minute idle exit is counted as a crash, so the 5-minute restart throttle silently drops every price check after a 10–15 min pause. Diagnosed from beta telemetry; fix proposed, not built.

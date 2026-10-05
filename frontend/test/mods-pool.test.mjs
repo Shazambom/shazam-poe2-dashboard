@@ -4,7 +4,7 @@
 // weight = the column's sum, chance = the ratio.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { prepare, atLevel, visible, shownChance, bandOf, inPool, tagLabel, namedTiers } from '../src/lib/mods/pool.js'
+import { prepare, atLevel, visible, modMatches, shownChance, bandOf, inPool, tagLabel, namedTiers } from '../src/lib/mods/pool.js'
 
 const tier = (tier, name, ilvl, text) => ({ tier, name, ilvl, text })
 const fam = (id, text, tags, tiers) => ({ id, text, tags, tiers })
@@ -69,18 +69,23 @@ test('rows keep order and family identity across levels (rows are keyed by famil
   assert.equal(a.prefix.rows[0].family, base.prefix[0], 'the family object is the section\'s own')
 })
 
+const show = (rows, tags, q) => visible(rows, { tags, hit: modMatches([{ prefix: { rows } }], q) })
+
 test('prepare builds the search text from the family text and the pool\'s tag labels; visible never changes a number', () => {
   const pool = POOL()
-  assert.equal(pool.sections[0].prefix[2].search, 'adds # to # fire damage to attacks attack fire')
+  assert.equal(pool.sections[0].prefix[2].search, 'Adds # to # Fire damage to Attacks Attack Fire')
   assert.equal(tagLabel('energy_shield'), 'Energy Shield')
   assert.equal(tagLabel('ulaman_mod'), 'Ulaman')
   const { rows } = atLevel(pool.sections[0], 82, 0).prefix
-  assert.equal(visible(rows, { tags: new Set(), q: '' }).length, 3)
-  assert.deepEqual(visible(rows, { tags: new Set(['life', 'fire']), q: '' }).map(r => r.family.id), ['prefix:Life', 'prefix:Fire'])
-  assert.deepEqual(visible(rows, { tags: new Set(), q: 'MANA' }).map(r => r.family.id), ['prefix:Mana'])
-  assert.deepEqual(visible(rows, { tags: new Set(), q: 'attack' }).map(r => r.family.id), ['prefix:Fire'], 'the tag label matches too')
-  assert.deepEqual(visible(rows, { tags: new Set(['life']), q: 'mana' }), [])
-  const shown = visible(rows, { tags: new Set(['life']), q: '' })
+  assert.equal(show(rows, new Set(), '').length, 3)
+  assert.deepEqual(show(rows, new Set(['life', 'fire']), '').map(r => r.family.id), ['prefix:Life', 'prefix:Fire'])
+  assert.deepEqual(show(rows, new Set(), 'MANA').map(r => r.family.id), ['prefix:Mana'])
+  assert.deepEqual(show(rows, new Set(), 'attack').map(r => r.family.id), ['prefix:Fire'], 'the tag label matches too')
+  assert.deepEqual(show(rows, new Set(['life']), 'mana'), [])
+  assert.deepEqual(show(rows, new Set(), 'attacks fire adds').map(r => r.family.id), ['prefix:Fire'], 'the shared search: words in any order')
+  assert.deepEqual(show(rows, new Set(), '12 fire').map(r => r.family.id), ['prefix:Fire'], 'a typed number fills a #')
+  assert.deepEqual(show(rows, new Set(), 'atacks').map(r => r.family.id), ['prefix:Fire'], 'a typo, when nothing matches as typed')
+  const shown = show(rows, new Set(['life']), '')
   assert.equal(shown[0].chance, 0.6, 'the denominator rule: filtering never moves a number')
   assert.ok(Math.abs(shownChance(shown) - 0.6) < 1e-9)
   assert.ok(Math.abs(shownChance(rows) - 1) < 1e-9)
@@ -93,4 +98,17 @@ test('namedTiers: a family whose tiers carry no name shows no name column (every
   assert.equal(namedTiers(pool.sections[0].prefix[0]), true)
   assert.equal(namedTiers(pool.sections[1].corrupted[0]), false)
   assert.equal(namedTiers({ tiers: [tier(1, '', 1, 'a'), tier(2, 'Named', 1, 'b')] }), true, 'one named tier keeps the column')
+})
+
+// code review (2026-10-04): the typo pass was decided per section list, so "cold" put Cooldown Recovery Rate in a
+// section with no Cold mod while other sections had exact hits. One decision across every list on the tab.
+test('the Mods filter forgives a typo only when nothing on the whole tab matches', () => {
+  const row = (id, text) => ({ family: { id, text, tags: [], search: text } })
+  const base = { suffix: { rows: [row('a', '+#% to Cold Resistance')] } }
+  const chrono = { suffix: { rows: [row('b', '#% increased Cooldown Recovery Rate')] } }
+  const hit = modMatches([base, chrono], 'cold')
+  assert.deepEqual(visible(chrono.suffix.rows, { tags: new Set(), hit }), [], 'no lookalike while Cold Resistance matches')
+  assert.deepEqual(visible(base.suffix.rows, { tags: new Set(), hit }).map(r => r.family.id), ['a'])
+  const typo = modMatches([base, chrono], 'colld')
+  assert.deepEqual(visible(base.suffix.rows, { tags: new Set(), hit: typo }).map(r => r.family.id), ['a'], 'a real typo still finds it')
 })

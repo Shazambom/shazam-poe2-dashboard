@@ -1,4 +1,5 @@
 import { parseNum } from './numInput.js'
+import { matching } from './search.js'
 // Trading → Stash: the user's holdings grouped by league mechanic, with net worth and liquid net worth.
 // Pure (StashView renders it). Rows are /api/capital rows ({ currency, qty, value_ref, realizable_ref, … }).
 //
@@ -108,10 +109,8 @@ export function salesToast({ new: n = 0, credited = 0 } = {}) {
   return credited ? `${sales} · added to your holdings` : sales
 }
 
-export const matches = (r, q) => {
-  const s = String(q || '').trim().toLowerCase()
-  return !s || String(r.name || r.currency || '').toLowerCase().includes(s)
-}
+// Find in stash: the holdings the shared search keeps, by name (a holding without one by its id).
+export const stashMatches = (rows, q) => new Set(matching(rows, q, r => [r.name || r.currency]))
 
 // The Arbitrage rail: holdings the route search may start from (server `arbitrage` flag), biggest first.
 export const arbitrageHoldings = (capital) =>

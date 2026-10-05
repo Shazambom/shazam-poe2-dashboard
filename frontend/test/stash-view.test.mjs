@@ -198,8 +198,6 @@ test('clearing the add bar\'s picker drops its currency, and one press adds once
   const v = strip(read('../src/components/StashView.jsx'))
   assert.match(v, /onClear=\{\(\) => setPick\(''\)\}/)
   assert.match(v, /const id = pickRef\.current/)
-  const p = read('../src/components/CurrencyPicker.jsx')
-  assert.match(p, /rankMatches\(/)
 })
 
 // Owner (2026-10-03): the top bar shows both, labelled — net worth and liquid net worth, the Stash's own figures.
@@ -255,4 +253,14 @@ test('only a typed total or a removal tells the server the user counted that cur
   assert.match(fn('setOne'), /recounted\.current\.add\(c\)/, 'typing a total is a count')
   assert.match(fn('remove'), /recounted\.current\.add\(c\)/, 'removing a holding is a count (none left)')
   assert.doesNotMatch(fn('addPicked'), /recounted/, 'the add bar adds; it is not a count')
+})
+
+// QA (2026-10-04): a hook placed after the "Loading your stash…" early return blanked the app once the stash loaded
+// (React error #310). Every hook runs before that return.
+test('StashView calls every hook before its loading return', () => {
+  const v = strip(read('../src/components/StashView.jsx'))
+  const body = v.slice(v.indexOf('export default function StashView'))
+  const early = body.indexOf('if (!qty) return')
+  assert.ok(early > 0)
+  assert.doesNotMatch(body.slice(early, body.indexOf('\n  return (', early)), /\buse[A-Z]\w*\(/, 'no hook after the early return')
 })

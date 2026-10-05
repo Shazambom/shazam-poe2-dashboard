@@ -1,8 +1,9 @@
 import { flatten, pathOf } from './tree.js'
+import { search } from './search.js'
 
 // The ⌘K palette's rows, pure so the list is testable: views, sub-views, board currencies,
 // leagues, workspace commands, and one "Open search: <name>" per saved search (hint = its
-// folder path). `q` filters by label, case-insensitively.
+// folder path). `q` searches labels and aliases with the shared search, best match first.
 export function buildPaletteItems({ tabs = [], subDests = [], rows = [], leagues = [], commands = [], tree = [], q = '' }) {
   const list = []
   for (const c of commands) list.push({ kind: 'cmd', id: c.id, label: c.label, hint: c.hint || 'Workspace', run: c.run })
@@ -14,6 +15,5 @@ export function buildPaletteItems({ tabs = [], subDests = [], rows = [], leagues
   }
   for (const r of rows) list.push({ kind: 'cur', id: r.id, label: r.name || r.id, hint: 'Open on board' })
   for (const l of leagues) list.push({ kind: 'league', id: l.id, label: l.text || l.id, hint: 'Switch league' })
-  const term = q.trim().toLowerCase()
-  return term ? list.filter(i => [i.label, ...(i.aka || [])].some(s => s.toLowerCase().includes(term))) : list
+  return search(list, q, i => [[i.label], i.aka])
 }

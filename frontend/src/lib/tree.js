@@ -1,3 +1,5 @@
+import { matching } from './search.js'
+
 // The ONE set of walkers over the workspace tree (folders with `children`, leaf searches).
 // Pure: every mutator returns a new tree and never touches its input. The store, the views
 // and liveWiring all go through these — no view carries its own recursive finder.
@@ -68,12 +70,8 @@ export function insertAt(nodes, node, parentId, index) {
   })
 }
 
-// The rail's filter box: case-insensitive over the node's name and the parsed item name.
-export function matchesFilter(node, term) {
-  const t = String(term || '').trim().toLowerCase()
-  if (!t) return true
-  return String(node.name || '').toLowerCase().includes(t) || String(node.item?.name || '').toLowerCase().includes(t)
-}
+// The rail's filter box: the ids of the nodes the shared search keeps, over the node's name and the parsed item name.
+export const filterHits = (nodes, term) => new Set(matching(flatten(nodes), term, n => [n.name, n.item?.name]).map(n => n.id))
 
 // "Belts / Uniques" — the folder path above a node (empty at root).
 export function pathOf(nodes, id, trail = []) {

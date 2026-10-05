@@ -8,7 +8,7 @@ import { useWorkspace } from '../lib/workspaceStore.js'
 import { flatten } from '../lib/tree.js'
 import { salesStats, relativeTime, rarityOf } from '../lib/sales.js'
 import { holdingWorth } from '../lib/capital.js'
-import { CASH, addAmount, addCredit, cleanQty, parseAmount, stashGroups, netWorth, liquidNetWorth, flipGroup, flipFold, isFolded, groupAccent, isCounted, matches, salesToast, UNGROUPED } from '../lib/stash.js'
+import { CASH, addAmount, addCredit, cleanQty, parseAmount, stashGroups, netWorth, liquidNetWorth, flipGroup, flipFold, isFolded, groupAccent, isCounted, stashMatches, salesToast, UNGROUPED } from '../lib/stash.js'
 import { diag } from '../lib/diag.js'
 import { hasTradeEngine as isDesktop } from '../lib/session.js'
 import { nav } from '../lib/nav.js'
@@ -185,8 +185,9 @@ export default function StashView({ league }) {
   const byName = useMemo(() => { const m = new Map(); for (const n of flatten(tree, x => x.kind === 'search')) if (n.name) m.set(n.name.toLowerCase(), n.id); return m }, [tree])
   const openRow = (r) => { setOpen(o => (o === r ? null : r)); diag('sales', 'sales-open') }
 
+  const hit = useMemo(() => stashMatches(rows, q), [rows, q])
   if (!qty) return <div className="stash-view"><div className="hint">Loading your stash…</div></div>
-  const shown = groups.filter(g => g.rows.some(r => matches(r, q)))
+  const shown = groups.filter(g => g.rows.some(r => hit.has(r)))
   const counted = groups.reduce((a, g) => a + g.counted_ref, 0)   // switched-on holdings at paper
 
   return (
@@ -238,7 +239,7 @@ export default function StashView({ league }) {
                 </div>
                 {!shut && (
                   <div className="stash-rows">
-                    {g.rows.filter(r => matches(r, q)).map(r => {
+                    {g.rows.filter(r => hit.has(r)).map(r => {
                       const worth = holdingWorth(r, { syncing })
                       const on = isCounted(r.currency, choices, dflt)
                       return (

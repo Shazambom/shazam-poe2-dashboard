@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react'
+import { matching, norm } from '../lib/search.js'
 
 // A filterable list of modifiers; click a row to pick it. Picked rows sit at the top so the
 // selection is always in view, but the order only changes when the filter changes or the
@@ -9,12 +10,11 @@ import React, { useMemo, useState } from 'react'
 function ModPicker({ mods, selected, hide, onToggle, onMin, header, children }) {
   const [filter, setFilter] = useState('')
   const [settled, setSettled] = useState(0)
-  const q = filter.trim().toLowerCase()
   const shown = useMemo(() => {
     const pool = mods.filter(m => !(hide?.has(m.id) && !selected.has(m.id)))
-    const matching = q ? pool.filter(m => m.text.toLowerCase().includes(q)) : pool
-    return [...matching.filter(m => selected.has(m.id)), ...matching.filter(m => !selected.has(m.id))]
-  }, [mods, hide, q, settled]) // eslint-disable-line react-hooks/exhaustive-deps
+    const kept = matching(pool, filter, m => [m.text])
+    return [...kept.filter(m => selected.has(m.id)), ...kept.filter(m => !selected.has(m.id))]
+  }, [mods, hide, norm(filter), settled]) // eslint-disable-line react-hooks/exhaustive-deps
   const minOf = (id) => (selected instanceof Map ? selected.get(id) : 0) || ''
   return (
     <div className="rx-picker rx-surface">
