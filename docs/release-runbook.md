@@ -283,6 +283,13 @@ Check these every time; each one has cost a deploy before. (The general rules ev
 
 ## Lessons from deploys
 
+- **2026-10-05, 0.3.14-beta.1: the regression gate runs on the owner's real settings, which dev builds may already
+  have migrated.** A dev build's m8 saved Balanced (volume window 72h) into the owner's data. Stable 0.3.13 then
+  priced every screen over 72h, while the release keeps the market at 24h, so the gate reported 105 price, market and
+  Hold differences. To tell a real regression from a settings artefact, re-run `ops/regression-diff.py --data <copy>`
+  on a copy with the setting reset to its default. Here the copy showed NO DIFFERENCES. Accept with that evidence in
+  the comment. To read a WAL database copy read-only, set its `journal_mode` to DELETE first.
+
 Condensed and general, newest first; each came from a post-deploy audit (step 8).
 
 - **2026-10-05 (0.3.13-beta.1):** the EE2 port sync at the top of `publish-github.sh` can bring a new GGG
