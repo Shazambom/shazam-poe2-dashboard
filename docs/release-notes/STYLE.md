@@ -47,3 +47,7 @@ If so, add the rule here, dated, in the same change as the corrected notes.
   now shows holdings by league mechanic with your liquid net worth; arbitrage, sales and the Strat Calculator
   all use it correctly", did. The same goes for bullets: a bullet that only makes sense if you know how a
   feature works internally ("Arbitrage trades only liquid currency") should say what the player sees instead.
+- **2026-10-05 (0.3.13): keep the summary to the plain headline; no sweeping scope words.** "Smarter search in every
+  search bar, plus arrow-key scrolling in search lists" became "Smarter search and arrow-key scrolling in search
+  lists." Name the things that changed and stop: drop qualifiers like "every", "all" or "across the app", which
+  overclaim and add length without telling a player anything the bullets don't.
