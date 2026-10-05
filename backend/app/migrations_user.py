@@ -273,6 +273,30 @@ def _m7_league_default(conn: sqlite3.Connection) -> None:
     log.info("m7: league default freed")
 
 
+def _m8_arbitrage_balanced(conn: sqlite3.Connection) -> None:
+    """One-time (owner, 2026-10-05): every install's Arbitrage values become the Balanced preset. "Default will
+    override people's current configs … by creating this new default we're improving the app, not changing a
+    user's preferences." Start from, Show at most, the sort and the share of capital stay the user's (a preset
+    never carries them). Idempotent on `_arb_balanced_v1`; afterwards the user's own edits stick."""
+    from .arbpresets import ARBITRAGE_PRESETS
+    row = conn.execute("SELECT value FROM kv WHERE key='settings'").fetchone()
+    if not row:
+        return
+    try:
+        s = json.loads(row[0])
+    except (ValueError, TypeError):
+        return
+    if not isinstance(s, dict) or s.get("_arb_balanced_v1"):
+        return
+    balanced = json.loads(json.dumps(ARBITRAGE_PRESETS[0]["values"]))   # a copy: never alias the constant
+    saved_filters = s.get("filters") if isinstance(s.get("filters"), dict) else {}
+    s.update({k: v for k, v in balanced.items() if k != "filters"})
+    s["filters"] = {**saved_filters, **balanced["filters"]}
+    s["_arb_balanced_v1"] = True
+    conn.execute("UPDATE kv SET value=? WHERE key='settings'", (json.dumps(s),))
+    log.info("m8: arbitrage values replaced with the Balanced preset")
+
+
 USER_MIGRATIONS: list[tuple[int, str, object]] = [
     (1, "initial split from legacy poe2arb.sqlite", _m1_split_from_legacy),
     (2, "derive trading_workspace tree from flat watches", _m2_watches_to_workspace),
@@ -281,4 +305,5 @@ USER_MIGRATIONS: list[tuple[int, str, object]] = [
     (5, "sales ledger table (Merchant History)", _m5_sales),
     (6, "raise the saved liquidity filter floor to 200", _m6_liq_floor_200),
     (7, "free a saved Standard league so the youngest league is the default", _m7_league_default),
+    (8, "replace saved arbitrage values with the Balanced preset", _m8_arbitrage_balanced),
 ]

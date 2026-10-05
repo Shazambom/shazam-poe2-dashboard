@@ -590,3 +590,26 @@ def test_a_fresh_board_reports_itself_to_beta_telemetry(monkeypatch):
     board = _arrow_board(monkeypatch, league_day=10)
     assert len(lines) == 1 and lines[0].startswith("[hold] day=10 hz=3d k=2 eligible=")
     assert board["assets"][0]["name"] in lines[0]
+
+
+def test_categories_are_the_games_own_exchange_categories(monkeypatch):
+    """Learnability pass (2026-10-05): Hold showed poe2scout's ids ("lineagesupportgems"). An item the game's
+    Currency Exchange lists shows that category (as the Stash groups do); anything else keeps its source name.
+    The dropdown and the filter use the same names."""
+    game = {"Asset1": "Ritual", "Asset2": "Runes", "Asset3": "Ritual"}
+    monkeypatch.setattr(holdscore, "exchange_category", lambda name, groups=None: game.get(name))
+    board = _arrow_board(monkeypatch, 10)
+    cat = {a["name"]: a["category"] for a in board["assets"]}
+    assert (cat["Asset1"], cat["Asset2"], cat["Asset3"]) == ("Ritual", "Runes", "Ritual")
+    assert cat["Asset4"] == "rune", "not on the exchange: the source category, unchanged"
+    assert {"Ritual", "Runes"} <= set(board["categories"])
+    ritual = _arrow_board(monkeypatch, 10, "Ritual")
+    assert {a["name"] for a in ritual["assets"]} == {"Asset1", "Asset3"}
+
+
+def test_exchange_category_reads_the_game_table_through_the_registry(monkeypatch):
+    from app import currencies, movers
+    monkeypatch.setattr(movers, "_trade_id", lambda name: {"Seraph's Heart": "seraphs-heart"}.get(name))
+    monkeypatch.setattr(currencies.registry, "groups", lambda categories=None: {"seraphs-heart": "Gems"})
+    assert holdscore.exchange_category("Seraph's Heart") == "Gems"
+    assert holdscore.exchange_category("Unknown Thing") is None

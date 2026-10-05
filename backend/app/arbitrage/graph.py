@@ -131,7 +131,9 @@ class Graph:
 
     # ------------------------------------------------------------ build
     @classmethod
-    def build(cls) -> "Graph":
+    def build(cls, volume_window_h: float | None = None) -> "Graph":
+        """`volume_window_h`: the hours each market's traded volume is averaged over (MARKET_VOLUME_WINDOW_H for the
+        market every screen prices from; the route search passes the Arbitrage page's own window)."""
         s = get_settings()
         g = cls(s)
         g.fee_table = gamedata.fees()["by_trade"]
@@ -148,7 +150,7 @@ class Graph:
                            d["age_s"], meta={"hour": d["hour"], "volume": d["volume_to"],
                                              "inactive": d.get("inactive", False),
                                              "quoted_rate": d.get("quoted_rate")}))
-        vols = digest.pair_volume(league, s.get("volume_window_h", 24))
+        vols = digest.pair_volume(league, volume_window_h or MARKET_VOLUME_WINDOW_H)
         for (a, b), e in g.edges.items():
             if e.kind != "recipe":
                 e.vol_in_per_h = vols.get((a, b), 0.0)
@@ -574,16 +576,22 @@ def cycle_unit(cycle: list[Edge], limit: int = 512) -> int:
     return 1
 _graph_cache: dict = {}
 GRAPH_TTL_S = 5.0
+# The market every screen prices from (Board, Hold, Convert, Capital, wealth) averages volumes over this window. The
+# Arbitrage page's `volume_window_h` (a preset knob) shapes only the route search's own graph (code review 2026-10-05:
+# a preset pick used to move every price in the app).
+MARKET_VOLUME_WINDOW_H = 24
 
 
-def cached_graph() -> Graph:
+def cached_graph(volume_window_h: float | None = None) -> Graph:
     """Graph.build() with a short TTL so header polling, capital valuation and route
-    search share one build instead of re-reading the digest tables per request."""
+    search share one build instead of re-reading the digest tables per request.
+    `volume_window_h`: the route search's own window; omitted, the market's."""
     s = get_settings()
+    window = volume_window_h or MARKET_VOLUME_WINDOW_H
     key = (s["league"], s["reference"], s["allow_digest_edges"], s["allow_recipe_edges"],
            s["live_max_age_s"], s["digest_max_age_h"],
-           s.get("min_edge_volume_ref_per_h"), s.get("min_edge_depth"))
-    return cache.memo(_graph_cache, key, GRAPH_TTL_S, Graph.build, version=orderbook.state["version"])
+           s.get("min_edge_volume_ref_per_h"), s.get("min_edge_depth"), window)
+    return cache.memo(_graph_cache, key, GRAPH_TTL_S, lambda: Graph.build(window), version=orderbook.state["version"])
 
 
 def anchor_prices() -> dict[str, float]:

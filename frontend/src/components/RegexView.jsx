@@ -17,7 +17,7 @@ import tabletTable from '../data/regex/tablet.json'
 // set what to match, copy the string. Everything is computed locally from the shipped tables;
 // the settings live in the user's settings blob under `regex_tools`.
 const TABLES = { waystone: waystoneTable, tablet: tabletTable }
-const KIND_OPTIONS = [['waystone', 'Waystones'], ['tablet', 'Tablets']]
+const KIND_OPTIONS = [['waystone', 'Waystones', 'regex-waystones'], ['tablet', 'Tablets', 'regex-tablets']]
 const RARITIES = [['normal', 'Normal'], ['magic', 'Magic'], ['rare', 'Rare']]
 const YIELDS = [['itemRarity', 'Item rarity'], ['packSize', 'Pack size'], ['monsterRarity', 'Monster rarity'], ['monsterEffect', 'Monster effectiveness'], ['dropChance', 'Waystone drop chance']]
 const CURRENCIES = [['exalted', 'Exalted'], ['divine', 'Divine']]
@@ -159,7 +159,7 @@ export default function RegexView() {
           {price}
         </div>
         <div className="rx-pickers">
-          <ModPicker mods={table.mods} selected={want} hide={avoid} onToggle={toggleWant} onMin={setMin} header="Include">{modeSeg}</ModPicker>
+          <ModPicker mods={table.mods} selected={want} hide={avoid} onToggle={toggleWant} onMin={setMin} header="Include" cmd="regex-include">{modeSeg}</ModPicker>
           {kind === 'waystone' && <ModPicker mods={table.mods} selected={avoid} hide={want} onToggle={toggleAvoid} header="Exclude" />}
         </div>
       </div>

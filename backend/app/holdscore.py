@@ -643,6 +643,15 @@ def leaderboard(horizon: str = "3d", category: str = "all", numeraire: str = "di
                       lambda: _leaderboard(horizon, category, numeraire, num_id, num_name, k))
 
 
+def exchange_category(name: str, groups: dict | None = None) -> str | None:
+    """The game's Currency Exchange category for a poe2scout item name (the Stash's groups,
+    currencies.registry.groups), or None when the exchange doesn't list it. `groups`: precomputed."""
+    from . import movers
+    from .currencies import registry
+    tid = movers._trade_id(name)
+    return (groups if groups is not None else registry.groups()).get(tid) if tid else None
+
+
 def _leaderboard(horizon: str, category: str, numeraire: str, num_id: int, num_name: str,
                  k: float = CAUTION_K) -> dict:
     cur_name, cur, past, meta = build_context(num_id)
@@ -663,10 +672,12 @@ def _leaderboard(horizon: str, category: str, numeraire: str, num_id: int, num_n
     # Score the WHOLE universe first: the value floor is relative to the day, so it must be read
     # off every asset that traded, not off whichever category is being viewed.
     entries = []
+    groups = registry.groups()
     for iid, series in cur.items():
         if iid == num_id:                       # the numeraire itself (return ≈ 0 by construction)
             continue
         name, cat = meta.get(iid, (str(iid), "?"))
+        cat = exchange_category(name, groups) or cat   # the game's category; poe2scout's when not on the exchange
         m = _metrics(series, hz)
         if not m:
             continue

@@ -6,6 +6,8 @@ import { nextPollMs } from './capital.js'
 // the rate budget, and the saved settings. Views that used to poll /api/session, /api/oauth/status
 // or fetch /api/settings on their own read this store; writes to settings go through saveSettings
 // so the cached copy never goes stale. `refresh()` is what a view calls after it changed something.
+let settingsQueue = Promise.resolve()   // settings writes, serialised (saveSettings)
+
 export const useStatus = create((set, get) => ({
   status: null,      // /api/status (league, digest/orderbook feed states, session, oauth, …)
   capital: null,     // /api/capital
@@ -38,10 +40,11 @@ export const useStatus = create((set, get) => ({
       return c
     } finally { set({ capitalSaving: false }) }
   },
-  saveSettings: async (patch) => {
-    const s = await api.putSettings(patch)
-    set({ settings: s })
-    return s
+  // One at a time, in the order made: a later save always lands last (an Arbitrage preset after a pending edit).
+  saveSettings: (patch) => {
+    const run = settingsQueue.then(() => api.putSettings(patch))
+    settingsQueue = run.catch(() => {})
+    return run.then(s => { set({ settings: s }); return s })
   },
 }))
 

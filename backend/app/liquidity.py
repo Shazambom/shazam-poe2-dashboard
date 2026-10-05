@@ -50,18 +50,22 @@ def _whole_units_out(cand: dict) -> int:
     return int(amt)
 
 
-def _liquid(g: "arbitrage.Graph", cand: dict) -> bool:
-    """Whether a cash-out path goes through markets that actually trade: every leg clears the
-    route filters' minimum traded value per hour and the stack fills within their maximum hours
-    (the same guards Arbitrage applies; unset = no guard). Liquid paths are PREFERRED over
-    illiquid ones rather than the only ones allowed — a holding too big for its market still has
-    an honest answer (a long fill time and a ghost), and reporting "no market data" for it was
-    wrong: there is market data."""
-    f = g.s.get("filters") or {}
-    min_vol, max_fill = f.get("min_volume_ref_per_h") or 0.0, f.get("max_fill_hours") or 0.0
-    if min_vol and (cand["volume_ref_per_h"] or 0.0) < min_vol:
+# Cash-out's own liquidity guards (the Arbitrage page's defaults before the presets): the page's filters are a preset
+# knob, and reading them let a preset pick — or m8's Balanced, which has no fill-time limit and states volume in
+# exalted — move every Capital/Stash value (code review 2026-10-05).
+CASHOUT_MIN_VOLUME_EX_PER_H = 100   # every leg trades at least this much value per hour, in exalted
+CASHOUT_MAX_FILL_HOURS = 24         # and the stack fills within a day
+
+
+def _liquid(cand: dict, ex_in_ref: float) -> bool:
+    """Whether a cash-out path goes through markets that actually trade: every leg clears
+    CASHOUT_MIN_VOLUME_EX_PER_H (converted to the reference: 1 exalted = `ex_in_ref`) and the stack fills within
+    CASHOUT_MAX_FILL_HOURS. Liquid paths are PREFERRED over illiquid ones rather than the only ones allowed — a
+    holding too big for its market still has an honest answer (a long fill time and a ghost), and reporting "no
+    market data" for it was wrong: there is market data."""
+    if (cand["volume_ref_per_h"] or 0.0) < CASHOUT_MIN_VOLUME_EX_PER_H * ex_in_ref:
         return False
-    if max_fill and (cand["fill_hours"] is None or cand["fill_hours"] > max_fill):
+    if cand["fill_hours"] is None or cand["fill_hours"] > CASHOUT_MAX_FILL_HOURS:
         return False
     return True
 
@@ -74,6 +78,11 @@ def _source(kinds: list[str]) -> str:
     if any(k == "digest" for k in kinds):
         return "digest"
     return "mixed"
+
+
+# Cash-out paths walk at most this many hops, whatever the Arbitrage page's max_steps: they only pass through cash
+# markets, and at 5 steps valuing 39 holdings took 97s on every capital poll (2026-10-05, QA of the learnability pass).
+CASHOUT_MAX_STEPS = 3
 
 
 def realizable(g: "arbitrage.Graph", ref_value: dict[str, float], currency: str, qty: float,
@@ -122,11 +131,12 @@ def realizable(g: "arbitrage.Graph", ref_value: dict[str, float], currency: str,
     # Sell into whichever cash currency (or the reference) nets the most VALUE, through liquid
     # cash markets only, valued by the same table as paper (net of the gold the path charges).
     rv = ref_value
+    ex_in_ref = ref_value.get(settings.ARBITRAGE_UNIT) or 1.0   # cash-out's volume floor is in exalted
     best = best_value = best_key = None
     for target in dict.fromkeys((*sorted(cash), ref)):
         if target == currency:
             continue
-        res = arbitrage._best_conversions(g, rv, currency, target, float(qty),
+        res = arbitrage._best_conversions(g, rv, currency, target, float(qty), max_steps=CASHOUT_MAX_STEPS,
                                           max_gain_pct=CROSS_TOLERANCE_PCT,
                                           gold_value_per_1k=gold_value_per_1k)
         worth = 1.0 if target == ref else (ref_value.get(target) or 0.0)
@@ -137,7 +147,7 @@ def realizable(g: "arbitrage.Graph", ref_value: dict[str, float], currency: str,
             # Ranked on what it really delivers. Clamping to paper here first made every candidate
             # at or above paper tie, and hop count alone then chose the route we display.
             value = _whole_units_out(cand) * worth - gold_ref
-            key = (_liquid(g, cand), cand["full_fill"], value, -cand["hops"])
+            key = (_liquid(cand, ex_in_ref), cand["full_fill"], value, -cand["hops"])
             if best is None or key > best_key:
                 best, best_value, best_key = cand, value, key
     if best is None:                                       # no exchange market to measure against

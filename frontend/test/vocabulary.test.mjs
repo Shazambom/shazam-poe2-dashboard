@@ -14,7 +14,9 @@ test('hold horizon is hours end to end (no holdHorizon bridge)', () => {
 test('route scores come from the server (no client scoreAll)', () => {
   const rv = src('components/RoutesView.jsx')
   assert.ok(!rv.includes('scoreAll') && !rv.includes('weightsRef') && !rv.includes('rank_weights'))
-  assert.ok(rv.includes("addEventListener('scores'"))
+  // the stream's events are read in one place (lib/routesStream.js streamSearch); the page applies the server's scores
+  assert.ok(src('lib/routesStream.js').includes("on('scores'"))
+  assert.match(rv, /scores: \(scores\) => \{ if \(scores\) accRef\.current\.forEach/)
 })
 
 test('feed staleness is rendered from the backend state strings', () => {

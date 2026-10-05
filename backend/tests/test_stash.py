@@ -60,7 +60,7 @@ def test_arbitrage_never_uses_fewer_hubs_than_the_board_shows():
 
 def test_route_search_starts_only_from_usable_holdings(monkeypatch):
     g = _market()
-    monkeypatch.setattr(arbitrage.graph, "cached_graph", lambda: g)
+    monkeypatch.setattr(arbitrage.graph, "cached_graph", lambda *a, **k: g)
     monkeypatch.setattr(db, "get_capital", lambda: {"chaos": 10.0, "c0": 3.0, "c13": 5.0})
     _, _, _, _, capital, starts, notional = routes._search_setup(None, None)
     assert capital == {"chaos": 10.0, "c0": 3.0}, "a non-hub holding is not arbitrage capital"
@@ -69,7 +69,7 @@ def test_route_search_starts_only_from_usable_holdings(monkeypatch):
 
 def test_holding_nothing_usable_searches_notionally_from_usable_currencies_only(monkeypatch):
     g = _market()
-    monkeypatch.setattr(arbitrage.graph, "cached_graph", lambda: g)
+    monkeypatch.setattr(arbitrage.graph, "cached_graph", lambda *a, **k: g)
     monkeypatch.setattr(db, "get_capital", lambda: {"c13": 5.0})
     _, _, _, _, capital, starts, notional = routes._search_setup(None, None)
     assert capital == {} and notional is True
@@ -149,7 +149,7 @@ def test_a_group_with_no_traded_item_has_no_icon():
 def test_capital_endpoint_serves_group_icons(monkeypatch):
     from app import main
     g = _market(n=2)
-    monkeypatch.setattr(arbitrage, "cached_graph", lambda: g)
+    monkeypatch.setattr(arbitrage, "cached_graph", lambda *a, **k: g)
     monkeypatch.setattr(db, "get_capital", lambda: {"c0": 1.0})
     monkeypatch.setattr(main.registry, "groups", lambda categories=None: {"c0": "Ritual", "c1": "Ritual"})
     assert main.capital()["group_icons"] == {"Ritual": "c0"}
@@ -180,7 +180,7 @@ def test_a_saved_start_arbitrage_may_not_use_falls_back_to_what_it_may(monkeypat
     """A "Start from" saved before the rule (or a hub that has since dropped out of the top) used to
     search with zero budget and show no loops, with the dropdown claiming "Everything I hold"."""
     g = _market()
-    monkeypatch.setattr(arbitrage.graph, "cached_graph", lambda: g)
+    monkeypatch.setattr(arbitrage.graph, "cached_graph", lambda *a, **k: g)
     monkeypatch.setattr(db, "get_capital", lambda: {"chaos": 10.0, "c0": 3.0, "c13": 5.0})
     _, _, _, _, _, starts, notional = routes._search_setup(None, ["c13"])
     assert sorted(starts) == ["c0", "chaos"] and notional is False
@@ -238,7 +238,7 @@ def test_a_holding_switched_off_on_stash_is_not_arbitrage_capital(monkeypatch):
     anymore." A holding counts until the user switches it off (settings `stash_counted`)."""
     g = _market()
     _switches(monkeypatch, {"chaos": False, "c0": True})
-    monkeypatch.setattr(arbitrage.graph, "cached_graph", lambda: g)
+    monkeypatch.setattr(arbitrage.graph, "cached_graph", lambda *a, **k: g)
     monkeypatch.setattr(db, "get_capital", lambda: {"chaos": 10.0, "c0": 3.0, "exalted": 5.0})
     _, _, _, _, capital, starts, _ = routes._search_setup(None, None)
     assert capital == {"c0": 3.0, "exalted": 5.0}
@@ -281,7 +281,7 @@ def test_a_switch_takes_effect_on_a_graph_built_before_it(monkeypatch):
     g = _market()
     g.s["stash_counted"] = {}                       # the graph was built before the flip
     _switches(monkeypatch, {"chaos": False})
-    monkeypatch.setattr(arbitrage.graph, "cached_graph", lambda: g)
+    monkeypatch.setattr(arbitrage.graph, "cached_graph", lambda *a, **k: g)
     monkeypatch.setattr(db, "get_capital", lambda: {"chaos": 10.0, "exalted": 5.0})
     assert routes._search_setup(None, None)[4] == {"exalted": 5.0}
     rows = {r["currency"]: r["arbitrage"] for r in liquidity.capital_rows({"chaos": 1.0}, g, g.ref_values())["rows"]}

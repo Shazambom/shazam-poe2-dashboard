@@ -152,7 +152,7 @@ def test_endpoint_serves_the_strats_and_the_one_table(monkeypatch):
         s = {"reference": "exalted"}
         def values(self):
             return {"divine": 400.0, "chaos": 20.0}
-    monkeypatch.setattr(arbitrage, "cached_graph", lambda: G())
+    monkeypatch.setattr(arbitrage, "cached_graph", lambda *a, **k: G())
     db.kv_set(stratcalc.KEY, None)
     r = client.get("/api/strategy/calc").json()
     assert r["calc"] is None
@@ -186,7 +186,7 @@ def test_prices_only_skips_the_saved_document(monkeypatch):
         s = {"reference": "exalted"}
         def values(self):
             return {"divine": 400.0}
-    monkeypatch.setattr(arbitrage, "cached_graph", lambda: G())
+    monkeypatch.setattr(arbitrage, "cached_graph", lambda *a, **k: G())
     db.kv_set(stratcalc.KEY, GOOD)
     r = client.get("/api/strategy/calc", params={"prices": 1}).json()
     assert set(r) == {"prices"} and r["prices"]["divine"] == 1.0

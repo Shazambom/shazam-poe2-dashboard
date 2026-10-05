@@ -91,8 +91,8 @@ def test_keep_drops_a_loop_whose_slowest_step_exceeds_the_limit():
     assert routes._keep(_route(slowest_step_hours=9.0), {"max_step_minutes": 0})   # 0 = off, like the others
 
 
-def test_default_is_45_minutes():
-    assert settings.DEFAULTS["filters"]["max_step_minutes"] == 45
+def test_default_is_the_balanced_presets():
+    assert settings.DEFAULTS["filters"]["max_step_minutes"] == settings.ARBITRAGE_PRESETS[0]["values"]["filters"]["max_step_minutes"] == 60
 
 
 # ---------------------------------------------------------------- 3. an inactive market trades at its ask

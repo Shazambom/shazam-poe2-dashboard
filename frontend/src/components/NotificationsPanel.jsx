@@ -7,7 +7,7 @@ import Toggle from './Toggle.jsx'
 
 const FAMILIES = [
   ['live', 'Live trade pings', 'a watched search finds a listing'],
-  ['signals', 'Market signals', "the analytics sidecar flags something 'about to move'"],
+  ['signals', 'Market signals', 'a currency looks about to move'],
 ]
 const CHANNELS = [
   ['banner', 'In-app banner', 'a card in the top-right stack with an Open action'],
@@ -53,7 +53,7 @@ export default function NotificationsPanel() {
                     </td>
                   )}
                 </React.Fragment>))}
-              <td><button className="btn small" title="Fires this row's enabled channels" onClick={() => test(fam)}>Test</button></td>
+              <td><button className="btn small" title="Fires this row's enabled channels" data-cmd={fam === 'live' ? 'settings-test-sound' : undefined} onClick={() => test(fam)}>Test</button></td>
             </tr>
           ))}
         </tbody>

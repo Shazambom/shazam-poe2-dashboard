@@ -22,7 +22,8 @@ import { useWorkspace, HISTORY_SYS } from './lib/workspaceStore.js'
 import { addFromClipboard } from './lib/clipboardAdd.js'
 import { useEe2History, clearHistoryWithUndo } from './lib/ee2History.js'
 import { findWhere } from './lib/tree.js'
-import { SUB_DESTS, SNAP, settle } from './lib/dests.js'
+import { DESTS, SCREEN_COMMANDS, SUB_DESTS, SNAP, settle } from './lib/dests.js'
+import { runTarget } from './lib/paletteRun.js'
 import BoardView from './components/BoardView.jsx'
 import StrategyView from './components/StrategyView.jsx'
 import EconomyView from './components/EconomyView.jsx'
@@ -146,16 +147,31 @@ export default function App() {
   const ee2Present = useWorkspace(s => s.ee2Present)
   const hasHistoryRows = useWorkspace(s => !!(findWhere(s.tree, n => n.kind === 'folder' && n.sys === HISTORY_SYS)?.children || []).length)
   const customThemes = useTheme(s => s.customs)
-  const wsCommands = React.useMemo(() => [
-    { id: 'ws-new-search', label: 'New search', hint: 'Workspace · ⌘N', run: () => { goWorkspace(); const ws = useWorkspace.getState(); ws.setActive(ws.addSearch(null, { type: 'search', slug: '', live: false }, 'New search')) } },
-    { id: 'ws-new-group', label: 'New group', hint: 'Workspace · ⌘⇧N', run: () => { goWorkspace(); useWorkspace.getState().addFolder(null) } },
-    { id: 'ws-toggle-rail', label: 'Toggle searches rail', hint: 'Workspace', run: () => { goWorkspace(); const ws = useWorkspace.getState(); ws.setLayout({ collapsed: !ws.layout?.collapsed }) } },
-    ...(window.poe2desktop?.clipboard ? [{ id: 'ws-clipboard', label: 'Add from clipboard', hint: 'Workspace · ⌘⇧V', run: () => { goWorkspace(); addFromClipboard(null) } }] : []),
-    ...(window.poe2desktop?.ee2 && (ee2Present || hasHistoryRows) ? [{ id: 'ws-clear-history', label: 'Clear EE2 history', hint: 'Workspace', run: () => { goWorkspace(); clearHistoryWithUndo() } }] : []),
-    { id: 'ws-sort', label: 'Sort searches A–Z', hint: 'Workspace · top level', run: () => { goWorkspace(); useWorkspace.getState().sortChildren(null) } },
-    ...[...THEMES, ...customThemes].map(t => ({ id: `theme-${t.id}`, label: `Theme: ${t.name}`, hint: 'Appearance', run: () => useTheme.getState().apply(t.id) })),
-    ...(window.poe2desktop?.feedback ? [{ id: 'send-feedback', label: 'Report a problem…', hint: 'Help', run: () => setFeedbackOpen(true) }] : []),
-  ], [goWorkspace, ee2Present, hasHistoryRows, customThemes])
+  // The screen ⌘K opens on: the tab, and the sub-view its section reports (nav.reportSub).
+  const [subs, setSubs] = useState({})
+  useEffect(() => nav.on(e => { if (e.type === 'sub') setSubs(m => ({ ...m, [e.section]: e.sub })) }), [])
+  const screen = (DESTS.find(d => d.section === tab && (!d.sub || d.sub === subs[tab])) || DESTS[0]).id
+  const goSub = React.useCallback((section, sub) => {
+    setTab(section)
+    if (sub) setTimeout(() => (section === 'Trading' ? nav.openTrading(sub) : nav.openSub(section, sub)), 0)
+  }, [])
+  const goScreen = React.useCallback((id) => { const d = DESTS.find(x => x.id === id); if (d) goSub(d.section, d.sub) }, [goSub])
+  // ⌘K actions App runs itself (SCREEN_COMMANDS entries without a control): each lands on Trading → Workspace and
+  // mutates the store directly, or opens the report dialog. Absent = not available here (no clipboard bridge…).
+  const appRuns = React.useMemo(() => ({
+    'ws-new-search': () => { goWorkspace(); const ws = useWorkspace.getState(); ws.setActive(ws.addSearch(null, { type: 'search', slug: '', live: false }, 'New search')) },
+    'ws-new-group': () => { goWorkspace(); useWorkspace.getState().addFolder(null) },
+    'ws-toggle-rail': () => { goWorkspace(); const ws = useWorkspace.getState(); ws.setLayout({ collapsed: !ws.layout?.collapsed }) },
+    ...(window.poe2desktop?.clipboard ? { 'ws-clipboard': () => { goWorkspace(); addFromClipboard(null) } } : {}),
+    ...(window.poe2desktop?.ee2 && (ee2Present || hasHistoryRows) ? { 'ws-clear-history': () => { goWorkspace(); clearHistoryWithUndo() } } : {}),
+    'ws-sort': () => { goWorkspace(); useWorkspace.getState().sortChildren(null) },
+    ...(window.poe2desktop?.feedback ? { 'send-feedback': () => setFeedbackOpen(true) } : {}),
+  }), [goWorkspace, ee2Present, hasHistoryRows])
+  // Every screen's actions, runnable: a control action goes to its screen, then focuses or clicks the control.
+  const screenCommands = React.useMemo(() => Object.fromEntries(Object.entries(SCREEN_COMMANDS).map(([id, cs]) => [id,
+    cs.map(c => ({ ...c, run: appRuns[c.id] || (c.target && (() => { goScreen(id); runTarget(c.target, c.act) })) })).filter(c => c.run)])),
+  [appRuns, goScreen])
+  const themeCommands = React.useMemo(() => [...THEMES, ...customThemes].map(t => ({ id: `theme-${t.id}`, label: `Theme: ${t.name}`, hint: 'Appearance', run: () => useTheme.getState().apply(t.id) })), [customThemes])
 
   const setLeague = async (league) => {
     if (!league || league === status?.league) return
@@ -251,10 +267,11 @@ export default function App() {
         open={cmdOpen} onClose={() => setCmdOpen(false)}
         tabs={TABS} onGoTab={setTab}
         subDests={SUB_DESTS}
-        onGoSub={(section, sub) => { setTab(section); setTimeout(() => (section === 'Trading' ? nav.openTrading(sub) : nav.openSub(section, sub)), 0) }}
+        onGoSub={goSub}
         leagues={leagues} onSetLeague={setLeague}
         onOpenCurrency={(id) => { setTab('Board'); setTimeout(() => nav.openCurrency(id), 0) }}
-        commands={wsCommands} onOpenSearch={(id) => { goWorkspace(); useWorkspace.getState().setActive(id) }}
+        screen={screen} screenCommands={screenCommands}
+        commands={themeCommands} onOpenSearch={(id) => { goWorkspace(); useWorkspace.getState().setActive(id) }}
       />
 
       {assetModal.node}

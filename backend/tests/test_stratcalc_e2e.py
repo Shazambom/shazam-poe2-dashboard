@@ -99,7 +99,7 @@ def _prices_through_the_app(monkeypatch, div_prices, ex_per_div=EX_PER_DIV) -> d
     if div_prices.get("exalted"):       # a market that states exalted's price sets its own ratio
         ex_per_div = 1 / div_prices["exalted"]
     g = _graph(div_prices, ex_per_div)
-    monkeypatch.setattr(arbitrage, "cached_graph", lambda: g)
+    monkeypatch.setattr(arbitrage, "cached_graph", lambda *a, **k: g)
     r = client.get("/api/strategy/calc")
     assert r.status_code == 200
     return r.json()

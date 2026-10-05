@@ -3,28 +3,32 @@ import { motion, AnimatePresence } from 'motion/react'
 import { api } from '../lib/api.js'
 import { useWorkspace } from '../lib/workspaceStore.js'
 import { buildPaletteItems } from '../lib/palette.js'
+import { usableHere } from '../lib/paletteRun.js'
 import Cur from './Cur.jsx'
 
 // ⌘K command palette — the fast path. Fuzzy-search across the board's currencies
 // (open its detail), the views (jump there), and leagues (switch). Keyboard-first:
 // ↑↓ to move, ↵ to run, esc to close. Opened via ⌘K/Ctrl-K or the top-bar chip.
-export default function CommandPalette({ open, onClose, tabs, onGoTab, subDests = [], onGoSub, leagues, onSetLeague, onOpenCurrency, commands = [], onOpenSearch }) {
+export default function CommandPalette({ open, onClose, tabs, onGoTab, subDests = [], onGoSub, leagues, onSetLeague, onOpenCurrency, commands = [], screen = null, screenCommands = {}, onOpenSearch }) {
   const tree = useWorkspace(s => s.tree)
   const [q, setQ] = useState('')
   const [rows, setRows] = useState([])   // board currencies (id + name)
   const [sel, setSel] = useState(0)
+  const [here, setHere] = useState([])   // this screen's actions usable when the palette opened
   const inputRef = useRef(null)
   const listRef = useRef(null)
 
   useEffect(() => {
     if (!open) return
     setQ(''); setSel(0)
+    setHere(usableHere(screenCommands[screen] || []))
     api.board().then(d => setRows(d?.rows || [])).catch(() => {})
     const t = setTimeout(() => inputRef.current?.focus(), 10)
     return () => clearTimeout(t)
   }, [open])
 
-  const items = useMemo(() => buildPaletteItems({ tabs, subDests, rows, leagues, commands, tree, q }), [tabs, subDests, rows, leagues, commands, tree, q])
+  const items = useMemo(() => buildPaletteItems({ tabs, subDests, rows, leagues, commands, tree, screen,
+    screenCommands: { ...screenCommands, [screen]: here }, q }), [tabs, subDests, rows, leagues, commands, tree, screen, screenCommands, here, q])
 
   useEffect(() => { if (sel > items.length - 1) setSel(0) }, [items.length, sel])
   // keep the selected row in view as you arrow through
@@ -58,7 +62,7 @@ export default function CommandPalette({ open, onClose, tabs, onGoTab, subDests 
           <motion.div className="cmdk" onClick={e => e.stopPropagation()}
             initial={{ opacity: 0, y: -14, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -8, scale: 0.98 }}
             transition={{ type: 'spring', stiffness: 420, damping: 32 }}>
-            <input ref={inputRef} className="cmdk-input" placeholder="Search currencies, views, leagues…"
+            <input ref={inputRef} className="cmdk-input" placeholder="Search screens, actions, currencies…"
               value={q} onChange={e => { setQ(e.target.value); setSel(0) }} onKeyDown={onKey} />
             <div className="cmdk-list" ref={listRef}>
               {items.length === 0 && <div className="cmdk-empty">No matches</div>}

@@ -56,8 +56,8 @@ def test_stream_routes_evicts_like_find_routes(monkeypatch):
     db.kv_set("settings", SETTINGS)
     arbitrage.invalidate_caches()
     g = _synthetic_graph()
-    monkeypatch.setattr(arbitrage.graph, "cached_graph", lambda: g)
-    monkeypatch.setattr(arbitrage, "cached_graph", lambda: g)
+    monkeypatch.setattr(arbitrage.graph, "cached_graph", lambda *a, **k: g)
+    monkeypatch.setattr(arbitrage, "cached_graph", lambda *a, **k: g)
     monkeypatch.setattr(db, "get_capital", lambda: {"chaos": 100.0})
     for i in range(40):
         list(arbitrage.stream_routes({"limit": 100 + i}, None))

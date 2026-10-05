@@ -1,7 +1,8 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { useStatus, ensureSettings } from '../lib/statusStore.js'
 import { lookup, useIcons } from '../lib/icons.js'
 import Cur from './Cur.jsx'
+import { useAutosave } from '../lib/hooks.js'
 
 // How much a Divine is worth in gold shifts across a league, so the player sets it. The slider
 // axis is gold-per-Divine on a log scale from 1k → 1M; the stored setting is its inverse,
@@ -16,24 +17,23 @@ const fmtGpd = (g) => g >= 1e6 ? `${(g / 1e6).toFixed(g >= 1e7 ? 0 : 1)}M` : g >
 export default function GoldValueSlider({ onCommit }) {
   useIcons()                                   // re-render once icons load (for the thumb url)
   const [gpd, setGpd] = useState(100000)       // gold per Divine (default gold_value_per_1k 0.01 → 100k)
-  const timer = useRef(null)
+  // Debounced save, and a value still waiting when the slider goes away (an Arbitrage preset pick redraws it) is sent
+  // then, not later: the shared autosave (lib/hooks.js). Then re-rank routes; the cash-out (ghost) is net of gold too.
+  const { save, arm } = useAutosave(async (nextGpd) => {
+    await useStatus.getState().saveSettings({ gold_value_per_1k: 1000 / nextGpd })
+    onCommit?.()
+    useStatus.getState().refresh()
+  }, 350)
 
   useEffect(() => {
+    arm()                                      // armed at once: a drag before the settings load still saves
     ensureSettings().then(s => {
       const gv = Number(s.gold_value_per_1k) || 0.01
       setGpd(Math.min(GPD_MAX, Math.max(GPD_MIN, Math.round(1000 / gv))))
     }).catch(() => {})
-  }, [])
+  }, []) // eslint-disable-line
 
-  const commit = (nextGpd) => {
-    setGpd(nextGpd)
-    clearTimeout(timer.current)
-    timer.current = setTimeout(() => {
-      useStatus.getState().saveSettings({ gold_value_per_1k: 1000 / nextGpd })
-        .then(() => { onCommit?.(); useStatus.getState().refresh() })   // cash-out (ghost) is net of gold too
-        .catch(() => {})
-    }, 350)                                    // debounce: persist + re-rank routes after the drag settles
-  }
+  const commit = (nextGpd) => { setGpd(nextGpd); save(nextGpd) }
 
   const thumb = lookup({ id: 'divine' })?.icon
   return (

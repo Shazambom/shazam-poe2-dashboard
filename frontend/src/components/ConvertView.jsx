@@ -48,10 +48,10 @@ function ConvertView({ currencies, capital }) {
     <div className="convert-panel">
       <div className="convert-head">
         <h3>Convert</h3>
-        <span className="hint">Cheapest way to turn one currency into another — an open path, not a loop.</span>
+        <span className="hint">Cheapest way to turn one currency into another</span>
       </div>
       <div className="convert-form">
-        <label className="convert-field">Have<CurrencyPicker value={have} onChange={setHave} options={opts} placeholder="have…" /></label>
+        <label className="convert-field" data-cmd="convert-have">Have<CurrencyPicker value={have} onChange={setHave} options={opts} placeholder="have…" /></label>
         <span className="convert-arrow">→</span>
         <label className="convert-field">Want<CurrencyPicker value={want} onChange={setWant} options={opts} placeholder="want…" /></label>
         <label className="convert-field amount">Amount<input type="number" min="0" placeholder={String(held[have] || 1)}

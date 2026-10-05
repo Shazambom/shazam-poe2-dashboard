@@ -208,3 +208,17 @@ def test_a_route_that_delivers_nothing_is_never_a_conversion():
                                       max_gain_pct=1e9, gold_value_per_1k=0.05)       # gold dear: direct nets < 0
     assert res["best"]["path"] == ["divine", "exalted"] and res["best"]["out"] == 1896
     assert all(r["out"] > 0 for r in [res["best"]] + res["alternatives"])
+
+
+def test_the_bridge_tie_break_never_grows_with_the_users_step_count(monkeypatch):
+    """Learnability QA 2026-10-05: at 5 steps the bridge score (all pairs of the 12 most valuable currencies)
+    took ~36s per Convert, starving the Arbitrage list behind it. It only breaks genuine ties, so it walks a fixed
+    BRIDGE_MAX_STEPS whatever the route search's max_steps."""
+    from app import centrality
+    g = _graph()
+    g.s = {**g.s, "max_steps": 5}
+    walked = []
+    real = g.iter_paths
+    monkeypatch.setattr(g, "iter_paths", lambda a, b, n: (walked.append(n), real(a, b, n))[1])
+    centrality.betweenness_lite(g, {c: 1.0 for c in g.adj})
+    assert walked and set(walked) == {centrality.BRIDGE_MAX_STEPS} == {3}

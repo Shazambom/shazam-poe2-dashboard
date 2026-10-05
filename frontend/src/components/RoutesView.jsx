@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { finishRoutes } from '../lib/routesStream.js'
+import { flushSync } from 'react-dom'
+import { finishRoutes, streamSearch } from '../lib/routesStream.js'
 import { api, fmt } from '../lib/api.js'
 import ConvertView from './ConvertView.jsx'
 import Cur from './Cur.jsx'
@@ -13,10 +14,12 @@ import { arbitrageHoldings, netWorth } from '../lib/stash.js'
 import { nav } from '../lib/nav.js'
 import { useCurrencies } from '../lib/icons.js'
 import { ensureSettings, useStatus } from '../lib/statusStore.js'
-import { useAutosave, useDebounced } from '../lib/hooks.js'
+import { useApi, useAutosave, useDebounced } from '../lib/hooks.js'
 import { DEFAULT_FILTERS, filtersFromSettings, filtersToSave, searchKeyOf, streamQuery } from '../lib/routeFilters.js'
+import { activePreset } from '../lib/arbPresets.js'
 
 const INF = Infinity
+const SEARCH_RETRIES = 2   // a timed-out search is searched again this many times, then the page says so
 
 // Column definitions: [key, label, accessor, defaultDir, title]
 const COLS = [
@@ -45,8 +48,12 @@ export default function RoutesView({ capital, status, currencies }) {
   const [err, setErr] = useState(null)
   const [open, setOpen] = useState(null)
   const tick = useSync(s => s.tick)              // topbar ⟳ → refresh loops
+  const settings = useStatus(s => s.settings)
+  const presets = useApi(() => api.arbitragePresets(), []).data || []
+  const [rev, setRev] = useState(0)              // bumped by a preset pick: the sliders re-read the settings
   const esRef = useRef(null)
   const accRef = useRef([])
+  const retries = useRef(0)
   // The search sends exactly what the form shows (a cleared box as 0 = off), never leaving a blank
   // for the server to fill from the saved settings, and re-runs when any of it changes — but not
   // before the saved filters have loaded (a search with the defaults first swapped the table a
@@ -54,36 +61,27 @@ export default function RoutesView({ capital, status, currencies }) {
   const filterKey = searchKeyOf(f, loaded)
 
   const load = () => {
-    esRef.current?.close()
+    esRef.current?.()                            // a superseded search reports nothing more
     accRef.current = []
     setCounts(null); setErr(null); setStreaming(true)
-    const es = new EventSource(api.routesStreamUrl(streamQuery(f)))
-    esRef.current = es
     // The server scores as it streams (provisional `scores` after each batch, authoritative on
     // `done`) — one ranking implementation, in the backend. The table shows the PREVIOUS result
     // until `done`, then swaps in the new one whole: rows never re-sort under the cursor mid-read.
-    const applyScores = (scores) => { if (scores) accRef.current.forEach(r => { if (scores[r.id] != null) r.score = scores[r.id] }) }
-    es.addEventListener('meta', e => setMeta(JSON.parse(e.data)))
-    es.addEventListener('routes', e => { accRef.current = accRef.current.concat(JSON.parse(e.data)) })
-    es.addEventListener('scores', e => applyScores(JSON.parse(e.data)))
-    es.addEventListener('done', e => {
-      const d = JSON.parse(e.data)
+    esRef.current = streamSearch(api.routesStreamUrl(streamQuery(f)), {
+      meta: setMeta,
+      routes: (rs) => { accRef.current = accRef.current.concat(rs) },
+      scores: (scores) => { if (scores) accRef.current.forEach(r => { if (scores[r.id] != null) r.score = scores[r.id] }) },
       // The authoritative top list, whether this was a fresh search or a cached replay
       // (lib/routesStream.js): one population for the banding, so the rows don't change on reload.
-      setRoutes(finishRoutes(accRef.current, d))
-      setCounts(d)
-      setStreaming(false)
-      es.close()
-    })
-    es.addEventListener('error', e => {
-      if (e.data) { try { setErr(JSON.parse(e.data).error) } catch { setErr('stream error') } }
-      setStreaming(false)
-      es.close()
+      done: (d) => { retries.current = 0; setRoutes(finishRoutes(accRef.current, d)); setCounts(d); setStreaming(false) },
+      fail: (msg) => { if (msg) setErr(msg); setStreaming(false) },
+      // a busy backend, not an empty market: search again, a couple of times, then stop and say so
+      timeout: () => { if (retries.current < SEARCH_RETRIES) { retries.current += 1; load() } else { setErr('the search is taking too long — press refresh to try again'); setStreaming(false) } },
     })
   }
 
   // The filters live in the user's settings: loaded once, saved (debounced) on every edit.
-  const { save, arm } = useAutosave(next => useStatus.getState().saveSettings({ filters: filtersToSave(next) }), 800)
+  const { save, arm, flush } = useAutosave(next => useStatus.getState().saveSettings({ filters: filtersToSave(next) }), 800)
   useEffect(() => {
     ensureSettings().then(s => { setF(filtersFromSettings(s.filters)); setLoaded(true); arm() })
       .catch(() => setLoaded(true))              // no settings: search with the defaults, once
@@ -93,13 +91,24 @@ export default function RoutesView({ capital, status, currencies }) {
   useEffect(() => {
     if (searchKey == null) return
     load()
-    return () => esRef.current?.close()
+    return () => esRef.current?.()
   }, [searchKey]) // eslint-disable-line
   useEffect(() => {
     if (searchKey == null) return
     const t = setInterval(() => { if (document.visibilityState === 'visible' && !streaming) load() }, 120000)
     return () => clearInterval(t)
   }, [searchKey, streaming]) // eslint-disable-line
+
+  const active = activePreset(presets, settings)
+  // A pick is an ordinary settings save of the preset's values, made after any edit still waiting to save: the
+  // sliders are redrawn first (each sends its pending edit as it goes), then the filter boxes' edit is sent, then the
+  // preset — saves land in order, so the preset wins its own values. The form and sliders then show them.
+  const pick = async (p) => {
+    flushSync(() => setRev(r => r + 1))
+    await flush().catch(() => {})
+    const s = await useStatus.getState().saveSettings(p.values).catch(() => null)
+    if (s) { setF(filtersFromSettings(s.filters)); setRev(r => r + 1) }
+  }
 
   // Manual refresh from the topbar ⟳ re-runs the search.
   useEffect(() => { if (tick > 0 && searchKey != null) load() }, [tick]) // eslint-disable-line
@@ -144,8 +153,18 @@ export default function RoutesView({ capital, status, currencies }) {
       <aside className="rail">
         <ArbitrageCapital />
 
+        {presets.length > 0 && <>
+          <h2>Preset</h2>
+          <div className="preset-grid">
+            {presets.map(p => (
+              <button key={p.id} type="button" className={`btn small ${active === p.id ? 'primary' : ''}`}
+                aria-pressed={active === p.id} onClick={() => pick(p)}>{p.label}</button>
+            ))}
+          </div>
+        </>}
+
         <h2>Gold value</h2>
-        <GoldValueSlider onCommit={load} />
+        <GoldValueSlider key={`gold-${rev}`} onCommit={load} />
 
         <h2>Filters</h2>
         <div className="field"><label>Minimum margin %</label><input type="number" step="0.1" value={f.min_margin_pct} onChange={set('min_margin_pct')} /></div>
@@ -158,13 +177,13 @@ export default function RoutesView({ capital, status, currencies }) {
 
         <details className="adv">
           <summary>More filters</summary>
-          <div className="field"><label>Minimum margin, in {ref}</label><input type="number" step="0.1" value={f.min_margin_ref} onChange={set('min_margin_ref')} /></div>
+          <div className="field"><label>Minimum margin, in exalted</label><input type="number" step="0.1" value={f.min_margin_ref} onChange={set('min_margin_ref')} /></div>
           <div className="field"><label>Maximum gold per loop</label><input type="number" step="100" placeholder="no limit" value={f.max_gold} onChange={set('max_gold')} /></div>
           <div className="field"><label>Minimum margin per 1k gold</label><input type="number" step="0.01" placeholder="no limit" value={f.min_margin_per_1k_gold} onChange={set('min_margin_per_1k_gold')} /></div>
-          <div className="field"><label>Minimum liquidity, in {ref}</label><input type="number" step="1" placeholder="no limit" value={f.min_liquidity_ref} onChange={set('min_liquidity_ref')} />
+          <div className="field"><label>Minimum liquidity, in exalted</label><input type="number" step="1" placeholder="no limit" value={f.min_liquidity_ref} onChange={set('min_liquidity_ref')} />
             {f.min_liquidity_ref !== '' && Number(f.min_liquidity_ref) < 200 && <span className="warn-hint">⚠ Below 200 you'll see routes you can't actually fill — expect a bad time.</span>}</div>
-          <div className="field"><label>Minimum velocity, {ref}/h per 1k gold</label><input type="number" step="0.01" placeholder="no limit" value={f.min_velocity} onChange={set('min_velocity')} /></div>
-          <div className="field"><label>Minimum traded volume, {ref} per hour</label><input type="number" step="1" placeholder="no limit" value={f.min_volume_ref_per_h} onChange={set('min_volume_ref_per_h')} />
+          <div className="field"><label>Minimum velocity, exalted/h per 1k gold</label><input type="number" step="0.01" placeholder="no limit" value={f.min_velocity} onChange={set('min_velocity')} /></div>
+          <div className="field"><label>Minimum traded volume, exalted per hour</label><input type="number" step="1" placeholder="no limit" value={f.min_volume_ref_per_h} onChange={set('min_volume_ref_per_h')} />
             {f.min_volume_ref_per_h !== '' && Number(f.min_volume_ref_per_h) < 100 && <span className="warn-hint">⚠ Below 100/h markets are too thin to trust — expect a bad time.</span>}</div>
           <div className="field"><label>Maximum minutes per step</label><input type="number" step="5" placeholder="no limit" value={f.max_step_minutes} onChange={set('max_step_minutes')}
             title="How long the slowest step would take at that market's own trading pace: the units you push in ÷ the units it trades per hour." /></div>
@@ -172,7 +191,7 @@ export default function RoutesView({ capital, status, currencies }) {
           <div className="check"><Toggle checked={!!f.exclude_recipes} onChange={v => update('exclude_recipes', v)} label="Exchange steps only" /></div>
           <div className="field"><label>Show at most</label><input type="number" value={f.limit} onChange={set('limit')} /></div>
         </details>
-        <ArbitrageAlgorithm onSaved={load} />
+        <ArbitrageAlgorithm key={`algo-${rev}`} onSaved={load} />
 
       </aside>
 
@@ -189,7 +208,7 @@ export default function RoutesView({ capital, status, currencies }) {
 
         {streaming && routes.length === 0 ? (
           <table><tbody>{Array.from({ length: 6 }).map((_, i) => <tr key={i}><td colSpan={12}><div className="sk sk-row" /></td></tr>)}</tbody></table>
-        ) : !streaming && routes.length === 0 ? (
+        ) : !streaming && counts && routes.length === 0 ? (
           <div className="empty">
             <b>{(counts?.total_candidates ?? 0) === 0 ? 'No loops yet.' : 'No loop clears your thresholds.'}</b><br />
             {(counts?.total_candidates ?? 0) === 0

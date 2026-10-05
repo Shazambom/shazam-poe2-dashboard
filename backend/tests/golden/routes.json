@@ -9,6 +9,7 @@
   "no_holding": 0
  },
  "filters": {
+  "exclude_recipes": false,
   "limit": 100,
   "live_only": false,
   "max_fill_hours": 0,

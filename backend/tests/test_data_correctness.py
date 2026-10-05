@@ -245,7 +245,7 @@ def test_m6_keeps_a_higher_floor_and_is_registered(tmp_path):
     assert (6, migrations_user._m6_liq_floor_200) in [(n, fn) for n, _, fn in migrations_user.USER_MIGRATIONS]
 
 
-def test_liquidity_floor_default_is_200():
+def test_liquidity_floor_default_never_below_the_recommended_200():
     from app import arbitrage, settings
-    assert settings.DEFAULTS["filters"]["min_liquidity_ref"] == 200.0
+    assert settings.DEFAULTS["filters"]["min_liquidity_ref"] >= arbitrage.RECOMMENDED_MIN_LIQUIDITY_REF
     assert arbitrage.RECOMMENDED_MIN_LIQUIDITY_REF == 200.0

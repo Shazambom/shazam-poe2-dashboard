@@ -6,6 +6,7 @@ import SearchTree from './SearchTree.jsx'
 import { toast } from '../lib/api.js'
 import { hasTradeEngine as isDesktop } from '../lib/session.js'
 import { flatten } from '../lib/tree.js'
+import { nav } from '../lib/nav.js'
 
 // Trading → Live: the live-search cockpit. Newest ping surfaces at the top as the single
 // travel-to-hideout button ("one button for all watches"); watched searches can be toggled
@@ -73,7 +74,7 @@ export default function LiveView({ league }) {
         {loadError
           ? <div className="notice error ws-load-error" role="alert"><b>Couldn't load your searches</b><span className="muted">{loadError}</span><button className="btn small" onClick={() => loadWorkspace()}>Retry</button></div>
           : searches.length === 0
-          ? <div className="empty small">No saved searches yet — add some in Workspace.</div>
+          ? <div className="empty small">No saved searches yet.<br /><button type="button" className="btn small" onClick={() => nav.openTrading('workspace')}>Open Workspace</button></div>
           : (
             <SearchTree
               onSelect={() => {}} compact
@@ -100,10 +101,10 @@ export default function LiveView({ league }) {
           <span className="spacer" />
           {pings.length > 0 && <button className="btn small" onClick={() => usePings.getState().clear()}>Clear</button>}
         </div>
-        <div className="live-newest" ref={headRef}>
+        <div className="live-newest" ref={headRef} data-cmd="live-ping">
           {newest
             ? <PingButton ping={newest} />
-            : <div className="empty small live-placeholder">Armed watches ping here.</div>}
+            : <div className="empty small live-placeholder">Press Go live on a search.</div>}
         </div>
         {rest.length > 0 && (
           <div className="live-recent">

@@ -107,4 +107,4 @@ def test_m7_keeps_any_other_league_and_tolerates_no_settings(tmp_path):
     assert _stored(c)["league"] == "Runes of Aldur"
     (tmp_path / "empty").mkdir()
     migrations_user._m7_league_default(_conn(tmp_path / "empty", None))   # an install with no settings row
-    assert [m[0] for m in migrations_user.USER_MIGRATIONS][-1] == 7
+    assert 7 in [m[0] for m in migrations_user.USER_MIGRATIONS]

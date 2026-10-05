@@ -31,6 +31,8 @@ SETTINGS = {
     "digest_max_age_h": 6, "live_max_age_s": 1800, "min_edge_volume_ref_per_h": 0,
     "min_edge_depth": 0, "hub_count": 2, "_hub_seed_v1": True, "_liq_floor_v1": True,
     "rank_weights": {"velocity": 0.5, "margin_per_1k_gold": 0.2, "margin_ref": 0.2, "volume": 0.1},
+    # pinned, not the defaults: the snapshots guard the arbitrage code, and the defaults are a preset (settings.py)
+    "volume_window_h": 24, "wide_spread": 2.0, "gold_value_per_1k": 0.01,
     "filters": {"min_margin_pct": 0.0, "min_margin_ref": 0.0, "max_gold": 0, "min_margin_per_1k_gold": 0.0,
                 "min_liquidity_ref": 0.0, "min_volume_ref_per_h": 0.0, "max_fill_hours": 0,
                 "min_velocity": 0.0, "live_only": False, "sort": "score", "limit": 100,
@@ -110,8 +112,8 @@ def _seed_digest_league() -> None:
 
 def test_find_routes_and_stream_routes_agree(frozen, monkeypatch):
     g = _synthetic_graph()
-    monkeypatch.setattr(arbitrage.graph, "cached_graph", lambda: g)
-    monkeypatch.setattr(arbitrage, "cached_graph", lambda: g)
+    monkeypatch.setattr(arbitrage.graph, "cached_graph", lambda *a, **k: g)
+    monkeypatch.setattr(arbitrage, "cached_graph", lambda *a, **k: g)
     arbitrage._route_cache.clear()
     direct = arbitrage._find_routes({}, None)
     assert direct["routes"], "fixture must produce at least one route"
@@ -131,8 +133,8 @@ def test_find_routes_and_stream_routes_agree(frozen, monkeypatch):
 
 def test_stream_routes_second_call_is_served_from_cache(frozen, monkeypatch):
     g = _synthetic_graph()
-    monkeypatch.setattr(arbitrage.graph, "cached_graph", lambda: g)
-    monkeypatch.setattr(arbitrage, "cached_graph", lambda: g)
+    monkeypatch.setattr(arbitrage.graph, "cached_graph", lambda *a, **k: g)
+    monkeypatch.setattr(arbitrage, "cached_graph", lambda *a, **k: g)
     arbitrage._route_cache.clear()
     first = list(arbitrage.stream_routes({"sort": "margin_ref"}, ["chaos"]))
     second = list(arbitrage.stream_routes({"sort": "margin_ref"}, ["chaos"]))
@@ -142,8 +144,8 @@ def test_stream_routes_second_call_is_served_from_cache(frozen, monkeypatch):
 
 def test_convert_golden(frozen, monkeypatch):
     g = _synthetic_graph()
-    monkeypatch.setattr(arbitrage.graph, "cached_graph", lambda: g)
-    monkeypatch.setattr(arbitrage, "cached_graph", lambda: g)
+    monkeypatch.setattr(arbitrage.graph, "cached_graph", lambda *a, **k: g)
+    monkeypatch.setattr(arbitrage, "cached_graph", lambda *a, **k: g)
     out = arbitrage.convert("chaos", "divine", 100)
     assert out["best"] is not None
     _check("convert", out)

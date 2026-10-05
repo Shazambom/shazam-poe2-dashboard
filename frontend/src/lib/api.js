@@ -52,6 +52,7 @@ export const api = {
   putCapital: (entries, counted = []) => put('/api/capital', { entries, counted }),
   settings: () => fetch('/api/settings').then(j),
   putSettings: (patch) => put('/api/settings', { patch }),
+  arbitragePresets: () => fetch('/api/arbitrage/presets').then(j),
   recipes: () => fetch('/api/recipes').then(j),
   putRecipes: (recipes) => put('/api/recipes', { recipes }),
   routesStreamUrl: (f) => '/api/routes/stream' + qs(f),

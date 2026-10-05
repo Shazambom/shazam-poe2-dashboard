@@ -24,6 +24,8 @@ DAMPING = 0.85           # PageRank teleport/follow split (standard 0.85)
 _MAX_ITER = 100          # power-iteration cap (converges in ~tens on these small graphs)
 _TOL = 1e-9              # L1 convergence threshold
 BRIDGE_TOP_K = 12        # betweenness enumerated among the K most valuable currencies
+BRIDGE_MAX_STEPS = 3     # ...over paths this long, whatever the route search's max_steps: at 5 the all-pairs walk
+                         # took ~36s per Convert (2026-10-05) for a score that only breaks genuine ties
 HUB_N = 5                # how many currencies get the Board hub chip
 
 
@@ -76,7 +78,7 @@ def betweenness_lite(g, rv: dict[str, float], top_k: int = BRIDGE_TOP_K,
     from .arbitrage import MAX_CANDIDATES
 
     if max_steps is None:
-        max_steps = int(g.s.get("max_steps", 4))
+        max_steps = BRIDGE_MAX_STEPS
     nodes = {a for a, _ in g.edges} | {b for _, b in g.edges}
     ranked = sorted(nodes, key=lambda x: rv.get(x, 0.0), reverse=True)[:top_k]
     counts: dict[str, float] = {}

@@ -245,7 +245,7 @@ export default function BoardView({ status }) {
         <h2 style={{ margin: 0 }}>Price board <span className="muted" style={{ fontWeight: 400 }}>· {rangeLabel(winH)}</span></h2>
         <span className="spacer" />
         {isDesktop && watchlist && (
-          <CurrencyPicker value="" placeholder="Add a currency…" onChange={addById}
+          <CurrencyPicker value="" placeholder="Add a currency…" onChange={addById} cmd="board-add"
             options={opts.filter(o => !watchlist.includes(o.id))} />
         )}
       </div>

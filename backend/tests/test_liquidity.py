@@ -231,8 +231,8 @@ def test_capital_endpoint_enriches_rows(monkeypatch):
 
     g = _g(reference="exalted")
     g.add(_edge("divine", "exalted", 50.0, 1_000_000))
-    monkeypatch.setattr(arbitrage.graph, "cached_graph", lambda: g)
-    monkeypatch.setattr(arbitrage, "cached_graph", lambda: g)
+    monkeypatch.setattr(arbitrage.graph, "cached_graph", lambda *a, **k: g)
+    monkeypatch.setattr(arbitrage, "cached_graph", lambda *a, **k: g)
     monkeypatch.setattr(db, "get_capital", lambda: {"divine": 10, "exalted": 100})
 
     res = main.capital()
@@ -272,3 +272,40 @@ def test_capital_is_not_syncing_once_a_market_is_quoted():
     g.add(_edge("exalted", "divine", 1 / 500.0, 1_000_000, kind="digest"))
     out = liquidity.capital_rows({"divine": 2.0}, g, g.values())
     assert out["syncing"] is False and out["realizable_total_ref"] is not None
+
+
+def test_cash_out_never_grows_with_the_arbitrage_step_count(monkeypatch):
+    """Learnability QA 2026-10-05: valuing 39 holdings took 1s at 3 steps, 14s at 4, 97s at 5 — on every 30s
+    capital poll, stalling the whole backend — because the cash-out path search followed the Arbitrage page's
+    max_steps. Cash-outs only pass through cash markets, so they walk a fixed CASHOUT_MAX_STEPS."""
+    from app import arbitrage
+    seen = []
+    real = arbitrage._best_conversions
+    def spy(*a, **k):
+        seen.append(k.get("max_steps"))
+        return real(*a, **k)
+    monkeypatch.setattr(arbitrage, "_best_conversions", spy)
+    g = _g()
+    g.s = {**g.s, "max_steps": 5}
+    g.add(_edge("annul", "exalted", 50.0, 1_000_000))
+    r = liquidity.realizable(g, g.ref_values(), "annul", 10, cash=HUBS)
+    assert r["realizable_ref"] == 500.0
+    assert seen and set(seen) == {liquidity.CASHOUT_MAX_STEPS} == {3}
+
+
+# Code review 2026-10-05: cash-out read the Arbitrage page's filters, so a preset (or m8's Balanced, which turns the
+# fill-time limit off and states volume in exalted) moved every Capital/Stash value. Cash-out keeps its own guards.
+def test_cash_out_liquidity_ignores_the_arbitrage_filters():
+    g = _g()
+    g.s = {**g.s, "filters": {"min_volume_ref_per_h": 1e9, "max_fill_hours": 0}}
+    fast = {"volume_ref_per_h": 500.0, "fill_hours": 2.0}
+    slow = {"volume_ref_per_h": 500.0, "fill_hours": liquidity.CASHOUT_MAX_FILL_HOURS + 6}
+    assert liquidity._liquid(fast, ex_in_ref=1.0) is True, "the page's 1e9 floor is not cash-out's"
+    assert liquidity._liquid(slow, ex_in_ref=1.0) is False, "cash-out keeps its fill-time guard with the page's off"
+    assert (liquidity.CASHOUT_MIN_VOLUME_EX_PER_H, liquidity.CASHOUT_MAX_FILL_HOURS) == (100, 24)
+
+
+def test_cash_out_volume_floor_is_in_exalted_whatever_the_reference():
+    # reference = divine, 1 exalted = 0.01 divine: the 100 ex/h floor is 1 div/h
+    assert liquidity._liquid({"volume_ref_per_h": 2.0, "fill_hours": 1.0}, ex_in_ref=0.01) is True
+    assert liquidity._liquid({"volume_ref_per_h": 0.5, "fill_hours": 1.0}, ex_in_ref=0.01) is False

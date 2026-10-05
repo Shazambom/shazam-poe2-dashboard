@@ -28,7 +28,7 @@ export function SyncMetrics({ status, bridge, connecting, onConnect, rl }) {
   return (
     <div className="sync-cluster">
       {/* market-data crawl freshness (the background pipeline; 'Sync now' still lives in Settings) */}
-      <span className="feed" title={status?.digest?.last_error || `last hour ${status?.digest?.last_hour ?? '–'}`}>
+      <span className="feed" title={status?.digest?.last_error || (status?.digest?.last_hour ? `Last market update ${fmt.hourLabel(status.digest.last_hour)}` : undefined)}>
         <i className={`dot ${backfilling ? 'stale' : digestOk}`} />
         {backfilling ? `syncing · ${fmt.n(status.digest.behind_h, 0)}h behind`
           : status?.digest?.last_fetch ? `market ${fmt.age(Date.now() / 1000 - status.digest.last_fetch)} ago`

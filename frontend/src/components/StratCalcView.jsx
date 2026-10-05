@@ -138,7 +138,7 @@ function PriceCell({ r, prices, onPrice, pending }) {
 
 // A currency × count list (loot, fixed costs), with "Add currency or item…" under it.
 // `bump`: each row's count gets a small "+" (right-click: one back) — loot, counted as it drops.
-function Rows({ rows, prices, options, names, added, onAdd, onCreate, onQty, onBump, onPrice, onRemove, what, addRef, onEnter, pending, renderIcon, known, bump = false }) {
+function Rows({ rows, prices, options, names, added, onAdd, onCreate, onQty, onBump, onPrice, onRemove, what, addRef, onEnter, pending, renderIcon, known, bump = false, cmd }) {
   const avail = useMemo(() => { const taken = new Set(rows.map(sc.rowKey)); return options.filter(o => !taken.has(o.id)) }, [options, rows])
   return (
     <>
@@ -161,7 +161,7 @@ function Rows({ rows, prices, options, names, added, onAdd, onCreate, onQty, onB
           </div>
         )
       })}
-      <div className="scalc-add" ref={addRef}>
+      <div className="scalc-add" ref={addRef} data-cmd={cmd}>
         <CurrencyPicker value="" placeholder="Add currency or item…" options={avail}
           onChange={id => onAdd(id)} onCreate={onCreate} renderIcon={renderIcon} known={known} />
       </div>
@@ -496,7 +496,7 @@ export default function StratCalcView({ league, currencies }) {
             onChange={e => { importFile(e.target.files?.[0]); e.target.value = '' }} />
           <button type="button" className="ws-icon-btn" title="Import a strat file" aria-label="Import a strat file" onClick={() => fileBox.current?.click()}>⤓</button>
           <button type="button" className="ws-icon-btn" title="New folder" aria-label="New folder" onClick={newFolder}>📁</button>
-          <button type="button" className="ws-icon-btn primary" title="New strat" aria-label="New strat" onClick={newStrat}>+</button>
+          <button type="button" className="ws-icon-btn primary" title="New strat" aria-label="New strat" data-cmd="calc-new" onClick={newStrat}>+</button>
         </h2>
         <Live running={anyRunning}>{now => <StratTree doc={doc} ctx={treeCtx(now)} change={change} treeRef={treeRef} />}</Live>
       </section>
@@ -581,7 +581,7 @@ export default function StratCalcView({ league, currencies }) {
                   </span>
                 ) : <>
                   <ClockBox ms={ms} on={on} onSet={v => editActive(x => ({ ...x, timer: sc.setElapsed(x.timer, v, Date.now()) }))} />
-                  <button type="button" className={`btn ${on ? '' : 'primary'}`} title="Space" onClick={toggleRun}>{on ? 'Pause' : ms > 0 ? 'Resume' : 'Start'}</button>
+                  <button type="button" className={`btn ${on ? '' : 'primary'}`} title="Space" data-cmd="calc-timer" onClick={toggleRun}>{on ? 'Pause' : ms > 0 ? 'Resume' : 'Start'}</button>
                 </>}
                 <Toggle checked={s.time.on} label="Override" ariaLabel="Override the session time"
                   onChange={v => editActive(x => (v ? sc.timeOverrideOn(x, Date.now()) : { ...x, time: { ...x.time, on: false } }))} />
@@ -603,7 +603,7 @@ export default function StratCalcView({ league, currencies }) {
         <div className="scalc-cols">
           <section className="capcard">
             <h2>Loot</h2>
-            <Rows rows={s.loot} prices={prices} options={options} names={names} added={added} what="looted"
+            <Rows rows={s.loot} prices={prices} options={options} names={names} added={added} what="looted" cmd="calc-loot"
               addRef={lootAdd} onEnter={backToAdd} pending={pending} renderIcon={pickIcon} known={known} {...rowsEdit('loot')} bump />
           </section>
 
@@ -612,7 +612,7 @@ export default function StratCalcView({ league, currencies }) {
             <div className="scalc-line">
               <span className="scalc-label">Maps run</span>
               <NumBox whole value={s.maps.count} label="Maps run" onChange={n => editActive(x => ({ ...x, maps: { ...x.maps, count: n } }))} />
-              <button type="button" className="btn scalc-plus" title="M"
+              <button type="button" className="btn scalc-plus" title="M" data-cmd="calc-map"
                 onPointerDown={startHold} onPointerUp={stopHold} onPointerLeave={stopHold} onPointerCancel={stopHold}
                 onClick={e => { if (e.detail === 0) addMaps(1) }}
                 onContextMenu={e => { e.preventDefault(); addMaps(-1) }}>+1</button>

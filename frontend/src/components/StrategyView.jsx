@@ -14,6 +14,7 @@ const SUBS = subsOf('Strategy')
 export default function StrategyView({ league, capital, status, currencies }) {
   const [sub, setSub] = useState('arbitrage')
   useEffect(() => nav.on(e => { if (e.type === 'openSub' && e.section === 'Strategy' && e.sub) setSub(e.sub) }), [])
+  useEffect(() => nav.reportSub('Strategy', sub), [sub])
   return (
     <div className="section">
       <SubTabs subs={SUBS} value={sub} onChange={setSub} layoutId="subtab-underline-strategy" />

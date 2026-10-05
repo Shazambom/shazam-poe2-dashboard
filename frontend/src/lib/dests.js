@@ -4,19 +4,68 @@
 // the report opener on the owner's side accepts exactly these ids (ops/feedback-bot/opener/dests.py,
 // pinned to this file by a test). A sub-view added anywhere else is missing from reports and ⌘K.
 export const DESTS = [
-  { id: 'board', section: 'Board', sub: null, label: 'Board' },
-  { id: 'strategy-arbitrage', section: 'Strategy', sub: 'arbitrage', label: 'Arbitrage' },
-  { id: 'strategy-hold', section: 'Strategy', sub: 'hold', label: 'Hold' },
-  { id: 'strategy-calc', section: 'Strategy', sub: 'calc', label: 'Strat Calculator' },
-  { id: 'economy-inflation', section: 'Economy', sub: 'inflation', label: 'Inflation' },
-  { id: 'economy-market', section: 'Economy', sub: 'market', label: 'Market' },
-  { id: 'trading-workspace', section: 'Trading', sub: 'workspace', label: 'Workspace' },
-  { id: 'trading-live', section: 'Trading', sub: 'live', label: 'Live' },
+  { id: 'board', section: 'Board', sub: null, label: 'Board', aka: ['prices', 'price board'] },
+  { id: 'strategy-arbitrage', section: 'Strategy', sub: 'arbitrage', label: 'Arbitrage', aka: ['flip', 'loop', 'convert'] },
+  { id: 'strategy-hold', section: 'Strategy', sub: 'hold', label: 'Hold', aka: ['invest', 'swing'] },
+  { id: 'strategy-calc', section: 'Strategy', sub: 'calc', label: 'Strat Calculator', aka: ['farm', 'profit per hour'] },
+  { id: 'economy-inflation', section: 'Economy', sub: 'inflation', label: 'Inflation', aka: ['deflation', 'div ex ratio'] },
+  { id: 'economy-market', section: 'Economy', sub: 'market', label: 'Market', aka: ['pairs', 'busiest', 'volume'] },
+  { id: 'trading-workspace', section: 'Trading', sub: 'workspace', label: 'Workspace', aka: ['trade', 'searches'] },
+  { id: 'trading-live', section: 'Trading', sub: 'live', label: 'Live', aka: ['ping', 'live search'] },
   { id: 'trading-sales', section: 'Trading', sub: 'sales', label: 'Stash', aka: ['Sales'] },   // renamed 2026-10-03; ⌘K still finds the old name
-  { id: 'trading-regex', section: 'Trading', sub: 'regex', label: 'Regex' },
-  { id: 'trading-mods', section: 'Trading', sub: 'mods', label: 'Mods' },
-  { id: 'settings', section: 'Settings', sub: null, label: 'Settings' },
+  { id: 'trading-regex', section: 'Trading', sub: 'regex', label: 'Regex', aka: ['waystone', 'tablet', 'highlight', 'stash search'] },
+  { id: 'trading-mods', section: 'Trading', sub: 'mods', label: 'Mods', aka: ['affix', 'tier', 'craft', 'modifiers'] },
+  { id: 'settings', section: 'Settings', sub: null, label: 'Settings', aka: ['sound', 'notification', 'notifications', 'theme'] },
 ]
+
+// Each screen's ⌘K actions, listed first when ⌘K opens on that screen (owner, 2026-10-05). An action works a
+// control the user could click: `target` names the control's `data-cmd` marker in its screen, `act` focuses or
+// clicks it (lib/paletteRun.js). Actions without a target are run by App (the Workspace store, the report dialog).
+// Never an action that spends the shared trade-history allowance (the Stash's history fetch).
+export const SCREEN_COMMANDS = {
+  board: [{ id: 'board-add', label: 'Add a currency', target: 'board-add', act: 'focus', aka: ['watch'] }],
+  'strategy-arbitrage': [{ id: 'convert', label: 'Convert…', target: 'convert-have', act: 'focus', aka: ['have', 'want'] }],
+  'strategy-hold': [{ id: 'hold-category', label: 'Category…', target: 'hold-category', act: 'focus' }],
+  'strategy-calc': [   // a focus action first: Enter on a just-opened ⌘K must not start the timer (QA 2026-10-05)
+    { id: 'calc-loot', label: 'Add loot…', target: 'calc-loot', act: 'focus', aka: ['drop', 'item'] },
+    { id: 'calc-timer', label: 'Start / Stop timer', target: 'calc-timer', act: 'click' },
+    { id: 'calc-map', label: 'Add map +1', target: 'calc-map', act: 'click', aka: ['maps run'] },
+    { id: 'calc-new', label: 'New strat', target: 'calc-new', act: 'click' },
+  ],
+  'economy-inflation': [{ id: 'inflation-anchor', label: 'Change anchor…', target: 'inflation-anchor', act: 'focus' }],
+  'economy-market': [
+    { id: 'market-pair', label: 'Pick a pair…', target: 'market-pair', act: 'focus', aka: ['chart'] },
+    { id: 'market-filter', label: 'Filter markets…', target: 'market-filter', act: 'focus' },
+  ],
+  'trading-workspace': [
+    { id: 'ws-new-search', label: 'New search', keys: '⌘N' },
+    { id: 'ws-new-group', label: 'New group', keys: '⌘⇧N', aka: ['folder'] },
+    { id: 'ws-clipboard', label: 'Add from clipboard', keys: '⌘⇧V', aka: ['paste'] },
+    { id: 'ws-sort', label: 'Sort searches A–Z' },
+    { id: 'ws-toggle-rail', label: 'Toggle searches rail', aka: ['sidebar'] },
+    { id: 'ws-clear-history', label: 'Clear EE2 history' },
+  ],
+  'trading-live': [{ id: 'live-ping', label: 'Jump to newest ping', keys: '⌘G', target: 'live-ping', act: 'focus', aka: ['teleport', 'travel', 'hideout'] }],
+  'trading-sales': [
+    { id: 'stash-add', label: 'Add a currency', target: 'stash-add', act: 'focus' },
+    { id: 'stash-find', label: 'Find in stash', target: 'stash-find', act: 'focus' },
+  ],
+  'trading-regex': [   // first: a focus action — Enter on a just-opened ⌘K must not touch the clipboard (QA pass 2)
+    { id: 'regex-include', label: 'Filter modifiers…', target: 'regex-include', act: 'focus' },
+    { id: 'regex-copy', label: 'Copy regex', target: 'regex-copy', act: 'click' },
+    { id: 'regex-waystones', label: 'Waystones', target: 'regex-waystones', act: 'click' },
+    { id: 'regex-tablets', label: 'Tablets', target: 'regex-tablets', act: 'click' },
+  ],
+  'trading-mods': [
+    { id: 'mods-filter', label: 'Filter modifiers…', target: 'mods-filter', act: 'focus' },
+    { id: 'mods-type', label: 'Item type…', target: 'mods-type', act: 'focus', aka: ['base'] },
+    { id: 'mods-paste', label: 'Paste item', target: 'mods-paste', act: 'click' },
+  ],
+  settings: [   // Report a problem packages a report as it opens: not the first row
+    { id: 'settings-test-sound', label: 'Test ping sound', target: 'settings-test-sound', act: 'click', aka: ['tone'] },
+    { id: 'send-feedback', label: 'Report a problem…', aka: ['bug', 'feedback'] },
+  ],
+}
 
 // One section's sub-tabs, for its SubTabs bar.
 export const subsOf = (section) => DESTS.filter(d => d.section === section && d.sub).map(d => ({ id: d.sub, label: d.label }))

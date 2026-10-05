@@ -7,7 +7,7 @@ import { readFileSync } from 'node:fs'
 const src = readFileSync(new URL('../src/components/HoldView.jsx', import.meta.url), 'utf8')
 
 test('the backfill wording is reserved for the whole-universe empty board', () => {
-  const backfill = src.indexOf('No assets scored yet')
+  const backfill = src.indexOf('Nothing to hold yet.')
   assert.ok(backfill > 0, 'the whole-board empty message still exists')
   const line = src.slice(src.lastIndexOf('\n', backfill), src.indexOf('\n', backfill))
   assert.match(line, /category === 'all'/, `the backfill message is shown for any category: ${line.trim()}`)

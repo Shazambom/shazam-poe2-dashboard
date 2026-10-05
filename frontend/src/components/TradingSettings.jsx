@@ -42,7 +42,7 @@ function WorkspaceTransfer() {
           <button className={`seg-btn ${mode === 'replace' ? 'on' : ''}`} onClick={() => setMode('replace')} title="Replace your curated searches with the file's (the EE2 history folder is kept)">Replace</button>
         </span>
         <input ref={fileRef} type="file" accept="application/json,.json" hidden onChange={onFile} aria-label="Import searches file" />
-        <span className="muted" style={{ fontSize: 12 }}>the EE2 history folder never travels</span>
+        <span className="muted" style={{ fontSize: 12 }}>Exiled Exchange 2 history stays on this computer</span>
       </div>
     </>
   )

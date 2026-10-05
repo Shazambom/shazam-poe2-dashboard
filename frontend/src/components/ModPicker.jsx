@@ -7,7 +7,7 @@ import { matching, norm } from '../lib/search.js'
 // picks. A picked mod whose table row offers a minimum (`num`) gets a small minimum box at the
 // row's end (blank = any roll). `selected` is a Map or Set of ids (a Map carries the minimums).
 // Rows show the mod's text with # where the roll goes, as the tooltip does.
-function ModPicker({ mods, selected, hide, onToggle, onMin, header, children }) {
+function ModPicker({ mods, selected, hide, onToggle, onMin, header, children, cmd }) {
   const [filter, setFilter] = useState('')
   const [settled, setSettled] = useState(0)
   const shown = useMemo(() => {
@@ -19,7 +19,7 @@ function ModPicker({ mods, selected, hide, onToggle, onMin, header, children }) 
   return (
     <div className="rx-picker rx-surface">
       <div className="rx-head"><span className="settings-sub">{header}</span>{children}</div>
-      <input className="ws-filter-input" value={filter} onChange={e => setFilter(e.target.value)} placeholder="Filter modifiers" spellCheck={false} />
+      <input className="ws-filter-input" data-cmd={cmd} value={filter} onChange={e => setFilter(e.target.value)} placeholder="Filter modifiers" spellCheck={false} />
       <div className="rx-list" role="listbox" aria-multiselectable="true" aria-label={header} onMouseLeave={() => setSettled(n => n + 1)}>
         {shown.map(m => {
           const on = selected.has(m.id)

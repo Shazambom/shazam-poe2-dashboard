@@ -25,6 +25,8 @@ doc and the code disagree, the code wins — fix the doc.
 
 - [`search-design.md`](./search-design.md) — the one search every box uses (`lib/search.js`): words in any
   order, today's tiers, typos only when nothing matches. **Built** 2026-10-04.
+- [`learnability-plan.md`](./learnability-plan.md) — the learnability pass (planned 2026-10-05): ⌘K by screen,
+  plain words, empty screens, the owner-tuned arbitrage presets (Balanced replaces saved values), cancellable search.
 
 ## Open bugs
 

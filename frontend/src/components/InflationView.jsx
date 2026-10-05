@@ -87,14 +87,16 @@ export default function InflationView({ league }) {
   const b = data?.basket
   const vel = b?.velocity_pct_per_day
   const anchors = data?.anchors ?? []   // the backend's anchor table (see /api/currencies)
+  // the date the basket's first point is from (the index is 100 there)
+  const sinceLabel = rows.length ? new Date(rows[0].t * 1000).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : null
 
   return (
     <div className="single infl">
       <div className="board-bar">
-        <h2 style={{ margin: 0 }}>Inflation <span className="muted" style={{ fontWeight: 400 }}>· soft currencies priced in a hard asset, indexed to 100 at league start</span></h2>
+        <h2 style={{ margin: 0 }}>Inflation</h2>
         <span className="spacer" />
-        <label className="hint" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>Hard-asset anchor
-          <CurrencyPicker value={anchor} onChange={setAnchor} options={anchors} placeholder="anchor…" />
+        <label className="hint" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>Anchor
+          <CurrencyPicker value={anchor} onChange={setAnchor} options={anchors} placeholder="anchor…" cmd="inflation-anchor" />
         </label>
       </div>
 
@@ -103,26 +105,25 @@ export default function InflationView({ league }) {
       {b && (
         <div className="infl-stats">
           <div className="stat">
-            <div className="stat-label">Basket inflation vs {data.anchor_name}</div>
+            <div className="stat-label">Inflation vs {data.anchor_name}</div>
             <div className={`stat-val ${(b.since_base_pct ?? 0) >= 0 ? 'loss' : 'gain'}`}>{b.since_base_pct == null ? '–' : fmt.pct(b.since_base_pct)}</div>
-            <div className="stat-sub">since data start</div>
+            {sinceLabel && <div className="stat-sub">since {sinceLabel}</div>}
           </div>
           <div className="stat">
             <div className="stat-label">Inflation velocity</div>
             <div className={`stat-val ${(vel ?? 0) >= 0 ? 'loss' : 'gain'}`}>{vel == null ? '–' : `${vel >= 0 ? '+' : ''}${vel}%/day`}</div>
-            <div className="stat-sub">last 24h trend — rising = dump soft, hold hard</div>
+            <div className="stat-sub">last 24h trend</div>
           </div>
           <div className="stat">
             <div className="stat-label">Last 24h</div>
             <div className={`stat-val ${(b.change_24h_pct ?? 0) >= 0 ? 'loss' : 'gain'}`}>{b.change_24h_pct == null ? '–' : fmt.pct(b.change_24h_pct)}</div>
-            <div className="stat-sub">{data.hours_covered}h of data</div>
           </div>
         </div>
       )}
 
       <div className="chart-box" style={{ height: 360 }}>
         {busy && !data ? <div className="empty">Loading…</div>
-          : rows.length < 2 ? <div className="empty">Not enough {data?.anchor_name} trades captured yet to chart inflation. Try the Divine anchor (denser), or let more hours accrue.</div>
+          : rows.length < 2 ? <div className="empty">Not enough trades yet.{anchor !== 'divine' && <><br /><button type="button" className="btn small" onClick={() => setAnchor('divine')}>Use Divine Orb</button></>}</div>
           : (
             <ResponsiveContainer>
               <LineChart data={rows} margin={{ top: 8, right: 16, bottom: 0, left: 0 }}>

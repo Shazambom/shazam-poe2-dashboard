@@ -14,4 +14,6 @@ export const nav = {
   goTrading(sub = 'workspace') { subs.forEach(f => { try { f({ type: 'goTrading', sub }) } catch {} }) },
   // Ask a section container (Strategy/Economy) to switch to a sub-view.
   openSub(section, sub) { subs.forEach(f => { try { f({ type: 'openSub', section, sub }) } catch {} }) },
+  // A section container reports the sub-view it shows, so App knows the current screen (⌘K lists its actions first).
+  reportSub(section, sub) { subs.forEach(f => { try { f({ type: 'sub', section, sub }) } catch {} }) },
 }

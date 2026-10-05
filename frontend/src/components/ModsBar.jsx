@@ -22,7 +22,7 @@ export default function ModsBar({ pools, currencies, poolId, ilvl, floor, filter
       <div className="mods-controls">
         <div className="field mods-pool">
           <label>Item type</label>
-          <CurrencyPicker value={poolId} onChange={onPool} options={pools} placeholder={disabled ? 'Loading…' : 'Search item types'} renderIcon={null} />
+          <CurrencyPicker value={poolId} onChange={onPool} options={pools} placeholder={disabled ? 'Loading…' : 'Search item types'} renderIcon={null} cmd="mods-type" />
         </div>
         <Num label="Item level" value={ilvl} min={1} max={100} onChange={onIlvl} />
         <Num label="Min level" value={floor} min={0} max={100} placeholder="any" onChange={onFloor} />
@@ -32,12 +32,12 @@ export default function ModsBar({ pools, currencies, poolId, ilvl, floor, filter
         </div>
         <div className="field mods-filter">
           <label>Filter</label>
-          <input className="ws-filter-input" value={filter} onChange={e => onFilter(e.target.value)} placeholder="Filter modifiers" spellCheck={false} />
+          <input className="ws-filter-input" data-cmd="mods-filter" value={filter} onChange={e => onFilter(e.target.value)} placeholder="Filter modifiers" spellCheck={false} />
         </div>
         {onPaste && (
           <div className="field mods-paste">
             <label>Item</label>
-            <button type="button" className="btn small" onClick={onPaste}>Paste item</button>
+            <button type="button" className="btn small" data-cmd="mods-paste" onClick={onPaste}>Paste item</button>
           </div>
         )}
       </div>

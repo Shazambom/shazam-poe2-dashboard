@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import threading
 import time
 from urllib.parse import urlsplit
 from contextlib import asynccontextmanager
@@ -17,7 +18,7 @@ from fastapi.responses import RedirectResponse, PlainTextResponse
 from . import analytics, arbitrage, db, devtelemetry, diag, digest, gamedata, gateway, holdscore, inflation, leaguearc, leaguehistory, liquidity, migrations_user, modpool, movers, oauth, orderbook, recipes, seedready, session, sidecar_supervisor, signalsack, stratcalc, watchdog, workspace
 from .config import INSTALL_LOG_PATH
 from .currencies import registry
-from .settings import get_settings, save_settings
+from .settings import ARBITRAGE_PRESETS, get_settings, save_settings
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("poe2arb")
@@ -329,6 +330,13 @@ def put_capital(body: CapitalBody):
 @app.get("/api/settings")
 def settings():
     return get_settings()
+
+
+@app.get("/api/arbitrage/presets")
+def arbitrage_presets():
+    """The Arbitrage page's presets (settings.ARBITRAGE_PRESETS, the one definition): the page writes a picked
+    preset's values through PUT /api/settings and shows a preset as picked while the saved values equal it."""
+    return ARBITRAGE_PRESETS
 
 
 class SettingsPatch(BaseModel):
@@ -899,18 +907,20 @@ class RouteQuery(BaseModel):
 
 
 @app.get("/api/routes/stream")
-def routes_stream(q: RouteQuery = Depends()):
+def routes_stream(request: Request, q: RouteQuery = Depends()):
     """SSE version of /api/routes: loops stream out as the search finds them.
 
     Events: `meta` (once), `routes` (batches of passing loops), `done` (final
     counts + authoritative score order). Runs in a worker thread; batches flush
-    every 25 loops or 150 ms so the UI fills in continuously.
+    every 25 loops or 150 ms so the UI fills in continuously. When the page closes the stream (every
+    Arbitrage edit starts a new search) the search is told to stop instead of running to the end.
     """
     import json as _json
 
     from fastapi.responses import StreamingResponse
 
     f, starts = q.to_filters(), q.starts()
+    stop = threading.Event()
 
     weights = get_settings().get("rank_weights", {})
 
@@ -935,7 +945,7 @@ def routes_stream(q: RouteQuery = Depends()):
             out += f"event: scores\ndata: {_json.dumps({r['id']: r['score'] for r in scored})}\n\n"
             return out
         try:
-            for kind, payload in arbitrage.stream_routes(f, starts):
+            for kind, payload in arbitrage.stream_routes(f, starts, cancelled=stop.is_set):
                 if kind == "route":
                     buf.append(payload)
                     if len(buf) >= 25 or time.time() - last > 0.15:
@@ -949,7 +959,20 @@ def routes_stream(q: RouteQuery = Depends()):
             log.exception("route stream failed: %s", exc)
             yield f"event: error\ndata: {_json.dumps({'error': str(exc)})}\n\n"
 
-    return StreamingResponse(gen(), media_type="text/event-stream",
+    async def until_gone():
+        """Each chunk is computed in a worker thread; between chunks, a closed page stops the search. On any
+        exit (the client gone, the response task cancelled) the search is told to stop."""
+        it = gen()
+        try:
+            while not await request.is_disconnected():
+                chunk = await run_in_threadpool(next, it, None)
+                if chunk is None:
+                    return
+                yield chunk
+        finally:
+            stop.set()
+
+    return StreamingResponse(until_gone(), media_type="text/event-stream",
                              headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
 

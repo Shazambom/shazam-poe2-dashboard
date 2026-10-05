@@ -197,14 +197,14 @@ export default function StashView({ league }) {
         <span className="ws-chip" title="Follows the top-bar league; the sales ledger keeps every league">{sel || '—'}</span>
         {saveState && <span className="save-state">{saveState === 'saving' ? 'saving…' : 'saved ✓'}</span>}
         <div className="stash-addbar">
-          <CurrencyPicker value={pick} placeholder="Add currency…" options={currencies} onChange={id => setPick(id || '')} onClear={() => setPick('')} />
+          <CurrencyPicker value={pick} placeholder="Add currency…" cmd="stash-add" options={currencies} onChange={id => setPick(id || '')} onClear={() => setPick('')} />
           <input type="text" inputMode="decimal" value={amount} aria-label="Amount to add"
             onChange={e => setAmount(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') addPicked() }} />
           <button type="button" className="btn primary small" disabled={!pick || parseAmount(amount) == null} onClick={addPicked}>Add</button>
         </div>
         <span className="spacer" />
         <label className="stash-search">
-          <input ref={searchRef} value={q} onChange={e => setQ(e.target.value)} placeholder="Find in stash" aria-label="Find in stash"
+          <input ref={searchRef} data-cmd="stash-find" value={q} onChange={e => setQ(e.target.value)} placeholder="Find in stash" aria-label="Find in stash"
             onKeyDown={e => { if (e.key === 'Escape') { setQ(''); e.currentTarget.blur() } }} />
           <span className="cmdk-k" aria-hidden="true">/</span>
         </label>

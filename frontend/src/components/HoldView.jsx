@@ -67,26 +67,25 @@ export default function HoldView() {
         </div>
         {/* Numeraire + Category apply only to Hold, but stay rendered (disabled/dimmed) in the
             Movers view so switching doesn't collapse the bar and jump the layout. */}
-        <div className={`seg ${isMovers ? 'hold-inactive' : ''}`} title="Hard-asset numeraire — what 'holds value' is measured against.">
+        <div className={`seg ${isMovers ? 'hold-inactive' : ''}`}>
           {numeraires.map(({ id: k, name }) => (
-            <button key={k} disabled={isMovers} className={`seg-btn ${!isMovers && numeraire === k ? 'on' : ''}`} title={name} onClick={() => setNumeraire(k)}>vs {k[0].toUpperCase() + k.slice(1)}</button>
+            <button key={k} disabled={isMovers} className={`seg-btn ${!isMovers && numeraire === k ? 'on' : ''}`} title={name} onClick={() => setNumeraire(k)}>vs <Cur name={name} size={14} /></button>
           ))}
         </div>
         {!isMovers && <CautionSlider value={data?.k} range={data?.k_range} onChange={setK} />}
         <label className={`hint ${isMovers ? 'hold-inactive' : ''}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>Category
-          <select className="league-select" value={category} disabled={isMovers} onChange={e => setCategory(e.target.value)}>
+          <select className="league-select" data-cmd="hold-category" value={category} disabled={isMovers} onChange={e => setCategory(e.target.value)}>
             {cats.map(c => <option key={c} value={c}>{c}</option>)}
           </select>
         </label>
       </div>
 
       {err && <div className="notice error">{err}</div>}
-      {data?.building && <div className="notice">Building the asset history from poe2scout (all currency categories × past leagues) — this takes a while on first run; the board fills in and improves as it crawls.</div>}
 
       {/* ---- Hold leaderboard (primary) ---- */}
       {!isMovers && <>
-        {busy && rows.length === 0 && <table><tbody>{Array.from({ length: 6 }).map((_, i) => <tr key={i}><td colSpan={8}><div className="sk sk-row" /></td></tr>)}</tbody></table>}
-        {!busy && rows.length === 0 && !data?.building && category === 'all' && <div className="empty">No assets scored yet — the backfill may still be running.</div>}
+        {(busy || data?.building) && rows.length === 0 && <table><tbody>{Array.from({ length: 6 }).map((_, i) => <tr key={i}><td colSpan={8}><div className="sk sk-row" /></td></tr>)}</tbody></table>}
+        {!busy && rows.length === 0 && !data?.building && category === 'all' && <div className="empty">Nothing to hold yet.</div>}
         {!busy && rows.length === 0 && category !== 'all' && <div className="empty">Nothing to hold in {category} right now — pick another category.</div>}
         {rows.length > 0 && (
           <table>
@@ -97,7 +96,7 @@ export default function HoldView() {
                 <th className="num" title="Worst drop since the league's prices settled">Max drawdown</th>
                 <th className="num" title={`Value kept, steadiness, a steady climb, price, how it held in past leagues and what it did next at this point in them, for a hold of ${delta}d, each ranked against today's board (0–100). Caution sets how much steadiness counts.`}>Hold score</th>
                 {showPred && <th className="num" title={`Likely direction over the next ${delta}d — more arrows, stronger`}>Predicted +{delta}d</th>}
-                <th className="num" title="Data depth × liquidity (0–100). Low = thin/obscure, treat with caution">Conf.</th>
+                <th className="num" title="Data depth × liquidity (0–100). Low = thin/obscure, treat with caution">Confidence</th>
               </tr>
             </thead>
             <tbody>

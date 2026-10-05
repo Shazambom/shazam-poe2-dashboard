@@ -354,7 +354,7 @@ def test_a_cost_is_shown_in_the_market_that_trades_the_grant_at_that_markets_rat
         ("runic-alloy", "divine", 0.1, 40), ("runic-alloy", "exalted", 48.0, 10),   # divine busiest, but the alloy is worth < 1 div
         ("adept-rune", "divine", 2.1, 30), ("adept-rune", "exalted", 990.0, 1),     # the rune's market is divine
     ])
-    monkeypatch.setattr(arbitrage, "cached_graph", lambda: g)
+    monkeypatch.setattr(arbitrage, "cached_graph", lambda *a, **k: g)
     out = modpool.prices("ring")
     assert out["reference"] == "exalted"
     assert out["prices"] == {
@@ -376,7 +376,7 @@ def test_a_cost_with_no_market_in_its_currency_stays_in_the_reference_at_its_val
     from app import arbitrage
     g = _priced_graph({"exalted": 1.0, "divine": 500.0, "adept-rune": 1005.0},
                       [("divine", "exalted", 500.0, 1_000), ("exalted", "divine", 1 / 500.0, 500_000)])
-    monkeypatch.setattr(arbitrage, "cached_graph", lambda: g)
+    monkeypatch.setattr(arbitrage, "cached_graph", lambda *a, **k: g)
     assert modpool.prices("ring")["prices"] == {"Adept Rune": {"price": 1005.0, "cur": "exalted", "value_ref": 1005.0}}
 
 

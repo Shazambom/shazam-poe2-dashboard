@@ -32,14 +32,14 @@ export default function MarketView({ currencies }) {
       <div className="two-col">
         <div>
           <h2>Pair history</h2>
-          <div className="row" style={{ marginBottom: 10 }}>
+          <div className="row" style={{ marginBottom: 10 }} data-cmd="market-pair">
             <CurrencyPicker value={pair.a} onChange={id => setPair(p => ({ ...p, a: id }))} options={currencies?.currencies ?? []} placeholder="currency…" />
             <span className="muted">priced in</span>
             <CurrencyPicker value={pair.b} onChange={id => setPair(p => ({ ...p, b: id }))} options={currencies?.currencies ?? []} placeholder="currency…" />
           </div>
           <div className="chart-box">
             {digestSeries.length === 0 && liveSeries.length === 0 ? (
-              <div className="empty">No history for this pair yet. The hourly digest fills in as it syncs; live points appear once the order-book sweep has run.</div>
+              <div className="empty">No trades for this pair yet.</div>
             ) : (
               <ResponsiveContainer>
                 <LineChart data={digestSeries.length ? digestSeries : liveSeries}>
@@ -92,9 +92,9 @@ export default function MarketView({ currencies }) {
         </div>
       </div>
 
-      <h2 style={{ marginTop: 28 }}>Edges in the current graph</h2>
+      <h2 style={{ marginTop: 28 }}>All markets</h2>
       <div className="row" style={{ marginBottom: 8 }}>
-        <input className="btn" placeholder="Filter by currency" value={q} onChange={e => setQ(e.target.value)} style={{ width: 240 }} />
+        <input className="btn" data-cmd="market-filter" placeholder="Filter by currency" value={q} onChange={e => setQ(e.target.value)} style={{ width: 240 }} />
       </div>
       <table>
         <thead><tr><th>From</th><th>To</th><th>Source</th><th className="num">Rate</th><th className="num">Depth</th><th className="num">Capacity (from units)</th><th className="num">Age</th></tr></thead>

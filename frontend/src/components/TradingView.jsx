@@ -18,6 +18,7 @@ export default function TradingView({ league }) {
   useEffect(() => nav.on(e => {
     if (e.type === 'openTrading' && e.sub) setSub(e.sub === 'browse' || e.sub === 'watches' ? 'workspace' : e.sub)
   }), [])
+  useEffect(() => nav.reportSub('Trading', sub), [sub])
 
   return (
     <div className="trading">

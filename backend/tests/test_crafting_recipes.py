@@ -186,7 +186,8 @@ def _market(monkeypatch, rates):
 def _loops(filters=None):
     from app import arbitrage
     arbitrage.invalidate_caches()
-    res = arbitrage.find_routes(filters or {"min_liquidity_ref": 0, "min_volume_ref_per_h": 0, "max_step_minutes": 0},
+    res = arbitrage.find_routes(filters or {"min_margin_pct": 0, "min_liquidity_ref": 0, "min_volume_ref_per_h": 0,
+                                            "max_step_minutes": 0},
                                 use_cache=False)     # no capital: a notional search from every currency
     return {tuple(r["path"]): r for r in res["routes"]}
 
@@ -364,7 +365,7 @@ def test_the_market_table_still_lists_a_market_a_recipe_took_over(monkeypatch):
     from app.arbitrage import graph as G
     g, _rv = _convert_graph()
     g.values = lambda: dict(_rv)
-    monkeypatch.setattr(G, "cached_graph", lambda: g)
+    monkeypatch.setattr(G, "cached_graph", lambda *a, **k: g)
     rows = [(r["from"], r["to"], r["kind"], r["rate"]) for r in board.edge_table()]
     assert ("greater-orb-of-augmentation", "aug", "digest", 2.0) in rows
     assert ("greater-orb-of-augmentation", "aug", "recipe", 3.0) in rows

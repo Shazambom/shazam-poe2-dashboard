@@ -184,6 +184,17 @@ RECOMMENDED_MIN_LIQUIDITY_REF = 200.0
 RECOMMENDED_MIN_VOLUME_REF_PER_H = 100.0
 
 
+# The filters' currency amounts, written in exalted (settings.ARBITRAGE_UNIT) so a preset means the same for
+# every reference currency; a route's figures are in the reference. Everything else is a ratio or a count.
+CURRENCY_THRESHOLDS = ("min_margin_ref", "min_liquidity_ref", "min_volume_ref_per_h", "min_velocity",
+                       "min_margin_per_1k_gold")
+
+
+def thresholds_in_reference(f: dict, ex_in_ref: float) -> dict:
+    """`f` with its exalted amounts converted to the reference (1 exalted = `ex_in_ref` reference)."""
+    return {k: (v * ex_in_ref if k in CURRENCY_THRESHOLDS and v else v) for k, v in f.items()}
+
+
 def _keep(r: dict, f: dict) -> bool:
     if r["margin_pct"] < f.get("min_margin_pct", -INF):
         return False
@@ -226,10 +237,10 @@ def _sort_key(sort: str):
 
 
 def _search_setup(filters: dict | None, start_currencies: list[str] | None):
-    g = graph.cached_graph()
+    g = graph.cached_graph(volume_window_h=get_settings()["volume_window_h"])   # the loop search's own window
     s = g.s
-    f = {**s["filters"], **(filters or {})}
     ref_value = g.values()
+    f = thresholds_in_reference({**s["filters"], **(filters or {})}, ref_value.get(settings_mod.ARBITRAGE_UNIT) or 1.0)
     usable = loop_currencies(g, ref_value)
     capital = {c: q for c, q in db.get_capital().items() if c in usable}
     # A saved "Start from" arbitrage may no longer use (a hub that left the top) falls back to the holdings.
@@ -240,9 +251,41 @@ def _search_setup(filters: dict | None, start_currencies: list[str] | None):
     return g, s, f, ref_value, capital, starts, notional
 
 
+def cycles_shortest_first(g: Graph, starts: list[str], max_steps: int, cap: int):
+    """Up to `cap` simple cycles from `starts`: every 2-hop loop, then every 3-hop, … , the held currencies taking
+    turns within a length. So the cap only ever cuts the longest loops, and fairly: depth-first from the first held
+    currency let its 4–5-hop loops fill the whole cap, and raising max_steps SHRANK the list (QA, 2026-10-05)."""
+    n = 0
+    for length in range(2, max_steps + 1):
+        gens = [(c for c in g.iter_cycles(start, length) if len(c) == length) for start in starts]
+        while gens:
+            for gen in list(gens):
+                cyc = next(gen, None)
+                if cyc is None:
+                    gens.remove(gen)
+                    continue
+                yield cyc
+                n += 1
+                if n >= cap:
+                    return
+
+
+def search_cycles(g: Graph, starts: list[str], max_steps: int, cap: int):
+    """The cycles the loop search simulates. Under the cap (every preset: 3 steps) the original order, each held
+    currency depth-first in turn, kept exactly, since the composite score ranks ties by it. Only a search the cap
+    would cut (4–5 steps) switches to shortest-first, so the cap drops the longest loops, never the shorter ones."""
+    original = []
+    for start in starts:
+        for cyc in g.iter_cycles(start, max_steps):
+            original.append(cyc)
+            if len(original) > cap:
+                return cycles_shortest_first(g, starts, max_steps, cap)
+    return iter(original)
+
+
 def _iter_candidates(g: Graph, s: dict, ref_value: dict, capital: dict, starts: list[str], notional: bool,
-                     deep_stats: dict | None = None):
-    """Yield route dicts as the DFS discovers them, capped at MAX_CANDIDATES — then whatever the
+                     deep_stats: dict | None = None, cancelled=lambda: False):
+    """Yield route dicts as the search finds them (shortest loops first, capped at MAX_CANDIDATES) — then whatever the
     whole-market deep scan adds (loops past `max_steps` or past the cap), tagged `deep`. Both go
     through `_route_from`, so a deep loop is sized, simulated, filtered and ranked like any other."""
     def budget_for(start: str) -> tuple[float, float]:
@@ -250,23 +293,17 @@ def _iter_candidates(g: Graph, s: dict, ref_value: dict, capital: dict, starts: 
         return held, (held * s["max_start_fraction"] if not notional
                       else (1.0 / ref_value.get(start, 1.0) or 1.0) * 10)
 
-    count = 0
     seen: set[str] = set()
-    capped = False
-    for start in starts:
+    for cyc in search_cycles(g, starts, s["max_steps"], MAX_CANDIDATES):
+        start = cyc[0].src
         held, budget = budget_for(start)
-        for cyc in g.iter_cycles(start, s["max_steps"]):
-            count += 1
-            if count > MAX_CANDIDATES:
-                capped = True
-                break
-            seen.add(_edge_list_id(cyc))
-            r = _route_from(g, cyc, start, held, budget, ref_value)
-            if r is not None:
-                yield r
-        if capped:
-            break
+        seen.add(_edge_list_id(cyc))
+        r = _route_from(g, cyc, start, held, budget, ref_value)
+        if r is not None:
+            yield r
 
+    if cancelled():          # the page has moved on: don't start the whole-market scan
+        return
     stats = {"loops": 0, "added": 0, "no_holding": 0}
     startable = set(starts)
     for loop in deepscan.deep_loops(g, ref_value):
@@ -313,10 +350,16 @@ def _diag(cached: bool, routes: int, after_filters: int, candidates: int, t0: fl
         pass
 
 
-def stream_routes(filters: dict | None = None, start_currencies: list[str] | None = None):
+CANCEL_CHECK_EVERY = 50   # candidates between checks that the page still wants this search
+PROGRESS_EVERY_S = 5.0    # a search with nothing new to send says it's alive this often (the page's idle watchdog)
+
+
+def stream_routes(filters: dict | None = None, start_currencies: list[str] | None = None, cancelled=lambda: False):
     """Generator for the SSE endpoint: ('meta', …) once, ('route', r) for every route
     that passes the filters as it is discovered, then ('done', summary). The finished,
-    scored result is also placed in the route cache so follow-up queries are instant."""
+    scored result is also placed in the route cache so follow-up queries are instant.
+    `cancelled()` turning true (the page closed the stream) ends it early, uncached. A search that has sent nothing
+    for PROGRESS_EVERY_S yields ('progress', {}), so the page's idle watchdog never mistakes a slow search for a dead one."""
     t0 = time.time()
     g, s, f, ref_value, capital, starts, notional = _search_setup(filters, start_currencies)
     # Serve a fresh cached result as one burst instead of re-searching.
@@ -342,9 +385,17 @@ def stream_routes(filters: dict | None = None, start_currencies: list[str] | Non
     }
     routes: list[dict] = []
     deep: dict = {}
-    for r in _iter_candidates(g, s, ref_value, capital, starts, notional, deep):
+    last_sent = time.time()
+    for n, r in enumerate(_iter_candidates(g, s, ref_value, capital, starts, notional, deep, cancelled), 1):
+        if n % CANCEL_CHECK_EVERY == 0:
+            if cancelled():
+                return
+            if time.time() - last_sent >= PROGRESS_EVERY_S:
+                last_sent = time.time()
+                yield "progress", {}
         routes.append(r)
         if _keep(r, f):
+            last_sent = time.time()
             yield "route", r
     kept, limit = _finish(routes, f, s)
     result = _result(g, s, f, ref_value, capital, notional, routes, kept, limit, deep)

@@ -8,6 +8,11 @@ from .config import LEAGUE
 
 log = logging.getLogger(__name__)
 
+
+from .arbpresets import ARBITRAGE_PRESETS, ARBITRAGE_UNIT  # noqa: F401 (re-exported)
+
+_BALANCED = ARBITRAGE_PRESETS[0]["values"]
+
 DEFAULTS: dict = {
     # Not a stored default: an unset league reads as the youngest current league (`youngest_league`),
     # and only the league dropdown stores one. LEAGUE is the fallback when no league is known.
@@ -42,7 +47,7 @@ DEFAULTS: dict = {
         "fee_side": "buy",
     },
     # Route search
-    "max_steps": 3,
+    "max_steps": _BALANCED["max_steps"],
     "max_start_fraction": 1.0,      # fraction of held capital to commit per route
     "live_max_age_s": 1800,         # order book older than this is ignored
     # Live refresh policy (all fetches go through the rate-limited queue)
@@ -65,27 +70,26 @@ DEFAULTS: dict = {
     # in the reference currency; depth is listings on a live ladder.
     "min_edge_volume_ref_per_h": 1.0,
     "min_edge_depth": 2,
-    # Composite ranking weights (rank-normalised, so scales don't matter). Gold
-    # efficiency leads, value second, volume (fill speed) a real but smaller vote.
-    # Lead term: velocity = margin_ref / (fill_hours × gold) — profit per hour per gold.
-    "rank_weights": {"velocity": 0.5, "margin_per_1k_gold": 0.2, "margin_ref": 0.2, "volume": 0.1},
-    "volume_window_h": 24,
+    # Composite ranking weights (rank-normalised, so scales don't matter). Lead term: velocity =
+    # margin_ref / (fill_hours × gold) — profit per hour per gold. Balanced preset's blend.
+    "rank_weights": dict(_BALANCED["rank_weights"]),
+    "volume_window_h": _BALANCED["volume_window_h"],
     # A market whose traded prices over the window disagree by this much is INACTIVE: nobody
     # quotes it continuously, so you buy at its dearest and sell at its cheapest rather than in
     # the middle (digest.directed_rates). Tunable on the Arbitrage page; 0 turns it off. Every
     # actively traded market measured under 1.4x on 2026-09-19; the median market was 1.25x.
-    "wide_spread": 2.0,
+    "wide_spread": _BALANCED["wide_spread"],
     # A wide-spread market is still a market when its book is DEEP on both sides: each side
     # standing at least `depth_hours` of the pair's own executed volume, the thin side at least
     # `depth_balance` of the deep one (owner, 2026-09-23). Measured in the pair's own units, so a
     # market that moves ten a day and one that moves a hundred thousand meet the same bar.
     "depth_hours": 1.0,
     "depth_balance": 0.1,
-    "step_overhead_min": 2.0,       # minutes per exchange step to place and collect an order
+    "step_overhead_min": _BALANCED["step_overhead_min"],   # minutes per exchange step to place and collect an order
     # Price of gold for ranking, in Divine per 1000 gold. Gold's real worth shifts across a
     # league, so a slider (Arbitrage page, range 100k–10M gold/Divine) tunes this; it feeds
-    # Convert's net-value ranking and Arbitrage velocity. Default 0.01 == 1 Divine ≈ 100k gold.
-    "gold_value_per_1k": 0.01,
+    # Convert's net-value ranking and Arbitrage velocity. Default: the Balanced preset's (1 Divine ≈ 105k gold).
+    "gold_value_per_1k": _BALANCED["gold_value_per_1k"],
     # Hold's stability dial (slider on the Hold page). 0 = rank on trailing return alone;
     # higher = favour the steadier asset. Default 2.0 is the backtested setting — see
     # docs/bugs/2026-09-20-hold-ranks-against-its-own-forecast.md.
@@ -100,21 +104,8 @@ DEFAULTS: dict = {
     # ExiledExchange2 History (desktop): record every item copied in game as a row in the workspace's
     # history folder. `max` rows kept (20…1000), `retentionDays` (7…90); both enforced by the client store.
     "ee2History": {"enabled": True, "max": 200, "retentionDays": 14},
-    # Default filters (UI can override per request)
-    "filters": {
-        "min_margin_pct": 3.0,            # skip sub-3% flips — noise once you count effort/fees
-        "min_margin_ref": 0.0,
-        "max_gold": 0,
-        "min_margin_per_1k_gold": 0.0,
-        "min_liquidity_ref": 200.0,        # per-step min executable capacity (ref value)
-        "min_volume_ref_per_h": 100.0,    # per-step min executed value/hour
-        "max_fill_hours": 24,             # route should fill within a day of trading
-        "max_step_minutes": 45,           # no step may need more than this much of ITS market's turnover
-        "min_velocity": 0.0,
-        "live_only": False,
-        "sort": "score",
-        "limit": 100,
-    },
+    # Default filters (UI can override per request): the Balanced preset's, plus the user's own choices.
+    "filters": {**_BALANCED["filters"], "live_only": False, "sort": "score", "limit": 100},
 }
 
 

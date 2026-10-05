@@ -827,8 +827,8 @@ def test_every_route_search_posts_one_diagnostic_line(frozen, monkeypatch):
     from app import arbitrage
     drain = _tlog_capture(monkeypatch)
     g = G._synthetic_graph()
-    monkeypatch.setattr(arbitrage.graph, "cached_graph", lambda: g)
-    monkeypatch.setattr(arbitrage, "cached_graph", lambda: g)
+    monkeypatch.setattr(arbitrage.graph, "cached_graph", lambda *a, **k: g)
+    monkeypatch.setattr(arbitrage, "cached_graph", lambda *a, **k: g)
     arbitrage._route_cache.clear()
     events = list(arbitrage.stream_routes({}, None))
     done = events[-1][1]

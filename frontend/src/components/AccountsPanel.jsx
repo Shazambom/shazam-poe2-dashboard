@@ -87,25 +87,22 @@ export default function AccountsPanel({ onChange }) {
           grab it from the <b>Download</b> button in the top bar. This website is a preview that uses hourly market data.</p>
       )}
 
-      <h2 style={{ marginTop: 24 }}>Path of Exile account (OAuth, optional)</h2>
-      {!oa?.configured ? (
-        <p className="hint">Not configured — only needed for account features (profile, characters), not for trading data.
-          See README → OAuth if you want it.</p>
-      ) : oa.logged_in ? (
-        <p className="hint">Logged in as <b>{oa.username}</b> · access token renews {ago(oa.expires_at).replace(' ago', '')} from now.</p>
-      ) : (
-        <p className="hint">Client <code>{oa.client_id}</code> ({oa.client_type}), redirect <code>{oa.redirect_uri}</code>.</p>
-      )}
-      {oa?.configured && (
+      {oa?.configured && <>
+        <h2 style={{ marginTop: 24 }}>Path of Exile account (OAuth, optional)</h2>
+        {oa.logged_in ? (
+          <p className="hint">Logged in as <b>{oa.username}</b> · access token renews {ago(oa.expires_at).replace(' ago', '')} from now.</p>
+        ) : (
+          <p className="hint">Client <code>{oa.client_id}</code> ({oa.client_type}), redirect <code>{oa.redirect_uri}</code>.</p>
+        )}
         <div className="row">
           {!oa.logged_in && <button className="btn primary" onClick={login}>Log in with Path of Exile</button>}
           {oa.logged_in && <button className="btn" onClick={async () => { await api.oauthLogout(); await load(); onChange?.() }}>Log out</button>}
         </div>
-      )}
-      {oa?.configured && !oa.logged_in && (
-        <p className="hint">The button works when the dashboard is open at <code>{oa.redirect_uri.replace(/\/callback$/, '')}</code> (same machine or SSH tunnel);
-          from another PC run <code>python tools/connect.py --server {host} oauth</code> instead.</p>
-      )}
+        {!oa.logged_in && (
+          <p className="hint">The button works when the dashboard is open at <code>{oa.redirect_uri.replace(/\/callback$/, '')}</code> (same machine or SSH tunnel);
+            from another PC run <code>python tools/connect.py --server {host} oauth</code> instead.</p>
+        )}
+      </>}
       {msg && <p className={`notice ${msg.ok ? '' : 'error'}`}>{msg.text}</p>}
     </>
   )

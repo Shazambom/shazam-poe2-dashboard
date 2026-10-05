@@ -50,9 +50,9 @@ def _graph(monkeypatch):
     g.add(_edge("divine", "exalted", 500.0, 40, kind="digest", vol=8))   # thin, and 10% low (4k ex/h)
     g.add(_edge("regal", "chaos", 0.2, 5_000, vol=900))                  # 1 regal = 2 ex, via chaos
     g.add(_edge("chaos", "regal", 5.0, 5_000, vol=4_500))
-    monkeypatch.setattr(arbitrage.graph, "cached_graph", lambda: g)
-    monkeypatch.setattr(arbitrage, "cached_graph", lambda: g)
-    monkeypatch.setattr(arbitrage._board_mod.graph, "cached_graph", lambda: g)
+    monkeypatch.setattr(arbitrage.graph, "cached_graph", lambda *a, **k: g)
+    monkeypatch.setattr(arbitrage, "cached_graph", lambda *a, **k: g)
+    monkeypatch.setattr(arbitrage._board_mod.graph, "cached_graph", lambda *a, **k: g)
     return g
 
 

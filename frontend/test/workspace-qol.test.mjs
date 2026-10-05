@@ -40,7 +40,8 @@ test('the saved-search filter: the shared search over node and item names, as a 
 test('buildPaletteItems lists commands and one Open-search row per node with its folder path', () => {
   const tree = [{ id: 'f', kind: 'folder', name: 'Belts', children: [{ id: 'a', kind: 'search', name: 'HH' }] }, { id: 'b', kind: 'search', name: 'MB' }]
   const cmds = [{ id: 'new-search', label: 'New search', run: () => {} }]
-  const items = buildPaletteItems({ tabs: ['Board'], subDests: [], rows: [], leagues: [], commands: cmds, tree, q: '' })
+  // an empty ⌘K lists the current screen's actions (on Workspace: New search)
+  const items = buildPaletteItems({ tabs: ['Board'], subDests: [], rows: [], leagues: [], screen: 'trading-workspace', screenCommands: { 'trading-workspace': cmds }, tree, q: '' })
   const kinds = items.map(i => i.kind)
   assert.ok(kinds.includes('cmd') && kinds.includes('ws'))
   const hh = items.find(i => i.kind === 'ws' && i.id === 'a')

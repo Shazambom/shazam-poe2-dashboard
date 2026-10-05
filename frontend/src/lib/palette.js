@@ -1,19 +1,30 @@
 import { flatten, pathOf } from './tree.js'
 import { search } from './search.js'
+import { DESTS } from './dests.js'
 
-// The ⌘K palette's rows, pure so the list is testable: views, sub-views, board currencies,
-// leagues, workspace commands, and one "Open search: <name>" per saved search (hint = its
-// folder path). `q` searches labels and aliases with the shared search, best match first.
-export function buildPaletteItems({ tabs = [], subDests = [], rows = [], leagues = [], commands = [], tree = [], q = '' }) {
-  const list = []
-  for (const c of commands) list.push({ kind: 'cmd', id: c.id, label: c.label, hint: c.hint || 'Workspace', run: c.run })
-  for (const t of tabs) list.push({ kind: 'view', id: t, label: t, hint: 'Go to view' })
-  for (const d of subDests) list.push({ kind: 'sub', id: `${d.section}:${d.sub}`, section: d.section, sub: d.sub, label: d.label, aka: d.aka, hint: `${d.section} view` })
-  for (const n of flatten(tree, x => x.kind === 'search')) {
+const screenLabel = (id) => DESTS.find(d => d.id === id)?.label ?? id
+const tabAka = (t) => DESTS.find(d => d.section === t && !d.sub)?.aka
+
+// The ⌘K palette's rows, pure so the order is testable. Opened empty, it starts with the current screen's
+// actions (owner, 2026-10-05), then the tabs (⌘1–⌘5), sub-views, saved searches and board currencies. Typing
+// searches everything with the shared search — other screens' actions, the app-wide commands (themes) and leagues
+// too — and this screen's matching actions still come first. Labels match, and so do the players' words (`aka`).
+export function buildPaletteItems({ tabs = [], subDests = [], rows = [], leagues = [], commands = [], tree = [],
+  screen = null, screenCommands = {}, q = '' }) {
+  const cmd = (c, hint) => ({ kind: 'cmd', id: c.id, label: c.label, hint, aka: c.aka, run: c.run })
+  const own = (screenCommands[screen] || []).map(c => cmd(c, c.keys || ''))
+  const others = Object.entries(screenCommands).filter(([s]) => s !== screen)
+    .flatMap(([s, cs]) => cs.map(c => cmd(c, [screenLabel(s), c.keys].filter(Boolean).join(' · '))))
+  const app = commands.map(c => cmd(c, c.hint || ''))
+  const views = tabs.map((t, i) => ({ kind: 'view', id: t, label: t, hint: `⌘${i + 1}`, aka: tabAka(t) }))
+  const subs = subDests.map(d => ({ kind: 'sub', id: `${d.section}:${d.sub}`, section: d.section, sub: d.sub, label: d.label, aka: d.aka, hint: `${d.section} view` }))
+  const searches = flatten(tree, x => x.kind === 'search').map(n => {
     const path = pathOf(tree, n.id) || []
-    list.push({ kind: 'ws', id: n.id, label: `Open search: ${n.name}`, hint: path.length ? path.join(' / ') : 'Workspace' })
-  }
-  for (const r of rows) list.push({ kind: 'cur', id: r.id, label: r.name || r.id, hint: 'Open on board' })
-  for (const l of leagues) list.push({ kind: 'league', id: l.id, label: l.text || l.id, hint: 'Switch league' })
-  return search(list, q, i => [[i.label], i.aka])
+    return { kind: 'ws', id: n.id, label: `Open search: ${n.name}`, hint: path.length ? path.join(' / ') : 'Workspace' }
+  })
+  const curs = rows.map(r => ({ kind: 'cur', id: r.id, label: r.name || r.id, hint: 'Open on board' }))
+  const lgs = leagues.map(l => ({ kind: 'league', id: l.id, label: l.text || l.id, hint: 'Switch league', aka: ['league'] }))
+  if (!q.trim()) return [...own, ...views, ...subs, ...searches, ...curs]
+  const fields = i => [[i.label], i.aka]
+  return [...search(own, q, fields), ...search([...views, ...subs, ...others, ...app, ...searches, ...curs, ...lgs], q, fields)]
 }

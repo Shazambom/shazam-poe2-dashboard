@@ -186,5 +186,7 @@ def test_cell_imports_only_the_allowed_modules():
 
 def test_dests_pinned_to_the_frontend_list():
     js = (Path(__file__).resolve().parents[3] / "frontend" / "src" / "lib" / "dests.js").read_text()
-    ids = re.findall(r"\{ id: '([a-z-]+)'", js)
+    screens = js[js.index("export const DESTS = ["):]
+    screens = screens[:screens.index("\n]\n")]           # the screen list only, not each screen's ⌘K actions
+    ids = re.findall(r"\{ id: '([a-z-]+)'", screens)
     assert list(dests.SCREENS) == ["current", *ids]
