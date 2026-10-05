@@ -51,3 +51,6 @@ If so, add the rule here, dated, in the same change as the corrected notes.
   search bar, plus arrow-key scrolling in search lists" became "Smarter search and arrow-key scrolling in search
   lists." Name the things that changed and stop: drop qualifiers like "every", "all" or "across the app", which
   overclaim and add length without telling a player anything the bullets don't.
+- **2026-10-05 (0.3.14): a new default that replaces users' saved values is not announced.** The Balanced preset
+  replaced every user's Arbitrage settings on upgrade; the owner left that out of the notes ("Leave out the reset of
+  settings"). Announce what players gain, not that a better default overwrote their old numbers.
