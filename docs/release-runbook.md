@@ -285,6 +285,11 @@ Check these every time; each one has cost a deploy before. (The general rules ev
 
 Condensed and general, newest first; each came from a post-deploy audit (step 8).
 
+- **2026-10-05 (0.3.13-beta.1):** the EE2 port sync at the top of `publish-github.sh` can bring a new GGG
+  `stats.json`, and the Regex tab's drift test (`regex-data.test.mjs`, "the GGG snapshot changed") then fails the test
+  gate before anything is pushed. Fix: `cd frontend && node scripts/sync-regex-data.mjs`, review the diff (usually only
+  `MANIFEST.json`'s `sourceSha256`; a change to `waystone.json`/`tablet.json` changes what players see, so read it),
+  commit, and re-run the publish. The sync commit stays; the re-run reuses it.
 - **2026-10-04 (0.3.12-beta.2):** the Windows build shipped with no market snapshot. shazam's cron was replacing
   `market-seed-latest` while CI downloaded it, so only the `.version` sidecar arrived, and the CI step checked nothing.
   Both platforms now fetch through `desktop/fetch-seed.sh` (it retries until a valid snapshot is there, else fails).

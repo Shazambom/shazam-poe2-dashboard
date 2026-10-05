@@ -39,6 +39,10 @@ export default function CurrencyPicker({ value, onChange, options = [], placehol
     return () => document.removeEventListener('mousedown', h)
   }, [])
   useEffect(() => { if (sel > matches.length - 1) setSel(0) }, [matches.length, sel])
+  // keep the highlighted row in view as you arrow through
+  useEffect(() => {
+    if (open) boxRef.current?.querySelector('.cmdk-item.sel')?.scrollIntoView({ block: 'nearest' })
+  }, [sel, open])
   useLayoutEffect(() => {
     const pop = boxRef.current?.querySelector('.curpick-pop')
     if (!open || !pop) return

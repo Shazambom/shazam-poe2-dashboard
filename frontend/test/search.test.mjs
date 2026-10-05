@@ -214,3 +214,10 @@ test('typo matches put the shortest name first among equal slips', () => {
   assert.equal(pick('vall orb', real)[0], 'Vaal Orb')
   assert.equal(pick('concentratd isolation', real)[0], 'Concentrated Liquid Isolation')
 })
+
+// Owner (2026-10-05): holding ↓ in a picker moved the highlight past the bottom of the list without scrolling it.
+test('the picker keeps the highlighted row in view as you arrow through, as the ⌘K palette does', () => {
+  const p = src('components/CurrencyPicker.jsx')
+  assert.match(p, /querySelector\('\.cmdk-item\.sel'\)\?\.scrollIntoView\(\{ block: 'nearest' \}\)/)
+  assert.match(p, /\}, \[sel, open\]\)/, 'runs whenever the highlight moves while the list is open')
+})
