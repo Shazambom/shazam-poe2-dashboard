@@ -283,6 +283,13 @@ Check these every time; each one has cost a deploy before. (The general rules ev
 
 ## Lessons from deploys
 
+- **2026-10-05, 0.3.14: the regression gate needs current local market data, and acceptances go stale.**
+  - **Stale data:** no app had run on the Mac for 8h, so the digest rates were past `digest_max_age_h`. The gate saw
+    0 market rows and 0 loops, and failed closed with "too little data". Fix: open the app, wait until `/api/status`
+    shows the digest caught up (`behind_h` under 1), quit it, then run the gate.
+  - **Stale acceptances:** with fresh data the beta's `hold *` acceptance matched nothing, and the gate rejects
+    stale lines. Re-run the diff for the new version and trim the accept file to what it reports today.
+
 - **2026-10-05, 0.3.14-beta.1: the regression gate runs on the owner's real settings, which dev builds may already
   have migrated.** A dev build's m8 saved Balanced (volume window 72h) into the owner's data. Stable 0.3.13 then
   priced every screen over 72h, while the release keeps the market at 24h, so the gate reported 105 price, market and
