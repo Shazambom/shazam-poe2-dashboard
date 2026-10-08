@@ -136,8 +136,13 @@ def diff(a: dict, b: dict) -> list[str]:
             out.append(f"values   {c}: {x:.6g} -> {y:.6g} ({(y / x - 1) * 100:+.2f}%)" if x else f"values   {c}: {x} -> {y}")
     for sec in ("busiest", "cards"):
         for c in sorted(set(a[sec]) | set(b[sec])):
-            if a[sec].get(c) != b[sec].get(c):
-                out.append(f"{sec:8} {c}: {a[sec].get(c)} -> {b[sec].get(c)}")
+            x, y = a[sec].get(c), b[sec].get(c)
+            if x == y:
+                continue
+            if isinstance(x, dict) and isinstance(y, dict):      # a changed card: only the fields that moved, sorted
+                out.append(f"{sec:8} {c}: " + "; ".join(f"{k} {x.get(k)} -> {y.get(k)}" for k in sorted(set(x) | set(y)) if x.get(k) != y.get(k)))
+            else:
+                out.append(f"{sec:8} {c}: {x} -> {y}")
     ma = {tuple(r[:3]): r for r in a["market_table"]}; mb = {tuple(r[:3]): r for r in b["market_table"]}
     for k in sorted(set(ma) | set(mb)):
         if ma.get(k) != mb.get(k):

@@ -74,6 +74,20 @@ def test_routes_exchange_only_loops_must_not_change_and_score_shifts_are_one_lin
     ]
 
 
+def test_a_card_difference_names_only_the_fields_that_changed():
+    """Owner, 2026-10-08: accept the CHANGE precisely, not a catch-all and not an id list that drifts with the data.
+    A changed card reports its changed fields, sorted, so an accept line can say "only the numeraire moved"
+    (`cards    *: change_pct * -> *; pref_num * -> *; trend_num * -> *`) and a card whose price moved is refused."""
+    base = _dump({}, [], []); new = _dump({}, [], [])
+    base["cards"] = {"chaos": {"id": "chaos", "mid": 70.0, "pref_num": "vaal", "trend_num": "vaal", "change_pct": 0.02, "hub": True}}
+    new["cards"] = {"chaos": {"id": "chaos", "mid": 70.0, "pref_num": "divine", "trend_num": "divine", "change_pct": 0.8, "hub": True},
+                    "exalted": {"id": "exalted", "mid": 1.0, "pref_num": "divine"}}
+    assert rd.diff(base, new) == [
+        "cards    chaos: change_pct 0.02 -> 0.8; pref_num vaal -> divine; trend_num vaal -> divine",
+        "cards    exalted: None -> {'id': 'exalted', 'mid': 1.0, 'pref_num': 'divine'}",
+    ]
+
+
 def test_the_publish_script_runs_the_gate_before_anything_remote():
     script = (ROOT / "desktop" / "publish-github.sh").read_text()
     gate = script.index("../ops/regression-diff.py --version \"$VER\" --accept ../ops/regression-accept.txt")

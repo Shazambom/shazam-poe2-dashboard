@@ -3,8 +3,12 @@
 # difference. Anything not listed blocks the release. Whole-line comments only.
 version: 0.3.15-beta.1
 
-# The first-contact pass (docs/first-contact-audit.md). The reference currency now has a card: ⌘K → "Exalted Orb"
-# opens its biggest market's card priced in Exalted (Divine at ~749 ex; owner's choice, 2026-10-08). Nothing else
-# users see changed: on the owner's data this tree and 0.3.14 agree on every price, busiest market, the other 662
-# cards, 2,779 market rows, 280 Hold rows, 4,931 loops, the pool and every conversion.
-cards    exalted
+# The volume rule, then the readable side (owner, 2026-10-08: "follow the volume rule and then apply readable side
+# to the volume rule"). A card's numeraire is its busiest market, full stop; the walk down the ranking is gone (it put
+# Exalted in verisium and Chaos in Vaal). The view draws the side that reads >= 1 ("10.70 per Divine"). The ONLY
+# change a card may show is its numeraire: pref_num, the market its line is drawn in (trend_num) and that line's %
+# (change_pct). A card whose price (mid), source or hub flag moved is not this change and stays refused. Nothing else
+# differs from 0.3.14 on the owner's data: prices, busiest markets, Market rows, Hold rows, loops, pool, Convert.
+cards    *: change_pct * -> *; pref_num * -> *; trend_num * -> *
+# The reference currency gains its card (0.3.14 excluded it by construction).
+cards    exalted: None -> *
