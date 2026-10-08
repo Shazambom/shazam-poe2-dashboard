@@ -51,3 +51,16 @@ test('the gold slider saves through the shared autosave, which sends a pending v
   const hooks = readFileSync(new URL('../src/lib/hooks.js', import.meta.url), 'utf8')
   assert.match(hooks, /useEffect\(\(\) => \(\) => \{ clearTimeout\(timer\.current\); timer\.current = null; if \(pending\.current\) saver\(pending\.current\.payload\)/)
 })
+
+// Owner, 2026-10-08: "I altered the arbitrage config values and clicked a preset and nothing changed until I reloaded
+// the page." A preset that differs from the form only in what the search key leaves out (ranking weights, the volume
+// window, spread, gold price) saved fine but never re-ran the search: the table waited for the next remount.
+test('a preset pick re-runs the search when the filters it sets are the ones already shown', async () => {
+  const { sameSearch } = await import('../src/lib/routeFilters.js')
+  const f = { min_margin_pct: 20, min_liquidity_ref: 1000, min_volume_ref_per_h: 100, max_step_minutes: 60 }
+  assert.equal(sameSearch(f, { ...f }), true, 'identical filters: the key effect will not fire, so pick must load')
+  assert.equal(sameSearch(f, { ...f, min_margin_pct: 5 }), false, 'changed filters: the key effect searches on its own')
+  const rv = src('RoutesView')
+  const pick = rv.slice(rv.indexOf('const pick = '), rv.indexOf('const pick = ') + 900)
+  assert.match(pick, /sameSearch\([^)]*\)\s*&&\s*load\(\)|if \(sameSearch\([^)]*\)\) load\(\)/, 'pick searches itself when the key will not change')
+})

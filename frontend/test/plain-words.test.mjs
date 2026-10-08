@@ -37,9 +37,10 @@ test('Inflation: no theory on screen, a real start date, and no hour count', () 
   const s = src('InflationView')
   for (const gone of ['soft currencies priced in a hard asset', 'Hard-asset anchor', 'Basket inflation', 'since data start',
     'rising = dump soft, hold hard', 'h of data']) assert.ok(!s.includes(gone), gone)
-  assert.match(s, /Inflation vs \{data\.anchor_name\}/)
-  assert.match(s, /since \{sinceLabel\}/)
-  assert.match(s, />Anchor\n/)
+  // first-contact audit (2026-10-08): the anchor stays; the tile is "Since league start", the picker reads "Against"
+  assert.match(s, /Since league start/)
+  assert.match(s, /\{sinceLabel\} · day 0 = 100/)
+  assert.match(s, />Against\n/)
 })
 
 test('an Inflation anchor with too few trades offers the Divine anchor', () => {

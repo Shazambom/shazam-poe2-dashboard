@@ -79,7 +79,7 @@ def cards(ids, window_h: int = 24, picks: dict[str, str] | None = None) -> dict[
     hub_ids = centrality.hubs(g, rv, settings_mod.hub_count(g.s))
     scout, scout_hist = leaguehistory.scout_prices(league), leaguehistory.scout_history(league)
     picks = picks or {}
-    ids = [c for c in dict.fromkeys(ids) if c != R and rv.get(c)]
+    ids = [c for c in dict.fromkeys(ids) if rv.get(c)]          # the reference too: see _reference_row
     # One card: its own queries. Many: read the window once (digest.window_history).
     shared = digest.window_history(league, window_h + RATE_WARMUP_H) if len(ids) > 1 else None
     history = _priced_history(league, window_h, shared)
@@ -250,6 +250,8 @@ def _row(g, rv: dict[str, float], ranked, hub_ids, c: str, pick: str | None, win
     league = s["league"]
     if history is None:                          # the price of b in a, hour by hour
         history = _priced_history(league, window_h)
+    if c == R:
+        return _reference_row(g, rv, ranked, hub_ids, c, pick, window_h, scout, scout_hist, history)
     mid = rv.get(c)     # includes the poe2scout fallback threaded through ref_values
     pref = default_numeraire(c, rv, ranked, R)
     # Trend + %-change over the selected window (24h/3d/7d/14d), from the SAME market the
@@ -312,6 +314,22 @@ def _row(g, rv: dict[str, float], ranked, hub_ids, c: str, pick: str | None, win
         "trend": trend, "trend_num": trend_num, "change_pct": change_pct,
         "pref_num": pref, "hub": c in hub_ids,
     }
+
+
+def _reference_row(g, rv, ranked, hub_ids, c: str, pick: str | None, window_h: int, scout, scout_hist, history) -> dict:
+    """The yardstick's card (owner, 2026-10-08: ⌘K → "Exalted Orb" had none, and a fraction of a Divine is not how
+    anyone quotes it). Everything is priced in the reference, so its value is 1 by definition; the card players
+    want is its biggest market quoted the way the market quotes it: Exalted's top market is Divine, so the card
+    is Divine's, in Exalted — "747 Exalted per Divine" — with that market's trend, source and freshness. The
+    volume rule's readability walk is undefined for the base unit (nothing liquid is worth less), so the top
+    market by value stands in for it."""
+    others = [o for _vol, o in ranked.get(c, []) if rv.get(o)]
+    shown = pick if (pick and pick != c and rv.get(pick)) else (others[0] if others else None)
+    if not shown:                                # nothing trades it: a bare card, no market to read
+        return {"id": c, "name": registry.name(c), "mid": 1.0, "source": None, "age_s": None, "trend": [],
+                "trend_num": c, "change_pct": None, "pref_num": c, "hub": c in hub_ids}
+    row = _row(g, rv, ranked, hub_ids, shown, c, window_h, scout, scout_hist, history)    # `shown`, priced in the reference
+    return {**row, "pref_num": c}                # and opened in it, not in `shown`'s own default market
 
 
 def default_numeraire(c: str, rv: dict[str, float], ranked: dict, R: str) -> str:

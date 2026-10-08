@@ -5,6 +5,7 @@ import { api, fmt, bus, surface } from './lib/api.js'
 import { useStatus, startStatusPolling } from './lib/statusStore.js'
 import { useCurrencies } from './lib/icons.js'
 import { nav } from './lib/nav.js'
+import { HORIZONS, useHorizon } from './lib/horizonStore.js'
 import { useLiveWiring, useLiveSync } from './lib/liveWiring.js'
 import VaalPingOrb from './components/VaalPingOrb.jsx'
 import DivinePingOrb from './components/DivinePingOrb.jsx'
@@ -172,6 +173,9 @@ export default function App() {
     cs.map(c => ({ ...c, run: appRuns[c.id] || (c.target && (() => { goScreen(id); runTarget(c.target, c.act) })) })).filter(c => c.run)])),
   [appRuns, goScreen])
   const themeCommands = React.useMemo(() => [...THEMES, ...customThemes].map(t => ({ id: `theme-${t.id}`, label: `Theme: ${t.name}`, hint: 'Appearance', run: () => useTheme.getState().apply(t.id) })), [customThemes])
+  // The global time window, by the words players type for it (7d, window, range).
+  const windowCommands = React.useMemo(() => HORIZONS.map(([k, h]) => ({ id: `window-${h}`, label: `Time window · ${k}`, hint: 'Picker', aka: [k, 'window', 'range', 'horizon'], run: () => useHorizon.getState().setHours(h) })), [])
+  const appCommands = React.useMemo(() => [...windowCommands, ...themeCommands], [windowCommands, themeCommands])
 
   const setLeague = async (league) => {
     if (!league || league === status?.league) return
@@ -248,8 +252,11 @@ export default function App() {
           <HorizonPicker />
           <span className="tb-spacer" />
           <SyncMetrics status={status} bridge={bridge} connecting={connecting} onConnect={doConnect} rl={rl} />
-          <span className="capital-pill">
-            net worth <b><Wealth v={capital?.total_ref} cur={ref} unit={pairUnit} /></b> · liquid <b><Wealth v={liquidTop} cur={ref} unit={pairUnit} /></b></span>
+          {/* Nothing entered yet: the one action that fills it, where the number will be (styleguide §0.1). */}
+          {capital && !capital.syncing && !capital.rows?.some(r => r.qty > 0)
+            ? <button type="button" className="btn primary connect-live nudge" title="Trading › Stash" onClick={() => nav.goTrading('sales')}><Cur id="mirror" size={14} /> Add what you hold ›</button>
+            : <span className="capital-pill">
+              net worth <b><Wealth v={capital?.total_ref} cur={ref} unit={pairUnit} /></b> · liquid <b><Wealth v={liquidTop} cur={ref} unit={pairUnit} /></b></span>}
           {status?.oauth?.logged_in && <span className="muted oauth-user">{status.oauth.username}</span>}
           <DiscordLink />
           <UpdateStatus version={appVersion} />
@@ -269,9 +276,9 @@ export default function App() {
         subDests={SUB_DESTS}
         onGoSub={goSub}
         leagues={leagues} onSetLeague={setLeague}
-        onOpenCurrency={(id) => { setTab('Board'); setTimeout(() => nav.openCurrency(id), 0) }}
+        onOpenCurrency={(it) => { if (!it.onBoard) return assetModal.open(it.label); setTab('Board'); setTimeout(() => nav.openCurrency(it.id), 0) }}
         screen={screen} screenCommands={screenCommands}
-        commands={themeCommands} onOpenSearch={(id) => { goWorkspace(); useWorkspace.getState().setActive(id) }}
+        commands={appCommands} onOpenSearch={(id) => { goWorkspace(); useWorkspace.getState().setActive(id) }}
       />
 
       {assetModal.node}

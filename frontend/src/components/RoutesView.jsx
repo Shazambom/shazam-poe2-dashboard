@@ -15,26 +15,27 @@ import { nav } from '../lib/nav.js'
 import { useCurrencies } from '../lib/icons.js'
 import { ensureSettings, useStatus } from '../lib/statusStore.js'
 import { useApi, useAutosave, useDebounced } from '../lib/hooks.js'
-import { DEFAULT_FILTERS, filtersFromSettings, filtersToSave, searchKeyOf, streamQuery } from '../lib/routeFilters.js'
+import { useTweaks } from '../lib/tweaks.js'
+import { yieldTiers } from '../lib/yieldTier.js'
+import { DEFAULT_FILTERS, filtersFromSettings, filtersToSave, sameSearch, searchKeyOf, streamQuery } from '../lib/routeFilters.js'
 import { activePreset } from '../lib/arbPresets.js'
 
 const INF = Infinity
 const SEARCH_RETRIES = 2   // a timed-out search is searched again this many times, then the page says so
 
-// Column definitions: [key, label, accessor, defaultDir, title]
+// Column definitions: [key, label, accessor, defaultDir, title]. The row says what you need, what you make and how
+// long it takes (first-contact audit, 2026-10-08); the engine's figures (score, liquidity, volume, age) sort it but
+// never sit on it. The default order is the hidden score, best first; clicking "Loop" returns to it.
 const COLS = [
-  ['score', 'Score', r => r.score ?? -INF, 'desc', 'Overall rank: velocity-led blend of the weighted metrics'],
-  ['commit', 'Commit', r => r.start_amount ?? 0, 'desc'],
-  ['margin', 'Margin', r => r.margin ?? -INF, 'desc'],
-  ['margin_pct', 'Margin %', r => r.margin_pct ?? -INF, 'desc'],
-  ['margin_ref', 'Margin (ref)', r => r.margin_ref ?? -INF, 'desc'],
+  ['commit', 'Needs', r => r.start_amount ?? 0, 'desc'],
+  ['margin', 'Profit', r => r.margin ?? -INF, 'desc'],
+  ['velocity', 'Yield', r => r.velocity_inf ? INF : (r.velocity ?? -INF), 'desc'],
   ['gold', 'Gold', r => r.gold_free ? -1 : (r.gold ?? INF), 'asc'],
-  ['velocity', 'Velocity', r => r.velocity_inf ? INF : (r.velocity ?? -INF), 'desc', 'margin ÷ (fill hours × gold) × 1000 — profit per hour per 1k gold'],
-  ['liquidity_ref', 'Liquidity', r => r.liquidity_ref ?? INF, 'desc'],
-  ['volume_ref_per_h', 'Volume / h', r => r.volume_ref_per_h ?? -INF, 'desc', "Slowest step's executed value per hour"],
-  ['fill_hours', 'Fill est.', r => r.fill_hours ?? INF, 'asc', 'Sum over steps of commit ÷ hourly turnover'],
-  ['max_age_s', 'Age', r => r.max_age_s ?? INF, 'asc'],
+  ['fill_hours', 'Takes', r => r.fill_hours ?? INF, 'asc'],
 ]
+const SORTS = Object.fromEntries(COLS.map(([k, , acc, dir]) => [k, [acc, dir]]))
+SORTS.score = [r => r.score ?? -INF, 'desc']
+const NCOLS = COLS.length + 1
 
 export default function RoutesView({ capital, status, currencies }) {
   const { nameOf } = useCurrencies()
@@ -102,12 +103,17 @@ export default function RoutesView({ capital, status, currencies }) {
   const active = activePreset(presets, settings)
   // A pick is an ordinary settings save of the preset's values, made after any edit still waiting to save: the
   // sliders are redrawn first (each sends its pending edit as it goes), then the filter boxes' edit is sent, then the
-  // preset — saves land in order, so the preset wins its own values. The form and sliders then show them.
+  // preset — saves land in order, so the preset wins its own values. The form and sliders then show them. A preset
+  // that leaves the filter boxes as they are (only weights, window, spread or gold differ) gives the search key
+  // nothing to react to, so the pick searches itself.
   const pick = async (p) => {
     flushSync(() => setRev(r => r + 1))
     await flush().catch(() => {})
     const s = await useStatus.getState().saveSettings(p.values).catch(() => null)
-    if (s) { setF(filtersFromSettings(s.filters)); setRev(r => r + 1) }
+    if (!s) return
+    const next = filtersFromSettings(s.filters)
+    setF(next); setRev(r => r + 1)
+    if (sameSearch(next, f)) load()
   }
 
   // Manual refresh from the topbar ⟳ re-runs the search.
@@ -122,8 +128,8 @@ export default function RoutesView({ capital, status, currencies }) {
   // loops read apart from the merely-good. Degenerate data (too few loops, no spread, or nothing
   // clears +1σ) falls back to showing everything so the view never blanks.
   const banded = useMemo(() => {
-    const col = COLS.find(c => c[0] === sort.key) ?? COLS[0]
-    const acc = col[2], desc = col[3] !== 'asc'
+    const [acc, defDir] = SORTS[sort.key] ?? SORTS.score
+    const desc = defDir !== 'asc'
     const limit = Number(f.limit) || 100
     const display = (arr) => {
       arr.sort((a, b) => { const ka = acc(a), kb = acc(b); return ka === kb ? 0 : kb > ka ? 1 : -1 })
@@ -141,10 +147,12 @@ export default function RoutesView({ capital, status, currencies }) {
     let kept = routes.filter(r => sig(r) >= 1)
     if (!kept.length) return all()
     kept = display(kept).slice(0, limit)
-    return { rows: kept.map(r => ({ r, band: Math.min(4, Math.max(1, Math.floor(sig(r)))) })), active: true, metric: col[1] }
+    return { rows: kept.map(r => ({ r, band: Math.min(4, Math.max(1, Math.floor(sig(r)))) })), active: true }
   }, [routes, sort, f.limit])
   const shown = banded.rows
-  const maxVel = useMemo(() => Math.max(1e-9, ...shown.map(({ r }) => r.velocity_inf ? 0 : (r.velocity || 0))), [shown])
+  const tiers = useMemo(() => yieldTiers(shown.map(({ r }) => r.velocity_inf ? Infinity : r.velocity)), [shown])
+  const quoteAge = useMemo(() => Math.max(0, ...shown.map(({ r }) => r.max_age_s ?? 0)), [shown])
+  const tweaks = useTweaks()                     // knobs show on beta and dev clients only
   const held = Object.keys(meta?.capital ?? {})
   const backfilling = status?.digest?.backfilling
 
@@ -163,11 +171,13 @@ export default function RoutesView({ capital, status, currencies }) {
           </div>
         </>}
 
-        <h2>Gold value</h2>
-        <GoldValueSlider key={`gold-${rev}`} onCommit={load} />
+        {tweaks && <>
+          <h2>Gold value</h2>
+          <GoldValueSlider key={`gold-${rev}`} onCommit={load} />
+        </>}
 
         <h2>Filters</h2>
-        <div className="field"><label>Minimum margin %</label><input type="number" step="0.1" value={f.min_margin_pct} onChange={set('min_margin_pct')} /></div>
+        {tweaks && <div className="field"><label>Minimum margin %</label><input type="number" step="0.1" value={f.min_margin_pct} onChange={set('min_margin_pct')} /></div>}
         <div className="field"><label>Start from</label>
           <select value={f.start} onChange={set('start')}>
             <option value="">Everything I hold</option>
@@ -175,7 +185,7 @@ export default function RoutesView({ capital, status, currencies }) {
           </select>
         </div>
 
-        <details className="adv">
+        {tweaks && <details className="adv">
           <summary>More filters</summary>
           <div className="field"><label>Minimum margin, in exalted</label><input type="number" step="0.1" value={f.min_margin_ref} onChange={set('min_margin_ref')} /></div>
           <div className="field"><label>Maximum gold per loop</label><input type="number" step="100" placeholder="no limit" value={f.max_gold} onChange={set('max_gold')} /></div>
@@ -190,8 +200,8 @@ export default function RoutesView({ capital, status, currencies }) {
           <div className="field"><label>Maximum estimated fill time, hours</label><input type="number" step="0.5" placeholder="no limit" value={f.max_fill_hours} onChange={set('max_fill_hours')} /></div>
           <div className="check"><Toggle checked={!!f.exclude_recipes} onChange={v => update('exclude_recipes', v)} label="Exchange steps only" /></div>
           <div className="field"><label>Show at most</label><input type="number" value={f.limit} onChange={set('limit')} /></div>
-        </details>
-        <ArbitrageAlgorithm key={`algo-${rev}`} onSaved={load} />
+        </details>}
+        {tweaks && <ArbitrageAlgorithm key={`algo-${rev}`} onSaved={load} />}
 
       </aside>
 
@@ -202,12 +212,11 @@ export default function RoutesView({ capital, status, currencies }) {
           <div className="notice">Market history is still syncing ({fmt.n(status.digest.behind_h, 0)}h behind). Loops fill in as rates land — no action needed.</div>
         )}
         {meta?.notional && (
-          <div className="notice">Loops are sized to a notional 10 {ref}. Add Chaos, Exalted or Divine on
-            {' '}<button type="button" className="link-btn" onClick={() => nav.goTrading('sales')}>Stash</button> to size them to what you hold.</div>
+          <div className="notice">Sized to 10 <Cur id={ref} size={14} /> · <button type="button" className="link-btn" onClick={() => nav.goTrading('sales')}>Add what you hold ›</button></div>
         )}
 
         {streaming && routes.length === 0 ? (
-          <table><tbody>{Array.from({ length: 6 }).map((_, i) => <tr key={i}><td colSpan={12}><div className="sk sk-row" /></td></tr>)}</tbody></table>
+          <table><tbody>{Array.from({ length: 6 }).map((_, i) => <tr key={i}><td colSpan={NCOLS}><div className="sk sk-row" /></td></tr>)}</tbody></table>
         ) : !streaming && counts && routes.length === 0 ? (
           <div className="empty">
             <b>{(counts?.total_candidates ?? 0) === 0 ? 'No loops yet.' : 'No loop clears your thresholds.'}</b><br />
@@ -215,13 +224,15 @@ export default function RoutesView({ capital, status, currencies }) {
               ? (backfilling
                 ? 'Market history is still syncing — this page fills in by itself within a few minutes.'
                 : 'The market graph is empty for this league. Check the league in the top bar, or wait for the next hourly market update.')
-              : 'Loosen a filter on the left — the margin threshold is usually the one.'}
+              : tweaks ? 'Loosen a filter on the left — the margin threshold is usually the one.' : 'Try a looser preset.'}
           </div>
         ) : (
+          <>
+          <div className="loops-head"><span>Best loops</span><span className="muted">prices from {fmt.age(quoteAge)} ago</span></div>
           <table>
             <thead>
               <tr>
-                <th>Loop{streaming && <span className="streaming" aria-label="searching" />}</th>
+                <th className={`sortable ${sort.key === 'score' ? 'sorted' : ''}`} title="Best first" onClick={() => setSort({ key: 'score', dir: 'desc' })}>Loop{sort.key === 'score' ? ' ▾' : ''}{streaming && <span className="streaming" aria-label="searching" />}</th>
                 {COLS.map(([key, label, , defDir, title]) => (
                   <th key={key} className={`num sortable ${sort.key === key ? 'sorted' : ''}`} title={title || `Sort by ${label}`}
                     onClick={() => clickSort(key, defDir)}>
@@ -234,37 +245,28 @@ export default function RoutesView({ capital, status, currencies }) {
               {shown.map(({ r, band }, i) => (
                 <React.Fragment key={r.id}>
                   {banded.active && i > 0 && band !== shown[i - 1].band && (
-                    <tr className="std-sep" aria-hidden="true"><td colSpan={12}><span className="std-bar" /></td></tr>
+                    <tr className="std-sep" aria-hidden="true"><td colSpan={NCOLS}><span className="std-bar" /></td></tr>
                   )}
                   <tr className="route" aria-expanded={open === r.id} onClick={() => setOpen(open === r.id ? null : r.id)}>
                     <td className="loop-cell"><Loop r={r} /></td>
-                    <td className="num">{r.score == null ? <span className="muted">–</span> : r.score.toFixed(3)}</td>
                     <td className="num" title={r.cycle_unit > 1 ? `${r.cycles} cycles × ${r.cycle_unit} per cycle` : `${r.cycles} single-unit cycles`}>
                       {fmt.n(r.start_amount)} <Cur id={r.start} size={16} />
                       {r.cycle_unit > 1 && <span className="muted" style={{ fontSize: 11 }}> ×{fmt.n(r.cycle_unit)}</span>}
                     </td>
-                    <td className={`num ${r.margin >= 0 ? 'gain' : 'loss'}`}>{r.margin >= 0 ? '+' : ''}{fmt.n(r.margin)}</td>
-                    <td className={`num ${r.margin >= 0 ? 'gain' : 'loss'}`}>{fmt.pct(r.margin_pct)}</td>
-                    <td className="num"><Wealth v={r.margin_ref} cur={ref} size={12} /></td>
-                    <td className="num">{r.gold_free ? <span className="muted">free</span> : fmt.n(r.gold)}</td>
-                    <td className="num mpg">
-                      {r.velocity_inf ? <span className="gain">∞</span> : r.velocity == null ? <span className="muted">–</span> : (
-                        <>
-                          <span className="gold-bar" style={{ width: `${Math.max(2, Math.min(60, 60 * (r.velocity || 0) / maxVel))}px` }} />
-                          {fmt.n(r.velocity, 3)}
-                        </>
-                      )}
+                    <td className="num">
+                      <span className={r.margin >= 0 ? 'gain' : 'loss'}>{r.margin >= 0 ? '+' : ''}{fmt.n(r.margin)} <Cur id={r.start} size={14} /></span>
+                      <span className="muted" style={{ marginLeft: 6 }}>{fmt.pct(r.margin_pct)}</span>
                     </td>
-                    <td className="num">{r.liquidity_ref == null ? <span className="muted">∞</span> : <Wealth v={r.liquidity_ref} cur={ref} size={12} />}</td>
-                    <td className="num">{r.volume_ref_per_h == null ? <span className="muted">–</span> : <Wealth v={r.volume_ref_per_h} cur={ref} size={12} suffix="/h" />}</td>
+                    <td className="num">{tiers[i] ? <span className={`tier tier-${tiers[i].toLowerCase()}`}>{tiers[i]}</span> : <span className="muted">–</span>}</td>
+                    <td className="num">{r.gold_free ? <span className="muted">free</span> : fmt.n(r.gold)}</td>
                     <td className={`num ${r.fill_hours != null && r.fill_hours > 4 ? 'muted' : ''}`}>{fmt.dur(r.fill_hours)}</td>
-                    <td className="num muted">{fmt.age(r.max_age_s)}</td>
                   </tr>
-                  {open === r.id && <tr><td colSpan={12} style={{ padding: 0 }}><Detail r={r} refCur={ref} /></td></tr>}
+                  {open === r.id && <tr><td colSpan={NCOLS} style={{ padding: 0 }}><Detail r={r} refCur={ref} /></td></tr>}
                 </React.Fragment>
               ))}
             </tbody>
           </table>
+          </>
         )}
       </section>
     </div>

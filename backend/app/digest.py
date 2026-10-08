@@ -365,7 +365,10 @@ _volume_cache: dict[tuple[str, int], tuple[float, dict]] = {}
 def pair_volume(league: str, hours: int = 24) -> dict[tuple[str, str], float]:
     """Executed volume per hour of the *source* currency for each directed pair,
     averaged over the whole window (quiet hours count as zero — that's the point)."""
-    return cache.memo(_volume_cache, (league, hours), 600, lambda: _pair_volume(league, hours))
+    # Versioned on the digest hour, like window_rates: a catch-up after a day closed must not leave the empty
+    # answer computed while the data was stale in place for ten minutes (no edge passes the depth yardstick).
+    return cache.memo(_volume_cache, (league, hours), 600, lambda: _pair_volume(league, hours),
+                      version=state["last_hour"])
 
 
 def _pair_volume(league: str, hours: int) -> dict[tuple[str, str], float]:
@@ -389,7 +392,8 @@ _partners_cache: dict[tuple[str, str, int], tuple[float, list[tuple[str, float]]
 def partners(league: str, want: str, hours: int = 168) -> list[tuple[str, float]]:
     """Haves that actually trade into `want`, ranked by executed volume of `want` over
     the window. Drives batch padding: the pairs the market uses most get the free slots."""
-    return cache.memo(_partners_cache, (league, want, hours), 600, lambda: _partners(league, want, hours))
+    return cache.memo(_partners_cache, (league, want, hours), 600, lambda: _partners(league, want, hours),
+                      version=state["last_hour"])
 
 
 def _partners(league: str, want: str, hours: int) -> list[tuple[str, float]]:
@@ -441,6 +445,8 @@ def top_markets_valued(league: str, hours: int, limit: int, by: str, ref_value: 
         va = (r.get("volume_a") or 0) * (ref_value.get(r["a"]) or 0)
         vb = (r.get("volume_b") or 0) * (ref_value.get(r["b"]) or 0)
         r["value_ex"] = round(va or vb, 2) if (va or vb) else None
+        # the market's own realised rate over the window: b per a (the number a trader reads beside the volume)
+        r["rate"] = ((r.get("volume_b") or 0) / r["volume_a"]) if r.get("volume_a") else None   # raw; the view rounds
     if by == "value":
         rows.sort(key=lambda r: (r.get("value_ex") or 0), reverse=True)
     return rows[:limit]

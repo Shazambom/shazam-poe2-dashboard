@@ -74,6 +74,9 @@ function LeagueAgeChart({ rows, keys, scale, refLine, valueFmt }) {
   )
 }
 
+// An inflation figure: an arrow for the direction and the size, no sign (▲ 98.6%).
+const arrowPct = (v) => (v == null ? '–' : `${v >= 0 ? '▲' : '▼'} ${Math.abs(Number(v)).toFixed(1)}%`)
+
 export default function InflationView({ league }) {
   const [anchor, setAnchor] = useState('lock')
   const [hidden, setHidden] = useState(() => new Set())   // currencies toggled off the inflation graph only
@@ -95,7 +98,7 @@ export default function InflationView({ league }) {
       <div className="board-bar">
         <h2 style={{ margin: 0 }}>Inflation</h2>
         <span className="spacer" />
-        <label className="hint" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>Anchor
+        <label className="hint" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>Against
           <CurrencyPicker value={anchor} onChange={setAnchor} options={anchors} placeholder="anchor…" cmd="inflation-anchor" />
         </label>
       </div>
@@ -104,19 +107,20 @@ export default function InflationView({ league }) {
 
       {b && (
         <div className="infl-stats">
+          {/* Inflation is neither a gain nor a loss: ink with an arrow, never red or green (styleguide §0.1). */}
           <div className="stat">
-            <div className="stat-label">Inflation vs {data.anchor_name}</div>
-            <div className={`stat-val ${(b.since_base_pct ?? 0) >= 0 ? 'loss' : 'gain'}`}>{b.since_base_pct == null ? '–' : fmt.pct(b.since_base_pct)}</div>
-            {sinceLabel && <div className="stat-sub">since {sinceLabel}</div>}
+            <div className="stat-label">Since league start</div>
+            <div className="stat-val">{arrowPct(b.since_base_pct)}</div>
+            {sinceLabel && <div className="stat-sub">{sinceLabel} · day 0 = 100</div>}
           </div>
           <div className="stat">
-            <div className="stat-label">Inflation velocity</div>
-            <div className={`stat-val ${(vel ?? 0) >= 0 ? 'loss' : 'gain'}`}>{vel == null ? '–' : `${vel >= 0 ? '+' : ''}${vel}%/day`}</div>
-            <div className="stat-sub">last 24h trend</div>
+            <div className="stat-label">Per day</div>
+            <div className="stat-val">{arrowPct(vel)}</div>
+            <div className="stat-sub">24h trend</div>
           </div>
           <div className="stat">
             <div className="stat-label">Last 24h</div>
-            <div className={`stat-val ${(b.change_24h_pct ?? 0) >= 0 ? 'loss' : 'gain'}`}>{b.change_24h_pct == null ? '–' : fmt.pct(b.change_24h_pct)}</div>
+            <div className="stat-val">{arrowPct(b.change_24h_pct)}</div>
           </div>
         </div>
       )}
@@ -144,7 +148,7 @@ export default function InflationView({ league }) {
 
       <div className="infl-table">
         <table>
-          <thead><tr><th title="Show this currency's line in the graph above">Graph</th><th>Currency</th><th className="num">Index now</th><th className="num">Inflation since start</th><th className="num">Hours</th></tr></thead>
+          <thead><tr><th title="Show this currency's line in the graph above">Graph</th><th>Currency</th><th className="num">Now (start = 100)</th><th className="num">Since start</th></tr></thead>
           <tbody>
             {(data?.currencies ?? []).map((cur, i) => {
               const on = !hidden.has(cur.id)
@@ -152,9 +156,8 @@ export default function InflationView({ league }) {
                 <tr key={cur.id} style={{ opacity: on ? 1 : 0.45 }}>
                   <td><Toggle checked={on} onChange={() => toggleCur(cur.id)} title={`${on ? 'Hide' : 'Show'} ${cur.name} in the graph`} /></td>
                   <td><span className="dot-key" style={{ background: SERIES[i % SERIES.length] }} /> <Cur name={cur.name} text /></td>
-                  <td className="num">{cur.current}</td>
-                  <td className={`num ${cur.since_base_pct >= 0 ? 'loss' : 'gain'}`}>{fmt.pct(cur.since_base_pct)}</td>
-                  <td className="num muted">{cur.coverage}</td>
+                  <td className="num">{fmt.n(cur.current, 0)}</td>
+                  <td className="num">{arrowPct(cur.since_base_pct)}</td>
                 </tr>
               )
             })}
@@ -258,7 +261,7 @@ function CrossLeague({ league }) {
       <div className="board-bar">
         <h2 style={{ margin: 0 }}>Across leagues <span className="muted" style={{ fontWeight: 400 }}>· {data?.item_name || 'Divine'} priced in Exalted, each league rebased to day-0 = 100 and aligned by day-of-league</span></h2>
         <span className="spacer" />
-        <label className="hint" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>Anchor
+        <label className="hint" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>Against
           <CurrencyPicker value={item} onChange={setItem} options={items} placeholder="anchor…" />
         </label>
       </div>

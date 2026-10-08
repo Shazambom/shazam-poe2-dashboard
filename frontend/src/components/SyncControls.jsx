@@ -5,7 +5,7 @@ import RefreshButton from './RefreshButton.jsx'
 
 // The topbar sync UI, split into two pieces so the live-refresh CONTROLS can sit up top next to the
 // Divine notification orb, while the passive METRICS stay on the second row:
-//   <RefreshControls/> — the manual ⟳ (reloads the mounted view).
+//   <RefreshControls/> — the manual ⟳ (reloads the mounted view and kicks the market-data sync).
 //   <SyncMetrics/>     — market-data freshness and the connect action.
 // Both read the shared sync store / status; nothing is duplicated across views (topbar is the sole home).
 
@@ -27,7 +27,7 @@ export function SyncMetrics({ status, bridge, connecting, onConnect, rl }) {
 
   return (
     <div className="sync-cluster">
-      {/* market-data crawl freshness (the background pipeline; 'Sync now' still lives in Settings) */}
+      {/* market-data crawl freshness (the background pipeline; the ⟳ above also syncs it) */}
       <span className="feed" title={status?.digest?.last_error || (status?.digest?.last_hour ? `Last market update ${fmt.hourLabel(status.digest.last_hour)}` : undefined)}>
         <i className={`dot ${backfilling ? 'stale' : digestOk}`} />
         {backfilling ? `syncing · ${fmt.n(status.digest.behind_h, 0)}h behind`

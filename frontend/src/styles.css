@@ -120,7 +120,7 @@ html[data-theme="divinity"] { --grp-mix: 62%; }
 html[data-theme="vaal"] { --grp-mix: 78%; }
 /* The light preset: the few translucent-white fills that give depth on dark surfaces become translucent-black. */
 :root[data-theme="divinity"] .sk { background: linear-gradient(100deg, rgba(0,0,0,.04) 30%, rgba(0,0,0,.09) 50%, rgba(0,0,0,.04) 70%); background-size: 220% 100%; }
-:root[data-theme="divinity"] .pulse-rank, :root[data-theme="divinity"] .cd-stat, :root[data-theme="divinity"] .pt-src, :root[data-theme="divinity"] .pulse-group { background-color: rgba(0,0,0,.05); }
+:root[data-theme="divinity"] .pulse-rank, :root[data-theme="divinity"] .cd-stat, :root[data-theme="divinity"] .pulse-group { background-color: rgba(0,0,0,.05); }
 :root[data-theme="divinity"] .price-tile::before { background: linear-gradient(90deg, transparent, rgba(255,255,255,.6), transparent); }
 :root[data-theme="divinity"] .topbar { box-shadow: 0 1px 0 rgba(255,255,255,.5) inset, 0 2px 14px rgba(0,0,0,.12); }
 :root[data-theme="divinity"] .cmdk-backdrop, :root[data-theme="divinity"] .detail-backdrop { background: rgba(60,40,20,.35); }
@@ -543,6 +543,11 @@ a { color: var(--live); }
 @keyframes dot-pulse { 0% { box-shadow: 0 0 0 0 rgba(var(--gain-rgb),.45); } 70% { box-shadow: 0 0 0 6px rgba(var(--gain-rgb),0); } 100% { box-shadow: 0 0 0 0 rgba(var(--gain-rgb),0); } }
 @media (prefers-reduced-motion: reduce) { .dot.ok { animation: none; } }
 .capital-pill { color: var(--ink); }
+/* The one empty-state action in the top bar breathes gold until there is something to show (owner: it needs to
+   catch the eye); no text, no extra element, and still with reduced motion. */
+.nudge { animation: nudge-glow 2.4s var(--ease) infinite; }
+@keyframes nudge-glow { 0%, 100% { box-shadow: none; } 50% { box-shadow: var(--glow-gold); } }
+@media (prefers-reduced-motion: reduce) { .nudge { animation: none; box-shadow: var(--glow-gold); } }
 .capital-pill b { font-weight: 600; }
 
 /* ---------- layout ---------- */
@@ -670,7 +675,14 @@ td.mpg { white-space: nowrap; }
 .k.live { background: var(--live); }
 .k.digest { background: var(--digest); }
 .k.recipe { background: var(--recipe); }
-.gold-bar { display: inline-block; height: 6px; background: var(--gold); border-radius: 1px; vertical-align: middle; margin-right: 6px; }
+/* yield tier among the loops shown (lib/yieldTier.js): S gold, A ink, B muted, C dim */
+.tier { display: inline-grid; place-items: center; min-width: 22px; height: 18px; padding: 0 5px; border-radius: 3px; font-weight: 700; font-size: 11px; }
+.tier-s { background: var(--gold); color: var(--ink-on-gold); }
+.tier-a { background: var(--panel-hi); color: var(--ink); border: 1px solid var(--line-strong); }
+.tier-b { background: var(--panel-2); color: var(--ink-2); border: 1px solid var(--line); }
+.tier-c { background: transparent; color: var(--muted); border: 1px solid var(--line); }
+.loops-head { display: flex; justify-content: space-between; align-items: baseline; font-size: 13px; margin: 0 0 6px; }
+.loops-head > span:first-child { font-weight: 600; }
 
 /* ---------- route detail ---------- */
 .detail { padding: 10px 12px 14px 30px; background: var(--panel); border-bottom: 1px solid var(--line); }
@@ -909,8 +921,6 @@ input[type=range] { accent-color: var(--gold); }
   border-color: rgba(var(--accent-rgb),.45);
   box-shadow: var(--shadow-2), var(--glow-gold);
 }
-.price-tile.src-live { border-left: 2px solid var(--live); }
-.price-tile.src-digest { border-left: 2px solid var(--digest); }
 .price-tile.clickable { cursor: pointer; }
 
 /* card detail modal (centered scale/fade zoom) */
@@ -924,8 +934,6 @@ input[type=range] { accent-color: var(--gold); }
   background: var(--card-gradient);
   box-shadow: var(--shadow-2), var(--glow-gold); padding: 20px 22px 22px;
 }
-.card-detail.src-live { border-left: 3px solid var(--live); }
-.card-detail.src-digest { border-left: 3px solid var(--digest); }
 .cd-close { position: absolute; top: 14px; right: 16px; border: 0; background: transparent; color: var(--muted); font-size: 22px; line-height: 1; cursor: pointer; }
 .cd-close:hover { color: var(--ink); }
 /* "Report a problem": the one draggable file chip (same dialog chrome as the card detail) */
@@ -966,6 +974,7 @@ input[type=range] { accent-color: var(--gold); }
 .pt-num-row { margin-top: 6px; font-size: 11px; color: var(--muted); display: flex; align-items: center; gap: 5px; }
 .pt-num-row select { font-size: 11px; padding: 1px 4px; background: transparent; color: inherit; border: 1px solid var(--line-strong); border-radius: 5px; max-width: 130px; }
 .pt-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pt-name.long { font-size: 12.5px; }   /* a long name shrinks a step before it clips */
 /* Hub glyph: a rare gold accent on the handful of most-central markets (centrality). */
 .pt-hub { flex: none; font-size: 10px; line-height: 1; color: var(--gold); opacity: .85; cursor: help; }
 .cd-hub { color: var(--gold); }
@@ -973,9 +982,6 @@ input[type=range] { accent-color: var(--gold); }
 .cd-cashpath { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; margin-top: 8px; font-size: 12px; color: var(--muted); }
 .cd-cashpath .cd-arrow { color: var(--muted); opacity: .7; }
 .pulse-hub { color: var(--gold); font-size: 9px; }
-.pt-src { font-size: 9.5px; font-weight: 600; letter-spacing: .06em; color: var(--muted); border: 1px solid var(--line-strong); border-radius: 999px; padding: 1px 6px; background: rgba(255,255,255,.02); }
-.pt-src.live { color: var(--live); border-color: rgba(var(--live-rgb),.5); background: rgba(var(--live-rgb),.1); }
-.pt-src.digest { color: var(--digest); border-color: rgba(var(--digest-rgb),.5); background: rgba(var(--digest-rgb),.1); }
 .pt-mid { font-size: 25px; font-weight: 700; letter-spacing: -.01em; display: flex; align-items: baseline; gap: 8px; line-height: 1.1; }
 .pt-unit { font-size: 12px; font-weight: 400; color: var(--muted); margin-left: 3px; }
 .pt-chg {
@@ -1014,7 +1020,7 @@ input[type=range] { accent-color: var(--gold); }
 .conf { display: inline-block; min-width: 26px; text-align: center; padding: 1px 5px; border-radius: 3px; font-size: 11px; font-weight: 600; }
 .conf-hi { background: rgba(var(--gain-rgb),.18); color: var(--gain); }
 .conf-mid { background: rgba(var(--accent-rgb),.18); color: var(--gold); }
-.conf-lo { background: rgba(var(--loss-rgb),.16); color: var(--loss); }
+.conf-lo { background: color-mix(in srgb, var(--afk) 16%, transparent); color: var(--afk); }   /* caution, not a loss (red is only ever a loss) */   /* caution, not a loss (red is only ever a loss) */
 
 /* ---------- inflation ---------- */
 .infl-stats { display: flex; gap: 14px; flex-wrap: wrap; margin: 4px 0 18px; }
@@ -1149,7 +1155,7 @@ code { background: var(--bg); padding: 1px 5px; border-radius: 3px; font-size: 1
 .arc-win { display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px; border-radius: 999px;
   font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .arc-win.buy { background: rgba(var(--gain-rgb),.14); color: var(--gain); border: 1px solid rgba(var(--gain-rgb),.4); }
-.arc-win.sell { background: rgba(var(--loss-rgb),.14); color: var(--loss); border: 1px solid rgba(var(--loss-rgb),.4); }
+.arc-win.sell { background: rgba(var(--accent-rgb),.14); color: var(--gold); border: 1px solid rgba(var(--accent-rgb),.4); }   /* red is a loss; a sell window is a plan */
 .arc-win.signal { background: rgba(var(--accent-rgb),.16); color: var(--gold-2); border: 1px solid rgba(var(--accent-rgb),.45); }
 
 /* ---------- regex (Trading → Regex): the search-string builder ---------- */

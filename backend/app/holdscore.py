@@ -18,12 +18,15 @@ Pure Python (stdlib only) — the data is a few hundred items × ~150 days.
 """
 from __future__ import annotations
 
+import logging
 import math
 import statistics
 
 from . import analytics, cache, db, devtelemetry, leagueregime, marketseries
 from .marketseries import league_age as _age
 from .settings import get_settings
+
+log = logging.getLogger(__name__)
 
 DIVINE_ID = marketseries.DIVINE_ID
 # Numeraires to price "held value" against. Divine = liquid default; Mirror & Lock
@@ -639,17 +642,57 @@ def leaderboard(horizon: str = "3d", category: str = "all", numeraire: str = "di
     # and a league switch would be served the old league's board, for the TTL (bug report FY0M4R).
     s = get_settings()
     k = clamp_k(s.get("hold_caution") if k is None else k)
-    return cache.memo(_cache, f"{s['league']}|{horizon}|{category}|{numeraire}|{k:g}", _TTL,
-                      lambda: _leaderboard(horizon, category, numeraire, num_id, num_name, k))
+    ranked = cache.memo(_cache, f"{s['league']}|{horizon}|{category}|{numeraire}|{k:g}", _TTL,
+                        lambda: _leaderboard(horizon, category, numeraire, num_id, num_name, k))
+    return attach_prices(ranked)
+
+
+def attach_prices(board: dict) -> dict:
+    """The rows with their price by the volume rule, on a copy: the ranking's 10-minute memo never holds a price
+    (a cold graph at boot would show '–' until it expired), the 5-second graph cache does."""
+    if not isinstance(board, dict) or not board.get("assets"):
+        return board
+    prices = native_prices([a["name"] for a in board["assets"]])
+    assets = []
+    for a in board["assets"]:
+        price = prices.get(a["name"])
+        assets.append({**a, "price": price[0] if price else None, "price_cur": price[1] if price else None})
+    return {**board, "assets": assets}
+
+
+def _graph_values(g):
+    """(value table, volume ranking, reference) of the exchange graph: what `native_price` reads."""
+    from . import arbitrage
+    rv = g.values()
+    return rv, arbitrage.counterparts_by_volume(g, rv), g.s["reference"]
+
+
+def native_prices(names: list[str]) -> dict[str, tuple[float, str]]:
+    """Each asset's price by the volume rule (CLAUDE.md): (rate, currency) in the market that trades it,
+    at that market's own rate (`arbitrage.native_price`). Assets the exchange doesn't price are left out;
+    a cold graph prices nothing. Only the row's display reads this; the ranking never does."""
+    from . import arbitrage, movers
+    from .arbitrage import graph
+    try:
+        g = graph.cached_graph()
+        rv, ranked, R = _graph_values(g)
+    except Exception as exc:                       # a cold or empty graph is no price, never an error
+        log.warning("hold: prices unavailable: %s", exc)
+        return {}
+    out = {}
+    for name in names:
+        tid = movers._trade_id(name)
+        native = arbitrage.native_price(g, tid, rv, ranked, R) if tid else None
+        if native:
+            out[name] = native
+    return out
 
 
 def exchange_category(name: str, groups: dict | None = None) -> str | None:
-    """The game's Currency Exchange category for a poe2scout item name (the Stash's groups,
-    currencies.registry.groups), or None when the exchange doesn't list it. `groups`: precomputed."""
+    """Hold's name for movers.exchange_category (the helper lives with _trade_id); kept so tests and callers can
+    patch it here."""
     from . import movers
-    from .currencies import registry
-    tid = movers._trade_id(name)
-    return (groups if groups is not None else registry.groups()).get(tid) if tid else None
+    return movers.exchange_category(name, groups)
 
 
 def _leaderboard(horizon: str, category: str, numeraire: str, num_id: int, num_name: str,

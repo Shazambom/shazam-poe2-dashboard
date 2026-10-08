@@ -26,7 +26,9 @@ actually move:
 
 **Web = test, desktop = production. "Ship" = publish a desktop release, and only with explicit
 per-change authorization** (CLAUDE.md). A desktop **user check** is always the *packaged* app
-launched in place (`dist:mac` → `open …/Arbiter.app`), never the dev launch or the web env.
+launched in place (`dist:mac` → `open …/Arbiter.app`), never the dev launch or the web env. `dist:mac` bundles
+whatever `backend-bin/` holds: after any backend change run `npm run build:backend` first (or `dist:mac:all`), or the
+owner checks new UI on an old backend (2026-10-08: two fixes "didn't take" for exactly this reason).
 
 ### Deploy rules — every playbook (owner, 2026-10-03)
 

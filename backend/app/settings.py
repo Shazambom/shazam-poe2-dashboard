@@ -9,7 +9,7 @@ from .config import LEAGUE
 log = logging.getLogger(__name__)
 
 
-from .arbpresets import ARBITRAGE_PRESETS, ARBITRAGE_UNIT  # noqa: F401 (re-exported)
+from .arbpresets import ARBITRAGE_PRESETS, ARBITRAGE_UNIT, HIDDEN_KNOB_DEFAULTS as _HIDDEN  # noqa: F401 (re-exported)
 
 _BALANCED = ARBITRAGE_PRESETS[0]["values"]
 
@@ -40,12 +40,7 @@ DEFAULTS: dict = {
     # (GoldPurchaseFee), fetched automatically. `per_unit` is only for manual
     # overrides; `per_ref_unit` is the fallback for items missing from the table.
     # `fee_side`: "buy" charges per unit received, "sell" per unit given.
-    "gold_model": {
-        "base_per_order": 0,
-        "per_unit": {},
-        "per_ref_unit": 10,
-        "fee_side": "buy",
-    },
+    "gold_model": {**_HIDDEN["gold_model"], "per_unit": dict(_HIDDEN["gold_model"]["per_unit"])},   # a copy, never the constant
     # Route search
     "max_steps": _BALANCED["max_steps"],
     "max_start_fraction": 1.0,      # fraction of held capital to commit per route
@@ -63,8 +58,8 @@ DEFAULTS: dict = {
     "batch_pad": True,
     "batch_max_have": 10,
     "digest_max_age_h": 6,          # digest rate older than this is ignored
-    "allow_digest_edges": True,     # fill missing live pairs with digest VWAP
-    "allow_recipe_edges": True,
+    "allow_digest_edges": _HIDDEN["allow_digest_edges"],
+    "allow_recipe_edges": _HIDDEN["allow_recipe_edges"],
     # Edge culling: markets thinner than this never enter the graph, so junk
     # loops aren't even searched. Volume is the edge's executed value per hour
     # in the reference currency; depth is listings on a live ladder.
@@ -105,7 +100,7 @@ DEFAULTS: dict = {
     # history folder. `max` rows kept (20…1000), `retentionDays` (7…90); both enforced by the client store.
     "ee2History": {"enabled": True, "max": 200, "retentionDays": 14},
     # Default filters (UI can override per request): the Balanced preset's, plus the user's own choices.
-    "filters": {**_BALANCED["filters"], "live_only": False, "sort": "score", "limit": 100},
+    "filters": {**_BALANCED["filters"], "live_only": False, "sort": "score", "limit": _HIDDEN["limit"]},
 }
 
 

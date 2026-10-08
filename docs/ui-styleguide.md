@@ -39,6 +39,37 @@ Learned the hard way in 0.2.58: a "deep scan: 12 loops, 0 new" summary, a "DEEP"
 "168 hidden as implausible" counter, an edge-count readout and a live/hourly legend all shipped
 and were all cut. None of them helped the user trade.
 
+### 0.1 First contact — what a player must get in five seconds (owner rulings 2026-10-08)
+
+From a first-time-player drive of 0.3.14 ([`first-contact-audit.md`](first-contact-audit.md)) and the usability
+literature behind it ([`ui-research-2026-10-07.md`](ui-research-2026-10-07.md)). "The solution is almost never more
+text or explanation, people DO NOT READ."
+
+- **Players act before they read.** A screen is judged by its first click. Fix structure, naming and defaults; never
+  add a paragraph, a tour or a tooltip as a crutch. The one text the evidence supports is a one-word label.
+- **A row shows the answer in the player's words.** Loop rows: what you need, what you make, how long it takes.
+  Engine figures (score parts, velocity numbers, "digest 32m") never sit on a row; the expanded row lists the trades.
+- **A number players can't parse becomes a tier.** Relative quality among the rows on screen is an S / A / B / C
+  badge: "players know what a tier list is". Bands are code constants, relative to the list shown.
+- **Shared facts are stated once.** A time every row shares ("prices from 32m ago") sits above the list, not in a
+  column of identical values.
+- **One meaning per colour.** Red is a loss, green a gain, and nothing else: a sell pill is gold, inflation is ink with
+  an arrow. (Extends §4.3.)
+- **Never a source badge.** "SC"/"HR", "daily close" vs "exchange price": which source won is our business (§0).
+- **Unique icons stay.** The rotating Divine orb (inbox), the Vaal orb (live pings) and the rotating currencies top-left
+  are the app's identity; don't swap them for generic glyphs. Icon rows keep names on hover.
+- **An empty state is one action.** "Add what you hold ›" where the net worth will be, never a dash and a zero.
+- **Knobs are for tweakers.** Numeric arbitrage controls and the Settings plumbing (gold overrides, recipes, currency
+  linker) show on beta and dev clients only; stable shows presets. No new setting; the existing channel gate.
+- **Domain baselines are decided.** Inflation is measured against stable assets (Hinekora's Lock, Mirror), never the
+  reference currency. Hold's ranking is tuned; UI work on Hold is a column, not a formula.
+- **Search widens, never regresses.** ⌘K indexes every priced currency and the words players type; the matching
+  (`lib/search.js`) stays as shipped, with pinned-query tests.
+- **One state, every screen.** "Connected" means logged in everywhere; a sign-in page anywhere means not connected.
+- **One refresh: the top-bar ⟳.** It reloads the view and kicks the market-data sync; never a second refresh
+  control, never a word button (owner, 2026-10-08: "all sync buttons need to be a symbol", "don't add double
+  refresh buttons, just reuse existing UI").
+
 ---
 
 ## 1. Architecture
@@ -368,3 +399,7 @@ Use it rarely and always say why.
 - ❌ An animation without a `prefers-reduced-motion` fallback.
 - ❌ Color as the only signal → pair with icon/label/position.
 - ❌ A new font size when an existing step fits.
+- ❌ A tooltip, tour or caption to explain a screen → rename, regroup or cut (§0.1).
+- ❌ A raw engine number in a row (score parts, velocity) → the answer, or a tier badge (§0.1).
+- ❌ Red for anything that isn't a loss (§0.1).
+- ❌ A per-row column of a value every row shares → state it once above the list (§0.1).

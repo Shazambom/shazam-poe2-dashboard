@@ -4,7 +4,7 @@ import { api, fmt, surface, toast } from '../lib/api.js'
 import { nav } from '../lib/nav.js'
 import { isDesktop } from '../lib/session.js'
 import Cur from './Cur.jsx'
-import CardDetail, { Spark, srcBadge, useAssetModal, rangeLabel } from './CardDetail.jsx'
+import CardDetail, { Spark, useAssetModal, rangeLabel } from './CardDetail.jsx'
 import { useCurrencies } from '../lib/icons.js'
 import { useStatus, ensureSettings } from '../lib/statusStore.js'
 import CurrencyPicker from './CurrencyPicker.jsx'
@@ -43,16 +43,15 @@ function Tile({ r, num, factor, prices, numOptions, onNum, onRemove, onOpen, ind
       exit={{ opacity: 0, scale: 0.96 }}
       whileHover={{ y: -3 }}
       transition={{ duration: 0.18, ease: [0.22, 0.61, 0.36, 1], delay: Math.min(index * 0.012, 0.07) }}
-      className={`price-tile clickable src-${r.source || 'none'}`}
+      className="price-tile clickable"
       onClick={() => onOpen?.(r.id)}
       role="button" tabIndex={0}
       onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen?.(r.id) } }}
     >
       <div className="pt-head">
-        <span className="pt-name"><Cur id={r.id} text /></span>
+        <span className={`pt-name${(r.name || '').length > 14 ? ' long' : ''}`}><Cur id={r.id} text /></span>
         {r.hub && <span className="pt-hub" title="Hub — a central market; a lot of value routes through it">⬢</span>}
         {onRemove && <button className="pt-remove" title="Remove from board" onClick={e => { e.stopPropagation(); onRemove(r.id) }}>×</button>}
-        <span className={`pt-src ${r.source}`} title={srcBadge(r.source).title}>{srcBadge(r.source).label}</span>
       </div>
       <div className="pt-mid">
         {mid == null ? <span className="muted">no price</span>
@@ -60,7 +59,8 @@ function Tile({ r, num, factor, prices, numOptions, onNum, onRemove, onOpen, ind
         {change != null && <span className={`pt-chg ${change >= 0 ? 'gain' : 'loss'}`}>{fmt.pct(change)}</span>}
       </div>
       <Spark points={trend} />
-      <div className="pt-foot muted">{r.source === 'scout' ? 'daily close' : 'exchange price'}{r.age_s != null && <> · traded {fmt.age(r.age_s)} ago</>}</div>
+      {/* one caption: when the price last moved; which source gave it stays in the backend (styleguide §0.1) */}
+      <div className="pt-foot muted">{r.age_s != null ? <>{r.source === 'scout' ? 'updated' : 'traded'} {fmt.age(r.age_s)} ago</> : ' '}</div>
       {onNum && numOptions.length > 0 && (
         <div className="pt-num-row" onClick={e => e.stopPropagation()}>priced in{' '}
           <select value={num} onChange={e => onNum(r.id, e.target.value)} title="Currency this card is priced in (defaults to its highest-volume market)">

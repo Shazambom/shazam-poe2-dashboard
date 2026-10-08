@@ -1,15 +1,10 @@
 # The differences the next release intends, checked by ops/regression-diff.py inside
 # desktop/publish-github.sh. It is valid for ONE version, and every line must still match a reported
 # difference. Anything not listed blocks the release. Whole-line comments only.
-version: 0.3.14
+version: 0.3.15-beta.1
 
-# The learnability pass (docs/learnability-plan.md). The market graph every screen prices from no longer follows the
-# Arbitrage page's "Volume window" (a preset knob, 24h or 72h): it averages volumes over a fixed 24h, and only the
-# route search uses the preset's window. On a data copy with the default 24h window saved, 0.3.13 and this release
-# show NO DIFFERENCES at all (prices, busiest markets, cards, Market, Hold, 4957 loops, pool, conversions). The
-# differences below appear only on data whose saved window is not 24h (the owner's: 72h, Balanced applied by a dev
-# build's m8), where 0.3.13 priced every screen over that window. Arbitrage loops, pool and Convert are unchanged.
-values   *
-busiest  *
-cards    *
-market   *
+# The first-contact pass (docs/first-contact-audit.md). The reference currency now has a card: ⌘K → "Exalted Orb"
+# opens its biggest market's card priced in Exalted (Divine at ~749 ex; owner's choice, 2026-10-08). Nothing else
+# users see changed: on the owner's data this tree and 0.3.14 agree on every price, busiest market, the other 662
+# cards, 2,779 market rows, 280 Hold rows, 4,931 loops, the pool and every conversion.
+cards    exalted

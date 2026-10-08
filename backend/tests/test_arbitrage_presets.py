@@ -1,4 +1,4 @@
-"""Arbitrage presets (docs/learnability-plan.md part 4): five owner-tuned sets of the Arbitrage page's values,
+"""Arbitrage presets (docs/learnability-plan.md part 4): six owner-tuned sets of the Arbitrage page's values,
 defined once in settings.py. Balanced is the default and replaces every user's saved arbitrage values once (m8).
 Currency thresholds are in exalted whatever the user's reference currency, so a preset means the same for everyone.
 
@@ -19,6 +19,10 @@ OWNER = {
     "balanced": ("Balanced", dict(min_margin_pct=20, max_gold=0, min_margin_per_1k_gold=0, min_liquidity_ref=1000,
                                   min_volume_ref_per_h=100, max_step_minutes=60),
                  3, (0.6, 0.2, 0.35, 0.3), 2, 72, 2, 0.009527348253160697),
+    # Owner, 2026-10-08, read from their running app: Balanced's filters, ranked by yield (velocity) alone.
+    "high_yield": ("High Yield", dict(min_margin_pct=20, max_gold=0, min_margin_per_1k_gold=0, min_liquidity_ref=1000,
+                                      min_volume_ref_per_h=100, max_step_minutes=60),
+                   3, (1, 0, 0, 0), 2, 72, 2, 0.009527348253160697),
     "quick": ("Quick flips", dict(min_margin_pct=5, max_gold=1000000, min_margin_per_1k_gold=0.41, min_liquidity_ref=200,
                                   min_volume_ref_per_h=10000, max_step_minutes=15),
               3, (0.8, 0.2, 0.4, 0.4), 2, 24, 2, 0.009098518761145686),
@@ -45,8 +49,8 @@ def _expected(pid):
     }
 
 
-def test_the_five_presets_in_order_with_the_owners_values():
-    assert [p["id"] for p in settings.ARBITRAGE_PRESETS] == ["balanced", "quick", "big", "gold", "safe"]
+def test_the_six_presets_in_order_with_the_owners_values():
+    assert [p["id"] for p in settings.ARBITRAGE_PRESETS] == ["balanced", "high_yield", "quick", "big", "gold", "safe"]
     for p in settings.ARBITRAGE_PRESETS:
         label, values = _expected(p["id"])
         assert p["label"] == label
@@ -122,8 +126,8 @@ def test_m8_runs_once_so_a_later_edit_sticks(tmp_path):
 
 def test_m8_tolerates_no_settings_and_is_registered(tmp_path):
     migrations_user._m8_arbitrage_balanced(_conn(tmp_path, None))   # a fresh install: nothing to replace
-    assert migrations_user.USER_MIGRATIONS[-1][0] == 8
-    assert migrations_user.USER_MIGRATIONS[-1][2] is migrations_user._m8_arbitrage_balanced
+    assert any(n == 8 for n, _d, _f in migrations_user.USER_MIGRATIONS)
+    assert any(f is migrations_user._m8_arbitrage_balanced for _n, _d, f in migrations_user.USER_MIGRATIONS)
 
 
 # --- thresholds are in exalted whatever the reference ------------------------------------------
@@ -230,3 +234,27 @@ def test_the_route_search_builds_over_the_presets_window(monkeypatch):
     monkeypatch.setattr(routes.db, "get_capital", lambda: {})
     routes._search_setup({}, None)
     assert asked == [72]
+
+
+def test_m9_resets_the_values_stable_can_no_longer_edit(tmp_path):
+    """Code review (2026-10-08): stable builds hide the recipe/digest switches, the gold overrides and "Show at most"
+    (beta and dev keep them). A user who had changed one would keep that state with no control left to change it, so
+    the upgrade sets those values back to the defaults once, the way m8 did for the presets. Everything else stays."""
+    s = dict(OLD, allow_digest_edges=False, allow_recipe_edges=False,
+             gold_model={"base_per_order": 50, "per_unit": {"chaos": 7}, "per_ref_unit": 3, "fee_side": "sell"})
+    s["filters"] = {**OLD["filters"], "limit": 5}
+    c = _conn(tmp_path, s)
+    migrations_user._m9_reset_hidden_knobs(c)
+    got = _stored(c)
+    assert (got["allow_digest_edges"], got["allow_recipe_edges"]) == (True, True)
+    assert got["gold_model"] == settings.DEFAULTS["gold_model"]
+    assert got["filters"]["limit"] == settings.DEFAULTS["filters"]["limit"]
+    assert got["filters"]["start"] == "divine" and got["theme"] == "ember", "the user's other choices stay"
+    assert got["_hidden_knobs_reset_v1"] is True
+    got["filters"]["limit"] = 7
+    c.execute("UPDATE kv SET value=? WHERE key='settings'", (json.dumps(got),))
+    migrations_user._m9_reset_hidden_knobs(c)
+    assert _stored(c)["filters"]["limit"] == 7, "runs once: a later edit on beta/dev sticks"
+    (tmp_path / "fresh").mkdir()
+    migrations_user._m9_reset_hidden_knobs(_conn(tmp_path / "fresh", None))
+    assert migrations_user.USER_MIGRATIONS[-1][0] == 9

@@ -6,16 +6,16 @@
 export const DESTS = [
   { id: 'board', section: 'Board', sub: null, label: 'Board', aka: ['prices', 'price board'] },
   { id: 'strategy-arbitrage', section: 'Strategy', sub: 'arbitrage', label: 'Arbitrage', aka: ['flip', 'loop', 'convert'] },
-  { id: 'strategy-hold', section: 'Strategy', sub: 'hold', label: 'Hold', aka: ['invest', 'swing'] },
+  { id: 'strategy-hold', section: 'Strategy', sub: 'hold', label: 'Hold', aka: ['invest', 'swing', 'movers', 'rising', 'pumping', 'what to buy'] },
   { id: 'strategy-calc', section: 'Strategy', sub: 'calc', label: 'Strat Calculator', aka: ['farm', 'profit per hour'] },
   { id: 'economy-inflation', section: 'Economy', sub: 'inflation', label: 'Inflation', aka: ['deflation', 'div ex ratio'] },
   { id: 'economy-market', section: 'Economy', sub: 'market', label: 'Market', aka: ['pairs', 'busiest', 'volume'] },
   { id: 'trading-workspace', section: 'Trading', sub: 'workspace', label: 'Workspace', aka: ['trade', 'searches'] },
   { id: 'trading-live', section: 'Trading', sub: 'live', label: 'Live', aka: ['ping', 'live search'] },
-  { id: 'trading-sales', section: 'Trading', sub: 'sales', label: 'Stash', aka: ['Sales'] },   // renamed 2026-10-03; ⌘K still finds the old name
-  { id: 'trading-regex', section: 'Trading', sub: 'regex', label: 'Regex', aka: ['waystone', 'tablet', 'highlight', 'stash search'] },
+  { id: 'trading-sales', section: 'Trading', sub: 'sales', label: 'Stash', aka: ['Sales', 'net worth', 'what I have', 'holdings'] },   // renamed 2026-10-03; ⌘K still finds the old name
+  { id: 'trading-regex', section: 'Trading', sub: 'regex', label: 'Regex', aka: ['waystone', 'tablet', 'highlight', 'stash search', 'bulk', 'buy many', 'vendor search'] },
   { id: 'trading-mods', section: 'Trading', sub: 'mods', label: 'Mods', aka: ['affix', 'tier', 'craft', 'modifiers'] },
-  { id: 'settings', section: 'Settings', sub: null, label: 'Settings', aka: ['sound', 'notification', 'notifications', 'theme'] },
+  { id: 'settings', section: 'Settings', sub: null, label: 'Settings', aka: ['sound', 'notification', 'notifications', 'theme', 'connect', 'login', 'account', 'session'] },
 ]
 
 // Each screen's ⌘K actions, listed first when ⌘K opens on that screen (owner, 2026-10-05). An action works a

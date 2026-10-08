@@ -209,6 +209,7 @@
   "volume_ref_per_h": 1000.0
  },
  "have": "chaos",
+ "min_amount": null,
  "reference": "exalted",
  "want": "divine"
 }

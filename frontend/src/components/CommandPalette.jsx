@@ -4,6 +4,7 @@ import { api } from '../lib/api.js'
 import { useWorkspace } from '../lib/workspaceStore.js'
 import { buildPaletteItems } from '../lib/palette.js'
 import { usableHere } from '../lib/paletteRun.js'
+import { useCurrencies } from '../lib/icons.js'
 import Cur from './Cur.jsx'
 
 // ⌘K command palette — the fast path. Fuzzy-search across the board's currencies
@@ -11,6 +12,7 @@ import Cur from './Cur.jsx'
 // ↑↓ to move, ↵ to run, esc to close. Opened via ⌘K/Ctrl-K or the top-bar chip.
 export default function CommandPalette({ open, onClose, tabs, onGoTab, subDests = [], onGoSub, leagues, onSetLeague, onOpenCurrency, commands = [], screen = null, screenCommands = {}, onOpenSearch }) {
   const tree = useWorkspace(s => s.tree)
+  const { list: currencies } = useCurrencies()   // every currency the app knows, for the index
   const [q, setQ] = useState('')
   const [rows, setRows] = useState([])   // board currencies (id + name)
   const [sel, setSel] = useState(0)
@@ -27,8 +29,8 @@ export default function CommandPalette({ open, onClose, tabs, onGoTab, subDests 
     return () => clearTimeout(t)
   }, [open])
 
-  const items = useMemo(() => buildPaletteItems({ tabs, subDests, rows, leagues, commands, tree, screen,
-    screenCommands: { ...screenCommands, [screen]: here }, q }), [tabs, subDests, rows, leagues, commands, tree, screen, screenCommands, here, q])
+  const items = useMemo(() => buildPaletteItems({ tabs, subDests, rows, currencies, leagues, commands, tree, screen,
+    screenCommands: { ...screenCommands, [screen]: here }, q }), [tabs, subDests, rows, currencies, leagues, commands, tree, screen, screenCommands, here, q])
 
   useEffect(() => { if (sel > items.length - 1) setSel(0) }, [items.length, sel])
   // keep the selected row in view as you arrow through
@@ -42,7 +44,7 @@ export default function CommandPalette({ open, onClose, tabs, onGoTab, subDests 
     if (it.kind === 'view') onGoTab(it.id)
     else if (it.kind === 'sub') onGoSub?.(it.section, it.sub)
     else if (it.kind === 'league') onSetLeague(it.id)
-    else if (it.kind === 'cur') onOpenCurrency(it.id)
+    else if (it.kind === 'cur') onOpenCurrency(it)
     else if (it.kind === 'cmd') it.run?.()
     else if (it.kind === 'ws') onOpenSearch?.(it.id)
     onClose()

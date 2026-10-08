@@ -36,3 +36,6 @@ export function streamQuery(form) {
 // loaded, so the page never searches with filters the user did not choose and then swaps the table
 // a second later (two searches per visit, owner 2026-10-03).
 export const searchKeyOf = (form, loaded) => (loaded ? JSON.stringify(filtersToSave(form)) : null)
+// Two forms that would run the same search. A preset pick that changes nothing the search key carries (ranking
+// weights, the volume window, spread, gold price) gets no key change, so the view must search on its own.
+export const sameSearch = (a, b) => searchKeyOf(a, true) === searchKeyOf(b, true)

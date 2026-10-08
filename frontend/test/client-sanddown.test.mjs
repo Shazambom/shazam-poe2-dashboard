@@ -44,7 +44,6 @@ test('formatters have one home', () => {
   const offenders = live.filter(f => !f.endsWith('lib/api.js') && /new Date\([^)]*\* 1000\)\.toLocaleString/.test(readFileSync(f, 'utf8')))
   assert.deepEqual(offenders.map(rel), [])
   assert.ok(!src('components/RoutesView.jsx').includes('const hrs ='))
-  assert.ok(src('components/CardDetail.jsx').includes('export function srcBadge('))
   assert.ok(!src('components/BoardView.jsx').includes("r.source === 'live' ? 'LIVE'"))
   const raw = live.filter(f => /Math\.round\([^)]*\)\.toLocaleString\(\)/.test(readFileSync(f, 'utf8')))
   assert.deepEqual(raw.map(rel), [])
@@ -103,8 +102,3 @@ test('bus toasts replace by id and default ok=true', () => {
   assert.deepEqual(seen.map(t => t.text), ['a', 'b'])
 })
 
-const { srcBadge } = await import('../src/components/CardDetail.jsx').catch(() => ({ srcBadge: null }))
-test('srcBadge maps every source to a label + title', { skip: !srcBadge && 'jsx not importable in node' }, () => {
-  assert.deepEqual(srcBadge('live'), { label: 'LIVE', title: 'live order book' })
-  assert.deepEqual(srcBadge(undefined), { label: '–', title: 'no data' })
-})

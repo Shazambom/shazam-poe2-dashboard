@@ -613,3 +613,35 @@ def test_exchange_category_reads_the_game_table_through_the_registry(monkeypatch
     monkeypatch.setattr(currencies.registry, "groups", lambda categories=None: {"seraphs-heart": "Gems"})
     assert holdscore.exchange_category("Seraph's Heart") == "Gems"
     assert holdscore.exchange_category("Unknown Thing") is None
+
+
+def test_rows_carry_a_price_by_the_volume_rule(monkeypatch):
+    """First-contact audit (2026-10-08): the #1 pick cost 293 div, which a player learned only after a click. Each
+    row carries its price in the market that trades it (the volume rule, `native_price`), raw; an asset nothing
+    prices shows none. The ranking is untouched ("you can only change the UI")."""
+    monkeypatch.setattr(holdscore, "native_prices",
+                        lambda names: {"Asset1": (293.0, "divine"), "Asset2": (41.5, "exalted")})
+    ranked = _arrow_board(monkeypatch, 10)
+    assert not any("price" in a for a in ranked["assets"]), "the ranking's memo never holds a price (a cold graph at boot would be cached for 10 minutes)"
+    board = holdscore.attach_prices(ranked)
+    by = {a["name"]: a for a in board["assets"]}
+    assert (by["Asset1"]["price"], by["Asset1"]["price_cur"]) == (293.0, "divine")
+    assert (by["Asset2"]["price"], by["Asset2"]["price_cur"]) == (41.5, "exalted")
+    assert by["Asset3"]["price"] is None and by["Asset3"]["price_cur"] is None
+    assert [a["name"] for a in board["assets"]] == [a["name"] for a in ranked["assets"]], \
+        "the order is the ranking's, price or no price"
+    assert ranked["assets"][0] is not board["assets"][0], "attached to a copy: the memoized rows stay untouched"
+    src = open(holdscore.__file__).read()
+    body = src[src.index("def leaderboard("):src.index("def exchange_category(")]
+    assert "attach_prices(" in body, "leaderboard() attaches prices on every request, outside cache.memo"
+
+
+def test_native_prices_reads_the_exchange_graph_by_trade_id(monkeypatch):
+    from app import arbitrage, movers
+    monkeypatch.setattr(movers, "_trade_id", lambda name: {"Seraph's Heart": "seraphs-heart"}.get(name))
+    g = object()
+    monkeypatch.setattr(arbitrage.graph, "cached_graph", lambda *a, **k: g)
+    monkeypatch.setattr(holdscore, "_graph_values", lambda g_: ({"seraphs-heart": 3000.0}, {}, "exalted"))
+    monkeypatch.setattr(arbitrage, "native_price",
+                        lambda g_, tid, rv, ranked, R: (293.0, "divine") if tid == "seraphs-heart" else None)
+    assert holdscore.native_prices(["Seraph's Heart", "Unknown Thing"]) == {"Seraph's Heart": (293.0, "divine")}

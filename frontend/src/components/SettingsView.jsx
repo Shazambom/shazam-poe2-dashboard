@@ -1,3 +1,4 @@
+import { refreshTweaks, useTweaks } from '../lib/tweaks.js'
 import React, { useEffect, useState } from 'react'
 import { api, surface, toast } from '../lib/api.js'
 import { useAutosave } from '../lib/hooks.js'
@@ -21,6 +22,7 @@ export default function SettingsView({ currencies, status, onSaved, onReportProb
   const [fees, setFees] = useState(null)
   const [busy, setBusy] = useState(false)
   const [diagOpen, setDiagOpen] = useState(false)
+  const tweaks = useTweaks()                     // knobs show on beta and dev clients only
 
   // The PUT payload: the editable subset, numbers coerced (blank → the default).
   const num = (v, fb) => { const n = Number(v); return Number.isFinite(n) ? n : fb }
@@ -75,12 +77,15 @@ export default function SettingsView({ currencies, status, onSaved, onReportProb
           <div className="field"><label>Reference currency for values</label>
             <CurrencyPicker value={s.reference} onChange={id => set('reference', id)} options={opts} placeholder="reference currency…" />
           </div>
-          <div className="check"><Toggle checked={s.allow_digest_edges} onChange={v => set('allow_digest_edges', v)} label="Fill missing pairs from hourly market data" /></div>
-          <div className="check"><Toggle checked={s.allow_recipe_edges} onChange={v => set('allow_recipe_edges', v)} label="Use recipe steps" /></div>
+          {tweaks && <>
+            <div className="check"><Toggle checked={s.allow_digest_edges} onChange={v => set('allow_digest_edges', v)} label="Fill missing pairs from hourly market data" /></div>
+            <div className="check"><Toggle checked={s.allow_recipe_edges} onChange={v => set('allow_recipe_edges', v)} label="Use recipe steps" /></div>
+          </>}
         </div>
 
         <div>
-          <details className="adv" open={false}>
+          {/* Owner tools (gold overrides, recipes, the currency linker): beta and dev clients only; stable sees Diagnostics. */}
+          {tweaks && <details className="adv" open={false}>
             <summary>Gold fees (automatic — from game data)</summary>
             <p className="hint">
               Per-unit fees come from the game's own <code>CurrencyExchange</code> table via ggpk.exposed; nothing needs typing in.
@@ -91,8 +96,6 @@ export default function SettingsView({ currencies, status, onSaved, onReportProb
             <div className="row" style={{ marginBottom: 12 }}>
               <RefreshButton busy={busy} onClick={async () => { setBusy(true); try { setFees(await surface(api.refreshGoldFees(), 'Gold fees refreshed')) } catch {} finally { setBusy(false) } }} title="Refresh gold fees from game data" />
               <span className="hint">Gold fees from game data</span>
-              <span className="spacer" />
-              <button className="btn" onClick={() => surface(api.syncDigest(), 'Market sync started').catch(() => {})}>Sync market data now</button>
             </div>
             <div className="field"><label>Fee applies to</label>
               <select value={s.gold_model.fee_side ?? 'buy'} onChange={e => setGold('fee_side', e.target.value)}>
@@ -107,14 +110,14 @@ export default function SettingsView({ currencies, status, onSaved, onReportProb
               }} />
             </div>
             <div className="field"><label>Fallback: gold per 1 {s.reference} of value</label><input type="number" value={s.gold_model.per_ref_unit} onChange={e => setGold('per_ref_unit', Number(e.target.value))} /></div>
-          </details>
+          </details>}
 
-          <details className="adv">
+          {tweaks && <details className="adv">
             <summary>Recipes (disenchant / combine)</summary>
             <RecipesView currencies={currencies} embedded />
-          </details>
+          </details>}
 
-          {(currencies?.unmapped_metadata_ids ?? []).length > 0 && (
+          {tweaks && (currencies?.unmapped_metadata_ids ?? []).length > 0 && (
             <details className="adv">
               <summary>Unmapped currencies ({currencies.unmapped_metadata_ids.length})</summary>
               <p className="hint">These item ids appeared in market data but couldn't be matched to a trade id automatically. Link them so their markets join the graph.</p>
@@ -153,7 +156,7 @@ function BetaChannelToggle() {
   useEffect(() => { desk?.getChannel?.().then(setSt).catch(() => {}) }, [])
   if (!desk?.getChannel) return null
   const toggle = async (v) => {
-    try { setSt(await desk.setChannel(v)); toast(v ? 'Beta channel on — checking for updates…' : 'Back on stable channel') } catch {}
+    try { setSt(refreshTweaks(await desk.setChannel(v))); toast(v ? 'Beta channel on — checking for updates…' : 'Back on stable channel') } catch {}
   }
   return (
     <div style={{ marginBottom: 12 }}>

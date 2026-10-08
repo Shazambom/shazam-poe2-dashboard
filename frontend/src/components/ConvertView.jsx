@@ -1,7 +1,8 @@
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { api, cleanErr, fmt, toast } from '../lib/api.js'
 import Cur from './Cur.jsx'
 import CurrencyPicker from './CurrencyPicker.jsx'
+import { useCurrencies } from '../lib/icons.js'
 import { Loop } from './RouteSteps.jsx'
 
 // "Convert": cheapest way to turn one currency into another across the exchange graph — an
@@ -16,14 +17,19 @@ import { Loop } from './RouteSteps.jsx'
 function ConvertView({ currencies, capital }) {
   const opts = currencies?.currencies ?? []
   const held = useMemo(() => Object.fromEntries((capital?.rows ?? []).map(r => [r.currency, r.qty])), [capital])
+  const { nameOf } = useCurrencies()
   const [have, setHave] = useState('chaos')
   const [want, setWant] = useState('divine')
-  const [amount, setAmount] = useState('')
+  const [typed, setTyped] = useState('')
+  const [dirty, setDirty] = useState(false)      // the user has typed an amount: show that, not the seed
   const [res, setRes] = useState(null)
   const [busy, setBusy] = useState(false)
 
-  // Effective amount: what the user typed, else what they hold, else 1 (base unit).
-  const effAmount = Number(amount) || held[have] || 1
+  // The box holds a real number: what you hold of `have`, else 1, until you type your own.
+  const amount = dirty ? typed : String(held[have] || 1)
+  // QA 2026-10-08: a result drawn for the last pair stayed on screen under the new icons; a new pair starts clean.
+  useEffect(() => { setRes(null) }, [have, want])
+  const effAmount = Number(amount) || 1
 
   const run = async () => {
     if (!have || !want || have === want) { toast('Pick two different currencies', false); return }
@@ -54,13 +60,13 @@ function ConvertView({ currencies, capital }) {
         <label className="convert-field" data-cmd="convert-have">Have<CurrencyPicker value={have} onChange={setHave} options={opts} placeholder="have…" /></label>
         <span className="convert-arrow">→</span>
         <label className="convert-field">Want<CurrencyPicker value={want} onChange={setWant} options={opts} placeholder="want…" /></label>
-        <label className="convert-field amount">Amount<input type="number" min="0" placeholder={String(held[have] || 1)}
-          value={amount} onChange={e => setAmount(e.target.value)} /></label>
+        <label className="convert-field amount">Amount<input type="number" min="1"
+          value={amount} onChange={e => { setDirty(true); setTyped(e.target.value) }} /></label>
         <button className="btn primary" disabled={busy} onClick={run}>{busy ? 'Finding…' : 'Find route'}</button>
       </div>
 
-      {res && !best && <p className="muted">{res.direct
-        ? 'That amount is too small — it buys less than one of what you want. Try a larger amount.'
+      {res && !best && <p className="muted">{res.min_amount
+        ? `Minimum ${fmt.n(res.min_amount)} ${nameOf(have)}`
         : 'No conversion route found between those currencies.'}</p>}
 
       {best && (

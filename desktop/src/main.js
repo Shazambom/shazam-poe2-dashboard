@@ -13,6 +13,7 @@ const fs = require('fs')
 const http = require('http')
 const path = require('path')
 const telemetry = require('./telemetry.js')
+const { loginConfirmedAt, SIGNED_IN_PROBE, LOGIN_POLL_MS } = require('./poelogin.js')
 const { postItemText, postQuery } = require('./dev-ee2-telemetry.js')   // beta/dev-gated inside installLog
 const { makeRing } = require('./feedback/ring.js')
 const { applyChannel } = require('./updater-channel.js')
@@ -285,8 +286,10 @@ async function postSession(cookie) {
   } catch (e) { return { ok: false, message: String(e.message || e) } }
 }
 
-// Full connect flow as a promise: use the existing login cookie if present,
-// otherwise open a login window and finish as soon as the cookie appears.
+// Full connect flow as a promise: load the site's /login in our own window and finish only when
+// the site lands on a signed-in page (poelogin.js). A session that is already good redirects at
+// once, so the window never shows; otherwise the form appears and the user signs in. Never
+// short-circuit on a cookie: anonymous visitors get a POESESSID too (owner, 2026-10-07).
 // Resolves with the backend's verdict so callers (menu OR the in-page button
 // via IPC) can show it however they like.
 // Beta-only login diagnostics, so we can see WHY a login (e.g. Steam SSO) fails on a machine we
@@ -294,10 +297,8 @@ async function postSession(cookie) {
 const reportLogin = (lines) => telemetry.installLog('login', lines, { max: 20000 })
 
 function connectPoeFlow() {
-  return new Promise(async (resolve) => {
-    const existing = await getPoeCookie()
-    if (existing) return resolve(await postSession(existing))
-    const login = new BrowserWindow({ width: 1100, height: 800, parent: win, title: 'Log in to Path of Exile' })
+  return new Promise((resolve) => {
+    const login = new BrowserWindow({ width: 1100, height: 800, parent: win, show: false, title: 'Log in to Path of Exile' })
     const buf = [`ua=${login.webContents.getUserAgent()}`]
     const wc = login.webContents
     // Keep the GGG/Steam login redirect chain inside the app (child popups inherit
@@ -311,26 +312,43 @@ function connectPoeFlow() {
     const log = (m) => { const t = new Date().toISOString().slice(11, 19); buf.push(`${t} ${m}`) }
     wc.on('did-start-navigation', (_e, u, inPage, isMain) => { if (isMain) log(`nav-start ${u}`) })
     wc.on('did-redirect-navigation', (_e, u) => log(`redirect ${u}`))
-    wc.on('did-navigate', (_e, u) => log(`navigated ${u}`))
     wc.on('did-navigate-in-page', (_e, u, isMain) => { if (isMain) log(`in-page ${u}`) })
-    wc.on('did-fail-load', (_e, code, desc, u) => log(`FAIL-LOAD ${code} ${desc} ${u}`))
+    wc.on('did-fail-load', (_e, code, desc, u) => { log(`FAIL-LOAD ${code} ${desc} ${u}`); if (!login.isDestroyed()) login.show() })
     wc.on('console-message', ({ level, message }) => log(`console[${level}] ${String(message).slice(0, 300)}`))
-    login.loadURL(`${POE}/login`)
-    let settled = false
+    let settled = false, confirmed = false
     const finish = (result) => { if (!settled) { settled = true; reportLogin(buf); resolve(result) } }
-    const poll = setInterval(async () => {
-      const cookie = await getPoeCookie()
-      if (!cookie || settled) return
-      clearInterval(poll)
-      log('cookie acquired -> posting to backend')
-      login.close()
-      finish(await postSession(cookie))
-    }, 1200)
+    const show = () => { if (!login.isDestroyed() && !login.isVisible()) login.show() }
+    // The page says whether it is signed in (its log-out link / "Logged in as"): "not /login" is not proof — Forgot
+    // password, Register and the logo all leave /login signed out. Probed when the DOM is ready and then every
+    // LOGIN_POLL_MS (a login ends with a redirect, a Steam hop or an in-page change; one probe at navigation time
+    // ran before the page existed). Claim first, so two overlapping probes cannot both post.
+    let probing = false
+    const probe = async (why) => {
+      if (confirmed || probing || login.isDestroyed()) return
+      const u = wc.getURL()
+      if (!loginConfirmedAt(u)) { show(); return }
+      probing = true
+      try {
+        const signedIn = await wc.executeJavaScript(SIGNED_IN_PROBE, true).catch(() => false)
+        const cookie = signedIn ? await getPoeCookie() : null
+        if (!cookie) { log(`${why}: ${signedIn ? 'signed-in page without a session cookie' : 'not signed in'} at ${u}`); show(); return }
+        confirmed = true
+        clearInterval(poll)
+        log('login confirmed -> posting to backend')
+        const r = await postSession(cookie)
+        if (!login.isDestroyed()) login.close()
+        finish(r)
+      } finally { probing = false }
+    }
+    wc.on('did-navigate', (_e, u) => { log(`navigated ${u}`); if (!loginConfirmedAt(u)) show() })
+    wc.on('dom-ready', () => probe('dom-ready'))
+    const poll = setInterval(() => probe('poll'), LOGIN_POLL_MS)
     login.on('closed', () => {
       clearInterval(poll)
       log('login window closed')
-      finish({ ok: false, message: 'Login window closed before signing in.' })
+      if (!confirmed) finish({ ok: false, message: 'Login window closed before signing in.' })
     })
+    login.loadURL(`${POE}/login`)
   })
 }
 
@@ -473,12 +491,13 @@ function setupUpdates() {
 ipcMain.handle('update:check', () => { try { _autoUpdater?.checkForUpdates() } catch {} })
 // Beta/dev channel opt-in (persisted). `locked` = the running build is itself a -beta build, so the
 // toggle can't be turned off from here (you'd need to reinstall a stable build); we surface that.
-ipcMain.handle('update:getChannel', () => ({ beta: onBetaChannel(), locked: isBetaVersion() }))
+// `tweaks` = the one beta-or-dev gate (diagTelemetryOn): the renderer shows tweakers' knobs by it (lib/tweaks.js).
+ipcMain.handle('update:getChannel', () => ({ beta: onBetaChannel(), locked: isBetaVersion(), tweaks: diagTelemetryOn() }))
 ipcMain.handle('update:setChannel', (_e, beta) => {
   settings.betaChannel = !!beta
   saveSettings()
   if (_autoUpdater) { _applyChannel(_autoUpdater); _autoUpdater.checkForUpdates().catch(() => {}) }
-  return { beta: onBetaChannel(), locked: isBetaVersion() }
+  return { beta: onBetaChannel(), locked: isBetaVersion(), tweaks: diagTelemetryOn() }
 })
 // UI theme (colour only): remember it so the next launch paints the right backdrop before CSS, and
 // recolour the current window's gutter now. Presets are keyed into BACKDROPS; a custom theme brings its hex.

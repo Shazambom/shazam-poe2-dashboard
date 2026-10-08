@@ -92,8 +92,9 @@ export default function HoldView() {
             <thead>
               <tr>
                 <th>#</th><th>Asset</th><th>Category</th>
+                <th className="num" title="In the market that trades it">Price</th>
                 <th className="num" title={`Return in ${numName} over the past ${delta}d`}>Past {delta}d ({unit})</th>
-                <th className="num" title="Worst drop since the league's prices settled">Max drawdown</th>
+                <th className="num" title="Worst drop since the league's prices settled">Max dip</th>
                 <th className="num" title={`Value kept, steadiness, a steady climb, price, how it held in past leagues and what it did next at this point in them, for a hold of ${delta}d, each ranked against today's board (0–100). Caution sets how much steadiness counts.`}>Hold score</th>
                 {showPred && <th className="num" title={`Likely direction over the next ${delta}d — more arrows, stronger`}>Predicted +{delta}d</th>}
                 <th className="num" title="Data depth × liquidity (0–100). Low = thin/obscure, treat with caution">Confidence</th>
@@ -105,6 +106,7 @@ export default function HoldView() {
                   <td className="muted">{i + 1}</td>
                   <td><Cur name={r.name} text /></td>
                   <td className="muted">{r.category}</td>
+                  <td className="num">{r.price == null ? <span className="muted">–</span> : <>{fmt.n(r.price, r.price >= 100 ? 0 : 2)} <Cur id={r.price_cur} size={12} /></>}</td>
                   <td className={`num ${r.ret_pct >= 0 ? 'gain' : 'loss'}`}>{fmt.pct(r.ret_pct)}</td>
                   <td className="num loss">{r.mdd_pct == null ? '–' : `${r.mdd_pct}%`}</td>
                   <td className="num mpg">{r.hold}</td>

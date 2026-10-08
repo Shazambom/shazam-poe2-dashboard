@@ -75,7 +75,7 @@ def _best_conversions(g: Graph, ref_value: dict[str, float], have: str, want: st
                       amount: float, max_steps: int | None = None,
                       max_gain_pct: float = 2.0,
                       gold_value_per_1k: float = GOLD_VALUE_DIVINE_PER_1K,
-                      bridge: dict[str, float] | None = None) -> dict:
+                      bridge: dict[str, float] | None = None, with_min_amount: bool = False) -> dict:
     """Rank open conversion paths have->want by NET value delivered: the value of the `want` you
     receive minus the gold spent, where gold is charged at `gold_value_per_1k` (Divine per 1k
     gold — a user-tunable price, since gold's worth shifts across a league). This makes gold a
@@ -91,15 +91,18 @@ def _best_conversions(g: Graph, ref_value: dict[str, float], have: str, want: st
     ref = g.s["reference"]
     gold_ref_per_1k = gold_value_per_1k * (ref_value.get("divine") or 1.0)   # Divine/1k -> ref/1k, at the one value table
     seen: dict[str, dict] = {}
+    starved: list[list[Edge]] = []          # paths the amount was too small for (min_amount below)
     count = 0
     for path in g.iter_paths(have, want, max_steps):
         count += 1
         if count > MAX_CANDIDATES:
             break
         r = _convert_path(g, path, amount, ref_value, have, want)
+        if with_min_amount and not _accepted(r, max_gain_pct) and len(starved) < MIN_AMOUNT_PATHS:
+            starved.append(path)
         # out == 0: whole-unit rounding floored the path to nothing — not a conversion. (It also
         # costs 0 gold, so its net value of 0 used to outrank every real route that nets < 0.)
-        if r is not None and r["out"] > 0 and r["gain_cross_pct"] <= max_gain_pct:   # + drop phantom-gain mirages
+        if _accepted(r, max_gain_pct):   # + drop phantom-gain mirages
             # net value delivered = value of `want` received - gold charged at the user's price.
             r["net_ref"] = r["out"] * ref_value.get(want, 0.0) - r["gold"] / 1000.0 * gold_ref_per_1k
             seen[r["id"]] = r
@@ -118,8 +121,70 @@ def _best_conversions(g: Graph, ref_value: dict[str, float], have: str, want: st
         direct_edge = direct_edge.market      # "direct" is the market; a recipe is a route
     direct = _convert_path(g, [direct_edge], amount, ref_value, have, want) if direct_edge else None
     alternatives = [r for r in ranked if best is None or r["id"] != best["id"]]
+    min_amount = (_min_amount(g, starved, ref_value, have, want, max_gain_pct)
+                  if with_min_amount and best is None else None)
     return {"have": have, "want": want, "amount": amount, "reference": g.s["reference"],
-            "best": best, "direct": direct, "alternatives": alternatives}
+            "best": best, "direct": direct, "alternatives": alternatives, "min_amount": min_amount}
+
+
+def _accepted(r: dict | None, max_gain_pct: float) -> bool:
+    """The one rule for "this path is a conversion": it delivers a whole unit and is no phantom-gain mirage.
+    The ranking and the minimum-amount search share it, so a named minimum always has a route."""
+    return r is not None and r["out"] > 0 and r["gain_cross_pct"] <= max_gain_pct
+
+
+MIN_AMOUNT_PATHS = 50      # how many starved paths are sized when naming the minimum
+MIN_AMOUNT_DOUBLINGS = 24  # fills thin out as the amount grows; the estimate is verified and raised
+MIN_AMOUNT_WALK = 8        # lots walked down past the bisection, where rounding makes acceptance bumpy
+
+
+def _min_amount(g: Graph, paths: list[list[Edge]], ref_value: dict[str, float], have: str, want: str,
+                max_gain_pct: float) -> int | None:
+    """The smallest whole amount of `have` that buys at least one whole `want` through a route the ranking accepts
+    (`_accepted`), on any of `paths`: the view says "Minimum N" instead of "No route" when the amount, not the
+    market, is the problem. A path whose whole book holds less than one `want` is skipped at once (no amount
+    rescues it). Each other path is sized from its quoted rates (fills only pay less), raised by doubling until it
+    passes, then searched back down for the smallest passing multiple of its lot unit."""
+    best: int | None = None
+    for path in paths:
+        unit = max(1, cycle_unit(path))
+        ceiling = math.floor(route_cap(path, math.inf) / unit) * unit   # all the book can take
+        if ceiling < unit or not _accepted(_convert_path(g, path, float(ceiling), ref_value, have, want), max_gain_pct):
+            continue                                                 # liquidity-starved: never a conversion
+        rate = 1.0                                   # top-of-ladder want per have: fills only pay less
+        for e in path:
+            rate *= e.rate
+        if rate <= 0:
+            continue
+        ok = lambda a: _accepted(_convert_path(g, path, float(a), ref_value, have, want), max_gain_pct)
+        amt = min(ceiling, unit * math.ceil(1.0 / (rate * unit)))
+        lo = 0                                       # the largest amount known to fail
+        for _ in range(MIN_AMOUNT_DOUBLINGS):
+            if ok(amt):
+                break
+            lo, amt = amt, min(ceiling, amt * 2)
+            if lo == ceiling:
+                break
+        else:
+            continue
+        if not ok(amt):
+            continue
+        while amt - lo > unit:                       # bisect, in lot units, down to the smallest passing amount
+            mid = lo + ((amt - lo) // (2 * unit)) * unit
+            if mid <= lo:
+                break
+            if ok(mid):
+                amt = mid
+            else:
+                lo = mid
+        # whole-unit rounding makes acceptance bumpy, so bisection can stop a lot or two high: walk the last steps
+        for _ in range(MIN_AMOUNT_WALK):
+            if amt - unit < unit or not ok(amt - unit):
+                break
+            amt -= unit
+        if best is None or amt < best:
+            best = amt
+    return best
 
 
 def convert(have: str, want: str, amount: float | None = None, max_steps: int | None = None) -> dict:
@@ -132,4 +197,4 @@ def convert(have: str, want: str, amount: float | None = None, max_steps: int | 
     gv = settings_mod.gold_value_per_1k(g.s)
     bridge = centrality.betweenness_lite(g, ref_value)
     return _best_conversions(g, ref_value, have, want, float(amount), max_steps,
-                             gold_value_per_1k=gv, bridge=bridge)
+                             gold_value_per_1k=gv, bridge=bridge, with_min_amount=True)

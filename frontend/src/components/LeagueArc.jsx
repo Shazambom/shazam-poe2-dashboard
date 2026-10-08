@@ -53,7 +53,7 @@ export default function LeagueArcSection({ name, num }) {
   const { data: arc } = useApi(() => api.arc(name, num || 'divine'), [name, num])
   if (!arc || !(arc.arc && arc.arc.length) || !(arc.history && arc.history.length >= 2)) return null
 
-  const windows = arc.windows || []
+  const windows = [...(arc.windows || [])].sort((a, b) => a.age - b.age)   // in the order the days come
   return (
     <>
       <div className="cd-section" title="Daily poe2scout closes (item ÷ numeraire), aligned by day-of-league">League arc
@@ -67,7 +67,8 @@ export default function LeagueArcSection({ name, num }) {
         {windows.map(wd => (
           <span key={wd.kind} className={`arc-win ${wd.kind}`}
             title={wd.kind === 'buy' ? 'projected trough — a good time to buy' : 'projected peak — a good time to sell'}>
-            {wd.kind} · day {wd.age} <b>{wd.ret_pct >= 0 ? '+' : ''}{wd.ret_pct}%</b>
+            {/* one thing per pill: the buy pill names the day; the sell pill the day and what you'd make */}
+            {wd.kind} · day {wd.age}{wd.kind === 'sell' && <b> · {wd.ret_pct >= 0 ? '+' : ''}{wd.ret_pct}%</b>}
           </span>
         ))}
         {!arc.weighted && (

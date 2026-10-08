@@ -18,13 +18,18 @@ def _preset(pid: str, label: str, *, min_margin_pct, max_gold, min_margin_per_1k
     }}
 
 
-# The Arbitrage page's presets, tuned by the owner in the packaged app (2026-10-05; docs/learnability-plan.md).
+# The Arbitrage page's presets, tuned by the owner in the packaged app (2026-10-05 and 2026-10-08; docs/learnability-plan.md,
+# docs/first-contact-audit.md).
 # A preset is every Filters / More filters / Arbitrage algorithm value plus the gold price; never Start from,
 # Show at most or the share of capital to commit, which stay the user's. Currency amounts are in exalted
 # (ARBITRAGE_UNIT) whatever the reference. Balanced is the default (DEFAULTS below, and migration m8).
 ARBITRAGE_PRESETS: list[dict] = [
     _preset("balanced", "Balanced", min_margin_pct=20, max_gold=0, min_margin_per_1k_gold=0, min_liquidity_ref=1000,
             min_volume_ref_per_h=100, max_step_minutes=60, weights=(0.6, 0.2, 0.35, 0.3), volume_window_h=72,
+            wide_spread=2, gold_value_per_1k=0.009527348253160697),
+    # Balanced's filters ranked by yield alone (owner, 2026-10-08, read from their running app).
+    _preset("high_yield", "High Yield", min_margin_pct=20, max_gold=0, min_margin_per_1k_gold=0, min_liquidity_ref=1000,
+            min_volume_ref_per_h=100, max_step_minutes=60, weights=(1, 0, 0, 0), volume_window_h=72,
             wide_spread=2, gold_value_per_1k=0.009527348253160697),
     _preset("quick", "Quick flips", min_margin_pct=5, max_gold=1000000, min_margin_per_1k_gold=0.41,
             min_liquidity_ref=200, min_volume_ref_per_h=10000, max_step_minutes=15, weights=(0.8, 0.2, 0.4, 0.4),
@@ -40,3 +45,13 @@ ARBITRAGE_PRESETS: list[dict] = [
             wide_spread=2, gold_value_per_1k=0.019905251005215174),
 ]
 ARBITRAGE_UNIT = "exalted"   # the currency the presets' (and the page's) currency thresholds are written in
+
+# The values stable builds no longer show (beta and dev keep them: lib/tweaks.js). Constants here, next to the presets,
+# because migration m9 resets them while settings.py is still importing (the same cycle m8 avoids). settings.DEFAULTS
+# reads them from here, so there is one definition.
+HIDDEN_KNOB_DEFAULTS = {
+    "allow_digest_edges": True,     # fill missing live pairs with digest VWAP
+    "allow_recipe_edges": True,
+    "gold_model": {"base_per_order": 0, "per_unit": {}, "per_ref_unit": 10, "fee_side": "buy"},
+    "limit": 100,                   # filters.limit: "Show at most"
+}

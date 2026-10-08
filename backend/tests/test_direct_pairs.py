@@ -477,3 +477,45 @@ def test_an_inactive_market_cannot_drag_a_value_down(monkeypatch):
         assert abs(V["thing"] / V["divine"] - 12.0) < 1e-6, V["thing"] / V["divine"]
     finally:
         _teardown()
+
+
+def test_movers_rows_carry_the_games_exchange_category_like_hold(monkeypatch):
+    """First-contact audit (2026-10-08): Positive movers showed poe2scout's ids ("vaultkeys", "ultimatum") beside a
+    Hold list that said Gems and Expedition. Both lists name an item by the game's Exchange category; what the
+    exchange doesn't list keeps its source name, exactly as Hold does."""
+    from app import movers
+    g = _graph(monkeypatch)
+    try:
+        t0 = 1_700_000_000
+        days = [t0 + i * 86400 for i in range(6)]
+        up = [100.0, 104.0, 108.0, 112.0, 116.0, 120.0]
+        monkeypatch.setattr(movers, "_current_series", lambda: (
+            "PairsLeague", {9: [(t, v, 5e8) for t, v in zip(days, up)], 10: [(t, v, 5e8) for t, v in zip(days, up)]},
+            {9: ("Xesht's Reliquary Key", "vaultkeys"), 10: ("Sovereign Alloy", "verisium")}))
+        monkeypatch.setattr(movers, "exchange_category",
+                            lambda name, groups=None: {"Xesht's Reliquary Key": "Fragments"}.get(name))
+        movers._cache.clear(); movers._movers_cache.clear()
+        cat = {a["name"]: a["category"] for a in movers.top_movers(24 * 5, 5, 0.0, "up")["assets"]}
+        assert cat["Xesht's Reliquary Key"] == "Fragments"
+        assert cat["Sovereign Alloy"] == "verisium", "not on the exchange: the source category, unchanged"
+    finally:
+        movers._cache.clear(); movers._movers_cache.clear()
+        _teardown()
+
+
+def test_the_reference_currency_opens_its_biggest_market_as_the_market_quotes_it(monkeypatch):
+    """Owner's packaged check (2026-10-08): ⌘K → "Exalted Orb" said "No price history" — the reference was excluded
+    from cards by construction, and poe2scout prices everything in it. Owner: quote it the way players do. The
+    yardstick's card is its biggest market's card, priced in the reference: here Exalted's deepest market is Chaos
+    (200k ex/h), so the card is Chaos at 10 Exalted, live, with that market's own trend."""
+    g = _graph(monkeypatch)
+    try:
+        ex = arbitrage.cards(["exalted"], 24)["exalted"]
+        chaos = arbitrage.cards(["chaos"], 24)["chaos"]
+        assert ex["id"] == "chaos" and ex["name"] == chaos["name"]
+        assert abs(ex["mid"] - 10.0) < 1e-9 and ex["source"] == "live"
+        assert ex["pref_num"] == "exalted", "opened in the reference, not in the counterpart's own default market"
+        assert ex["trend"] == chaos["trend"] and ex["trend_num"] == chaos["trend_num"]
+        assert arbitrage.asset("exalted", 24)["row"]["id"] == "chaos"
+    finally:
+        _teardown()

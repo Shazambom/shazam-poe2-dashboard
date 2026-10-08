@@ -27,6 +27,9 @@ doc and the code disagree, the code wins — fix the doc.
   order, today's tiers, typos only when nothing matches. **Built** 2026-10-04.
 - [`learnability-plan.md`](./learnability-plan.md) — the learnability pass (planned 2026-10-05): ⌘K by screen,
   plain words, empty screens, the owner-tuned arbitrage presets (Balanced replaces saved values), cancellable search.
+- [`first-contact-audit.md`](./first-contact-audit.md) — a first-time player's drive of 0.3.14 (2026-10-07): 15
+  verified friction points, the task table, and the literature behind judging them
+  ([`ui-research-2026-10-07.md`](./ui-research-2026-10-07.md), primary sources).
 
 ## Open bugs
 

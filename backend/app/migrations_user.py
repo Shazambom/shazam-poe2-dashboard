@@ -273,6 +273,31 @@ def _m7_league_default(conn: sqlite3.Connection) -> None:
     log.info("m7: league default freed")
 
 
+def _m9_reset_hidden_knobs(conn: sqlite3.Connection) -> None:
+    """One-time (code review, 2026-10-08): stable builds no longer show the recipe/digest switches, the gold-fee
+    overrides or "Show at most" (beta and dev keep them: lib/tweaks.js). A user who had changed one would keep that
+    state with nothing on screen to change it back, so those values return to the defaults once, the way m8 did for
+    the presets. Everything else stays. Idempotent on `_hidden_knobs_reset_v1`."""
+    from .arbpresets import HIDDEN_KNOB_DEFAULTS as d
+    row = conn.execute("SELECT value FROM kv WHERE key='settings'").fetchone()
+    if not row:
+        return
+    try:
+        s = json.loads(row[0])
+    except (ValueError, TypeError):
+        return
+    if not isinstance(s, dict) or s.get("_hidden_knobs_reset_v1"):
+        return
+    s["allow_digest_edges"] = d["allow_digest_edges"]
+    s["allow_recipe_edges"] = d["allow_recipe_edges"]
+    s["gold_model"] = json.loads(json.dumps(d["gold_model"]))
+    filters = s.get("filters") if isinstance(s.get("filters"), dict) else {}
+    s["filters"] = {**filters, "limit": d["limit"]}
+    s["_hidden_knobs_reset_v1"] = True
+    conn.execute("UPDATE kv SET value=? WHERE key='settings'", (json.dumps(s),))
+    log.info("m9: hidden knobs reset to defaults")
+
+
 def _m8_arbitrage_balanced(conn: sqlite3.Connection) -> None:
     """One-time (owner, 2026-10-05): every install's Arbitrage values become the Balanced preset. "Default will
     override people's current configs … by creating this new default we're improving the app, not changing a
@@ -306,4 +331,5 @@ USER_MIGRATIONS: list[tuple[int, str, object]] = [
     (6, "raise the saved liquidity filter floor to 200", _m6_liq_floor_200),
     (7, "free a saved Standard league so the youngest league is the default", _m7_league_default),
     (8, "replace saved arbitrage values with the Balanced preset", _m8_arbitrage_balanced),
+    (9, "reset the values stable builds no longer show", _m9_reset_hidden_knobs),
 ]

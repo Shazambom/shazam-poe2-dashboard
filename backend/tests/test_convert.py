@@ -222,3 +222,83 @@ def test_the_bridge_tie_break_never_grows_with_the_users_step_count(monkeypatch)
     monkeypatch.setattr(g, "iter_paths", lambda a, b, n: (walked.append(n), real(a, b, n))[1])
     centrality.betweenness_lite(g, {c: 1.0 for c in g.adj})
     assert walked and set(walked) == {centrality.BRIDGE_MAX_STEPS} == {3}
+
+
+def test_an_amount_too_small_to_buy_one_reports_the_minimum():
+    """Owner's first-contact drive (2026-10-08): 1 chaos -> divine said "No conversion route found" when the real
+    problem was the amount (50 worked). The backend names the smallest amount of `have` that buys one whole `want`
+    through a route the ranking would accept; the view shows it. Only Convert asks for it (`with_min_amount`):
+    the Capital view's cash-out sizing calls the same ranking every 30 s and never reads it."""
+    g = _graph()
+    ref = {"chaos": 10.0, "exalted": 1.0, "divine": 50.0}
+    res = arbitrage._best_conversions(g, ref, "chaos", "divine", 1.0, max_steps=4, max_gain_pct=1e9, with_min_amount=True)
+    assert res["best"] is None
+    assert res["min_amount"] == 5          # the best market pays 0.20 divine per chaos: 5 chaos buys the first one
+    # the named minimum is one the ranking accepts: at it there is a route
+    ok = arbitrage._best_conversions(g, ref, "chaos", "divine", float(res["min_amount"]), max_steps=4, max_gain_pct=1e9)
+    assert ok["best"] is not None
+    # enough: no minimum to report; not asked: none computed
+    assert arbitrage._best_conversions(g, ref, "chaos", "divine", 50.0, max_steps=4, max_gain_pct=1e9, with_min_amount=True)["min_amount"] is None
+    assert arbitrage._best_conversions(g, ref, "chaos", "divine", 1.0, max_steps=4, max_gain_pct=1e9)["min_amount"] is None
+    # nothing connects: no route and no minimum
+    none = arbitrage._best_conversions(g, ref, "divine", "chaos", 1.0, max_steps=4, max_gain_pct=1e9, with_min_amount=True)
+    assert none["best"] is None and none["min_amount"] is None
+
+
+def test_the_minimum_respects_the_gain_cap_and_is_the_smallest_amount():
+    """Code review (2026-10-08): the minimum ignored the phantom-gain cap (so "Minimum 5" could name an amount with
+    no route) and only ever doubled (so it could overshoot a working 6 with 7 or 10). With ref divine=60 the 2-hop
+    path is a +20% cross that the default cap rejects; only the direct market (0.15) counts: 7 chaos buys the first
+    divine. And a ladder whose first rung runs out needs a search back down from the first passing doubling."""
+    g = _graph()
+    ref = {"chaos": 10.0, "exalted": 1.0, "divine": 60.0}
+    res = arbitrage._best_conversions(g, ref, "chaos", "divine", 1.0, max_steps=4, with_min_amount=True)
+    assert res["best"] is None
+    assert res["min_amount"] == 7
+    at_min = arbitrage._best_conversions(g, ref, "chaos", "divine", 7.0, max_steps=4)
+    assert at_min["best"] is not None and at_min["best"]["out"] >= 1
+    assert arbitrage._best_conversions(g, ref, "chaos", "divine", 5.0, max_steps=4)["best"] is None, "5 only fills through the mirage"
+    # a thin first rung: 0.2 pays for half a divine, the rest fills at 0.1 -> 8 chaos is the first whole divine
+    g2 = Graph({"gold_model": {}, "reference": "exalted", "league": "Test", "step_overhead_min": 0, "max_steps": 4})
+    g2.fee_table = {}
+    g2.add(Edge("chaos", "divine", "live", 0.2, [{"rate": 0.2, "stock": 0.5}, {"rate": 0.1, "stock": 100}], age_s=0.0))
+    res2 = arbitrage._best_conversions(g2, ref, "chaos", "divine", 1.0, max_steps=4, max_gain_pct=1e9, with_min_amount=True)
+    assert res2["min_amount"] == 8
+
+
+def test_a_liquidity_starved_path_is_not_sized_up():
+    """Code review: doubling cannot rescue a path whose market holds less than one whole `want`; such paths are
+    skipped at once instead of simulated 24 times."""
+    g = Graph({"gold_model": {}, "reference": "exalted", "league": "Test", "step_overhead_min": 0, "max_steps": 4})
+    g.fee_table = {}
+    g.add(Edge("chaos", "divine", "live", 0.2, [{"rate": 0.2, "stock": 0.5}], age_s=0.0))   # half a divine in the whole book
+    ref = {"chaos": 10.0, "exalted": 1.0, "divine": 50.0}
+    import importlib
+    cv = importlib.import_module('app.arbitrage.convert')   # the package re-exports convert() under the same name
+    calls = []
+    real = cv._convert_path
+    def counting(*a, **k):
+        calls.append(1)
+        return real(*a, **k)
+    cv._convert_path, saved = counting, cv._convert_path
+    try:
+        res = arbitrage._best_conversions(g, ref, "chaos", "divine", 1.0, max_steps=4, max_gain_pct=1e9, with_min_amount=True)
+    finally:
+        cv._convert_path = saved
+    assert res["best"] is None and res["min_amount"] is None
+    assert len(calls) <= 4, f"a dead path was simulated {len(calls)} times"
+
+
+def test_the_minimum_walks_down_past_a_bumpy_bisection():
+    """Whole-unit rounding makes acceptance non-monotone: a bisection can settle a lot high. The last lots are walked
+    down, so an amount one below the named minimum does not quietly work (the owner's app said "Minimum 13" while 12
+    converted)."""
+    g = Graph({"gold_model": {}, "reference": "exalted", "league": "Test", "step_overhead_min": 0, "max_steps": 4})
+    g.fee_table = {}
+    # 0.3 for the first 2 units' worth, then 0.05: 7 chaos -> 0.6+0.25 = 0.85 (no), 8 -> 0.9 (no), 9 -> 0.95, 10 -> 1.0 (yes)
+    g.add(Edge("chaos", "divine", "live", 0.3, [{"rate": 0.3, "stock": 0.6}, {"rate": 0.05, "stock": 100}], age_s=0.0))
+    ref = {"chaos": 10.0, "exalted": 1.0, "divine": 50.0}
+    res = arbitrage._best_conversions(g, ref, "chaos", "divine", 1.0, max_steps=4, max_gain_pct=1e9, with_min_amount=True)
+    n = res["min_amount"]
+    assert arbitrage._best_conversions(g, ref, "chaos", "divine", float(n), max_steps=4, max_gain_pct=1e9)["best"] is not None
+    assert arbitrage._best_conversions(g, ref, "chaos", "divine", float(n - 1), max_steps=4, max_gain_pct=1e9)["best"] is None, n

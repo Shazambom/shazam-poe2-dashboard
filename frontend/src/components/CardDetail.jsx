@@ -10,12 +10,6 @@ import { useHorizon } from '../lib/horizonStore.js'
 import { useStatus } from '../lib/statusStore.js'
 import { factorFor, trendIn, valueIn } from '../lib/price.js'
 
-export const SRC_LABEL = { live: 'live order book', digest: 'hourly market data', derived: 'derived via other markets', scout: 'poe2scout', none: 'no data' }
-const SRC_SHORT = { live: 'LIVE', digest: 'HR', derived: '~', scout: 'SC' }
-// The source badge (board tile + detail head): the short tag and its hover title, from one table.
-export function srcBadge(source) {
-  return { label: SRC_SHORT[source] || '–', title: SRC_LABEL[source] || 'no data' }
-}
 
 // Canonical hours → range label (matches the board/hold horizon pickers).
 export function rangeLabel(hours) {
@@ -96,13 +90,12 @@ export default function CardDetail({ r, num, factor, numOptions, onNum, prices, 
   }, [])
   return (
     <motion.div className="detail-backdrop" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose}>
-      <motion.div className={`card-detail src-${r.source || 'none'}`} role="dialog" aria-modal="true"
+      <motion.div className="card-detail" role="dialog" aria-modal="true"
         initial={{ opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.98 }}
         transition={{ duration: 0.18, ease: [0.22, 0.61, 0.36, 1] }} onClick={e => e.stopPropagation()}>
         <button ref={closeRef} className="cd-close" onClick={onClose} title="Close (Esc)">×</button>
         <div className="cd-head">
           <span className="cd-title"><Cur id={r.id} name={r.name} text size={24} /></span>
-          <span className={`pt-src ${r.source}`} title={srcBadge(r.source).title}>{srcBadge(r.source).label}</span>
         </div>
         <div className="cd-price">
           {mid == null ? <span className="muted">no price</span>

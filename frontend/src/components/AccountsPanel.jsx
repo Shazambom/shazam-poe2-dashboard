@@ -51,34 +51,34 @@ export default function AccountsPanel({ onChange }) {
 
   return (
     <>
-      <h2>Trade session</h2>
+      <h2>Account</h2>
       {sess?.connected ? (
         <p className="notice">Connected{sess.label ? ` · ${sess.label}` : ''} · set {ago(sess.set_at)} · last successful fetch {ago(sess.last_ok)}.
           {' '}{sess.source !== 'env' && <button className="btn small" onClick={async () => { await api.disconnectSession(); await load(); onChange?.() }}>Disconnect</button>}
         </p>
       ) : desktop ? (
         <>
-          <ol className="hint" style={{ margin: '10px 0', lineHeight: 1.7 }}>
-            <li><button className="btn primary small" onClick={() => window.poe2desktop?.openLogin?.()}>Open pathofexile.com login in your browser ↗</button>
-              {' '}— sign in there (Steam/Cloudflare work normally in a real browser).</li>
-            <li>Press <b>F12 → Application → Cookies → <code>POESESSID</code></b> and copy its value.</li>
-            <li>Paste it here:
-              <div className="row" style={{ marginTop: 6 }}>
-                <input className="btn" type="password" placeholder="POESESSID" value={cookie} onChange={e => setCookie(e.target.value)} style={{ width: 300 }} autoComplete="off" />
-                <button className="btn primary" disabled={!cookie || busy} onClick={connect}>{busy ? 'Verifying…' : 'Connect'}</button>
-              </div>
-            </li>
-          </ol>
+          {/* Owner, 2026-10-08: one Connect, the in-app login; the browser-and-paste steps are a fallback. */}
+          <div className="row" style={{ margin: '10px 0' }}>
+            <button className="btn primary" disabled={busy} onClick={bridgeConnect}>{busy ? 'Connecting…' : 'Connect'}</button>
+            <span className="hint">Signs you in to pathofexile.com in a window of this app.</span>
+          </div>
           <details className="adv">
             <summary>Other ways to connect</summary>
-            <div className="row" style={{ margin: '6px 0' }}>
-              <button className="btn" disabled={busy} onClick={bridgeConnect}>
-                {busy ? 'Connecting…' : 'Connect via in-app login window'}</button>
-              <span className="hint">Opens an embedded login. May get stuck on Cloudflare or Steam SSO — prefer the browser steps above.</span>
-            </div>
+            <ol className="hint" style={{ margin: '10px 0', lineHeight: 1.7 }}>
+              <li><button className="btn small" onClick={() => window.poe2desktop?.openLogin?.()}>Open pathofexile.com login in your browser ↗</button>
+                {' '}— if the in-app window gets stuck on Cloudflare or Steam.</li>
+              <li>Press <b>F12 → Application → Cookies → <code>POESESSID</code></b> and copy its value.</li>
+              <li>Paste it here:
+                <div className="row" style={{ marginTop: 6 }}>
+                  <input className="btn" type="password" placeholder="POESESSID" value={cookie} onChange={e => setCookie(e.target.value)} style={{ width: 300 }} autoComplete="off" />
+                  <button className="btn" disabled={!cookie || busy} onClick={connect}>{busy ? 'Verifying…' : 'Use this cookie'}</button>
+                </div>
+              </li>
+            </ol>
           </details>
-          <p className="hint">The cookie is verified with one exchange query, stored encrypted under <code>data/</code>, and only ever sent to pathofexile.com.
-            Logging out of the website invalidates it — reconnect afterwards.</p>
+          <p className="hint">The session is stored encrypted under <code>data/</code> and only ever sent to pathofexile.com.
+            Logging out of the website ends it — connect again afterwards.</p>
         </>
       ) : (
         // Web build: the live order book needs the desktop app's native login — don't

@@ -101,6 +101,12 @@ export const fmt = {
   n: (v, d = 0) => v == null ? '–' : Number(v).toLocaleString(undefined, { maximumFractionDigits: d }),
   pct: (v) => v == null ? '–' : `${v >= 0 ? '+' : ''}${Number(v).toFixed(2)}%`,
   rate: (v) => v == null ? '–' : v >= 100 ? v.toFixed(0) : v >= 1 ? v.toFixed(2) : v.toPrecision(3),
+  // A big count as an amount: three significant figures with k / M (24.9M, 2.35M, 224k); small numbers as they are.
+  compact: (v) => {
+    if (v == null) return '–'
+    const r = Number(Number(v).toPrecision(3)), a = Math.abs(r)   // round first: 999,950 is 1M, never '1000k'
+    return a >= 1e9 ? `${Number((r / 1e9).toPrecision(3))}B` : a >= 1e6 ? `${Number((r / 1e6).toPrecision(3))}M` : a >= 1e3 ? `${Number((r / 1e3).toPrecision(3))}k` : String(r)
+  },
   age: (s) => s == null ? '–' : s < 90 ? `${Math.round(s)}s` : s < 5400 ? `${Math.round(s / 60)}m` : `${(s / 3600).toFixed(1)}h`,
   // A duration given in HOURS (fill times, cash-out times): minutes below an hour, days past two.
   dur: (h) => h == null ? '–' : h < 1 / 60 ? '<1m' : h < 1 ? `${Math.round(h * 60)}m` : h < 48 ? `${h.toFixed(1)}h` : `${(h / 24).toFixed(1)}d`,

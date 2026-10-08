@@ -108,9 +108,12 @@ def _top_movers(window_h: int, n: int, min_value_ex: float, direction: str) -> d
     # while Exalted inflated look like a mover.
     base = _reference()
     hourly = exchange_cards([meta.get(iid, (str(iid), "?"))[0] for iid in liquid], window_h, base)
+    from .currencies import registry
+    groups = registry.groups()
     out = []
     for iid, medval in liquid.items():
         name, cat = meta.get(iid, (str(iid), "?"))
+        cat = exchange_category(name, groups) or cat   # the game's category, as Hold names it
         card = hourly.get(name)
         # the daily fallback is smoothed exactly like the card's (_median3), or the row and the
         # card it opens disagree for the same asset
@@ -157,6 +160,15 @@ def _carry_forward(anchor_pts, days) -> dict:
         if last:
             out[t] = last
     return out
+
+
+def exchange_category(name: str, groups: dict | None = None) -> str | None:
+    """The game's Currency Exchange category for a poe2scout item name (the Stash's groups,
+    currencies.registry.groups), or None when the exchange doesn't list it. `groups`: precomputed.
+    Hold and Positive movers name a row's category with this."""
+    from .currencies import registry
+    tid = _trade_id(name)
+    return (groups if groups is not None else registry.groups()).get(tid) if tid else None
 
 
 def _trade_id(name: str) -> str | None:

@@ -1,4 +1,4 @@
-// Arbitrage presets (docs/learnability-plan.md part 4): the backend serves the five owner-tuned sets; the page
+// Arbitrage presets (docs/learnability-plan.md part 4): the backend serves the six owner-tuned sets; the page
 // writes a picked one through the normal settings save and shows a preset as picked while the saved values equal
 // it, so editing any number deselects it (no stored "current preset").
 import { test } from 'node:test'

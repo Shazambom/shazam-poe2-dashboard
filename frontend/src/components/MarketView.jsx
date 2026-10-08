@@ -23,7 +23,9 @@ export default function MarketView({ currencies }) {
 
   const names = Object.fromEntries((currencies?.currencies ?? []).map(c => [c.id, c.name]))
   // one text per pair, so "div chaos" spans both names
-  const shown = useMemo(() => matching(edges, q, e => [`${e.from_name} ${e.to_name} ${e.from} ${e.to}`]), [edges, q])
+  // real markets first, recipe rows after them (first-contact audit: All markets opened on recipe rows)
+  const shown = useMemo(() => matching(edges, q, e => [`${e.from_name} ${e.to_name} ${e.from} ${e.to}`])
+    .sort((a, b) => (a.kind === 'recipe') - (b.kind === 'recipe')), [edges, q])
   const digestSeries = (hist?.digest ?? []).map(p => ({ t: hourLabel(p.hour), rate: p.rate, vol: p.volume_a }))
   const liveSeries = (hist?.live ?? []).map(p => ({ t: hourLabel(p.fetched_at), rate: p.best_rate, stock: p.best_stock }))
 
@@ -73,17 +75,17 @@ export default function MarketView({ currencies }) {
           </div>
           {top.length === 0 ? <p className="hint">Nothing yet — the digest hasn't synced for this league.</p> : (
             <table>
-              <thead><tr><th>Market</th><th className="num">{byValue ? 'Value traded' : 'Volume'}</th><th className="num">Hours active</th></tr></thead>
+              <thead><tr><th>Market</th><th className="num">{byValue ? 'Value traded' : 'Traded · 24h'}</th><th className="num">Rate</th></tr></thead>
               <tbody>
                 {top.slice(0, 15).map((m, i) => (
                   <tr key={i} style={{ cursor: 'pointer' }} onClick={() => setPair({ a: m.a, b: m.b })}>
-                    <td><Cur id={m.a} name={names[m.a]} /> / <Cur id={m.b} name={names[m.b]} /></td>
+                    <td><Cur id={m.a} name={names[m.a]} /> › <Cur id={m.b} name={names[m.b]} /></td>
                     <td className="num">
                       {byValue
                         ? (m.value_ex != null ? <Wealth v={m.value_ex} cur="exalted" size={12} /> : '–')
-                        : `${fmt.n(m.volume_a)} / ${fmt.n(m.volume_b)}`}
+                        : <>{fmt.compact(m.volume_a)} <Cur id={m.a} size={12} /> <span className="muted">for</span> {fmt.compact(m.volume_b)} <Cur id={m.b} size={12} /></>}
                     </td>
-                    <td className="num">{m.hours_active}</td>
+                    <td className="num">{fmt.rate(m.rate)}</td>
                   </tr>
                 ))}
               </tbody>
