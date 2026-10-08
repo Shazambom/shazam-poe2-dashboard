@@ -20,7 +20,7 @@ test('a freshly mounted price paints at 0, not at its value — that is the coun
 test('the board tile uses it for the price, and it is the spring that starts at 0', () => {
   const board = readFileSync(new URL('../src/components/BoardView.jsx', import.meta.url), 'utf8')
   assert.match(board, /import AnimatedNumber from '\.\.\/lib\/animatedNumber\.js'/)
-  assert.match(board, /<AnimatedNumber value=\{mid\} format=\{fmt\.rate\} \/>/)
+  assert.match(board, /<AnimatedNumber value=\{n\} format=\{fmt\.rate\} \/>/)   // through <Rate>: the readable side's number
   const src = readFileSync(new URL('../src/lib/animatedNumber.js', import.meta.url), 'utf8')
   assert.match(src, /useSpring\(COUNT_UP_FROM,/, 'the spring starts at COUNT_UP_FROM, not at `value`')
 })

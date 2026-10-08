@@ -261,3 +261,17 @@ Primary sources in [`ui-research-2026-10-07.md`](ui-research-2026-10-07.md). The
   moment the user took the slow path (Grossman 2007).
 - **Peak-end** (Kahneman 1993): the worst moment (an unreadable loop, a sign-in wall after "Connected") shapes the
   memory of the session more than any polish.
+
+## Ruling 2026-10-08 (evening): the volume rule, then the readable side
+
+The reference card fix shipped to the owner's packaged check as a special case for the reference currency
+(`_reference_row`), and the regression gate showed it touched one card. Owner: "Why would you hard code it that
+way? You should have a deterministic rule that chooses when and how to flip things." Measured on a copy of the
+owner's data (658 priced currencies): the walk-down in `default_numeraire` had put Exalted in verisium (market #37,
+0.9% of its Divine volume) and Chaos in Vaal (#47, 0.5%), and printed a reference cross for 9 currencies whose
+only market reads below 1. Two candidate rules were put to the owner with every card each changes; the owner ruled:
+**"follow the volume rule and then apply readable side to the volume rule"** — the busiest market names the
+numeraire, no walk; the view draws whichever side of that market reads ≥ 1. 134 of 623 cards change; the reference
+needs no special case. Backend: `default_numeraire` is the busiest market (`board.py`); the view: `readable()` /
+`flipChange()` in `lib/price.js`, the one `<Rate>` element at every price site (Board tiles and hubs, CardDetail,
+Hold, the inbox). Documented in CLAUDE.md (the volume rule) and the styleguide ("Which side").

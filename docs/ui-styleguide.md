@@ -244,6 +244,10 @@ already held in a currency (a sale's price, a holding) shows in that currency, r
 in the market that trades the thing (`board.default_numeraire`) at that market's own rate
 (`Graph.direct_rate`). Never convert a native amount through exalted: it is not what anyone traded.
 
+**Which side:** the one that reads at least 1 (owner, 2026-10-08). A rate below 1 in its market is drawn from the
+other side with one quiet word — `10.7 per ◈` — by the one `<Rate>` element (`lib/price.js` `readable`); the line
+and the % flip with it. Never a hand-formatted price next to a `<Cur>`.
+
 **Wealth, the approximation:** worth that has no single native currency (a sum across currencies,
 such as a Capital total) is computed in the **reference currency** (`*_ref`, `value_ex`, `medvol`,
 …), and a native number too large to read is re-denominated. Both go through ONE rule —

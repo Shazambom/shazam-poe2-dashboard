@@ -55,7 +55,7 @@ test('Top bar: while nothing is held, one action replaces the zero', () => {
 test('Inbox: an entry names the price, not the volume multiple', () => {
   const s = src('components/DivinePingOrb.jsx')
   assert.doesNotMatch(s, /vol_z/)
-  assert.match(s, /fmt\.rate\(s\.close\)/)
+  assert.match(s, /<Rate value=\{s\.close\}/)
 })
 
 // QA pass (2026-10-08) on the first-contact build: four defects and the polish that follows the same rules.
@@ -103,7 +103,7 @@ test('review: the empty-state chip keys on holdings, not on their price', () => 
 
 test('review: an inbox price is an Exalted close and says so', () => {
   const s = src('components/DivinePingOrb.jsx')
-  assert.match(s, /fmt\.rate\(s\.close\)\} <Cur id="exalted"/)
+  assert.match(s, /<Rate value=\{s\.close\} num="exalted"/)
   assert.doesNotMatch(s, /settings\?\.reference/)
 })
 

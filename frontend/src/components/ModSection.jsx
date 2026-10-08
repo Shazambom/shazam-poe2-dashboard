@@ -1,12 +1,12 @@
 import React from 'react'
 import Cur from './Cur.jsx'
-import { Native } from './Wealth.jsx'
+import Rate from './Rate.jsx'
 import { lines } from '../lib/mods/format.jsx'
 import { priceOf } from '../lib/mods/prices.js'
 
 // A grant's cost in the market that trades it (the volume rule), or a dash when nothing prices it.
 export const Price = ({ value }) => (
-  <span className="mods-num mods-price">{value == null ? '–' : <Native v={value.price} cur={value.cur} vRef={value.value_ref} size={12} />}</span>
+  <span className="mods-num mods-price">{value == null ? '–' : <Rate value={value.price} num={value.cur} size={12} bold={false} />}</span>
 )
 
 // A pool another currency opens on the item, one level down from the base tables: a header

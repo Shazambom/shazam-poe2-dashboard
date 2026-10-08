@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react'
 import { api, fmt } from '../lib/api.js'
 import { useApi } from '../lib/hooks.js'
 import Cur from './Cur.jsx'
+import Rate from './Rate.jsx'
 import Wealth from './Wealth.jsx'
 import { useAssetModal } from './CardDetail.jsx'
 import { useHorizon } from '../lib/horizonStore.js'
@@ -106,7 +107,7 @@ export default function HoldView() {
                   <td className="muted">{i + 1}</td>
                   <td><Cur name={r.name} text /></td>
                   <td className="muted">{r.category}</td>
-                  <td className="num">{r.price == null ? <span className="muted">–</span> : <>{fmt.n(r.price, r.price >= 100 ? 0 : 2)} <Cur id={r.price_cur} size={12} /></>}</td>
+                  <td className="num"><Rate value={r.price} num={r.price_cur} size={12} bold={false} /></td>
                   <td className={`num ${r.ret_pct >= 0 ? 'gain' : 'loss'}`}>{fmt.pct(r.ret_pct)}</td>
                   <td className="num loss">{r.mdd_pct == null ? '–' : `${r.mdd_pct}%`}</td>
                   <td className="num mpg">{r.hold}</td>

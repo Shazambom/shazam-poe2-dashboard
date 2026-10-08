@@ -543,6 +543,8 @@ a { color: var(--live); }
 @keyframes dot-pulse { 0% { box-shadow: 0 0 0 0 rgba(var(--gain-rgb),.45); } 70% { box-shadow: 0 0 0 6px rgba(var(--gain-rgb),0); } 100% { box-shadow: 0 0 0 0 rgba(var(--gain-rgb),0); } }
 @media (prefers-reduced-motion: reduce) { .dot.ok { animation: none; } }
 .capital-pill { color: var(--ink); }
+/* The readable side of a market (lib/price.js): "10.7 per ◈" — the word sits quiet between number and unit. */
+.per { color: var(--muted); font-size: 0.82em; margin: 0 0.35em 0 0.3em; }
 /* The one empty-state action in the top bar breathes gold until there is something to show (owner: it needs to
    catch the eye); no text, no extra element, and still with reduced motion. */
 .nudge { animation: nudge-glow 2.4s var(--ease) infinite; }

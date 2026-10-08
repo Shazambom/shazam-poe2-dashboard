@@ -8,7 +8,8 @@ import LeagueArcSection from './LeagueArc.jsx'
 import { useSignals } from '../lib/signalStore.js'
 import { useHorizon } from '../lib/horizonStore.js'
 import { useStatus } from '../lib/statusStore.js'
-import { factorFor, trendIn, valueIn } from '../lib/price.js'
+import { factorFor, trendIn, valueIn, readable, flipChange } from '../lib/price.js'
+import Rate from './Rate.jsx'
 
 
 // Canonical hours → range label (matches the board/hold horizon pickers).
@@ -62,8 +63,11 @@ export default function CardDetail({ r, num, factor, numOptions, onNum, prices, 
   const f = factor || 1
   const rp = (v) => (v == null ? null : v / f)
   const mid = rp(r.mid)
-  const trend = trendIn(r, num, f, prices)
-  const change = r.change_pct
+  // The readable side of the market (lib/price.js): below 1, the line and the % flip with the number.
+  const per = readable(mid).per
+  const trend0 = trendIn(r, num, f, prices)
+  const trend = per && trend0 ? trend0.map(p => ({ t: p.t, v: p.v ? 1 / p.v : p.v })) : trend0
+  const change = per ? flipChange(r.change_pct) : r.change_pct
   const inCurs = Object.keys(prices).filter(c => c !== r.id && prices[c]).sort((a, b) => prices[b] - prices[a]).slice(0, 8)
   // Phase 4: if this item currently has a fired 'about to move' signal, explain why it fired.
   // Joined by NAME (the signal carries a numeric item_id, the row a currency id).
@@ -99,7 +103,7 @@ export default function CardDetail({ r, num, factor, numOptions, onNum, prices, 
         </div>
         <div className="cd-price">
           {mid == null ? <span className="muted">no price</span>
-            : <><b>{fmt.rate(mid)}</b><Cur id={num} size={18} /></>}
+            : <Rate value={mid} num={num} size={18} />}
           {change != null && <span className={`pt-chg ${change >= 0 ? 'gain' : 'loss'}`}>{fmt.pct(change)}<span className="muted" style={{ fontWeight: 400, marginLeft: 4 }}>· {range}</span></span>}
         </div>
         <div className="cd-spark"><Spark points={trend} w={560} h={150} /></div>
@@ -107,7 +111,7 @@ export default function CardDetail({ r, num, factor, numOptions, onNum, prices, 
           <div className="cd-section">⚡ Signal <span className="muted" style={{ fontWeight: 400 }}>· volume-confirmed move forming</span></div>
           <div className="cd-chips">
             <span className="arc-win signal">about to move</span>
-            <span className="cd-chip" title="price at the anomaly">at {fmt.rate(rp(signal.close))} <Cur id={num} size={12} /></span>
+            <span className="cd-chip" title="price at the anomaly">at <Rate value={rp(signal.close)} num={num} size={12} bold={false} /></span>
           </div>
         </>}
         <LeagueArcSection name={r.name} num={num} />
@@ -139,7 +143,7 @@ export default function CardDetail({ r, num, factor, numOptions, onNum, prices, 
           <div className="cd-section">Value in other currencies</div>
           <div className="cd-invalue">
             {inCurs.map(c => (
-              <div key={c} className="cd-vrow"><Cur id={c} text size={16} /><span className="spacer" /><b>{fmt.rate(valueIn(r.id, r.mid, c, prices))}</b></div>
+              <div key={c} className="cd-vrow"><Cur id={c} text size={16} /><span className="spacer" /><Rate value={valueIn(r.id, r.mid, c, prices)} num={c} size={12} /></div>
             ))}
           </div>
         </>}

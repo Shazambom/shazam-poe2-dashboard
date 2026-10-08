@@ -11,17 +11,20 @@ import CurrencyPicker from './CurrencyPicker.jsx'
 import { useHorizon } from '../lib/horizonStore.js'
 import { useSync } from '../lib/syncStore.js'
 import { usePoll } from '../lib/hooks.js'
-import { factorFor, trendIn, valueIn } from '../lib/price.js'
+import { factorFor, trendIn, valueIn, readable, flipChange } from '../lib/price.js'
+import Rate from './Rate.jsx'
 import AnimatedNumber from '../lib/animatedNumber.js'
 
 
 function Tile({ r, num, factor, prices, numOptions, onNum, onRemove, onOpen, index = 0 }) {
-  const change = r.change_pct
   const f = factor || 1
   const rp = (v) => (v == null ? null : v / f)               // reprice R-value into `num`
   const mid = rp(r.mid)
-  const trend = trendIn(r, num, f, prices)
-  const unit = <Cur id={num} size={14} />
+  // The readable side of the market (lib/price.js): below 1, the line and the % flip with the number.
+  const per = readable(mid).per
+  const trend0 = trendIn(r, num, f, prices)
+  const trend = per && trend0 ? trend0.map(p => ({ t: p.t, v: p.v ? 1 / p.v : p.v })) : trend0
+  const change = per ? flipChange(r.change_pct) : r.change_pct
   // Flash the price green/red only when THIS currency's price changes (new data landing) —
   // compared before repricing, so changing "priced in" or the numeraire moving never flashes.
   const raw = r.mid
@@ -55,7 +58,7 @@ function Tile({ r, num, factor, prices, numOptions, onNum, onRemove, onOpen, ind
       </div>
       <div className="pt-mid">
         {mid == null ? <span className="muted">no price</span>
-          : <span className={`pt-num ${flash}`}><AnimatedNumber value={mid} format={fmt.rate} /><span className="pt-unit">{unit}</span></span>}
+          : <span className={`pt-num ${flash}`}><Rate value={mid} num={num} bold={false} render={(n) => <AnimatedNumber value={n} format={fmt.rate} />} /></span>}
         {change != null && <span className={`pt-chg ${change >= 0 ? 'gain' : 'loss'}`}>{fmt.pct(change)}</span>}
       </div>
       <Spark points={trend} />
@@ -210,7 +213,7 @@ export default function BoardView({ status }) {
                 return (
                   <button key={r.id} className="pulse-chip clickable" title={`${r.name || nameOf(r.id)} — central market · expand chart`}
                     onClick={() => setOpenId(r.id)}>
-                    <Cur id={r.id} size={16} /><span className="pulse-v">{val == null ? '–' : fmt.rate(val)}</span><span className="pulse-u"><Cur id={num} size={12} /></span>
+                    <Cur id={r.id} size={16} /><span className="pulse-v"><Rate value={val} num={num} size={12} bold={false} /></span>
                   </button>
                 )
               })}

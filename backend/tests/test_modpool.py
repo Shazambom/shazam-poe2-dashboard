@@ -345,20 +345,20 @@ def ring_grants(export, derived, monkeypatch):
 
 def test_a_cost_is_shown_in_the_market_that_trades_the_grant_at_that_markets_rate(ring_grants, monkeypatch):
     """The volume rule (CLAUDE.md): a grant's cost is shown in its highest-volume counterpart it is
-    worth at least one of, at THAT market's rate — never its reference value divided by the
+    (owner 2026-10-08: the busiest market, the view shows the readable side), at THAT market's rate — never its reference value divided by the
     counterpart's. The reference value rides along only for the display's approximation."""
     from app import arbitrage
     values = {"exalted": 1.0, "divine": 500.0, "runic-alloy": 49.11, "adept-rune": 1005.0}
     g = _priced_graph(values, [
         ("divine", "exalted", 500.0, 1_000), ("exalted", "divine", 1 / 500.0, 500_000),
-        ("runic-alloy", "divine", 0.1, 40), ("runic-alloy", "exalted", 48.0, 10),   # divine busiest, but the alloy is worth < 1 div
+        ("runic-alloy", "divine", 0.1, 40), ("runic-alloy", "exalted", 48.0, 10),   # divine busiest: 0.1 of one (the view draws "10 per Divine")
         ("adept-rune", "divine", 2.1, 30), ("adept-rune", "exalted", 990.0, 1),     # the rune's market is divine
     ])
     monkeypatch.setattr(arbitrage, "cached_graph", lambda *a, **k: g)
     out = modpool.prices("ring")
     assert out["reference"] == "exalted"
     assert out["prices"] == {
-        "Runic Alloy": {"price": 48.0, "cur": "exalted", "value_ref": 49.11},
+        "Runic Alloy": {"price": 0.1, "cur": "divine", "value_ref": 49.11},
         "Adept Rune": {"price": 2.1, "cur": "divine", "value_ref": 1005.0},
     }
     assert modpool.prices("wand")["prices"] == {"Adept Rune": {"price": 2.1, "cur": "divine", "value_ref": 1005.0}}, "a pool prices its own grants only"

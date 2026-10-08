@@ -24,3 +24,16 @@ export function trendIn(r, num, factor, prices) {
 export function valueIn(id, mid, c, prices) {
   return (mid != null && prices?.[c]) ? mid / prices[c] : null
 }
+
+// The readable side (owner, 2026-10-08: "follow the volume rule and then apply readable side to the volume
+// rule"). The backend names the market; a rate below 1 in it is drawn from the other side — 0.093 Divine per
+// Chaos is "10.7 per Divine". `n` is the number to draw; `per` says it is the counterpart's side.
+export function readable(rate) {
+  if (rate == null || !(rate > 0) || rate >= 1) return { n: rate, per: false }
+  return { n: 1 / rate, per: true }
+}
+
+// The % change of the other side of a market: +25% one way is exactly -20% the other.
+export function flipChange(pct) {
+  return pct == null ? null : -pct / (1 + pct / 100)
+}

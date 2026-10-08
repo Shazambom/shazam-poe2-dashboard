@@ -70,7 +70,7 @@ test('nativeAmount keeps a native price and approximates only an unreadable one'
 
 test('the Mods cost renders the native price, not the reference value', () => {
   const s = readFileSync(new URL('../src/components/ModSection.jsx', import.meta.url), 'utf8')
-  assert.ok(s.includes('<Native'), 'ModSection renders <Native>')
+  assert.ok(s.includes('<Rate value={value.price} num={value.cur}'), 'ModSection renders the price in its market through <Rate> (the readable side)')
   assert.ok(!/fmt\.rate\(value\)/.test(s) && !s.includes('<Wealth'), 'no reference-only or converted price')
 })
 

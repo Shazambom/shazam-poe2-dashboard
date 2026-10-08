@@ -136,24 +136,24 @@ def test_a_one_sided_fat_finger_is_not_a_price(monkeypatch):
         _teardown()
 
 
-def test_a_card_is_never_priced_in_a_currency_worth_more_than_itself(monkeypatch):
-    """The readability floor is 1.0: chaos (10 ex) is not shown "in divine" (550) even though
-    divine is its biggest market; it steps down to exalted. Divine keeps chaos (55)."""
+def test_the_busiest_market_prices_every_card_and_the_view_picks_the_readable_side(monkeypatch):
+    """Owner, 2026-10-08: "follow the volume rule and then apply readable side to the volume rule". The
+    numeraire is the market that trades the most of the currency, full stop (no walk down to a cheaper
+    counterpart: that walk put Exalted in verisium and Chaos in Vaal, markets #37 and #47). Chaos' busiest
+    market is Divine (315k chaos/h against 40k with Exalted), so its card is priced in Divine at 0.018;
+    the view shows the side that reads >= 1 ("55 per Divine"). The reference is a card like any other."""
     g = _graph(monkeypatch)
     try:
         b = client.get("/api/board?window_h=24").json()
-        pref = {r["id"]: r["pref_num"] for r in b["rows"]}
-        assert pref["chaos"] == "exalted"
-        assert pref["divine"] == "chaos"
-        for r in b["rows"]:
-            n = r["pref_num"]
-            if r["mid"] and b["prices"].get(n) and n != b["reference"]:
-                assert r["mid"] / b["prices"][n] >= 1.0, f"{r['id']} shown in {n} at {r['mid'] / b['prices'][n]:.3f}"
+        rows = {r["id"]: r for r in b["rows"]}
+        assert rows["chaos"]["pref_num"] == "divine"
+        assert rows["divine"]["pref_num"] == "chaos"
+        assert rows["regal"]["pref_num"] == "chaos"          # its only market, though 1 regal = 0.2 chaos
+        ex = arbitrage.cards(["exalted"], 24)["exalted"]     # not on this watchlist; a card all the same
+        assert ex["mid"] == 1.0 and ex["pref_num"] == "chaos"
     finally:
         _teardown()
 
-
-# ------------------------------------------------------------------ the line under the number
 def test_board_trend_and_change_follow_the_market_the_price_comes_from(monkeypatch):
     """The sparkline and the % on a card are the history of the SAME market as the number. Divine
     is priced by its Chaos market, so its line is the divine↔chaos history in chaos (`trend_num`),
@@ -176,9 +176,9 @@ def test_board_trend_and_change_follow_the_market_the_price_comes_from(monkeypat
         d = rows["divine"]
         assert d["pref_num"] == "chaos" and d["trend_num"] == "chaos"
         assert d["trend"][-1]["v"] == 55.0 and abs(d["change_pct"] - 10.0) < 1e-9
-        c = rows["chaos"]                                    # priced against the reference itself
-        assert c["pref_num"] == "exalted" and c["trend_num"] == "exalted"
-        assert abs(c["trend"][0]["v"] - 9.0) < 1e-9
+        c = rows["chaos"]                                    # its busiest market is Divine: the same line, read the other way
+        assert c["pref_num"] == "divine" and c["trend_num"] == "divine"
+        assert abs(c["trend"][0]["v"] - 1 / 50.0) < 1e-9 and abs(c["change_pct"] - (-100 / 11)) < 1e-6   # 1/55 vs 1/50
     finally:
         _teardown()
 
@@ -503,19 +503,22 @@ def test_movers_rows_carry_the_games_exchange_category_like_hold(monkeypatch):
         _teardown()
 
 
-def test_the_reference_currency_opens_its_biggest_market_as_the_market_quotes_it(monkeypatch):
+def test_the_reference_currency_is_a_card_like_any_other(monkeypatch):
     """Owner's packaged check (2026-10-08): ⌘K → "Exalted Orb" said "No price history" — the reference was excluded
-    from cards by construction, and poe2scout prices everything in it. Owner: quote it the way players do. The
-    yardstick's card is its biggest market's card, priced in the reference: here Exalted's deepest market is Chaos
-    (200k ex/h), so the card is Chaos at 10 Exalted, live, with that market's own trend."""
+    from cards by construction. Owner: no special case; the volume rule, then the readable side. Exalted's busiest
+    market here is Chaos (400k ex/h), so its card is Exalted priced in Chaos — 0.1, which the view draws as
+    "10 per Chaos" — live, with that market's own trend, and the asset view opens the same row."""
+    from app import arbitrage as arb
     g = _graph(monkeypatch)
     try:
+        t0 = 1_700_000_000
+        def hist(_league, a, b, hours):                   # chaos in exalted, 9 -> 10: exalted in chaos, 1/9 -> 1/10
+            return [{"hour": t0 + i * 3600, "rate": 9.0 + i * 0.2} for i in range(6)] if (a, b) == ("chaos", "exalted") else []
+        monkeypatch.setattr(arb._board_mod.digest, "pair_history", hist)
         ex = arbitrage.cards(["exalted"], 24)["exalted"]
-        chaos = arbitrage.cards(["chaos"], 24)["chaos"]
-        assert ex["id"] == "chaos" and ex["name"] == chaos["name"]
-        assert abs(ex["mid"] - 10.0) < 1e-9 and ex["source"] == "live"
-        assert ex["pref_num"] == "exalted", "opened in the reference, not in the counterpart's own default market"
-        assert ex["trend"] == chaos["trend"] and ex["trend_num"] == chaos["trend_num"]
-        assert arbitrage.asset("exalted", 24)["row"]["id"] == "chaos"
+        assert ex["id"] == "exalted" and ex["mid"] == 1.0 and ex["source"] == "live"
+        assert ex["pref_num"] == "chaos" and ex["trend_num"] == "chaos"
+        assert abs(ex["trend"][-1]["v"] - 0.1) < 1e-9 and ex["change_pct"] < 0
+        assert arbitrage.asset("exalted", 24)["row"]["id"] == "exalted"
     finally:
         _teardown()

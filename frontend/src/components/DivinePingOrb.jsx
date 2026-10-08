@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import { useSignals, sigKey } from '../lib/signalStore.js'
 import { useIcons, lookup } from '../lib/icons.js'
 import Cur from './Cur.jsx'
+import Rate from './Rate.jsx'
 import { fmt } from '../lib/api.js'
 
 // The market-signal inbox: a golden Divine Orb that appears in the topbar when the sidecar has
@@ -52,7 +53,7 @@ export default function DivinePingOrb({ onOpenSignal }) {
                   title="Open detail">
                   <Cur name={s.name} size={18} />
                   <span className="signal-name">{s.name}</span>
-                  <span className="signal-vz" title="price when it fired">{fmt.rate(s.close)} <Cur id="exalted" size={12} /></span>
+                  <span className="signal-vz" title="price when it fired"><Rate value={s.close} num="exalted" size={12} bold={false} /></span>
                 </button>
                 {!s.acked && (
                   <button className="signal-x" title="Dismiss" aria-label="Dismiss signal"

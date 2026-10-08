@@ -246,9 +246,14 @@ and share data through the fewest new surfaces. Think ecosystem, not screens.
 
 **When unsure what currency to display something in, follow the volume rule** (owner, 2026-09-28).
 A thing is shown in the market that actually trades it: its highest-volume counterpart
-(`counterparts_by_volume` in `backend/app/arbitrage/graph.py`), walking down the ranking to the
-first counterpart it is worth at least one of (`board.default_numeraire`, the Board's rule). The
-number is **that market's own rate** (`Graph.direct_rate`), never a conversion through exalted.
+(`counterparts_by_volume` in `backend/app/arbitrage/graph.py`; `board.default_numeraire` names it),
+full stop — no walking down the ranking (owner, 2026-10-08: "follow the volume rule and then apply
+readable side to the volume rule"; the walk once put Exalted in verisium and Chaos in Vaal). The
+number is **that market's own rate** (`Graph.direct_rate`), never a conversion through exalted, drawn
+on **the side that reads at least 1** (`frontend/src/lib/price.js` `readable`, the one `<Rate>`
+element): Chaos in Divine is 0.093, shown as "10.7 per Divine"; the reference is "749 per Divine".
+A flipped card flips its line and its % with the number. The backend never flips: it hands the
+market and the rate; the view picks the side.
 - **Precise first.** An amount already held in a currency (a sale's price, a holding) shows in
   that currency, raw. A price shows in its trading market at the traded rate. Converting one
   currency into another through ex can mislead: it is not what anyone traded.

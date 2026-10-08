@@ -223,10 +223,10 @@ def test_a_dead_secondary_market_never_sets_the_number_or_the_line(monkeypatch):
         row = {r["id"]: r for r in out["rows"]}["chaos"]
         assert row["mid"] == pytest.approx(10.0), "chaos is priced through its busiest market (divine)"
         assert g_priced_by(arbitrage)["chaos"] == "divine"
-        # Worth 10 ex, less than one divine, so the card is SHOWN in exalted (the readability rule);
-        # the line is still the pricing chain (chaos→divine→exalted), never the dead direct market.
-        assert row["trend_num"] == "exalted"
-        assert row["trend"][-1]["v"] == pytest.approx(row["mid"] / out["prices"]["exalted"], rel=0.02), \
+        # Shown in its busiest market, divine (0.02 of one; the view draws the readable side, "50 per Divine"),
+        # so the line is that market, chaos→divine, never the dead direct market.
+        assert row["pref_num"] == "divine" and row["trend_num"] == "divine"
+        assert row["trend"][-1]["v"] == pytest.approx(row["mid"] / out["prices"]["divine"], rel=0.02), \
             "the line ends on the number, not on the dead market's fold (~55)"
         g = arbitrage.graph.cached_graph()
         assert g.edges[("chaos", "exalted")].meta["inactive"] is True, "the wandering secondary market stays dead"
