@@ -283,6 +283,13 @@ Check these every time; each one has cost a deploy before. (The general rules ev
 
 ## Lessons from deploys
 
+- **2026-10-08, 0.3.15-beta.1: accept the change, not the ids.** An accept line is a glob over the WHOLE reported line
+  (`cards    exalted` matches nothing; `cards    exalted: None -> *` does). A list of changed ids is only valid for one
+  data snapshot: the live digest moves between the diff and the publish, and near-tie cards drift in and out (102 →
+  103). A changed card now reports only its changed fields, sorted, so the acceptance names the mechanism
+  (`cards    *: change_pct * -> *; pref_num * -> *; trend_num * -> *`) and a card whose price moved is still refused.
+  Never a bare `cards    *`.
+
 - **2026-10-05, 0.3.14: the regression gate needs current local market data, and acceptances go stale.**
   - **Stale data:** no app had run on the Mac for 8h, so the digest rates were past `digest_max_age_h`. The gate saw
     0 market rows and 0 loops, and failed closed with "too little data". Fix: open the app, wait until `/api/status`
