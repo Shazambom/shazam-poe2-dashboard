@@ -6,7 +6,7 @@ import assert from 'node:assert/strict'
 import { buildPaletteItems } from '../src/lib/palette.js'
 import { SUB_DESTS, SCREEN_COMMANDS } from '../src/lib/dests.js'
 
-const TABS = ['Board', 'Stash', 'Strategy', 'Trading', 'Economy', 'Settings']
+const TABS = ['Board', 'Stash', 'Trading', 'Economy', 'Settings']
 const withRuns = () => Object.fromEntries(Object.entries(SCREEN_COMMANDS).map(([s, cs]) => [s, cs.map(c => ({ ...c, run: () => {} }))]))
 const CURRENCIES = [['exalted', 'Exalted Orb'], ['perfect-exalted-orb', 'Perfect Exalted Orb'], ['divine', 'Divine Orb'],
   ['chaos', 'Chaos Orb'], ['mirror', 'Mirror of Kalandra'], ['hinekoras-lock', "Hinekora's Lock"], ['seraphs-heart', "Seraph's Heart"]]
@@ -32,8 +32,8 @@ test('a board currency is listed once, not twice', () => {
 })
 
 test('the words players type reach the screen that does the job', () => {
-  assert.equal(first('movers'), 'Hold')
-  assert.equal(first('rising'), 'Hold')
+  assert.equal(first('movers'), 'Top movers')
+  assert.equal(first('rising'), 'Top movers')   // the movers have their own screen since 2026-10-08
   assert.equal(first('bulk'), 'Regex')
   assert.equal(first('connect'), 'Settings')
   assert.equal(first('7d'), 'Time window · 7d')

@@ -1,4 +1,4 @@
-// Strategy → Strat Calculator: named farming strats, each a session you can leave and resume, and
+// Stash → Strat Calculator: named farming strats, each a session you can leave and resume, and
 // each one's profit in divines per hour. Pure: components/StratCalcView.jsx renders it,
 // test/stratcalc.test.mjs and backend/tests/test_stratcalc_e2e.py pin it.
 //

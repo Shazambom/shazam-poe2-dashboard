@@ -13,14 +13,14 @@ test('the Stash is its own tab (owner, 2026-10-08), right after the Board; nothi
   const d = DESTS.find(x => x.id === 'stash')
   assert.equal(d.label, 'Stash')
   assert.equal(d.section, 'Stash')
-  assert.equal(d.sub, null)
+  assert.equal(d.sub, 'stash')
   assert.ok(!DESTS.some(x => x.label === 'Sales'))
 })
 
 test('the app mounts the Stash view on its own tab', () => {
-  const app = strip(read('../src/App.jsx'))
-  assert.match(app, /tab === 'Stash' && <div className="section"><StashView /)
-  assert.doesNotMatch(app, /SalesView/)
+  const tab = strip(read('../src/components/StashTab.jsx'))
+  assert.match(tab, /sub === 'stash' && <StashView /)
+  assert.doesNotMatch(tab, /SalesView/)
 })
 
 test('the Stash view groups, totals and switches through lib/stash.js and saves choices in settings', () => {
@@ -108,9 +108,9 @@ test('groups read left to right in value order, not down one column then the nex
 test('⌘K finds Stash by its old name too', async () => {
   const { buildPaletteItems } = await import('../src/lib/palette.js')
   const { SUB_DESTS } = await import('../src/lib/dests.js')
-  const tabs = ['Board', 'Stash', 'Strategy', 'Trading', 'Economy', 'Settings']
+  const tabs = ['Board', 'Stash', 'Trading', 'Economy', 'Settings']
   const hits = buildPaletteItems({ tabs, subDests: SUB_DESTS, q: 'sales' })
-  assert.deepEqual(hits.map(h => [h.kind, h.label]), [['view', 'Stash']])
+  assert.deepEqual(hits.map(h => [h.kind, h.label]), [['sub', 'Stash']])
 })
 
 // code review (2026-10-03)
@@ -158,7 +158,7 @@ test('cash rows wait with "…" while the market syncs, like every other row', (
 test('the Arbitrage card sums with the Stash\'s own helper; no dead save plumbing remains', () => {
   const rv = strip(read('../src/components/RoutesView.jsx'))
   assert.match(rv, /netWorth\(held\)/)
-  for (const f of ['RoutesView', 'StrategyView']) assert.doesNotMatch(read(`../src/components/${f}.jsx`), /onCapitalSaved/)
+  for (const f of ['RoutesView', 'StashTab']) assert.doesNotMatch(read(`../src/components/${f}.jsx`), /onCapitalSaved/)
   assert.doesNotMatch(read('../src/App.jsx'), /onCapitalSaved/)
 })
 

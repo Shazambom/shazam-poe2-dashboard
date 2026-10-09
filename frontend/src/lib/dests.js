@@ -5,11 +5,14 @@
 // pinned to this file by a test). A sub-view added anywhere else is missing from reports and ⌘K.
 export const DESTS = [
   { id: 'board', section: 'Board', sub: null, label: 'Board', aka: ['prices', 'price board'] },
-  { id: 'stash', section: 'Stash', sub: null, label: 'Stash', aka: ['Sales', 'net worth', 'what I have', 'holdings'] },   // its own tab (owner, 2026-10-08)
-  { id: 'strategy-arbitrage', section: 'Strategy', sub: 'arbitrage', label: 'Arbitrage', aka: ['flip', 'loop', 'convert'] },
-  { id: 'strategy-hold', section: 'Strategy', sub: 'hold', label: 'Hold', aka: ['invest', 'swing', 'movers', 'rising', 'pumping', 'what to buy'] },
-  { id: 'strategy-calc', section: 'Strategy', sub: 'calc', label: 'Strat Calculator', aka: ['farm', 'profit per hour'] },
+  // The Stash tab (owner, 2026-10-08; was "Strategy"): what you hold first, then what to do with it.
+  { id: 'stash', section: 'Stash', sub: 'stash', label: 'Stash', aka: ['Sales', 'net worth', 'what I have', 'holdings'] },
+  { id: 'stash-arbitrage', section: 'Stash', sub: 'arbitrage', label: 'Arbitrage', aka: ['flip', 'loop', 'convert'] },
+  { id: 'stash-calc', section: 'Stash', sub: 'calc', label: 'Strat Calculator', aka: ['farm', 'profit per hour'] },
+  // Economy (owner, 2026-10-08): Hold and the movers broken out of one board, Hold first.
+  { id: 'economy-hold', section: 'Economy', sub: 'hold', label: 'Hold', aka: ['invest', 'swing', 'what to buy', 'store of value'] },
   { id: 'economy-inflation', section: 'Economy', sub: 'inflation', label: 'Inflation', aka: ['deflation', 'div ex ratio'] },
+  { id: 'economy-movers', section: 'Economy', sub: 'movers', label: 'Top movers', aka: ['movers', 'rising', 'pumping', 'positive movers', 'gainers'] },
   { id: 'economy-market', section: 'Economy', sub: 'market', label: 'Market', aka: ['pairs', 'busiest', 'volume'] },
   { id: 'trading-workspace', section: 'Trading', sub: 'workspace', label: 'Workspace', aka: ['trade', 'searches'] },
   { id: 'trading-live', section: 'Trading', sub: 'live', label: 'Live', aka: ['ping', 'live search'] },
@@ -24,14 +27,15 @@ export const DESTS = [
 // Never an action that spends the shared trade-history allowance (the Stash's history fetch).
 export const SCREEN_COMMANDS = {
   board: [{ id: 'board-add', label: 'Add a currency', target: 'board-add', act: 'focus', aka: ['watch'] }],
-  'strategy-arbitrage': [{ id: 'convert', label: 'Convert…', target: 'convert-have', act: 'focus', aka: ['have', 'want'] }],
-  'strategy-hold': [{ id: 'hold-category', label: 'Category…', target: 'hold-category', act: 'focus' }],
-  'strategy-calc': [   // a focus action first: Enter on a just-opened ⌘K must not start the timer (QA 2026-10-05)
+  'stash-arbitrage': [{ id: 'convert', label: 'Convert…', target: 'convert-have', act: 'focus', aka: ['have', 'want'] }],
+  'economy-hold': [{ id: 'hold-category', label: 'Category…', target: 'hold-category', act: 'focus' }],
+  'stash-calc': [   // a focus action first: Enter on a just-opened ⌘K must not start the timer (QA 2026-10-05)
     { id: 'calc-loot', label: 'Add loot…', target: 'calc-loot', act: 'focus', aka: ['drop', 'item'] },
     { id: 'calc-timer', label: 'Start / Stop timer', target: 'calc-timer', act: 'click' },
     { id: 'calc-map', label: 'Add map +1', target: 'calc-map', act: 'click', aka: ['maps run'] },
     { id: 'calc-new', label: 'New strat', target: 'calc-new', act: 'click' },
   ],
+  'economy-movers': [],   // a leaderboard with no control of its own; its window is the app-wide one (the ⌘K time-window commands)
   'economy-inflation': [{ id: 'inflation-anchor', label: 'Change anchor…', target: 'inflation-anchor', act: 'focus' }],
   'economy-market': [
     { id: 'market-pair', label: 'Pick a pair…', target: 'market-pair', act: 'focus', aka: ['chart'] },

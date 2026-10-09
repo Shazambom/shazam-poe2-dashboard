@@ -46,7 +46,7 @@ test('wealth display sites use the shared component', () => {
   for (const [f, needle] of [
     ['App.jsx', 'net worth <b>'], ['components/StashView.jsx', 'Net worth'], ['components/CardDetail.jsx', 'realizable'],
     ['components/RouteSteps.jsx', 'value through loop'], ['components/RoutesView.jsx', 'margin_ref'],
-    ['components/MarketView.jsx', 'value_ex'], ['components/HoldView.jsx', 'medvol'],
+    ['components/MarketView.jsx', 'value_ex'], ['components/MoversView.jsx', 'medvol'],
   ]) {
     const s = src(f)
     assert.ok(s.includes('<Wealth'), `${f} (${needle}) should render <Wealth>`)

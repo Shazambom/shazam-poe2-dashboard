@@ -8,7 +8,7 @@ import { buildPaletteItems } from '../src/lib/palette.js'
 import { DESTS, SUB_DESTS, SCREEN_COMMANDS } from '../src/lib/dests.js'
 import { runTarget } from '../src/lib/paletteRun.js'
 
-const TABS = ['Board', 'Stash', 'Strategy', 'Trading', 'Economy', 'Settings']
+const TABS = ['Board', 'Stash', 'Trading', 'Economy', 'Settings']
 const withRuns = () => Object.fromEntries(Object.entries(SCREEN_COMMANDS).map(([s, cs]) => [s, cs.map(c => ({ ...c, run: () => {} }))]))
 const GLOBAL = [{ id: 'send-feedback', label: 'Report a problem…', hint: 'Help', aka: ['bug', 'feedback'], run: () => {} },
   { id: 'theme-vault', label: 'Theme: Vault', hint: 'Appearance', run: () => {} }]
@@ -20,7 +20,7 @@ test('an empty ⌘K starts with this screen\'s actions', () => {
   assert.equal(items('board')[0].label, 'Add a currency')
   assert.equal(items('stash')[0].label, 'Add a currency')
   assert.deepEqual(items('trading-workspace').slice(0, 2).map(i => i.label), ['New search', 'New group'])
-  assert.equal(items('strategy-arbitrage')[0].label, 'Convert…')
+  assert.equal(items('stash-arbitrage')[0].label, 'Convert…')
   assert.equal(items('trading-live')[0].label, 'Jump to newest ping')
 })
 
@@ -30,10 +30,10 @@ test('Enter on a just-opened ⌘K never changes anything: each screen\'s first a
   // An allowlist (code review): a first action only focuses, unless it is named here as checked and harmless.
   const HARMLESS = new Set(['settings-test-sound'])   // plays the ping sound; changes nothing
   for (const [screen, cs] of Object.entries(SCREEN_COMMANDS)) {
-    if (screen === 'trading-workspace') continue   // the owner's own example: New search first
+    if (screen === 'trading-workspace' || cs.length === 0) continue   // the owner's own example: New search first; Top movers has no actions
     assert.ok(cs[0].act === 'focus' || HARMLESS.has(cs[0].id), `${screen}: first action "${cs[0].label}" must only focus`)
   }
-  assert.equal(items('strategy-calc')[0].label, 'Add loot…')
+  assert.equal(items('stash-calc')[0].label, 'Add loot…')
   assert.equal(items('trading-regex')[0].label, 'Filter modifiers…')
   assert.equal(items('trading-mods')[0].label, 'Filter modifiers…')
   assert.equal(items('settings')[0].label, 'Test ping sound')
@@ -83,12 +83,13 @@ test('the Stash offers no action that fetches trade history (it spends the share
 test('every screen has its actions, keyed by the one screen list', () => {
   const ids = DESTS.map(d => d.id)
   assert.deepEqual(Object.keys(SCREEN_COMMANDS).sort(), [...ids].sort())
-  for (const [s, cs] of Object.entries(SCREEN_COMMANDS)) assert.ok(cs.length > 0, s)
+  // Top movers is a leaderboard with no control of its own (its window is the app-wide one, a ⌘K time-window command).
+  for (const [s, cs] of Object.entries(SCREEN_COMMANDS)) assert.ok(cs.length > 0 || s === 'economy-movers', s)
 })
 
 // each action names the control it works; that control carries the marker in its screen's source
 const SOURCE = {
-  board: ['BoardView'], 'strategy-arbitrage': ['ConvertView'], 'strategy-hold': ['HoldView'], 'strategy-calc': ['StratCalcView'],
+  board: ['BoardView'], 'stash-arbitrage': ['ConvertView'], 'economy-hold': ['HoldView'], 'stash-calc': ['StratCalcView'],
   'economy-inflation': ['InflationView'], 'economy-market': ['MarketView'], 'trading-live': ['LiveView'], stash: ['StashView'],
   'trading-regex': ['RegexView', 'RegexResult'], 'trading-mods': ['ModsBar'], settings: ['NotificationsPanel'],
 }
@@ -146,7 +147,7 @@ test('App feeds ⌘K the current screen, and the sub-tab views report theirs', (
   assert.match(app, /screenCommands=\{screenCommands\}/)
   assert.match(app, /onGoSub=\{goSub\}/, 'one section\/sub-view dispatch, shared by ⌘K\'s screens and actions')
   assert.match(app, /if \(d\) goSub\(d\.section, d\.sub\)/)
-  for (const [file, section] of [['StrategyView', 'Strategy'], ['EconomyView', 'Economy'], ['TradingView', 'Trading']]) {
+  for (const [file, section] of [['StashTab', 'Stash'], ['EconomyView', 'Economy'], ['TradingView', 'Trading']]) {
     const src = readFileSync(new URL(`../src/components/${file}.jsx`, import.meta.url), 'utf8')
     assert.match(src, new RegExp(`nav\\.reportSub\\('${section}', sub\\)`), file)
   }

@@ -26,10 +26,9 @@ import { findWhere } from './lib/tree.js'
 import { DESTS, SCREEN_COMMANDS, SUB_DESTS, SNAP, settle } from './lib/dests.js'
 import { runTarget } from './lib/paletteRun.js'
 import BoardView from './components/BoardView.jsx'
-import StrategyView from './components/StrategyView.jsx'
+import StashTab from './components/StashTab.jsx'
 import EconomyView from './components/EconomyView.jsx'
 import TradingView from './components/TradingView.jsx'
-import StashView from './components/StashView.jsx'
 import Cur from './components/Cur.jsx'
 import SettingsView from './components/SettingsView.jsx'
 import DownloadApp from './components/DownloadApp.jsx'
@@ -38,7 +37,7 @@ import BrandOrb from './components/BrandOrb.jsx'
 import FeedbackDialog from './components/FeedbackDialog.jsx'
 import DiscordLink from './components/DiscordLink.jsx'
 
-const TABS = ['Board', 'Stash', 'Strategy', 'Trading', 'Economy', 'Settings']   // owner's order, 2026-10-08
+const TABS = ['Board', 'Stash', 'Trading', 'Economy', 'Settings']   // owner's order, 2026-10-08
 export default function App() {
   const [tab, setTab] = useState('Board')
   const status = useStatus(s => s.status)
@@ -92,7 +91,7 @@ export default function App() {
     const h = (e) => {
       if (!(e.metaKey || e.ctrlKey) || e.altKey) return
       if (e.key === 'k' || e.key === 'K') { e.preventDefault(); setCmdOpen(o => !o) }
-      else if (e.key >= '1' && e.key <= '6' && TABS[e.key - 1]) { e.preventDefault(); setTab(TABS[e.key - 1]) }   // ⌘1–6 = the tabs, in order
+      else if (e.key >= '1' && e.key <= '5' && TABS[e.key - 1]) { e.preventDefault(); setTab(TABS[e.key - 1]) }   // ⌘1–5 = the tabs, in order
     }
     window.addEventListener('keydown', h)
     return () => window.removeEventListener('keydown', h)
@@ -145,7 +144,7 @@ export default function App() {
   const goWorkspace = React.useCallback(() => { setTab('Trading'); setTimeout(() => nav.openTrading('workspace'), 0) }, [])
   useEffect(() => nav.on(e => {
     if (e.type === 'goTrading') { setTab('Trading'); setTimeout(() => nav.openTrading(e.sub || 'workspace'), 0) }
-    if (e.type === 'goStash') setTab('Stash')
+    if (e.type === 'goStash') { setTab('Stash'); setTimeout(() => nav.openSub('Stash', 'stash'), 0) }
   }), [])
   const ee2Present = useWorkspace(s => s.ee2Present)
   const hasHistoryRows = useWorkspace(s => !!(findWhere(s.tree, n => n.kind === 'folder' && n.sys === HISTORY_SYS)?.children || []).length)
@@ -267,8 +266,7 @@ export default function App() {
       </header>
 
       {tab === 'Board' && <BoardView key={league} status={status} />}
-      {tab === 'Stash' && <div className="section"><StashView league={league} /></div>}
-      {tab === 'Strategy' && <StrategyView key={league} league={league} capital={capital} status={status} currencies={currencies} />}
+      {tab === 'Stash' && <StashTab key={league} league={league} capital={capital} status={status} currencies={currencies} />}
       {tab === 'Economy' && <EconomyView key={league} league={league} currencies={currencies} />}
       {tab === 'Trading' && <TradingView league={league} />}
       {tab === 'Settings' && <SettingsView currencies={currencies} status={status} onSaved={refreshHeader} onReportProblem={() => setFeedbackOpen(true)} />}

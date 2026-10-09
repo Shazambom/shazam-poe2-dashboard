@@ -276,10 +276,15 @@ needs no special case. Backend: `default_numeraire` is the busiest market (`boar
 `flipChange()` in `lib/price.js`, the one `<Rate>` element at every price site (Board tiles and hubs, CardDetail,
 Hold, the inbox). Documented in CLAUDE.md (the volume rule) and the styleguide ("Which side").
 
-## Ruling 2026-10-08 (late): the Stash is its own tab
+## Ruling 2026-10-08 (late): the Stash replaces Strategy
 
-Owner: "I want stash to be its own tab at the top ... right after board, then strategy then trading then economy and
-then settings." Tabs are now Board · Stash · Strategy · Trading · Economy · Settings (⌘1–⌘6). The screen id is `stash`
-(section Stash, no sub-view) in the one screen list (`frontend/src/lib/dests.js`, its desktop twin and the bot opener's
-allow-list); Trading keeps Workspace, Live, Regex and Mods. Every road to the Stash (the Arbitrage rail, the top bar's
-empty state) goes through `nav.goStash()`.
+Owner, in two steps: "I want stash to be its own tab at the top ... right after board", then "strategy should be renamed
+stash and the stash tab should come first for it then arbitrage, hold, and strat calculator". Tabs are Board · Stash ·
+Trading · Economy · Settings (⌘1–⌘5); the Stash tab opens on the stash (holdings + sales) and holds Arbitrage and the
+Strat Calculator — what you hold, then what to do with it. Then: "hold and positive movers should be broken out and put
+under economy. Hold should be first then inflation then top movers then market" — Economy is Hold · Inflation · Top
+movers · Market, opening on Hold; the movers leaderboard that was a toggle inside Hold is `MoversView`. Screen ids
+`stash`, `stash-arbitrage`, `stash-calc`, `economy-hold`, `economy-inflation`, `economy-movers`, `economy-market` in the
+one screen list (`frontend/src/lib/dests.js`, its desktop twin, the bot opener's allow-list);
+`StrategyView.jsx` is `StashTab.jsx`. Trading keeps Workspace, Live, Regex and Mods. Every road to the stash (the
+Arbitrage rail, the top bar's empty state) goes through `nav.goStash()`.

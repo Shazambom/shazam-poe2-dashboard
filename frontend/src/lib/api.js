@@ -70,7 +70,7 @@ export const api = {
   workspace: () => fetch('/api/trading/workspace').then(j),
   sales: (league) => fetch('/api/sales' + qs({ league })).then(j),
   putWorkspace: (workspace) => put('/api/trading/workspace', { workspace }),
-  // Strategy → Strat Calculator: the saved session + divines per unit (backend/app/stratcalc.py).
+  // Stash → Strat Calculator: the saved session + divines per unit (backend/app/stratcalc.py).
   stratCalc: () => fetch('/api/strategy/calc').then(j),
   stratPrices: () => fetch('/api/strategy/calc?prices=1').then(j),
   putStratCalc: (calc) => put('/api/strategy/calc', { calc }),

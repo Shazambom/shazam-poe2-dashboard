@@ -66,7 +66,7 @@ test('one status store: status/capital/settings/session polling lives in lib/sta
 
 test('one sub-tab shell', () => {
   assert.ok(src('components/SubTabs.jsx').includes('export default function SubTabs('))
-  for (const f of ['components/StrategyView.jsx', 'components/EconomyView.jsx', 'components/TradingView.jsx']) {
+  for (const f of ['components/StashTab.jsx', 'components/EconomyView.jsx', 'components/TradingView.jsx']) {
     const s = src(f)
     assert.ok(s.includes('<SubTabs'), f)
     assert.ok(!s.includes('<motion.span className="subtab-underline"'), f)

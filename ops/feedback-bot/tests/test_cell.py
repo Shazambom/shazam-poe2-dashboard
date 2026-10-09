@@ -110,7 +110,7 @@ def test_screen_bytes_that_are_not_a_jpeg_are_dropped_not_fatal(tmp_path):
     d = valid_doc()
     d["screens"]["board"] = base64.b64encode(b"%PDF-1.4 " + b"x" * 100).decode()
     d["screens"]["settings"] = base64.b64encode(b"\x7fELF" + b"\x00" * 100).decode()
-    d["screens"]["strategy-hold"] = "not base64 at all!!"
+    d["screens"]["economy-hold"] = "not base64 at all!!"
     code, out = run(tmp_path, d)
     assert code == OK
     assert [f for f in files(out) if f.startswith("screens/")] == ["screens/00-current.jpg"]

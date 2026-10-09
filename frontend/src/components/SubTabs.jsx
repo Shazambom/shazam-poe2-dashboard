@@ -1,7 +1,7 @@
 import React from 'react'
 import { motion } from 'motion/react'
 
-// The one sub-tab strip (Strategy / Economy / Trading). `layoutId` must be unique per section or
+// The one sub-tab strip (Stash / Economy / Trading). `layoutId` must be unique per section or
 // the underline animates across sections.
 export default function SubTabs({ subs, value, onChange, layoutId }) {
   return (

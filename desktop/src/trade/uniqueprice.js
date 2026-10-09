@@ -1,4 +1,4 @@
-// Strategy → Strat Calculator: a price from a trade search (a unique's floor, a linked tablet or
+// Stash → Strat Calculator: a price from a trade search (a unique's floor, a linked tablet or
 // waystone search; the renderer builds the query): one background search and one fetch of the
 // cheapest listings, through the user's own logged-in session (proxy.js) under the shared rate budget
 // (policy trade-search for the search, trade-fetch for the listings). Only the prices go back to the

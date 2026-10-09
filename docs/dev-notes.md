@@ -314,8 +314,8 @@ app, no new outbound call (the invite opens in the OS browser); nothing can bill
   utilityProcess worker (main refuses it when packaged). Fixtures: `desktop/test/fixtures/ee2/items/*.txt`.
   The CLI form: `node desktop/src/ee2-history/worker.js --stdin --league "Standard" < item.txt`.
 - **Telemetry markers** added: `ee2` (history-*), `ws` (workspace save/undo/flush), `sales`.
-- **Stash tab** (its own top-level tab since 2026-10-08, id `stash`; was Trading › Sales, then Trading › Stash; the diag
-  marker stays `sales`) — main fetches Merchant History under policy `trade-history`; the backend's `sales` table
+- **Stash tab** (since 2026-10-08 the Stash section — holdings first, then Arbitrage, Strat Calculator — replaces
+  "Strategy"; Hold and Top movers (ex-"Positive movers" toggle) sit under Economy, Hold first; screen id `stash`, sub `stash`; was Trading › Sales, then Trading › Stash; the diag marker stays `sales`) — main fetches Merchant History under policy `trade-history`; the backend's `sales` table
   (user migration 5) is the ledger. Only `POST /api/sales/ingest` writes it.
   A new sale credits the holdings only when it was made after the user last COUNTED that currency
   (`db.sales_ingest`, one transaction for upsert + check + credit). A count = typing a total or removing a
@@ -500,7 +500,7 @@ Tests: `desktop/test/tap.test.mjs`, `desktop/test/listings.test.mjs`, `desktop/t
 `backend/tests/test_ratelimits_api.py` (headroom, the real rules as a working limiter), `frontend/test/reprice.test.mjs`,
 `frontend/test/workspace-reprice.test.mjs`, the store fuzz's reprice round trip.
 
-### Strategy → Strat Calculator (added 2026-10-01)
+### Stash → Strat Calculator (added 2026-10-01; the tab was "Strategy" until 2026-10-08)
 
 Tracks a farming session's net divines per hour. The pure model is `frontend/src/lib/stratcalc.js`; the
 view is `StratCalcView.jsx`; the strats are the user kv `strat_calc`, checked by `backend/app/stratcalc.py`
@@ -618,7 +618,7 @@ Full table + steps: [`release-runbook.md`](./release-runbook.md) → "Two channe
 - **Data ingest:** `digest.py`, `orderbook.py`, `gamedata.py` (gold fees), `gateway.py` (rate-limited HTTP).
 - **API:** `main.py` (all routes). **Settings:** `settings.py`. **DB:** `db.py`/`config.py`.
 - **Frontend views:** `BoardView`, `HoldView`, `RoutesView`/`ConvertView`, `InflationView`,
-  `MarketView`, `WorkspaceView`/`LiveView`, `SettingsView`; shells `EconomyView`/`StrategyView`/
+  `MarketView`, `WorkspaceView`/`LiveView`, `SettingsView`; shells `EconomyView`/`StashTab`/
   `TradingView` over one `SubTabs`. **Shared client plumbing:** `lib/hooks.js` (`useApi`,
   `useAutosave`), `lib/statusStore.js` (the one status/capital/settings poll),
   `lib/icons.js` (`useCurrencies`), `lib/session.js` (`isDesktop`, trade URLs), `lib/api.js`

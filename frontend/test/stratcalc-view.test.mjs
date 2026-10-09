@@ -1,4 +1,4 @@
-// Strategy → Strat Calculator: the view's wiring. The math, the strats and the input rules are pinned
+// Stash → Strat Calculator: the view's wiring. The math, the strats and the input rules are pinned
 // in stratcalc.test.mjs and backend/tests/test_stratcalc_e2e.py; this pins how the screen uses them
 // and that it follows the styleguide (docs/ui-styleguide.md).
 import test from 'node:test'
@@ -12,10 +12,10 @@ const code = view.replace(/\/\/.*$/gm, '')
 const css = read('../src/styles.css')
 const scCss = css.slice(css.indexOf('/* ---------- strat calculator'), css.indexOf('/* ----------', css.indexOf('/* ---------- strat calculator') + 10))
 
-test('Strategy has a Strat Calculator sub-tab', () => {
-  const sv = read('../src/components/StrategyView.jsx')
-  assert.ok(sv.includes("subsOf('Strategy')") && sv.includes('<StratCalcView'))
-  assert.ok(DESTS.some(d => d.section === 'Strategy' && d.sub === 'calc' && d.label === 'Strat Calculator'), 'the tab, in the one screen list')
+test('the Stash tab has a Strat Calculator sub-tab', () => {
+  const sv = read('../src/components/StashTab.jsx')
+  assert.ok(sv.includes("subsOf('Stash')") && sv.includes('<StratCalcView'))
+  assert.ok(DESTS.some(d => d.section === 'Stash' && d.sub === 'calc' && d.label === 'Strat Calculator'), 'the tab, in the one screen list')
 })
 
 test('the sidebar: a "Strats" card with a drag-and-drop folder tree, like trade searches (owner, 2026-10-01)', () => {
@@ -117,7 +117,7 @@ test('uniques: listed in the picker, priced by one background trade search at a 
   assert.ok(pricing.includes('sc.needsFloor(') && pricing.includes('sc.floorDiv(') && pricing.includes('sc.recordFloor('))
   assert.ok(/if \(!trade\?\.priceQuery \|\| !open \|\| !league \|\| pending/.test(code), 'one search in flight at a time (uniques and linked lines share the queue); the budget paces the rest')
   assert.ok(/error === 'auth'/.test(code), 'not logged in: stop searching, the row stays open for a typed price')
-  const sv = read('../src/components/StrategyView.jsx')
+  const sv = read('../src/components/StashTab.jsx')
   assert.ok(sv.includes('<StratCalcView league={league}'), 'the search runs in the league the app is on')
 })
 

@@ -20,7 +20,7 @@ import { nav } from '../lib/nav.js'
 import { openInTrading } from '../lib/stratTrading.js'
 import { useWorkspace } from '../lib/workspaceStore.js'
 
-// Strategy → Strat Calculator: named farming strats in a sidebar tree (folders, drag and drop — the
+// Stash → Strat Calculator: named farming strats in a sidebar tree (folders, drag and drop — the
 // trade searches' tree), each a session you can leave and resume, and each one's profit in divines per
 // hour. The math, the strats and the input rules are lib/stratcalc.js; the strats autosave to the user
 // kv `strat_calc`; prices are divines per unit off the backend's one value table.

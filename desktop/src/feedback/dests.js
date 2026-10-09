@@ -4,11 +4,12 @@
 'use strict'
 const DESTS = [
   { id: 'board', section: 'Board', sub: null },
-  { id: 'stash', section: 'Stash', sub: null },
-  { id: 'strategy-arbitrage', section: 'Strategy', sub: 'arbitrage' },
-  { id: 'strategy-hold', section: 'Strategy', sub: 'hold' },
-  { id: 'strategy-calc', section: 'Strategy', sub: 'calc' },
+  { id: 'stash', section: 'Stash', sub: 'stash' },
+  { id: 'stash-arbitrage', section: 'Stash', sub: 'arbitrage' },
+  { id: 'stash-calc', section: 'Stash', sub: 'calc' },
+  { id: 'economy-hold', section: 'Economy', sub: 'hold' },
   { id: 'economy-inflation', section: 'Economy', sub: 'inflation' },
+  { id: 'economy-movers', section: 'Economy', sub: 'movers' },
   { id: 'economy-market', section: 'Economy', sub: 'market' },
   { id: 'trading-workspace', section: 'Trading', sub: 'workspace' },
   { id: 'trading-live', section: 'Trading', sub: 'live' },

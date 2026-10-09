@@ -1,4 +1,4 @@
-// Strategy → Strat Calculator: named farming strats, each a session you can leave and resume, and
+// Stash → Strat Calculator: named farming strats, each a session you can leave and resume, and
 // each one's profit in divines per hour. Pure (frontend/src/lib/stratcalc.js); the view renders it.
 //   * the timer is wall clock (a start stamp + the time already banked): it survives tab switches
 //     and restarts, and only ONE strat runs at a time;
