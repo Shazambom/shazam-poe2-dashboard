@@ -28,7 +28,7 @@ const FOLD_KEY = 'arbiter:stash-folded'
 const readFolds = () => { try { return JSON.parse(localStorage.getItem(FOLD_KEY)) || {} } catch { return {} } }
 const writeFolds = (f) => { try { localStorage.setItem(FOLD_KEY, JSON.stringify(f)) } catch {} }
 
-// Trading → Stash: what you hold, grouped by the game's own category for each item (lib/stash.js), with
+// The Stash tab: what you hold, grouped by the game's own category for each item (lib/stash.js), with
 // net worth and liquid net worth, and the trade site's Merchant History beside it (new sales are credited
 // to the holdings). Holdings edit here; the Arbitrage rail only shows the part a loop may start from.
 export default function StashView({ league }) {

@@ -3,6 +3,7 @@ tuple, never from the report; pinned to frontend/src/lib/dests.js by desktop/tes
 SCREENS = (
     "current",
     "board",
+    "stash",
     "strategy-arbitrage",
     "strategy-hold",
     "strategy-calc",
@@ -10,7 +11,6 @@ SCREENS = (
     "economy-market",
     "trading-workspace",
     "trading-live",
-    "trading-sales",
     "trading-regex",
     "trading-mods",
     "settings",

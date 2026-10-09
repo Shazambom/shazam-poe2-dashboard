@@ -314,8 +314,8 @@ app, no new outbound call (the invite opens in the OS browser); nothing can bill
   utilityProcess worker (main refuses it when packaged). Fixtures: `desktop/test/fixtures/ee2/items/*.txt`.
   The CLI form: `node desktop/src/ee2-history/worker.js --stdin --league "Standard" < item.txt`.
 - **Telemetry markers** added: `ee2` (history-*), `ws` (workspace save/undo/flush), `sales`.
-- **Stash tab** (was "Sales"; id `trading-sales`, sub `sales` kept so reports, ⌘K and diag markers still
-  match) — main fetches Merchant History under policy `trade-history`; the backend's `sales` table
+- **Stash tab** (its own top-level tab since 2026-10-08, id `stash`; was Trading › Sales, then Trading › Stash; the diag
+  marker stays `sales`) — main fetches Merchant History under policy `trade-history`; the backend's `sales` table
   (user migration 5) is the ledger. Only `POST /api/sales/ingest` writes it.
   A new sale credits the holdings only when it was made after the user last COUNTED that currency
   (`db.sales_ingest`, one transaction for upsert + check + credit). A count = typing a total or removing a

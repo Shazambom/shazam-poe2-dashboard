@@ -6,7 +6,7 @@ import assert from 'node:assert/strict'
 import { buildPaletteItems } from '../src/lib/palette.js'
 import { SUB_DESTS, SCREEN_COMMANDS } from '../src/lib/dests.js'
 
-const TABS = ['Board', 'Strategy', 'Economy', 'Trading', 'Settings']
+const TABS = ['Board', 'Stash', 'Strategy', 'Trading', 'Economy', 'Settings']
 const withRuns = () => Object.fromEntries(Object.entries(SCREEN_COMMANDS).map(([s, cs]) => [s, cs.map(c => ({ ...c, run: () => {} }))]))
 const CURRENCIES = [['exalted', 'Exalted Orb'], ['perfect-exalted-orb', 'Perfect Exalted Orb'], ['divine', 'Divine Orb'],
   ['chaos', 'Chaos Orb'], ['mirror', 'Mirror of Kalandra'], ['hinekoras-lock', "Hinekora's Lock"], ['seraphs-heart', "Seraph's Heart"]]

@@ -29,6 +29,7 @@ import BoardView from './components/BoardView.jsx'
 import StrategyView from './components/StrategyView.jsx'
 import EconomyView from './components/EconomyView.jsx'
 import TradingView from './components/TradingView.jsx'
+import StashView from './components/StashView.jsx'
 import Cur from './components/Cur.jsx'
 import SettingsView from './components/SettingsView.jsx'
 import DownloadApp from './components/DownloadApp.jsx'
@@ -37,7 +38,7 @@ import BrandOrb from './components/BrandOrb.jsx'
 import FeedbackDialog from './components/FeedbackDialog.jsx'
 import DiscordLink from './components/DiscordLink.jsx'
 
-const TABS = ['Board', 'Strategy', 'Economy', 'Trading', 'Settings']
+const TABS = ['Board', 'Stash', 'Strategy', 'Trading', 'Economy', 'Settings']   // owner's order, 2026-10-08
 export default function App() {
   const [tab, setTab] = useState('Board')
   const status = useStatus(s => s.status)
@@ -91,7 +92,7 @@ export default function App() {
     const h = (e) => {
       if (!(e.metaKey || e.ctrlKey) || e.altKey) return
       if (e.key === 'k' || e.key === 'K') { e.preventDefault(); setCmdOpen(o => !o) }
-      else if (e.key >= '1' && e.key <= '5' && TABS[e.key - 1]) { e.preventDefault(); setTab(TABS[e.key - 1]) }   // ⌘1–5 = the tabs, in order
+      else if (e.key >= '1' && e.key <= '6' && TABS[e.key - 1]) { e.preventDefault(); setTab(TABS[e.key - 1]) }   // ⌘1–6 = the tabs, in order
     }
     window.addEventListener('keydown', h)
     return () => window.removeEventListener('keydown', h)
@@ -144,6 +145,7 @@ export default function App() {
   const goWorkspace = React.useCallback(() => { setTab('Trading'); setTimeout(() => nav.openTrading('workspace'), 0) }, [])
   useEffect(() => nav.on(e => {
     if (e.type === 'goTrading') { setTab('Trading'); setTimeout(() => nav.openTrading(e.sub || 'workspace'), 0) }
+    if (e.type === 'goStash') setTab('Stash')
   }), [])
   const ee2Present = useWorkspace(s => s.ee2Present)
   const hasHistoryRows = useWorkspace(s => !!(findWhere(s.tree, n => n.kind === 'folder' && n.sys === HISTORY_SYS)?.children || []).length)
@@ -254,7 +256,7 @@ export default function App() {
           <SyncMetrics status={status} bridge={bridge} connecting={connecting} onConnect={doConnect} rl={rl} />
           {/* Nothing entered yet: the one action that fills it, where the number will be (styleguide §0.1). */}
           {capital && !capital.syncing && !capital.rows?.some(r => r.qty > 0)
-            ? <button type="button" className="btn primary connect-live nudge" title="Trading › Stash" onClick={() => nav.goTrading('sales')}><Cur id="mirror" size={14} /> Add what you hold ›</button>
+            ? <button type="button" className="btn primary connect-live nudge" title="Stash" onClick={() => nav.goStash()}><Cur id="mirror" size={14} /> Add what you hold ›</button>
             : <span className="capital-pill">
               net worth <b><Wealth v={capital?.total_ref} cur={ref} unit={pairUnit} /></b> · liquid <b><Wealth v={liquidTop} cur={ref} unit={pairUnit} /></b></span>}
           {status?.oauth?.logged_in && <span className="muted oauth-user">{status.oauth.username}</span>}
@@ -265,6 +267,7 @@ export default function App() {
       </header>
 
       {tab === 'Board' && <BoardView key={league} status={status} />}
+      {tab === 'Stash' && <div className="section"><StashView league={league} /></div>}
       {tab === 'Strategy' && <StrategyView key={league} league={league} capital={capital} status={status} currencies={currencies} />}
       {tab === 'Economy' && <EconomyView key={league} league={league} currencies={currencies} />}
       {tab === 'Trading' && <TradingView league={league} />}

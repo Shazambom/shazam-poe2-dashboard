@@ -9,17 +9,18 @@ const read = (p) => readFileSync(new URL(p, import.meta.url), 'utf8')
 const strip = (s) => s.replace(/\/\/.*$/gm, '').replace(/\{\/\*[\s\S]*?\*\/\}/g, '')
 const css = read('../src/styles.css')
 
-test('the Sales tab is now Stash; its id stays so reports, ⌘K and diag markers keep working', () => {
-  const d = DESTS.find(x => x.id === 'trading-sales')
+test('the Stash is its own tab (owner, 2026-10-08), right after the Board; nothing is called Sales', () => {
+  const d = DESTS.find(x => x.id === 'stash')
   assert.equal(d.label, 'Stash')
-  assert.equal(d.sub, 'sales')
+  assert.equal(d.section, 'Stash')
+  assert.equal(d.sub, null)
   assert.ok(!DESTS.some(x => x.label === 'Sales'))
 })
 
-test('Trading mounts the Stash view on its tab', () => {
-  const tv = strip(read('../src/components/TradingView.jsx'))
-  assert.match(tv, /sub === 'sales' && <StashView /)
-  assert.doesNotMatch(tv, /SalesView/)
+test('the app mounts the Stash view on its own tab', () => {
+  const app = strip(read('../src/App.jsx'))
+  assert.match(app, /tab === 'Stash' && <div className="section"><StashView /)
+  assert.doesNotMatch(app, /SalesView/)
 })
 
 test('the Stash view groups, totals and switches through lib/stash.js and saves choices in settings', () => {
@@ -37,7 +38,7 @@ test('the Arbitrage rail shows only arbitrage capital and links to Stash; the ed
   const rv = strip(read('../src/components/RoutesView.jsx'))
   assert.doesNotMatch(rv, /<CapitalCard/)
   assert.match(rv, /arbitrageHoldings\(/)
-  assert.match(rv, /goTrading\('sales'\)/)
+  assert.match(rv, /goStash\(\)/)
 })
 
 test('the sticky sales column fits the viewport and scrolls its own overflow (bug XWZGZ0)', () => {
@@ -107,8 +108,9 @@ test('groups read left to right in value order, not down one column then the nex
 test('⌘K finds Stash by its old name too', async () => {
   const { buildPaletteItems } = await import('../src/lib/palette.js')
   const { SUB_DESTS } = await import('../src/lib/dests.js')
-  const hits = buildPaletteItems({ subDests: SUB_DESTS, q: 'sales' })
-  assert.deepEqual(hits.map(h => h.label), ['Stash'])
+  const tabs = ['Board', 'Stash', 'Strategy', 'Trading', 'Economy', 'Settings']
+  const hits = buildPaletteItems({ tabs, subDests: SUB_DESTS, q: 'sales' })
+  assert.deepEqual(hits.map(h => [h.kind, h.label]), [['view', 'Stash']])
 })
 
 // code review (2026-10-03)

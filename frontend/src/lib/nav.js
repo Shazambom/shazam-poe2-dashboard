@@ -9,9 +9,10 @@ export const nav = {
   // target so a freshly-mounting TradingView lands there even if it missed the event.
   openTrading(sub) { pendingTrading = sub; subs.forEach(f => { try { f({ type: 'openTrading', sub }) } catch {} }) },
   consumePendingTrading() { const s = pendingTrading; pendingTrading = null; return s },
-  // Ask the app to show the Trading tab at a sub-view (default Workspace: the Strat Calculator's
-  // "Open in Trading"; 'sales' = Stash, from the Arbitrage rail).
+  // Ask the app to show the Trading tab at a sub-view (default Workspace: the Strat Calculator's "Open in Trading").
   goTrading(sub = 'workspace') { subs.forEach(f => { try { f({ type: 'goTrading', sub }) } catch {} }) },
+  // Ask the app to show the Stash tab (the Arbitrage rail, the top bar's empty state).
+  goStash() { subs.forEach(f => { try { f({ type: 'goStash' }) } catch {} }) },
   // Ask a section container (Strategy/Economy) to switch to a sub-view.
   openSub(section, sub) { subs.forEach(f => { try { f({ type: 'openSub', section, sub }) } catch {} }) },
   // A section container reports the sub-view it shows, so App knows the current screen (⌘K lists its actions first).

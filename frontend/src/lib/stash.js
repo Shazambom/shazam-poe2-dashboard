@@ -1,6 +1,6 @@
 import { parseNum } from './numInput.js'
 import { matching } from './search.js'
-// Trading → Stash: the user's holdings grouped by league mechanic, with net worth and liquid net worth.
+// The Stash tab: the user's holdings grouped by league mechanic, with net worth and liquid net worth.
 // Pure (StashView renders it). Rows are /api/capital rows ({ currency, qty, value_ref, realizable_ref, … }).
 //
 // Groups are the game's own Currency Exchange category, served per currency as `group` by

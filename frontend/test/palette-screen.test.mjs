@@ -8,7 +8,7 @@ import { buildPaletteItems } from '../src/lib/palette.js'
 import { DESTS, SUB_DESTS, SCREEN_COMMANDS } from '../src/lib/dests.js'
 import { runTarget } from '../src/lib/paletteRun.js'
 
-const TABS = ['Board', 'Strategy', 'Economy', 'Trading', 'Settings']
+const TABS = ['Board', 'Stash', 'Strategy', 'Trading', 'Economy', 'Settings']
 const withRuns = () => Object.fromEntries(Object.entries(SCREEN_COMMANDS).map(([s, cs]) => [s, cs.map(c => ({ ...c, run: () => {} }))]))
 const GLOBAL = [{ id: 'send-feedback', label: 'Report a problem…', hint: 'Help', aka: ['bug', 'feedback'], run: () => {} },
   { id: 'theme-vault', label: 'Theme: Vault', hint: 'Appearance', run: () => {} }]
@@ -18,7 +18,7 @@ const items = (screen, q = '') => buildPaletteItems({ tabs: TABS, subDests: SUB_
 
 test('an empty ⌘K starts with this screen\'s actions', () => {
   assert.equal(items('board')[0].label, 'Add a currency')
-  assert.equal(items('trading-sales')[0].label, 'Add a currency')
+  assert.equal(items('stash')[0].label, 'Add a currency')
   assert.deepEqual(items('trading-workspace').slice(0, 2).map(i => i.label), ['New search', 'New group'])
   assert.equal(items('strategy-arbitrage')[0].label, 'Convert…')
   assert.equal(items('trading-live')[0].label, 'Jump to newest ping')
@@ -77,7 +77,7 @@ test('the words players use find the right place', () => {
 })
 
 test('the Stash offers no action that fetches trade history (it spends the shared allowance)', () => {
-  for (const c of SCREEN_COMMANDS['trading-sales']) assert.doesNotMatch(c.label + (c.aka || []).join(' '), /history|fetch|refresh|merchant/i)
+  for (const c of SCREEN_COMMANDS['stash']) assert.doesNotMatch(c.label + (c.aka || []).join(' '), /history|fetch|refresh|merchant/i)
 })
 
 test('every screen has its actions, keyed by the one screen list', () => {
@@ -89,7 +89,7 @@ test('every screen has its actions, keyed by the one screen list', () => {
 // each action names the control it works; that control carries the marker in its screen's source
 const SOURCE = {
   board: ['BoardView'], 'strategy-arbitrage': ['ConvertView'], 'strategy-hold': ['HoldView'], 'strategy-calc': ['StratCalcView'],
-  'economy-inflation': ['InflationView'], 'economy-market': ['MarketView'], 'trading-live': ['LiveView'], 'trading-sales': ['StashView'],
+  'economy-inflation': ['InflationView'], 'economy-market': ['MarketView'], 'trading-live': ['LiveView'], stash: ['StashView'],
   'trading-regex': ['RegexView', 'RegexResult'], 'trading-mods': ['ModsBar'], settings: ['NotificationsPanel'],
 }
 // a control is marked by `data-cmd="x"`, a picker's `cmd="x"`, or a segment option's third element 'x'

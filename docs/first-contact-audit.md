@@ -275,3 +275,11 @@ numeraire, no walk; the view draws whichever side of that market reads ≥ 1. 13
 needs no special case. Backend: `default_numeraire` is the busiest market (`board.py`); the view: `readable()` /
 `flipChange()` in `lib/price.js`, the one `<Rate>` element at every price site (Board tiles and hubs, CardDetail,
 Hold, the inbox). Documented in CLAUDE.md (the volume rule) and the styleguide ("Which side").
+
+## Ruling 2026-10-08 (late): the Stash is its own tab
+
+Owner: "I want stash to be its own tab at the top ... right after board, then strategy then trading then economy and
+then settings." Tabs are now Board · Stash · Strategy · Trading · Economy · Settings (⌘1–⌘6). The screen id is `stash`
+(section Stash, no sub-view) in the one screen list (`frontend/src/lib/dests.js`, its desktop twin and the bot opener's
+allow-list); Trading keeps Workspace, Live, Regex and Mods. Every road to the Stash (the Arbitrage rail, the top bar's
+empty state) goes through `nav.goStash()`.

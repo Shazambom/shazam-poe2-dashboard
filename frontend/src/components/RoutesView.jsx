@@ -212,7 +212,7 @@ export default function RoutesView({ capital, status, currencies }) {
           <div className="notice">Market history is still syncing ({fmt.n(status.digest.behind_h, 0)}h behind). Loops fill in as rates land — no action needed.</div>
         )}
         {meta?.notional && (
-          <div className="notice">Sized to 10 <Cur id={ref} size={14} /> · <button type="button" className="link-btn" onClick={() => nav.goTrading('sales')}>Add what you hold ›</button></div>
+          <div className="notice">Sized to 10 <Cur id={ref} size={14} /> · <button type="button" className="link-btn" onClick={() => nav.goStash()}>Add what you hold ›</button></div>
         )}
 
         {streaming && routes.length === 0 ? (
@@ -274,7 +274,7 @@ export default function RoutesView({ capital, status, currencies }) {
 }
 
 // What arbitrage may trade from: the held default cash and hub currencies (the server's `arbitrage`
-// flag on /api/capital). Holdings are edited on Trading → Stash, where every holding counts.
+// flag on /api/capital). Holdings are edited on the Stash tab, where every holding counts.
 function ArbitrageCapital() {
   const capital = useStatus(s => s.capital)
   const held = arbitrageHoldings(capital)
@@ -286,7 +286,7 @@ function ArbitrageCapital() {
         : <div className="hint">You hold nothing arbitrage trades from yet. Add Chaos, Exalted or Divine on Stash.</div>}
       <div className="cap-foot">
         {held.length > 0 && <Wealth v={netWorth(held)} cur={capital?.reference} size={12} />}
-        <button type="button" className="link-btn" onClick={() => nav.goTrading('sales')}>Stash ›</button>
+        <button type="button" className="link-btn" onClick={() => nav.goStash()}>Stash ›</button>
       </div>
     </div>
   )

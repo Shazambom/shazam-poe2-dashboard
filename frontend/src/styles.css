@@ -49,7 +49,7 @@
   --ease: cubic-bezier(.22,.61,.36,1);
   --font: 'IBM Plex Sans', 'Segoe UI', system-ui, -apple-system, sans-serif;
   --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;   /* a search string is read character by character */
-  /* League-mechanic accents (Trading → Stash), one per Currency Exchange category the game has. A group
+  /* League-mechanic accents (the Stash tab), one per Currency Exchange category the game has. A group
      names its token after its category (lib/stash.js groupAccent); one the game adds later falls back to
      --muted. Only ever a 3px edge, the icon's glow and a faint header wash — never a number's colour.
      Each theme blends the hue toward its own --ink-2 by --grp-mix (set per theme below the presets). */

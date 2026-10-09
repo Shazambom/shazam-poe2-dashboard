@@ -49,7 +49,7 @@ test('Board cards: no source badge or source colour; one caption; long names shr
 test('Top bar: while nothing is held, one action replaces the zero', () => {
   const s = src('App.jsx')
   assert.match(s, /Add what you hold ›/)
-  assert.match(s, /nav\.goTrading\('sales'\)/)
+  assert.match(s, /nav\.goStash\(\)/)
 })
 
 test('Inbox: an entry names the price, not the volume multiple', () => {
