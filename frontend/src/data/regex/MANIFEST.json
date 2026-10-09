@@ -1,6 +1,6 @@
 {
   "source": "data/regex inputs + ee2-query/data/trade/stats.json",
-  "sourceSha256": "a671218907ba259d24e26188fe83d7c0c0d09ad3c1125466c335a38644659134",
+  "sourceSha256": "aed09c63e7f09530ceb06d1e6d0a291eaa55976c6d85b3eed658b8bdeb279afa",
   "files": {
     "map-names.json": {
       "sha256": "6ab97986f7a69174adc1a0215dda776bd563eac6e8c2fd5c8196a8ab0f25d7ce",
