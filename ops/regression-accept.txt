@@ -1,7 +1,7 @@
 # The differences the next release intends, checked by ops/regression-diff.py inside
 # desktop/publish-github.sh. It is valid for ONE version, and every line must still match a reported
 # difference. Anything not listed blocks the release. Whole-line comments only.
-version: 0.3.15-beta.2
+version: 0.3.15
 
 # The volume rule, then the readable side (owner, 2026-10-08: "follow the volume rule and then apply readable side
 # to the volume rule"). A card's numeraire is its busiest market, full stop; the walk down the ranking is gone (it put
