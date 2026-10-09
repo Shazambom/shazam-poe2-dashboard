@@ -28,6 +28,7 @@ test('the Stash section opens on the stash, then Arbitrage, Strat Calculator; Ec
   const hold = src('components/HoldView.jsx')
   assert.doesNotMatch(hold, /Positive movers|isMovers|api\.movers/, 'Hold is one board; the movers have their own')
   assert.match(src('components/MoversView.jsx'), /api\.movers\(hours, MOVERS_N, 'up'\)/)
+  assert.match(src('components/MoversView.jsx'), /rangeLabel\(hours\)/, 'the window is named as the top bar names it, never "24.0h"')
   assert.doesNotMatch(src('components/StashTab.jsx'), /HoldView/)
   assert.deepEqual(DESTS.slice(0, 2).map(d => d.id), ['board', 'stash'])
   assert.ok(!DESTS.some(d => d.section === 'Strategy'))

@@ -3,7 +3,7 @@ import { api, fmt } from '../lib/api.js'
 import { useApi } from '../lib/hooks.js'
 import Cur from './Cur.jsx'
 import Wealth from './Wealth.jsx'
-import { useAssetModal } from './CardDetail.jsx'
+import { useAssetModal, rangeLabel } from './CardDetail.jsx'
 import { useHorizon } from '../lib/horizonStore.js'
 
 // Economy → Top movers (owner, 2026-10-08: broken out of Hold): the biggest upward swings across every currency over
@@ -15,7 +15,7 @@ export default function MoversView() {
   const assetModal = useAssetModal()
   const mv = useApi(() => api.movers(hours, MOVERS_N, 'up'), [hours])
   const rows = useMemo(() => mv.data?.assets ?? [], [mv.data])
-  const horizon = mv.data?.horizon ?? fmt.age(hours * 3600)
+  const horizon = rangeLabel(hours)          // the app-wide window, named as the top bar names it (24h / 3d / 7d / 14d)
   return (
     <div className="single hold">
       <div className="board-bar">
