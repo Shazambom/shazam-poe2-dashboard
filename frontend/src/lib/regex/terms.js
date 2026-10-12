@@ -15,10 +15,14 @@ export function rarity({ normal, magic, rare }) {
 // or null when no minimum makes sense. `side` is the token's place relative to the roll
 // ('inside' when the token bridges the roll with ".*"); `gap` is false when the token touches
 // the roll, so nothing may be put between them; `after` is the character printed right after
-// the roll ("%", " "), the number's anchor. Null for a modifier printed in several forms, on two
-// lines, with two rolls, or whose token sits on the other line from its roll.
+// the roll ("%", " "), the number's anchor. Null for a modifier on two lines, with two rolls,
+// whose token sits on the other line from its roll, or whose printed forms disagree.
 export function placement(text, regex) {
-  if (formsOf(text).length > 1) return null
+  const [first, ...rest] = formsOf(text).map(f => formPlacement(f, regex))
+  return first && rest.every(p => p && p.side === first.side && p.gap === first.gap && p.after === first.after) ? first : null
+}
+
+function formPlacement(text, regex) {
   const lines = linesOf(text)
   if (lines.length > 1) return null
   const line = lines[0]

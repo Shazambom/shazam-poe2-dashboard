@@ -33,7 +33,7 @@ const sha = (buf) => crypto.createHash('sha256').update(buf).digest('hex')
 const readJson = (p) => JSON.parse(fs.readFileSync(p, 'utf8'))
 export const readPool = (text) => text.split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('//'))
 
-// FNV-1a over the text: a stable id that survives reordering the pool.
+// FNV-1a over the text: a new row's id, stable under reordering the pool.
 function fnv1a(str) {
   let h = 0x811c9dc5
   for (const ch of Buffer.from(str, 'utf8')) { h ^= ch; h = Math.imul(h, 0x01000193) >>> 0 }
@@ -81,7 +81,11 @@ export function build() {
     const dup = texts.find((t, i) => texts.indexOf(t) !== i)
     if (dup) throw new Error(`${kind}.txt lists "${dup}" twice`)
     const tokens = shortestUnique(texts, stop)
-    const mods = texts.map((text, i) => ({ id: fnv1a(text), text, regex: tokens[i], trade: tradeOf(text), num: placement(text, tokens[i]) }))
+    // Saved searches hold row ids, so a row that gains a wording keeps the id it already ships with
+    // (matched on its first form); only a new row is hashed.
+    const out = path.join(DATA, `${kind}.json`)
+    const shipped = new Map((fs.existsSync(out) ? readJson(out).mods : []).map(m => [formsOf(m.text)[0], m.id]))
+    const mods = texts.map((text, i) => ({ id: shipped.get(formsOf(text)[0]) || fnv1a(text), text, regex: tokens[i], trade: tradeOf(text), num: placement(text, tokens[i]) }))
       .sort((a, b) => a.text.localeCompare(b.text))
     const table = { mods }
     if (kind === 'tablet') {
@@ -92,7 +96,7 @@ export function build() {
       const kindTokens = shortestUnique(kinds.map(k => k.description), kindStop)
       table.kinds = kinds.map((k, i) => ({ ...k, regex: kindTokens[i] }))
     }
-    fs.writeFileSync(path.join(DATA, `${kind}.json`), JSON.stringify(table, null, 2) + '\n')
+    fs.writeFileSync(out, JSON.stringify(table, null, 2) + '\n')
     console.log(`${kind}: ${mods.length} mods, ${mods.filter(m => m.trade.length).length} with trade ids, ${mods.filter(m => m.num).length} with a minimum, longest token ${Math.max(...tokens.map(t => t.length))}`)
   }
   const files = {}

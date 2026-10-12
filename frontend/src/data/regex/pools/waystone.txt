@@ -37,7 +37,7 @@ Area has patches of Chilled Ground
 Area has patches of Shocked Ground
 
 // Added 2026-09-24 from EE2's area-mod flags (desktop/src/vendor/ee2-query/data/en/stats.ndjson).
-# additional Rare Monsters are spawned from Abysses in Map
+# additional Rare Monsters are spawned from Abysses in Map ~ # additional Rare Monsters are spawned from Abysses
 #% increased Gold found in Map
 #% increased Magic Pack Size
 #% increased Pack Size in Map
@@ -48,10 +48,10 @@ Area has patches of Shocked Ground
 #% increased number of Monster Packs
 Abyss Cracks have #% chance to spawn all Monsters as at least Magic
 Abyss Pits have #% chance to spawn all Monsters as at least Magic
-Abyss Pits in Map are twice as likely to have Rewards
+Abyss Pits in Map are twice as likely to have Rewards ~ Abyss Pits in Area are twice as likely to have Rewards ~ Abyss Pits in Area always have Rewards
 Abyssal Monsters grant #% increased Experience
-Abyssal Monsters in Map have increased Difficulty and Reward for each closed Pit
-Abysses in Map spawn #% increased Monsters
+Abyssal Monsters in Map have increased Difficulty and Reward for each closed Pit ~ Abyssal Monsters have increased Difficulty and Reward for each closed Pit
+Abysses in Map spawn #% increased Monsters ~ Abysses spawn #% increased Monsters
 Abysses lead to an Abyssal Boss
 Abysses lead to an Abyssal Depths
 Area contains # additional packs of Beasts
@@ -66,22 +66,22 @@ Area contains # additional packs of Vaal Monsters
 Area contains an additional Incubator Queen
 Area contains an additional Magic Chest
 Area has patches of Mana Siphoning Ground
-Map contains # additional Abysses
+Map contains # additional Abysses ~ Area contains # additional Abysses
 Map contains # additional Strongboxes
 Map contains an additional Essence
 Map contains an additional Rare Chest
 Map contains an additional Shrine
 Map has #% increased Magic Monsters
 Map has #% increased number of Rare Monsters
-Map is overrun by the Abyssal
+Map is overrun by the Abyssal ~ Area is overrun by the Abyssal
 Monsters fire # additional Projectiles
 Monsters have #% chance to steal Power, Frenzy and Endurance charges on Hit
 Monsters have #% increased Area of Effect
 Monsters inflict # Grasping Vine on Hit
 Natural Rare Monsters in Area Eat the Souls of slain Monsters in their Presence
 Natural Rare Monsters in Area have # extra Abyssal Modifier
-Players and their Minions deal no damage for 3 out of every 10 seconds
+Players and their Minions deal no damage for 3 out of every 10 seconds ~ Players and their Minions deal no damage for # out of every # seconds
 Players are Marked for Death for # seconds | after killing a Rare or Unique monster
-Players have #% more Movement and Skill Speed for each time they've used a Skill Recently
+Players have #% more Movement and Skill Speed for each time they've used a Skill Recently ~ Players have #% less Movement and Skill Speed for each time they've used a Skill Recently
 Players steal the Eaten Souls of Slain Rare Monsters in Area
 Rare Monsters have # additional Modifier

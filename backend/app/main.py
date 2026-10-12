@@ -204,7 +204,7 @@ def status():
         "unmapped_metadata_ids": len(registry.unmapped_meta),
         "gold_fees": gamedata.state,
         "mod_pools": modpool.state,
-        "wealth_prices": _wealth_prices(),   # reference per unit of chaos/divine/mirror (UI wealth rule)
+        "wealth_prices": _wealth_prices(),   # reference per unit of chaos/divine/lock/mirror (UI wealth rule)
     }
 
 
@@ -345,7 +345,7 @@ class SettingsPatch(BaseModel):
 
 # Settings the market graph never reads: route results are keyed on the Stash switches and Capital is
 # not cached, so flipping one rebuilds nothing.
-SETTINGS_OUTSIDE_THE_GRAPH = frozenset({"stash_counted"})
+SETTINGS_OUTSIDE_THE_GRAPH = frozenset({"stash_counted", "stash_unit"})
 
 
 @app.put("/api/settings")

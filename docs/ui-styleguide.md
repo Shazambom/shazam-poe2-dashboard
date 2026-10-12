@@ -253,8 +253,10 @@ such as a Capital total) is computed in the **reference currency** (`*_ref`, `va
 …), and a native number too large to read is re-denominated. Both go through ONE rule —
 `WEALTH_TIERS` + `wealthUnit()` in `frontend/src/lib/wealth.js`, rendered by `<Wealth v={amount} />`
 (`frontend/src/components/Wealth.jsx`: value + currency icon, raw reference amount on hover) or
-`wealthText()` for tooltips: **≥1,000,000 ref → mirrors, ≥1,000 ref → divines, ≥100 ref → chaos**,
-else the reference. Prices come from `/api/status → wealth_prices`. Never hand-format a
+`wealthText()` for tooltips: **≥1,000,000 ex → mirrors, ≥1,000 ex → divines, ≥100 ex → chaos**,
+else the reference, and never a tier the amount is worth less than one of. The Stash's net worth has its
+own lines (`STASH_TIERS`: chaos from 300 ex, divines from 5, mirrors from 1) and the user's own choice of
+currency (`stash_unit`, `stashUnit()`). Prices come from `/api/status → wealth_prices`. Never hand-format a
 re-denomination with `fmt.n(x) <Cur/>`; never use `<Wealth>` where a native amount exists.
 
 ## 4. Color usage rules
@@ -280,7 +282,7 @@ Reuse these before writing new CSS. Each is a small, composable block already in
   is `--panel-2` + `--line-strong`, hover lifts to `--panel-hi` with a gold-dim border,
   `:active` nudges `translateY(1px)`.
 - **Segmented control — `.seg` / `.seg-btn`** (`.on` = gold gradient). For 2–4 mutually
-  exclusive options (time horizons, modes).
+  exclusive options (time horizons, modes); up to six when the options are currency icons (the Stash's unit).
 - **Toggle switch — `<Toggle>`** (`components/Toggle.jsx`, `.toggle`/`.toggle-track`/`.toggle-thumb`).
   The **only** on/off control. **Raw `<input type="checkbox">` is BANNED** and fails
   `npm run lint:style`. `onChange` receives the new boolean; pass a `label` for the inline text.

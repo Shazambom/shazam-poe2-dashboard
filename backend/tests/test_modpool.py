@@ -207,7 +207,7 @@ def test_build_pool_gives_each_item_type_only_the_sections_with_something_in_the
     # A Preserved Cranium desecrates a jewel, a Preserved Vertebrae a waystone: their mods key on the
     # base's own tags, no lord, and land in the Desecrated section (poe2db Ruby: Desecrated /32).
     jewel = modpool.build_pool(pools["jewel_ruby"], derived.families, derived.sections)
-    assert [s["id"] for s in jewel["sections"]] == ["base", "desecrated"]
+    assert [s["id"] for s in jewel["sections"]] == ["base", "desecrated", "corrupted", "enchant"]   # its own corruptions (owner 2026-10-12)
     assert jewel["sections"][0]["prefix"] or jewel["sections"][0]["suffix"]
     jdes = jewel["sections"][1]
     assert len(jdes["prefix"] + jdes["suffix"]) == 32
@@ -414,3 +414,42 @@ def test_a_desktop_install_never_rebuilds_its_mod_tables(monkeypatch, tmp_path):
     monkeypatch.setattr(db, "MARKET_SEED_PATH", None)      # the server, or a dev backend with no seed
     r = TestClient(main.app).post("/api/mods/refresh")
     assert r.status_code == 200 and ran == [True]
+
+
+def test_a_socketables_whole_pool_applies_to_every_item_it_can_be_set_into(derived):
+    """Owner, 2026-10-12: a socketable that opens a mod pool opens all of it on any item it fits,
+    whatever the base (poe2db: every body armour lists the 21 soul tiers, every weapon the 9 of Thrud's Might)."""
+    pools = {p["id"]: p for p in derived.pools}
+    count = lambda pid, sid: sum(len(f["tiers"]) for s in modpool.build_pool(pools[pid], derived.families, derived.sections)["sections"] if s["id"] == sid for a in ("prefix", "suffix") for f in s[a])
+    assert {count(p, "soul") for p in pools if p.startswith("body_armour")} == {21}
+    str_soul = next(s for s in modpool.build_pool(pools["body_armour_str"], derived.families, derived.sections)["sections"] if s["id"] == "soul")
+    assert any("Evasion" in t["text"] and "Energy Shield" in t["text"] for f in str_soul["prefix"] for t in f["tiers"]), "a pure-armour chest lists the evasion and energy shield tier too"
+    for pid in ("claw", "dagger", "flail", "crossbow", "wand", "bow"):
+        assert count(pid, "destruction") == 9, pid
+    # A pool no socketable carries (the Genesis Tree, the bones) still follows the item's own tags.
+    assert count("ring", "genesis_tree_caster") and not count("amulet", "genesis_tree_caster")
+
+
+def test_jewels_and_relics_show_their_corruption_modifiers(derived):
+    """Owner, 2026-10-12, measured against poe2db: a jewel lists its 11 corruption modifiers and the 7
+    upgrades of them; a relic its one. A pool with no corruption of its own (tablets, waystones) shows neither."""
+    pools = {p["id"]: p for p in derived.pools}
+    built = lambda pid: {s["id"]: s for s in modpool.build_pool(pools[pid], derived.families, derived.sections)["sections"]}
+    for pid in ("jewel_ruby", "jewel_emerald", "jewel_sapphire", "jewel_diamond", "jewel_time_lost_ruby"):
+        b = built(pid)
+        assert list(b)[:2] == ["base", "desecrated"] and list(b)[-2:] == ["corrupted", "enchant"], pid
+        texts = sorted(t["text"] for f in b["corrupted"]["corrupted"] for t in f["tiers"])
+        assert len(texts) == 11 and "+(4–6) to Strength" in texts and "Immune to Maim" in texts and "+(3–7)% to Chaos Resistance" in texts, pid
+        up = sorted(t["text"] for f in b["enchant"]["enchant"] for t in f["tiers"])
+        assert up == sorted(["+(14–16) to Strength", "+(14–16) to Dexterity", "+(14–16) to Intelligence", "+(15–20)% to Fire Resistance",
+                             "+(15–20)% to Cold Resistance", "+(15–20)% to Lightning Resistance", "+(10–13)% to Chaos Resistance"]), pid
+        assert b["corrupted"]["title"] == "Corrupted" and not b["corrupted"]["floored"]
+    for pid in ("relic_seal_urn", "relic_amphora_tapestry", "relic_coffer_incense_vase"):
+        b = built(pid)
+        assert [t["text"] for f in b["corrupted"]["corrupted"] for t in f["tiers"]] == ["(8–10)% increased Honour restored"], pid
+        assert "enchant" not in b, "an upgrade needs a corruption of the same family to upgrade"
+    for pid in ("toweraugmentation_abyss", "map_t16", "lifeflask"):
+        assert not {"corrupted", "enchant"} & set(built(pid)), pid
+    # Gear is unchanged: its own corruption families only.
+    ring = built("ring")
+    assert len(ring["corrupted"]["corrupted"]) == 12 and not any("Immune to Maim" in f["text"] for f in ring["corrupted"]["corrupted"])

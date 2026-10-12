@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { api, fmt, surface, toast } from '../lib/api.js'
-import { wealthDigits, wealthUnit } from '../lib/wealth.js'
+import { wealthDigits, stashUnit, STASH_UNITS } from '../lib/wealth.js'
 import { useAutosave } from '../lib/hooks.js'
 import { useStatus, ensureSettings } from '../lib/statusStore.js'
 import { useSync } from '../lib/syncStore.js'
@@ -97,7 +97,9 @@ export default function StashView({ league }) {
   const syncing = !!data?.syncing
   const liquid = syncing ? null : liquidNetWorth(rows, choices, dflt)
   const icons = data?.group_icons || {}
-  const pairUnit = wealthUnit(total, data?.reference ?? 'exalted', status?.wealth_prices)?.unit   // both figures, one scale
+  const unitChoice = useStatus(s => s.settings?.stash_unit) ?? null
+  const pairUnit = stashUnit(total, data?.reference ?? 'exalted', status?.wealth_prices, unitChoice)   // both figures, one scale
+  const chooseUnit = (u) => useStatus.getState().saveSettings({ stash_unit: u }).catch(() => toast('Could not save that choice', false))
   const ref = data?.reference ?? 'exalted'
 
   // The add bar (pinned at the top): pick a currency, say how many, Add.
@@ -218,6 +220,12 @@ export default function StashView({ league }) {
           <div className="stash-bar" aria-hidden="true">
             <i style={{ flexGrow: counted }} />{total - counted > 0 && <i className="off" style={{ flexGrow: total - counted }} />}
           </div>)}
+        <div className="seg stash-unit" role="group" aria-label="Value in">
+          <button className={`seg-btn ${unitChoice == null ? 'on' : ''}`} onClick={() => chooseUnit(null)}>Auto</button>
+          {STASH_UNITS.map(u => (
+            <button key={u} className={`seg-btn ${unitChoice === u ? 'on' : ''}`} data-unit={u} onClick={() => chooseUnit(u)}><Cur id={u} size={14} /></button>
+          ))}
+        </div>
       </div>
 
       <div className="stash-body">

@@ -17,7 +17,7 @@
     },
     {
       "id": "652ed575",
-      "text": "# additional Rare Monsters are spawned from Abysses in Map",
+      "text": "# additional Rare Monsters are spawned from Abysses in Map ~ # additional Rare Monsters are spawned from Abysses",
       "regex": "wne",
       "trade": [
         "explicit.stat_243380454",
@@ -223,8 +223,8 @@
     },
     {
       "id": "e66808db",
-      "text": "Abyss Pits in Map are twice as likely to have Rewards",
-      "regex": "ik",
+      "text": "Abyss Pits in Map are twice as likely to have Rewards ~ Abyss Pits in Area are twice as likely to have Rewards ~ Abyss Pits in Area always have Rewards",
+      "regex": "ts i",
       "trade": [
         "explicit.stat_4256531808",
         "desecrated.stat_4256531808"
@@ -247,7 +247,7 @@
     },
     {
       "id": "e70226a6",
-      "text": "Abyssal Monsters in Map have increased Difficulty and Reward for each closed Pit",
+      "text": "Abyssal Monsters in Map have increased Difficulty and Reward for each closed Pit ~ Abyssal Monsters have increased Difficulty and Reward for each closed Pit",
       "regex": "iff",
       "trade": [
         "explicit.stat_360553763",
@@ -257,14 +257,14 @@
     },
     {
       "id": "e0c0082c",
-      "text": "Abysses in Map spawn #% increased Monsters",
-      "regex": "p s",
+      "text": "Abysses in Map spawn #% increased Monsters ~ Abysses spawn #% increased Monsters",
+      "regex": "sed Monsters",
       "trade": [
         "explicit.stat_944630113",
         "desecrated.stat_944630113"
       ],
       "num": {
-        "side": "before",
+        "side": "after",
         "gap": true,
         "after": "%"
       }
@@ -480,8 +480,8 @@
     },
     {
       "id": "4ec55e7c",
-      "text": "Map contains # additional Abysses",
-      "regex": "ses$",
+      "text": "Map contains # additional Abysses ~ Area contains # additional Abysses",
+      "regex": "al Ab",
       "trade": [
         "explicit.stat_3490187949",
         "desecrated.stat_3490187949"
@@ -568,8 +568,8 @@
     },
     {
       "id": "d588f0e7",
-      "text": "Map is overrun by the Abyssal",
-      "regex": "p i",
+      "text": "Map is overrun by the Abyssal ~ Area is overrun by the Abyssal",
+      "regex": " is",
       "trade": [
         "explicit.stat_2741291867",
         "desecrated.stat_2741291867"
@@ -892,7 +892,7 @@
     {
       "id": "a5549718",
       "text": "Natural Rare Monsters in Area have # extra Abyssal Modifier",
-      "regex": "a A",
+      "regex": "ra A",
       "trade": [
         "explicit.stat_1168851547",
         "desecrated.stat_1168851547"
@@ -905,7 +905,7 @@
     },
     {
       "id": "944a656f",
-      "text": "Players and their Minions deal no damage for 3 out of every 10 seconds",
+      "text": "Players and their Minions deal no damage for 3 out of every 10 seconds ~ Players and their Minions deal no damage for # out of every # seconds",
       "regex": "nio",
       "trade": [
         "explicit.stat_2408625104",
@@ -996,7 +996,7 @@
     },
     {
       "id": "87445084",
-      "text": "Players have #% more Movement and Skill Speed for each time they've used a Skill Recently",
+      "text": "Players have #% more Movement and Skill Speed for each time they've used a Skill Recently ~ Players have #% less Movement and Skill Speed for each time they've used a Skill Recently",
       "regex": "ey",
       "trade": [
         "explicit.stat_4274247770",

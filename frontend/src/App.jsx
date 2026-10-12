@@ -15,7 +15,7 @@ import { useSignals, startSignalPolling } from './lib/signalStore.js'
 import { notify } from './lib/notifications.js'
 import Wealth from './components/Wealth.jsx'
 import { liquidNetWorth } from './lib/stash.js'
-import { wealthUnit } from './lib/wealth.js'
+import { stashUnit } from './lib/wealth.js'
 import { useAssetModal } from './components/CardDetail.jsx'
 import CommandPalette from './components/CommandPalette.jsx'
 import { connectBridge, connectSessionWithToast } from './lib/session.js'
@@ -45,8 +45,8 @@ export default function App() {
   const settings = useStatus(s => s.settings)
   // The Stash's two figures (owner, 2026-10-03): net worth, and liquid net worth — the switched-on holdings
   // at what they would sell for; none until the market has synced.
-  const liquidTop = capital?.syncing ? null : liquidNetWorth(capital?.rows, settings?.stash_counted, capital?.counted_by_default)
-  const pairUnit = wealthUnit(capital?.total_ref, capital?.reference || 'exalted', status?.wealth_prices)?.unit   // one scale for both
+  const liquidTop = !capital || capital?.syncing ? null : liquidNetWorth(capital?.rows, settings?.stash_counted, capital?.counted_by_default)
+  const pairUnit = stashUnit(capital?.total_ref, capital?.reference || 'exalted', status?.wealth_prices, settings?.stash_unit)   // one scale for both
   const rl = useStatus(s => s.rl)              // trade-API rate/queue budget — surfaced in the topbar sync cluster
   const refreshHeader = useStatus(s => s.refresh)
   const { raw: currencies } = useCurrencies()

@@ -388,6 +388,13 @@ clipboard; only the parse crosses) → preload `trade.modItem` → `lib/mods/ite
 Tests: `backend/tests/test_modpool.py` (derivations over `tests/fixtures/mods`, a trimmed
 export), `frontend/test/mods-*.test.mjs`, `desktop/test/mods-search.test.mjs` (the real
 vendored data, so an EE2 sync that renames a group fails here).
+**Which tiers a pool shows** (`build_pool`): the base and bone sections follow the export's spawn weights for the
+item's own tags. A section a **socketable** opens ("Can roll X modifiers": soul, destruction, …) shows its whole pool on
+every item the socketable fits, whatever the base (owner 2026-10-12; poe2db lists it so). Jewels and relics carry their
+own domain's **Corrupted** modifiers, and a jewel the upgrades of them (the ones weighted on no class); a pool with no
+corruption of its own (tablets, waystones, flasks) shows neither. Checked pool by pool against poe2db's `ModsView`
+pages 2026-10-12 (74 pages, ~11,100 tiers).
+
 **The tables are built on shazam only** (`python -m app.modpool --force`, run by the snapshot
 publisher) and reach installs in the seed. A backend with a seed bundled (every desktop install,
 the dev app included) refuses `POST /api/mods/refresh` (403). To rebuild locally, run the same CLI

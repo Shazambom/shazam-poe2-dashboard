@@ -79,7 +79,7 @@ test('the Mods cost renders the native price, not the reference value', () => {
 test('wealthAs shows an amount in a given unit; the side-by-side figures share the larger one\'s unit', async () => {
   const { wealthAs, wealthUnit: wu } = await import('../src/lib/wealth.js')
   const prices = { mirror: 3_700_000, divine: 700, chaos: 65 }
-  const total = 1_450_000, liquid = 990_000
+  const total = 4_450_000, liquid = 990_000   // worth more than one mirror; the smaller figure follows it
   const unit = wu(Math.max(total, liquid), 'exalted', prices).unit
   assert.equal(unit, 'mirror')
   assert.deepEqual(wealthAs(liquid, 'exalted', prices, unit), { value: liquid / 3_700_000, unit: 'mirror' })
@@ -92,4 +92,82 @@ test('the paired figures (top bar, Stash) render in one unit', () => {
   assert.match(src('App.jsx'), /unit=\{pairUnit\}[\s\S]*unit=\{pairUnit\}/)
   assert.match(src('components/StashView.jsx'), /unit=\{pairUnit\}[\s\S]*unit=\{pairUnit\}/)
   assert.match(src('components/Wealth.jsx'), /unit = null/)
+})
+
+// Owner, 2026-10-12: net worth "should remain in divine until the number of divines exceed a mirror's value".
+test('an amount moves up a tier only once it is worth at least one of that currency', () => {
+  const below = wealthUnit(1_200_000, 'exalted', P)            // past the 1M line, but 0.69 of a mirror
+  assert.equal(below.unit, 'divine'); assert.ok(Math.abs(below.value - 1_200_000 / 454.2) < 1e-9)
+  assert.equal(wealthUnit(1_736_943, 'exalted', P).unit, 'divine')
+  assert.equal(wealthUnit(1_736_944, 'exalted', P).unit, 'mirror')
+  assert.equal(wealthUnit(-1_200_000, 'exalted', P).unit, 'divine')
+  // a divine dearer than the 1000 line: 1500 ex is not yet one divine
+  assert.equal(wealthUnit(1500, 'exalted', { exalted: 1, chaos: 47.3, divine: 2000 }).unit, 'chaos')
+})
+
+// Owner, 2026-10-12: "a User should be able to override what they value their stash in, be it exalted,
+// chaos, divine, hinekoras lock, or mirror".
+test('the stash is valued in the currency the user chose, else by the wealth rule', async () => {
+  const { stashUnit, STASH_UNITS, wealthAs } = await import('../src/lib/wealth.js')
+  const Q = { ...P, 'hinekoras-lock': 90_000 }
+  assert.deepEqual(STASH_UNITS, ['exalted', 'chaos', 'divine', 'hinekoras-lock', 'mirror'])
+  assert.equal(stashUnit(5000, 'exalted', Q, null), 'divine')
+  assert.equal(stashUnit(5000, 'exalted', Q, undefined), 'divine')
+  for (const u of STASH_UNITS) assert.equal(stashUnit(5000, 'exalted', Q, u), u)
+  assert.ok(Math.abs(wealthAs(5000, 'exalted', Q, 'mirror').value - 5000 / 1_736_944) < 1e-12, 'a small stash in mirrors is a fraction, as asked')
+  assert.ok(Math.abs(wealthAs(180_000, 'exalted', Q, 'hinekoras-lock').value - 2) < 1e-9)
+  assert.equal(stashUnit(5000, 'exalted', P, 'hinekoras-lock'), 'divine', 'no price for the choice yet: the rule')
+  assert.equal(stashUnit(5000, 'exalted', Q, 'vaal'), 'divine', 'not a choice on offer: the rule')
+})
+
+test('both net worth sites read the one choice', () => {
+  const src = (p) => readFileSync(new URL(`../src/${p}`, import.meta.url), 'utf8')
+  for (const f of ['App.jsx', 'components/StashView.jsx']) assert.ok(/stashUnit\([^)]*stash_unit|stashUnit\([^)]*unitChoice/.test(src(f)), `${f} should take its unit from stashUnit`)
+  assert.ok(src('components/StashView.jsx').includes("saveSettings({ stash_unit:"), 'the Stash saves the choice')
+})
+
+// Owner, 2026-10-12: the stash's net worth on Auto "should still auto change … when it gets to over 300ex to
+// chaos then when it gets to over 5div in value it starts displaying networth in div", and to mirror past one mirror.
+test('the stash on Auto: exalted to 300, then chaos, divine from 5 divines, mirror from one mirror', async () => {
+  const { stashUnit, STASH_TIERS, wealthUnit: wu } = await import('../src/lib/wealth.js')
+  const Q = { exalted: 1, chaos: 40, divine: 700, mirror: 4_000_000 }
+  assert.deepEqual(STASH_TIERS, [['mirror', 0, 1], ['divine', 0, 5], ['chaos', 300, 1]])
+  const auto = (v) => stashUnit(v, 'exalted', Q, null)
+  assert.equal(auto(299), 'exalted')
+  assert.equal(auto(300), 'chaos')
+  assert.equal(auto(3499), 'chaos', '4.99 divines is still chaos')
+  assert.equal(auto(3500), 'divine')
+  assert.equal(auto(3_999_999), 'divine')
+  assert.equal(auto(4_000_000), 'mirror')
+  assert.equal(stashUnit(3500, 'exalted', { exalted: 1, chaos: 40 }, null), 'chaos', 'no divine price: the next tier')
+  // the app-wide rule for other amounts keeps its own lines
+  assert.equal(wu(150, 'exalted', Q).unit, 'chaos')
+  assert.equal(wu(1400, 'exalted', Q).unit, 'divine')
+})
+
+// QA 2026-10-12: with a chosen unit the hover named the Auto unit, 0.5 of a mirror hid half the stash's
+// worth in rounding, and the top bar printed "liquid 0 ref" before the holdings loaded.
+test('a chosen unit reads the same on hover, a fraction keeps two decimals, nothing is drawn before holdings load', async () => {
+  const { wealthText: wt, wealthDigits } = await import('../src/lib/wealth.js')
+  const Q = { exalted: 1, chaos: 40, divine: 700, mirror: 4_000_000 }
+  assert.equal(wt(2_100_000, 'exalted', Q, 'mirror'), '0.525 mirror (2,100,000 exalted)')
+  assert.equal(wt(5000, 'exalted', Q, 'mirror'), '0.00125 mirror (5,000 exalted)', 'a small stash in mirrors is never "0"')
+  assert.equal(wt(2_100_000, 'exalted', Q, 'exalted'), '2,100,000 exalted')
+  assert.equal(wt(2_100_000, 'exalted', Q), '3,000 divine (2,100,000 exalted)')
+  assert.equal(wealthDigits(1.7), 1); assert.equal(wealthDigits(2815), 0)
+  const src = (p) => readFileSync(new URL(`../src/${p}`, import.meta.url), 'utf8')
+  assert.match(src('components/Wealth.jsx'), /wealthText\(v, ref, status\?\.wealth_prices, unit\)/)
+  assert.match(src('components/Wealth.jsx'), /wealthNumber\(w\.value/)
+  assert.match(src('App.jsx'), /liquidTop = !capital \|\| capital\?\.syncing \? null/)
+})
+
+// Code review 2026-10-12: the lines are exalted amounts whatever the reference, and a tier that IS the
+// reference is a tier, never skipped (a 500 divine stash on a divine reference once fell to chaos).
+test('the tiers hold on a reference other than exalted', async () => {
+  const { stashUnit, wealthUnit: wu } = await import('../src/lib/wealth.js')
+  const D = { divine: 1, exalted: 1 / 700, chaos: 40 / 700, mirror: 4_000_000 / 700 }
+  const auto = (ex) => stashUnit(ex / 700, 'divine', D, null)
+  assert.equal(auto(301), 'chaos'); assert.equal(auto(3400), 'chaos')
+  assert.equal(auto(3600), 'divine'); assert.equal(auto(350_000), 'divine'); assert.equal(auto(4_100_000), 'mirror')
+  assert.equal(wu(500, 'divine', D).unit, 'divine')
 })

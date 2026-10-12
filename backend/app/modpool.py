@@ -23,7 +23,7 @@ Derivations, each one a rule the export supports:
 - A section (a pool another currency opens) is every spawn tag no released base carries: the
   socketable whose text says "Can roll X modifiers" is its carrier (title and classes); a key whose
   mods carry base tags (the bones, the Genesis Tree) needs none; a key with neither would show on
-  every item and is skipped. Corruption implicits and their upgrades (the `upgraded_corruption_mod`
+  every item and is skipped. A socketable's pool applies whole to every item it can be set into. Corruption implicits and their upgrades (the `upgraded_corruption_mod`
   tag) are two more. The orb's minimum modifier level applies where regular orbs roll: item-domain
   prefix/suffix pools.
 """
@@ -401,7 +401,8 @@ def sections_from(export: Export, families: list, pools: list | None = None) -> 
     by_domain: dict = {}   # the unveiled keys of a non-item domain are one section (poe2db: one "Desecrated" group, the lords as tags in it)
     for tag, pairs in sorted(keyed.items()):
         domain = Counter(f["domain"] for f, _ in pairs).most_common(1)[0][0]
-        if tag in carriers:
+        socketed = tag in carriers
+        if socketed:
             title, classes = carriers[tag]
         elif any(t in carried and t != "default" for _, tier in pairs for t, _w in tier["weights"]):
             # No currency names the pool, so its mods do: each zero-weights the scoped classes it is
@@ -426,7 +427,7 @@ def sections_from(export: Export, families: list, pools: list | None = None) -> 
                 sections.append(by_domain[domain])
             by_domain[domain]["keys"].append(tag)
             continue
-        sections.append({"id": tag, "title": title, "domain": domain, "affixes": ["prefix", "suffix"], "keys": [tag], "classes": classes, "floored": True})
+        sections.append({"id": tag, "title": title, "domain": domain, "affixes": ["prefix", "suffix"], "keys": [tag], "classes": classes, "floored": True, "socketed": socketed})
     for affix, title in (("corrupted", "Corrupted"), ("enchant", "Corrupted upgrade")):
         if any(f["affix"] == affix for f in families):
             sections.append({"id": affix, "title": title, "domain": "item", "affixes": [affix], "keys": [], "classes": None, "floored": False})
@@ -458,14 +459,18 @@ def build_pool(pool: dict, families: list, sections: list) -> dict:
     out = []
     count, base = Counter(), Counter()   # tag → rows carrying it, over every table / the base table
     all_keys = {k for s in sections for k in s["keys"]}
+    corrupted_groups: set = set()   # the corruption families this pool shows (an upgrade upgrades one of them)
     for s in sections:
-        if s["id"] != "base" and pool["domain"] != "item" and s["domain"] == "item":
-            continue   # a jewel or waystone takes no item-domain pool, but it can be desecrated
+        corruption = s["id"] in ("corrupted", "enchant")
+        if s["id"] != "base" and pool["domain"] != "item" and s["domain"] == "item" and not corruption:
+            continue   # a jewel or waystone takes no item-domain pool, but it can be desecrated and corrupted
         if s["classes"] is not None and pool["class"] not in s["classes"]:
             continue
         tags = set(pool["tags"]) | set(s["keys"])
         domain = s["domain"] or pool["domain"]
-        if s["id"] != "base" and domain != "item":
+        if s["id"] == "corrupted":
+            domain = pool["domain"]   # a jewel's and a relic's corruption modifiers are their own domain's
+        if s["id"] != "base" and domain != "item" and not corruption:
             tags |= set(pool.get("desecrates") or ())
         sec = {"id": s["id"], "title": s["title"], "floored": s["floored"]}
         for a in s["affixes"]:
@@ -475,14 +480,25 @@ def build_pool(pool: dict, families: list, sections: list) -> dict:
                 continue
             if not _keys_on(f, s["keys"]) and not (s.get("unkeyed") and not _rolled(f["tiers"]) & all_keys):
                 continue
-            tiers = [t for t in f["tiers"] if rolls_on(t["weights"], tags)]
-            if domain != "item" and s["id"] != "base":
+            if s["id"] == "enchant" and pool["domain"] != "item":
+                # Off gear, the upgrades are the ones weighted on no class, of a corruption the pool has
+                # (poe2db Ruby: 7; a relic's one corruption has no upgrade).
+                tiers = [t for t in f["tiers"] if f["group"] in corrupted_groups and _rolled([t]) == {"default"}]
+            elif s.get("socketed"):
+                # A socketable's pool is all of it on any item the socketable fits, whatever the base
+                # (owner 2026-10-12; poe2db lists it so): the export's per-base zeros are not applied.
+                tiers = [t for t in f["tiers"] if _rolled([t]) & set(s["keys"])]
+            else:
+                tiers = [t for t in f["tiers"] if rolls_on(t["weights"], tags)]
+            if domain != "item" and s["id"] != "base" and not corruption:
                 # A desecration pool shows the tiers its own currency adds: a lord's tier under the
                 # lords, an otherworldly tier under the Altered Collarbone, a tier keyed on no one
                 # under the jewel and waystone bones. One family can hold tiers of two of them.
                 tiers = [t for t in tiers if (_rolled([t]) & set(s["keys"])) or (s.get("unkeyed") and not _rolled([t]) & all_keys)]
             if not tiers:
                 continue
+            if s["id"] == "corrupted":
+                corrupted_groups.add(f["group"])
             row_tags = _row_tags(f, s, _rolled(tiers), all_keys)
             sec[f["affix"]].append({"id": f["id"], "text": f["text"], "tags": row_tags,
                                     "tiers": [{"tier": i + 1, "name": t["name"], "ilvl": t["ilvl"], "text": t["text"]} for i, t in enumerate(tiers)]})

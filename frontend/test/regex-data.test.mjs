@@ -143,3 +143,52 @@ test('tablet kinds: one per settings key, tokens unique against every mod, fixed
     for (const l of others) assert.equal(re.test(matchable(l)), false, `${k.regex} (${k.key}) matches "${l}"`)
   }
 })
+
+// Lines read off real tablets (beta item telemetry, 2026-10): each is found by exactly one row.
+const REAL_TABLET_LINES = {
+  'Expeditions have +35% Surpassing chance to contain an additional Verisium Remnant': 'Expeditions have +#% Surpassing chance to contain an additional Verisium Remnant',
+  'Monsters from Verisium Remnants drop 24% increased Verisium': 'Monsters from Verisium Remnants drop #% increased Verisium',
+  'Expeditions contain 1 Additional Verisium Sentry in Map': 'Expeditions contain 1 Additional Verisium Sentry in Map',
+  'Expeditions contain 2 Additional Verisium Sentries in Map': 'Expeditions contain 1 Additional Verisium Sentry in Map',
+  'Expeditions contain 2 Additional Bosses encased in ice in Map': 'Expeditions contain 1 Additional Boss encased in ice in Map',
+  'Expeditions contain 1 buried Strongbox in Map': 'Expeditions contain 1 buried Strongbox in Map',
+  'Expeditions contain 2 buried Strongboxes in Map': 'Expeditions contain 1 buried Strongbox in Map',
+  'Expeditions contain 2 Vaal Relics in Map': 'Expeditions contain 1 Vaal Relic in Map',
+  'The first 2 unearthed Runic Monsters will be Rare Monsters in Map': 'The first unearthed Runic Monster will be a Rare Monster in Map',
+  'Revived Monsters from Ritual Altars in Map have 30% increased chance to be Rare': 'Revived Monsters from Ritual Altars in Map have #% increased chance to be Rare',
+}
+
+test('tablet: real printed lines, plural wordings included, are each found by exactly one row', () => {
+  const { mods } = readJson('tablet.json')
+  for (const [line, first] of Object.entries(REAL_TABLET_LINES)) {
+    const hits = mods.filter(m => new RegExp(m.regex, 'im').test(line))
+    assert.equal(hits.length, 1, `"${line}" is found by ${hits.length} rows: ${hits.map(m => m.text).join(' / ')}`)
+    assert.equal(formsOf(hits[0].text)[0], first, line)
+  }
+})
+
+// A saved search holds row ids: a row that gains a wording keeps the id it shipped with.
+const SHIPPED_IDS = {
+  '28831d76': 'Expeditions contain 1 Additional Boss encased in ice in Map',
+  'cfa8c445': 'Expeditions contain 1 Additional Verisium Sentry in Map',
+  'efb67c6e': 'Expeditions contain 1 buried Strongbox in Map',
+  '9296b560': 'Expeditions contain 1 Vaal Relic in Map',
+  'bb6369c8': 'The first unearthed Runic Monster will be a Rare Monster in Map',
+}
+const SHIPPED_WAYSTONE_IDS = {
+  '652ed575': "# additional Rare Monsters are spawned from Abysses in Map",
+  'e66808db': "Abyss Pits in Map are twice as likely to have Rewards",
+  'e70226a6': "Abyssal Monsters in Map have increased Difficulty and Reward for each closed Pit",
+  'e0c0082c': "Abysses in Map spawn #% increased Monsters",
+  '4ec55e7c': "Map contains # additional Abysses",
+  'd588f0e7': "Map is overrun by the Abyssal",
+  '944a656f': "Players and their Minions deal no damage for 3 out of every 10 seconds",
+  '87445084': "Players have #% more Movement and Skill Speed for each time they've used a Skill Recently",
+}
+// The sync carries an id over from the table it replaces; these pins are what a from-scratch rebuild must match.
+for (const [kind, pins] of [['tablet', SHIPPED_IDS], ['waystone', SHIPPED_WAYSTONE_IDS]]) {
+  test(`${kind}: rows that gained a wording keep their shipped ids`, () => {
+    const byId = new Map(readJson(`${kind}.json`).mods.map(m => [m.id, m]))
+    for (const [id, first] of Object.entries(pins)) assert.equal(formsOf(byId.get(id)?.text || '')[0], first, id)
+  })
+}

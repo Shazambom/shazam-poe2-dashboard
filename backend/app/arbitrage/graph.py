@@ -604,7 +604,7 @@ def anchor_prices() -> dict[str, float]:
     out = {s["reference"]: 1.0}
     # The one value table every priced amount uses (Graph.values) — a holding valued by one rule
     # and re-denominated by another once read "1000 divine ≈ 988 divine".
-    for tid in ("exalted", "chaos", "divine", "mirror"):
+    for tid in ("exalted", "chaos", "divine", "hinekoras-lock", "mirror"):
         px = V.get(tid)
         if px:
             out[tid] = float(px)

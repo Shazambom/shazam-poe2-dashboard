@@ -58,6 +58,10 @@ test('placement: where the roll sits relative to the token, derived once from te
   assert.equal(placement('Map contains an additional Shrine ~ Map contains # additional Shrines', 'l Shrine'), null)
   assert.equal(placement('Abyssal Monsters have #% increased Effectiveness for each closed Pit, up to #%', 't,'), null)
   assert.equal(placement('Players are Marked for Death for # seconds | after killing a Rare or Unique monster', 'af'), null)
+  // several forms that all put the roll in the same place relative to the token keep the minimum
+  assert.deepEqual(placement('Map contains # additional Abysses ~ Area contains # additional Abysses', 'al Ab'), { side: 'after', gap: true, after: ' ' })
+  assert.deepEqual(placement('Abysses in Map spawn #% increased Monsters ~ Abysses spawn #% increased Monsters', 'sed Monsters'), { side: 'after', gap: true, after: '%' })
+  assert.equal(placement('Monsters have #% more Life ~ Life of Monsters is #% more', 'Life'), null)   // the forms disagree
 })
 
 test('a minimum is the number pattern anchored on the character after the roll, on the side the roll lives', () => {

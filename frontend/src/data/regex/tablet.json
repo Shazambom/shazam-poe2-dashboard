@@ -644,7 +644,11 @@
       "trade": [
         "explicit.stat_900933517"
       ],
-      "num": null
+      "num": {
+        "side": "after",
+        "gap": true,
+        "after": "%"
+      }
     },
     {
       "id": "86edef32",
@@ -661,7 +665,7 @@
     },
     {
       "id": "28831d76",
-      "text": "Expeditions contain 1 Additional Boss encased in ice in Map",
+      "text": "Expeditions contain 1 Additional Boss encased in ice in Map ~ Expeditions contain # Additional Bosses encased in ice in Map",
       "regex": "nca",
       "trade": [
         "explicit.stat_1183698646"
@@ -670,8 +674,8 @@
     },
     {
       "id": "cfa8c445",
-      "text": "Expeditions contain 1 Additional Verisium Sentry in Map",
-      "regex": "try",
+      "text": "Expeditions contain 1 Additional Verisium Sentry in Map ~ Expeditions contain # Additional Verisium Sentries in Map",
+      "regex": "m Se",
       "trade": [
         "explicit.stat_1109460697"
       ],
@@ -679,7 +683,7 @@
     },
     {
       "id": "efb67c6e",
-      "text": "Expeditions contain 1 buried Strongbox in Map",
+      "text": "Expeditions contain 1 buried Strongbox in Map ~ Expeditions contain # buried Strongboxes in Map",
       "regex": " bu",
       "trade": [
         "explicit.stat_181823691"
@@ -688,12 +692,25 @@
     },
     {
       "id": "9296b560",
-      "text": "Expeditions contain 1 Vaal Relic in Map",
+      "text": "Expeditions contain 1 Vaal Relic in Map ~ Expeditions contain # Vaal Relics in Map",
       "regex": "Rel",
       "trade": [
         "explicit.stat_2852112245"
       ],
       "num": null
+    },
+    {
+      "id": "3232ae73",
+      "text": "Expeditions have +#% Surpassing chance to contain an additional Verisium Remnant",
+      "regex": "um Remnant$",
+      "trade": [
+        "explicit.stat_3653794255"
+      ],
+      "num": {
+        "side": "after",
+        "gap": true,
+        "after": "%"
+      }
     },
     {
       "id": "399b10ba",
@@ -715,7 +732,11 @@
       "trade": [
         "explicit.stat_3753446846"
       ],
-      "num": null
+      "num": {
+        "side": "before",
+        "gap": true,
+        "after": " "
+      }
     },
     {
       "id": "136ef082",
@@ -881,7 +902,11 @@
       "trade": [
         "explicit.stat_588512487"
       ],
-      "num": null
+      "num": {
+        "side": "after",
+        "gap": true,
+        "after": " "
+      }
     },
     {
       "id": "f7d65bbb",
@@ -1059,6 +1084,19 @@
       }
     },
     {
+      "id": "ea13a3e3",
+      "text": "Monsters from Verisium Remnants drop #% increased Verisium",
+      "regex": "om Ve",
+      "trade": [
+        "explicit.stat_3520418269"
+      ],
+      "num": {
+        "side": "before",
+        "gap": true,
+        "after": "%"
+      }
+    },
+    {
       "id": "baf3afee",
       "text": "Monsters have #% increased Effectiveness",
       "regex": "eness$",
@@ -1138,7 +1176,7 @@
     {
       "id": "2f83b386",
       "text": "Revived Monsters from Ritual Altars in Map have #% increased chance to be Rare",
-      "regex": "be R",
+      "regex": "o be R",
       "trade": [
         "explicit.stat_3979184174"
       ],
@@ -1181,7 +1219,7 @@
     },
     {
       "id": "bb6369c8",
-      "text": "The first unearthed Runic Monster will be a Rare Monster in Map",
+      "text": "The first unearthed Runic Monster will be a Rare Monster in Map ~ The first # unearthed Runic Monsters will be Rare Monsters in Map",
       "regex": "^Th",
       "trade": [
         "explicit.stat_3963944561"

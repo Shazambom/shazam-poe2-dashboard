@@ -80,20 +80,20 @@ Slaying Rare Monsters in Map pauses the Delirium Mirror Timer for 1 second ~ Sla
 
 // Added 2026-09-24 from GGG's explicit stat texts naming the Map (desktop/src/vendor/ee2-query/data/trade/stats.json).
 Breaches in Map spawn #% increased Magic Monsters
-Expeditions contain 1 Additional Verisium Sentry in Map
-Expeditions contain 1 Additional Boss encased in ice in Map
+Expeditions contain 1 Additional Verisium Sentry in Map ~ Expeditions contain # Additional Verisium Sentries in Map
+Expeditions contain 1 Additional Boss encased in ice in Map ~ Expeditions contain # Additional Bosses encased in ice in Map
 Map Boss has +#% chance to drop a Waystone of the current tier or higher
 Deferring Favours at Ritual Altars in Map costs #% increased Tribute
 Map Bosses have # additional Modifier
 Breaches in Map spawn an additional Rare Monster
-Expeditions contain 1 buried Strongbox in Map
+Expeditions contain 1 buried Strongbox in Map ~ Expeditions contain # buried Strongboxes in Map
 Breaches in Map contain # additional Clasped Hand
 Rerolling Favours at Ritual Altars in Map costs #% increased Tribute
 Map has #% chance to contain three additional Breaches
 Breaches in Map open and close #% faster
 Map Bosses are Hunted by Azmeri Spirits
 Breach Hives in Map have an additional wave of Hiveborn Monsters
-Expeditions contain 1 Vaal Relic in Map
+Expeditions contain 1 Vaal Relic in Map ~ Expeditions contain # Vaal Relics in Map
 #% increased Expedition Monster Rarity in Map
 #% increased Expedition Explosive Area of Effect in Map
 Map has #% chance to contain an additional Breach
@@ -101,7 +101,12 @@ Delirium Fog in Map dissipates #% faster
 Delirious Monsters Killed in Map provide #% increased Reward Progress
 Rare Monsters in Map have a #% Surpassing chance to have an additional Modifier
 Verisium Remnants have +#% chance to add an additional Runic Modifier in Map
-The first unearthed Runic Monster will be a Rare Monster in Map
+The first unearthed Runic Monster will be a Rare Monster in Map ~ The first # unearthed Runic Monsters will be Rare Monsters in Map
 Unstable Breaches in Map take an additional second to collapse after timer is filled
 #% increased Quantity of Breach Splinters dropped by Breach Monsters in Map
 Expeditions have +#% Surpassing chance to Duplicate Runic Monsters in Map
+
+// Added 2026-10-12 from real tablets (beta item telemetry) and the game's Expedition tablet pool (mod_pools):
+// two modifiers the table lacked, and the plural wordings above.
+Expeditions have +#% Surpassing chance to contain an additional Verisium Remnant
+Monsters from Verisium Remnants drop #% increased Verisium

@@ -36,6 +36,9 @@ DEFAULTS: dict = {
     # capital arbitrage may trade from. Only a user's choices are stored (null = cleared); a currency
     # without one takes STASH_COUNTED_BY_DEFAULT (served to the client on /api/capital).
     "stash_counted": {},
+    # Stash: the currency net worth is shown in, a trade id (exalted, chaos, divine, hinekoras-lock, mirror);
+    # None = the wealth rule picks (frontend lib/wealth.js stashUnit).
+    "stash_unit": None,
     # Gold fee model. Per-unit fees come from the game's CurrencyExchange table
     # (GoldPurchaseFee), fetched automatically. `per_unit` is only for manual
     # overrides; `per_ref_unit` is the fallback for items missing from the table.

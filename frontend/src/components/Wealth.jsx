@@ -1,7 +1,7 @@
 import React from 'react'
 import { fmt } from '../lib/api.js'
 import { useStatus } from '../lib/statusStore.js'
-import { nativeAmount, wealthAs, wealthUnit, wealthDigits, wealthText } from '../lib/wealth.js'
+import { nativeAmount, wealthShown, wealthNumber, wealthDigits, wealthText } from '../lib/wealth.js'
 import Cur from './Cur.jsx'
 
 // The one way to show an amount of wealth: `<Wealth v={amountInRef} />` renders the
@@ -12,11 +12,11 @@ import Cur from './Cur.jsx'
 export default function Wealth({ v, cur = null, size = 14, suffix = null, digits = null, className = '', unit = null }) {
   const status = useStatus(s => s.status)
   const ref = cur || status?.reference || 'exalted'
-  const w = unit ? wealthAs(v, ref, status?.wealth_prices, unit) : wealthUnit(v, ref, status?.wealth_prices)
+  const w = wealthShown(v, ref, status?.wealth_prices, unit)
   if (!w) return <span className={`muted ${className}`}>–</span>
   return (
-    <span className={`wealth ${className}`} title={wealthText(v, ref, status?.wealth_prices)}>
-      {fmt.n(w.value, digits ?? wealthDigits(w.value))} <Cur id={w.unit} size={size} />{suffix}
+    <span className={`wealth ${className}`} title={wealthText(v, ref, status?.wealth_prices, unit)}>
+      {wealthNumber(w.value, digits)} <Cur id={w.unit} size={size} />{suffix}
     </span>
   )
 }
