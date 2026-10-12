@@ -155,7 +155,14 @@ The deploy rules in [`dev-notes.md`](./dev-notes.md) → "Deploy rules — every
 - **After:** audit it (deploy rule 4) and record any lesson below.
 
 **Lessons (market seed)** — condensed, newest first:
-- *(none recorded yet)*
+- **2026-10-12 (mod pool builder change):** the cron rebuilds the mod tables with the code in the backend container on
+  each UTC day's first publish, so `deploy-web.sh backend` with a changed `modpool.py` IS a scheduled seed change:
+  prove it side by side and get the owner's go before that deploy, not after. A one-off container proves it without
+  touching production (`docker run --rm -e DATA_DIR=/data -e PYTHONPATH=/app -v <copy>:/data -v <new app>:/app/app:ro
+  shazam-poe2-dashboard-backend python -m app.modpool`, then the exporter the same way; copy the DB with sqlite's
+  backup, never `cp` a WAL database). A second publish on the same day is the publisher's own steps by hand (modpool,
+  the exporter without `--only-if-newer`, the uploader, copy the `.cut`), away from :17. Through `sshshazambom sudo`,
+  stdin reaches a plain command but not `sudo python3 -`: write the script to a file first.
 
 ### Consuming the snapshot in builds
 
