@@ -1,7 +1,8 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { Suspense, lazy, useEffect, useRef, useState } from 'react'
 import { motion, AnimatePresence, MotionConfig } from 'motion/react'
 import { THEMES, useTheme } from './lib/themeStore.js'
 import { api, fmt, bus, surface } from './lib/api.js'
+import { diag } from './lib/diag.js'
 import { useStatus, startStatusPolling } from './lib/statusStore.js'
 import { useCurrencies } from './lib/icons.js'
 import { nav } from './lib/nav.js'
@@ -26,16 +27,17 @@ import { findWhere } from './lib/tree.js'
 import { DESTS, SCREEN_COMMANDS, SUB_DESTS, SNAP, settle } from './lib/dests.js'
 import { runTarget } from './lib/paletteRun.js'
 import BoardView from './components/BoardView.jsx'
-import StashTab from './components/StashTab.jsx'
-import EconomyView from './components/EconomyView.jsx'
-import TradingView from './components/TradingView.jsx'
 import Cur from './components/Cur.jsx'
-import SettingsView from './components/SettingsView.jsx'
 import DownloadApp from './components/DownloadApp.jsx'
 import UpdateStatus from './components/UpdateStatus.jsx'
 import BrandOrb from './components/BrandOrb.jsx'
 import FeedbackDialog from './components/FeedbackDialog.jsx'
 import DiscordLink from './components/DiscordLink.jsx'
+
+const StashTab = lazy(() => import('./components/StashTab.jsx'))
+const EconomyView = lazy(() => import('./components/EconomyView.jsx'))
+const TradingView = lazy(() => import('./components/TradingView.jsx'))
+const SettingsView = lazy(() => import('./components/SettingsView.jsx'))
 
 const TABS = ['Board', 'Stash', 'Trading', 'Economy', 'Settings']   // owner's order, 2026-10-08
 export default function App() {
@@ -47,7 +49,6 @@ export default function App() {
   // at what they would sell for; none until the market has synced.
   const liquidTop = !capital || capital?.syncing ? null : liquidNetWorth(capital?.rows, settings?.stash_counted, capital?.counted_by_default)
   const pairUnit = stashUnit(capital?.total_ref, capital?.reference || 'exalted', status?.wealth_prices, settings?.stash_unit)   // one scale for both
-  const rl = useStatus(s => s.rl)              // trade-API rate/queue budget — surfaced in the topbar sync cluster
   const refreshHeader = useStatus(s => s.refresh)
   const { raw: currencies } = useCurrencies()
   const [leagues, setLeagues] = useState([])
@@ -134,6 +135,19 @@ export default function App() {
   useLiveSync(status?.league ?? '')   // keep the live engine reconciled to the DB's armed searches
   useEe2History()                     // ExiledExchange2 History: main's item intents → the workspace store
   useEffect(() => { useWorkspace.getState().setLeague(status?.league ?? '') }, [status?.league])
+  // Flush debounced workspace edits on hide/quit regardless of which tab is mounted, so quitting
+  // from Board/Stash/Economy/Settings never stalls 1 s waiting for ws:flushed.
+  useEffect(() => {
+    const flush = () => { if (document.visibilityState === 'hidden') useWorkspace.getState().flush() }
+    const hide = () => useWorkspace.getState().flush()
+    document.addEventListener('visibilitychange', flush)
+    window.addEventListener('pagehide', hide)
+    const offQuit = window.poe2desktop?.ws?.onFlush?.(() => {
+      const t0 = Date.now()
+      useWorkspace.getState().flush().then(() => diag('ws', `ws-flush-on-quit ok ms=${Date.now() - t0}`)).catch(() => {}).finally(() => window.poe2desktop.ws.flushed())
+    })
+    return () => { document.removeEventListener('visibilitychange', flush); window.removeEventListener('pagehide', hide); offQuit?.() }
+  }, [])
   // The global focus hotkey (desktop) raises the window here; jump to Live + focus newest.
   useEffect(() => {
     if (!window.poe2desktop?.trade?.onFocusLive) return
@@ -252,7 +266,7 @@ export default function App() {
           )}
           <HorizonPicker />
           <span className="tb-spacer" />
-          <SyncMetrics status={status} bridge={bridge} connecting={connecting} onConnect={doConnect} rl={rl} />
+          <SyncMetrics status={status} bridge={bridge} connecting={connecting} onConnect={doConnect} />
           {/* Nothing entered yet: the one action that fills it, where the number will be (styleguide §0.1). */}
           {capital && !capital.syncing && !capital.rows?.some(r => r.qty > 0)
             ? <button type="button" className="btn primary connect-live nudge" title="Stash" onClick={() => nav.goStash()}><Cur id="mirror" size={14} /> Add what you hold ›</button>
@@ -266,10 +280,12 @@ export default function App() {
       </header>
 
       {tab === 'Board' && <BoardView key={league} status={status} />}
-      {tab === 'Stash' && <StashTab key={league} league={league} capital={capital} status={status} currencies={currencies} />}
-      {tab === 'Economy' && <EconomyView key={league} league={league} currencies={currencies} />}
-      {tab === 'Trading' && <TradingView league={league} />}
-      {tab === 'Settings' && <SettingsView currencies={currencies} status={status} onSaved={refreshHeader} onReportProblem={() => setFeedbackOpen(true)} />}
+      <Suspense fallback={null}>
+        {tab === 'Stash' && <StashTab key={league} league={league} capital={capital} status={status} currencies={currencies} />}
+        {tab === 'Economy' && <EconomyView key={league} league={league} currencies={currencies} />}
+        {tab === 'Trading' && <TradingView league={league} />}
+        {tab === 'Settings' && <SettingsView currencies={currencies} status={status} onSaved={refreshHeader} onReportProblem={() => setFeedbackOpen(true)} />}
+      </Suspense>
 
       <CommandPalette
         open={cmdOpen} onClose={() => setCmdOpen(false)}

@@ -167,20 +167,6 @@ export default function WorkspaceView({ league, visible = true }) {
   useEffect(() => { if (!loaded) loadWorkspace() }, [loaded])
   useEffect(() => { activeRef.current = activeId }, [activeId])
 
-  // Flush the debounced save when the page goes away (tab hidden, window closing) so the last
-  // edit isn't lost to a 700 ms window. Main's before-quit also asks for a flush (batch 1).
-  useEffect(() => {
-    const flush = () => { if (document.visibilityState === 'hidden') useWorkspace.getState().flush() }
-    const hide = () => useWorkspace.getState().flush()
-    document.addEventListener('visibilitychange', flush)
-    window.addEventListener('pagehide', hide)
-    const offQuit = window.poe2desktop?.ws?.onFlush?.(() => {
-      const t0 = Date.now()
-      useWorkspace.getState().flush().then(() => diag('ws', `ws-flush-on-quit ok ms=${Date.now() - t0}`)).catch(() => {}).finally(() => window.poe2desktop.ws.flushed())
-    })
-    return () => { document.removeEventListener('visibilitychange', flush); window.removeEventListener('pagehide', hide); offQuit?.() }
-  }, [])
-
   // Clipboard-add target: the selected folder, else the selected node's parent, else root.
   const clipboardTarget = useCallback(() => {
     const api = treeApi.current

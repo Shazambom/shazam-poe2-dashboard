@@ -94,10 +94,11 @@ def test_exporter_derives_schema_from_source_and_windows_data(tmp_path):
     for t in ("digest_markets", "league_daily", "item_meta", "kv_ops"):
         assert d.execute("SELECT sql FROM sqlite_master WHERE name=?", (t,)).fetchone() == \
                s.execute("SELECT sql FROM sqlite_master WHERE name=?", (t,)).fetchone(), t
-    # indices come along with their tables
-    src_idx = {r[0] for r in s.execute("SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='digest_markets'")}
-    dst_idx = {r[0] for r in d.execute("SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='digest_markets'")}
-    assert src_idx == dst_idx
+    # secondary indexes are intentionally omitted from the shipped seed (cuts ~35% off seed size)
+    # and recreated by db.MARKET_SCHEMA on first open
+    src_idx = {r[0] for r in s.execute("SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='digest_markets' AND sql IS NOT NULL")}
+    dst_idx = {r[0] for r in d.execute("SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='digest_markets' AND sql IS NOT NULL")}
+    assert dst_idx == set()
     names = {r[0] for r in d.execute("SELECT name FROM sqlite_master WHERE type='table'")}
     assert "orderbook" not in names and "orderbook_history" not in names
     assert "analytics_cache" not in names and "analytics_jobs" not in names
@@ -105,6 +106,9 @@ def test_exporter_derives_schema_from_source_and_windows_data(tmp_path):
     assert d.execute("SELECT COUNT(*) FROM digest_markets").fetchone()[0] == 1   # old + private dropped
     assert d.execute("SELECT value FROM market_meta WHERE key='snapshot_version'").fetchone()[0] == "42"
     assert {r[0] for r in d.execute("SELECT key FROM kv_ops")} == {"digest_cursor", "lh_current", "seed_cut:Std", "seed_poll"}
+    d.executescript(db.MARKET_SCHEMA)
+    rebuilt_idx = {r[0] for r in d.execute("SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='digest_markets' AND sql IS NOT NULL")}
+    assert src_idx == rebuilt_idx
 
 
 # ----------------------------------------------------------------- the seed ships only verified days

@@ -1,7 +1,7 @@
 {
   "name": "poe2-dashboard-desktop",
   "productName": "Arbiter",
-  "version": "0.3.17-beta.1",
+  "version": "0.3.17-beta.2",
   "description": "Exchange-loop dashboard for Path of Exile 2 — desktop app",
   "main": "src/main.js",
   "author": "Shazambom",
@@ -14,7 +14,7 @@
     "build:sidecar": "./build-sidecar.sh",
     "dist:mac": "npm run build:frontend && electron-builder --mac",
     "dist:win": "npm run build:frontend && electron-builder --win",
-    "dist:mac:all": "npm run build:backend && npm run build:sidecar && npm run dist:mac",
+    "dist:mac:all": "npm run build:backend && npm run dist:mac",
     "publish": "./publish-github.sh"
   },
   "devDependencies": {
@@ -38,7 +38,11 @@
     },
     "files": [
       "src/**/*",
-      "app-dist/**/*"
+      "app-dist/**/*",
+      "!node_modules/uiohook-napi/libuiohook/**",
+      "!node_modules/uiohook-napi/src/**",
+      "!node_modules/uiohook-napi/build/**",
+      "!node_modules/uiohook-napi/binding.gyp"
     ],
     "asarUnpack": [
       "**/*.node",
@@ -95,13 +99,6 @@
       {
         "from": "market-seed",
         "to": "market-seed",
-        "filter": [
-          "**/*"
-        ]
-      },
-      {
-        "from": "sidecar-bin",
-        "to": "sidecar-bin",
         "filter": [
           "**/*"
         ]

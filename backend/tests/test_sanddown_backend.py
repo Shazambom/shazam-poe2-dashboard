@@ -86,6 +86,9 @@ def test_build_context_reads_via_marketseries_and_is_memoized(monkeypatch):
     b = holdscore.build_context(291)
     assert a == b and len(calls) == 1
     holdscore.build_context(295)
+    assert len(calls) == 1   # shared _raw_daily() scan across numeraires
+    holdscore.invalidate()
+    holdscore.build_context(295)
     assert len(calls) == 2
     src = (APP / "holdscore.py").read_text()
     assert "SELECT league, item_id, day, close, volume" not in src

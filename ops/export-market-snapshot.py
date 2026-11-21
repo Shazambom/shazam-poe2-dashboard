@@ -38,22 +38,36 @@ except ImportError as exc:                     # pragma: no cover — misuse, no
 MARKET_META_DDL = "CREATE TABLE IF NOT EXISTS market_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)"
 
 
+# digest_markets columns populated by the crawler but never read by any backend query;
+# nulling them in the exported seed cuts ~15% off the compressed snapshot without altering
+# any schema or query result. (hi_stock_a/b ARE read for liquidity and stay intact.)
+_NULL_SEED_COLS = {
+    "digest_markets": frozenset({
+        "lo_stock_a", "lo_stock_b",
+        "lo_ratio_a", "lo_ratio_b", "hi_ratio_a", "hi_ratio_b",
+    }),
+}
+
+
 def _copy_ddl(src, dst, table):
-    """Recreate `table` (+ its indices) in dst exactly as the source defines it."""
+    """Recreate `table` in dst as the source defines it (tables only — secondary indexes are
+    rebuilt from db.MARKET_SCHEMA on first open, cutting ~35% off the shipped seed)."""
     rows = src.execute(
-        "SELECT type, sql FROM sqlite_master WHERE tbl_name=? AND sql IS NOT NULL "
-        "ORDER BY CASE type WHEN 'table' THEN 0 ELSE 1 END", (table,)).fetchall()
+        "SELECT sql FROM sqlite_master WHERE type='table' AND tbl_name=? AND sql IS NOT NULL",
+        (table,)).fetchall()
     if not rows:
         raise SystemExit(f"{table}: not present in source — not a market.sqlite?")
-    for _type, sql in rows:
+    for (sql,) in rows:
         dst.execute(sql)
 
 
 def _copy_rows(src, dst, table, where=""):
     cols = [r[1] for r in src.execute(f"PRAGMA table_info({table})")]
+    drop = _NULL_SEED_COLS.get(table, frozenset())
+    select_exprs = ["NULL" if c in drop else c for c in cols]
     collist = ",".join(cols)
     ph = ",".join("?" * len(cols))
-    rows = src.execute(f"SELECT {collist} FROM {table} {where}").fetchall()
+    rows = src.execute(f"SELECT {','.join(select_exprs)} FROM {table} {where}").fetchall()
     dst.executemany(f"INSERT INTO {table}({collist}) VALUES({ph})", rows)
     print(f"  {table}: copied {len(rows)} rows")
     return len(rows)
@@ -236,7 +250,7 @@ def main():
         # The backend decompresses once during seeding. A plaintext .version sidecar lets
         # the backend compare snapshot_version WITHOUT decompressing on every launch.
         out_path = args.out if args.out.endswith(".gz") else args.out + ".gz"
-        with open(tmp, "rb") as fi, gzip.open(out_path, "wb", compresslevel=6) as fo:
+        with open(tmp, "rb") as fi, gzip.open(out_path, "wb", compresslevel=9) as fo:
             shutil.copyfileobj(fi, fo)
         os.remove(tmp)
         with open(out_path + ".version", "w") as vf:

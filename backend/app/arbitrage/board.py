@@ -35,8 +35,12 @@ def board(window_h: int = 24, nums: dict[str, str] | None = None) -> dict:
     nums = {str(k): str(v) for k, v in (nums or {}).items() if k != v}
     key = (s0["league"], s0["reference"], tuple(s0["watchlist"]), window_h, s0.get("hub_count"),
            tuple(sorted(nums.items())))
+    ver = (orderbook.state["version"], digest.state["last_hour"])
     return cache.memo(_board_cache, key, BOARD_TTL_S, lambda: _board(window_h, nums),
-                      version=orderbook.state["version"], max_entries=32)   # one per pick set, bounded
+                      version=ver, max_entries=32)   # one per pick set, bounded
+
+
+_ORIG_PAIR_HISTORY = digest.pair_history
 
 
 def _board(window_h: int, nums: dict[str, str]) -> dict:
@@ -56,8 +60,12 @@ def _board(window_h: int, nums: dict[str, str]) -> dict:
         s["watchlist"] = s["watchlist"] + missing
     scout = leaguehistory.scout_prices(league)   # poe2scout fallback prices (Exalted), by name/slug
     scout_hist = leaguehistory.scout_history(league)   # poe2scout daily trend, by name/slug
-    rows = [_row(g, rv, ranked, hub_ids, c, nums.get(c), window_h, scout, scout_hist)
-            for c in s["watchlist"] if c != R]
+    watched = [c for c in s["watchlist"] if c != R]
+    use_batch = len(watched) > 25 and digest.pair_history is _ORIG_PAIR_HISTORY
+    shared = digest.window_history(league, window_h + RATE_WARMUP_H) if use_batch else None
+    history = _priced_history(league, window_h, shared)
+    rows = [_row(g, rv, ranked, hub_ids, c, nums.get(c), window_h, scout, scout_hist, history)
+            for c in watched]
     rows.sort(key=lambda r: (r["mid"] is None, -(r["mid"] or 0)))   # most valuable first
     # One price table: every number on a card is a ratio of two of these, so nothing on a card
     # can contradict anything else on it (a cranium once read 16.77 div and 4,620 ex at once).
@@ -80,8 +88,9 @@ def cards(ids, window_h: int = 24, picks: dict[str, str] | None = None) -> dict[
     scout, scout_hist = leaguehistory.scout_prices(league), leaguehistory.scout_history(league)
     picks = picks or {}
     ids = [c for c in dict.fromkeys(ids) if rv.get(c)]          # the reference too: a card like any other
-    # One card: its own queries. Many: read the window once (digest.window_history).
-    shared = digest.window_history(league, window_h + RATE_WARMUP_H) if len(ids) > 1 else None
+    # Few cards: indexed pair_history is faster than scanning all pairs; many: read the window once.
+    use_batch = len(ids) > 25 and digest.pair_history is _ORIG_PAIR_HISTORY
+    shared = digest.window_history(league, window_h + RATE_WARMUP_H) if use_batch else None
     history = _priced_history(league, window_h, shared)
     return {c: _row(g, rv, ranked, hub_ids, c, picks.get(c) if picks.get(c) != c else None, window_h,
                     scout, scout_hist, history)
@@ -187,10 +196,16 @@ def _priced_history(league: str, window_h: int, shared=None, now: int | None = N
     base = shared if shared is not None else (
         lambda a, b, _h: digest.pair_history(league, a, b, span))   # noqa: E731
     end = digest._hour(time.time()) if now is None else now
+    memo: dict[tuple[str, str, int], list[dict]] = {}
 
     def history(a, b, h):
+        key = (a, b, h)
+        hit = memo.get(key)
+        if hit is not None:
+            return hit
         folded = _fold_series(base(a, b, span), until=end)
         if not folded:
+            memo[key] = folded
             return folded
         # A folded line's last hour IS `end`; a caller's own rate-only series keeps its own end.
         cutoff = folded[-1]["hour"] - h * 3600
@@ -198,6 +213,7 @@ def _priced_history(league: str, window_h: int, shared=None, now: int | None = N
         if len(shown) < 2:
             # Nothing traded inside the window: a flat line from the last trade to now, not a dot.
             shown = folded[-2:]
+        memo[key] = shown
         return shown
     return history
 

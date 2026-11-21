@@ -1,11 +1,19 @@
-"""Desktop entrypoint: run the API on localhost for the Electron shell.
+"""Desktop entrypoint: run the API on localhost for the Electron shell, or act as the
+heavy-analytics sidecar when invoked with ``--sidecar`` (reusing the same frozen Python +
+NumPy runtime so the installer ships one binary instead of two).
 
 PyInstaller bundles this as a single binary; DATA_DIR and PORT come from the
 shell so state lives in the user's app-data directory.
 """
 import os
+import sys
 
-import uvicorn
+if len(sys.argv) > 1 and sys.argv[1] == "--sidecar":
+    # Dispatch BEFORE importing uvicorn/FastAPI/cryptography so the sidecar child stays lean.
+    from sidecar.run_sidecar import main as _sidecar_main
+    raise SystemExit(_sidecar_main(sys.argv[2:]))
+
+import uvicorn  # noqa: E402
 
 # The desktop backend answers only its own app on loopback (app/main.py `loopback_only`).
 os.environ.setdefault("ARBITER_LOOPBACK_ONLY", "1")

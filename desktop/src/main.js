@@ -81,10 +81,10 @@ function backendBinary() {
   return findBundledBin('backend-bin', name).found
 }
 
-async function waitFor(url, tries = 60) {
+async function waitFor(url, tries = 240) {
   for (let i = 0; i < tries; i++) {
     try { const r = await fetch(url, { signal: AbortSignal.timeout(1500) }); if (r.ok) return true } catch {}
-    await new Promise(r => setTimeout(r, 500))
+    await new Promise(r => setTimeout(r, i < 10 ? 100 : i < 25 ? 250 : 500))
   }
   return false
 }
@@ -125,15 +125,13 @@ async function startBackend() {
       const p = path.join(d, n); if (fs.existsSync(p)) { marketSeed = p; break }
     } if (marketSeed) break }
     if (marketSeed) console.log('[backend] market seed:', marketSeed)
-    // Sidecar binary (heavy analytics), bundled per-platform via extraResources like the
-    // backend. The backend spawns + supervises it; SIDECAR_BIN tells it where. Absent in dev =
-    // backend runs the sidecar from source (or skips it). See docs/db-architecture.md.
+    // Sidecar (heavy analytics): unified into poe2arb-backend (--sidecar), reusing the same
+    // frozen Python + NumPy runtime. If a separate legacy sidecar-bin exists, honour it;
+    // otherwise leave SIDECAR_BIN empty so sidecar_supervisor launches `[sys.executable, "--sidecar"]`.
     const sidecarName = process.platform === 'win32' ? 'poe2arb-sidecar.exe' : 'poe2arb-sidecar'
     const sc = findBundledBin('sidecar-bin', sidecarName)
-    // Pass the EXPECTED path even when not found, so the backend supervisor can log a warning
-    // (packaging regression) instead of silently disabling analytics.
-    const sidecarBin = sc.found || sc.expected
-    console.log('[backend] sidecar bin:', sidecarBin, sc.found ? '' : '(expected; not found)')
+    const sidecarBin = sc.found || ''
+    console.log('[backend] sidecar:', sidecarBin || `${bin} --sidecar`)
     // Restarted when it dies on its own (respawn.js); never after stopBackend().
     const respawner = backendRespawner = createRespawner({ start: () => startOnce() })
     const gone = (why) => {
@@ -175,19 +173,21 @@ async function startBackend() {
     }
     startOnce()
     const t0 = Date.now()
-    if (await waitFor(`${localUrl}/api/status`, 240)) {   // ~2min: cover a slow first-boot re-seed before declaring failure
+    if (await waitFor(`${localUrl}/api/health`, 240)) {   // ~2min: cover a slow first-boot re-seed before declaring failure
       bkLog(`bound after ${Math.round((Date.now() - t0) / 1000)}s`)
-      // DEV DIAGNOSTIC: probe the heavy-analytics pipeline REPEATEDLY (not one blind snapshot) so we
-      // see job progression on Windows — whether the 'done' bucket ever appears, or jobs stay wedged
-      // at 'running'. Combined with the sidecar's own p=sidecar telemetry this pinpoints where it dies.
-      for (const delay of [60000, 150000, 300000]) {
-        setTimeout(async () => {
-          try {
-            const r = await fetch(`${localUrl}/api/diag`, { signal: AbortSignal.timeout(8000) })
-            const d = await r.json()
-            bkLog(`analytics@${Math.round(delay / 1000)}s ${JSON.stringify(d.analytics || {})}`)
-          } catch (e) { bkLog(`analytics-probe-failed ${String(e && e.message || e)}`) }
-        }, delay)
+      // DEV DIAGNOSTIC (beta/dev only): probe the heavy-analytics pipeline REPEATEDLY so we see
+      // job progression on Windows — whether 'done' appears or jobs stay wedged at 'running'.
+      if (diagTelemetryOn()) {
+        for (const delay of [60000, 150000, 300000]) {
+          const t = setTimeout(async () => {
+            try {
+              const r = await fetch(`${localUrl}/api/diag`, { signal: AbortSignal.timeout(8000) })
+              const d = await r.json()
+              bkLog(`analytics@${Math.round(delay / 1000)}s ${JSON.stringify(d.analytics || {})}`)
+            } catch (e) { bkLog(`analytics-probe-failed ${String(e && e.message || e)}`) }
+          }, delay)
+          if (t.unref) t.unref()
+        }
       }
       backendUrl = localUrl
       backendKind = 'local'
@@ -257,7 +257,9 @@ function startUiServer() {
     }
     let f = path.join(dist, u.pathname === '/' ? 'index.html' : u.pathname)
     if (!f.startsWith(dist) || !fs.existsSync(f) || fs.statSync(f).isDirectory()) f = path.join(dist, 'index.html')
-    res.writeHead(200, { 'Content-Type': MIME[path.extname(f)] || 'application/octet-stream' })
+    const headers = { 'Content-Type': MIME[path.extname(f)] || 'application/octet-stream' }
+    if (u.pathname.startsWith('/assets/')) headers['Cache-Control'] = 'public, max-age=31536000, immutable'
+    res.writeHead(200, headers)
     fs.createReadStream(f).pipe(res)
   })
   return new Promise(resolve => {
@@ -760,17 +762,21 @@ ipcMain.handle('mods:item', async () => {
 })
 
 // Give the renderer a beat to flush its debounced workspace save before we go: send ws:flush,
-// wait for ws:flushed (or 1 s), then quit for real.
+// wait for ws:flushed (or 1 s), then quit for real. Stop backend/trade/ee2 only once the flush
+// has finished (previously a second before-quit listener killed the backend while ws:flush was
+// still trying to PUT /api/workspace).
 // (`_flushedForQuit` is declared up top so the update handler can set it before quitAndInstall.)
-app.on('before-quit', (e) => {
-  if (_flushedForQuit || !win || win.isDestroyed()) return
-  e.preventDefault()
-  const done = () => { if (_flushedForQuit) return; _flushedForQuit = true; app.quit() }
-  ipcMain.once('ws:flushed', done)
-  setTimeout(done, 1000)
-  try { win.webContents.send('ws:flush') } catch { done() }
-})
-
 const stopTrade = () => { try { require('./trade').engine.stopAll() } catch {}; try { require('./trade/hotkey.js').unregisterAll() } catch {} }
-app.on('window-all-closed', () => { stopTrade(); stopEe2Integration(); stopBackend(); app.quit() })
-app.on('before-quit', () => { stopTrade(); stopEe2Integration(); stopBackend() })
+const stopAll = () => { stopTrade(); stopEe2Integration(); stopBackend() }
+app.on('before-quit', (e) => {
+  if (!_flushedForQuit && win && !win.isDestroyed()) {
+    e.preventDefault()
+    const done = () => { if (_flushedForQuit) return; _flushedForQuit = true; app.quit() }
+    ipcMain.once('ws:flushed', done)
+    setTimeout(done, 1000)
+    try { win.webContents.send('ws:flush') } catch { done() }
+    return
+  }
+  stopAll()
+})
+app.on('window-all-closed', () => { stopAll(); app.quit() })

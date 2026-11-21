@@ -179,7 +179,7 @@ def _trade_id(name: str) -> str | None:
     for cand in (want, _slug(name)):
         if cand in registry.by_id:
             return cand
-    return next((cid for cid, cur in registry.by_id.items() if cur.name.lower() == want), None)
+    return registry.lookup_name(want)
 
 
 def _anchor_ids() -> list[str]:

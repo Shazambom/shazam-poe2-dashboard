@@ -14,14 +14,12 @@ test('main.js has no remote-mode vestiges', () => {
   assert.ok(main.includes('const BACKDROP'))
 })
 
-test('Windows CI runs the same PyInstaller scripts the Mac uses', () => {
+test('Windows CI runs the same PyInstaller script the Mac uses', () => {
   const wf = readFileSync(`${ROOT}.github/workflows/release-desktop-win.yml`, 'utf8')
-  assert.ok(wf.includes('desktop/build-backend.sh') && wf.includes('desktop/build-sidecar.sh'))
+  assert.ok(wf.includes('desktop/build-backend.sh') && wf.includes('--sidecar --selftest'))
   assert.ok(!wf.includes('pyinstaller --noconfirm'))
-  for (const f of ['build-backend.sh', 'build-sidecar.sh']) {
-    const s = readFileSync(`${ROOT}desktop/${f}`, 'utf8')
-    assert.ok(s.includes('uname -s') && s.includes('Scripts/activate'), f)
-  }
+  const s = readFileSync(`${ROOT}desktop/build-backend.sh`, 'utf8')
+  assert.ok(s.includes('uname -s') && s.includes('Scripts/activate') && s.includes('--sidecar --selftest'))
 })
 
 test('engine.js has no stale PR comments', () => {

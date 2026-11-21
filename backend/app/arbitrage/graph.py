@@ -30,6 +30,10 @@ def counterparts_by_volume(g, rv: dict[str, float] | None = None) -> dict[str, l
     with the value table. The Board's default numeraire, the league arc's fallback numeraire and
     the value table (`Graph.quote_busiest_markets`, `Graph._widest_values`) all walk this
     ranking; nothing else defines "the market that trades a currency"."""
+    memo = getattr(g, "_counterparts_memo", None)
+    sig = (len(g.edges), g.sources.get("live", 0), g.sources.get("digest", 0), len(g.busiest))
+    if memo and memo[0] == sig:
+        return memo[1]
     units: dict[tuple[str, str], float] = {}          # (currency, counterpart) -> units of currency per hour
     for (a, b), e in g.market_edges():
         if not e.vol_in_per_h or e.rate <= 0:
@@ -42,6 +46,7 @@ def counterparts_by_volume(g, rv: dict[str, float] | None = None) -> dict[str, l
             ranked.setdefault(c, []).append((u, other))
     for lst in ranked.values():
         lst.sort(reverse=True)
+    g._counterparts_memo = (sig, ranked)
     return ranked
 
 
@@ -458,15 +463,17 @@ class Graph:
                     yield from dfs(e.dst, path + [e], visited | {e.dst})
         yield from dfs(start, [], {start})
 
-    def iter_paths(self, start: str, target: str, max_steps: int):
+    def iter_paths(self, start: str, target: str, max_steps: int, allowed_mids=None):
         """Lazily yield simple OPEN paths from `start` to `target` (the conversion sibling of
         `iter_cycles`, which closes back to start). Each path is a list[Edge] ending at
-        `target`, visiting no node twice, at most `max_steps` hops long."""
+        `target`, visiting no node twice, at most `max_steps` hops long. When `allowed_mids` is
+        provided, only intermediate nodes in that set are expanded."""
         def dfs(node: str, path: list[Edge], visited: set[str]):
             for e in self.adj.get(node, []):
                 if e.dst == target:
                     yield path + [e]
-                elif e.dst not in visited and len(path) < max_steps - 1:
+                elif (e.dst not in visited and len(path) < max_steps - 1
+                      and (allowed_mids is None or e.dst in allowed_mids)):
                     yield from dfs(e.dst, path + [e], visited | {e.dst})
         yield from dfs(start, [], {start})
 
@@ -575,7 +582,7 @@ def cycle_unit(cycle: list[Edge], limit: int = 512) -> int:
             return a
     return 1
 _graph_cache: dict = {}
-GRAPH_TTL_S = 5.0
+GRAPH_TTL_S = 60.0
 # The market every screen prices from (Board, Hold, Convert, Capital, wealth) averages volumes over this window. The
 # Arbitrage page's `volume_window_h` (a preset knob) shapes only the route search's own graph (code review 2026-10-05:
 # a preset pick used to move every price in the app).
@@ -583,15 +590,16 @@ MARKET_VOLUME_WINDOW_H = 24
 
 
 def cached_graph(volume_window_h: float | None = None) -> Graph:
-    """Graph.build() with a short TTL so header polling, capital valuation and route
-    search share one build instead of re-reading the digest tables per request.
+    """Graph.build() with a TTL + data-version stamp so header polling, capital valuation and
+    route search share one build instead of re-reading the digest tables per request.
     `volume_window_h`: the route search's own window; omitted, the market's."""
     s = get_settings()
     window = volume_window_h or MARKET_VOLUME_WINDOW_H
     key = (s["league"], s["reference"], s["allow_digest_edges"], s["allow_recipe_edges"],
            s["live_max_age_s"], s["digest_max_age_h"],
            s.get("min_edge_volume_ref_per_h"), s.get("min_edge_depth"), window)
-    return cache.memo(_graph_cache, key, GRAPH_TTL_S, lambda: Graph.build(window), version=orderbook.state["version"])
+    ver = (orderbook.state["version"], digest.state["last_hour"])
+    return cache.memo(_graph_cache, key, GRAPH_TTL_S, lambda: Graph.build(window), version=ver, max_entries=4)
 
 
 def anchor_prices() -> dict[str, float]:

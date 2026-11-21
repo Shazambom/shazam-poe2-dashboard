@@ -14,9 +14,13 @@ export default function VaalPingOrb({ onClick }) {
   const [, tick] = useState(0)
 
   // Re-evaluate intensity as the token ages (1s interval, not rAF — hidden-tab safe).
+  // Stop polling once the newest ping is terminal (gone or expired).
   useEffect(() => {
-    if (!newest) return
-    const t = setInterval(() => tick(n => n + 1), 1000)
+    if (!newest || newest.flags?.gone || !newest.tokenExp || newest.tokenExp <= Date.now()) return
+    const t = setInterval(() => {
+      tick(n => n + 1)
+      if (newest.tokenExp <= Date.now()) clearInterval(t)
+    }, 1000)
     return () => clearInterval(t)
   }, [newest])
 

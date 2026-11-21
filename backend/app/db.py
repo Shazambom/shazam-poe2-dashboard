@@ -463,13 +463,23 @@ def analyze() -> None:
 # Per-thread connections
 # ---------------------------------------------------------------------------
 
+_tx_gen = 0
+
+
+def tx_gen() -> int:
+    """Monotonic write generation incremented on every committed `tx()`. Used by read-mostly
+    in-memory memos (settings, gamedata, recipes, modpool) to stay coherent across writes."""
+    return _tx_gen
+
+
 def _connect() -> sqlite3.Connection:
     conn = sqlite3.connect(str(USER_DB_PATH), check_same_thread=False, timeout=30)
     conn.row_factory = sqlite3.Row
     conn.execute("ATTACH DATABASE ? AS market", (str(MARKET_DB_PATH),))
-    conn.execute("PRAGMA journal_mode=WAL")
-    conn.execute("PRAGMA market.journal_mode=WAL")
+    # WAL is persistent in the DB headers and already enabled by _boot_databases().
     conn.execute("PRAGMA busy_timeout=15000")
+    conn.execute("PRAGMA temp_store=MEMORY")
+    conn.execute("PRAGMA cache_size=-4000")         # 4 MiB page cache per thread connection
     # user.sqlite must survive power loss ("never lose user data"); its writes are rare, debounced
     # single-row upserts, so FULL costs nothing a user can feel. Market data is disposable: NORMAL.
     conn.execute("PRAGMA main.synchronous=FULL")
@@ -487,11 +497,13 @@ def _conn() -> sqlite3.Connection:
 @contextmanager
 def tx() -> Iterator[sqlite3.Connection]:
     """Write transaction: serialised app-wide, committed on exit."""
+    global _tx_gen
     with _write_lock:
         c = _conn()
         try:
             yield c
             c.commit()
+            _tx_gen += 1
         except Exception:
             c.rollback()
             raise

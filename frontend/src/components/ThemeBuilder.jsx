@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from '../lib/api.js'
 import { THEMES, DEFAULT_THEME, useTheme } from '../lib/themeStore.js'
-import { presetTables } from '../lib/themeCss.js'
 import {
   PRIMARIES, DERIVED_KEYS, isTriplet, primariesOf, rederive, derive, contrastIssues, autoFixContrast,
   exportCss, exportJson, newThemeId,
@@ -14,9 +13,9 @@ import { hexToTriplet, rgbToHex } from '../lib/color.js'
 // copies one, then you edit the copy. Export hands back a ready-to-paste preset block + JSON so a tweaked
 // copy can be codified in styles.css as a shipped default.
 
-// The presets' colour tables come from styles.css itself (loaded on demand, only in the builder).
+// The presets' colour tables are extracted from styles.css at build time (vite.config.js), loaded on demand.
 let presetsPromise = null
-const loadPresets = () => (presetsPromise ??= import('../styles.css?raw').then(m => presetTables(m.default).tables))
+const loadPresets = () => (presetsPromise ??= import('virtual:theme-presets').then(m => m.default))
 
 const NAMES = Object.fromEntries(THEMES.map(t => [t.id, t.name]))
 const tripletToHex = (v) => rgbToHex(String(v).split(',').map(Number))
@@ -35,8 +34,12 @@ export default function ThemeBuilder() {
   const previewTimer = useRef(null)
 
   useEffect(() => { loadPresets().then(setPresets).catch(() => {}) }, [])
-  // Leaving the builder ends any preview (the chosen theme comes back).
-  useEffect(() => () => { clearTimeout(previewTimer.current); useTheme.getState().endPreview() }, [])
+  // Leaving the builder ends any preview (the chosen theme comes back) and cancels pending timers.
+  useEffect(() => () => {
+    clearTimeout(previewTimer.current)
+    clearTimeout(saveTimer.current)
+    useTheme.getState().endPreview()
+  }, [])
 
   const editing = useMemo(() => customs.find(t => t.id === editId) || null, [customs, editId])
   useEffect(() => { setDraft(editing ? { ...editing, colors: { ...editing.colors } } : null); setExported('') }, [editing?.id]) // eslint-disable-line

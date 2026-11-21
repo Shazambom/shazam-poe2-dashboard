@@ -101,6 +101,57 @@ def test_win_alive_treats_access_denied_as_alive(monkeypatch):
     assert watchdog._win_alive(4321) is False
 
 
+def test_watch_stdin_eof_clean_exit_with_open_pipe_does_not_sigabrt():
+    """Regression: when watch_stdin_eof blocks in buffered sys.stdin.buffer.read(1), a clean
+    interpreter exit (like the sidecar's idle exit) aborts in CPython's _enter_buffered_busy
+    with SIGABRT (rc=-6). Raw os.read(fd, 1) must exit cleanly with rc=0 while the pipe stays open."""
+    import subprocess
+    backend_dir = str(Path(__file__).resolve().parents[1])
+    code = (
+        f"import sys, time; sys.path.insert(0, {backend_dir!r}); "
+        "from app import watchdog; "
+        "watchdog.watch_stdin_eof(); "
+        "time.sleep(0.15)"
+    )
+    proc = subprocess.Popen(
+        [sys.executable, "-c", code],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    try:
+        rc = proc.wait(timeout=5)
+        err = proc.stderr.read().decode("utf-8", "replace")
+    finally:
+        if proc.stdin:
+            try:
+                proc.stdin.close()
+            except Exception:
+                pass
+    assert rc == 0, f"expected clean rc=0 with open stdin pipe, got rc={rc} stderr={err!r}"
+
+
+def test_watch_stdin_eof_fires_when_parent_closes_pipe():
+    import subprocess
+    backend_dir = str(Path(__file__).resolve().parents[1])
+    code = (
+        f"import os, sys, time; sys.path.insert(0, {backend_dir!r}); "
+        "from app import watchdog; "
+        "watchdog.watch_stdin_eof(on_dead=lambda r: os._exit(42)); "
+        "time.sleep(5)"
+    )
+    proc = subprocess.Popen(
+        [sys.executable, "-c", code],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    time.sleep(0.15)
+    proc.stdin.close()
+    rc = proc.wait(timeout=5)
+    assert rc == 42
+
+
 if __name__ == "__main__":
     import pytest
     raise SystemExit(pytest.main([__file__, "-q"]))

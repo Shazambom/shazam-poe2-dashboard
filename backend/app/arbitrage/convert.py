@@ -75,7 +75,8 @@ def _best_conversions(g: Graph, ref_value: dict[str, float], have: str, want: st
                       amount: float, max_steps: int | None = None,
                       max_gain_pct: float = 2.0,
                       gold_value_per_1k: float = GOLD_VALUE_DIVINE_PER_1K,
-                      bridge: dict[str, float] | None = None, with_min_amount: bool = False) -> dict:
+                      bridge: dict[str, float] | None = None, with_min_amount: bool = False,
+                      allowed_mids=None) -> dict:
     """Rank open conversion paths have->want by NET value delivered: the value of the `want` you
     receive minus the gold spent, where gold is charged at `gold_value_per_1k` (Divine per 1k
     gold — a user-tunable price, since gold's worth shifts across a league). This makes gold a
@@ -93,7 +94,8 @@ def _best_conversions(g: Graph, ref_value: dict[str, float], have: str, want: st
     seen: dict[str, dict] = {}
     starved: list[list[Edge]] = []          # paths the amount was too small for (min_amount below)
     count = 0
-    for path in g.iter_paths(have, want, max_steps):
+    paths = g.iter_paths(have, want, max_steps, allowed_mids=allowed_mids) if allowed_mids is not None else g.iter_paths(have, want, max_steps)
+    for path in paths:
         count += 1
         if count > MAX_CANDIDATES:
             break

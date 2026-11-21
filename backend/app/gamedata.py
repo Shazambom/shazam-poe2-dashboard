@@ -178,16 +178,30 @@ async def refresh(force: bool = False) -> dict:
 
 
 # ------------------------------------------------------------------ queries
+_fees_cache: tuple | None = None
+_cats_cache: tuple | None = None
+
+
 def categories() -> dict[str, str]:
     """{metadata id: the game's Currency Exchange category} — the one reader of the table's categories."""
-    return {meta: e["category"] for meta, e in (db.kv_get("gold_fees_meta", {}) or {}).items()
-            if isinstance(e, dict) and e.get("category")}
+    global _cats_cache
+    ver = (str(db.MARKET_DB_PATH), db.tx_gen())
+    if _cats_cache and _cats_cache[0] == ver:
+        return _cats_cache[1]
+    res = {meta: e["category"] for meta, e in (db.kv_get("gold_fees_meta", {}) or {}).items()
+           if isinstance(e, dict) and e.get("category")}
+    _cats_cache = (ver, res)
+    return res
 
 
 def fees() -> dict:
     """Fees keyed by trade id (where mapped) plus the raw metadata-keyed table."""
+    global _fees_cache
     from .currencies import registry
 
+    ver = (str(db.MARKET_DB_PATH), db.tx_gen(), registry.loaded_at, len(registry.meta_to_trade))
+    if _fees_cache and _fees_cache[0] == ver:
+        return _fees_cache[1]
     by_meta = db.kv_get("gold_fees_meta", {})
     by_trade: dict[str, int] = {}
     unmapped = []
@@ -197,4 +211,6 @@ def fees() -> dict:
             by_trade[tid] = e["fee"]
         else:
             unmapped.append(meta)
-    return {"by_trade": by_trade, "by_meta": by_meta, "unmapped": sorted(unmapped), "state": state}
+    res = {"by_trade": by_trade, "by_meta": by_meta, "unmapped": sorted(unmapped), "state": state}
+    _fees_cache = (ver, res)
+    return res

@@ -95,6 +95,9 @@ def open_market(data_dir: str | None = None) -> sqlite3.Connection:
     return conn
 
 
+IDLE_EXIT_S = 60.0   # exit cleanly (rc=0) after 60s idle; supervisor wakes us when new jobs enqueue
+
+
 def main() -> None:
     parent = os.environ.get("ARBITER_PARENT_PID")
     ppid = int(parent) if parent and parent.isdigit() else None
@@ -134,6 +137,7 @@ def main() -> None:
         _tlog(f"requeue-stale error {exc!r}")
 
     idle = done = 0
+    idle_since = time.monotonic()
     while True:
         try:
             worked = run_once(conn)
@@ -149,6 +153,7 @@ def main() -> None:
                 with conn:
                     analytics.prune_jobs(conn)
             idle = 0
+            idle_since = time.monotonic()
         else:
             # periodically re-heal in case a job was orphaned while we were idle-looping
             if idle == 0:
@@ -157,5 +162,10 @@ def main() -> None:
                         analytics.requeue_stale(conn, older_than_s=120)
                 except sqlite3.Error:
                     pass
+            if time.monotonic() - idle_since >= IDLE_EXIT_S:
+                _tlog(f"idle exit after {IDLE_EXIT_S:.0f}s (done={done})")
+                conn.close()
+                devtelemetry.flush(timeout=2.0)
+                return
             time.sleep(min(5.0, 0.5 * (idle + 1)))   # gentle idle backoff
             idle = min(idle + 1, 9)

@@ -7,11 +7,16 @@ import { useIcons, lookup, iconFailed, iconLoaded, useIconEpoch } from '../lib/i
 //   <Cur id="exalted" />            icon only, name on hover
 //   <Cur name="Divine Orb" />       resolve by name
 //   <Cur id="chaos" text />         icon + name inline
-export default function Cur({ id, name, size = 18, text = false, className = '' }) {
-  const idx = useIcons()                 // re-render once the index loads
+const Cur = React.memo(function Cur({ id, name, size = 18, text = false, className = '' }) {
+  useIcons()                             // re-render once the index loads
   const [broken, setBroken] = useState(false)
-  const epoch = useIconEpoch()
-  useEffect(() => { setBroken(false) }, [epoch])
+  const [attempt, setAttempt] = useState(0)
+  const epoch = useIconEpoch(broken)
+  useEffect(() => {
+    if (!broken) return
+    setBroken(false)
+    setAttempt(a => a + 1)
+  }, [epoch]) // eslint-disable-line
   const rec = lookup({ id, name })
   const label = rec?.name || name || id || '?'
   const icon = rec?.icon
@@ -21,9 +26,11 @@ export default function Cur({ id, name, size = 18, text = false, className = '' 
   }
   return (
     <span className={`cur ${className}`} title={label}>
-      <img key={epoch} className="cur-img" src={icon} alt={label} width={size} height={size}
+      <img key={attempt} className="cur-img" src={icon} alt={label} width={size} height={size}
         loading="lazy" onLoad={iconLoaded} onError={() => { setBroken(true); iconFailed() }} />
       {text && <span className="cur-name">{label}</span>}
     </span>
   )
-}
+})
+
+export default Cur

@@ -88,8 +88,11 @@ class ExiledExchangeIntegration extends EventEmitter {
   // Detect EE2 and drive the presence state machine.
   async _evaluatePresence(initial) {
     let info
-    try { info = await detectEE2({ checkProcess: true }) } catch { info = { present: false, method: 'none' } }
+    // Only shell out to tasklist/ps on startup or when not yet detected via config-dir.
+    const needProc = initial || !this._present || this._presentMethod === 'process'
+    try { info = await detectEE2({ checkProcess: needProc }) } catch { info = { present: false, method: 'none' } }
     const present = Boolean(info.present)
+    this._presentMethod = info.method
 
     if (initial || present !== this._present) {
       this._present = present

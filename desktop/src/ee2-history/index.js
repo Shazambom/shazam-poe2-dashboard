@@ -42,7 +42,7 @@ function createHistoryConsumer({ manager, worker, prefs, send = null, log = () =
     if (proc) return proc
     if (lastFailure && now() - lastFailure < RESTART_MIN_MS) return null
     try {
-      proc = worker.spawn({ onExit: () => { proc = null; lastFailure = now(); status.warm = false } }); status.warm = true
+      proc = worker.spawn({ onExit: (info) => { proc = null; if (!info?.idle) lastFailure = now(); status.warm = false } }); status.warm = true
       if (typeof proc.warm === 'function') proc.warm().then(r => { if (r) log(`warm ms=${r.ms} items=${r.items} stats=${r.stats}`) }).catch(e => log(`warm-fail err="${String(e && e.message || e).slice(0, 160)}"`))
     } catch (e) { lastFailure = now(); proc = null; log(`history-skip reason=worker spawn="${String(e && e.message || e).slice(0, 80)}"`) }
     return proc

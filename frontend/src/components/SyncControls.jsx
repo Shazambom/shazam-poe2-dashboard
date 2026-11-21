@@ -19,7 +19,7 @@ export function RefreshControls() {
   )
 }
 
-export function SyncMetrics({ status, bridge, connecting, onConnect, rl }) {
+export function SyncMetrics({ status, bridge, connecting, onConnect }) {
   const connected = !!status?.session?.connected
   const backfilling = status?.digest?.backfilling
   // Feed freshness comes from the backend as a state string (it owns the thresholds).

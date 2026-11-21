@@ -17,7 +17,6 @@ export const capitalDirty = new Map()
 export const useStatus = create((set, get) => ({
   status: null,      // /api/status (league, digest/orderbook feed states, session, oauth, …)
   capital: null,     // /api/capital
-  rl: null,          // /api/ratelimits (trade budget for the topbar cluster)
   settings: null,    // /api/settings (the saved user settings)
 
   capitalSaving: false,   // a holdings write is in flight (the Stash re-reads holdings only after it lands)
@@ -31,7 +30,6 @@ export const useStatus = create((set, get) => ({
       const [s, c] = await Promise.all([api.status(), api.capital()])
       set(get().capitalWrites === writes ? { status: s, capital: c, capitalStale: false } : { status: s })
     } catch (e) { console.error(e) }
-    api.rateLimits().then(rl => set({ rl })).catch(() => {})
   },
   loadSettings: async () => {
     const s = await api.settings()
@@ -91,10 +89,15 @@ export const useStatus = create((set, get) => ({
 let syncTheme = null
 export const onSettingsTheme = (fn) => { syncTheme = fn }
 
-// The settings blob, fetched once and then served from the store (kept fresh by saveSettings).
+// The settings blob, fetched once (deduped across concurrent callers) and kept fresh by saveSettings.
+let settingsInflight = null
 export const ensureSettings = () => {
   const st = useStatus.getState()
-  return st.settings ? Promise.resolve(st.settings) : st.loadSettings()
+  if (st.settings) return Promise.resolve(st.settings)
+  if (!settingsInflight) {
+    settingsInflight = st.loadSettings().finally(() => { settingsInflight = null })
+  }
+  return settingsInflight
 }
 
 // Start the 30s status poll (every few seconds while Capital is syncing, lib/capital.js

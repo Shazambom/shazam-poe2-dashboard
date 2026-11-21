@@ -27,3 +27,18 @@ test('liveLabel reflects armed + engine state', () => {
     { text: 'Reconnecting…', title: 'closed 1006' })
   assert.deepEqual(liveLabel({ armed: true }, { state: 'error', message: 'HTTP 500' }), { text: 'Error', title: 'HTTP 500' })
 })
+
+test('pingTransition resets to fresh on NEW_PING from any state', async () => {
+  const { pingTransition, buttonView } = await import('../src/lib/pingMachine.js')
+  for (const s of ['fresh', 'stale', 'sending', 'pending', 'rateLimited', 'gone', 'expired']) {
+    const next = pingTransition(s, { type: 'NEW_PING' })
+    assert.equal(next, 'fresh', `from ${s}`)
+    assert.equal(buttonView(next).enabled, true)
+  }
+})
+
+test('LiveView keys the newest PingButton by pingId so fresh pings never inherit expired state', async () => {
+  const { readFileSync } = await import('node:fs')
+  const src = readFileSync(new URL('../src/components/LiveView.jsx', import.meta.url), 'utf8')
+  assert.match(src, /<PingButton\s+key=\{newest\.pingId\}\s+ping=\{newest\}\s*\/>/)
+})

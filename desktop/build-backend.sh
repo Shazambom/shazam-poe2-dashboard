@@ -27,10 +27,51 @@ pyinstaller --noconfirm --clean --onefile \
   --paths ../backend \
   --add-data "../backend/data${SEP}data" \
   --collect-all pyrate_limiter \
+  --hidden-import sidecar.run_sidecar \
+  --hidden-import sidecar.runner \
+  --hidden-import sidecar.analytics.discords \
+  --hidden-import sidecar.analytics.arc \
+  --exclude-module tkinter \
+  --exclude-module _tkinter \
+  --exclude-module unittest \
+  --exclude-module pydoc \
+  --exclude-module doctest \
+  --exclude-module test \
+  --exclude-module lib2to3 \
+  --exclude-module idlelib \
+  --exclude-module curses \
+  --exclude-module pip \
+  --exclude-module setuptools \
+  --exclude-module pkg_resources \
+  --exclude-module distutils \
+  --exclude-module xmlrpc \
+  --exclude-module ftplib \
+  --exclude-module imaplib \
+  --exclude-module smtplib \
+  --exclude-module poplib \
+  --exclude-module pdb \
+  --exclude-module bdb \
+  --exclude-module profile \
+  --exclude-module cProfile \
+  --exclude-module turtle \
+  --exclude-module numpy.testing \
+  --exclude-module numpy.tests \
+  --exclude-module numpy._core.tests \
+  --exclude-module numpy.f2py \
+  --exclude-module numpy.distutils \
+  --exclude-module numpy.doc \
+  --exclude-module uvloop \
+  --exclude-module httptools \
+  --exclude-module websockets \
+  --exclude-module watchfiles \
+  --exclude-module yaml \
+  --exclude-module dotenv \
   ../backend/run_desktop.py
 
 mkdir -p backend-bin
 cp "dist/poe2arb-backend$EXE" backend-bin/
 rm -rf "$WORK" dist poe2arb-backend.spec
+# Smoke-run the frozen sidecar dispatch path in the build environment.
+"backend-bin/poe2arb-backend$EXE" --sidecar --selftest
 echo "backend-bin/ ready:"
 ls -la backend-bin/

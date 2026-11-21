@@ -18,12 +18,15 @@ export const usePings = create((set, get) => ({
     const st = get()
     if (st.seen[p.listingId]) return                 // dedup
     const pings = [p, ...st.pings].slice(0, MAX)
-    const seen = { ...st.seen, [p.listingId]: true }
+    const keys = Object.keys(st.seen)
+    const seen = keys.length >= MAX * 2
+      ? Object.fromEntries([...keys.slice(-(MAX * 2 - 1)).map(k => [k, true]), [p.listingId, true]])
+      : { ...st.seen, [p.listingId]: true }
     set({ pings, seen, unseen: st.unseen + 1 })
   },
   markSeen: () => set({ unseen: 0 }),
   remove: (pingId) => set(s => ({ pings: s.pings.filter(p => p.pingId !== pingId) })),
-  clear: () => set({ pings: [], unseen: 0 }),
+  clear: () => set({ pings: [], seen: {}, unseen: 0 }),
   setEngine: (e) => set({ engine: { ...get().engine, ...e } }),
   setSearchState: ({ itemId, state, message }) =>
     set(s => ({ searchStates: { ...s.searchStates, [itemId]: { state, message, at: Date.now() } } })),

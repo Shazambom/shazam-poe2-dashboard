@@ -77,8 +77,10 @@ async function _connect(itemId) {
   ws.on('unexpected-response', (_req, res) => {
     const code = res.statusCode
     console.log(`[trade] WS unexpected-response item=${itemId} HTTP ${code}`)
-    if (code === 401 || code === 403) _sink('trade:search-state', { itemId, state: 'auth', message: 'Reconnect your PoE session' })
-    else _sink('trade:search-state', { itemId, state: 'error', message: `HTTP ${code}` })
+    if (code === 401 || code === 403) {
+      rec.stopped = true
+      _sink('trade:search-state', { itemId, state: 'auth', message: 'Reconnect your PoE session' })
+    } else _sink('trade:search-state', { itemId, state: 'error', message: `HTTP ${code}` })
     try { ws.terminate() } catch {}
   })
   ws.on('close', (code) => {

@@ -2,10 +2,13 @@
 // on GGG's CDN (e.g. "/gen/image/…"). We reference those at runtime (a hotlink to
 // GGG's own server) — nothing is bundled or re-hosted. Lets any view render a
 // currency as its icon with the name on hover, keyed by trade id OR by name.
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { api } from './api.js'
 
 export const CDN = 'https://web.poecdn.com'
+
+const EMPTY_LIST = []
+const EMPTY_MAP = new Map()
 
 let _index = null                 // { byId: Map<id,rec>, byName: Map<lcname,rec>, raw, list }
 let _promise = null
@@ -47,8 +50,8 @@ function retrySoon() {
 }
 
 // Image loads that fail (CDN hiccup, offline at launch) are retried too — ONE shared timer with
-// backoff (5 s, tripling to 5 min), not one per icon: it bumps an epoch, every <Cur> showing a text
-// fallback remounts its <img>, and the first image that loads resets the backoff.
+// backoff (5 s, tripling to 5 min), not one per icon: it bumps an epoch, and only broken <Cur>
+// instances subscribe and remount their <img>; the first image that loads resets the backoff.
 let _epoch = 0, _imgDelay = 5000, _imgTimer = null
 const epochSubs = new Set()
 export function iconFailed() {
@@ -61,9 +64,14 @@ export function iconFailed() {
   }, _imgDelay)
 }
 export function iconLoaded() { _imgDelay = 5000 }
-export function useIconEpoch() {
+export function useIconEpoch(active = true) {
   const [e, setE] = useState(_epoch)
-  useEffect(() => { epochSubs.add(setE); setE(_epoch); return () => epochSubs.delete(setE) }, [])
+  useEffect(() => {
+    if (!active) return
+    epochSubs.add(setE)
+    setE(_epoch)
+    return () => epochSubs.delete(setE)
+  }, [active])
   return e
 }
 
@@ -72,12 +80,15 @@ export function useIconEpoch() {
 // copy reads this instead.
 export function useCurrencies() {
   const idx = useIcons()
-  return {
-    raw: idx?.raw ?? null,
-    list: idx?.list ?? [],
-    byId: idx?.byId ?? new Map(),
-    nameOf: (id) => idx?.byId.get(id)?.name || id,
-  }
+  return useMemo(() => {
+    const byId = idx?.byId ?? EMPTY_MAP
+    return {
+      raw: idx?.raw ?? null,
+      list: idx?.list ?? EMPTY_LIST,
+      byId,
+      nameOf: (id) => byId.get(id)?.name || id,
+    }
+  }, [idx])
 }
 
 // Resolve {id?, name?} -> { name, icon } or null. id wins, then name (case-insensitive).

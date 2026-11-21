@@ -133,15 +133,17 @@ def realizable(g: "arbitrage.Graph", ref_value: dict[str, float], currency: str,
     rv = ref_value
     ex_in_ref = ref_value.get(settings.ARBITRAGE_UNIT) or 1.0   # cash-out's volume floor is in exalted
     best = best_value = best_key = None
+    allowed_mids = frozenset(cash) | {ref}
     for target in dict.fromkeys((*sorted(cash), ref)):
         if target == currency:
             continue
         res = arbitrage._best_conversions(g, rv, currency, target, float(qty), max_steps=CASHOUT_MAX_STEPS,
                                           max_gain_pct=CROSS_TOLERANCE_PCT,
-                                          gold_value_per_1k=gold_value_per_1k)
+                                          gold_value_per_1k=gold_value_per_1k,
+                                          allowed_mids=allowed_mids)
         worth = 1.0 if target == ref else (ref_value.get(target) or 0.0)
         for cand in ([res["best"]] if res["best"] else []) + res["alternatives"]:
-            if any(n not in cash and n != ref for n in cand["path"][1:-1]):
+            if any(n not in allowed_mids for n in cand["path"][1:-1]):
                 continue                                   # a detour through a non-cash market is arbitrage
             gold_ref = cand["out"] * rv.get(target, 0.0) - cand["net_ref"]
             # Ranked on what it really delivers. Clamping to paper here first made every candidate

@@ -102,19 +102,32 @@ def watch_parent(pid: Optional[int], *, interval: float = 2.0, misses: int = 2,
 
 def watch_stdin_eof(on_dead: Optional[Callable] = None) -> Optional[threading.Thread]:
     """Block on stdin in a daemon thread; call on_dead at EOF. This is how a child learns its
-    parent closed the pipe (i.e. died), portably. No-op if stdin is unavailable."""
+    parent closed the pipe (i.e. died), portably. No-op if stdin is unavailable.
+
+    Uses raw os.read(fd, 1) when stdin has a real OS descriptor so the daemon thread never holds
+    CPython's BufferedReader lock on sys.stdin during clean interpreter shutdown (which otherwise
+    triggers SIGABRT in _enter_buffered_busy on idle exit)."""
+    fd: Optional[int] = None
+    buf = None
     try:
-        buf = sys.stdin.buffer
-    except (AttributeError, ValueError):
-        return None
-    if buf is None:
-        return None
+        fd = sys.stdin.fileno()
+    except Exception:
+        try:
+            buf = sys.stdin.buffer
+        except (AttributeError, ValueError):
+            return None
+        if buf is None:
+            return None
     dead = on_dead or _hard_exit
 
     def _loop() -> None:
         try:
-            while buf.read(1):     # returns b'' only on EOF (parent gone); blocks otherwise
-                pass
+            if fd is not None:
+                while os.read(fd, 1):   # returns b'' only on EOF (parent gone); blocks otherwise
+                    pass
+            else:
+                while buf.read(1):
+                    pass
         except Exception:
             pass
         dead("stdin-eof")

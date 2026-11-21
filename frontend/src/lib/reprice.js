@@ -161,6 +161,10 @@ export function remember(map, page, now = Date.now(), latest = null, { sampled =
   for (const [c, m] of Object.entries(minsOf(page, page.prices || latest))) if (mins[c] == null || m < mins[c]) mins[c] = m
   const wasSampled = fresh && prevEntry.sampled
   map.set(key, { mins, at: wasSampled && !sampled ? prevEntry.at : now, sampled: sampled || !!wasSampled })
+  if (map.size > 200) {
+    for (const [k, v] of map) if (now - v.at > SIBLING_TTL_MS) map.delete(k)
+    while (map.size > 200) map.delete(map.keys().next().value)
+  }
 }
 
 // A search whose deeper listings were fetched in the last 5 minutes: no new fetch (reopen, ↻, run again).

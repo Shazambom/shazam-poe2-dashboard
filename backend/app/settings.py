@@ -186,15 +186,23 @@ def _youngest_now() -> str:
     return max(current, key=lambda lg: first.get(lg) or "9999-12-31")
 
 
+_settings_cache: dict = {}
+_SETTINGS_TTL = 30.0
+
+
 def forget_youngest() -> None:
     global _youngest_gen
     _youngest_gen += 1
     cache.clear(_youngest)
+    cache.clear(_settings_cache)
 
 
 def get_settings() -> dict:
     """Stored settings over DEFAULTS. Read-only (one-time transforms are user migrations)."""
-    return _merged(db.kv_get("settings", {}))
+    ver = (str(db.USER_DB_PATH), db.tx_gen(), _youngest_gen)
+    cached = cache.memo(_settings_cache, "s", _SETTINGS_TTL,
+                        lambda: _merged(db.kv_get("settings", {})), version=ver, max_entries=2)
+    return copy.deepcopy(cached)
 
 
 def save_settings(patch: dict) -> dict:
@@ -216,6 +224,7 @@ def save_settings(patch: dict) -> dict:
                 current.pop("league", None)   # the default is read, never stored: the next league reaches everyone
         return current
     saved = db.kv_update("settings", apply, {})
+    cache.clear(_settings_cache)
     effective = _merged(saved)
     _log_changes(before, effective)
     return effective

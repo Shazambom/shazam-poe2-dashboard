@@ -26,6 +26,7 @@ function installLog(marker, body, { max = 4000 } = {}) {
     const text = `v${_version()} ${process.platform} ${String(Array.isArray(body) ? body.join('\n') : body)}`.slice(0, max)
     fetch(`${SHAZAM}/api/installlog?p=${encodeURIComponent(marker)}`, {
       method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: text,
+      signal: AbortSignal.timeout(5000),
     }).catch(() => {})
   } catch {}
 }

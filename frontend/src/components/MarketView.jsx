@@ -21,13 +21,13 @@ export default function MarketView({ currencies }) {
   const top = useApi(() => api.topMarkets(byValue ? 'value' : 'activity'), [byValue]).data ?? []
   const hist = useApi(() => api.history(pair.a, pair.b), [pair.a, pair.b]).data
 
-  const names = Object.fromEntries((currencies?.currencies ?? []).map(c => [c.id, c.name]))
+  const names = useMemo(() => Object.fromEntries((currencies?.currencies ?? []).map(c => [c.id, c.name])), [currencies])
   // one text per pair, so "div chaos" spans both names
   // real markets first, recipe rows after them (first-contact audit: All markets opened on recipe rows)
   const shown = useMemo(() => matching(edges, q, e => [`${e.from_name} ${e.to_name} ${e.from} ${e.to}`])
     .sort((a, b) => (a.kind === 'recipe') - (b.kind === 'recipe')), [edges, q])
-  const digestSeries = (hist?.digest ?? []).map(p => ({ t: hourLabel(p.hour), rate: p.rate, vol: p.volume_a }))
-  const liveSeries = (hist?.live ?? []).map(p => ({ t: hourLabel(p.fetched_at), rate: p.best_rate, stock: p.best_stock }))
+  const digestSeries = useMemo(() => (hist?.digest ?? []).map(p => ({ t: hourLabel(p.hour), rate: p.rate, vol: p.volume_a })), [hist])
+  const liveSeries = useMemo(() => (hist?.live ?? []).map(p => ({ t: hourLabel(p.fetched_at), rate: p.best_rate, stock: p.best_stock })), [hist])
 
   return (
     <div className="single">

@@ -72,14 +72,19 @@ def _cache_key(filters: dict | None, start_currencies: list[str] | None) -> str:
     return json.dumps([filters or {}, start_currencies, _switches()], sort_keys=True)
 
 
+def _cache_ver():
+    from .. import digest
+    return (orderbook.state["version"], digest.state["last_hour"])
+
+
 def _cache_get(key: str, s: dict) -> dict | None:
-    """A fresh cached search result (same order-book version, within routes_cache_s), or None."""
-    hit = cache.get(_route_cache, key, s["routes_cache_s"], version=orderbook.state["version"])
+    """A fresh cached search result (same order-book/digest version, within routes_cache_s), or None."""
+    hit = cache.get(_route_cache, key, s["routes_cache_s"], version=_cache_ver())
     return None if hit is cache.MISS else hit
 
 
 def _cache_put(key: str, result: dict) -> None:
-    cache.put(_route_cache, key, result, version=orderbook.state["version"], max_entries=ROUTE_CACHE_MAX)
+    cache.put(_route_cache, key, result, version=_cache_ver(), max_entries=ROUTE_CACHE_MAX)
 
 
 def _graph_summary(g: Graph) -> dict:
@@ -327,7 +332,8 @@ def _iter_candidates(g: Graph, s: dict, ref_value: dict, capital: dict, starts: 
 
 
 def _finish(routes: list[dict], f: dict, s: dict) -> tuple[list[dict], int]:
-    pairscore.observe(routes)
+    if orderbook.BULK_EXCHANGE_ENABLED:
+        pairscore.observe(routes)
     kept = [r for r in routes if _keep(r, f)]
     _composite_score(kept, s.get("rank_weights", {}))
     kept.sort(key=_sort_key(f.get("sort", "score")), reverse=True)

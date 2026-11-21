@@ -15,7 +15,7 @@ function installCloudflareCookieFix() {
   if (_cfHookInstalled) return
   _cfHookInstalled = true
   try {
-    session.defaultSession.webRequest.onHeadersReceived((details, cb) => {
+    session.defaultSession.webRequest.onHeadersReceived({ urls: ['https://*.pathofexile.com/*'] }, (details, cb) => {
       const h = details.responseHeaders || {}
       const key = Object.keys(h).find(k => k.toLowerCase() === 'set-cookie')
       if (key && Array.isArray(h[key])) h[key] = h[key].map(c => c.replace(/;\s*Partitioned/ig, ''))

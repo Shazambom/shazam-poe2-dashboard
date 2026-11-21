@@ -18,11 +18,22 @@ from .config import DATA_DIR
 KEY_PATH = DATA_DIR / "secret.key"
 
 
+_fernet_cache: tuple[str, int, Fernet] | None = None
+
+
 def _fernet() -> Fernet:
+    global _fernet_cache
     if not KEY_PATH.exists():
         KEY_PATH.write_bytes(Fernet.generate_key())
         os.chmod(KEY_PATH, 0o600)
-    return Fernet(KEY_PATH.read_bytes())
+    st = KEY_PATH.stat()
+    key_str = str(KEY_PATH)
+    cached = _fernet_cache
+    if cached and cached[0] == key_str and cached[1] == st.st_mtime_ns:
+        return cached[2]
+    f = Fernet(KEY_PATH.read_bytes())
+    _fernet_cache = (key_str, st.st_mtime_ns, f)
+    return f
 
 
 def store(name: str, value: Any) -> None:

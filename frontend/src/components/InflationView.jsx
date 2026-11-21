@@ -207,7 +207,7 @@ function trimPartialDay(leagues) {
   }).filter(l => l.points.length)
 }
 
-function MarketCap({ league }) {
+const MarketCap = React.memo(function MarketCap({ league }) {
   const { data, err, busy } = useApi(() => api.inflationMarketcap(), [])
 
   const leagues = useMemo(() => trimPartialDay(data?.leagues ?? []), [data])
@@ -241,12 +241,12 @@ function MarketCap({ league }) {
       </div>
     </div>
   )
-}
+})
 
 // Cross-league inflation: Divine-in-Exalted per league, each rebased to its own
 // day-0 = 100 and plotted by day-of-league, so the current league's inflation can
 // be read against past leagues at the same age. Data via poe2scout history.
-function CrossLeague({ league }) {
+const CrossLeague = React.memo(function CrossLeague({ league }) {
   const [item, setItem] = useState(291)   // Divine (densest, all leagues) by default
   const { data, err, busy } = useApi(() => api.inflationCross(item), [item])
   const items = data?.items ?? []
@@ -273,4 +273,4 @@ function CrossLeague({ league }) {
       </div>
     </div>
   )
-}
+})

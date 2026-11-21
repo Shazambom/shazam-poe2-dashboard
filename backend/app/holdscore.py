@@ -77,8 +77,9 @@ ARROW_DASH_SHARE = 0.25  # the weakest quarter of the day's forecasts shows a da
 ARROW_HORIZONS = ("3d", "7d")  # 1d red arrows are a coin flip (fell 46% vs 48% chance), so the 1d
                                # column keeps its place but shows only dashes
 
-_cache: dict = {}            # leaderboard results
+_cache: dict = {}            # leaderboard results (always full universe; filtered by category on read)
 _ctx_cache: dict = {}        # build_context per (league setting, numeraire)
+_raw_cache: dict = {}        # raw (meta, by_league) from league_daily so multiple numeraires share one DB scan
 _TTL = 600
 _CTX_TTL = 300
 
@@ -86,6 +87,8 @@ _CTX_TTL = 300
 def invalidate() -> None:
     cache.clear(_cache)
     cache.clear(_ctx_cache)
+    cache.clear(_raw_cache)
+    _record_cache.clear()
 
 
 def _build_league(rows, num_id) -> tuple[dict[int, dict[int, tuple[float, float]]], str | None]:
@@ -97,13 +100,14 @@ def _build_league(rows, num_id) -> tuple[dict[int, dict[int, tuple[float, float]
     if not days:
         return {}, None
     day0 = days[0]
+    age_of = {d: _age(d, day0) for d in days}
     per: dict[int, dict[int, tuple[float, float]]] = {}
     for iid, day, close, vol in rows:
         n = num.get(day)
         if n and close:
             # (price in numeraire, daily traded value in exalted). Value is numeraire-
             # independent so the liquidity floor holds across the vs-Divine/Mirror/Lock toggles.
-            per.setdefault(iid, {})[_age(day, day0)] = (close / n, (vol or 0) * close)
+            per.setdefault(iid, {})[age_of[day]] = (close / n, (vol or 0) * close)
     return per, day0
 
 
@@ -121,11 +125,28 @@ def _smooth(series: dict[int, tuple[float, float]], target: int) -> float:
     """Median price over the target day and its immediate neighbours — robust to the
     single-day outliers that thin poe2scout daily closes are riddled with (a lone spike
     otherwise turns a flat asset into a fake +3000% mover)."""
-    vals = [series[a][0] for a in (target - 1, target, target + 1) if a in series]
-    if not vals:
-        near = min(series, key=lambda a: abs(a - target))
-        vals = [series[near][0]]
-    return statistics.median(vals)
+    v0 = series.get(target - 1)
+    v1 = series.get(target)
+    v2 = series.get(target + 1)
+    if v0 is not None and v1 is not None and v2 is not None:
+        a, b, c = v0[0], v1[0], v2[0]
+        if a <= b:
+            return b if b <= c else (a if c <= a else c)
+        return a if a <= c else (b if c <= b else c)
+    if v1 is not None:
+        if v0 is not None:
+            return (v0[0] + v1[0]) * 0.5
+        if v2 is not None:
+            return (v1[0] + v2[0]) * 0.5
+        return v1[0]
+    if v0 is not None and v2 is not None:
+        return (v0[0] + v2[0]) * 0.5
+    if v0 is not None:
+        return v0[0]
+    if v2 is not None:
+        return v2[0]
+    near = min(series, key=lambda a: abs(a - target))
+    return series[near][0]
 
 
 def _metrics(series: dict[int, tuple[float, float]], hz_days: int):
@@ -274,6 +295,8 @@ def _record(iid, past) -> float | None:
         ps = {a: v for a, v in full.items() if a <= RECORD_TO + 1}
         key = (lg, iid, len(ps), max(ps, default=-1), ps.get(max(ps, default=-1)))
         if key not in _record_cache:
+            if len(_record_cache) >= 4096:
+                _record_cache.clear()
             sm = {a: _smooth(ps, a) for a in ps}
             wins = [(sm[a], sm[a + RECORD_HOLD]) for a in sm
                     if a >= DISCOVERY_DAY and a + RECORD_HOLD <= RECORD_TO and a + RECORD_HOLD in sm and sm[a] > 0]
@@ -573,6 +596,25 @@ def arrows(preds) -> list:
     return out
 
 
+def _raw_daily():
+    """Shared raw league_daily read (meta, by_league) cached for _CTX_TTL so
+    multiple numeraires (Divine/Chaos/Mirror), regime, and leaguearc share one SQLite scan."""
+    def _load():
+        with db.q() as c:
+            meta = marketseries.read_meta(c)
+            rows = marketseries.read_rows(c)
+        by_league: dict[str, list] = {}
+        for r in rows:
+            by_league.setdefault(r[0], []).append((r[1], r[2], r[3], r[4]))
+        return meta, by_league
+    return cache.memo(_raw_cache, str(db.MARKET_DB_PATH), _CTX_TTL, _load, max_entries=1)
+
+
+def read_meta() -> dict:
+    """Cached item_meta {item_id: (name, category)} without building a full numeraire context."""
+    return _raw_daily()[0]
+
+
 def build_context(num_id: int):
     """Shared league-building for Hold + the league-arc: read all league_daily (via the shared
     marketseries reader), price everything in `num_id`, resolve the current league the same way
@@ -585,14 +627,9 @@ def build_context(num_id: int):
 
 
 def _build_context(preferred: str, num_id: int):
-    with db.q() as c:
-        meta = marketseries.read_meta(c)
-        rows = marketseries.read_rows(c)
-        current = movers_current_leagues()
-    cur_name = marketseries.pick_league(rows, preferred, current)
-    by_league: dict[str, list] = {}
-    for r in rows:
-        by_league.setdefault(r[0], []).append((r[1], r[2], r[3], r[4]))
+    meta, by_league = _raw_daily()
+    current = movers_current_leagues()
+    cur_name = marketseries.pick_league([(lg,) for lg in by_league], preferred, current)
     built, day0s = {}, {}
     for lg, rws in by_league.items():
         built[lg], day0s[lg] = _build_league(rws, num_id)
@@ -610,8 +647,8 @@ def regime_of(league: str | None):
         return None
 
     def build():
-        with db.q() as c:
-            per = leagueregime.from_rows(marketseries.read_rows(c, league))
+        _meta, by_league = _raw_daily()
+        per = leagueregime.from_rows((league, *r) for r in by_league.get(league, ()))
         return lambda t: leagueregime.regime(per, t)
     return cache.memo(_ctx_cache, ("regime", league), _CTX_TTL, build, max_entries=8)
 
@@ -640,10 +677,16 @@ def leaderboard(horizon: str = "3d", category: str = "all", numeraire: str = "di
     num_id, num_name = NUMERAIRES[numeraire]
     # The dial and the league are part of the cache key: without them the slider would appear dead,
     # and a league switch would be served the old league's board, for the TTL (bug report FY0M4R).
+    # Always cache the full ("all") universe and slice by category on read so category tab switches
+    # are O(N) memory filters instead of full rebuilds.
     s = get_settings()
     k = clamp_k(s.get("hold_caution") if k is None else k)
-    ranked = cache.memo(_cache, f"{s['league']}|{horizon}|{category}|{numeraire}|{k:g}", _TTL,
-                        lambda: _leaderboard(horizon, category, numeraire, num_id, num_name, k))
+    ranked = cache.memo(_cache, f"{s['league']}|{horizon}|{numeraire}|{k:g}", _TTL,
+                        lambda: _leaderboard(horizon, "all", numeraire, num_id, num_name, k),
+                        max_entries=16)
+    if category != "all" and isinstance(ranked, dict) and ranked.get("assets"):
+        filtered = [a for a in ranked["assets"] if a.get("category") == category]
+        ranked = {**ranked, "count": len(filtered), "assets": filtered}
     return attach_prices(ranked)
 
 

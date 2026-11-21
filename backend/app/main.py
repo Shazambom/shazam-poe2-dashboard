@@ -49,25 +49,29 @@ async def lifespan(app: FastAPI):
         watchdog.guard(parent_pid=int(_parent), stdin_eof=False)
     registry.load_static_cache()
     sidecar_supervisor.start()          # spawn + supervise the heavy-analytics sidecar (no-op if absent)
-    tasks = [asyncio.create_task(registry.keep_static_fresh()), asyncio.create_task(digest.run_forever()), asyncio.create_task(_gold_fee_loop()),
-             asyncio.create_task(orderbook.worker()), asyncio.create_task(orderbook.sweeper()),
+    tasks = [asyncio.create_task(registry.keep_static_fresh()), asyncio.create_task(digest.run_forever()),
+             asyncio.create_task(_gold_fee_loop()),
              asyncio.create_task(_league_history_loop()), asyncio.create_task(_analytics_loop())]
+    if orderbook.BULK_EXCHANGE_ENABLED:
+        tasks.extend([asyncio.create_task(orderbook.worker()), asyncio.create_task(orderbook.sweeper())])
     if seed_poll_enabled():
         tasks.append(asyncio.create_task(_seed_poll_loop()))
     if not session.get_cookie():
         log.info("no trade session yet: connect one in Settings to enable the live order book")
-    try:   # beta telemetry: what the seed left us for the Mods tab
-        from . import devtelemetry
-        snap, n_pools = db._read_snapshot_version(db.MARKET_DB_PATH), len(modpool.pools())
-        devtelemetry.tlog("mods", f"snapshot v{snap} pools={n_pools} currencies={len(modpool.currencies())} meta={db.kv_get('mods_meta', {}).get('pools')}")
-        if db.MARKET_SEED_PATH and n_pools == 0:
-            devtelemetry.t0("mods-empty", f"seed bundled, snapshot v{snap}, pools=0")
-    except Exception as exc:
-        log.warning("mods telemetry failed: %s", exc)
+    if devtelemetry.enabled():
+        try:   # beta telemetry: what the seed left us for the Mods tab
+            snap, n_pools = db._read_snapshot_version(db.MARKET_DB_PATH), len(modpool.pools())
+            devtelemetry.tlog("mods", f"snapshot v{snap} pools={n_pools} currencies={len(modpool.currencies())} meta={db.kv_get('mods_meta', {}).get('pools')}")
+            if db.MARKET_SEED_PATH and n_pools == 0:
+                devtelemetry.t0("mods-empty", f"seed bundled, snapshot v{snap}, pools=0")
+        except Exception as exc:
+            log.warning("mods telemetry failed: %s", exc)
     yield
     for t in tasks:
         t.cancel()
+    await asyncio.gather(*tasks, return_exceptions=True)
     sidecar_supervisor.stop()
+    await gateway.aclose()
 
 
 async def _gold_fee_loop():
@@ -142,6 +146,7 @@ async def _analytics_loop():
                         analytics.enqueue(c, "discords", {"league": league})
                         analytics.enqueue(c, "arc", {"league": league})
                 await run_in_threadpool(_enqueue)
+                sidecar_supervisor.wake()
         except Exception as exc:
             log.warning("analytics enqueue error: %s", exc)
         await asyncio.sleep(7200)       # every 2h (daily data — no need to churn)
@@ -172,7 +177,13 @@ async def loopback_only(request: Request, call_next):
     return await call_next(request)
 
 
-# ------------------------------------------------------------------ status
+# ------------------------------------------------------------------ health & status
+@app.get("/api/health")
+def health():
+    """Lightweight readiness probe for Electron startup (touches neither SQLite nor the exchange graph)."""
+    return {"ok": True}
+
+
 DIGEST_STALE_S = 2 * 3600      # hourly digest older than this → "stale" (also the backfilling bar)
 ORDERBOOK_STALE_S = 3600       # no live book fetched for an hour → "stale"
 
@@ -728,9 +739,11 @@ async def board_refresh(wait_s: float = 30, window_h: int = 24):
     if not session.get_cookie():
         raise HTTPException(400, "no trade session connected")
     s = get_settings()
-    futs = orderbook.request_pairs(arbitrage.board_pairs(), priority=1, max_age_s=s["live_min_age_s"])
+    pairs = await run_in_threadpool(arbitrage.board_pairs)
+    futs = orderbook.request_pairs(pairs, priority=1, max_age_s=s["live_min_age_s"])
     waited = await orderbook.wait_for(futs, wait_s)
-    return {**arbitrage.board(window_h), "refresh": {**waited, "queue": orderbook.state["queue"]}}
+    board_data = await run_in_threadpool(arbitrage.board, window_h)
+    return {**board_data, "refresh": {**waited, "queue": orderbook.state["queue"]}}
 
 
 @app.get("/api/market/edges")
@@ -1005,11 +1018,11 @@ async def routes_refresh_top(body: RefreshTopBody):
     q = body.query()
     f, starts = q.to_filters(), q.starts()
     n = body.n if body.n is not None else s["live_top_n"]
-    before = arbitrage.find_routes(f, starts)
+    before = await run_in_threadpool(arbitrage.find_routes, f, starts)
     pairs = [tuple(p) for r in before["routes"][:max(0, n)] for p in r["pairs"]]
     futs = orderbook.request_pairs(pairs, priority=1, max_age_s=s["live_min_age_s"])
     waited = await orderbook.wait_for(futs, body.wait_s)
-    after = arbitrage.find_routes(f, starts, use_cache=False) if waited["done"] else before
+    after = await run_in_threadpool(arbitrage.find_routes, f, starts, False) if waited["done"] else before
     return {**after, "refresh": {**waited, "pairs_considered": len(set(pairs)), "top_n": n,
                                  "queue": orderbook.state["queue"], "in_flight": orderbook.state["in_flight"]}}
 
@@ -1035,10 +1048,12 @@ async def routes_refresh_one(body: RefreshRouteBody):
     waited = await orderbook.wait_for(futs, body.wait_s)
     q = body.query()
     f, starts = q.to_filters(), q.starts()
-    res = arbitrage.find_routes(f, starts, use_cache=False)
+    res = await run_in_threadpool(arbitrage.find_routes, f, starts, False)
     route = next((r for r in res["routes"] if r["id"] == body.id), None)
     if route is None:  # it may no longer pass the filters; recompute unfiltered so the user sees why
-        loose = arbitrage.find_routes({"min_margin_pct": -1e9, "min_margin_ref": -1e9, "limit": 100000}, starts, use_cache=False)
+        loose = await run_in_threadpool(
+            arbitrage.find_routes, {"min_margin_pct": -1e9, "min_margin_ref": -1e9, "limit": 100000}, starts, False
+        )
         route = next((r for r in loose["routes"] if r["id"] == body.id), None)
     return {"route": route, "routes": res["routes"], "refresh": {**waited, "pairs": len(pairs),
             "queue": orderbook.state["queue"]}, "still_passes": route is not None and any(r["id"] == body.id for r in res["routes"])}

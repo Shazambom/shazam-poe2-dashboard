@@ -156,7 +156,8 @@ def traded_bounds(rows) -> dict[tuple[str, str], tuple[float, float]]:
 
 def directed_rates(a: str, b: str, r, age: float, bounds: tuple[float, float] | None = None,
                    wide_spread: float | None = None, rate: float | None = None,
-                   volume: tuple[float, float] | None = None) -> dict[tuple[str, str], dict]:
+                   volume: tuple[float, float] | None = None,
+                   _settings: dict | None = None) -> dict[tuple[str, str], dict]:
     """The directed edges one traded hour of the a<->b market supports. An edge a->b hands you b,
     so someone must have been STANDING there offering b: the receiving side's standing stock
     (`hi_stock_*`) must be > 0. No sellers → no edge in that direction — traded volume is never a
@@ -177,7 +178,7 @@ def directed_rates(a: str, b: str, r, age: float, bounds: tuple[float, float] | 
     from the ONE number rather than from two divisions, so their product stays within a single
     rounding step of 1 — a market that traded against itself would be a free two-hop loop."""
     lo, hi = bounds or (0.0, 0.0)
-    s = settings.get_settings()
+    s = settings.get_settings() if _settings is None else _settings
     wide = settings.wide_spread(s) if wide_spread is None else wide_spread
     inactive = bool(lo > 0 and hi > 0 and wide > 0 and hi / lo >= wide)
     px = rate if rate else (r["vol_a"] / r["vol_b"])                 # a per b
@@ -213,10 +214,12 @@ def _deep(r, a_per_b: float, volume: tuple[float, float], min_hours: float, min_
 
 def latest_rates(league: str, max_age_hours: int = 6) -> dict[tuple[str, str], dict]:
     """Directed rate map {(from, to): {...}} from the most recent hour(s) with data."""
-    since = _hour(time.time()) - max_age_hours * 3600
+    now = time.time()
+    since = _hour(now) - max_age_hours * 3600
     with db.q() as c:
         rows = c.execute(
-            """SELECT * FROM digest_markets WHERE league=? AND hour>=? ORDER BY hour DESC""",
+            """SELECT hour, cur_a, cur_b, vol_a, vol_b, hi_stock_a, hi_stock_b
+               FROM digest_markets WHERE league=? AND hour>=? ORDER BY hour DESC""",
             (league, since),
         ).fetchall()
     bounds = traded_bounds(rows)            # how far the executed hours ran, per market
@@ -224,7 +227,8 @@ def latest_rates(league: str, max_age_hours: int = 6) -> dict[tuple[str, str], d
     # would otherwise leave the older markets to their newest hour alone.
     priced = window_rates(league, max(RATE_WINDOW_H, max_age_hours))
     day = pair_volume(league, 24)           # each side's executed units per hour: the depth yardstick
-    wide = settings.wide_spread(settings.get_settings())
+    s = settings.get_settings()
+    wide = settings.wide_spread(s)
     out: dict[tuple[str, str], dict] = {}
     for r in rows:
         a = registry.resolve_meta(r["cur_a"])
@@ -233,10 +237,11 @@ def latest_rates(league: str, max_age_hours: int = 6) -> dict[tuple[str, str], d
             continue
         if (a, b) in out or (b, a) in out:  # newest hour already recorded
             continue
-        out.update(directed_rates(a, b, r, time.time() - (r["hour"] + 3600),
+        out.update(directed_rates(a, b, r, now - (r["hour"] + 3600),
                                   bounds.get((r["cur_a"], r["cur_b"])), wide,
                                   priced.get((r["cur_a"], r["cur_b"])),
-                                  volume=(day.get((a, b), 0.0), day.get((b, a), 0.0))))
+                                  volume=(day.get((a, b), 0.0), day.get((b, a), 0.0)),
+                                  _settings=s))
     return out
 
 
@@ -312,7 +317,7 @@ def pair_history(league: str, a: str, b: str, hours: int = 168) -> list[dict]:
     since = _hour(time.time()) - hours * 3600
     with db.q() as c:
         rows = c.execute(
-            ("""SELECT * FROM digest_markets WHERE league=? AND hour>=?
+            ("""SELECT hour, cur_a, cur_b, vol_a, vol_b FROM digest_markets WHERE league=? AND hour>=?
                 AND ((cur_a IN ({a}) AND cur_b IN ({b})) OR (cur_a IN ({b}) AND cur_b IN ({a})))"""
              + TRADED_ONLY + " ORDER BY hour").format(
                 a=",".join("?" * len(metas_a)), b=",".join("?" * len(metas_b))),

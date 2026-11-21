@@ -133,8 +133,7 @@ def _counterpart_names(item_name: str) -> list[str]:
     from . import arbitrage                    # lazy: arbitrage pulls the whole graph stack
     from .arbitrage.board import counterparts_by_volume
     from .currencies import registry
-    want = item_name.strip().lower()
-    slug = next((cid for cid in registry.by_id if registry.name(cid).lower() == want), None)
+    slug = registry.lookup_name(item_name.strip().lower())
     if slug is None:
         return []
     g = arbitrage.cached_graph()
@@ -147,20 +146,26 @@ def arc_for(item, numeraire: str = "divine") -> dict:
     # The arc is priced in whatever the CARD is shown in (the volume rule picked it), not always
     # Divine: an omen's arc against Divine answered a question nobody asked on a card reading in
     # Chaos. Any currency with daily history can be the numeraire; anchors keep their short slugs.
+    meta0 = holdscore.read_meta()
     num_id, num_name = holdscore.NUMERAIRES.get(numeraire, (None, None))
     if num_id is None:
-        _cur, _c, _p, meta0 = holdscore.build_context(holdscore.NUMERAIRES["divine"][0])
         num_id, num_name = _resolve_item(meta0, numeraire)
         if num_id is None:
             numeraire = "divine"
             num_id, num_name = holdscore.NUMERAIRES["divine"]
-    cur_name, cur, past, meta = holdscore.build_context(num_id)
-    item_id, item_name = _resolve_item(meta, item)
+    item_id, item_name = _resolve_item(meta0, item)
     if item_id is not None and item_id == num_id:
-        num_id, num_name = pick_numeraire(item_id, num_id, num_name, _counterpart_names(item_name), meta)
-        if num_id != item_id:
-            numeraire = num_name
-            cur_name, cur, past, meta = holdscore.build_context(num_id)
+        picked_id, picked_name = pick_numeraire(item_id, num_id, num_name, _counterpart_names(item_name), meta0)
+        if picked_id != item_id:
+            num_id, num_name, numeraire = picked_id, picked_name, picked_name
+    cur_name, cur, past, meta = holdscore.build_context(num_id)
+    if item_id is None and meta is not meta0:
+        item_id, item_name = _resolve_item(meta, item)
+        if item_id is not None and item_id == num_id:
+            num_id, num_name = pick_numeraire(item_id, num_id, num_name, _counterpart_names(item_name), meta)
+            if num_id != item_id:
+                numeraire = num_name
+                cur_name, cur, past, meta = holdscore.build_context(num_id)
 
     weights, resembles = None, None
     with db.q() as c:

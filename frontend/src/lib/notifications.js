@@ -24,7 +24,8 @@ export function notifyPrefs() {
 // OS-level notification. On desktop it is delivered by the Electron MAIN process (shows as
 // "Arbiter" in the system's notification center; a click raises the window and echoes the tag
 // back so the right onClick runs). On the web it is the browser's Notification API. Never throws.
-const clicks = new Map()   // tag -> onClick, for desktop click echoes
+const clicks = new Map()   // tag -> onClick, for desktop click echoes (bounded)
+const MAX_CLICKS = 50
 let clickSub = false
 export function osNotify(title, body, { tag, onClick } = {}) {
   try {
@@ -32,7 +33,11 @@ export function osNotify(title, body, { tag, onClick } = {}) {
     const bridge = window.poe2desktop
     if (bridge?.notify) {
       const t = tag || `n${Date.now()}`
-      if (onClick) clicks.set(t, onClick)
+      if (onClick) {
+        if (clicks.has(t)) clicks.delete(t)
+        clicks.set(t, onClick)
+        while (clicks.size > MAX_CLICKS) clicks.delete(clicks.keys().next().value)
+      }
       if (!clickSub && bridge.onNotifyClick) { clickSub = true; bridge.onNotifyClick((k) => { const fn = clicks.get(k); clicks.delete(k); fn?.() }) }
       bridge.notify({ title, body, tag: t })
       return true

@@ -35,12 +35,18 @@ def _selftest() -> int:
     return 0
 
 
-if __name__ == "__main__":
-    if "--selftest" in sys.argv:
-        raise SystemExit(_selftest())
+def main(argv: list[str] | None = None) -> int:
+    args = sys.argv[1:] if argv is None else argv
+    if "--selftest" in args:
+        return _selftest()
     try:
         runner.main()
+        return 0
     except BaseException as exc:            # a startup crash (e.g. DB open) must not vanish silently
         import traceback as _tb
         runner._tlog(f"TOP-LEVEL CRASH {exc!r}\n{_tb.format_exc()[-1500:]}")
         raise
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -34,18 +34,29 @@ def _ensure() -> None:
             RECIPES_PATH.write_text("[]")
 
 
+_load_cache: tuple | None = None
+_edges_cache: tuple | None = None
+
+
 def load() -> list[dict]:
+    global _load_cache
     _ensure()
+    st = RECIPES_PATH.stat()
+    ver = (str(RECIPES_PATH), st.st_mtime_ns, st.st_size)
+    if _load_cache and _load_cache[0] == ver:
+        return [dict(r) for r in _load_cache[1]]
     data = json.loads(RECIPES_PATH.read_text())
     for r in data:
         r.setdefault("id", uuid.uuid4().hex[:8])
         r.setdefault("enabled", True)
         r.setdefault("kind", "combine")
         r["routable"] = len(r.get("inputs", {})) == 1 and len(r.get("outputs", {})) == 1
-    return data
+    _load_cache = (ver, data)
+    return [dict(r) for r in data]
 
 
 def save(data: list[dict]) -> list[dict]:
+    global _load_cache, _edges_cache
     clean = []
     for r in data:
         clean.append({
@@ -58,6 +69,8 @@ def save(data: list[dict]) -> list[dict]:
             "note": r.get("note", ""),
         })
     RECIPES_PATH.write_text(json.dumps(clean, indent=2))
+    _load_cache = None
+    _edges_cache = None
     return load()
 
 
@@ -72,6 +85,14 @@ def derived() -> list[dict]:
 def edges() -> list[dict]:
     """Routable, enabled recipes as directed edges: the derived ones plus the user's own file, where
     the user's recipe wins over a derived one with the same id."""
+    global _edges_cache
+    from . import db
+    from .currencies import registry
+    _ensure()
+    st = RECIPES_PATH.stat()
+    ver = (str(RECIPES_PATH), st.st_mtime_ns, st.st_size, str(db.MARKET_DB_PATH), db.tx_gen(), len(registry.by_id))
+    if _edges_cache and _edges_cache[0] == ver:
+        return _edges_cache[1]
     user = load()
     mine = {r["id"] for r in user}
     out = []
@@ -84,6 +105,7 @@ def edges() -> list[dict]:
             continue
         out.append({"from": src, "to": dst, "rate": out_q / in_q, "lot": in_q,
                     "recipe_id": r["id"], "name": r["name"], "kind": r["kind"]})
+    _edges_cache = (ver, out)
     return out
 
 

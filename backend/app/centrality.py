@@ -79,6 +79,11 @@ def betweenness_lite(g, rv: dict[str, float], top_k: int = BRIDGE_TOP_K,
 
     if max_steps is None:
         max_steps = BRIDGE_MAX_STEPS
+    memo = getattr(g, "_betweenness_memo", None)
+    # Only reuse cache when iter_paths hasn't been monkeypatched on the instance (tests)
+    patched = "iter_paths" in getattr(g, "__dict__", ())
+    if not patched and memo and memo[0] is rv and memo[1] == (len(g.edges), top_k, max_steps):
+        return memo[2]
     nodes = {a for a, _ in g.edges} | {b for _, b in g.edges}
     ranked = sorted(nodes, key=lambda x: rv.get(x, 0.0), reverse=True)[:top_k]
     counts: dict[str, float] = {}
@@ -95,9 +100,10 @@ def betweenness_lite(g, rv: dict[str, float], top_k: int = BRIDGE_TOP_K,
                 total += 1
                 for e in path[:-1]:          # every edge's dst except the final one = intermediates
                     counts[e.dst] = counts.get(e.dst, 0.0) + 1.0
-    if total == 0:
-        return {}
-    return {k: v / total for k, v in counts.items()}
+    res = {k: v / total for k, v in counts.items()} if total else {}
+    if not patched:
+        g._betweenness_memo = (rv, (len(g.edges), top_k, max_steps), res)
+    return res
 
 
 def _rank(g, rv: dict[str, float]) -> list[str]:

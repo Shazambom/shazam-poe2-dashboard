@@ -11,7 +11,7 @@ from __future__ import annotations
 import time
 
 from . import gateway, secrets
-from .config import POESESSID, TRADE_EXCHANGE_URL
+from .config import POESESSID
 from .settings import get_settings
 
 
@@ -31,9 +31,10 @@ def source() -> str | None:
 
 def status() -> dict:
     rec = secrets.load("poesessid") or {}
+    has_stored = bool(rec.get("cookie"))
     return {
-        "connected": bool(get_cookie()),
-        "source": source(),
+        "connected": has_stored or bool(POESESSID),
+        "source": "dashboard" if has_stored else ("env" if POESESSID else None),
         "set_at": rec.get("set_at"),
         "last_ok": rec.get("last_ok"),
         "label": rec.get("label"),

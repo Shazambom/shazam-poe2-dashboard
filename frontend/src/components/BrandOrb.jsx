@@ -29,10 +29,11 @@ export default function BrandOrb({ onDone }) {
   const wasRunning = useRef(false)
 
   useEffect(() => {
-    let timer
+    let timer, alive = true
     const tick = async () => {
       let d = null
       try { d = await api.backfill() } catch {}
+      if (!alive) return
       const on = !!(d && d.running && (d.phase === 'crawling' || d.phase === 'leagues'))
       setRunning(on)
       if (on) {
@@ -43,7 +44,7 @@ export default function BrandOrb({ onDone }) {
       timer = setTimeout(tick, on ? 1500 : 8000)   // poll fast while building
     }
     tick()
-    return () => clearTimeout(timer)
+    return () => { alive = false; clearTimeout(timer) }
   }, []) // eslint-disable-line
 
   // Each completed rotation swaps to a different random orb (never repeat back-to-back).

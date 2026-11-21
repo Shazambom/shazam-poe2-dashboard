@@ -103,7 +103,7 @@ export default function LiveView({ league }) {
         </div>
         <div className="live-newest" ref={headRef} data-cmd="live-ping">
           {newest
-            ? <PingButton ping={newest} />
+            ? <PingButton key={newest.pingId} ping={newest} />
             : <div className="empty small live-placeholder">Press Go live on a search.</div>}
         </div>
         {rest.length > 0 && (

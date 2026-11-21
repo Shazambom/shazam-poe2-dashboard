@@ -711,24 +711,56 @@ def store(result: dict) -> None:
 
 
 # ------------------------------------------------------------------ reads (endpoints)
+_pools_cache: tuple | None = None
+_currencies_cache: tuple | None = None
+_pool_cache: dict[str, dict | None] = {}
+_pool_cache_ver: tuple | None = None
+_POOL_CACHE_MAX = 32
+
+
+def _mod_ver() -> tuple:
+    return (str(db.MARKET_DB_PATH), db.tx_gen())
+
+
 def pools() -> list:
+    global _pools_cache
+    ver = _mod_ver()
+    if _pools_cache and _pools_cache[0] == ver:
+        return _pools_cache[1]
     with db.q() as c:
         rows = c.execute("SELECT id, name, class, domain, keywords FROM mod_pools ORDER BY class, name").fetchall()
-    return [{"id": r["id"], "name": r["name"], "class": r["class"], "domain": r["domain"], "keywords": json.loads(r["keywords"])} for r in rows]
+    res = [{"id": r["id"], "name": r["name"], "class": r["class"], "domain": r["domain"], "keywords": json.loads(r["keywords"])} for r in rows]
+    _pools_cache = (ver, res)
+    return res
 
 
 def pool(pool_id: str) -> dict | None:
+    global _pool_cache_ver
+    ver = _mod_ver()
+    if _pool_cache_ver != ver:
+        _pool_cache.clear()
+        _pool_cache_ver = ver
+    if pool_id in _pool_cache:
+        return _pool_cache[pool_id]
     with db.q() as c:
         r = c.execute("SELECT id, name, class, domain, data FROM mod_pools WHERE id = ?", (pool_id,)).fetchone()
-    if not r:
-        return None
-    return {"id": r["id"], "name": r["name"], "class": r["class"], "domain": r["domain"], **json.loads(r["data"])}
+    res = {"id": r["id"], "name": r["name"], "class": r["class"], "domain": r["domain"], **json.loads(r["data"])} if r else None
+    if len(_pool_cache) >= _POOL_CACHE_MAX:
+        _pool_cache.pop(next(iter(_pool_cache)))
+    _pool_cache[pool_id] = res
+    return res
 
 
 def currencies() -> list:
+    global _currencies_cache
+    ver = _mod_ver()
+    if _currencies_cache and _currencies_cache[0] == ver:
+        return _currencies_cache[1]
     with db.q() as c:
         rows = c.execute("SELECT id, name, floor, cap FROM mod_currencies ORDER BY rowid").fetchall()
-    return [{"id": r["id"], "name": r["name"], "floor": r["floor"], "cap": r["cap"]} for r in rows]
+    res = [{"id": r["id"], "name": r["name"], "floor": r["floor"], "cap": r["cap"]} for r in rows]
+    _currencies_cache = (ver, res)
+    return res
 
 
 def prices(pool_id: str) -> dict | None:

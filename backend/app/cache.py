@@ -27,11 +27,19 @@ def get(store: dict, key: Hashable, ttl_s: float, version: Any = None) -> Any:
     return _MISS
 
 
-def put(store: dict, key: Hashable, value: Any, version: Any = None, max_entries: int | None = None) -> Any:
-    store[key] = (time.time(), version, value)
+def put(store: dict, key: Hashable, value: Any, version: Any = None, max_entries: int | None = None,
+        ttl_s: float | None = None) -> Any:
+    now = time.time()
+    store[key] = (now, version, value)
     if max_entries and len(store) > max_entries:
-        oldest = min(store, key=lambda k: store[k][0])
-        store.pop(oldest, None)
+        # First drop entries invalidated by version or TTL before evicting live entries.
+        stale = [k for k, (ts, ver, _v) in store.items()
+                 if k != key and (ver != version or (ttl_s is not None and now - ts >= ttl_s))]
+        for k in stale:
+            store.pop(k, None)
+        while len(store) > max_entries:
+            oldest = min((k for k in store if k != key), key=lambda k: store[k][0])
+            store.pop(oldest, None)
     return value
 
 
@@ -39,7 +47,7 @@ def memo(store: dict, key: Hashable, ttl_s: float, build: Callable[[], Any], ver
          max_entries: int | None = None) -> Any:
     value = get(store, key, ttl_s, version)
     if value is _MISS:
-        value = put(store, key, build(), version, max_entries)
+        value = put(store, key, build(), version, max_entries, ttl_s=ttl_s)
     return value
 
 

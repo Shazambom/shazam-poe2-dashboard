@@ -286,5 +286,13 @@ async def request(method: str, url: str, *, policy: str | None = None, retries: 
     raise RateLimited(60, p.name)  # unreachable
 
 
+async def aclose() -> None:
+    """Close the shared httpx client on shutdown so pooled sockets are released cleanly."""
+    global _client
+    c, _client = _client, None
+    if c is not None:
+        await c.aclose()
+
+
 def status() -> dict:
     return {k: v.to_json() for k, v in POLICIES.items()}

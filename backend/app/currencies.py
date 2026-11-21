@@ -183,14 +183,23 @@ class Registry:
         graph build once the registry held hundreds of currencies."""
         if getattr(self, "_stems_n", -1) != len(self.by_id):
             stems: dict[str, str] = {}
+            by_name: dict[str, str] = {}
             for tid, cur in self.by_id.items():
+                if cur.name:
+                    by_name.setdefault(cur.name.lower(), tid)
                 if cur.icon:
                     m = self._icon_stem.search(cur.icon)
                     if m:
                         stems.setdefault(m.group(1).lower(), tid)
             self._stems = stems
+            self._by_name = by_name
             self._stems_n = len(self.by_id)
         return self._stems
+
+    def lookup_name(self, name_lower: str) -> str | None:
+        """O(1) case-insensitive currency name -> trade id lookup."""
+        self._stem_index()
+        return self._by_name.get(name_lower)
 
     def resolve_meta(self, meta: str) -> str | None:
         """Return the trade id for a metadata id, learning heuristically if needed."""

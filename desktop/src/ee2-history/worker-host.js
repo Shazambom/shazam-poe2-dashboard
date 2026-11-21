@@ -17,9 +17,9 @@ function spawnWorker({ onExit } = {}) {
   const { utilityProcess } = require('electron')
   const child = utilityProcess.fork(unpacked(path.join(__dirname, 'worker.js')), [], { serviceName: 'arbiter-ee2-query', stdio: 'ignore' })
   const pending = new Map()
-  let seq = 0, idle = null, ready = null, dead = false
+  let seq = 0, idle = null, ready = null, dead = false, idleKill = false
 
-  const fail = (err) => { dead = true; clearTimeout(idle); for (const p of pending.values()) { clearTimeout(p.timer); p.reject(err) } pending.clear(); try { onExit?.() } catch {} }
+  const fail = (err) => { dead = true; clearTimeout(idle); for (const p of pending.values()) { clearTimeout(p.timer); p.reject(err) } pending.clear(); try { onExit?.({ idle: idleKill }) } catch {} }
   child.on('exit', () => fail(new Error('worker exited')))
   child.on('message', (m) => {
     if (!m || typeof m !== 'object') return
@@ -31,7 +31,7 @@ function spawnWorker({ onExit } = {}) {
     else if (m.t === 'parsed') p.resolve(m.item)
     else p.resolve({ error: { stage: m.stage, message: m.message } })
   })
-  const touch = () => { clearTimeout(idle); idle = setTimeout(() => { if (!pending.size) kill() }, IDLE_EXIT_MS); if (idle.unref) idle.unref() }
+  const touch = () => { clearTimeout(idle); idle = setTimeout(() => { if (!pending.size) { idleKill = true; kill() } }, IDLE_EXIT_MS); if (idle.unref) idle.unref() }
   let readyResolve, readyReject
   const warm = () => {
     if (ready) return ready
@@ -44,8 +44,9 @@ function spawnWorker({ onExit } = {}) {
   const request = async (msg) => {
     if (dead) throw new Error('worker exited')
     // The timeout covers init too: a worker that never reports ready must not hang the caller.
-    const timeout = new Promise((_, rej) => setTimeout(() => rej(new Error('build timeout')), BUILD_TIMEOUT_MS + 5000).unref?.())
-    await Promise.race([warm(), timeout])
+    let warmTimer
+    const timeout = new Promise((_, rej) => { warmTimer = setTimeout(() => rej(new Error('build timeout')), BUILD_TIMEOUT_MS + 5000); warmTimer.unref?.() })
+    try { await Promise.race([warm(), timeout]) } finally { clearTimeout(warmTimer) }
     touch()
     const id = ++seq
     return new Promise((resolve, reject) => {
