@@ -38,6 +38,7 @@ def _setup(tmp: Path, cut: str) -> dict:
     c.execute("INSERT INTO kv_ops VALUES('seed_poll', ?)", (json.dumps({"at": time.time(), "leagues": ["Cur"]}),))
     for day in ("2026-09-26", "2026-09-27", "2026-09-28"):
         c.execute("INSERT INTO league_daily VALUES('Cur', 1, ?, 1.0, 1.0, 5)", (day,))
+    c.execute("INSERT INTO mod_pools VALUES('ring', 'Rings', 'Rings', 'item', '[]', '{}')")
     c.commit()
     c.close()
     set_cut(repo, cut)

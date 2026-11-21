@@ -129,9 +129,26 @@ CATEGORIES = ["currency", "ritual", "essences", "fragments", "delirium", "breach
               "uncutgems", "abyss", "ultimatum", "expedition", "verisium", "runes",
               "lineagesupportgems", "idol", "vaultkeys", "incursion", "vaal"]
 PRICE_FLOOR_EX = 5.0
-# Softcore challenge/event leagues worth comparing (skip HC variants, Standard, Hardcore).
-SKIP = ("HC ", "Hardcore", "Standard")
+# Softcore challenge/event leagues worth comparing (skip HC variants and permanent realms: Standard, Hardcore, Early Access).
+_PERMANENT_EXACT = {"standard", "hardcore", "early access", "ssf standard", "ssf hardcore", "ssf early access"}
+_PERMANENT_PREFIXES = ("early access ", "hc early access", "hardcore early access", "standard (", "hardcore (")
 REFRESH_S = 12 * 3600   # re-pull current leagues at most twice a day; past leagues are final
+
+
+def is_permanent_league(name: str) -> bool:
+    """True for non-challenge permanent realms (Standard, Hardcore, Early Access variants)."""
+    low = (name or "").strip().lower()
+    if not low:
+        return False
+    return low in _PERMANENT_EXACT or low.startswith(_PERMANENT_PREFIXES) or low.endswith(" (early access)")
+
+
+def is_skipped_league(name: str) -> bool:
+    """True for permanent or Hardcore realms that should not be tracked as softcore challenge leagues."""
+    low = (name or "").strip().lower()
+    if not low:
+        return True
+    return is_permanent_league(low) or low.startswith(("hc ", "hardcore ")) or low.endswith(" hardcore")
 
 
 async def _get(path: str):
@@ -148,7 +165,7 @@ async def _get(path: str):
 async def _leagues() -> list[dict]:
     data = await _get("/Leagues")
     rows = data if isinstance(data, list) else data.get("items", data.get("Leagues", []))
-    return [l for l in rows if not any(l.get("Value", "").startswith(s) or l.get("Value") == s for s in SKIP)]
+    return [l for l in rows if not is_skipped_league(l.get("Value", ""))]
 
 
 def _has_history() -> bool:

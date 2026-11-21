@@ -91,15 +91,63 @@ export const isFolded = (group, folds, total, q) =>
 export const flipFold = (group, folds, total, q) =>
   String(q || '').trim() ? folds : { ...folds, [group.name]: !isFolded(group, folds, total, '') }
 
-// Sales credited on the server while the editor holds typed quantities: add exactly what the server added
-// (`added`: {currency: amount}) to what was typed, so neither the credit nor an unsaved edit is lost.
-// Returns the same object when nothing was added.
-export function addCredit(typed, added) {
-  const entries = Object.entries(added || {}).filter(([, a]) => a > 0)
-  if (!entries.length) return typed
-  const out = { ...typed }
-  for (const [c, a] of entries) out[c] = String((Number(typed[c]) || 0) + a)
+// Convert /api/capital rows into the editor's { currency: qty } map, always including default CASH rows.
+export function capitalQty(cap) {
+  const r = Object.fromEntries(CASH.map(p => [p, 0]))
+  for (const x of cap?.rows || []) r[x.currency] = x.qty
+  return r
+}
+
+// Track unsaved edits made since the last committed save (while debouncing or held during a sales fetch):
+//   - { kind: 'count', value } : the user typed an absolute total (a recount — do not add sales on top)
+//   - { kind: 'remove' }       : the user removed the holding
+//   - { kind: 'add', delta }   : the user added +delta via the Add bar (rebases onto authoritative server total)
+export function recordPendingEdit(edits, currency, edit) {
+  if (!edits || !currency || !edit) return
+  if (edit.kind === 'add') {
+    const prev = edits.get(currency)
+    if (prev?.kind === 'count') {
+      edits.set(currency, { kind: 'count', value: String((Number(prev.value) || 0) + edit.delta) })
+    } else if (prev?.kind === 'remove') {
+      edits.set(currency, { kind: 'count', value: String(edit.delta) })
+    } else {
+      edits.set(currency, { kind: 'add', delta: (prev?.delta || 0) + edit.delta })
+    }
+    return
+  }
+  edits.set(currency, edit)
+}
+
+// Currencies whose total was recounted or removed in `edits` (sent as `counted` to PUT /api/capital).
+export function countedFromEdits(edits) {
+  if (!edits || !edits.size) return []
+  const out = []
+  for (const [c, edit] of edits) if (edit.kind === 'count' || edit.kind === 'remove') out.push(c)
   return out
+}
+
+// Re-compose failed edits under any newer edits made while the failed PUT was in flight,
+// preserving chronological order (e.g., failed recount 125 + newer add +5 -> count 130).
+export function restoreFailedEdits(failedEdits, newerEdits) {
+  const merged = new Map(failedEdits || [])
+  for (const [c, edit] of newerEdits || []) recordPendingEdit(merged, c, edit)
+  return merged
+}
+
+// Reconcile authoritative post-credit `/api/capital` with any unsaved edits held in the editor.
+// When no edits are pending, returns the server's holdings with `needsSave: false` (no redundant PUT, and
+// immune to startup hydration races). Pending recounts/removals keep the user's absolute count; pending
+// Add-bar deltas rebase onto the server's credited balance.
+export function reconcileCapital(post, pendingEdits) {
+  const base = capitalQty(post)
+  if (!pendingEdits || !pendingEdits.size) return { qty: base, needsSave: false }
+  const out = { ...base }
+  for (const [c, edit] of pendingEdits) {
+    if (edit.kind === 'remove') delete out[c]
+    else if (edit.kind === 'count') out[c] = edit.value
+    else if (edit.kind === 'add') out[c] = String((Number(out[c]) || 0) + edit.delta)
+  }
+  return { qty: out, needsSave: true }
 }
 
 // What a sales fetch says: how many sales were new, and whether the holdings changed.

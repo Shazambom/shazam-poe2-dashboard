@@ -68,6 +68,7 @@ def _market_db(path: Path, now: int) -> None:
     c.execute("INSERT INTO kv_ops VALUES('lh_current', '[\"Std\"]')")
     c.execute("INSERT INTO kv_ops VALUES('seed_cut:Std', ?)", (json.dumps({"day": "2026-01-01", "through": "2026-01-01", "stale": []}),))
     c.execute("INSERT INTO kv_ops VALUES('seed_poll', ?)", (json.dumps({"at": time.time(), "leagues": ["Std"]}),))
+    c.execute("INSERT INTO mod_pools VALUES('ring', 'Rings', 'Rings', 'item', '[]', '{}')")
     c.execute("INSERT INTO analytics_cache VALUES('discords','current',1,'{}')")
     c.commit()
     c.close()
@@ -273,3 +274,33 @@ def test_a_league_with_no_verified_day_ships_no_fetch_stamps_either(tmp_path):
     assert _run_exporter(src, out).returncode == 0
     d = sqlite3.connect(str(out))
     assert d.execute("SELECT COUNT(*) FROM kv_ops WHERE key LIKE 'lh_fetch:Cur:%'").fetchone()[0] == 0
+
+
+def test_exporter_refuses_empty_mod_pools_even_with_force(tmp_path):
+    """Never publish a seed whose mod_pools table was wiped (causes T0 mods-empty on desktop), even with --force."""
+    src, out = tmp_path / "market.sqlite", tmp_path / "seed.sqlite"
+    _market_db(src, int(time.time()))
+    c = sqlite3.connect(str(src))
+    c.execute("DELETE FROM mod_pools")
+    c.commit()
+    c.close()
+    r = _run_exporter(src, out)
+    assert r.returncode != 0 and "mod_pools" in (r.stdout + r.stderr) and not out.exists()
+    r_forced = _run_exporter(src, out, "--force")
+    assert r_forced.returncode != 0 and "mod_pools" in (r_forced.stdout + r_forced.stderr) and not out.exists()
+
+
+def test_exporter_keeps_trade_leagues_in_kv_ops(tmp_path):
+    """trade_leagues stays in kv_ops per db-architecture.md; consumers enforce TRADE_LEAGUES_TTL_S on read."""
+    src, out = tmp_path / "market.sqlite", tmp_path / "seed.sqlite"
+    _market_db(src, int(time.time()))
+    c = sqlite3.connect(str(src))
+    c.execute("INSERT INTO kv_ops VALUES('trade_leagues', ?)", (json.dumps({"at": time.time(), "leagues": [{"id": "Old", "text": "Old"}]}),))
+    c.commit()
+    c.close()
+    r = _run_exporter(src, out)
+    assert r.returncode == 0, r.stdout + r.stderr
+    d = sqlite3.connect(str(out))
+    assert d.execute("SELECT COUNT(*) FROM kv_ops WHERE key='trade_leagues'").fetchone()[0] == 1
+
+

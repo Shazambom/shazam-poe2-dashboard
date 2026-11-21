@@ -173,6 +173,12 @@ def main():
             raise SystemExit("ABORT: no digest_cursor found — can't confirm the sync is complete. "
                              "Pass --force to override.")
 
+        # Empty mod_pools is a T0 blocker (docs/release-runbook.md); --force only skips digest freshness.
+        n_pools = src.execute("SELECT COUNT(*) FROM mod_pools").fetchone()[0] if "mod_pools" in tables else 0
+        if n_pools == 0:
+            raise SystemExit("ABORT: mod_pools is empty — refusing to publish a seed that would break the Mods tab. "
+                             "Re-run modpool refresh before exporting.")
+
         cuts = _verified_cuts(src, args.max_poll_age_h)
         for lg, info in cuts.items():
             print(f"  {lg}: ships through {info['day']} (poe2scout finished {info['through']}; "
@@ -196,7 +202,7 @@ def main():
         for t in SEED_TABLES:
             if t not in ("digest_markets", "kv_ops"):
                 _copy_rows(src, dst, t)
-        # seed_fp:* is the server poll's per-item bookkeeping; clients never read it.
+        # seed_fp:* is server bookkeeping; trade_leagues stays in kv_ops (TTL-checked on read by orderbook/settings).
         _copy_rows(src, dst, "kv_ops", where="WHERE key NOT LIKE 'seed_fp:%'")
         for lg, day in cut_days.items():
             n = dst.execute("DELETE FROM league_daily WHERE league=? AND (? IS NULL OR day>?)", (lg, day, day)).rowcount

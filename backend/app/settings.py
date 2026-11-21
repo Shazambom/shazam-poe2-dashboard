@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import copy
 import logging
+import time
 
-from . import cache, db, marketseries
-from .config import LEAGUE
+from . import cache, db, leaguehistory, marketseries
+from .config import LEAGUE, TRADE_LEAGUES_TTL_S
 
 log = logging.getLogger(__name__)
 
@@ -107,15 +108,48 @@ DEFAULTS: dict = {
 }
 
 
+def _fresh_trade_league_ids() -> list[str]:
+    """Fresh cached GGG trade league IDs (within TRADE_LEAGUES_TTL_S), else []."""
+    trade = db.kv_get("trade_leagues")
+    if not isinstance(trade, dict):
+        return []
+    at = trade.get("at")
+    leagues = trade.get("leagues")
+    if not isinstance(at, (int, float)) or time.time() - at >= TRADE_LEAGUES_TTL_S or not isinstance(leagues, list):
+        return []
+    return [lid for l in leagues if isinstance(l, dict) and isinstance((lid := l.get("id")), str) and lid.strip()]
+
+
+def _is_retired_league(league: str) -> bool:
+    """True when a saved challenge league has ended and is no longer playable. Permanent realms
+    (Standard/Hardcore/Early Access), live trade leagues, and private leagues `(PL…)` are never retired."""
+    if not league or "(PL" in league or leaguehistory.is_permanent_league(league):
+        return False
+    live_ids = _fresh_trade_league_ids()
+    if live_ids:
+        return league not in live_ids
+    current = [lg for lg in db.kv_get(marketseries.CURRENT_LEAGUES_KEY, []) or [] if lg]
+    if not current or league in current:
+        return False
+    low = league.strip().lower()
+    base = league[3:].strip() if low.startswith("hc ") else league[9:].strip() if low.startswith("hardcore ") else league
+    if base in current:
+        return False
+    with db.q() as c:
+        return c.execute("SELECT 1 FROM league_daily WHERE league IN (?, ?) LIMIT 1", (league, base)).fetchone() is not None
+
+
 def _merged(stored: dict | None) -> dict:
     merged = copy.deepcopy(DEFAULTS)
     _deep_update(merged, stored or {})
-    if not (stored or {}).get("league"):
+    saved = (stored or {}).get("league")
+    if not saved or _is_retired_league(saved):
         merged["league"] = youngest_league()
     return merged
 
 
 _youngest: dict = {}
+_youngest_gen: int = 0
 _YOUNGEST_TTL_S = 300
 
 
@@ -123,11 +157,26 @@ def youngest_league() -> str:
     """The default league (owner, 2026-10-02): of the leagues poe2scout marks current (`lh_current`,
     never Standard or Hardcore), the one whose history starts latest; one with no dailies yet is the
     newest of all. LEAGUE when none is known."""
-    return cache.memo(_youngest, "league", _YOUNGEST_TTL_S, _youngest_now)
+    gen = _youngest_gen
+    hit = cache.get(_youngest, "league", _YOUNGEST_TTL_S, version=gen)
+    if hit is not cache.MISS:
+        return hit
+    val = _youngest_now()
+    if _youngest_gen == gen:
+        cache.put(_youngest, "league", val, version=gen)
+    return val
 
 
 def _youngest_now() -> str:
+    live_ids = _fresh_trade_league_ids()
     current = [lg for lg in db.kv_get(marketseries.CURRENT_LEAGUES_KEY, []) or [] if lg]
+    if live_ids:
+        live_set = set(live_ids)
+        current = [lg for lg in current if lg in live_set]
+        if not current:
+            live_challenge = [lg for lg in live_ids if not leaguehistory.is_skipped_league(lg)]
+            if live_challenge:
+                return live_challenge[0]
     if not current:
         return LEAGUE
     with db.q() as c:
@@ -138,6 +187,8 @@ def _youngest_now() -> str:
 
 
 def forget_youngest() -> None:
+    global _youngest_gen
+    _youngest_gen += 1
     cache.clear(_youngest)
 
 
@@ -154,14 +205,20 @@ def save_settings(patch: dict) -> dict:
     def apply(stored):
         nonlocal before
         before = _merged(stored)
+        raw_league = (stored or {}).get("league")
         current = copy.deepcopy(before)
         _deep_update(current, patch)
-        if "league" not in patch and not (stored or {}).get("league"):
-            current.pop("league", None)   # the default is read, never stored: the next league reaches everyone
+        if "league" not in patch:
+            # Never persist a read-time fallback league on an unrelated preference edit.
+            if raw_league:
+                current["league"] = raw_league
+            else:
+                current.pop("league", None)   # the default is read, never stored: the next league reaches everyone
         return current
     saved = db.kv_update("settings", apply, {})
-    _log_changes(before, _merged(saved))
-    return saved
+    effective = _merged(saved)
+    _log_changes(before, effective)
+    return effective
 
 
 def _log_changes(before: dict, after: dict) -> None:

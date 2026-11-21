@@ -177,3 +177,45 @@ def test_a_sale_time_that_cannot_be_read_is_recorded_but_never_breaks_the_fetch(
 
 def test_the_count_times_are_user_data():
     assert datapolicy.is_user_kv(STAMPS)
+
+
+def test_small_http_date_network_delay_does_not_push_pre_recount_sale_past_cutoff():
+    # The user recounts their divines right after a sale (sale was 1s before recount).
+    # The trade site's HTTP Date header arrives 3s behind the local clock (1s header resolution + 2s network delay).
+    # Transport delay must not shift an already-counted sale past the recount stamp and double-credit it.
+    now = datetime.now(timezone.utc)
+    _save({"divine": 300})
+    sold = _iso(now - timedelta(seconds=1))
+    delayed_date = (now - timedelta(seconds=3)).isoformat()
+    got = _fetch([_sale("jitter-sale", 25, "divine", sold)], server_time=delayed_date)
+    assert got["credited"] == 0 and got["added"] == {}
+    assert db.get_capital() == {"divine": 300}
+
+
+def test_same_sale_with_different_utc_timestamp_formatting_is_not_double_credited():
+    # Equivalent UTC timestamps ("...Z" vs "...+00:00") for the same item_id must deduplicate to one ledger row
+    # and credit at most once.
+    _stamps(**{"*": 60, "divine": 60})
+    sale_dt = (datetime.now(timezone.utc) - timedelta(minutes=5)).replace(microsecond=0)
+    first = _fetch([_sale("fmt-dedup", 25, "divine", sale_dt.strftime("%Y-%m-%dT%H:%M:%SZ"))])
+    assert first["new"] == 1 and first["credited"] == 1
+    assert db.get_capital() == {"divine": 25}
+
+    second = _fetch([_sale("fmt-dedup", 25, "divine", sale_dt.isoformat())])
+    assert second["new"] == 0 and second["credited"] == 0 and second["added"] == {}
+    assert db.get_capital() == {"divine": 25}
+    assert db.sales_count(LEAGUE) == 1
+
+
+def test_small_slow_pc_clock_skew_is_still_corrected_and_does_not_double_credit():
+    # PC clock runs 5s slow (server_time is +4.5s ahead of PC): a sale made 2s BEFORE the recount reads
+    # +2.5s ahead of the PC's stamp. Positive skew must NOT be zeroed by the transport-delay deadband.
+    pc_now = datetime.now(timezone.utc)
+    _save({"divine": 300})
+    site_now = pc_now + timedelta(seconds=4.5)
+    sold = _iso(site_now - timedelta(seconds=2))
+    got = _fetch([_sale("slow-5s", 25, "divine", sold)], server_time=site_now.isoformat())
+    assert got["credited"] == 0 and got["added"] == {}
+    assert db.get_capital() == {"divine": 300}
+
+

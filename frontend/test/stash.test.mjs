@@ -115,11 +115,62 @@ test('folding is the stored choice; while searching a click changes nothing', ()
   assert.deepEqual(S.flipFold(g, {}, 1000, 'div'), {}, 'no hidden fold saved mid-search')
 })
 
-test('a sale credited while edits are unsaved keeps both: exactly what the server added goes onto what was typed', () => {
-  const typed = { divine: '11', chaos: '7', exalted: '0' }
-  assert.deepEqual(S.addCredit(typed, { divine: 3, vaal: 2 }), { divine: '14', chaos: '7', exalted: '0', vaal: '2' })
-  assert.equal(S.addCredit(typed, {}), typed, 'no credit, nothing changes')
-  assert.equal(S.addCredit(typed, undefined), typed)
+test('reconcileCapital adopts server credits cleanly without double-counting clean editors or pending recounts', () => {
+  const post = { rows: [{ currency: 'divine', qty: 125 }, { currency: 'chaos', qty: 60 }] }
+
+  // Clean editor (including startup hydration race where the editor already loaded 125): no PUT needed, no +25 added again.
+  const clean = S.reconcileCapital(post, new Map())
+  assert.deepEqual(clean, { qty: { chaos: 60, exalted: 0, divine: 125 }, needsSave: false })
+
+  // Pending recount during fetch: user typed 125 (already includes the 25 div sale) while server also credited chaos.
+  const recounted = new Map()
+  S.recordPendingEdit(recounted, 'divine', { kind: 'count', value: '125' })
+  const recRes = S.reconcileCapital(post, recounted)
+  assert.deepEqual(recRes, { qty: { chaos: 60, exalted: 0, divine: '125' }, needsSave: true })
+
+  // Pending cleared input during fetch: preserve empty string while user is typing.
+  const cleared = new Map()
+  S.recordPendingEdit(cleared, 'divine', { kind: 'count', value: '' })
+  assert.equal(S.reconcileCapital(post, cleared).qty.divine, '')
+
+  // Pending removal during fetch: deleted holding stays deleted, other credits kept.
+  const removed = new Map()
+  S.recordPendingEdit(removed, 'vaal', { kind: 'remove' })
+  const postWithVaal = { rows: [...post.rows, { currency: 'vaal', qty: 10 }] }
+  const remRes = S.reconcileCapital(postWithVaal, removed)
+  assert.equal('vaal' in remRes.qty, false)
+  assert.equal(remRes.qty.divine, 125)
+  assert.equal(remRes.needsSave, true)
+
+  // Pending Add-bar delta during fetch: relative +10 loot rebases onto server's credited 125 -> 135.
+  const added = new Map()
+  S.recordPendingEdit(added, 'divine', { kind: 'add', delta: 4 })
+  S.recordPendingEdit(added, 'divine', { kind: 'add', delta: 6 })
+  const addRes = S.reconcileCapital(post, added)
+  assert.deepEqual(addRes, { qty: { chaos: 60, exalted: 0, divine: '135' }, needsSave: true })
+
+  // Recount followed by Add-bar delta during fetch: stays a count (125 + 5 = 130), does not re-add server credit.
+  const countThenAdd = new Map()
+  S.recordPendingEdit(countThenAdd, 'divine', { kind: 'count', value: '125' })
+  S.recordPendingEdit(countThenAdd, 'divine', { kind: 'add', delta: 5 })
+  assert.equal(S.reconcileCapital(post, countThenAdd).qty.divine, '130')
+})
+
+test('countedFromEdits and restoreFailedEdits keep recount metadata consistent across failed saves', () => {
+  const failed = new Map()
+  S.recordPendingEdit(failed, 'divine', { kind: 'count', value: '125' })
+  S.recordPendingEdit(failed, 'vaal', { kind: 'remove' })
+  S.recordPendingEdit(failed, 'chaos', { kind: 'add', delta: 4 })
+  assert.deepEqual(S.countedFromEdits(failed), ['divine', 'vaal'])
+
+  // While the failed PUT was in flight, the user added +5 divine and +2 chaos.
+  const newer = new Map()
+  S.recordPendingEdit(newer, 'divine', { kind: 'add', delta: 5 })
+  S.recordPendingEdit(newer, 'chaos', { kind: 'add', delta: 2 })
+  const restored = S.restoreFailedEdits(failed, newer)
+  assert.deepEqual(restored.get('divine'), { kind: 'count', value: '130' }, 'recount 125 + newer add +5 stays a count at 130')
+  assert.deepEqual(restored.get('chaos'), { kind: 'add', delta: 6 }, 'failed add +4 + newer add +2 sums to +6')
+  assert.deepEqual(S.countedFromEdits(restored), ['divine', 'vaal'])
 })
 
 // Owner (2026-10-03): "move add currency to the top of the stash tab and keep it there … a box next to it to

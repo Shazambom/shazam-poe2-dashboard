@@ -363,16 +363,21 @@ async def sweeper() -> None:
         await asyncio.sleep(ORDERBOOK_SWEEP_SECONDS)
 
 
+from .config import TRADE_LEAGUES_TTL_S  # noqa: E402,F401
+
+
 async def leagues(force: bool = False) -> list[dict]:
-    """League ids as the trade site names them (cached a day). Public endpoint, trade policy."""
+    """League ids as the trade site names them (cached 30 min). Public endpoint, trade policy."""
     cached = db.kv_get("trade_leagues")
-    if cached and not force and time.time() - cached["at"] < 86400:
+    if cached and not force and time.time() - cached["at"] < TRADE_LEAGUES_TTL_S:
         return cached["leagues"]
     r = await gateway.request("GET", "https://www.pathofexile.com/api/trade2/data/leagues", policy="trade",
                               headers={"Accept": "application/json"})
     r.raise_for_status()
     out = [{"id": l.get("id"), "text": l.get("text", l.get("id"))} for l in r.json().get("result", []) if l.get("id")]
     db.kv_set("trade_leagues", {"at": time.time(), "leagues": out})
+    from . import settings
+    settings.forget_youngest()
     return out
 
 

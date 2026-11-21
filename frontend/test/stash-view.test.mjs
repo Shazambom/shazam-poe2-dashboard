@@ -124,8 +124,10 @@ test('the Stash reads holdings from the store only, and a save does not re-fetch
   const v = strip(read('../src/components/StashView.jsx'))
   assert.doesNotMatch(v, /setSaved|saved \?\? shared/)
   assert.doesNotMatch(v, /saveCapital\(entries\)\)\s*\n?\s*refreshHeader\(\)/)
-  assert.match(v, /addCredit\(qtyRef\.current, r\.added\)/, 'a credit merges exactly what the server added into unsaved edits')
+  assert.match(v, /reconcileCapital\(/, 'a credit reconciles against authoritative server holdings instead of re-adding onto hydrated state')
+  assert.doesNotMatch(v, /addCredit\(/, 'never blindly adds server credit on top of editor state')
   assert.match(v, /flush\(\)/, 'pending edits are sent before a credit is read')
+  assert.match(v, /waitCapital\(\)/, 'waits for any prior mount save before fetching sales')
 })
 
 test('stored switch choices merge under ones made before settings loaded', () => {
@@ -221,7 +223,9 @@ test('the picker: a second Enter after choosing changes nothing; typing drops th
 
 test('holding autosave also stops a save already scheduled, keeping the edit pending', () => {
   const h = read('../src/lib/hooks.js')
-  assert.match(h, /const hold = \(\) => \{ held\.current = true; clearTimeout\(timer\.current\); timer\.current = null \}/)
+  const a = read('../src/lib/autosave.js')
+  assert.match(h, /createAutosave\(/)
+  assert.match(a, /const hold = \(\) => \{\s*held = true\s*clearTimeout\(timer\); timer = null\s*\}/)
 })
 
 test('adding through the bar opens its group for now, without changing the saved folds', () => {
@@ -250,11 +254,21 @@ test('the pinned sales column starts below the pinned header\'s real height', ()
 // total or removing a holding is a count; the add bar ("+N") and the Stash's own re-save after a credit are not.
 test('only a typed total or a removal tells the server the user counted that currency', () => {
   const v = strip(read('../src/components/StashView.jsx'))
-  assert.match(v, /saveCapital\(entries, counted\)/, 'the save sends which totals were counted')
+  const s = strip(read('../src/lib/statusStore.js'))
+  assert.match(v, /saveCapital\(entries, counted, edits\)/, 'the save sends counted currencies and edit metadata to the serialised store queue')
+  assert.match(v, /countedFromEdits\(edits\)/, 'counted list is derived from the store-shared capitalDirty map')
+  assert.match(s, /restoreFailedEdits\(pendingEdits, capitalDirty\)/, 'failed queue-tail PUT recomposes edits chronologically into shared capitalDirty')
   const fn = (name) => v.slice(v.indexOf(`const ${name} =`), v.indexOf('\n  const ', v.indexOf(`const ${name} =`) + 1))
-  assert.match(fn('setOne'), /recounted\.current\.add\(c\)/, 'typing a total is a count')
-  assert.match(fn('remove'), /recounted\.current\.add\(c\)/, 'removing a holding is a count (none left)')
-  assert.doesNotMatch(fn('addPicked'), /recounted/, 'the add bar adds; it is not a count')
+  assert.match(fn('setOne'), /kind: 'count'/, 'typing a total is a count')
+  assert.match(fn('remove'), /kind: 'remove'/, 'removing a holding is a count (none left)')
+  assert.match(fn('addPicked'), /kind: 'add'/, 'the add bar records a relative delta, not a count')
+  assert.match(v, /if \(capitalDirty\.size && qtyRef\.current\) save\(qtyRef\.current\)/, 'retries restored edits before a refresh')
+  assert.match(v, /if \(!flushed \|\| !priorOk \|\| capitalDirty\.size \|\| !isCurrent\(\)\) return/, 'aborts sales fetch if any edit remains unsaved or failed')
+  assert.match(v, /else discard\(\)/, 'discards stale held autosave payload when reconciliation has no unsaved edits left')
+  assert.match(v, /capitalCreditRev/, 'reconciles mounted StashView when an earlier mount sales fetch credits')
+  assert.match(v, /salesFetching/, 'holds autosave across remounts while any sales fetch is in flight')
+  assert.match(v, /!capitalStale/, 'blocks re-seeding stale store holdings after a failed post-credit reload')
+  assert.match(v, /commitDetachedEdits/, 'rebases detached edits onto latest store capital instead of sending stale qtyRef')
 })
 
 // QA (2026-10-04): a hook placed after the "Loading your stash…" early return blanked the app once the stash loaded

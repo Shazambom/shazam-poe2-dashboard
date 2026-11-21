@@ -78,3 +78,37 @@ def test_the_orb_calls_a_crawl_stalled_only_past_the_longest_rate_wait(monkeypat
     assert main.backfill_status()["phase"] == "crawling"
     lh.progress["updated"] = NOW - main.STALL_S - 1
     assert main.backfill_status()["phase"] == "stalled"
+
+
+def test_permanent_hardcore_and_early_access_leagues_are_skipped(monkeypatch):
+    """PoE 2 1.0 splits Early Access into a permanent realm (e.g. Early Access Standard): never treat it
+    as a current challenge league."""
+    import asyncio
+
+    for name in ("Standard", "Hardcore", "HC Forbidden Rites", "HC Conquerors of Wraeclast",
+                 "Early Access Standard", "Standard (Early Access)", "Hardcore Early Access",
+                 "Early Access", "SSF Standard", ""):
+        assert lh.is_skipped_league(name), f"should skip {name!r}"
+    for name in ("Conquerors of Wraeclast", "Forbidden Rites", "Runes of Aldur", "Dawn of the Hunt", "Raise the Standard"):
+        assert not lh.is_skipped_league(name), f"should keep {name!r}"
+        assert not lh.is_permanent_league(name), f"should not treat {name!r} as permanent"
+    for name in ("Standard", "Hardcore", "Early Access", "Early Access Standard", "Standard (Early Access)", "SSF Standard"):
+        assert lh.is_permanent_league(name), f"should treat {name!r} as permanent"
+    assert not lh.is_permanent_league("HC Dawn of the Hunt"), "HC challenge league is not a permanent realm"
+
+    async def fake_get(path):
+        assert path == "/Leagues"
+        return [
+            {"Value": "Conquerors of Wraeclast"},
+            {"Value": "HC Conquerors of Wraeclast"},
+            {"Value": "Standard"},
+            {"Value": "Early Access Standard"},
+            {"Value": "Standard (Early Access)"},
+            {"Value": "Hardcore"},
+        ]
+
+    monkeypatch.setattr(lh, "_get", fake_get)
+    kept = [l["Value"] for l in asyncio.run(lh._leagues())]
+    assert kept == ["Conquerors of Wraeclast"]
+
+

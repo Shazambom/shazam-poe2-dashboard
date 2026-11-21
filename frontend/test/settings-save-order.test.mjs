@@ -49,7 +49,9 @@ test('the gold slider saves through the shared autosave, which sends a pending v
   assert.doesNotMatch(g, /pendingRef|clearTimeout/)
   assert.match(g, /arm\(\)/, 'armed on mount, so a drag before the settings load still saves')
   const hooks = readFileSync(new URL('../src/lib/hooks.js', import.meta.url), 'utf8')
-  assert.match(hooks, /useEffect\(\(\) => \(\) => \{ clearTimeout\(timer\.current\); timer\.current = null; if \(pending\.current\) saver\(pending\.current\.payload\)/)
+  const autosave = readFileSync(new URL('../src/lib/autosave.js', import.meta.url), 'utf8')
+  assert.match(hooks, /useEffect\(\(\) => \{ ctrl\.current\.mount\(\); return \(\) => ctrl\.current\.unmount\(\) \}, \[\]\)/)
+  assert.match(autosave, /const unmount = \(\) => \{[\s\S]*if \(pending && !held\) \{[\s\S]*getSaver\(\)\?\.\(payload\)/)
 })
 
 // Owner, 2026-10-08: "I altered the arbitrage config values and clicked a preset and nothing changed until I reloaded

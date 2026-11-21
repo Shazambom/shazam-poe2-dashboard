@@ -831,12 +831,17 @@ async def refresh(force: bool = False) -> dict:
     else:
         pages_error = "; ".join(filter(None, [pages_error, "bench recipes: nothing parsed; kept the last good list"]))
     pages_error = "; ".join(filter(None, [pages_error, await refresh_tablet_uses(max_age)])) or None
-    # The exchange's items named the game's way (the digest trades items no other source names).
-    pages_error = "; ".join(filter(None, [pages_error, await catalog.refresh(export.bases, max_age=max_age)])) or None
     derived = derive(export)
     import hashlib
     source = {f: hashlib.sha256(raw[f]).hexdigest()[:16] for f in REPOE_FILES}
     result = assemble(derived, export=export, currencies=cur, grants=grants, source=source)
+    if not result["pools"] or not derived.families:
+        err = f"RePoE derived 0 pools / {len(derived.families)} families; kept the last good tables"
+        state["last_error"] = "; ".join(filter(None, [pages_error, err]))
+        log.warning("mod pool refresh refused empty build: %s", err)
+        return state
+    # The exchange's items named the game's way (only after RePoE passes validation so empty bases never wipe meta_catalog).
+    pages_error = "; ".join(filter(None, [pages_error, await catalog.refresh(export.bases, max_age=max_age)])) or None
     store(result)
     state["last_error"] = pages_error
     log.info("mod pools rebuilt: %d pools, %d families, %d currencies, %d grant pages", len(result["pools"]), len(derived.families), len(result["currencies"]), len([g for g in grants if g]))

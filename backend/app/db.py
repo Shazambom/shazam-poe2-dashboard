@@ -555,20 +555,41 @@ def get_capital() -> dict[str, float]:
 
 
 # ---------------------------------------------------------------- sales ledger (user data)
+def _parse_iso_utc(t: Any) -> datetime | None:
+    try:
+        dt = datetime.fromisoformat(str(t).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return dt if dt.tzinfo is not None else None
+
+
 def _sales_upsert(c: sqlite3.Connection, league: str, rows: list[dict]) -> list[dict]:
-    """Upsert Merchant History rows by (item_id, time); returns the rows that were NEW. Never deletes."""
+    """Upsert Merchant History rows by (item_id, instant); returns the rows that were NEW. Never deletes."""
     new: list[dict] = []
     for r in rows:
         item_id, t = r.get("item_id"), r.get("time")
         if not item_id or not t:
             continue
         price = r.get("price") or {}
-        if not c.execute("SELECT 1 FROM sales WHERE item_id=? AND time=?", (str(item_id), str(t))).fetchone():
+        iid, ts = str(item_id), str(t)
+        canonical_ts = ts
+        if c.execute("SELECT 1 FROM sales WHERE item_id=? AND time=?", (iid, ts)).fetchone():
+            is_new = False
+        else:
+            existing_times = [row[0] for row in c.execute("SELECT time FROM sales WHERE item_id=?", (iid,)).fetchall()]
+            parsed = _parse_iso_utc(ts)
+            matched = next((et for et in existing_times if parsed is not None and _parse_iso_utc(et) == parsed), None)
+            if matched is not None:
+                is_new = False
+                canonical_ts = matched
+            else:
+                is_new = True
+        if is_new:
             new.append(r)
         c.execute(
             "INSERT INTO sales(item_id, time, league, price_amount, price_currency, item_json) VALUES(?,?,?,?,?,?) "
             "ON CONFLICT(item_id, time) DO UPDATE SET price_amount=excluded.price_amount, price_currency=excluded.price_currency, item_json=excluded.item_json",
-            (str(item_id), str(t), league, price.get("amount"), price.get("currency"), json.dumps(r.get("item") or {})),
+            (iid, canonical_ts, league, price.get("amount"), price.get("currency"), json.dumps(r.get("item") or {})),
         )
     return new
 
@@ -637,13 +658,9 @@ def set_capital(entries: dict[str, float], counted: list[str] | tuple = ()) -> N
 
 
 def _sale_time(t: Any) -> datetime | None:
-    try:
-        dt = datetime.fromisoformat(str(t).replace("Z", "+00:00"))
-    except ValueError:
-        dt = None
-    if dt is None or dt.tzinfo is None:
+    dt = _parse_iso_utc(t)
+    if dt is None:
         devtelemetry.tlog("sales", f"unreadable sale time {t!r}: not credited")
-        return None
     return dt
 
 

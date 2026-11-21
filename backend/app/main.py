@@ -47,7 +47,7 @@ async def lifespan(app: FastAPI):
     _parent = os.environ.get("ARBITER_PARENT_PID")
     if _parent and _parent.isdigit():
         watchdog.guard(parent_pid=int(_parent), stdin_eof=False)
-    await registry.load_static()
+    registry.load_static_cache()
     sidecar_supervisor.start()          # spawn + supervise the heavy-analytics sidecar (no-op if absent)
     tasks = [asyncio.create_task(registry.keep_static_fresh()), asyncio.create_task(digest.run_forever()), asyncio.create_task(_gold_fee_loop()),
              asyncio.create_task(orderbook.worker()), asyncio.create_task(orderbook.sweeper()),
@@ -834,13 +834,19 @@ def sales_ingest(body: SalesIngest):
     return {"ok": True, "new": len(new_rows), "total": db.sales_count(league), "credited": len(credited), "added": added}
 
 
+# HTTP Date headers have 1s resolution and arrive after network latency, which makes `site - now`
+# slightly negative (transport delay, not PC clock drift). Positive skew (`site > now`) only occurs
+# when the PC clock runs slow, so keep positive skew active to protect against double-crediting.
+CLOCK_SKEW_DEADBAND_S = 10.0
+
+
 def _clock_skew(server_time: str | None) -> float:
-    """The trade site's clock minus this PC's, in seconds (0 when unknown)."""
-    try:
-        site = datetime.fromisoformat(str(server_time).replace("Z", "+00:00"))
-        return (site - datetime.now(timezone.utc)).total_seconds() if site.tzinfo else 0.0
-    except (TypeError, ValueError):
+    """The trade site's clock minus this PC's, in seconds (0 when unknown or small transport delay)."""
+    site = db._parse_iso_utc(server_time)
+    if site is None:
         return 0.0
+    skew = (site - datetime.now(timezone.utc)).total_seconds()
+    return 0.0 if -CLOCK_SKEW_DEADBAND_S <= skew < 0 else skew
 
 
 @app.get("/api/sales")

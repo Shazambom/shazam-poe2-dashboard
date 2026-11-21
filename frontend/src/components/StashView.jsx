@@ -2,13 +2,13 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { api, fmt, surface, toast } from '../lib/api.js'
 import { wealthDigits, stashUnit, STASH_UNITS } from '../lib/wealth.js'
 import { useAutosave } from '../lib/hooks.js'
-import { useStatus, ensureSettings } from '../lib/statusStore.js'
+import { useStatus, ensureSettings, capitalDirty } from '../lib/statusStore.js'
 import { useSync } from '../lib/syncStore.js'
 import { useWorkspace } from '../lib/workspaceStore.js'
 import { flatten } from '../lib/tree.js'
 import { salesStats, relativeTime, rarityOf } from '../lib/sales.js'
 import { holdingWorth } from '../lib/capital.js'
-import { CASH, addAmount, addCredit, cleanQty, parseAmount, stashGroups, netWorth, liquidNetWorth, flipGroup, flipFold, isFolded, groupAccent, isCounted, stashMatches, salesToast, UNGROUPED } from '../lib/stash.js'
+import { CASH, addAmount, recordPendingEdit, countedFromEdits, reconcileCapital, cleanQty, parseAmount, stashGroups, netWorth, liquidNetWorth, flipGroup, flipFold, isFolded, groupAccent, isCounted, stashMatches, salesToast, UNGROUPED } from '../lib/stash.js'
 import { diag } from '../lib/diag.js'
 import { hasTradeEngine as isDesktop } from '../lib/session.js'
 import { nav } from '../lib/nav.js'
@@ -44,28 +44,29 @@ export default function StashView({ league }) {
   const [qty, setQty] = useState(null)          // { currency: "qty as typed" }
   const qtyRef = useRef(null)
   qtyRef.current = qty
-  // The currencies whose total the user typed (or removed) since the last save: the server credits a sale of
-  // one only when it was made after that count. The add bar and the credit re-save are not counts.
-  const recounted = useRef(new Set())
-  const { state: saveState, save, flush, hold, release, arm } = useAutosave(async (rows) => {
+  // Unsaved edits live in the store-shared `capitalDirty` Map so edits held during a fetch or restored
+  // after a failed unmount PUT survive across Stash mounts; `statusStore.saveCapital` carries failed recount
+  // cutoffs and edits forward into any newer queued PUT and restores into `capitalDirty` only if the queue tail rejects.
+  const commitCapital = async (rows, { notifyCredit = false } = {}) => {
     const entries = {}
     Object.entries(rows).forEach(([c, v]) => { const n = Number(v); if (Number.isFinite(n) && n > 0) entries[c] = n })
-    const counted = [...recounted.current]
-    recounted.current.clear()
-    await surface(useStatus.getState().saveCapital(entries, counted))
-  })
-  // Seeded once from whichever copy arrives first, then owned by the inputs: a poll never overwrites typing.
-  const seed = (cap) => {
-    const r = Object.fromEntries(CASH.map(p => [p, 0]))
-    cap.rows.forEach(x => { r[x.currency] = x.qty })
-    setQty(r); arm()
+    const edits = new Map(capitalDirty)
+    const counted = countedFromEdits(edits)
+    capitalDirty.clear()
+    await surface(useStatus.getState().saveCapital(entries, counted, edits))
+    if (notifyCredit) useStatus.setState(st => ({ capitalCreditRev: st.capitalCreditRev + 1 }))
   }
-  // Never from a copy older than a save still in flight (an edit made just before leaving the page).
+  const { state: saveState, save, flush, hold, release, discard, arm } = useAutosave((rows) => commitCapital(rows))
+  // Never seed from a copy older than a save in flight or a confirmed sales credit whose reload hasn't landed yet.
   const capitalSaving = useStatus(s => s.capitalSaving)
-  useEffect(() => { if (!qty && data && !capitalSaving) seed(data) }, [data, qty, capitalSaving]) // eslint-disable-line
+  const capitalStale = useStatus(s => s.capitalStale)
+  const salesFetching = useStatus(s => s.salesFetching)
   const tick = useSync(s => s.tick)
   const tick0 = useRef(tick)
-  const setOne = (c, v) => { recounted.current.add(c); setQty(r => { const n = { ...r, [c]: v }; save(n); return n }) }
+  const setOne = (c, v) => {
+    recordPendingEdit(capitalDirty, c, { kind: 'count', value: v })
+    setQty(r => { const n = { ...r, [c]: v }; save(n); return n })
+  }
 
   // ---- the "count toward liquid net worth" switches (settings `stash_counted`; only choices are stored)
   const stored = useStatus(s => s.settings?.stash_counted)
@@ -80,7 +81,7 @@ export default function StashView({ league }) {
   }
   // Removing a holding forgets its switch too: added back later, it starts at the default.
   const remove = (c) => {
-    recounted.current.add(c)
+    recordPendingEdit(capitalDirty, c, { kind: 'remove' })
     setQty(r => { const n = { ...r }; delete n[c]; save(n); return n })
     if (choices && c in choices) choose({ [c]: null })
   }
@@ -111,6 +112,7 @@ export default function StashView({ league }) {
     const id = pickRef.current, n = parseAmount(amount)
     if (!id || n == null) return
     pickRef.current = ''
+    recordPendingEdit(capitalDirty, id, { kind: 'add', delta: n })
     setQty(r => { const next = addAmount(r, id, n); if (next !== r) save(next); return next })
     unfold(id); setPick('')
   }
@@ -145,40 +147,185 @@ export default function StashView({ league }) {
   const [open, setOpen] = useState(null)
   const [busy, setBusy] = useState(false)
   const [lastFetch, setLastFetch] = useState(null)
-  const loadSales = (lg) => api.sales(lg).then(setSales).catch(() => {})
+  const mountedRef = useRef(true)
+  const selRef = useRef(sel)
+  selRef.current = sel
+  const activeRefresh = useRef(null)
+  useEffect(() => {
+    mountedRef.current = true
+    return () => { mountedRef.current = false; activeRefresh.current = null }
+  }, [])
+  const loadSales = (lg) => api.sales(lg).then(d => { if (mountedRef.current && selRef.current === lg) setSales(d) }).catch(() => {})
   useEffect(() => { if (sel) loadSales(sel) }, [sel])
+  // If an earlier mount's in-flight sales fetch lands a credit or commits detached edits after this StashView
+  // opened, reconcile into the editor BEFORE salesFetching releases this mount's held edits.
+  const creditRev = useStatus(s => s.capitalCreditRev)
+  const creditRevRef = useRef(creditRev)
+  useEffect(() => {
+    if (creditRev === creditRevRef.current) return
+    creditRevRef.current = creditRev
+    if (!data || !qtyRef.current) return
+    const { qty: next, needsSave } = reconcileCapital(data, capitalDirty)
+    setQty(next)
+    if (needsSave) save(next)
+    else discard()
+    if (selRef.current) loadSales(selRef.current)
+  }, [creditRev, data]) // eslint-disable-line
+  // If any mount's post-credit capital reload fails, drop stale quantities on the active editor too so it
+  // cannot save a pre-credit balance before refreshHeader() delivers the credited holdings.
+  useEffect(() => {
+    if (!capitalStale) return
+    discard()
+    capitalDirty.clear()
+    setQty(null)
+  }, [capitalStale]) // eslint-disable-line
+  // Hold autosave across ALL Stash mounts while any sales fetch is in flight or holdings are stale, so a
+  // remounted editor cannot send a pre-credit full-balance PUT over an in-flight credit before reconciliation.
+  useEffect(() => {
+    if (salesFetching || capitalStale) hold()
+    else release()
+  }, [salesFetching, capitalStale]) // eslint-disable-line
+  // Seeded once from whichever copy arrives first, rebased with any shared unsaved edits (e.g. a failed unmount PUT)
+  // and scheduled for retry (held automatically if salesFetching/capitalStale is active).
+  const seed = (cap) => {
+    const { qty: next, needsSave } = reconcileCapital(cap, capitalDirty)
+    setQty(next)
+    arm()
+    if (needsSave) save(next)
+  }
+  useEffect(() => { if (!qty && data && !capitalSaving && !capitalStale) seed(data) }, [data, qty, capitalSaving, capitalStale]) // eslint-disable-line
+  const commitDetachedEdits = async () => {
+    if (!capitalDirty.size) return
+    discard()
+    const base = useStatus.getState().capital
+    if (!base) return
+    const { qty: next, needsSave } = reconcileCapital(base, capitalDirty)
+    if (needsSave) await commitCapital(next, { notifyCredit: true }).catch(() => {})
+  }
   const refresh = async (auto = false) => {
-    if (!isDesktop || !sel || busy) return
+    if (!isDesktop || !sel || activeRefresh.current || useStatus.getState().salesFetching) return
     if (auto && Date.now() - (lastFetchAt.get(sel) || 0) < POLL_MS) return   // too soon — serve the ledger
-    lastFetchAt.set(sel, Date.now())
+    const token = {}
+    activeRefresh.current = token
+    const isCurrent = () => mountedRef.current && activeRefresh.current === token && selRef.current === sel
     setBusy(true)
-    // New sales are credited to the holdings on the server. Send any unsaved edit first and keep later
-    // ones pending, so no save of the old quantities can land after the credit and erase it.
-    await flush()
-    hold()
+    // New sales are credited to the holdings on the server. Send any unsaved edit (including any edit restored
+    // after an earlier failed PUT, or any in-flight save from a previous mount) first and hold all Stash editors
+    // until the fetch settles, so no stale full-balance PUT can race the credit.
+    let acquiredFetch = false
     try {
-      const r = await window.poe2desktop.sales.fetch(sel)
-      setLastFetch({ at: Date.now(), ...r })
-      if (r.ok) {
-        await loadSales(sel)
-        if (r.new) {
-          const post = await api.capital()
-          useStatus.setState(st => ({ capital: post, capitalWrites: st.capitalWrites + 1 }))
-          const merged = qtyRef.current && addCredit(qtyRef.current, r.added)
-          if (merged && merged !== qtyRef.current) { setQty(merged); release(); save(merged) }
-          refreshHeader()
+      if (capitalDirty.size && qtyRef.current) save(qtyRef.current)
+      const flushed = await flush()
+      const priorOk = await useStatus.getState().waitCapital()
+      if (!flushed || !priorOk || capitalDirty.size || !isCurrent()) return
+      hold()
+      useStatus.setState({ salesFetching: true })
+      acquiredFetch = true
+      lastFetchAt.set(sel, Date.now())
+      const invalidateCapital = (msg) => {
+        discard()
+        capitalDirty.clear()
+        useStatus.setState(st => ({ capitalStale: true, capitalWrites: st.capitalWrites + 1 }))
+        if (isCurrent()) {
+          setQty(null)
+          if (msg) toast(msg, false)
         }
-        if (!auto) toast(salesToast(r))
+        refreshHeader()
       }
-      else if (!auto) toast(r.error === 'rate' ? `Trade site rate limit — try again in ${r.retryAfter || 60}s` : r.error === 'auth' ? 'Connect your PoE session first (Settings → Accounts)' : `Fetch failed: ${r.error}`, false)
-    } finally { release(); setBusy(false) }
+      let r
+      try {
+        r = await window.poe2desktop.sales.fetch(sel)
+      } catch {
+        // Fetch promise rejected with unknown server ingest status: invalidate all mounted editors
+        // and reload authoritative holdings instead of releasing any pre-fetch full-balance PUT.
+        invalidateCapital(auto ? null : 'Sales fetch failed — reloading holdings…')
+        return
+      }
+      const current = isCurrent()
+      if (current) setLastFetch({ at: Date.now(), ...r })
+      const hasCredit = !!(r.ok && ((r.credited || 0) > 0 || Object.values(r.added || {}).some(v => v > 0)))
+      if (r.ok) {
+        if (hasCredit) {
+          let post = null
+          let writesBeforeRead = 0
+          try {
+            await useStatus.getState().waitCapital()
+            writesBeforeRead = useStatus.getState().capitalWrites
+            const [cap] = await Promise.all([api.capital(), current ? loadSales(sel) : Promise.resolve()])
+            post = cap
+          } catch {
+            // Credit landed on the server, but we couldn't read the new balance: never release an unreconciled
+            // pre-credit snapshot over it, and invalidate all mounted editors until refreshHeader() lands.
+            invalidateCapital('Sales credited — reloading holdings…')
+            return
+          }
+          if (isCurrent()) {
+            useStatus.setState(st => (st.capitalWrites === writesBeforeRead
+              ? { capital: post, capitalWrites: st.capitalWrites + 1, capitalCreditRev: st.capitalCreditRev + 1, capitalStale: false }
+              : st))
+            creditRevRef.current = useStatus.getState().capitalCreditRev
+            if (qtyRef.current) {
+              const { qty: next, needsSave } = reconcileCapital(post, capitalDirty)
+              setQty(next)
+              if (needsSave) save(next)
+              else discard()
+            }
+            refreshHeader()
+            if (!auto) toast(salesToast(r))
+          } else {
+            // Unmounted or league switched while fetch ran: publish the server's credit (and commit any held
+            // edits from this or any other mount rebased onto it) BEFORE clearing salesFetching.
+            let committed = false
+            let expectedWrites = writesBeforeRead
+            if (capitalDirty.size) {
+              discard()
+              const { qty: next, needsSave } = reconcileCapital(post, capitalDirty)
+              if (needsSave) {
+                committed = await commitCapital(next, { notifyCredit: true }).then(() => true, () => false)
+                expectedWrites = useStatus.getState().capitalWrites
+              }
+            }
+            if (!committed) {
+              useStatus.setState(st => (st.capitalWrites === expectedWrites
+                ? { capital: post, capitalWrites: st.capitalWrites + 1, capitalCreditRev: st.capitalCreditRev + 1, capitalStale: false }
+                : st))
+            }
+            refreshHeader()
+          }
+        } else {
+          if (current) await loadSales(sel)
+          if (isCurrent()) {
+            if (!auto) toast(salesToast(r))
+          } else {
+            await commitDetachedEdits()
+          }
+        }
+      } else {
+        if (current) {
+          if (!auto) toast(r.error === 'rate' ? `Trade site rate limit — try again in ${r.retryAfter || 60}s` : r.error === 'auth' ? 'Connect your PoE session first (Settings → Accounts)' : `Fetch failed: ${r.error}`, false)
+        } else {
+          await commitDetachedEdits()
+        }
+      }
+    } finally {
+      if (acquiredFetch) useStatus.setState({ salesFetching: false })
+      if (activeRefresh.current === token) {
+        activeRefresh.current = null
+        if (mountedRef.current) setBusy(false)
+      }
+      if (acquiredFetch && !activeRefresh.current && !useStatus.getState().capitalStale) release()
+    }
   }
   // A 10-minute timer while mounted (= while the Stash tab is visible). Desktop only.
   useEffect(() => {
     if (!isDesktop || !sel) return
     refresh(true)
     const t = setInterval(() => { if (document.visibilityState !== 'hidden') refresh(true) }, POLL_MS)
-    return () => clearInterval(t)
+    return () => {
+      clearInterval(t)
+      activeRefresh.current = null
+      setBusy(false)
+    }
   }, [sel]) // eslint-disable-line
   // Topbar ⟳ = this tab's own refresh (a manual one).
   useEffect(() => { if (tick !== tick0.current) { tick0.current = tick; refresh(false) } }, [tick]) // eslint-disable-line

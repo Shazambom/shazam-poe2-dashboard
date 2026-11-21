@@ -46,3 +46,4 @@ ORDERBOOK_SWEEP_SECONDS = _int("ORDERBOOK_SWEEP_SECONDS", 600)
 GGG_DIGEST_URL = "https://web.poecdn.com/api/currency-exchange/poe2"
 TRADE_STATIC_URL = "https://www.pathofexile.com/api/trade2/data/static"
 TRADE_EXCHANGE_URL = "https://www.pathofexile.com/api/trade2/exchange"
+TRADE_LEAGUES_TTL_S = 1800   # 30 min: picks up a newly launched league quickly without hammering trade2/data/leagues

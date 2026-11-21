@@ -453,3 +453,46 @@ def test_jewels_and_relics_show_their_corruption_modifiers(derived):
     # Gear is unchanged: its own corruption families only.
     ring = built("ring")
     assert len(ring["corrupted"]["corrupted"]) == 12 and not any("Immune to Maim" in f["text"] for f in ring["corrupted"]["corrupted"])
+
+
+def test_refresh_refuses_to_wipe_mod_pools_when_repoe_derives_nothing(export, derived, monkeypatch):
+    """A transient empty RePoE export must never wipe mod_pools to 0 rows (shazam incident 2026-11-18)."""
+    import asyncio
+    from app import catalog, gamedata
+
+    good = modpool.assemble(derived, export=export, currencies=modpool.currencies_from((FIX / "stackable.html").read_text()),
+                            grants=[], source={"repoe": "good"})
+    modpool.store(good)
+    before = len(modpool.pools())
+    assert before > 0
+
+    async def empty_repoe(url, cache_name, max_age):
+        return b"{}"
+
+    async def fake_page(slug, max_age):
+        if slug == "Stackable_Currency":
+            return (FIX / "stackable.html").read_text()
+        if slug == "Reforging_Bench":
+            return "Used in Three to One Reforge<table><thead><tr><th>From</th><th>To</th></tr></thead><tbody><tr><td>A x3</td><td>B x1</td></tr></tbody></table>"
+        return "<html></html>"
+
+    async def ok_none(*a, **k):
+        return None
+
+    catalog_calls = {"n": 0}
+
+    async def track_catalog(*a, **k):
+        catalog_calls["n"] += 1
+
+    monkeypatch.setattr(gamedata, "_get", empty_repoe)
+    monkeypatch.setattr(modpool, "_page", fake_page)
+    monkeypatch.setattr(modpool, "grant_slugs", lambda _: [])
+    monkeypatch.setattr(modpool, "refresh_tablet_uses", ok_none)
+    monkeypatch.setattr(catalog, "refresh", track_catalog)
+
+    st = asyncio.run(modpool.refresh(force=True))
+    assert len(modpool.pools()) == before, "last good mod_pools must survive an empty RePoE build"
+    assert catalog_calls["n"] == 0, "catalog.refresh must not run with an empty RePoE base_items export"
+    assert st.get("last_error") and "0 pools" in st["last_error"]
+
+

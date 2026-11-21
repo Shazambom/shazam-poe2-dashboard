@@ -79,6 +79,18 @@ class Registry:
         self._rebuild_links()
 
     # -------------------------------------------------------------- static
+    def load_static_cache(self) -> bool:
+        """Synchronously apply the cached /data/static (from kv_ops / market seed) at boot so
+        startup never blocks on pathofexile.com while icons are immediately available."""
+        if self.loaded_at or getattr(self, "_cache_applied", False):
+            return True
+        cached = db.kv_get(STATIC_CACHE_KEY)
+        if not cached:
+            return False
+        self._apply_static(cached)
+        self._cache_applied = True
+        return True
+
     async def load_static(self) -> bool:
         """Fetch /api/trade2/data/static and merge into the registry. Names and ICONS come only
         from here, so one failed fetch at boot must not mean a text-only app: the last good copy
@@ -92,11 +104,9 @@ class Registry:
                 raise ValueError("empty static payload")
         except Exception as exc:  # network is optional; the cached copy (or the seed) still works
             log.warning("could not load trade static data: %s", exc)
-            cached = db.kv_get(STATIC_CACHE_KEY) if not self.loaded_at else None
+            applied = False if self.loaded_at else self.load_static_cache()
             devtelemetry.tlog("static", f"fetch failed ({type(exc).__name__}: {str(exc)[:160]}); "
-                                        f"cache={'applied' if cached else 'none' if not self.loaded_at else 'n/a'}")
-            if cached:
-                self._apply_static(cached)
+                                        f"cache={'applied' if applied else 'none' if not self.loaded_at else 'n/a'}")
             return False
         self._apply_static(data)
         self.loaded_at = time.time()
@@ -122,12 +132,16 @@ class Registry:
         self._rebuild_links()
 
     async def keep_static_fresh(self) -> None:
-        """Until one live fetch has succeeded, keep trying (30 s, doubling to 10 min)."""
+        """Fetch live /data/static in the background immediately at boot, then retry on failure (30 s, doubling to 10 min)."""
         delay = 30.0
+        retried = False
         while not self.loaded_at:
-            await asyncio.sleep(delay)
             if await self.load_static():
-                devtelemetry.tlog("static", "recovered on retry")
+                if retried:
+                    devtelemetry.tlog("static", "recovered on retry")
+                break
+            retried = True
+            await asyncio.sleep(delay)
             delay = min(delay * 2, 600.0)
 
     def _rebuild_links(self) -> None:
@@ -136,6 +150,7 @@ class Registry:
         negative cache so a freshly-loaded bridge re-evaluates previously-unmapped ids."""
         self.meta_to_trade.clear()
         self.unmapped_meta.clear()
+        self._stems_n = -1   # icon URLs may have updated on existing IDs; rebuild stem index on next lookup
         # The catalog names what the others don't: an id the bridge or a user maps is theirs.
         catalog = {m: e for m, e in self._catalog.items()
                    if isinstance(e, dict) and e.get("id") and m not in self._bridge and m not in self._user_overrides}
