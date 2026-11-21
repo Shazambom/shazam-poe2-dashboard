@@ -71,7 +71,86 @@ pyinstaller --noconfirm --clean --onefile \
 mkdir -p backend-bin
 cp "dist/poe2arb-backend$EXE" backend-bin/
 rm -rf "$WORK" dist poe2arb-backend.spec
-# Smoke-run the frozen sidecar dispatch path in the build environment.
+# Smoke-run the frozen sidecar dispatch path, clean idle exit, and full HTTP boot.
 "backend-bin/poe2arb-backend$EXE" --sidecar --selftest
+python - "backend-bin/poe2arb-backend$EXE" <<'PY'
+import os, shutil, socket, subprocess, sys, tempfile, time, urllib.request
+
+exe = os.path.abspath(sys.argv[1])
+tmp = tempfile.mkdtemp(prefix="arbiter-bin-smoke-")
+try:
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        port = s.getsockname()[1]
+    env = os.environ.copy()
+    env.update({
+        "DATA_DIR": tmp,
+        "MARKET_SEED": "",
+        "PORT": str(port),
+        "POE2_DISABLE_POLL": "1",
+        "POE2_DISABLE_SIDECAR": "1",
+    })
+    proc = subprocess.Popen(
+        [exe],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        env=env,
+    )
+    try:
+        deadline = time.monotonic() + 20.0
+        healthy = False
+        while time.monotonic() < deadline:
+            if proc.poll() is not None:
+                out = proc.stdout.read().decode("utf-8", errors="replace")
+                raise RuntimeError(f"frozen backend exited early rc={proc.returncode}:\n{out}")
+            try:
+                with urllib.request.urlopen(f"http://127.0.0.1:{port}/api/health", timeout=1.0) as r:
+                    if r.status == 200:
+                        healthy = True
+                        break
+            except Exception:
+                time.sleep(0.2)
+        if not healthy:
+            raise RuntimeError("frozen backend did not become healthy within 20s")
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/api/status", timeout=5.0) as r:
+            if r.status != 200:
+                raise RuntimeError(f"/api/status returned {r.status}")
+        proc.terminate()
+        proc.wait(timeout=10.0)
+        print(f"frozen backend HTTP boot smoke OK (port {port})")
+    finally:
+        if proc.poll() is None:
+            proc.kill()
+            proc.wait(timeout=5.0)
+
+    # Also verify frozen --sidecar exits cleanly on stdin close (parent-watchdog path, no SIGABRT).
+    sc_env = os.environ.copy()
+    sc_env.update({"DATA_DIR": tmp, "MARKET_DB": os.path.join(tmp, "market.sqlite")})
+    sc = subprocess.Popen(
+        [exe, "--sidecar"],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        env=sc_env,
+    )
+    try:
+        time.sleep(0.8)
+        if sc.poll() is not None and sc.returncode != 0:
+            out = sc.stdout.read().decode("utf-8", errors="replace")
+            raise RuntimeError(f"frozen sidecar crashed early rc={sc.returncode}:\n{out}")
+        sc.stdin.close()
+        rc = sc.wait(timeout=10.0)
+        if rc != 0:
+            out = sc.stdout.read().decode("utf-8", errors="replace")
+            raise RuntimeError(f"frozen sidecar exited rc={rc} on stdin close:\n{out}")
+        print("frozen sidecar parent-watchdog smoke OK (rc=0)")
+    finally:
+        if sc.poll() is None:
+            sc.kill()
+            sc.wait(timeout=5.0)
+finally:
+    shutil.rmtree(tmp, ignore_errors=True)
+PY
 echo "backend-bin/ ready:"
 ls -la backend-bin/

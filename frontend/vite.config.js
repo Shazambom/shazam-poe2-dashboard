@@ -22,4 +22,9 @@ function themePresetsPlugin() {
 export default defineConfig({
   plugins: [react(), themePresetsPlugin()],
   server: { port: 5173, proxy: { '/api': 'http://localhost:8000', '/callback': 'http://localhost:8000' } },
+  test: {
+    environment: 'happy-dom',
+    include: ['test/lifecycle/**/*.test.jsx'],
+    setupFiles: ['test/lifecycle/setup.js'],
+  },
 })

@@ -16,7 +16,7 @@ import Rate from './Rate.jsx'
 import AnimatedNumber from '../lib/animatedNumber.js'
 
 
-function Tile({ r, num, factor, prices, numOptions, onNum, onRemove, onOpen, index = 0 }) {
+const Tile = React.forwardRef(function Tile({ r, num, factor, prices, numOptions, onNum, onRemove, onOpen, index = 0 }, ref) {
   const f = factor || 1
   const rp = (v) => (v == null ? null : v / f)               // reprice R-value into `num`
   const mid = rp(r.mid)
@@ -41,6 +41,7 @@ function Tile({ r, num, factor, prices, numOptions, onNum, onRemove, onOpen, ind
   }, [raw])
   return (
     <motion.div
+      ref={ref}
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.96 }}
@@ -73,7 +74,7 @@ function Tile({ r, num, factor, prices, numOptions, onNum, onRemove, onOpen, ind
       )}
     </motion.div>
   )
-}
+})
 
 export default function BoardView({ status }) {
   const [data, setData] = useState(null)

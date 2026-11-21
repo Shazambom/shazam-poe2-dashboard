@@ -23,6 +23,9 @@ echo "== frontend: node tests"
 node --test "frontend/test/*.test.mjs"   # a glob, not the folder: Node 22 rejects a bare directory
 node frontend/test/workspace-store.fuzzy.mjs
 
+echo "== frontend: react lifecycle tests (vitest)"
+npm --prefix frontend run test:ui
+
 if [ -d desktop/test ]; then
   echo "== desktop: node tests"
   node --test "desktop/test/*.test.mjs"

@@ -15,6 +15,7 @@
     "dist:mac": "npm run build:frontend && electron-builder --mac",
     "dist:win": "npm run build:frontend && electron-builder --win",
     "dist:mac:all": "npm run build:backend && npm run dist:mac",
+    "smoke:mac": "node scripts/smoke-packaged.mjs",
     "publish": "./publish-github.sh"
   },
   "devDependencies": {
