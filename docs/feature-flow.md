@@ -1,9 +1,18 @@
-# Building a feature — the flow (owner, 2026-10-03)
+# Building a feature — the flow (owner, 2026-10-03; updated 2026-11-22)
 
-**Plan → TDD → QA → code review → send to the owner to review locally.** One step at a time: each
-finishes, and its findings are fixed, before the next begins. The skills hold the method; this page holds
-the order and what each step must produce.
+**Dependabot check → Plan → TDD → QA → code review → send to the owner to review locally.** One step at a
+time: each finishes, and its findings are fixed, before the next begins. The skills hold the method; this
+page holds the order and what each step must produce.
 
+0. **Dependabot check (prioritize over feature work).** Before starting feature work, inspect all open
+   Dependabot security alerts and PRs:
+   ```bash
+   gh api "repos/:owner/:repo/dependabot/alerts?state=open"
+   gh pr list --state open --author "app/dependabot"
+   ```
+   Resolve open vulnerability alerts and merge or consolidate actionable dependency updates first (with
+   `ops/run-tests.sh` green and a live CDP drive for UI/Electron majors). If a major upgrade is blocked
+   upstream, explain why and record what is needed before proceeding to feature work.
 1. **Plan.** It varies from session to session, so decide together what this feature needs. Options
    include:
    - parallel subagents exploring the parts of the app it touches;
