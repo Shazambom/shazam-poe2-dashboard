@@ -8,9 +8,11 @@ const main = readFileSync(new URL('../src/main.js', import.meta.url), 'utf8')
 const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
 const ci = readFileSync(new URL('../../.github/workflows/release-desktop-win.yml', import.meta.url), 'utf8')
 
-test('electron 44 and a builder that packages it', () => {
-  assert.match(pkg.devDependencies.electron, /^\^44\./)
-  assert.match(pkg.devDependencies['electron-builder'], /^\^26\./)
+test('electron 44+ and a builder that packages it', () => {
+  const electronMajor = Number(pkg.devDependencies.electron.match(/^\^?(\d+)\./)?.[1])
+  const builderMajor = Number(pkg.devDependencies['electron-builder'].match(/^\^?(\d+)\./)?.[1])
+  assert.ok(electronMajor >= 44, `expected electron >= 44, got ${pkg.devDependencies.electron}`)
+  assert.ok(builderMajor >= 26, `expected electron-builder >= 26, got ${pkg.devDependencies['electron-builder']}`)
 })
 
 test('console-message uses the event-object form (35.0: positional args deprecated)', () => {

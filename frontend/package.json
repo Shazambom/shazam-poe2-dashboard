@@ -11,18 +11,21 @@
     "test:ui": "vitest run"
   },
   "dependencies": {
-    "motion": "^13.5.1",
-    "react": "^18.3.1",
-    "react-arborist": "^3.16.0",
-    "react-dom": "^18.3.1",
-    "recharts": "^2.15.4",
+    "motion": "^14.14.0",
+    "react": "^19.3.1",
+    "react-arborist": "^4.0.1",
+    "react-dnd": "^16.0.1",
+    "react-dnd-html5-backend": "^16.0.1",
+    "react-dom": "^19.3.1",
+    "react-is": "^19.3.1",
+    "recharts": "^3.11.0",
     "zustand": "^5.1.0"
   },
   "devDependencies": {
     "@testing-library/react": "^16.3.3",
-    "@vitejs/plugin-react": "^4.7.0",
+    "@vitejs/plugin-react": "^6.3.0",
     "happy-dom": "^21.0.4",
-    "vite": "^6.4.6",
+    "vite": "^8.3.8",
     "vitest": "^5.1.1"
   }
 }

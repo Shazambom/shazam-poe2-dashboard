@@ -30,13 +30,13 @@ jobs:
   build-win:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.sha }}
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: '22'
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
       - name: Build bundled backend + sidecar (PyInstaller, Windows x64)
@@ -106,7 +106,7 @@ jobs:
           done
           node desktop/scripts/release-assets.mjs upload "$TAG" "${FILES[@]}"
       - name: Also upload as workflow artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: windows-installer
           path: |
