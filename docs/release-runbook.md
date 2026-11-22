@@ -306,6 +306,11 @@ Check these every time; each one has cost a deploy before. (The general rules ev
 
 Condensed and general, newest first; each came from a post-deploy audit (step 8).
 
+- **2026-11-22 (0.3.17-beta.3):** when overwriting a signed Mach-O binary on Apple Silicon (`desktop/build-backend.sh`),
+  `rm -f` the destination before `cp` so macOS AMFI doesn't `SIGKILL` (`Killed: 9`) the reused vnode; and in build smoke
+  tests never leave a child process's stdout on an unread `subprocess.PIPE` (redirect to a temp file so verbose cold-boot
+  logs can't fill the 64 KB pipe buffer and deadlock startup).
+
 - **2026-10-12 (0.3.16-beta.1):** start the publisher detached (`nohup bash -c './publish-github.sh; echo "EXIT $?"' >>
   <log> 2>&1 &`) and watch the log. A background command still carries the tool's 10-minute limit, and the Windows CI
   wait alone is longer; a publish killed there dies between the Mac upload and the release going public.
