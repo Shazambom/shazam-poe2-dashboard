@@ -71,7 +71,7 @@ test('QA 2: ⌘K opens a currency that is not on the board by its name, in the a
 })
 
 test('QA 3: the Per day tile says what it measures', () => {
-  assert.match(src('components/InflationView.jsx'), /<div className="stat-sub">24h trend<\/div>/)
+  assert.match(src('components/InflationView.jsx'), /<div className="stat-sub">7d trend<\/div>/)
 })
 
 test('QA 4: the Loop header always means best first, and shows it', () => {

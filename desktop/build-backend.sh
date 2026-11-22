@@ -69,6 +69,7 @@ pyinstaller --noconfirm --clean --onefile \
   ../backend/run_desktop.py
 
 mkdir -p backend-bin
+rm -f "backend-bin/poe2arb-backend$EXE"
 cp "dist/poe2arb-backend$EXE" backend-bin/
 rm -rf "$WORK" dist poe2arb-backend.spec
 # Smoke-run the frozen sidecar dispatch path, clean idle exit, and full HTTP boot.
@@ -90,39 +91,45 @@ try:
         "POE2_DISABLE_POLL": "1",
         "POE2_DISABLE_SIDECAR": "1",
     })
-    proc = subprocess.Popen(
-        [exe],
-        stdin=subprocess.PIPE,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        env=env,
-    )
-    try:
-        deadline = time.monotonic() + 20.0
-        healthy = False
-        while time.monotonic() < deadline:
-            if proc.poll() is not None:
-                out = proc.stdout.read().decode("utf-8", errors="replace")
-                raise RuntimeError(f"frozen backend exited early rc={proc.returncode}:\n{out}")
-            try:
-                with urllib.request.urlopen(f"http://127.0.0.1:{port}/api/health", timeout=1.0) as r:
-                    if r.status == 200:
-                        healthy = True
-                        break
-            except Exception:
-                time.sleep(0.2)
-        if not healthy:
-            raise RuntimeError("frozen backend did not become healthy within 20s")
-        with urllib.request.urlopen(f"http://127.0.0.1:{port}/api/status", timeout=5.0) as r:
-            if r.status != 200:
-                raise RuntimeError(f"/api/status returned {r.status}")
-        proc.terminate()
-        proc.wait(timeout=10.0)
-        print(f"frozen backend HTTP boot smoke OK (port {port})")
-    finally:
-        if proc.poll() is None:
-            proc.kill()
-            proc.wait(timeout=5.0)
+    # Write child output to a file rather than an unread PIPE (a noisy cold-boot log >64KB deadlocks PIPE).
+    boot_log = os.path.join(tmp, "boot.log")
+    with open(boot_log, "wb") as logf:
+        proc = subprocess.Popen(
+            [exe],
+            stdin=subprocess.PIPE,
+            stdout=logf,
+            stderr=subprocess.STDOUT,
+            env=env,
+        )
+        try:
+            deadline = time.monotonic() + 20.0
+            healthy = False
+            while time.monotonic() < deadline:
+                if proc.poll() is not None:
+                    logf.flush()
+                    out = open(boot_log, encoding="utf-8", errors="replace").read()[-4000:]
+                    raise RuntimeError(f"frozen backend exited early rc={proc.returncode}:\n{out}")
+                try:
+                    with urllib.request.urlopen(f"http://127.0.0.1:{port}/api/health", timeout=1.0) as r:
+                        if r.status == 200:
+                            healthy = True
+                            break
+                except Exception:
+                    time.sleep(0.2)
+            if not healthy:
+                logf.flush()
+                out = open(boot_log, encoding="utf-8", errors="replace").read()[-4000:]
+                raise RuntimeError(f"frozen backend did not become healthy within 20s:\n{out}")
+            with urllib.request.urlopen(f"http://127.0.0.1:{port}/api/status", timeout=5.0) as r:
+                if r.status != 200:
+                    raise RuntimeError(f"/api/status returned {r.status}")
+            proc.terminate()
+            proc.wait(timeout=10.0)
+            print(f"frozen backend HTTP boot smoke OK (port {port})")
+        finally:
+            if proc.poll() is None:
+                proc.kill()
+                proc.wait(timeout=5.0)
 
     # Also verify frozen --sidecar exits cleanly on stdin close (parent-watchdog path, no SIGABRT).
     sc_env = os.environ.copy()

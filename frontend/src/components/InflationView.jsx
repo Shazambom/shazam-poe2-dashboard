@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine, Legend, CartesianGrid } from 'recharts'
 import { api, fmt } from '../lib/api.js'
 import { useApi } from '../lib/hooks.js'
@@ -54,16 +54,17 @@ function mergeSeries(list, { x, val, meta, filter }) {
 // The two age-aligned multi-league charts (cross-league inflation + economy size)
 // are the same chart bar the y-scale and reference line; one component serves both.
 function LeagueAgeChart({ rows, keys, scale, refLine, valueFmt }) {
+  const fmtVal = valueFmt || (v => fmt.n(v, 0))
   return (
     <ResponsiveContainer>
-      <LineChart data={rows} margin={{ top: 8, right: 16, bottom: 4, left: 8 }}>
+      <LineChart data={rows} margin={{ top: 8, right: 16, bottom: 16, left: 8 }}>
         <CartesianGrid stroke={GRID} strokeDasharray="2 4" vertical={false} />
         <XAxis dataKey="age" type="number" domain={['dataMin', 'dataMax']} tick={AXIS} axisLine={{ stroke: GRID }} tickLine={false}
-          tickFormatter={d => `d${d}`} label={{ value: 'day of league', position: 'insideBottom', offset: -2, ...AXIS }} />
+          tickFormatter={d => `d${d}`} label={{ value: 'day of league', position: 'insideBottom', offset: -6, ...AXIS }} />
         <YAxis scale={scale || 'auto'} domain={['auto', 'auto']} tick={AXIS} width={54} axisLine={false} tickLine={false} tickFormatter={v => fmt.n(v, 0)} />
-        <Tooltip cursor={CURSOR} content={<ChartTooltip labelFmt={d => `day ${d}`} valueFmt={v => fmt.n(v, 0)} />} />
+        <Tooltip cursor={CURSOR} content={<ChartTooltip labelFmt={d => `day ${d}`} valueFmt={fmtVal} />} />
         {refLine != null && <ReferenceLine y={refLine} stroke={chart.refLine} strokeDasharray="3 3" />}
-        <Legend wrapperStyle={{ fontSize: 12 }} />
+        <Legend wrapperStyle={{ fontSize: 12, paddingTop: 14 }} />
         {keys.map((k, i) => (
           <Line key={k.id} type="monotone" dataKey={k.id} name={k.id + (k.current ? ' (current)' : '')}
             stroke={SERIES[i % SERIES.length]} strokeWidth={k.current ? 2.8 : 1.4}
@@ -77,21 +78,44 @@ function LeagueAgeChart({ rows, keys, scale, refLine, valueFmt }) {
 // An inflation figure: an arrow for the direction and the size, no sign (▲ 98.6%).
 const arrowPct = (v) => (v == null ? '–' : `${v >= 0 ? '▲' : '▼'} ${Math.abs(Number(v)).toFixed(1)}%`)
 
+// Fixed color slots for core currencies so lines never swap colors across anchor switches (theme.js).
+const CORE_COLOR_SLOT = { annul: 0, chaos: 1, divine: 2, vaal: 3, exalted: 4 }
+const CORE_SLOTS = Object.keys(CORE_COLOR_SLOT).length
+
 export default function InflationView({ league }) {
   const [anchor, setAnchor] = useState('lock')
-  const [hidden, setHidden] = useState(() => new Set())   // currencies toggled off the inflation graph only
-  const toggleCur = (id) => setHidden(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n })
+  const [overrides, setOverrides] = useState(() => ({}))   // explicit per-currency graph toggle overrides
+  const isOn = (c) => overrides[c.id] ?? (c.default_on !== false)
+  const toggleCur = (c) => setOverrides(prev => ({ ...prev, [c.id]: !(prev[c.id] ?? (c.default_on !== false)) }))
   const { data, err, busy } = useApi(() => api.inflation(anchor), [anchor, league])
 
-  const { rows, keys } = useMemo(() =>
-    mergeSeries(data?.currencies ?? [], { x: 't', val: 'v', meta: c => ({ id: c.id, name: c.name }) }), [data])
+  // Never show the previous anchor/league's stats or flash empty state on the synchronous switch commit.
+  const reqKey = `${league || ''}|${anchor}`
+  const prevKey = useRef(reqKey)
+  useEffect(() => { prevKey.current = reqKey }, [reqKey])
+  const switching = prevKey.current !== reqKey
+  const curData = (data && (!data.anchor || data.anchor === anchor) && (!league || !data.league || data.league === league)) ? data : null
+  const loading = busy || switching
+
+  const { rows, keys, colorOf } = useMemo(() => {
+    const list = curData?.currencies ?? []
+    const merged = mergeSeries(list, { x: 't', val: 'v', meta: c => ({ id: c.id, name: c.name, default_on: c.default_on }) })
+    const extras = list.filter(c => !(c.id in CORE_COLOR_SLOT)).map(c => c.id).sort()
+    const extraSlot = new Map(extras.map((id, i) => [id, CORE_SLOTS + i]))
+    return {
+      ...merged,
+      colorOf: (id) => SERIES[(CORE_COLOR_SLOT[id] ?? extraSlot.get(id) ?? 0) % SERIES.length],
+    }
+  }, [curData])
   const nameOf = (id) => keys.find(k => k.id === id)?.name || id
 
-  const b = data?.basket
+  const b = curData?.basket
   const vel = b?.velocity_pct_per_day
-  const anchors = data?.anchors ?? []   // the backend's anchor table (see /api/currencies)
-  // the date the basket's first point is from (the index is 100 there)
-  const sinceLabel = rows.length ? new Date(rows[0].t * 1000).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : null
+  const anchors = data?.anchors ?? []   // the backend's anchor table (stable across anchor switches)
+  // the date and span the basket's window covers (the index is 100 at the start of the window)
+  const spanPts = b?.points?.length ? b.points : rows
+  const sinceLabel = spanPts.length ? new Date(spanPts[0].t * 1000).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : null
+  const spanDays = spanPts.length >= 2 ? Math.max(1, Math.round((spanPts[spanPts.length - 1].t - spanPts[0].t) / 86400)) : null
 
   return (
     <div className="single infl">
@@ -105,28 +129,29 @@ export default function InflationView({ league }) {
 
       {err && <div className="notice error">{err}</div>}
 
-      {b && (
+      {(b || (loading && data)) && (
         <div className="infl-stats">
           {/* Inflation is neither a gain nor a loss: ink with an arrow, never red or green (styleguide §0.1). */}
           <div className="stat">
-            <div className="stat-label">Since league start</div>
-            <div className="stat-val">{arrowPct(b.since_base_pct)}</div>
-            {sinceLabel && <div className="stat-sub">{sinceLabel} · day 0 = 100</div>}
+            <div className="stat-label">{spanDays ? `Last ${spanDays} ${spanDays === 1 ? 'day' : 'days'}` : 'Window'}</div>
+            <div className="stat-val">{arrowPct(b?.since_base_pct)}</div>
+            {sinceLabel && <div className="stat-sub">{sinceLabel} = 100</div>}
           </div>
           <div className="stat">
             <div className="stat-label">Per day</div>
             <div className="stat-val">{arrowPct(vel)}</div>
-            <div className="stat-sub">24h trend</div>
+            <div className="stat-sub">7d trend</div>
           </div>
           <div className="stat">
             <div className="stat-label">Last 24h</div>
-            <div className="stat-val">{arrowPct(b.change_24h_pct)}</div>
+            <div className="stat-val">{arrowPct(b?.change_24h_pct)}</div>
           </div>
         </div>
       )}
 
       <div className="chart-box" style={{ height: 360 }}>
-        {busy && !data ? <div className="empty">Loading…</div>
+        {loading && !curData ? <div className="empty">Loading…</div>
+          : err && !curData ? null
           : rows.length < 2 ? <div className="empty">Not enough trades yet.{anchor !== 'divine' && <><br /><button type="button" className="btn small" onClick={() => setAnchor('divine')}>Use Divine Orb</button></>}</div>
           : (
             <ResponsiveContainer>
@@ -135,10 +160,10 @@ export default function InflationView({ league }) {
                 <XAxis dataKey="t" tickFormatter={day} tick={AXIS} minTickGap={48} axisLine={{ stroke: GRID }} tickLine={false} />
                 <YAxis domain={['auto', 'auto']} tick={AXIS} width={44} axisLine={false} tickLine={false} tickFormatter={v => v.toFixed(0)} />
                 <Tooltip cursor={CURSOR} content={<ChartTooltip labelFmt={day} valueFmt={v => v.toFixed(1)} nameFmt={nameOf} />} />
-                <ReferenceLine y={100} stroke={chart.refLine} strokeDasharray="3 3" label={{ value: 'league start', position: 'insideTopRight', fill: chart.axis, fontSize: 10 }} />
+                <ReferenceLine y={100} stroke={chart.refLine} strokeDasharray="3 3" />
                 <Legend wrapperStyle={{ fontSize: 12 }} formatter={nameOf} />
-                {keys.map((k, i) => hidden.has(k.id) ? null : (
-                  <Line key={k.id} type="monotone" dataKey={k.id} stroke={SERIES[i % SERIES.length]}
+                {keys.map((k) => !isOn(k) ? null : (
+                  <Line key={k.id} type="monotone" dataKey={k.id} stroke={colorOf(k.id)}
                     dot={false} activeDot={{ r: 4, strokeWidth: 2, stroke: 'var(--panel)' }} strokeWidth={1.8} isAnimationActive={false} connectNulls />
                 ))}
               </LineChart>
@@ -150,12 +175,12 @@ export default function InflationView({ league }) {
         <table>
           <thead><tr><th title="Show this currency's line in the graph above">Graph</th><th>Currency</th><th className="num">Now (start = 100)</th><th className="num">Since start</th></tr></thead>
           <tbody>
-            {(data?.currencies ?? []).map((cur, i) => {
-              const on = !hidden.has(cur.id)
+            {(curData?.currencies ?? []).map((cur) => {
+              const on = isOn(cur)
               return (
                 <tr key={cur.id} style={{ opacity: on ? 1 : 0.45 }}>
-                  <td><Toggle checked={on} onChange={() => toggleCur(cur.id)} title={`${on ? 'Hide' : 'Show'} ${cur.name} in the graph`} /></td>
-                  <td><span className="dot-key" style={{ background: SERIES[i % SERIES.length] }} /> <Cur name={cur.name} text /></td>
+                  <td><Toggle checked={on} onChange={() => toggleCur(cur)} title={`${on ? 'Hide' : 'Show'} ${cur.name} in the graph`} /></td>
+                  <td><span className="dot-key" style={{ background: colorOf(cur.id) }} /> <Cur name={cur.name} text /></td>
                   <td className="num">{fmt.n(cur.current, 0)}</td>
                   <td className="num">{arrowPct(cur.since_base_pct)}</td>
                 </tr>
@@ -237,7 +262,7 @@ const MarketCap = React.memo(function MarketCap({ league }) {
       <div className="chart-box" style={{ height: 320, marginTop: 12 }}>
         {busy && !data ? <div className="empty">Loading…</div>
           : rows.length < 2 ? <div className="empty">Economy history is still building — check back shortly.</div>
-          : <LeagueAgeChart rows={rows} keys={keys} scale="log" valueFmt={(v) => [`${fmt.n(v, 0)} mir/day`]} />}
+          : <LeagueAgeChart rows={rows} keys={keys} scale="log" valueFmt={v => `${fmt.n(v, 0)} mir/day`} />}
       </div>
     </div>
   )

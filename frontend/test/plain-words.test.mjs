@@ -33,13 +33,12 @@ test('Hold\'s first run shows loading rows, not a paragraph about poe2scout', ()
   assert.doesNotMatch(s, /the backfill may still be running/)
 })
 
-test('Inflation: no theory on screen, a real start date, and no hour count', () => {
+test('Inflation: no theory on screen, an honest window label, and no hour count', () => {
   const s = src('InflationView')
   for (const gone of ['soft currencies priced in a hard asset', 'Hard-asset anchor', 'Basket inflation', 'since data start',
-    'rising = dump soft, hold hard', 'h of data']) assert.ok(!s.includes(gone), gone)
-  // first-contact audit (2026-10-08): the anchor stays; the tile is "Since league start", the picker reads "Against"
-  assert.match(s, /Since league start/)
-  assert.match(s, /\{sinceLabel\} · day 0 = 100/)
+    'rising = dump soft, hold hard', 'h of data', 'Since league start', 'day 0 = 100']) assert.ok(!s.includes(gone), gone)
+  assert.match(s, /Last \$\{spanDays\} \$\{spanDays === 1 \? 'day' : 'days'\}/)
+  assert.match(s, /\{sinceLabel\} = 100/)
   assert.match(s, />Against\n/)
 })
 
