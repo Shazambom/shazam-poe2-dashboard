@@ -20,8 +20,9 @@ export const linesOf = (text) => text.split(' | ')
 // The forms a modifier may print as (every one must satisfy the token).
 export const formsOf = (text) => text.split(' ~ ')
 
-// A body with ^ and $ where it touches a line end: the ways to anchor it.
-const anchored = (body, atStart, atEnd) => [body, ...(atStart ? ['^' + body] : []), ...(atEnd ? [body + '$'] : []), ...(atStart && atEnd ? ['^' + body + '$'] : [])]
+// A body with ^ where it touches line start. Never emit $: PoE 2 0.5.0+ advanced descriptions
+// append " — Unscalable Value", "(desecrated)", "(fractured)", or "(enchant)" to line ends.
+const anchored = (body, atStart) => (atStart ? [body, '^' + body] : [body])
 
 // The printed line with a mask of the characters a token may not use: a roll's digits, and
 // any digit at all ("3 out of every 10 seconds" would otherwise hand out the token "3", which

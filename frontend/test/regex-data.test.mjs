@@ -114,6 +114,7 @@ for (const kind of KINDS) {
     const otherKind = readPool(kind === 'waystone' ? 'tablet' : 'waystone')
     for (const m of mods) {
       assert.ok(m.regex, m.text)
+      assert.equal(m.regex.endsWith('$'), false, `${m.regex} (${m.text}) must not use $ (breaks on PoE 2 0.5.x trailing suffixes)`)
       const re = new RegExp(m.regex, 'im')
       for (const f of formsOf(m.text)) assert.ok(linesOf(f).map(matchable).some(l => re.test(l)), `${m.regex} must match the form "${f}"`)
       for (const o of mods) if (o !== m) for (const l of printed(o.text)) assert.equal(re.test(l), false, `${m.regex} (${m.text}) also matches "${l}"`)
@@ -124,8 +125,8 @@ for (const kind of KINDS) {
       if (formsOf(m.text).length === 1 && linesOf(m.text).length === 1 && (m.text.match(/#/g) || []).length === 1) assert.ok(m.num, `${m.text} should offer a minimum`)
     }
     assert.equal(mods.filter(m => !m.trade.length).length, NO_TRADE_ID[kind], `${kind}: rows without a trade id: ${mods.filter(m => !m.trade.length).map(m => m.text).join(' / ')}`)
-    // Kind anchors the generators rely on: no mod of the other kind prints them either way round.
-    const anchor = kind === 'waystone' ? /e \(T/i : / rem/i
+    // Kind anchors the generators rely on: no mod or name of the other kind prints them either way round.
+    const anchor = kind === 'waystone' ? /e \(T/i : / rema/i
     for (const l of otherKind.flatMap(printed)) assert.equal(anchor.test(l), false, `the ${kind} anchor matches a ${kind === 'waystone' ? 'tablet' : 'waystone'} mod: ${l}`)
   })
 }

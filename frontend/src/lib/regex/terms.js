@@ -46,19 +46,25 @@ function formPlacement(text, regex) {
   } catch { return null }
 }
 
+// PoE 2 0.5.0+ matches against advanced descriptions, where rolled values carry their tier
+// range right after the number ("18(15-19)%", "42(50-40)%", "2(1-2) buried"). Requiring the
+// opening "(" before ")" keeps the upper tier bound ("19)%") from falsely matching.
+const ROLL_RANGE = '(\\([^)]*\\))?'
+
 // The token, with "at least min" bolted onto the side the roll lives, when asked for and when
 // the table says a minimum is possible. The number is anchored on the character printed after
-// the roll, so a longer number is read whole and a shorter one never matches; a token that
-// touches the roll is glued straight on; a bridged token takes the number inside its bridge.
+// the roll (with an optional inline tier range between them), so a longer number is read whole
+// and a shorter one never matches; a token that touches the roll is glued straight on; a
+// bridged token takes the number inside its bridge.
 export function selectedMod(mod, sel, round10) {
   const p = mod.num
   const num = p ? minRegex(String(Number(sel?.min) || 0), round10).replace(/\./g, '\\d') : ''
   if (!num) return mod.regex
   const anchor = escapeRe(p.after)
-  if (p.side === 'before') return `${mod.regex}${p.gap ? '.*' : ''}${num}${anchor}`
-  if (p.side === 'after') return `${num}${p.gap ? anchor + '.*' : ''}${mod.regex}`
+  if (p.side === 'before') return `${mod.regex}${p.gap ? '.*' : ''}${num}${ROLL_RANGE}${anchor}`
+  if (p.side === 'after') return `${num}${ROLL_RANGE}${p.gap ? anchor + '.*' : ''}${mod.regex}`
   const bridge = mod.regex.indexOf('.*')
-  return `${mod.regex.slice(0, bridge)}.*${num}${anchor}.*${mod.regex.slice(bridge + 2)}`
+  return `${mod.regex.slice(0, bridge)}.*${num}${ROLL_RANGE}${anchor}.*${mod.regex.slice(bridge + 2)}`
 }
 
 const byId = (table) => new Map(table.mods.map(m => [m.id, m]))

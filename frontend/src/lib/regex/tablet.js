@@ -5,9 +5,9 @@
 import { rangeRegex, priceRange } from './number.js'
 import { rarity, wantedTerms, joinTerms } from './terms.js'
 
-// "10 uses remaining" / "1 use remaining" is on every tablet and no waystone; the kind anchor
-// when no uses term is.
-const ANCHOR = '" rem"'
+// "10 uses remaining" / "1 use remaining" is on every tablet and no waystone (including rare
+// waystones named "* Remnant"); the kind anchor when no uses term is.
+const ANCHOR = '" rema"'
 
 export function tabletRegex(s, table) {
   const uses = usesTerm(s.uses)

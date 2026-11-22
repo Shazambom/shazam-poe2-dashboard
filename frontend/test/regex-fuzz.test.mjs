@@ -38,30 +38,43 @@ const NAMES = readJson('map-names.json')
 const V = NAMES.vocab
 const NAME_POOL = namePool(NAMES)
 
-// A mod as the item prints it: a plain roll where the text has "#" ("Monsters deal 17% of Damage
-// as Extra Fire"), one line per line of the mod ("a | b" in the pool). A mod with several printed
-// forms ("a ~ b") prints the form `it.form` picks. `rolls` is one number per "#".
-const renderMod = (text, rolls, form = 0) => {
+// A mod as the item prints it: plain roll ("17%") or PoE 2 0.5.x advanced format with an
+// inline tier range ("17(15-25)%") and optional " — Unscalable Value" suffix on unrolled lines.
+const renderMod = (text, rolls, form = 0, adv = false) => {
   const forms = text.split(' ~ ')
   let i = 0
-  return forms[form % forms.length].replace(/#/g, () => String(rolls[i++])).split(' | ').join('\n')
+  const rendered = forms[form % forms.length].replace(/#/g, () => {
+    const v = rolls[i++]
+    return adv ? `${v}(${Math.max(1, v - 3)}-${Math.min(99, v + 12)})` : String(v)
+  })
+  const lines = rendered.split(' | ')
+  return (adv && i === 0 ? lines.map(l => `${l} — Unscalable Value`) : lines).join('\n')
 }
 
 function renderWaystone(it) {
-  const y = (label, v) => v > 0 ? [`${label}: +${v}%`] : []
+  const adv = !!it.adv
+  const aug = adv ? ' (augmented)' : ''
+  const y = (label, v) => v > 0 ? [`${label}: +${v}%${aug}`] : []
+  const packLabel = adv ? 'Monster Pack Size' : 'Pack Size'
+  const modLines = it.mods.flatMap((m, idx) => adv
+    ? [idx % 2 === 0 ? `{ Prefix Modifier "${V.waystone_prefix[idx % V.waystone_prefix.length]}" (Tier: 1) }`
+                     : `{ Suffix Modifier "${V.waystone_suffix[idx % V.waystone_suffix.length]}" (Tier: 1) }`,
+       renderMod(m.text, m.rolls, m.form, true)]
+    : [renderMod(m.text, m.rolls, m.form, false)])
   return [
     'Item Class: Waystones',
     `Rarity: ${it.rarity[0].toUpperCase() + it.rarity.slice(1)}`,
     ...(it.rarity === 'rare' ? [it.name] : []),
     `Waystone (Tier ${it.tier})`,
     '--------',
-    `Revives Available: ${it.revives}`,
-    ...y('Item Rarity', it.iir), ...y('Pack Size', it.pack), ...y('Monster Rarity', it.mrar), ...y('Monster Effectiveness', it.eff), ...y('Waystone Drop Chance', it.drop),
+    `Revives Available: ${it.revives}${aug}`,
+    ...y('Item Rarity', it.iir), ...y(packLabel, it.pack), ...y('Monster Rarity', it.mrar), ...y('Monster Effectiveness', it.eff), ...y('Waystone Drop Chance', it.drop),
     '--------', `Item Level: ${it.tier + 64}`, '--------',
-    ...it.mods.map(m => renderMod(m.text, m.rolls, m.form)),
+    ...(adv ? ['{ Implicit Modifier }'] : []),
+    ...modLines,
     ...(it.corrupted ? ['--------', 'Corrupted'] : []),
-    ...(it.delirious ? ['Delirious'] : []),
-    ...(it.price ? ['--------', `~b/o ${it.price.n}${it.price.frac || ""} ${it.price.cur}`] : []),
+    ...(it.delirious ? [adv ? 'Players in Area are 32% Delirious (enchant)' : 'Delirious'] : []),
+    ...(it.price ? ['--------', `${adv ? 'Note: ' : ''}~b/o ${it.price.n}${it.price.frac || ''} ${it.price.cur}`] : []),
   ].join('\n')
 }
 
@@ -70,33 +83,42 @@ const TABLET_DESC = Object.fromEntries(TTABLE.kinds.map(k => [k.key, k.descripti
 const TYPE_KEYS = TTABLE.kinds.map(k => k.key)
 
 function renderTablet(it) {
+  const adv = !!it.adv
   const base = TABLET_BASE[it.type]
   const head = it.rarity === 'rare' ? [it.name, base] : it.rarity === 'magic' ? [`${it.prefix} ${base} ${it.suffix}`] : [base]
+  const modLines = it.mods.flatMap((m, idx) => adv
+    ? [idx % 2 === 0 ? `{ Prefix Modifier "${V.magic_prefix[idx % V.magic_prefix.length]}" (Tier: 1) }`
+                     : `{ Suffix Modifier "${V.magic_suffix[idx % V.magic_suffix.length]}" (Tier: 1) }`,
+       renderMod(m.text, m.rolls, m.form, true)]
+    : [renderMod(m.text, m.rolls, m.form, false)])
   return [
-    'Item Class: Tablets',
+    adv ? 'Item Class: Tablet' : 'Item Class: Tablets',
     `Rarity: ${it.rarity[0].toUpperCase() + it.rarity.slice(1)}`,
     ...head,
-    'Tablet',
+    ...(adv ? [] : ['Tablet']),
     '--------', `Item Level: ${60 + it.uses}`, '--------',
+    ...(adv ? ['{ Implicit Modifier }'] : []),
     TABLET_DESC[it.type],
     it.uses === 1 ? '1 use remaining' : `${it.uses} uses remaining`,
     '--------',
-    ...it.mods.map(m => renderMod(m.text, m.rolls, m.form)),
-    ...(it.price ? ['--------', `~b/o ${it.price.n}${it.price.frac || ""} ${it.price.cur}`] : []),
+    ...modLines,
+    ...(it.price ? ['--------', `${adv ? 'Note: ' : ''}~b/o ${it.price.n}${it.price.frac || ''} ${it.price.cur}`] : []),
   ].join('\n')
 }
 
-// The search box. Returns true when the item stays visible.
+// The search box: line-by-line regex matching, matching PoE 2's actual engine.
 export function search(string, tooltip) {
   const terms = []
   const re = /"([^"]*)"|(\S+)/g
   let m
   while ((m = re.exec(string))) terms.push(m[1] ?? m[2])
+  const lines = tooltip.split('\n')
   return terms.every(t => {
     const neg = t.startsWith('!')
     const body = neg ? t.slice(1) : t
-    let hit
-    try { hit = new RegExp(body, 'im').test(tooltip) } catch (e) { throw new Error(`bad regex ${body}: ${e.message}`) }
+    let rx
+    try { rx = new RegExp(body, 'i') } catch (e) { throw new Error(`bad regex ${body}: ${e.message}`) }
+    const hit = lines.some(line => rx.test(line))
     return neg ? !hit : hit
   })
 }
@@ -133,7 +155,7 @@ const price = (r) => r.chance(.5) ? { n: r.int(0, 999), frac: r.chance(.3) ? `.$
 
 function randomWaystone(r) {
   const mods = r.sample(WMODS, r.int(0, 6)).map(m => withRoll(r, m))
-  return { name: name(r), tier: r.int(1, 16), revives: r.int(0, 6), rarity: r.pick(RAR), corrupted: r.chance(.4), delirious: r.chance(.2),
+  return { adv: r.chance(.5), name: name(r), tier: r.int(1, 16), revives: r.int(0, 6), rarity: r.pick(RAR), corrupted: r.chance(.4), delirious: r.chance(.2),
     iir: r.chance(.7) ? r.int(1, 150) : 0, pack: r.chance(.7) ? r.int(1, 150) : 0, drop: r.chance(.5) ? r.int(1, 150) : 0, eff: r.chance(.5) ? r.int(1, 150) : 0, mrar: r.chance(.5) ? r.int(1, 150) : 0,
     mods, price: price(r) }
 }
@@ -142,7 +164,7 @@ function randomTablet(r) {
   const type = r.pick(Object.keys(TABLET_BASE))
   const pool = TMODS.filter(m => m.type === 'any' || m.type === type)
   const mods = r.sample(pool, r.int(0, 4)).map(m => withRoll(r, m))
-  return { name: `${r.pick(V.tablet_first)} ${r.pick(V.tablet_second)}`, prefix: r.pick(V.magic_prefix), suffix: r.pick(V.magic_suffix),
+  return { adv: r.chance(.5), name: `${r.pick(V.tablet_first)} ${r.pick(V.tablet_second)}`, prefix: r.pick(V.magic_prefix), suffix: r.pick(V.magic_suffix),
     type, rarity: r.pick(RAR), uses: r.int(1, 18), mods, price: price(r) }
 }
 
@@ -235,11 +257,13 @@ test('the tooltip model agrees with the stoplist the tokens were computed agains
   const r = rng(1)
   const bare = (l) => l.replace(/#/g, '1').replace(/[+-]?\d+/g, '').replace(/\s+/g, ' ').trim()
   const fixed = new Set(STOP.map(bare))
-  const lines = renderWaystone({ ...randomWaystone(r), mods: [], price: { n: 5, cur: 'exalted' }, corrupted: true, delirious: true }).split('\n')
-    .concat(...Object.keys(TABLET_BASE).map(type => renderTablet({ ...randomTablet(r), type, mods: [], price: { n: 5, cur: 'divine' } }).split('\n')))
-  for (const line of lines) {
-    if (line === '--------' || NAME_POOL.includes(line)) continue
-    assert.ok(fixed.has(bare(line)), `tooltip line "${line}" is not in tooltip-lines.json`)
+  for (const adv of [false, true]) {
+    const lines = renderWaystone({ ...randomWaystone(r), adv, mods: [], price: { n: 5, cur: 'exalted' }, corrupted: true, delirious: true }).split('\n')
+      .concat(...Object.keys(TABLET_BASE).map(type => renderTablet({ ...randomTablet(r), adv, type, mods: [], price: { n: 5, cur: 'divine' } }).split('\n')))
+    for (const line of lines) {
+      if (line === '--------' || NAME_POOL.includes(line)) continue
+      assert.ok(fixed.has(bare(line)), `tooltip line "${line}" (adv=${adv}) is not in tooltip-lines.json`)
+    }
   }
 })
 

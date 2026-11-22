@@ -7,7 +7,7 @@ export function namePool({ vocab, patterns }) {
     let out = ['']
     for (const part of pattern.split(/(\{[a-z_]+\})/)) {
       if (!part) continue
-      const words = part.startsWith('{') ? vocab[part.slice(1, -1)] : [part]
+      const words = /^\{[a-z_]+\}$/.test(part) ? vocab[part.slice(1, -1)] : [part]
       if (!words) throw new Error(`map-names.json: unknown list ${part}`)
       out = out.flatMap(prefix => words.map(w => prefix + w))
     }

@@ -67,15 +67,18 @@ test('placement: where the roll sits relative to the token, derived once from te
 test('a minimum is the number pattern anchored on the character after the roll, on the side the roll lives', () => {
   const byId = Object.fromEntries(mods.map(m => [m.id, m]))
   assert.equal(selectedMod(byId.fire, { min: 0 }, false), 'a fire$')
-  assert.equal(selectedMod(byId.fire, { min: 12 }, false), '(1[2-9]|[2-9]\\d|\\d\\d\\d)%.*a fire$')
-  assert.equal(selectedMod(row('life', 'Monsters have #% increased Life', 'nsters h'), { min: 25 }, true), 'nsters h.*([2-9]\\d|\\d\\d\\d)%')
+  assert.equal(selectedMod(byId.fire, { min: 12 }, false), '(1[2-9]|[2-9]\\d|\\d\\d\\d)(\\([^)]*\\))?%.*a fire$')
+  assert.equal(selectedMod(row('life', 'Monsters have #% increased Life', 'nsters h'), { min: 25 }, true), 'nsters h.*([2-9]\\d|\\d\\d\\d)(\\([^)]*\\))?%')
   // touching the roll: no ".*", the token is the anchor
-  assert.equal(selectedMod(byId.res, { min: 1 }, false), '([1-9]|\\d\\d\\d?)% ma')
+  assert.equal(selectedMod(byId.res, { min: 1 }, false), '([1-9]|\\d\\d\\d?)(\\([^)]*\\))?% ma')
   assert.equal(new RegExp(selectedMod(byId.res, { min: 1 }, false), 'i').test('-1% maximum Player Resistances'), true)
+  assert.equal(new RegExp(selectedMod(byId.res, { min: 1 }, false), 'i').test('-1(1-5)% maximum Player Resistances'), true)
   // a bridged token takes the number inside the bridge
-  assert.equal(selectedMod(byId.magic, { min: 37 }, false), '^M.*(3[7-9]|[4-9]\\d|\\d\\d\\d)%.*gi')
+  assert.equal(selectedMod(byId.magic, { min: 37 }, false), '^M.*(3[7-9]|[4-9]\\d|\\d\\d\\d)(\\([^)]*\\))?%.*gi')
   assert.equal(new RegExp(selectedMod(byId.magic, { min: 37 }, false), 'im').test('Map has 37% increased Magic Monsters'), true)
+  assert.equal(new RegExp(selectedMod(byId.magic, { min: 37 }, false), 'im').test('Map has 37(35-49)% increased Magic Monsters'), true)
   assert.equal(new RegExp(selectedMod(byId.magic, { min: 37 }, false), 'im').test('Map has 5% increased Magic Monsters'), false)
+  assert.equal(new RegExp(selectedMod(byId.magic, { min: 37 }, false), 'im').test('Map has 35(35-49)% increased Magic Monsters'), false)
   // rounded to 0 is "any": bare token
   assert.equal(selectedMod(byId.res, { min: 7 }, true), '% ma')
   // no placement: bare token whatever the minimum
@@ -84,6 +87,7 @@ test('a minimum is the number pattern anchored on the character after the roll, 
   for (const [min, roll, want] of [[12, 5, false], [12, 12, true], [12, 215, true], [30, 25, false], [30, 119, true], [130, 25, false], [3, 8, true], [3, 2, false]]) {
     const re = new RegExp(selectedMod(byId.fire, { min }, false), 'i')
     assert.equal(re.test(`Monsters deal ${roll}% of Damage as Extra Fire`), want, `min ${min} roll ${roll}`)
+    assert.equal(re.test(`Monsters deal ${roll}(1-${Math.max(roll, min) + 5})% of Damage as Extra Fire`), want, `min ${min} ranged roll ${roll}`)
   }
 })
 
@@ -117,7 +121,7 @@ test('waystone: wanted and unwanted mods', () => {
   assert.equal(waystoneRegex(W({ want: [{ id: 'chains', min: 0 }, { id: 'fire', min: 0 }] }), WT), '"e \\(T" "hains$|a fire$"')
   assert.equal(waystoneRegex(W({ want: [{ id: 'chains', min: 0 }, { id: 'fire', min: 0 }], wantMode: 'all' }), WT), '"e \\(T" "hains$" "a fire$"')
   assert.equal(waystoneRegex(W({ avoid: ['chains', 'pack'] }), WT), '"e \\(T" "!hains$|pack"')
-  assert.equal(waystoneRegex(W({ want: [{ id: 'fire', min: 15 }], avoid: ['chains'] }), WT), '"e \\(T" "(1[5-9]|[2-9]\\d|\\d\\d\\d)%.*a fire$" "!hains$"')
+  assert.equal(waystoneRegex(W({ want: [{ id: 'fire', min: 15 }], avoid: ['chains'] }), WT), '"e \\(T" "(1[5-9]|[2-9]\\d|\\d\\d\\d)(\\([^)]*\\))?%.*a fire$" "!hains$"')
   assert.equal(waystoneRegex(W({ want: [{ id: 'gone', min: 0 }] }), WT), '')   // an id not in the table is ignored
 })
 
@@ -128,21 +132,21 @@ test('waystone: price and append, in order', () => {
 
 test('tablet: type, uses, rarity, mods, price', () => {
   assert.equal(tabletRegex(T(), TT), '')
-  // The kind anchor " rem" ("10 uses remaining", "1 use remaining") keeps waystones out; a uses
-  // term is its own anchor.
-  assert.equal(tabletRegex(T({ type: { ...defaults.tablet.type, ritual: true } }), TT), '" rem" "(^adds rit)"')
-  assert.equal(tabletRegex(T({ type: { ...defaults.tablet.type, breach: true, abyss: true } }), TT), '" rem" "(^adds an ot|^adds aby)"')
-  assert.equal(tabletRegex(T({ type: { ...defaults.tablet.type, breach: true, temple: true } }), TT), '" rem" "(^adds an ot)"')   // a kind the table lacks is ignored
+  // The kind anchor " rema" ("10 uses remaining", "1 use remaining") keeps waystones out
+  // (including rare waystones named "* Remnant"); a uses term is its own anchor.
+  assert.equal(tabletRegex(T({ type: { ...defaults.tablet.type, ritual: true } }), TT), '" rema" "(^adds rit)"')
+  assert.equal(tabletRegex(T({ type: { ...defaults.tablet.type, breach: true, abyss: true } }), TT), '" rema" "(^adds an ot|^adds aby)"')
+  assert.equal(tabletRegex(T({ type: { ...defaults.tablet.type, breach: true, temple: true } }), TT), '" rema" "(^adds an ot)"')   // a kind the table lacks is ignored
   assert.equal(tabletRegex(T({ uses: 5 }), TT), '"([5-9]|1[0-8]) us"')
   assert.equal(tabletRegex(T({ uses: 9 }), TT), '"(9|1[0-8]) us"')
   assert.equal(tabletRegex(T({ uses: 14 }), TT), '"1[4-8] us"')
   assert.equal(tabletRegex(T({ uses: 19 }), TT), '')
-  assert.equal(tabletRegex(T({ rarity: { normal: true, magic: false, rare: false } }), TT), '" rem" "y: n"')
-  assert.equal(tabletRegex(T({ want: [{ id: 'pack', min: 0 }, { id: 'fire', min: 0 }] }), TT), '" rem" "pack|a fire$"')
+  assert.equal(tabletRegex(T({ rarity: { normal: true, magic: false, rare: false } }), TT), '" rema" "y: n"')
+  assert.equal(tabletRegex(T({ want: [{ id: 'pack', min: 0 }, { id: 'fire', min: 0 }] }), TT), '" rema" "pack|a fire$"')
   assert.equal(tabletRegex(T({ want: [{ id: 'pack', min: 25 }, { id: 'fire', min: 0 }], wantMode: 'all' }), TT),
-    '" rem" "(2[5-9]|[3-9]\\d|\\d\\d\\d)%.*pack" "a fire$"')
-  assert.equal(tabletRegex(T({ want: [{ id: 'pack', min: 25 }], round10: true }), TT), '" rem" "([2-9]\\d|\\d\\d\\d)%.*pack"')
-  assert.equal(tabletRegex(T({ price: { on: true, trade: false, min: 1, max: 9, currency: 'divine' } }), TT), '" rem" " [1-9](\\.\\d+)? divine"')
+    '" rema" "(2[5-9]|[3-9]\\d|\\d\\d\\d)(\\([^)]*\\))?%.*pack" "a fire$"')
+  assert.equal(tabletRegex(T({ want: [{ id: 'pack', min: 25 }], round10: true }), TT), '" rema" "([2-9]\\d|\\d\\d\\d)(\\([^)]*\\))?%.*pack"')
+  assert.equal(tabletRegex(T({ price: { on: true, trade: false, min: 1, max: 9, currency: 'divine' } }), TT), '" rema" " [1-9](\\.\\d+)? divine"')
 })
 
 test('waystone trade query: instant buyout, rarity from the toggles, every id GGG lists for a text', () => {

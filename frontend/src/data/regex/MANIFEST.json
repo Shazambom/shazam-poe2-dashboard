@@ -3,8 +3,8 @@
   "sourceSha256": "2f82a8cefec613cc244df85cf65af19ec6a1653b6da6c5ea27a43b9f0ec70427",
   "files": {
     "map-names.json": {
-      "sha256": "6ab97986f7a69174adc1a0215dda776bd563eac6e8c2fd5c8196a8ab0f25d7ce",
-      "bytes": 3257
+      "sha256": "d9fca2b8e336cc0fab88eab3b86249c8dc352f84f26fe87ca9f9f4c66ce190c8",
+      "bytes": 5239
     },
     "pools/tablet.txt": {
       "sha256": "edbd8632af403b5645623ce9517b930bac4aa25e4818f8356c6c22c370e2ddaf",
@@ -19,16 +19,16 @@
       "bytes": 1331
     },
     "tablet.json": {
-      "sha256": "290ab12518610bb4697b1e547aae688df8753d100146b0d321b891293a136b16",
-      "bytes": 31518
+      "sha256": "df4e37c55d32030ddc58a61ca33a4c5b906dfd4b9aa24cd9b53fbb8d4921c15f",
+      "bytes": 31587
     },
     "tooltip-lines.json": {
-      "sha256": "7d26dbda1a84af28ee5e7ed43c3fbc85ef18173309b58a293e574a65b083619e",
-      "bytes": 1340
+      "sha256": "cf451b1e566497615ebadb224db824a2ae5e11a59407d1fc49adad271077290a",
+      "bytes": 2065
     },
     "waystone.json": {
-      "sha256": "e869c3d70482bee4e97db15f96fc952615903579a3a6d666e8b3c6776aee77b8",
-      "bytes": 24313
+      "sha256": "76f2d2a6fce84cb53512c6d210f8ab0473e2736cff49ad435f4f889980c94d7b",
+      "bytes": 24340
     }
   }
 }

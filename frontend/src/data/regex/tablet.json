@@ -147,7 +147,7 @@
     {
       "id": "f5a3b3a3",
       "text": "#% increased Expedition Explosive Area of Effect in Map",
-      "regex": "ea ",
+      "regex": "a o",
       "trade": [
         "explicit.stat_3039133122"
       ],
@@ -266,7 +266,7 @@
     {
       "id": "bbc47a16",
       "text": "#% increased Quantity of Breach Splinters dropped by Breach Monsters in Map",
-      "regex": "f B",
+      "regex": "f Br",
       "trade": [
         "explicit.stat_624534143"
       ],
@@ -306,7 +306,7 @@
     {
       "id": "e0ec303e",
       "text": "#% increased Quantity of Hiveblood found in Map",
-      "regex": "ebl",
+      "regex": "vebl",
       "trade": [
         "explicit.stat_2778285247"
       ],
@@ -358,7 +358,7 @@
     {
       "id": "76b534d4",
       "text": "#% increased Quantity of Wombgifts found in Map",
-      "regex": " Wo",
+      "regex": " Wom",
       "trade": [
         "explicit.stat_472809816"
       ],
@@ -412,7 +412,7 @@
     {
       "id": "e66808db",
       "text": "Abyss Pits in Map are twice as likely to have Rewards",
-      "regex": " tw",
+      "regex": "s Pi",
       "trade": [
         "explicit.stat_4256531808",
         "desecrated.stat_4256531808"
@@ -429,7 +429,7 @@
     {
       "id": "621d7008",
       "text": "Abysses in Map have #% increased chance to lead to an Abyssal Depths",
-      "regex": "hs",
+      "regex": "o l",
       "trade": [
         "explicit.stat_2722831300"
       ],
@@ -442,13 +442,13 @@
     {
       "id": "e0c0082c",
       "text": "Abysses in Map spawn #% increased Monsters",
-      "regex": "d Monsters$",
+      "regex": "ses in Map s",
       "trade": [
         "explicit.stat_944630113",
         "desecrated.stat_944630113"
       ],
       "num": {
-        "side": "after",
+        "side": "before",
         "gap": true,
         "after": "%"
       }
@@ -465,7 +465,7 @@
     {
       "id": "c903b7a2",
       "text": "Breaches in Map contain # additional Clasped Hand",
-      "regex": "asp",
+      "regex": "spe",
       "trade": [
         "explicit.stat_2224050171"
       ],
@@ -517,7 +517,7 @@
     {
       "id": "d8be508c",
       "text": "Breaches in Map spawn an additional Rare Monster",
-      "regex": "nster$",
+      "regex": "^Breaches in Map spawn a",
       "trade": [
         "explicit.stat_1653625239"
       ],
@@ -526,7 +526,7 @@
     {
       "id": "fc3e0ef2",
       "text": "Deferring Favours at Ritual Altars in Map costs #% increased Tribute",
-      "regex": "ef.*nc",
+      "regex": "fe.*nc",
       "trade": [
         "explicit.stat_1345835998"
       ],
@@ -602,11 +602,11 @@
     {
       "id": "707925fa",
       "text": "Delirium Fog in Map dissipates #% slower",
-      "regex": " sl",
+      "regex": "% sl",
       "trade": [],
       "num": {
         "side": "after",
-        "gap": true,
+        "gap": false,
         "after": "%"
       }
     },
@@ -684,7 +684,7 @@
     {
       "id": "efb67c6e",
       "text": "Expeditions contain 1 buried Strongbox in Map ~ Expeditions contain # buried Strongboxes in Map",
-      "regex": " bu",
+      "regex": " bur",
       "trade": [
         "explicit.stat_181823691"
       ],
@@ -702,7 +702,7 @@
     {
       "id": "3232ae73",
       "text": "Expeditions have +#% Surpassing chance to contain an additional Verisium Remnant",
-      "regex": "um Remnant$",
+      "regex": "l Verisium R",
       "trade": [
         "explicit.stat_3653794255"
       ],
@@ -780,7 +780,7 @@
     {
       "id": "a02e116d",
       "text": "Map Bosses are Hunted by Azmeri Spirits",
-      "regex": "Hu",
+      "regex": " Hu",
       "trade": [
         "explicit.stat_2588474575"
       ],
@@ -815,7 +815,7 @@
     {
       "id": "1fcf1886",
       "text": "Map contains # additional Rare Chests",
-      "regex": "sts$",
+      "regex": "e Che",
       "trade": [],
       "num": {
         "side": "after",
@@ -840,7 +840,7 @@
     {
       "id": "6dab967a",
       "text": "Map contains an additional Abyss",
-      "regex": "yss$",
+      "regex": "n additional Ab",
       "trade": [
         "explicit.stat_1070816711"
       ],
@@ -911,7 +911,7 @@
     {
       "id": "f7d65bbb",
       "text": "Map has #% chance to contain an additional Breach",
-      "regex": "ch$",
+      "regex": "n additional B",
       "trade": [
         "explicit.stat_3049505189"
       ],
@@ -989,7 +989,7 @@
     {
       "id": "f5ce04f4",
       "text": "Map has #% increased chance to contain Rogue Exiles",
-      "regex": "les$",
+      "regex": "in R",
       "trade": [
         "explicit.stat_1352729973"
       ],
@@ -1044,7 +1044,7 @@
     {
       "id": "2803ed14",
       "text": "Map has #% increased Monster Rarity",
-      "regex": "rity$",
+      "regex": "d Monster ",
       "trade": [
         "explicit.stat_4142653832"
       ],
@@ -1099,12 +1099,12 @@
     {
       "id": "baf3afee",
       "text": "Monsters have #% increased Effectiveness",
-      "regex": "eness$",
+      "regex": "^Monsters h",
       "trade": [
         "explicit.stat_2065500219"
       ],
       "num": {
-        "side": "after",
+        "side": "before",
         "gap": true,
         "after": "%"
       }
@@ -1112,7 +1112,7 @@
     {
       "id": "25660a2c",
       "text": "Monsters Sacrificed at Ritual Altars in Map grant #% increased Tribute",
-      "regex": "Sac",
+      "regex": "p g",
       "trade": [
         "explicit.stat_159726667"
       ],
@@ -1198,12 +1198,12 @@
     {
       "id": "c4ddcc4b",
       "text": "Ritual Favours in Map have #% increased chance to be Omens",
-      "regex": " Om",
+      "regex": "l Fa",
       "trade": [
         "explicit.stat_4219853180"
       ],
       "num": {
-        "side": "after",
+        "side": "before",
         "gap": true,
         "after": "%"
       }
@@ -1220,7 +1220,7 @@
     {
       "id": "bb6369c8",
       "text": "The first unearthed Runic Monster will be a Rare Monster in Map ~ The first # unearthed Runic Monsters will be Rare Monsters in Map",
-      "regex": "^Th",
+      "regex": "^The",
       "trade": [
         "explicit.stat_3963944561"
       ],
@@ -1274,7 +1274,7 @@
     {
       "id": "10a26ee9",
       "text": "Verisium Remnants have +#% chance to add an additional Runic Modifier in Map",
-      "regex": "^Ve",
+      "regex": "^Ver",
       "trade": [
         "explicit.stat_3871299443"
       ],
@@ -1318,7 +1318,7 @@
       "label": "Delirium",
       "base": "Delirium Tablet",
       "description": "Adds a Mirror of Delirium to a Map",
-      "regex": "f D"
+      "regex": "a Mi"
     },
     {
       "key": "breach",

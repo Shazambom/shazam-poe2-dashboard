@@ -69,7 +69,7 @@
     {
       "id": "77ccc930",
       "text": "#% increased Magic Pack Size",
-      "regex": "ze$",
+      "regex": "gic P",
       "trade": [
         "explicit.stat_1714706956",
         "fractured.stat_1714706956"
@@ -83,7 +83,7 @@
     {
       "id": "91ccc4fc",
       "text": "#% increased Monster Damage",
-      "regex": "age$",
+      "regex": "d Monster ",
       "trade": [
         "explicit.stat_1890519597",
         "fractured.stat_1890519597",
@@ -98,7 +98,7 @@
     {
       "id": "c8b54f17",
       "text": "#% increased number of Monster Packs",
-      "regex": "ks$",
+      "regex": "f Mo",
       "trade": [
         "explicit.stat_2624927319"
       ],
@@ -111,7 +111,7 @@
     {
       "id": "f912d458",
       "text": "#% increased Pack Size in Map",
-      "regex": "ze ",
+      "regex": "ize ",
       "trade": [
         "explicit.stat_2017682521",
         "enchant.stat_2017682521"
@@ -125,7 +125,7 @@
     {
       "id": "74f50ba4",
       "text": "#% increased Quantity of Items found in Map",
-      "regex": "ms",
+      "regex": " It",
       "trade": [
         "explicit.stat_2390685262"
       ],
@@ -138,7 +138,7 @@
     {
       "id": "39e855bf",
       "text": "#% increased Quantity of Waystones found in Map",
-      "regex": "f W",
+      "regex": "f Wa",
       "trade": [
         "explicit.stat_2777224821"
       ],
@@ -166,7 +166,7 @@
     {
       "id": "ce4e5822",
       "text": "#% more Monster Life",
-      "regex": "fe$",
+      "regex": "er L",
       "trade": [
         "explicit.stat_95249895",
         "fractured.stat_95249895",
@@ -272,7 +272,7 @@
     {
       "id": "d24572cb",
       "text": "Abysses lead to an Abyssal Boss",
-      "regex": "oss$",
+      "regex": "l Bo",
       "trade": [
         "explicit.stat_2399592398",
         "desecrated.stat_2399592398"
@@ -282,7 +282,7 @@
     {
       "id": "8f6fcd68",
       "text": "Abysses lead to an Abyssal Depths",
-      "regex": "hs",
+      "regex": "sal D",
       "trade": [
         "explicit.stat_2278777540",
         "desecrated.stat_2278777540"
@@ -320,7 +320,7 @@
     {
       "id": "a7b55194",
       "text": "Area contains # additional packs of Ezomyte Monsters",
-      "regex": "Ez",
+      "regex": "zo",
       "trade": [
         "explicit.stat_1436812886",
         "desecrated.stat_1436812886"
@@ -334,7 +334,7 @@
     {
       "id": "6c56e756",
       "text": "Area contains # additional packs of Faridun Monsters",
-      "regex": "f F",
+      "regex": "Far",
       "trade": [
         "explicit.stat_4130878258",
         "desecrated.stat_4130878258"
@@ -391,7 +391,7 @@
     {
       "id": "e2ce4735",
       "text": "Area contains # additional packs of Undead",
-      "regex": "ad$",
+      "regex": "ndea",
       "trade": [
         "explicit.stat_240445958",
         "desecrated.stat_240445958"
@@ -438,7 +438,7 @@
     {
       "id": "e96b1107",
       "text": "Area has patches of Chilled Ground",
-      "regex": "Chi",
+      "regex": "hil",
       "trade": [
         "explicit.stat_349586058",
         "fractured.stat_349586058",
@@ -470,7 +470,7 @@
     {
       "id": "3fa52cc3",
       "text": "Area has patches of Shocked Ground",
-      "regex": "hoc",
+      "regex": "cke",
       "trade": [
         "explicit.stat_3477720557",
         "fractured.stat_3477720557",
@@ -518,7 +518,7 @@
     {
       "id": "8fb7c8fb",
       "text": "Map contains an additional Rare Chest",
-      "regex": "e Chest$",
+      "regex": "l Rare C",
       "trade": [
         "explicit.stat_231864447"
       ],
@@ -579,11 +579,26 @@
     {
       "id": "96a8063a",
       "text": "Monster Damage Penetrates #% Elemental Resistances",
-      "regex": "net",
+      "regex": "% E",
       "trade": [
         "explicit.stat_1898978455",
         "fractured.stat_1898978455",
         "desecrated.stat_1898978455"
+      ],
+      "num": {
+        "side": "after",
+        "gap": false,
+        "after": "%"
+      }
+    },
+    {
+      "id": "d3008592",
+      "text": "Monster have #% increased Elemental Ailment Application",
+      "regex": "r h",
+      "trade": [
+        "explicit.stat_3877264671",
+        "fractured.stat_3877264671",
+        "desecrated.stat_3877264671"
       ],
       "num": {
         "side": "before",
@@ -592,24 +607,9 @@
       }
     },
     {
-      "id": "d3008592",
-      "text": "Monster have #% increased Elemental Ailment Application",
-      "regex": "pp",
-      "trade": [
-        "explicit.stat_3877264671",
-        "fractured.stat_3877264671",
-        "desecrated.stat_3877264671"
-      ],
-      "num": {
-        "side": "after",
-        "gap": true,
-        "after": "%"
-      }
-    },
-    {
       "id": "e117d261",
       "text": "Monsters are Armoured",
-      "regex": "red$",
+      "regex": "re A",
       "trade": [
         "explicit.stat_2539290279",
         "fractured.stat_2539290279",
@@ -620,7 +620,7 @@
     {
       "id": "457e166f",
       "text": "Monsters are Evasive",
-      "regex": "vas",
+      "regex": "siv",
       "trade": [
         "explicit.stat_2570249991",
         "fractured.stat_2570249991",
@@ -646,7 +646,7 @@
     {
       "id": "628ac7d0",
       "text": "Monsters deal #% of Damage as Extra Chaos",
-      "regex": "os$",
+      "regex": "a Ch",
       "trade": [
         "explicit.stat_2200661314",
         "fractured.stat_2200661314",
@@ -676,7 +676,7 @@
     {
       "id": "c3faa34c",
       "text": "Monsters deal #% of Damage as Extra Fire",
-      "regex": "ire$",
+      "regex": "ra F",
       "trade": [
         "explicit.stat_92381065",
         "fractured.stat_92381065",
@@ -780,7 +780,7 @@
     {
       "id": "fc490622",
       "text": "Monsters have #% increased Accuracy Rating",
-      "regex": "cc",
+      "regex": " Ac",
       "trade": [
         "explicit.stat_1588049749",
         "fractured.stat_1588049749",
@@ -824,14 +824,14 @@
     {
       "id": "1d2660c7",
       "text": "Monsters have #% increased Critical Hit Chance | Monsters have +#% Critical Damage Bonus",
-      "regex": "it ",
+      "regex": "Hit ",
       "trade": [],
       "num": null
     },
     {
       "id": "40f1cf09",
       "text": "Monsters have #% increased Stun Buildup",
-      "regex": "up$",
+      "regex": "Bui",
       "trade": [
         "explicit.stat_115425161",
         "fractured.stat_115425161",
@@ -853,7 +853,7 @@
     {
       "id": "672d3ded",
       "text": "Monsters inflict # Grasping Vine on Hit",
-      "regex": "ras",
+      "regex": " Vi",
       "trade": [
         "explicit.stat_1751584857",
         "desecrated.stat_1751584857"
@@ -867,7 +867,7 @@
     {
       "id": "f2c74a85",
       "text": "Monsters take #% reduced Extra Damage from Critical Hits",
-      "regex": "tak",
+      "regex": "ke ",
       "trade": [
         "explicit.stat_337935900",
         "fractured.stat_337935900",
@@ -875,7 +875,7 @@
       ],
       "num": {
         "side": "before",
-        "gap": true,
+        "gap": false,
         "after": "%"
       }
     },
@@ -923,7 +923,7 @@
     {
       "id": "a2984d44",
       "text": "Players are periodically Cursed with Elemental Weakness",
-      "regex": "kn",
+      "regex": " We",
       "trade": [
         "explicit.stat_554690751",
         "fractured.stat_554690751",
@@ -934,7 +934,7 @@
     {
       "id": "c7934906",
       "text": "Players are periodically Cursed with Enfeeble",
-      "regex": "eb",
+      "regex": "h En",
       "trade": [
         "explicit.stat_2029171424",
         "fractured.stat_2029171424",
@@ -956,7 +956,7 @@
     {
       "id": "91d35270",
       "text": "Players gain #% reduced Flask Charges",
-      "regex": "Fla",
+      "regex": "sk ",
       "trade": [
         "explicit.stat_2549889921",
         "fractured.stat_2549889921",
@@ -1011,7 +1011,7 @@
     {
       "id": "f7582c83",
       "text": "Players steal the Eaten Souls of Slain Rare Monsters in Area",
-      "regex": "ea$",
+      "regex": "rs s",
       "trade": [
         "explicit.stat_1365079333",
         "desecrated.stat_1365079333"
