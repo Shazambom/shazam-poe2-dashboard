@@ -1,7 +1,7 @@
 {
   "name": "poe2-dashboard-desktop",
   "productName": "Arbiter",
-  "version": "0.3.17-beta.3",
+  "version": "0.3.17-beta.4",
   "description": "Exchange-loop dashboard for Path of Exile 2 — desktop app",
   "main": "src/main.js",
   "author": "Shazambom",
@@ -16,6 +16,8 @@
     "dist:win": "npm run build:frontend && electron-builder --win",
     "dist:mac:all": "npm run build:backend && npm run dist:mac",
     "smoke:mac": "node scripts/smoke-packaged.mjs",
+    "profile": "node ../ops/profile.mjs",
+    "profile:quick": "node ../ops/profile.mjs --quick",
     "publish": "./publish-github.sh"
   },
   "devDependencies": {
