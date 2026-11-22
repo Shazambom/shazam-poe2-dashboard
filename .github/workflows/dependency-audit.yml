@@ -1,0 +1,52 @@
+name: Dependency security audit
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'frontend/package*.json'
+      - 'desktop/package*.json'
+      - 'backend/requirements*.txt'
+      - 'ops/feedback-bot/requirements*.txt'
+      - '.github/workflows/dependency-audit.yml'
+  pull_request:
+    paths:
+      - 'frontend/package*.json'
+      - 'desktop/package*.json'
+      - 'backend/requirements*.txt'
+      - 'ops/feedback-bot/requirements*.txt'
+  schedule:
+    - cron: '0 13 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  npm-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Audit frontend npm dependencies (high+)
+        run: npm --prefix frontend audit --audit-level=high
+      - name: Audit desktop npm dependencies (high+)
+        run: npm --prefix desktop audit --audit-level=high
+
+  pip-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install pip-audit
+        run: python -m pip install --upgrade pip pip-audit
+      - name: Audit Python requirements
+        run: |
+          pip-audit -r backend/requirements.txt
+          pip-audit -r backend/requirements-sidecar.txt
+          pip-audit -r ops/feedback-bot/requirements-bot.txt
+          pip-audit -r ops/feedback-bot/requirements-opener.txt

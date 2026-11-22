@@ -42,6 +42,17 @@ if (typeof Element !== 'undefined' && !Element.prototype.scrollIntoView) {
   Element.prototype.scrollIntoView = () => {}
 }
 
+// happy-dom 21 eagerly creates Animation.finished and rejects it with AbortError on cancel(),
+// which motion-dom triggers during unmount without awaiting .finished.
+if (typeof Element !== 'undefined' && typeof Element.prototype.animate === 'function') {
+  const nativeAnimate = Element.prototype.animate
+  Element.prototype.animate = function animateWithHandledFinished(...args) {
+    const anim = nativeAnimate.apply(this, args)
+    anim?.finished?.catch(() => {})
+    return anim
+  }
+}
+
 if (typeof window !== 'undefined' && !window.poe2desktop) {
   const noopSub = () => vi.fn(() => () => {})
   window.poe2desktop = {

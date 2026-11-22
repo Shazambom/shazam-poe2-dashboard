@@ -13,4 +13,4 @@
 # ⚠️ If you ever re-add a heavy library here, you MUST keep it OFF the sidecar's runtime import
 # path unless it's proven to run from a frozen onefile binary ON WINDOWS (build + run it in the
 # release-desktop-win CI, not just locally). numba-backed libraries specifically do not.
-numpy==2.5.3
+numpy==2.5.5
