@@ -19,7 +19,7 @@
     "publish": "./publish-github.sh"
   },
   "devDependencies": {
-    "electron": "^44.11.5",
+    "electron": "^45.4.1",
     "electron-builder": "^26.18.0",
     "esbuild": "^0.25.12"
   },
