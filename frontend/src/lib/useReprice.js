@@ -1,6 +1,7 @@
 // Trading → Workspace "Reprice in <currency>" (docs/reprice-design.md): the trade tap's view of this window's
 // page (desktop/src/trade/tap.js) → at most one offer; apply() replaces the saved search with the repriced one,
 // with a 10 s undo. The rules are in reprice.js; this only wires events, prices, the store and telemetry.
+import { createStore, useStore } from 'zustand'
 import { ignoredError } from './ignoredError.js'
 import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
 import { api, undoToast } from './api.js'
@@ -62,17 +63,18 @@ export function useReprice({ wv, node, navUrl, inHistory, remountKey, league, vi
   // The row's own query, from its link (a run search's slug is its query): the page counts only once it holds it.
   const nodeId = node?.id ?? null
   const selectedId = useEffectEvent(() => nodeId)
-  const [decodedLink, setDecodedLink] = useState(null)
+  const [decoder] = useState(() => createStore(() => null))
+  const decodedLink = useStore(decoder)
   const rowQuery = decodedLink?.query ?? null
   useEffect(() => {
     let live = true
     const owner = selectedId()
-    setDecodedLink(null)
+    decoder.setState(null, true)
     searchOfLink(navUrl || '').then(j => {
-      if (live && j?.query) setDecodedLink({ nodeId: owner, query: j.query })
+      if (live && j?.query) decoder.setState({ nodeId: owner, query: j.query }, true)
     }).catch(() => ignoredError('read search query'))
     return () => { live = false }
-  }, [navUrl])
+  }, [decoder, navUrl])
   // The window's own page, or — when the site redrew a search it ran moments ago from its own cache, with no
   // request the tap could see — the last page seen for that exact search (5 minutes).
   const page = own && pageIsRows(own, rowQuery) ? own : (rowQuery && TAP.recentFor(league, rowQuery)) || own
