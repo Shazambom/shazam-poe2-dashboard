@@ -300,3 +300,32 @@ test('"Use this search" on the search already linked keeps its price and spends 
   assert.equal(SP.sameSearch(a, userSearch('maps', '')), false)
   assert.equal(SP.sameSearch(null, a), false)
 })
+
+// The view sleeps until the next search falls due (an idle view still re-prices hourly): nextDue is the first
+// time the queue has work again, for unique floors, linked tablet lines and the maps alike.
+test('nextDue is exactly when the queue next has a search to run', async () => {
+  const H = sc.FLOOR_TTL_MS
+  const site = tradeSite(['chaos'])
+  const retryAt = new Map()
+  assert.equal(SP.nextDue(sc.activeStrat(strat('chaos')), { retryAt, uses: USES }), null, 'nothing linked or searched: never')
+  let d = linkTo(strat('chaos'), 'maps', userSearch('maps', ''), 1)
+  d = await priceAll(d, site, retryAt, 1)
+  d = linkTo(d, 'tablet', userSearch('tablet', ''), 1000)
+  d = await priceAll(d, site, retryAt, 1000)
+  const s = sc.activeStrat(d)
+  s.loot.push({ cur: null, name: 'Headhunter', base: 'Leather Belt', qty: 1, price: null, floor: { div: 1, at: 2000 } })
+  const order = []
+  let now = 1
+  for (let i = 0; i < 3; i++) {
+    const due = SP.nextDue(s, { retryAt, uses: USES })
+    assert.equal(SP.nextPricing(s, { now: due - 1, retryAt, uses: USES }), null, 'nothing before it')
+    const job = SP.nextPricing(s, { now: due, retryAt, uses: USES })
+    assert.ok(job && due > now, 'a search at it')
+    order.push([job.key, due])
+    SP.started(retryAt, job, due)
+    now = due
+  }
+  assert.deepEqual(order, [['link:maps', 1 + H], ['link:t', 1000 + H], [sc.rowKey(s.loot.at(-1)), 2000 + H]])
+  SP.retryLater(retryAt, { key: 'link:maps', mark: retryAt.get('link:maps') }, 60_000, 1 + H)
+  assert.equal(SP.nextDue(s, { retryAt, uses: USES }), 1 + H + 60_000, 'a back-off moves its due time')
+})

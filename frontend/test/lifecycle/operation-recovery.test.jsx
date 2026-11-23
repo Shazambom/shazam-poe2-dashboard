@@ -357,14 +357,52 @@ it('strategy pricing: retries of a failing search are bounded, then it waits its
   expect(priceQuery).toHaveBeenCalledTimes(4)
   for (let i = 0; i < 20; i++) await advance(60_000)
   expect(priceQuery).toHaveBeenCalledTimes(4)
-  // Its next turn, an hour on (the queue runs again on the next edit), fails too: a fresh set of short retries.
-  for (let i = 0; i < 41; i++) await advance(60_000)
-  await act(async () => { useStratStore.getState().change(d => sc.rename(d, 's', 'Edited an hour later')) })
+  // Its next turn, an hour after its last try, comes on its own (an edit does not bring it early) and fails
+  // too: a fresh set of short retries.
+  for (let i = 0; i < 39; i++) await advance(60_000)
+  await act(async () => { useStratStore.getState().change(d => sc.rename(d, 's', 'Edited before the hour')) })
+  expect(priceQuery).toHaveBeenCalledTimes(4)
+  for (let i = 0; i < 60; i++) await advance(1000)
   expect(priceQuery).toHaveBeenCalledTimes(5)
   for (let i = 0; i < 25; i++) await advance(1000)
   expect(priceQuery).toHaveBeenCalledTimes(8)
   expect(toasts).not.toHaveBeenCalled()
   view.unmount()
+  await useStratStore.getState().flush()
+})
+
+// An open, idle strat: a unique's floor is an hour old, so it is searched again then, with no input, one
+// search per hour (never a loop); a rate-limit wait that covers its hour holds it until the wait ends.
+it('strategy pricing: an idle open strat re-prices its unique every hour on its own', async () => {
+  stratWithUnique()
+  const found = { ok: true, listings: [{ amount: 2, currency: 'divine' }] }
+  const priceQuery = vi.spyOn(window.poe2desktop.trade, 'priceQuery').mockResolvedValue(found)
+  const view = render(<StratCalcView league="A" />)
+  await settle()
+  expect(priceQuery).toHaveBeenCalledTimes(1)
+  // 10 s steps: React renders (and the queue runs) between steps, as it would between real seconds.
+  const minutes = async (n) => { for (let i = 0; i < n * 6; i++) await advance(10_000) }
+  await minutes(59)
+  expect(priceQuery).toHaveBeenCalledTimes(1)
+  await minutes(2)
+  expect(priceQuery).toHaveBeenCalledTimes(2)
+  await minutes(3 * 60)
+  expect(priceQuery).toHaveBeenCalledTimes(5)
+  // Its next hour is answered "wait ten minutes": nothing is searched before the wait ends, then once.
+  priceQuery.mockResolvedValueOnce({ ok: false, error: 'rate', retryAfter: 600 })
+  await minutes(60)
+  expect(priceQuery).toHaveBeenCalledTimes(6)
+  await minutes(9)
+  expect(priceQuery).toHaveBeenCalledTimes(6)
+  await minutes(2)
+  expect(priceQuery).toHaveBeenCalledTimes(7)
+  await minutes(57)
+  expect(priceQuery).toHaveBeenCalledTimes(7)
+  expect(priceQuery.mock.calls.every(c => c[0].league === 'A')).toBe(true)
+  expect(toasts).not.toHaveBeenCalled()
+  view.unmount()
+  await minutes(120)
+  expect(priceQuery).toHaveBeenCalledTimes(7)
   await useStratStore.getState().flush()
 })
 
