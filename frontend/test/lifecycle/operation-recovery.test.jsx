@@ -418,3 +418,32 @@ it('workspace import: an unreadable file leaves the workspace untouched and the 
   expect(toasts).toHaveBeenCalledWith(expect.objectContaining({ text: 'Imported 1 item (merge)', ok: true }))
   useWorkspace.getState().hydrate({ version: 2, tree: [] })
 })
+
+// The hotkey IPC cannot fail once main has registered it (a refused combo is an { ok: false } answer, and
+// main then keeps the previous combo registered: desktop/test/hotkey.test.mjs). A rejection means the hotkey
+// never started this session, so no retry can succeed; the renderer's recovery is to leave capture with the
+// combo it showed, and register again on the user's next press. Pinned here.
+it('focus hotkey: a failed registration leaves the shown combo and the next press registers again', async () => {
+  const previous = window.poe2desktop.hotkey
+  const set = vi.fn().mockRejectedValueOnce(new Error('No handler registered')).mockResolvedValue({ ok: true })
+  window.poe2desktop.hotkey = { get: vi.fn(async () => ({ combo: 'Control+H' })), set }
+  try {
+    installApiMock()
+    render(<TradingSettings />)
+    await settle()
+    const button = screen.getByRole('button', { name: 'Control+H' })
+    fireEvent.click(button)
+    fireEvent.keyDown(button, { key: 'k', ctrlKey: true })
+    await settle()
+    expect(button.textContent).toBe('Control+H')
+    expect(toasts).not.toHaveBeenCalled()
+    fireEvent.click(button)
+    expect(button.textContent).toBe('Press a combo…')
+    fireEvent.keyDown(button, { key: 'j', ctrlKey: true })
+    await settle()
+    expect(set.mock.calls.map(c => c[0])).toEqual(['CommandOrControl+K', 'CommandOrControl+J'])
+    expect(button.textContent).toBe('⌘/Ctrl+J')
+  } finally {
+    window.poe2desktop.hotkey = previous
+  }
+})
