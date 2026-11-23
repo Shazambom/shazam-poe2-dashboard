@@ -423,21 +423,25 @@ class CdpClient {
   }
 }
 
-async function waitForHealth(t0, timeoutMs = 45000) {
-  while (now() - t0 < timeoutMs) {
+// The boot checks poll until they succeed, time out, or `signal` aborts (the other check failed).
+const STOPPED = 'stopped: the other boot check failed'
+
+async function waitForHealth(t0, timeoutMs = 45000, signal = undefined) {
+  while (now() - t0 < timeoutMs && !signal?.aborted) {
     try {
-      const r = await fetch(`http://127.0.0.1:${BACKEND_PORT}/api/health`)
+      const r = await fetch(`http://127.0.0.1:${BACKEND_PORT}/api/health`, { signal })
       if (r.ok) return { ms: +(now() - t0).toFixed(1), body: await r.json() }
     } catch (e) { ignored('wait-health', e) }
     await sleep(50)
   }
+  if (signal?.aborted) throw new Error(STOPPED)
   throw new Error(`Timed out waiting for /api/health after ${timeoutMs}ms`)
 }
 
-async function waitForCdpTarget(cdpPort, t0, timeoutMs = 35000) {
-  while (now() - t0 < timeoutMs) {
+export async function waitForCdpTarget(cdpPort, t0, timeoutMs = 35000, signal = undefined) {
+  while (now() - t0 < timeoutMs && !signal?.aborted) {
     try {
-      const r = await fetch(`http://127.0.0.1:${cdpPort}/json/list`)
+      const r = await fetch(`http://127.0.0.1:${cdpPort}/json/list`, { signal })
       if (r.ok) {
         const list = await r.json()
         const page = list.find((t) => t.type === 'page' && t.webSocketDebuggerUrl && !String(t.url).startsWith('devtools://'))
@@ -446,7 +450,19 @@ async function waitForCdpTarget(cdpPort, t0, timeoutMs = 35000) {
     } catch (e) { ignored('wait-cdp-target', e) }
     await sleep(50)
   }
+  if (signal?.aborted) throw new Error(STOPPED)
   throw new Error(`Timed out waiting for CDP target on :${cdpPort}`)
+}
+
+// Run polls side by side, like Promise.all; the first to fail aborts the others, which stop at their
+// next check, so a failed boot ends the profiler at once instead of waiting out the other's timeout.
+export async function allOrAbort(polls) {
+  const ac = new AbortController()
+  try {
+    return await Promise.all(polls.map((poll) => poll(ac.signal).catch((e) => { ac.abort(); throw e })))
+  } finally {
+    ac.abort()   // also after success: nothing is left polling
+  }
 }
 
 async function waitForDom(cdp, expr, timeoutMs = 20000) {
@@ -537,7 +553,7 @@ async function profileRuntime(opts) {
         env: spawnEnv,
         stdio: ['ignore', 'pipe', 'pipe'],
       })
-      const [health, cdpInfo] = await Promise.all([waitForHealth(t0, 60000), waitForCdpTarget(cdpPort, t0, 60000)])
+      const [health, cdpInfo] = await allOrAbort([(s) => waitForHealth(t0, 60000, s), (s) => waitForCdpTarget(cdpPort, t0, 60000, s)])
       cdp = new CdpClient(cdpInfo.target.webSocketDebuggerUrl)
       await cdp.connect()
       await waitForDom(cdp, `document.body && document.body.innerText.includes('Divine') && document.querySelectorAll('button').length > 5`, 30000)
@@ -579,7 +595,7 @@ async function profileRuntime(opts) {
       env: spawnEnv,
       stdio: ['ignore', 'pipe', 'pipe'],
     })
-    const [health, cdpInfo] = await Promise.all([waitForHealth(t0, 45000), waitForCdpTarget(cdpPort, t0, 45000)])
+    const [health, cdpInfo] = await allOrAbort([(s) => waitForHealth(t0, 45000, s), (s) => waitForCdpTarget(cdpPort, t0, 45000, s)])
     cdp = new CdpClient(cdpInfo.target.webSocketDebuggerUrl)
     await cdp.connect()
     await waitForDom(cdp, `document.body && document.body.innerText.includes('Divine') && document.querySelectorAll('button').length > 5`, 25000)
@@ -973,6 +989,6 @@ async function main() {
 if (path.resolve(process.argv[1] || '') === __filename) {
   main().catch((err) => {
     console.error('PROFILE ERROR:', err.message)
-    process.exit(1)
+    process.exitCode = 1   // the process then ends by itself: a failed boot check aborts its sibling poll
   })
 }
