@@ -274,6 +274,14 @@ const config = [
     },
   },
   {
+    // per-path: desktop/scripts/ are dev and build scripts that never ship (electron-builder packs src/** and
+    // `dependencies`), but desktop/package.json has no `files` field, so n/no-unpublished-import takes them for
+    // published code and flags their devDependencies (esbuild in sync-ee2.mjs). n/no-extraneous-import still
+    // requires every import to be declared in desktop/package.json.
+    files: ['desktop/scripts/**/*.mjs'],
+    rules: { 'n/no-unpublished-import': 'off' },
+  },
+  {
     // ops/ scripts run on the Node the lint gate demands (ops/lint/package.json engines); ops/ itself
     // has no package.json, so without this n assumes Node 16 and flags fetch and WebSocket.
     files: ['ops/**/*.mjs'],
