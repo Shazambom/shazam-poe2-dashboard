@@ -157,7 +157,7 @@ function BetaChannelToggle() {
   useEffect(() => { desk?.getChannel?.().then(setSt).catch(() => ignoredError('read release channel')) }, [])
   if (!desk?.getChannel) return null
   const toggle = async (v) => {
-    try { setSt(refreshTweaks(await desk.setChannel(v))); toast(v ? 'Beta channel on — checking for updates…' : 'Back on stable channel') } catch {}
+    try { setSt(refreshTweaks(await desk.setChannel(v))); toast(v ? 'Beta channel on — checking for updates…' : 'Back on stable channel') } catch { ignoredError('change release channel') }
   }
   return (
     <div style={{ marginBottom: 12 }}>

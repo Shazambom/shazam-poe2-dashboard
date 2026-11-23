@@ -150,7 +150,7 @@ export default function App() {
     window.addEventListener('pagehide', hide)
     const offQuit = window.poe2desktop?.ws?.onFlush?.(() => {
       const t0 = Date.now()
-      flushAll().then(() => diag('ws', `ws-flush-on-quit ok ms=${Date.now() - t0}`)).catch(() => {}).finally(() => window.poe2desktop.ws.flushed())
+      flushAll().then(() => diag('ws', `ws-flush-on-quit ok ms=${Date.now() - t0}`)).catch(() => ignoredError('flush edits on quit')).finally(() => window.poe2desktop.ws.flushed())
     })
     return () => { document.removeEventListener('visibilitychange', flush); window.removeEventListener('pagehide', hide); offQuit?.() }
   }, [])

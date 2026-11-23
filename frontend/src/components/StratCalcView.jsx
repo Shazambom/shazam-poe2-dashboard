@@ -416,7 +416,7 @@ export default function StratCalcView({ league, currencies }) {
         clearTimeout(wakeTimer.current)
         wakeTimer.current = setTimeout(() => setWake(w => w + 1), until - Date.now() + 250)
       }
-    }).catch(() => {}).finally(() => setPending(null))
+    }).catch(() => ignoredError('price strategy search')).finally(() => setPending(null))
   }, [open, league, pending, change, uses, wake])
 
   // +1 held repeats; released, left or cancelled, it stops.

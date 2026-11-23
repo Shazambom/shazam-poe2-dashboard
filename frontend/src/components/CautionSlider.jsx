@@ -26,7 +26,7 @@ export default function CautionSlider({ value, range, onChange }) {
     timer.current = setTimeout(() => {
       dragging.current = false
       onChange?.(next)                                     // re-rank now
-      useStatus.getState().saveSettings({ hold_caution: next }).catch(() => {})
+      useStatus.getState().saveSettings({ hold_caution: next }).catch(() => ignoredError('save caution setting'))
     }, 350)                                                // debounce the drag, then persist
   }
 

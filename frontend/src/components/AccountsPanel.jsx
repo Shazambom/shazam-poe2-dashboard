@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api, fmt } from '../lib/api.js'
+import { ignoredError } from '../lib/ignoredError.js'
 import { connectBridge, connectSession } from '../lib/session.js'
 import { useStatus } from '../lib/statusStore.js'
 import { clearMerchantShopCache } from '../lib/merchantCache.js'
@@ -38,7 +39,7 @@ export default function AccountsPanel({ onChange }) {
       const r = await api.connectSession(raw)
       // Desktop: also mirror the cookie into the Electron session so the embedded
       // Trade site is logged in (paste otherwise only reaches the backend).
-      if (window.poe2desktop?.setCookie) { try { await window.poe2desktop.setCookie(raw) } catch {} }
+      if (window.poe2desktop?.setCookie) { try { await window.poe2desktop.setCookie(raw) } catch { ignoredError('mirror login cookie') } }
       clearMerchantShopCache()
       setMsg({ ok: true, text: r.message }); setCookie(''); await load(); onChange?.()
     }

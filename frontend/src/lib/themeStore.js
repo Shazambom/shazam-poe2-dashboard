@@ -77,7 +77,7 @@ export const useTheme = create((set, get) => ({
   apply: (id) => {
     const t = paintTheme(id, get().tableOf(id))
     set({ id: t, previewing: false })
-    useStatus.getState().saveSettings({ theme: t }).catch(() => {})
+    useStatus.getState().saveSettings({ theme: t }).catch(() => ignoredError('save theme choice'))
   },
   // Settings arrived (boot / another device): the blob wins over the localStorage mirror.
   sync: (id, customs) => {

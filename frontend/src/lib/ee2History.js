@@ -32,7 +32,7 @@ export async function saveHistoryPrefs(patch) {
   ws.setHistoryPrefs(next)
   window.poe2desktop?.ee2?.setEnabled?.(next.enabled)
   window.poe2desktop?.ee2?.setSearchPrefs?.({ waystoneStats: next.waystoneStats })
-  try { await useStatus.getState().saveSettings({ ee2History: next }) } catch {}
+  try { await useStatus.getState().saveSettings({ ee2History: next }) } catch { ignoredError('save history preferences') }
   return next
 }
 
