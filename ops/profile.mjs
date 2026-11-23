@@ -31,6 +31,15 @@ import { fileURLToPath } from 'node:url'
 import zlib from 'node:zlib'
 
 const __filename = fileURLToPath(import.meta.url)
+
+// Errors the profiler carries on past (a socket already closed, a process already gone, a poll that is
+// not ready yet): the first of each kind goes to stderr, so --json output on stdout stays parseable.
+const ignoredScopes = new Set()
+function ignored(scope, e) {
+  if (ignoredScopes.has(scope)) return
+  ignoredScopes.add(scope)
+  console.error(`[profile] ignored ${scope}: ${String(e?.message ?? e)}`)
+}
 const __dirname = path.dirname(__filename)
 const ROOT = path.resolve(__dirname, '..')
 const DESKTOP_DIR = path.join(ROOT, 'desktop')
@@ -101,7 +110,7 @@ export function parseArgs(argv) {
   return opts
 }
 
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+const sleep = (ms) => new Promise((r) => { setTimeout(r, ms) })
 const now = () => performance.now()
 
 function gitMeta() {
@@ -159,7 +168,7 @@ function freePort() {
     srv.unref()
     srv.on('error', reject)
     srv.listen(0, '127.0.0.1', () => {
-      const { port } = srv.address()
+      const { port } = /** @type {import('node:net').AddressInfo} */ (srv.address())
       srv.close(() => resolve(port))
     })
   })
@@ -238,7 +247,7 @@ function profileArtifacts(opts) {
     }
     selftestTimes.sort((a, b) => a - b)
 
-    let pyi = { available: false }
+    let pyi
     try {
       const py = findPython(true)
       const raw = execFileSync(py, [path.join(__dirname, 'profile-backend.py'), '--pyi-inspect', binPath], {
@@ -310,7 +319,8 @@ function profileBackend(opts) {
 function getProcessTree(rootPid) {
   const out = execSync('ps -axo pid,ppid,rss,pcpu,command', { encoding: 'utf8' })
   const rows = out.trim().split('\n').slice(1).map((line) => {
-    const m = line.trim().match(/^(\d+)\s+(\d+)\s+(\d+)\s+([\d.]+)\s+(.*)$/)
+    // The line is trimmed, so the command after the last column's spaces starts with a non-space.
+    const m = line.trim().match(/^(\d+)\s+(\d+)\s+(\d+)\s+([\d.]+)\s+(\S.*)$/)
     if (!m) return null
     return { pid: Number(m[1]), ppid: Number(m[2]), rssKB: Number(m[3]), cpu: Number(m[4]), cmd: m[5] }
   }).filter(Boolean)
@@ -409,7 +419,7 @@ class CdpClient {
     }
   }
   close() {
-    try { this.ws?.close() } catch {}
+    try { this.ws?.close() } catch (e) { ignored('cdp-close', e) }
   }
 }
 
@@ -418,7 +428,7 @@ async function waitForHealth(t0, timeoutMs = 45000) {
     try {
       const r = await fetch(`http://127.0.0.1:${BACKEND_PORT}/api/health`)
       if (r.ok) return { ms: +(now() - t0).toFixed(1), body: await r.json() }
-    } catch {}
+    } catch (e) { ignored('wait-health', e) }
     await sleep(50)
   }
   throw new Error(`Timed out waiting for /api/health after ${timeoutMs}ms`)
@@ -433,7 +443,7 @@ async function waitForCdpTarget(cdpPort, t0, timeoutMs = 35000) {
         const page = list.find((t) => t.type === 'page' && t.webSocketDebuggerUrl && !String(t.url).startsWith('devtools://'))
         if (page) return { ms: +(now() - t0).toFixed(1), target: page }
       }
-    } catch {}
+    } catch (e) { ignored('wait-cdp-target', e) }
     await sleep(50)
   }
   throw new Error(`Timed out waiting for CDP target on :${cdpPort}`)
@@ -444,7 +454,7 @@ async function waitForDom(cdp, expr, timeoutMs = 20000) {
   while (now() - t0 < timeoutMs) {
     try {
       if (await cdp.eval(expr)) return +(now() - t0).toFixed(1)
-    } catch {}
+    } catch (e) { ignored('wait-dom', e) }
     await sleep(40)
   }
   return -1
@@ -453,16 +463,16 @@ async function waitForDom(cdp, expr, timeoutMs = 20000) {
 async function stopApp(proc) {
   if (!proc) return
   const pid = proc.pid
-  try { proc.kill('SIGTERM') } catch {}
+  try { proc.kill('SIGTERM') } catch (e) { ignored('stop-app', e) }
   const deadline = now() + 5000
   while (now() < deadline && proc.exitCode === null) await sleep(100)
   if (proc.exitCode === null) {
-    try { proc.kill('SIGKILL') } catch {}
+    try { proc.kill('SIGKILL') } catch (e) { ignored('kill-app', e) }
   }
   // Ensure any child backend owned by this instance is also gone and port 8210 is released
   const tree = getProcessTree(pid)
   for (const p of tree.procs) {
-    try { process.kill(p.pid, 'SIGKILL') } catch {}
+    try { process.kill(p.pid, 'SIGKILL') } catch (e) { ignored('kill-tree', e) }
   }
   const portDeadline = now() + 5000
   while (now() < portDeadline && await isPortOpen(BACKEND_PORT)) await sleep(100)
@@ -956,7 +966,7 @@ async function main() {
   }
 
   if (opts.check && budgetFailures.length > 0) {
-    process.exit(1)
+    process.exitCode = 1
   }
 }
 

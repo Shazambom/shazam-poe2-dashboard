@@ -60,14 +60,14 @@ test('get is called only for the four state endpoints — never /api/session or 
 })
 
 test('a rejecting or hanging get still yields a bundle, with { error } in that slot', async () => {
-  const i = inputs({ get: async (p) => { if (p === '/api/diag') throw new Error('down'); if (p === '/api/status') return new Promise(() => {}); return {} }, timeoutMs: 50 })
+  const i = inputs({ get: async (p) => { if (p === '/api/diag') { throw new Error('down') } if (p === '/api/status') { return new Promise(() => {}) } return {} }, timeoutMs: 50 })
   const doc = unpack(await buildBundle(i))
   assert.match(doc.state.diag.error, /down/)
   assert.match(doc.state.status.error, /timeout/i)
 })
 
 test('oversize screens are dropped largest-first under the cap and screensPartial is set', async () => {
-  const big = (n, fill) => Buffer.from(Array.from({ length: n }, () => Math.floor(Math.random() * 256)).map((x, i) => (x ^ fill)))   // incompressible
+  const big = (n, fill) => Buffer.from(Array.from({ length: n }, () => Math.floor(Math.random() * 256)).map((x) => (x ^ fill)))   // incompressible
   const i = inputs({ screens: { current: big(2_000_000, 1), board: big(2_000_000, 2), settings: big(500_000, 3), 'strategy-hold': big(50_000, 4) } })
   const b = await buildBundle(i)
   assert.ok(b.length <= MAX_BUNDLE, `bundle ${b.length} > cap`)

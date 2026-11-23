@@ -4,12 +4,13 @@
 // log file isn't present in any candidate location, degrades silently to null —
 // never an error.
 'use strict'
+const { ignored } = require('../../ignored.js')
 
-const fs = require('fs')
+const fs = require('node:fs')
 const fsp = fs.promises
-const os = require('os')
-const path = require('path')
-const { StringDecoder } = require('string_decoder')
+const os = require('node:os')
+const path = require('node:path')
+const { StringDecoder } = require('node:string_decoder')
 
 // Common install locations for PoE2's Client.txt (standalone + Steam), per
 // platform. Accepts optional (platform, home) for deterministic testing.
@@ -56,6 +57,7 @@ async function findLog() {
 // file size asynchronously against our tracked byte offset and buffers incomplete trailing
 // lines until a newline arrives so split writes are never dropped or truncated.
 class LogWatcher {
+  /** @param {{ intervalMs?: number, onLine?: (line: string) => void, filePath?: string | null }} [opts] */
   constructor({ intervalMs = 1000, onLine, filePath = null } = {}) {
     this._intervalMs = Math.max(intervalMs, 50)
     this._onLine = typeof onLine === 'function' ? onLine : () => {}
@@ -78,7 +80,7 @@ class LogWatcher {
       ? ((await exists(this._explicitPath)) ? this._explicitPath : null)
       : await findLog()
     if (!file || this._stopped) return null
-    let size = 0
+    let size
     try { size = (await fsp.stat(file)).size } catch { size = 0 }
     if (this._stopped) return null
     this._file = file
@@ -148,7 +150,7 @@ class LogWatcher {
       this._partial = parts.pop() || ''
       for (const line of parts) {
         const t = line.trim()
-        if (t) { try { this._onLine(t) } catch {} }
+        if (t) { try { this._onLine(t) } catch (e) { ignored('client-log:on-line', e) } }
       }
       done()
     })

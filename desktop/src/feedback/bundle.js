@@ -3,7 +3,10 @@
 // Electron and no network. State comes from four credential-free endpoints only — never
 // /api/session or /api/oauth/* — then the allow-list and redactDeep run over state + logs.
 'use strict'
-const { gzipSync, constants } = require('zlib')
+const { ignored } = require('../ignored.js')
+const { gzip, constants } = require('node:zlib')
+const { promisify } = require('node:util')
+const gzipAsync = promisify(gzip)
 const { SETTINGS_KEYS, pickAllowed, redactDeep } = require('./redact.js')
 
 const STATE_ENDPOINTS = ['/api/diag', '/api/status', '/api/backfill', '/api/settings']
@@ -11,7 +14,7 @@ const MAX_BUNDLE = 4 * 1024 * 1024 - 65        // the sealed file stays under Di
 const LIMITS = { main: 200, backend: 65536, renderer: 100, updater: 40 }
 const GZIP = { level: constants.Z_BEST_COMPRESSION }
 
-const withTimeout = (p, ms) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), ms))])
+const withTimeout = (p, ms) => Promise.race([p, new Promise((_, rej) => { setTimeout(() => rej(new Error('timeout')), ms) })])
 
 async function fetchState(get, timeoutMs) {
   const out = {}
@@ -35,13 +38,13 @@ function logsFrom(sources = {}) {
 
 // Screens are already JPEG buffers; encode them, and if the whole bundle would blow the cap drop
 // the largest ones until it fits. Size never fails a report.
-function pack(doc, screens) {
+async function pack(doc, screens) {
   const remaining = new Map(Object.entries(screens || {}).filter(([, b]) => b && b.length))
   let partial = false
   for (;;) {
     doc.screens = Object.fromEntries([...remaining].map(([k, b]) => [k, Buffer.from(b).toString('base64')]))
     doc.manifest.screensPartial = partial
-    const gz = gzipSync(Buffer.from(JSON.stringify(doc)), GZIP)
+    const gz = await gzipAsync(Buffer.from(JSON.stringify(doc)), GZIP)
     if (gz.length <= MAX_BUNDLE || remaining.size === 0) return gz
     const biggest = [...remaining].sort((a, b) => b[1].length - a[1].length)[0][0]
     remaining.delete(biggest)
@@ -53,7 +56,7 @@ async function buildBundle({ meta, sources, get, readJson, bounds, screens, time
   const state = await fetchState(get, timeoutMs)
   state.settings = pickAllowed(state.settings, SETTINGS_KEYS)
   let desktop = {}
-  try { desktop = readJson() || {} } catch {}
+  try { desktop = readJson() || {} } catch (e) { ignored('feedback:read-desktop-settings', e) }
   state.desktopSettings = pickAllowed(desktop, SETTINGS_KEYS)
   state.bounds = bounds || null
   const doc = {
@@ -65,4 +68,4 @@ async function buildBundle({ meta, sources, get, readJson, bounds, screens, time
   return pack(doc, screens)
 }
 
-module.exports = { buildBundle, STATE_ENDPOINTS, MAX_BUNDLE, LIMITS }
+module.exports = { buildBundle, STATE_ENDPOINTS, MAX_BUNDLE }

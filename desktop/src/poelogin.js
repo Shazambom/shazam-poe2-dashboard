@@ -2,6 +2,7 @@
 // Loading /login with a real session redirects straight to the account; without one the site
 // stays on /login (or bounces through Steam). A POESESSID cookie proves nothing: the site hands
 // one to anonymous visitors too, which is how Connect used to "succeed" while logged out.
+'use strict'
 const loginConfirmedAt = (url) => {
   let u
   try { u = new URL(String(url)) } catch { return false }

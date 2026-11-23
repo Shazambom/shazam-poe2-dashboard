@@ -6,7 +6,7 @@ import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 
 const require = createRequire(import.meta.url)
-const M = require('../src/trade/merchant.js')
+const { projectShopRows, parseProfileAccount, makeMerchantFetcher, makeMerchantPricer, MAX_SHOP_ITEMS, CURSOR_TTL_MS } = require('../src/trade/merchant.js')
 
 const ID = (i) => i.toString(16).padStart(64, '0')
 const rawEntry = (id, {
@@ -49,7 +49,7 @@ const rawEntry = (id, {
 })
 
 test('projectShopRows keeps only shop fields and strips whisper, tokens, and account block', () => {
-  const rows = M.projectShopRows({
+  const rows = projectShopRows({
     result: [
       rawEntry(ID(1)),
       null,
@@ -65,15 +65,19 @@ test('projectShopRows keeps only shop fields and strips whisper, tokens, and acc
   assert.equal(rows[0].stashName, 'Shop 1')
   assert.deepEqual(rows[0].item.explicitMods, ['+50 to maximum Life'])
   assert.doesNotMatch(JSON.stringify(rows), /SecretPlayer|HeroChar|WHISPER_SECRET|HIDEOUT_SECRET|whisper|SHOULD_NOT_PASS/)
-  assert.deepEqual(M.projectShopRows(null), [])
+  assert.deepEqual(projectShopRows(null), [])
 })
 
+/**
+ * @param {{ searchIds?: string[], total?: number | null, searchStatus?: number, fetchStatus?: number, refuse?: boolean,
+ *   refuseOnFetchNum?: number | null, now?: () => number }} [o]
+ */
 function harness({ searchIds = [ID(1), ID(2)], total = null, searchStatus = 200, fetchStatus = 200, refuse = false, refuseOnFetchNum = null, now = () => 1700000000000 } = {}) {
   const calls = { acquire: [], observe: [], requests: [] }
   const lines = []
   const byId = new Map(searchIds.map((id, i) => [id, rawEntry(id, { amount: 10 + i })]))
   let fetchCount = 0
-  const fetchShop = M.makeMerchantFetcher({
+  const fetchShop = makeMerchantFetcher({
     request: async (req) => {
       calls.requests.push(req)
       if (req.method === 'POST') {
@@ -96,7 +100,7 @@ function harness({ searchIds = [ID(1), ID(2)], total = null, searchStatus = 200,
         calls.acquire.push([policy, opts])
         if (policy === 'trade-fetch') fetchCount++
         if (refuse || (refuseOnFetchNum != null && policy === 'trade-fetch' && fetchCount >= refuseOnFetchNum)) {
-          const e = new Error('rl')
+          const e = /** @type {Error & { retryAfter?: number }} */ (new Error('rl'))
           e.retryAfter = 2
           throw e
         }
@@ -144,7 +148,7 @@ test('defaults to price desc sort, supports oldest sort, fetches under spare: 0.
 })
 
 test('paginates 50 + 50 with zero extra search calls, reports apiCapReached at 100, and expires stale cursors', async () => {
-  assert.equal(M.MAX_SHOP_ITEMS, 50)
+  assert.equal(MAX_SHOP_ITEMS, 50)
   const ids = Array.from({ length: 100 }, (_, i) => ID(i + 1))
   let t = 1_700_000_000_000
   const h = harness({ searchIds: ids, total: 164, now: () => t })
@@ -175,7 +179,7 @@ test('paginates 50 + 50 with zero extra search calls, reports apiCapReached at 1
   assert.equal(p2.rows[49].id, ID(100))
 
   // Expired cursor returns { ok: false, error: 'expired' } instead of silently re-searching page 1
-  t += M.CURSOR_TTL_MS + 1000
+  t += CURSOR_TTL_MS + 1000
   const expired = await h.fetchShop({ league: 'Standard', account: 'BigShop#0001', sort: 'price_desc', more: true })
   assert.deepEqual(expired, { ok: false, error: 'expired' })
   assert.equal(h.calls.requests.filter(r => r.method === 'POST').length, 1)
@@ -204,13 +208,13 @@ test('rejects invalid league or overlong account before touching budget or netwo
 })
 
 test('auto-resolves logged-in PoE account directly from /my-account without hitting legacy get-account-name, caches it, and handles auth failure', async () => {
-  assert.equal(M.parseProfileAccount('<a href="/account/view-profile/Dj-Reck1-9507">Dj-Reck1#9507</a>'), 'Dj-Reck1#9507')
-  assert.equal(M.parseProfileAccount('no profile here'), '')
+  assert.equal(parseProfileAccount('<a href="/account/view-profile/Dj-Reck1-9507">Dj-Reck1#9507</a>'), 'Dj-Reck1#9507')
+  assert.equal(parseProfileAccount('no profile here'), '')
 
   let accountHits = 0
   const seenPaths = []
   const seenAccounts = []
-  const fetcher1 = M.makeMerchantFetcher({
+  const fetcher1 = makeMerchantFetcher({
     request: async (req) => {
       seenPaths.push(req.path)
       if (req.path === '/my-account') {
@@ -244,7 +248,7 @@ test('auto-resolves logged-in PoE account directly from /my-account without hitt
   assert.equal(accountHits, 2)
 
   // Unauthenticated session returns auth error cleanly
-  const fetcher3 = M.makeMerchantFetcher({
+  const fetcher3 = makeMerchantFetcher({
     request: async () => ({ status: 401, headers: {}, body: '' }),
     budget: { acquire: async () => {}, observe: () => {} },
     wait: async () => {},
@@ -255,9 +259,10 @@ test('auto-resolves logged-in PoE account directly from /my-account without hitt
 
 test('cancel() and resetAccount() during in-flight /my-account resolution never poison subsequent callers or cache stale accounts', async () => {
   // 1) cancel() during /my-account resolves caller 1 as cancelled while caller 2 succeeds cleanly
+  /** @type {(value?: any) => void} */
   let releaseAcct
   const acctGate = new Promise(r => { releaseAcct = r })
-  const fetcher1 = M.makeMerchantFetcher({
+  const fetcher1 = makeMerchantFetcher({
     request: async (req) => {
       if (req.path === '/my-account') {
         await acctGate
@@ -279,9 +284,12 @@ test('cancel() and resetAccount() during in-flight /my-account resolution never 
   assert.equal(res2.account, 'Recovered#1234')
 
   // 2) resetAccount() during pre-logout /my-account prevents stale Account A from poisoning Account B
-  let resolveOld, resolveNew
+  /** @type {(value?: any) => void} */
+  let resolveOld
+  /** @type {(value?: any) => void} */
+  let resolveNew
   let acctCall = 0
-  const fetcher2 = M.makeMerchantFetcher({
+  const fetcher2 = makeMerchantFetcher({
     request: async (req) => {
       if (req.path === '/my-account') {
         acctCall++
@@ -314,10 +322,11 @@ test('cancel() and resetAccount() during in-flight /my-account resolution never 
 })
 
 test('deduplicates concurrent in-flight fetches for same league/account/sort without colliding across sorts', async () => {
+  /** @type {(value?: any) => void} */
   let releaseSearch
   const gate = new Promise(r => { releaseSearch = r })
   let searchCalls = 0
-  const fetchShop = M.makeMerchantFetcher({
+  const fetchShop = makeMerchantFetcher({
     request: async (req) => {
       if (req.method === 'POST') {
         searchCalls++
@@ -341,10 +350,11 @@ test('deduplicates concurrent in-flight fetches for same league/account/sort wit
 
 test('cancel() aborts an in-flight shop fetch and stops remaining batches', async () => {
   const ids = Array.from({ length: 25 }, (_, i) => ID(i + 1))
+  /** @type {(value?: any) => void} */
   let releaseFirstBatch
   const batchGate = new Promise(r => { releaseFirstBatch = r })
   let fetchCalls = 0
-  const fetchShop = M.makeMerchantFetcher({
+  const fetchShop = makeMerchantFetcher({
     request: async (req) => {
       if (req.method === 'POST') {
         return { status: 200, headers: {}, body: JSON.stringify({ id: 'S1', result: ids, total: 25 }) }
@@ -357,7 +367,7 @@ test('cancel() aborts an in-flight shop fetch and stops remaining batches', asyn
     wait: async () => {},
   })
   const p = fetchShop({ league: 'Standard', account: 'Player#1234' })
-  await new Promise(r => setTimeout(r, 10))
+  await new Promise(r => { setTimeout(r, 10) })
   fetchShop.cancel()
   releaseFirstBatch()
   const r = await p
@@ -368,9 +378,10 @@ test('cancel() aborts an in-flight shop fetch and stops remaining batches', asyn
 test('makeMerchantPricer checks Instant Buyout floor with spare: 0.5 headroom, deduplicates in-flight, and cancels cleanly', async () => {
   const acquired = []
   const requests = []
+  /** @type {(value?: any) => void} */
   let release
   const gate = new Promise(r => { release = r })
-  const priceCheck = M.makeMerchantPricer({
+  const priceCheck = makeMerchantPricer({
     request: async (req) => {
       requests.push(req)
       if (req.method === 'POST') {
@@ -415,7 +426,7 @@ test('makeMerchantPricer keeps search ids on fetch rate-limit so retry skips tra
   let searchCount = 0
   let fetchCount = 0
   let failFetch = true
-  const priceCheck = M.makeMerchantPricer({
+  const priceCheck = makeMerchantPricer({
     request: async (req) => {
       if (req.method === 'POST') {
         searchCount++
@@ -431,7 +442,7 @@ test('makeMerchantPricer keeps search ids on fetch rate-limit so retry skips tra
     budget: {
       acquire: async (policy) => {
         if (policy === 'trade-fetch' && failFetch) {
-          const e = new Error('rl')
+          const e = /** @type {Error & { retryAfter?: number }} */ (new Error('rl'))
           e.retryAfter = 1
           throw e
         }
@@ -456,7 +467,7 @@ test('makeMerchantPricer keeps search ids on fetch rate-limit so retry skips tra
 })
 
 test('projectShopRows resolves Rare mods via shared modsearch catalogue without altering Unique row keys', () => {
-  const rows = M.projectShopRows({
+  const rows = projectShopRows({
     result: [
       rawEntry(ID(10), {
         name: 'Bramble Finger',
@@ -477,7 +488,7 @@ test('projectShopRows resolves Rare mods via shared modsearch catalogue without 
 test('makeMerchantPricer delegates to makeRechecker and samples deeper ranks past page 1', async () => {
   const allIds = Array.from({ length: 25 }, (_, i) => ID(i + 1))
   const fetchBatches = []
-  const priceCheck = M.makeMerchantPricer({
+  const priceCheck = makeMerchantPricer({
     request: async (req) => {
       if (req.method === 'POST') {
         return { status: 200, headers: {}, body: JSON.stringify({ id: 'DEEP_S', result: allIds, total: 25 }) }

@@ -16,11 +16,11 @@
         "src/preload.js",
         "src/preload-snap.js",
         "src/ee2-history/worker.js",
-        "src/vendor/ee2-query/entry.js",
         "scripts/*.mjs",
         "test/*.test.mjs"
       ],
-      "project": ["src/**/*.js", "scripts/**/*.mjs", "test/**/*.mjs"]
+      "project": ["src/**/*.js", "scripts/**/*.mjs", "test/**/*.mjs"],
+      "ignore": ["src/vendor/ee2-query/entry.js"]
     }
   },
   "ignoreUnresolved": ["virtual:theme-presets"]

@@ -12,11 +12,12 @@
 //   2. A running process whose name looks like EE2 (secondary; requires shelling
 //      out to tasklist/ps, so it's optional and fully guarded).
 'use strict'
+const { ignored } = require('../../ignored.js')
 
-const fs = require('fs')
-const os = require('os')
-const path = require('path')
-const { execFile } = require('child_process')
+const fs = require('node:fs')
+const os = require('node:os')
+const path = require('node:path')
+const { execFile } = require('node:child_process')
 
 // Candidate config directories per platform. EE2 stores config under an Electron
 // userData dir named "exiled-exchange-2" (confirmed by EE2 main/src/host-files/
@@ -35,11 +36,14 @@ function configDirs() {
   return [path.join(xdg, 'exiled-exchange-2')]
 }
 
-function findConfig() {
+// Does the path exist? (fs.existsSync's answer, without blocking: false on any error.)
+const exists = (p) => fs.promises.access(p).then(() => true, () => false)
+
+async function findConfig() {
   for (const dir of configDirs()) {
     const cfg = path.join(dir, 'apt-data', 'config.json')
-    try { if (fs.existsSync(cfg)) return { dir, config: cfg } } catch {}
-    try { if (fs.existsSync(dir)) return { dir, config: null } } catch {}
+    if (await exists(cfg)) return { dir, config: cfg }
+    if (await exists(dir)) return { dir, config: null }
   }
   return null
 }
@@ -52,12 +56,12 @@ function findProcess() {
     try {
       if (process.platform === 'win32') {
         execFile('tasklist', { timeout: 2000 }, (err, out) => {
-          if (err || !out) return done(false)
+          if (err || !out) { done(false); return }
           done(/exiled.?exchange/i.test(out))
         })
       } else {
         execFile('ps', ['-A', '-o', 'comm'], { timeout: 2000 }, (err, out) => {
-          if (err || !out) return done(false)
+          if (err || !out) { done(false); return }
           done(/exiled.?exchange/i.test(out))
         })
       }
@@ -67,9 +71,9 @@ function findProcess() {
 
 // Returns { present, method, dir, config, running }. Never throws.
 async function detectEE2({ checkProcess = false } = {}) {
-  const cfg = findConfig()
+  const cfg = await findConfig()
   let running = false
-  if (checkProcess) { try { running = await findProcess() } catch {} }
+  if (checkProcess) { try { running = await findProcess() } catch (e) { ignored('ee2-detect:find-process', e) } }
   const present = Boolean(cfg) || running
   return {
     present,
@@ -80,4 +84,4 @@ async function detectEE2({ checkProcess = false } = {}) {
   }
 }
 
-module.exports = { detectEE2, configDirs }
+module.exports = { detectEE2 }

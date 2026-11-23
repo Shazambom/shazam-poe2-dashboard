@@ -20,6 +20,7 @@
 // We only READ the clipboard (never clear/rewrite) so we can't interfere with
 // EE2's own read/restore dance.
 'use strict'
+const { ignored } = require('../../ignored.js')
 
 // Lazy electron require so this file's pure parser can be unit-tested (and
 // self-tested via `node clipboard-watcher.js`) without an Electron runtime.
@@ -77,9 +78,8 @@ function looksLikeItem(text) {
 // A header line with "Label: value" shape is a FIELD; label-less lines are the
 // name then base type. We label fields by localized regex, then fall back to
 // position (1st field = class, 2nd = rarity) so non-English clients still parse.
-function parseItem(raw) {
-  const lines = raw.replace(/\r\n/g, '\n').split('\n')
-
+// The header's labelled fields and its label-less name lines, up to the first divider.
+function readHeader(lines) {
   let itemClass = ''
   let rarity = ''
   const fieldsInOrder = []   // [{label, value}] for positional fallback
@@ -89,7 +89,8 @@ function parseItem(raw) {
     if (isSeparator(line)) break            // header ends at the first divider
     const t = line.trim()
     if (!t) continue
-    const m = t.match(/^([^:]{1,32}):\s*(.+)$/)
+    // t is trimmed, so the value after the colon (once leading space is skipped) starts with a non-space.
+    const m = t.match(/^([^:]{1,32}):\s*(\S.*)$/)
     if (m) {
       const label = m[1].trim()
       const value = m[2].trim()
@@ -100,6 +101,13 @@ function parseItem(raw) {
       nameLines.push(t)                     // name, then (maybe) base type
     }
   }
+  return { itemClass, rarity, fieldsInOrder, nameLines }
+}
+
+function parseItem(raw) {
+  const header = readHeader(raw.replace(/\r\n/g, '\n').split('\n'))
+  const { fieldsInOrder, nameLines } = header
+  let { itemClass, rarity } = header
 
   // Positional fallback for unrecognized localized labels: fields always come in
   // the order Item Class -> Rarity, so fill whichever we didn't match by label.
@@ -109,16 +117,16 @@ function parseItem(raw) {
 
   // Flags are standalone lines. English-canonical (localized flag words vary and
   // aren't needed for identity); raw is always available for deeper parsing.
-  const flag = (word) => new RegExp(`^${word}$`, 'im').test(raw)
+  const flag = (line) => line.test(raw)
 
   return {
     name: nameLines[0] || '',
     baseType: nameLines[1] || '',
     rarity: rarity || 'Unknown',
     itemClass: itemClass || '',
-    corrupted: flag('Corrupted'),
-    unidentified: flag('Unidentified'),
-    mirrored: flag('Mirrored'),
+    corrupted: flag(/^Corrupted$/im),
+    unidentified: flag(/^Unidentified$/im),
+    mirrored: flag(/^Mirrored$/im),
     raw,
     ts: Date.now(),
   }
@@ -128,6 +136,7 @@ function parseItem(raw) {
 // distinct item. Dedupes consecutive identical clipboard contents. The interval
 // is adaptive: setIntervalMs() lets the manager speed us up when EE2 is active.
 class ClipboardWatcher {
+  /** @param {{ intervalMs?: number, onItem?: (item: any) => void }} [opts] */
   constructor({ intervalMs = 600, onItem } = {}) {
     this._intervalMs = this._clamp(intervalMs)
     this._onItem = typeof onItem === 'function' ? onItem : () => {}
@@ -147,7 +156,7 @@ class ClipboardWatcher {
       this._starting = false
       this._lastHash = this._hash(text)
       this._arm()
-    })
+    }).catch((e) => ignored('ee2-clipboard:seed', e))
   }
 
   stop() {
@@ -187,7 +196,7 @@ class ClipboardWatcher {
     let item
     try { item = parseItem(text) } catch { return }
     if (!item.name) return
-    try { this._onItem(item) } catch {}
+    try { this._onItem(item) } catch (e) { ignored('ee2-clipboard:on-item', e) }
   }
 }
 
@@ -199,6 +208,7 @@ class ClipboardWatcher {
 //
 // baseline = the clipboard hash at kickoff; we ignore it so a previously-copied
 // item doesn't get re-emitted when the current hover yields nothing.
+/** @param {{ intervalMs?: number, durationMs?: number, onItem?: (item: any) => void }} [opts] */
 function captureItemBurst({ intervalMs = 15, durationMs = 250, onItem } = {}) {
   const cb = typeof onItem === 'function' ? onItem : () => {}
   const hash = (t) => `${t.length}:${t.slice(0, 64)}`
@@ -206,7 +216,7 @@ function captureItemBurst({ intervalMs = 15, durationMs = 250, onItem } = {}) {
   let baseHash = null
   let reading = true
   let done = false
-  readClip().then((t) => { baseHash = hash(t); reading = false })
+  readClip().then((t) => { baseHash = hash(t); reading = false }).catch((e) => ignored('ee2-clipboard:burst-seed', e))
   let elapsed = 0
   const timer = setInterval(async () => {
     elapsed += intervalMs
@@ -217,19 +227,19 @@ function captureItemBurst({ intervalMs = 15, durationMs = 250, onItem } = {}) {
     reading = false
     if (done || !text || hash(text) === baseHash || !looksLikeItem(text)) return
     let item
-    try { item = parseItem(text) } catch {}
-    if (item && item.name) { done = true; clearInterval(timer); try { cb(item) } catch {} }
+    try { item = parseItem(text) } catch (e) { ignored('ee2-clipboard:parse', e) }
+    if (item && item.name) { done = true; clearInterval(timer); try { cb(item) } catch (e) { ignored('ee2-clipboard:burst-item', e) } }
   }, intervalMs)
   if (timer.unref) timer.unref()
   return () => { done = true; clearInterval(timer) }
 }
 
-module.exports = { ClipboardWatcher, parseItem, looksLikeItem, captureItemBurst, _useClipboard }
+module.exports = { ClipboardWatcher, looksLikeItem, captureItemBurst, _useClipboard }
 
 // --- tiny self-test: `node clipboard-watcher.js` (pure parser, no Electron) ---
 // Guards against parser regressions for the common PoE2 item shapes.
 if (require.main === module) {
-  const strip = (o) => { const { raw, ts, ...rest } = o; return rest }
+  const strip = (o) => Object.fromEntries(Object.entries(o).filter(([k]) => k !== 'raw' && k !== 'ts'))
   const eq = (a, b, msg) => {
     if (JSON.stringify(a) !== JSON.stringify(b)) {
       console.error('FAIL', msg, '\n  got   ', JSON.stringify(a), '\n  expect', JSON.stringify(b))

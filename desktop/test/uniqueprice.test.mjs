@@ -19,7 +19,7 @@ function harness({ search = { status: 200, body: JSON.stringify(SEARCH) }, fetch
   const price = U.makeQueryPricer({
     request: async (r) => { calls.requests.push(r); const x = r.method === 'POST' ? search : fetch; return { status: x.status, headers: { 'x-rate-limit-ip': '5:10:60', 'retry-after': '30' }, body: x.body } },
     budget: {
-      acquire: async (p) => { calls.acquire.push(p); if (refuse === p) { const e = new Error('rl'); e.retryAfter = 7; throw e } },
+      acquire: async (p) => { calls.acquire.push(p); if (refuse === p) { const e = /** @type {Error & { retryAfter?: number }} */ (new Error('rl')); e.retryAfter = 7; throw e } },
       observe: (p, s) => calls.observe.push([p, s]),
     },
     log: (l) => lines.push(l),
@@ -90,7 +90,7 @@ test('repro (review #5): a refused fetch keeps its search, so the retry spends n
   const price = U.makeQueryPricer({
     request: async (r) => { calls.requests.push(r.method); return { status: 200, headers: {}, body: JSON.stringify(r.method === 'POST' ? SEARCH : FETCH) } },
     budget: {
-      acquire: async (p) => { calls.acquire.push(p); if (p === 'trade-fetch' && refuseFetch) { const e = new Error('rl'); e.retryAfter = 30; throw e } },
+      acquire: async (p) => { calls.acquire.push(p); if (p === 'trade-fetch' && refuseFetch) { const e = /** @type {Error & { retryAfter?: number }} */ (new Error('rl')); e.retryAfter = 30; throw e } },
       observe: () => {},
     },
   })

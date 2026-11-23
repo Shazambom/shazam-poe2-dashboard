@@ -23,7 +23,7 @@ function harness({ status = 200, body = { result: [listing(ID(1), 15, 'chaos')] 
   const calls = { acquire: [], observe: [], requests: [] }, lines = []
   const fetchListings = L.makeListingFetcher({
     request: async (r) => { calls.requests.push(r); return { status, headers: { 'x-rate-limit-ip': '12:4:10' }, body: JSON.stringify(body) } },
-    budget: { acquire: async (p) => { calls.acquire.push(p); if (refuse) { const e = new Error('rl'); e.retryAfter = 3; throw e } }, observe: (p, s) => calls.observe.push([p, s]) },
+    budget: { acquire: async (p) => { calls.acquire.push(p); if (refuse) { const e = /** @type {Error & { retryAfter?: number }} */ (new Error('rl')); e.retryAfter = 3; throw e } }, observe: (p, s) => calls.observe.push([p, s]) },
     log: (l) => lines.push(l),
     wait: async () => {},
   })
@@ -89,7 +89,7 @@ test('a budget "wait" is waited out once, then the fetch goes through; a second 
   let refusals = 1
   const fetchListings = L.makeListingFetcher({
     request: async (r) => { requests.push(r); return { status: 200, headers: {}, body: JSON.stringify({ result: [listing(ID(1), 15, 'chaos')] }) } },
-    budget: { acquire: async () => { if (refusals-- > 0) { const e = new Error('rl'); e.retryAfter = 3; throw e } }, observe: () => {} },
+    budget: { acquire: async () => { if (refusals-- > 0) { const e = /** @type {Error & { retryAfter?: number }} */ (new Error('rl')); e.retryAfter = 3; throw e } }, observe: () => {} },
     wait: async (ms) => { waits.push(ms) },
   })
   assert.deepEqual(await fetchListings({ league: 'L', searchId: 'Q1', ids: [ID(1)] }), { ok: true, rows: [{ id: ID(1), amount: 15, currency: 'chaos' }] })
@@ -99,7 +99,7 @@ test('a budget "wait" is waited out once, then the fetch goes through; a second 
   assert.equal(again.ok, false); assert.equal(again.error, 'rate')
   assert.deepEqual(waits, [3000, 3000], 'one wait per call, no loop')
   refusals = 1
-  const long = L.makeListingFetcher({ request: async () => ({ status: 200, headers: {}, body: '{"result":[]}' }), budget: { acquire: async () => { if (refusals-- > 0) { const e = new Error('rl'); e.retryAfter = 600; throw e } }, observe: () => {} }, wait: async (ms) => waits.push(ms) })
+  const long = L.makeListingFetcher({ request: async () => ({ status: 200, headers: {}, body: '{"result":[]}' }), budget: { acquire: async () => { if (refusals-- > 0) { const e = /** @type {Error & { retryAfter?: number }} */ (new Error('rl')); e.retryAfter = 600; throw e } }, observe: () => {} }, wait: async (ms) => waits.push(ms) })
   await long({ league: 'L', searchId: 'Q1', ids: [ID(1)] })
   assert.equal(waits.at(-1), 10000, 'capped at 10 s')
 })
@@ -121,11 +121,11 @@ test('cancel() drops a fetch that is still waiting on the budget — nothing is 
   let refuse = true
   const f = L.makeListingFetcher({
     request: async (r) => { requests.push(r); return { status: 200, headers: {}, body: '{"result":[]}' } },
-    budget: { acquire: async () => { if (refuse) { refuse = false; const e = new Error('rl'); e.retryAfter = 5; throw e } }, observe: () => {} },
+    budget: { acquire: async () => { if (refuse) { refuse = false; const e = /** @type {Error & { retryAfter?: number }} */ (new Error('rl')); e.retryAfter = 5; throw e } }, observe: () => {} },
     wait: (ms, signal) => new Promise(res => { release = res; signal?.addEventListener('abort', () => res(), { once: true }) }),
   })
   const pending = f({ league: 'L', searchId: 'Q1', ids: [ID(1)] })
-  await new Promise(r => setImmediate(r))
+  await new Promise(r => { setImmediate(r) })
   f.cancel()
   assert.deepEqual(await pending, { ok: false, error: 'cancelled' })
   assert.equal(requests.length, 0, 'the dropped fetch never reached the site')
@@ -154,7 +154,7 @@ function rechecker({ searchRes = { id: 'S7', result: Array.from({ length: 100 },
       const ids = r.path.split('/fetch/')[1].split('?')[0].split(',')
       return { status: 200, headers: {}, body: JSON.stringify({ result: ids.map((id, k) => listing(id, 100 + k, k % 2 ? 'chaos' : 'vaal')) }) }
     },
-    budget: { acquire: async (p, o) => { calls.acquire.push([p, o]); if (refuse-- > 0) { const e = new Error('rl'); e.retryAfter = 2; throw e } }, observe: () => {} },
+    budget: { acquire: async (p, o) => { calls.acquire.push([p, o]); if (refuse-- > 0) { const e = /** @type {Error & { retryAfter?: number }} */ (new Error('rl')); e.retryAfter = 2; throw e } }, observe: () => {} },
     wait: async () => {},
   })
   return { f, calls }
@@ -198,11 +198,11 @@ test('recheck: a budget "not yet" is waited out once; cancel drops it before any
   let release
   const f = L.makeRechecker({
     request: async () => { throw new Error('must not be sent') },
-    budget: { acquire: async () => { const e = new Error('rl'); e.retryAfter = 5; throw e }, observe: () => {} },
+    budget: { acquire: async () => { const e = /** @type {Error & { retryAfter?: number }} */ (new Error('rl')); e.retryAfter = 5; throw e }, observe: () => {} },
     wait: (ms, signal) => new Promise(res => { release = res; signal?.addEventListener('abort', () => res(), { once: true }) }),
   })
   const pending = f({ league: 'L', query: Q })
-  await new Promise(r => setImmediate(r))
+  await new Promise(r => { setImmediate(r) })
   f.cancel()
   assert.deepEqual(await pending, { ok: false, error: 'cancelled' })
   void release
@@ -235,8 +235,7 @@ test('recheck: identical checks already in flight share one search', async () =>
 // and a new click on the same search after a cancel starts a fresh check (not the cancelled one).
 test('recheck: cancelled while the search is in flight → no fetch is sent; a later click runs fresh', async () => {
   const sent = []
-  let f
-  f = L.makeRechecker({
+  const f = L.makeRechecker({
     request: async (r) => {
       sent.push(r.method)
       if (r.method === 'POST') { f.cancel(); return { status: 200, headers: {}, body: JSON.stringify({ id: 'S1', result: [ID(1), ID(2)], total: 2 }) } }

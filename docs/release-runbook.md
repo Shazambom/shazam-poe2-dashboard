@@ -190,7 +190,7 @@ Check these every time; each one has cost a deploy before. (The general rules ev
    diff:
    - env-gated drive routines (`LIVE_DEBUG` / `TAB_TEST` / `RESTORE_TEST` / `LIVETREE_TEST`
      / `ARM_ONLY`) are removed from `desktop/src/main.js`.
-   - trace logs stay behind `dlog` / `TRADE_DEBUG` (failure logs may stay always-on); no
+   - trace logs stay behind `dlog` (its `DBG` constant in `trade/engine.js` is `false`; failure logs may stay always-on); no
      stray always-on `console.log('[trade]…`.
    - the DEV-only `__arbiterTestPing` hook stays behind `import.meta.env.DEV`.
    - fuzz suites pass:

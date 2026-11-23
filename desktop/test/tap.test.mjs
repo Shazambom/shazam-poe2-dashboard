@@ -23,9 +23,10 @@ const FILTERS_RES = { result: [
 
 // A fake webContents + debugger: records every command, serves bodies by requestId.
 function fakeContents({ id = 7, bodies = {}, attachThrows = false, bodyFails = new Set() } = {}) {
+  /** @type {any} a fake Electron.Debugger */
   const dbg = new EventEmitter()
   const commands = []
-  dbg.attach = () => { if (attachThrows) throw new Error('already attached') ; dbg.attached = true }
+  dbg.attach = () => { if (attachThrows) { throw new Error('already attached')  } dbg.attached = true }
   dbg.isAttached = () => !!dbg.attached
   dbg.sendCommand = async (method, params) => {
     commands.push(method)
@@ -36,11 +37,12 @@ function fakeContents({ id = 7, bodies = {}, attachThrows = false, bodyFails = n
     }
     return {}
   }
+  /** @type {any} a fake Electron.WebContents */
   const contents = new EventEmitter()
   Object.assign(contents, { id, debugger: dbg, isDevToolsOpened: () => false })
   return { contents, dbg, commands }
 }
-const tick = () => new Promise(r => setImmediate(r))
+const tick = () => new Promise(r => { setImmediate(r) })
 const req = (dbg, requestId, url, method = 'GET', postData) => dbg.emit('message', {}, 'Network.requestWillBeSent', { requestId, request: { url, method, postData }, type: 'XHR' })
 const done = (dbg, requestId) => dbg.emit('message', {}, 'Network.loadingFinished', { requestId })
 

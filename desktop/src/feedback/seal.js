@@ -7,7 +7,7 @@
 //   key  = HKDF-SHA256(ikm = X25519(eph, ownerPub), salt = ephPub‖ownerPub, info = INFO, 32)
 //   AAD  = the 5 header bytes — a header edit fails the tag
 'use strict'
-const crypto = require('crypto')
+const crypto = require('node:crypto')
 
 const MAGIC = 'ARB1'
 const KEY_ID = 1                     // bump on owner-key rotation (the old PEM stays readable on shazam)
@@ -15,7 +15,7 @@ const INFO = 'arbiter-feedback-v1'
 // The owner's X25519 public key (raw 32 bytes, base64): the public half of the keypair shazam minted
 // with `python -m arbseal keygen 1` (the private half never leaves /etc/arbiter/keys there). It ships
 // as a file beside this module so a rotation is a file copy, not a code edit.
-const OWNER_PUB_B64 = require('fs').readFileSync(require('path').join(__dirname, 'owner-key.pub'), 'utf8').trim()
+const OWNER_PUB_B64 = require('node:fs').readFileSync(require('node:path').join(__dirname, 'owner-key.pub'), 'utf8').trim()
 const OVERHEAD = 4 + 1 + 32 + 12 + 16
 // Raw 32-byte X25519 public keys import through the fixed SPKI prefix (verified on Node 18).
 const SPKI_PREFIX = Buffer.from('302a300506032b656e032100', 'hex')
@@ -63,4 +63,4 @@ function open(sealed, privateKeyPem) {
   return Buffer.concat([d.update(ct), d.final()])   // a bad tag throws here
 }
 
-module.exports = { MAGIC, KEY_ID, INFO, OWNER_PUB_B64, OVERHEAD, seal, open }
+module.exports = { MAGIC, KEY_ID, OWNER_PUB_B64, OVERHEAD, seal, open }

@@ -5,9 +5,13 @@
 // to 1 in main.js; this menu offers an explicit reset instead.
 'use strict'
 
+/**
+ * @param {{ platform?: string, arbiter?: Electron.MenuItemConstructorOptions[], resetTradeZoom?: () => void }} [opts]
+ * @returns {Electron.MenuItemConstructorOptions[]}
+ */
 function buildMenuTemplate({ platform = process.platform, arbiter = [], resetTradeZoom = () => {} } = {}) {
   return [
-    ...(platform === 'darwin' ? [{ role: 'appMenu' }] : []),
+    ...(platform === 'darwin' ? [/** @type {Electron.MenuItemConstructorOptions} */ ({ role: 'appMenu' })] : []),
     { label: 'Arbiter', submenu: arbiter },
     { role: 'editMenu' },
     {

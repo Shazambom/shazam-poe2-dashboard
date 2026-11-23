@@ -7,6 +7,7 @@
 // there is exactly one place that decides whether anything leaves the machine. Bodies are plain
 // text, never secrets or keystrokes. The server is on the owner's LAN and reachable only there.
 'use strict'
+const { ignored } = require('./ignored.js')
 
 const SHAZAM = 'http://192.168.1.250:8080'
 
@@ -27,8 +28,8 @@ function installLog(marker, body, { max = 4000 } = {}) {
     fetch(`${SHAZAM}/api/installlog?p=${encodeURIComponent(marker)}`, {
       method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: text,
       signal: AbortSignal.timeout(5000),
-    }).catch(() => {})
-  } catch {}
+    }).catch((e) => ignored('telemetry:send', e))
+  } catch (e) { ignored('telemetry:install-log', e) }
 }
 
 module.exports = { SHAZAM, configure, installLog }

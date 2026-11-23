@@ -7,6 +7,8 @@
 // X-Rate-Limit headers so the backend's view stays exact. If the local backend is unreachable we
 // fail OPEN (same as having no budget) — the app never blocks the user on its own diagnostics.
 'use strict'
+const { ignored } = require('../ignored.js')
+const { backendFetch } = require('../local-backend.js')
 
 class RateLimitError extends Error {
   constructor(retryAfter) { super(`rate-limited, retry in ${retryAfter}s`); this.retryAfter = retryAfter; this.code = 'RATE_LIMITED' }
@@ -19,7 +21,7 @@ function configure({ backendUrl }) { if (backendUrl) _backendUrl = backendUrl }
 async function acquire(policy, opts = {}) {
   let r
   try {
-    const resp = await fetch(`${_backendUrl()}/api/ratelimits/acquire`, {
+    const resp = await backendFetch(`${_backendUrl()}/api/ratelimits/acquire`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(opts.spare ? { policy, spare: opts.spare } : { policy }),
       signal: AbortSignal.timeout(3000),
     })
@@ -36,21 +38,21 @@ function observe(policy, status, headers) {
     if (key.startsWith('x-rate-limit') || key === 'retry-after') h[key] = Array.isArray(v) ? v[0] : String(v)
   }
   try {
-    fetch(`${_backendUrl()}/api/ratelimits/observe`, {
+    backendFetch(`${_backendUrl()}/api/ratelimits/observe`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ policy, status, headers: h }), signal: AbortSignal.timeout(3000),
-    }).catch(() => {})
-  } catch {}
+    }).catch((e) => ignored('budget:observe', e))
+  } catch (e) { ignored('budget:observe', e) }
 }
 
 // Tell the backend a request it didn't make just spent a slot (an EE2 price check on the same
 // account/IP — batch 4-B). Fire-and-forget; the backend folds it in without penalising.
 function hint(policy) {
   try {
-    fetch(`${_backendUrl()}/api/ratelimits/hint`, {
+    backendFetch(`${_backendUrl()}/api/ratelimits/hint`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ policy }), signal: AbortSignal.timeout(3000),
-    }).catch(() => {})
-  } catch {}
+    }).catch((e) => ignored('budget:hint', e))
+  } catch (e) { ignored('budget:hint', e) }
 }
 
 // One trade-site request under the shared budget: reserve a slot, send, report the headers, classify.
@@ -58,6 +60,19 @@ function hint(policy) {
 // the site's clock, its Date header — Sales compares sale times with it) or
 // { ok: false, error: 'rate' | 'auth' | 'HTTP n' | message, status?, retryAfter? }.
 // deps: { request(req) → { status, headers, body }, budget: { acquire, observe } } (injectable for tests).
+/**
+ * @typedef {{ status: number, headers?: Record<string, any>, body?: string }} TradeResponse
+ * @typedef {{ acquire: (policy: string, opts?: { spare?: number }) => Promise<unknown>, observe: (policy: string, status: number, headers?: Record<string, any>) => void }} Budget
+ * @typedef {{ request: (req: any) => Promise<TradeResponse>, budget: Budget }} BudgetDeps
+ * @typedef {{ ok: boolean, error?: string, status?: number, retryAfter?: number, data?: any, date?: string }} Budgeted
+ */
+/**
+ * @param {BudgetDeps} deps
+ * @param {string} policy
+ * @param {any} req
+ * @param {{ spare?: number }} [opts]
+ * @returns {Promise<Budgeted>}
+ */
 async function budgeted({ request, budget }, policy, req, opts) {
   try { await (opts ? budget.acquire(policy, opts) : budget.acquire(policy)) } catch (e) { return { ok: false, error: 'rate', retryAfter: e.retryAfter } }
   let resp
@@ -67,7 +82,7 @@ async function budgeted({ request, budget }, policy, req, opts) {
   if (resp.status === 401 || resp.status === 403) return { ok: false, error: 'auth', status: resp.status }
   if (resp.status !== 200) return { ok: false, error: `HTTP ${resp.status}`, status: resp.status }
   let data = null
-  try { data = JSON.parse(resp.body) } catch {}
+  try { data = JSON.parse(resp.body) } catch (e) { ignored('budget:parse-body', e) }
   const date = resp.headers?.date
   return { ok: true, status: 200, data, ...(date ? { date } : {}) }
 }

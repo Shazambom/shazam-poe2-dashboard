@@ -9,6 +9,7 @@
 //   cdn=    what web.poecdn.com answered for the image requests (status tally, first failure)
 // Remove once the cause is known. Reports no user data — counts, status codes and CDN URLs only.
 'use strict'
+const { backendFetch } = require('./local-backend.js')
 
 const CDN = 'https://web.poecdn.com/*'
 
@@ -39,9 +40,10 @@ function install({ win, session, backendUrl, log }) {
   } catch (e) { log(`hook-failed ${String(e)}`) }
 
   const report = async (when) => {
-    let data = 'unreachable'
+    /** @type {string | { loaded_at: number | null, n: number, withIcon: number }} */
+    let data
     try {
-      const d = await (await fetch(`${backendUrl()}/api/currencies`, { signal: AbortSignal.timeout(8000) })).json()
+      const d = await (await backendFetch(`${backendUrl()}/api/currencies`, { signal: AbortSignal.timeout(8000) })).json()
       const list = d.currencies || []
       data = { loaded_at: d.loaded_at ? Math.round(d.loaded_at) : null, n: list.length, withIcon: list.filter(c => c.icon).length }
     } catch (e) { data = `error ${String(e.message || e)}` }
@@ -49,7 +51,7 @@ function install({ win, session, backendUrl, log }) {
     try { if (win() && !win().isDestroyed()) dom = await win().webContents.executeJavaScript(PROBE, true) } catch (e) { dom = `error ${String(e.message || e)}` }
     log(`${when} data=${JSON.stringify(data)} dom=${JSON.stringify(dom)} cdn=${JSON.stringify(cdn)}`)
   }
-  for (const [ms, tag] of [[20000, '@20s'], [120000, '@120s'], [600000, '@10m']]) setTimeout(() => report(tag), ms)
+  for (const [ms, tag] of /** @type {Array<[number, string]>} */ ([[20000, '@20s'], [120000, '@120s'], [600000, '@10m']])) setTimeout(() => report(tag), ms)
 }
 
 module.exports = { install }

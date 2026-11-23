@@ -35,6 +35,7 @@ function poeWebApi() {
     case 'pt': return 'br.pathofexile.com'
     case 'fr': return 'fr.pathofexile.com'
   }
+  return undefined
 }
 const TipsFrequency = { Always: 1, MoreOften: 2, Normal: 3, Rarely: 4, VeryRarely: 5, Never: 6 }
 module.exports = { AppConfig, poeWebApi, setPrefs, DEFAULT_PREFS, TipsFrequency, updateConfig: () => {}, saveConfig: () => {}, pushHostConfig: () => {}, initConfig: async () => {}, defaultConfig: () => config }

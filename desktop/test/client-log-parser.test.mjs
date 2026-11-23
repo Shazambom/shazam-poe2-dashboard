@@ -1,7 +1,7 @@
 // Client.txt parser, LogWatcher, and main/preload wiring tests.
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, readFileSync, rmSync, writeFileSync, appendFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync, appendFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createRequire } from 'node:module'
@@ -89,7 +89,7 @@ test('LogWatcher tails appended lines, buffers split lines across ticks, recover
     // Partial line written across two poll ticks (C10) must be reassembled, never emitted split or dropped
     const splitFull = P + 'Generating level 81 area "MapBurialBog" with seed 777888'
     appendFileSync(file, splitFull.slice(0, 35), 'utf8')
-    await new Promise(r => setTimeout(r, 140))
+    await new Promise(r => { setTimeout(r, 140) })
     assert.ok(!seen.some(l => l.includes('MapBurialBog')), 'incomplete line waits for newline')
     appendFileSync(file, splitFull.slice(35) + '\n', 'utf8')
     await new Promise((res, rej) => {
@@ -135,6 +135,14 @@ test('main.js and preload.js wire Client.txt watcher cleanly while server-watche
   assert.ok(preload.includes("clientLog:") && preload.includes("sub('client-log:event')") && preload.includes("sub('client-log:status')") && preload.includes("ipcRenderer.invoke('client-log:status')"), 'preload exposes clientLog event, status push, and status invoke')
   assert.ok(preload.includes("clientLogLine:") && preload.includes("ipcRenderer.invoke('dev:client-log-line'"), 'preload exposes dev.clientLogLine')
 
-  // server-watcher remains dormant / unwired
-  assert.ok(!main.includes('server-watcher'), 'server-watcher.js stays dormant')
+  // Nothing in the app probes EE2's own server: no GET /config poll and never its /events websocket (a
+  // client there becomes EE2's "last-active" client and diverts its price-check results). The optional
+  // server-watcher.js that did the /config probe was deleted unwired; this keeps any copy of it out.
+  const SRC = ROOT + 'desktop/src/'
+  for (const f of readdirSync(SRC, { recursive: true })) {
+    if (!String(f).endsWith('.js') || String(f).startsWith('vendor/')) continue
+    const text = readFileSync(SRC + f, 'utf8')
+    assert.ok(!/path:\s*['"`]\/config['"`]/.test(text), `${f} probes EE2's /config`)
+    assert.ok(!/\/events['"`]/.test(text), `${f} names EE2's /events socket`)
+  }
 })

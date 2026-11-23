@@ -4,6 +4,7 @@
 'use strict'
 const { DEFAULT_PREFS } = require('../vendor/ee2-query/shims/config.js')
 
+/** @param {{ language?: string, realm?: string, preferredTradeSite?: string }} prefs */
 function hostFor({ language, realm, preferredTradeSite }) {
   if (preferredTradeSite === 'www') return 'www.pathofexile.com'
   switch (language) {
@@ -28,7 +29,7 @@ function prefsFromConfig(cfg) {
   const prefs = {
     leagueId: pick(c, 'leagueId'), language: pick(c, 'language'), realm: pick(c, 'realm'), preferredTradeSite: pick(c, 'preferredTradeSite'),
     searchStatRange: Number(pick(w, 'searchStatRange')) || DEFAULT_PREFS.searchStatRange,
-    defaultAllSelected: !!pick(w, 'defaultAllSelected'), activateStockFilter: !!pick(w, 'activateStockFilter'),
+    defaultAllSelected: Boolean(pick(w, 'defaultAllSelected')), activateStockFilter: Boolean(pick(w, 'activateStockFilter')),
     collapseListings: pick(w, 'collapseListings') === 'app' ? 'app' : 'api',
     savedAugments: (w && w.savedAugments && typeof w.savedAugments === 'object') ? w.savedAugments : {},
   }
@@ -38,7 +39,7 @@ function prefsFromConfig(cfg) {
 }
 
 function readPrefs() {
-  let cfg = null
+  let cfg
   try { cfg = require('../integrations/exiled-exchange/ee2-config.js').loadConfig() } catch { cfg = null }
   return prefsFromConfig(cfg)
 }

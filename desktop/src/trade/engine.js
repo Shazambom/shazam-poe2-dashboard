@@ -2,6 +2,8 @@
 // WebSocket, and on each ping fetch the listing details and emit an enriched ping to the
 // renderer. Read-only discovery + the manual teleport POST — strictly human-triggered, no
 // auto-buy. See docs/trading-rework-research.md for the locked design decisions.
+'use strict'
+const { ignored } = require('../ignored.js')
 const WebSocket = require('ws')
 const { POE, poeRequest, poeJson, cookieHeader, userAgent } = require('./proxy.js')
 const budget = require('./budget.js')
@@ -12,11 +14,13 @@ const BACKOFF_BASE = 2000
 const BACKOFF_MAX = 60000
 
 const sockets = new Map()       // itemId -> { ws, slug, league, searchId, attempts, stopped }
+/** @type {(channel: string, payload: any) => void} */
 let _sink = () => {}            // set by index.js: (channel, payload) => webContents.send
 
-// Verbose per-event trace (startSearch / WS open / ping / stop / teleport). Off by default
-// so production is quiet; set TRADE_DEBUG=1 to re-enable while diagnosing. Failures still log.
-const DBG = !!process.env.TRADE_DEBUG
+// Verbose per-event trace (startSearch / WS open / ping / stop / teleport). Off so production is
+// quiet; flip this constant in a dev build to diagnose (no environment switch: CLAUDE.md
+// "Configuration"). Failures still log.
+const DBG = false
 const dlog = (...a) => { if (DBG) console.log(...a) }
 
 function setSink(fn) { _sink = fn }
@@ -81,7 +85,7 @@ async function _connect(itemId) {
       rec.stopped = true
       _sink('trade:search-state', { itemId, state: 'auth', message: 'Reconnect your PoE session' })
     } else _sink('trade:search-state', { itemId, state: 'error', message: `HTTP ${code}` })
-    try { ws.terminate() } catch {}
+    try { ws.terminate() } catch (e) { ignored('live-search:terminate', e) }
   })
   ws.on('close', (code) => {
     rec.ws = null
@@ -121,6 +125,15 @@ async function _onPingIds(itemId, ids) {
   }
 }
 
+// A whisper/hideout token's expiry (its JWT exp, in ms), 0 when absent or unreadable.
+function tokenExpiry(token) {
+  let tokenExp = 0
+  try { if (token) tokenExp = (JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString()).exp || 0) * 1000 } catch (e) { ignored('live-search:token-exp', e) }
+  return tokenExp
+}
+
+const pingItem = (item) => ({ name: item.name || '', typeLine: item.typeLine || item.baseType || '', icon: item.icon || '' })
+
 // Shape the fetch result into the renderer Ping.
 function _normalize(itemId, rec, r) {
   if (!r || !r.listing) return null
@@ -129,20 +142,19 @@ function _normalize(itemId, rec, r) {
   const acct = L.account || {}
   const online = acct.online ? (acct.online.status === 'afk' ? 'afk' : 'online') : 'offline'
   const item = r.item || {}
-  let tokenExp = 0
   const token = L.hideout_token || L.whisper_token || null
-  try { if (token) tokenExp = (JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString()).exp || 0) * 1000 } catch {}
+  const tokenExp = tokenExpiry(token)
   return {
     pingId: `p_${itemId}_${r.id}`,
     itemId, searchId: rec.searchId, listingId: r.id,
-    item: { name: item.name || '', typeLine: item.typeLine || item.baseType || '', icon: item.icon || '' },
+    item: pingItem(item),
     price,
     account: acct.name || acct.lastCharacterName || '',
     online,
     indexedAt: L.indexed ? Date.parse(L.indexed) : Date.now(),
     receivedAt: Date.now(),
     token, tokenExp,
-    flags: { gone: !!r.gone, inDemand: !!L.in_demand },
+    flags: { gone: Boolean(r.gone), inDemand: Boolean(L.in_demand) },
   }
 }
 
@@ -151,7 +163,7 @@ function stopSearch(itemId) {
   if (!rec) return
   rec.stopped = true
   clearTimeout(rec.timer)
-  try { rec.ws?.close() } catch {}
+  try { rec.ws?.close() } catch (e) { ignored('live-search:close', e) }
   sockets.delete(itemId)
   dlog(`[trade] stopSearch item=${itemId} (live ${sockets.size}/${MAX_SOCKETS})`)
   emitState()
@@ -170,8 +182,8 @@ async function teleport(token) {
   budget.observe('trade-whisper', resp.status, resp.headers)
   if (resp.status === 429) throw new budget.RateLimitError(30)
   const data = poeJson(resp) || {}
-  dlog(`[trade] teleport -> HTTP ${resp.status} success=${!!data.success}`)
-  return { success: !!data.success, status: resp.status }
+  dlog(`[trade] teleport -> HTTP ${resp.status} success=${Boolean(data.success)}`)
+  return { success: Boolean(data.success), status: resp.status }
 }
 
 module.exports = { setSink, startSearch, stopSearch, stopAll, teleport, activeCount, emitState }

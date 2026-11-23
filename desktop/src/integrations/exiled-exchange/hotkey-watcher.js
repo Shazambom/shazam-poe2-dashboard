@@ -17,6 +17,7 @@
 // strings, so we look names up directly against that runtime table. We do NOT
 // import EE2's KeyToCode.ts (reference-only).
 'use strict'
+const { ignored } = require('../../ignored.js')
 
 // Modifier tokens we recognize in an EE2 shortcut string.
 const MODS = {
@@ -33,7 +34,7 @@ function loadUiohook() {
   try {
     const mod = require('uiohook-napi')
     if (mod && mod.uIOhook && mod.UiohookKey) return mod
-  } catch {}
+  } catch (e) { ignored('ee2-hotkey:load-uiohook', e) }
   return null
 }
 
@@ -61,6 +62,7 @@ class HotkeyWatcher {
   // onHotkey({action, target, shortcut, ts}) fires on a configured match.
   // onFirstKey() fires once when the FIRST key event of any kind arrives — used
   // to confirm uiohook is actually delivering events (macOS permission check).
+  /** @param {{ onHotkey?: (...a: any[]) => void, onFirstKey?: () => void, cooldownMs?: number }} [opts] */
   constructor({ onHotkey, onFirstKey, cooldownMs = 250 } = {}) {
     this._onHotkey = typeof onHotkey === 'function' ? onHotkey : () => {}
     this._onFirstKey = typeof onFirstKey === 'function' ? onFirstKey : () => {}
@@ -93,8 +95,8 @@ class HotkeyWatcher {
 
   stop() {
     if (!this._mod) return
-    try { this._mod.uIOhook.removeListener('keydown', this._handler) } catch {}
-    try { this._mod.uIOhook.stop() } catch {}
+    try { this._mod.uIOhook.removeListener('keydown', this._handler) } catch (e) { ignored('ee2-hotkey:remove-listener', e) }
+    try { this._mod.uIOhook.stop() } catch (e) { ignored('ee2-hotkey:stop', e) }
     this._mod = null
     this._handler = null
     this._specs = []
@@ -118,7 +120,7 @@ class HotkeyWatcher {
   }
 
   _onKeydown(e) {
-    if (!this._sawKey) { this._sawKey = true; try { this._onFirstKey() } catch {} }
+    if (!this._sawKey) { this._sawKey = true; try { this._onFirstKey() } catch (err) { ignored('ee2-hotkey:on-first-key', err) } }
     // Ignore modifier-only keydowns fast; match on the real key.
     for (const s of this._specs) {
       if (e.keycode !== s.keycode) continue
@@ -130,10 +132,10 @@ class HotkeyWatcher {
       const last = this._lastFire.get(s.shortcut) || 0
       if (now - last < this._cooldownMs) return   // debounce auto-repeat
       this._lastFire.set(s.shortcut, now)
-      try { this._onHotkey({ action: s.action, target: s.target, shortcut: s.shortcut, ts: now }) } catch {}
+      try { this._onHotkey({ action: s.action, target: s.target, shortcut: s.shortcut, ts: now }) } catch (err) { ignored('ee2-hotkey:on-hotkey', err) }
       return
     }
   }
 }
 
-module.exports = { HotkeyWatcher, parseShortcut }
+module.exports = { HotkeyWatcher }

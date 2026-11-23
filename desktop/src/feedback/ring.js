@@ -1,6 +1,7 @@
 // A bounded ring of log lines: the last N, each clamped and stamped HH:MM:SS. Feeds the main-process
 // and updater logs into a feedback report without keeping unbounded history around.
 'use strict'
+const { ignored } = require('../ignored.js')
 
 const MAX_LINE = 500
 
@@ -16,11 +17,11 @@ function makeRing(n, now = () => new Date()) {
       try {
         buf.push(`${now().toISOString().slice(11, 19)} ${text(line).slice(0, MAX_LINE)}`)
         if (buf.length > n) buf.splice(0, buf.length - n)
-      } catch {}
+      } catch (e) { ignored('log-ring:push', e) }
     },
     lines: () => buf.slice(),
     clear: () => { buf.length = 0 },
   }
 }
 
-module.exports = { makeRing, MAX_LINE }
+module.exports = { makeRing }

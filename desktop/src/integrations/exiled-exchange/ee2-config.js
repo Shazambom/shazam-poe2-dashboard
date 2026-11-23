@@ -19,10 +19,11 @@
 // `${hotkeyHold} + ${hotkey}`. We extract our OWN normalized list from the JSON;
 // we do not import EE2 code.
 'use strict'
+const { ignored } = require('../../ignored.js')
 
-const fs = require('fs')
-const os = require('os')
-const path = require('path')
+const fs = require('node:fs')
+const os = require('node:os')
+const path = require('node:path')
 
 function configDir() {
   const home = os.homedir()
@@ -56,6 +57,31 @@ function loadConfig() {
 // Walk the config JSON and pull out every hotkey binding as our own normalized
 // { action, target, shortcut } records. Generic (walks widgets/arrays) so new or
 // rebound actions are picked up without hard-coding EE2's widget schema.
+// The bindings one config node declares, in order: [action, shortcut, target].
+function nodeBindings(node) {
+  const out = []
+  const label = typeof node.wtype === 'string' ? node.wtype : 'hotkey'
+  // Combined hold+key (price-check style): hotkeyHold ("Ctrl") + hotkey ("D").
+  if (typeof node.hotkey === 'string' && node.hotkey) {
+    const combo = typeof node.hotkeyHold === 'string' && node.hotkeyHold
+      ? `${node.hotkeyHold} + ${node.hotkey}`
+      : node.hotkey
+    out.push([label, combo, node.wtype])
+  }
+  if (typeof node.hotkeyLocked === 'string') {
+    out.push([`${label}-locked`, node.hotkeyLocked, node.wtype])
+  }
+  // Any "...Key" string field is a binding (overlayKey, wikiKey, poedbKey,
+  // craftOfExileKey, stashSearchKey, samePricedKey, toggleKey, resetKey, ...).
+  for (const [k, v] of Object.entries(node)) {
+    if (k !== 'hotkey' && k !== 'hotkeyHold' && k !== 'hotkeyLocked' &&
+        /Key$/.test(k) && typeof v === 'string') {
+      out.push([k, v])
+    }
+  }
+  return out
+}
+
 function extractShortcuts(cfg) {
   if (!cfg || typeof cfg !== 'object') return []
   const out = []
@@ -72,25 +98,7 @@ function extractShortcuts(cfg) {
     if (!node || typeof node !== 'object') return
     if (Array.isArray(node)) { node.forEach(walk); return }
 
-    const label = typeof node.wtype === 'string' ? node.wtype : 'hotkey'
-    // Combined hold+key (price-check style): hotkeyHold ("Ctrl") + hotkey ("D").
-    if (typeof node.hotkey === 'string' && node.hotkey) {
-      const combo = typeof node.hotkeyHold === 'string' && node.hotkeyHold
-        ? `${node.hotkeyHold} + ${node.hotkey}`
-        : node.hotkey
-      push(label, combo, node.wtype)
-    }
-    if (typeof node.hotkeyLocked === 'string') {
-      push(`${label}-locked`, node.hotkeyLocked, node.wtype)
-    }
-    // Any "...Key" string field is a binding (overlayKey, wikiKey, poedbKey,
-    // craftOfExileKey, stashSearchKey, samePricedKey, toggleKey, resetKey, ...).
-    for (const [k, v] of Object.entries(node)) {
-      if (k !== 'hotkey' && k !== 'hotkeyHold' && k !== 'hotkeyLocked' &&
-          /Key$/.test(k) && typeof v === 'string') {
-        push(k, v)
-      }
-    }
+    for (const [action, shortcut, target] of nodeBindings(node)) push(action, shortcut, target)
     for (const v of Object.values(node)) if (v && typeof v === 'object') walk(v)
   }
 
@@ -114,7 +122,7 @@ function watchConfig(onChange) {
   let timer = null
   const fire = () => {
     if (timer) clearTimeout(timer)
-    timer = setTimeout(() => { try { onChange() } catch {} }, 300)
+    timer = setTimeout(() => { try { onChange() } catch (e) { ignored('ee2-config:on-change', e) } }, 300)
     if (timer.unref) timer.unref()
   }
   try {
@@ -122,9 +130,9 @@ function watchConfig(onChange) {
     watcher.on('error', () => {})
   } catch { watcher = null }
   return () => {
-    try { watcher?.close() } catch {}
+    try { watcher?.close() } catch (e) { ignored('ee2-config:unwatch', e) }
     if (timer) clearTimeout(timer)
   }
 }
 
-module.exports = { configPath, loadConfig, extractShortcuts, readShortcuts, watchConfig, defaultShortcuts }
+module.exports = { loadConfig, readShortcuts, watchConfig }

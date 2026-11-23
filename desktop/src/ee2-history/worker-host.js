@@ -3,7 +3,8 @@
 // 3 s + a little; the process exits itself after 10 idle minutes and is re-spawned on the next use
 // by the consumer (which also throttles restarts after a failure).
 'use strict'
-const path = require('path')
+const { ignored } = require('../ignored.js')
+const path = require('node:path')
 
 const IDLE_EXIT_MS = 10 * 60 * 1000
 const BUILD_TIMEOUT_MS = 3500
@@ -13,13 +14,14 @@ const BUILD_TIMEOUT_MS = 3500
 // disk. Inside a packaged app __dirname still says app.asar — point at the unpacked twin.
 const unpacked = (p) => p.replace(/app\.asar(?=[\\/])/, 'app.asar.unpacked')
 
+/** @param {{ onExit?: (info?: { idle?: boolean }) => void }} [opts] */
 function spawnWorker({ onExit } = {}) {
   const { utilityProcess } = require('electron')
   const child = utilityProcess.fork(unpacked(path.join(__dirname, 'worker.js')), [], { serviceName: 'arbiter-ee2-query', stdio: 'ignore' })
   const pending = new Map()
   let seq = 0, idle = null, ready = null, dead = false, idleKill = false
 
-  const fail = (err) => { dead = true; clearTimeout(idle); for (const p of pending.values()) { clearTimeout(p.timer); p.reject(err) } pending.clear(); try { onExit?.({ idle: idleKill }) } catch {} }
+  const fail = (err) => { dead = true; clearTimeout(idle); for (const p of pending.values()) { clearTimeout(p.timer); p.reject(err) } pending.clear(); try { onExit?.({ idle: idleKill }) } catch (e) { ignored('ee2-worker:on-exit', e) } }
   child.on('exit', () => fail(new Error('worker exited')))
   child.on('message', (m) => {
     if (!m || typeof m !== 'object') return
@@ -27,7 +29,7 @@ function spawnWorker({ onExit } = {}) {
     if (m.t === 'error' && m.id == null) { readyReject?.(new Error(`init: ${m.message || 'failed'}`)); return }
     const p = pending.get(m.id); if (!p) return
     pending.delete(m.id); clearTimeout(p.timer)
-    if (m.t === 'built') { const { t, id, ...rest } = m; p.resolve(rest) }
+    if (m.t === 'built') p.resolve(Object.fromEntries(Object.entries(m).filter(([k]) => k !== 't' && k !== 'id')))
     else if (m.t === 'parsed') p.resolve(m.item)
     else p.resolve({ error: { stage: m.stage, message: m.message } })
   })
@@ -57,8 +59,8 @@ function spawnWorker({ onExit } = {}) {
   }
   const build = (raw, prefs) => request({ t: 'build', raw, prefs })
   const parse = (raw) => request({ t: 'parse', raw })
-  const kill = () => { if (dead) return; try { child.kill() } catch {} }
+  const kill = () => { if (dead) { return } try { child.kill() } catch (e) { ignored('ee2-worker:kill', e) } }
   return { build, parse, warm, kill }
 }
 
-module.exports = { spawnWorker, unpacked, IDLE_EXIT_MS, BUILD_TIMEOUT_MS }
+module.exports = { spawnWorker, unpacked }

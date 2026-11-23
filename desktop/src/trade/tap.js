@@ -6,6 +6,7 @@
 // app). Any failure is silence; consumers show nothing. Attached to every trade webview from
 // app.on('web-contents-created'); consumers filter by wcId, as the navigation events already are.
 'use strict'
+const { ignored } = require('../ignored.js')
 const { projectRows } = require('./listings.js')
 
 const CHANNEL = 'trade:tap'
@@ -35,58 +36,73 @@ function kindOf(url) {
 }
 
 // The projections: only what the consumers need.
-function project(k, req, res, wcId) {
-  if (k.kind === 'search') {
-    const body = parse(req.postData)
-    if (!body?.query || typeof res?.id !== 'string' || !Array.isArray(res.result)) return null
-    return { kind: 'search', wcId, league: k.league, id: res.id, body, ids: res.result, total: Number(res.total) || 0 }
-  }
-  if (k.kind === 'fetch') {
-    if (!k.searchId || !Array.isArray(res?.result)) return null
-    return { kind: 'fetch', wcId, searchId: k.searchId, rows: projectRows(res) }
-  }
+function projectSearch(k, req, res, wcId) {
+  const body = parse(req.postData)
+  if (!body?.query || typeof res?.id !== 'string' || !Array.isArray(res.result)) return null
+  return { kind: 'search', wcId, league: k.league, id: res.id, body, ids: res.result, total: Number(res.total) || 0 }
+}
+function projectFetch(k, res, wcId) {
+  if (!k.searchId || !Array.isArray(res?.result)) return null
+  return { kind: 'fetch', wcId, searchId: k.searchId, rows: projectRows(res) }
+}
+function projectOptions(res, wcId) {
   const price = (res?.result || []).find(g => g?.id === 'trade_filters')?.filters?.find(f => f?.id === 'price')?.option?.options
   if (!Array.isArray(price)) return null
   _options = price.filter(o => typeof o?.id === 'string' && o.id).map(o => ({ id: o.id, text: String(o.text ?? o.id) }))
   return { kind: 'options', wcId, price: _options }
 }
+function project(k, req, res, wcId) {
+  if (k.kind === 'search') return projectSearch(k, req, res, wcId)
+  if (k.kind === 'fetch') return projectFetch(k, res, wcId)
+  return projectOptions(res, wcId)
+}
 
 // contents: a webview's webContents. send(channel, payload) reaches the window; log(line) is beta telemetry.
 // observe(policy, status, headers): the page's own search/fetch rate-limit headers, into the shared budget.
+/**
+ * @param {{ id: number, debugger: Electron.Debugger, once?: Electron.WebContents['once'] }} contents
+ * @param {(channel: string, payload: any) => void} send
+ * @param {(line: string) => void} [log]
+ * @param {(policy: string, status: number, headers: Record<string, any>) => void} [observe]
+ */
 function attachTap(contents, send, log = () => {}, observe = () => {}) {
   const dbg = contents.debugger
   const wcId = contents.id
   const pending = new Map()   // requestId → { kind…, postData }
-  const emit = (p) => { try { send(CHANNEL, p) } catch {} }
+  const emit = (p) => { try { send(CHANNEL, p) } catch (e) { ignored('tap:send', e) } }
 
+  const onRequest = (p) => {
+    const k = kindOf(p?.request?.url)
+    if (k) pending.set(p.requestId, { k, postData: p.request.postData })
+  }
+  const onResponse = (p) => {
+    const r = pending.get(p?.requestId)
+    const policy = r && { search: 'trade-search', fetch: 'trade-fetch' }[r.k.kind]
+    // A cached response carries old X-Rate-Limit state: only what the site just answered is current.
+    const cached = p.response?.fromDiskCache || p.response?.fromPrefetchCache || p.response?.fromServiceWorker
+    if (policy && !cached) { try { observe(policy, p.response?.status, p.response?.headers || {}) } catch (e) { ignored('tap:observe', e) } }
+  }
+  const onFinished = (p) => {
+    const r = pending.get(p?.requestId)
+    if (!r) return
+    pending.delete(p.requestId)
+    _send(dbg, 'Network.getResponseBody', { requestId: p.requestId }).then((b) => {
+      const text = b?.base64Encoded ? Buffer.from(b.body, 'base64').toString('utf8') : b?.body
+      const out = project(r.k, r, parse(text), wcId)
+      if (out) emit(out)
+    }, (e) => ignored('tap:response-body', e)).catch((e) => ignored('tap:project', e))
+  }
   const onMessage = (_e, method, p) => {
-    if (method === 'Network.requestWillBeSent') {
-      const k = kindOf(p?.request?.url)
-      if (k) pending.set(p.requestId, { k, postData: p.request.postData })
-    } else if (method === 'Network.responseReceived') {
-      const r = pending.get(p?.requestId)
-      const policy = r && { search: 'trade-search', fetch: 'trade-fetch' }[r.k.kind]
-      // A cached response carries old X-Rate-Limit state: only what the site just answered is current.
-      const cached = p.response?.fromDiskCache || p.response?.fromPrefetchCache || p.response?.fromServiceWorker
-      if (policy && !cached) { try { observe(policy, p.response?.status, p.response?.headers || {}) } catch {} }
-    } else if (method === 'Network.loadingFailed') {
-      pending.delete(p?.requestId)
-    } else if (method === 'Network.loadingFinished') {
-      const r = pending.get(p?.requestId)
-      if (!r) return
-      pending.delete(p.requestId)
-      _send(dbg, 'Network.getResponseBody', { requestId: p.requestId }).then((b) => {
-        const text = b?.base64Encoded ? Buffer.from(b.body, 'base64').toString('utf8') : b?.body
-        const out = project(r.k, r, parse(text), wcId)
-        if (out) emit(out)
-      }, () => {})
-    }
+    if (method === 'Network.requestWillBeSent') onRequest(p)
+    else if (method === 'Network.responseReceived') onResponse(p)
+    else if (method === 'Network.loadingFailed') pending.delete(p?.requestId)
+    else if (method === 'Network.loadingFinished') onFinished(p)
   }
 
   const attach = () => {
     try {
       dbg.attach('1.3')
-      _send(dbg, 'Network.enable', { maxResourceBufferSize: 4e6, maxTotalBufferSize: 2e7 }).catch(() => {})
+      _send(dbg, 'Network.enable', { maxResourceBufferSize: 4e6, maxTotalBufferSize: 2e7 }).catch((e) => ignored('tap:network-enable', e))
       log(`tap attach wc=${wcId}`)
       if (_options) emit({ kind: 'options', wcId, price: _options })
       return true

@@ -16,7 +16,6 @@ import { apiToSatisfySearch } from "@/web/price-check/trade/common";
 
 const FIX = process.env.ARBITER_FIXTURES!;
 const OUT = process.env.ARBITER_GOLDENS!;
-const TRADE = process.env.ARBITER_TRADE_DATA!; // the same GGG snapshot the port bundles
 
 // Serve the port's trade-data snapshot (not specs/data) so both sides see identical data.
 vi.mock("@/web/background/IPC", () => ({
@@ -75,7 +74,7 @@ describe("arbiter goldens", () => {
       fs.mkdirSync(OUT, { recursive: true });
       for (const f of files) {
         const raw = fs.readFileSync(path.join(FIX, "items", f), "utf8");
-        const { id, ...prefs } = variant;
+        const prefs = Object.fromEntries(Object.entries(variant).filter(([k]) => k !== "id"));
         const r = build(raw, p);
         fs.writeFileSync(path.join(OUT, `${f.replace(/\.txt$/, "")}__${variant.id}.json`), JSON.stringify({ fixture: f, prefs, ...r }, null, 1) + "\n");
       }

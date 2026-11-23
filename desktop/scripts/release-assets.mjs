@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 // Release assets, done safely — the ONE tool both halves of a release use (Windows CI and
 // publish-github.sh), so the two can't drift. Fixes docs/bugs/2026-09-17-release-publish-not-atomic.md:
 //
@@ -56,10 +55,13 @@ export function manifestFiles(text) {
   const out = new Map()
   let cur = null
   for (const raw of text.split(/\r?\n/)) {
-    let m
-    if ((m = raw.match(/^\s*-\s*url:\s*(\S+)/))) { cur = { name: m[1], size: null }; out.set(cur.name, cur) }
-    else if (cur && (m = raw.match(/^\s+size:\s*(\d+)/))) cur.size = Number(m[1])
-    else if ((m = raw.match(/^path:\s*(\S+)/))) { if (!out.has(m[1])) out.set(m[1], { name: m[1], size: null }) }
+    // Tried in order; a later pattern is only matched when the earlier ones did not match.
+    const url = raw.match(/^\s*-\s*url:\s*(\S+)/)
+    const size = url || !cur ? null : raw.match(/^\s+size:\s*(\d+)/)
+    const file = url || size ? null : raw.match(/^path:\s*(\S+)/)
+    if (url) { cur = { name: url[1], size: null }; out.set(cur.name, cur) }
+    else if (size) cur.size = Number(size[1])
+    else if (file) { if (!out.has(file[1])) out.set(file[1], { name: file[1], size: null }) }
     if (/^\S/.test(raw) && !/^files:/.test(raw)) cur = null
   }
   return [...out.values()]
@@ -93,6 +95,11 @@ export function problems(tag, assets, manifests) {
 // Pure: has the upload's speed collapsed? `samples` = [{t, bytes}] (ms, cumulative bytes sent),
 // oldest first. True once a full window of history exists and the average over the last window
 // is under the floor. Never true once every byte is out (then only the response is pending).
+/**
+ * @param {Array<{ t: number, bytes: number }>} samples
+ * @param {number} total
+ * @param {{ minBps: number, windowMs: number }} [rule]
+ */
 export function stalled(samples, total, { minBps, windowMs } = STALL) {
   if (samples.length < 2) return false
   const last = samples[samples.length - 1]
@@ -114,7 +121,7 @@ function run(cmd, args, { timeout = 120000 } = {}) {
   })
 }
 const gh = (args, opts) => run('gh', args, opts)
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+const sleep = (ms) => new Promise((r) => { setTimeout(r, ms) })
 
 // The release for a tag, drafts included (the /releases/tags/<tag> endpoint can't see drafts).
 async function findRelease(tag) {
@@ -180,7 +187,7 @@ async function streamUp(rel, file, name, size) {
     })
     const started = Date.now(), samples = [{ t: started, bytes: 0 }]
     let done = false, sentAllAt = 0
-    const finish = (ok, why) => { if (done) return; done = true; clearInterval(tick); req.destroy(); src.destroy(); resolve({ ok, why }) }
+    const finish = (ok, why) => { if (done) { return } done = true; clearInterval(tick); req.destroy(); src.destroy(); resolve({ ok, why }) }
     const src = createReadStream(file, { highWaterMark: 256 * 1024 })
     const tick = setInterval(() => {
       const now = Date.now(), bytes = Math.max(0, (req.socket?.bytesWritten || 0))
@@ -306,23 +313,25 @@ async function publish(tag) {
   throw new Error(`rolled back: ${tag} is a draft again; clients stay on the previous version.`)
 }
 
+/** @param {string[]} argv */
 async function main([cmd, tag, ...rest]) {
-  if (!cmd || !tag) { console.error('usage: release-assets.mjs ensure-draft <tag> <sha> | has <tag> <asset> | upload <tag> <files...> | verify <tag> [--live] | publish <tag>'); process.exit(2) }
+  if (!cmd || !tag) { console.error('usage: release-assets.mjs ensure-draft <tag> <sha> | has <tag> <asset> | upload <tag> <files...> | verify <tag> [--live] | publish <tag>'); process.exitCode = 2; return }
   if (cmd === 'ensure-draft') await ensureDraft(tag, rest[0])
   else if (cmd === 'has') {
     const rel = await findRelease(tag)
     const a = rel && (await assetsOf(rel.id)).find((x) => x.name === rest[0])
-    process.exit(a && a.state === 'uploaded' ? 0 : 1)
+    process.exitCode = a && a.state === 'uploaded' ? 0 : 1
+    return
   }
   else if (cmd === 'upload') await upload(tag, rest)
   else if (cmd === 'verify') {
     const bad = await verify(tag, { live: rest.includes('--live') })
-    if (bad.length) { console.error(`release ${tag} NOT complete:\n  ${bad.join('\n  ')}`); process.exit(1) }
+    if (bad.length) { console.error(`release ${tag} NOT complete:\n  ${bad.join('\n  ')}`); process.exitCode = 1; return }
     console.log(`release ${tag} complete`)
   } else if (cmd === 'publish') await publish(tag)
-  else { console.error(`unknown command ${cmd}`); process.exit(2) }
+  else { console.error(`unknown command ${cmd}`); process.exitCode = 2 }
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
-  main(process.argv.slice(2)).catch((e) => { console.error(`FATAL: ${e.message}`); process.exit(1) })
+  main(process.argv.slice(2)).catch((e) => { console.error(`FATAL: ${e.message}`); process.exitCode = 1 })
 }

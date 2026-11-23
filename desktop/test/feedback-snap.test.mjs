@@ -22,15 +22,15 @@ function harness(plan = {}) {
       log.push('new'); this.opts = opts; this._d = false
       this.webContents = {
         id: 77,
-        executeJavaScript: async (js) => { log.push(`js:${js}`); if (plan.jsThrows?.test(js)) throw new Error('js failed'); if (plan.jsHangs?.test(js)) return new Promise(() => {}); return true },
-        capturePage: async (_r, o) => { log.push(`cap:${o?.stayHidden ? 'hidden' : 'plain'}`); if (plan.capThrows) throw new Error('cap'); return image('snap') },
+        executeJavaScript: async (js) => { log.push(`js:${js}`); if (plan.jsThrows?.test(js)) { throw new Error('js failed') } if (plan.jsHangs?.test(js)) { return new Promise(() => {}) } return true },
+        capturePage: async (_r, o) => { log.push(`cap:${o?.stayHidden ? 'hidden' : 'plain'}`); if (plan.capThrows) { throw new Error('cap') } return image('snap') },
       }
     }
-    loadURL(u) { log.push(`load:${u}`); if (plan.loadThrows) return Promise.reject(new Error('load')); return Promise.resolve() }
+    loadURL(u) { log.push(`load:${u}`); if (plan.loadThrows) { return Promise.reject(new Error('load')) } return Promise.resolve() }
     destroy() { this._d = true; destroyed++; log.push('destroy') }
     isDestroyed() { return this._d }
   }
-  const visibleWin = { webContents: { capturePage: async () => { log.push('cap:visible'); if (plan.visibleThrows) throw new Error('v'); return image('visible') } } }
+  const visibleWin = { webContents: { capturePage: async () => { log.push('cap:visible'); if (plan.visibleThrows) { throw new Error('v') } return image('visible') } } }
   const run = (over = {}) => sweepScreens({ uiUrl: 'http://127.0.0.1:1234', bounds: { width: 1440, height: 847 }, dests: DESTS,
     BrowserWindow, session: sessionDouble, visibleWin, perScreenMs: 30, totalMs: 500, ...over })
   return { log, run, filter: () => filter, destroyed: () => destroyed }
@@ -53,6 +53,7 @@ test('walks the full dest list: visible window first, then one hidden capture pe
 
 test('the snap window is hidden, sandboxed, isolated, without webviewTag, and its /api filter cancels only its own non-GETs', async () => {
   const h = harness()
+  /** @type {any} */
   let opts
   const BW = class { constructor(o) { opts = o; throw new Error('stop here') } }
   await h.run({ BrowserWindow: BW })
@@ -69,7 +70,7 @@ test('the filter cancels a POST from the snap window and nothing else', async ()
   let cb
   const sessionDouble = { webRequest: { onBeforeRequest: (f, c) => { if (c) { cb = c; assert.deepEqual(f.urls, ['http://127.0.0.1:1234/api/*']) } } } }
   await h.run({ session: sessionDouble })
-  const verdict = (d) => new Promise(res => cb(d, res))
+  const verdict = (d) => new Promise(res => { cb(d, res) })
   assert.deepEqual(await verdict({ webContentsId: 77, method: 'POST' }), { cancel: true })
   assert.deepEqual(await verdict({ webContentsId: 77, method: 'GET' }), { cancel: false })
   assert.deepEqual(await verdict({ webContentsId: 1, method: 'PUT' }), { cancel: false })

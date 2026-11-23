@@ -3,10 +3,14 @@
 // that ran for a minute or more earns a quick restart again. An exit we asked for (quit, update
 // install) is never restarted. Without this a backend crash left every /api call failing until the
 // user relaunched (audit 2026-09-29).
+'use strict'
 const FIRST_MS = 1000
 const MAX_MS = 60 * 1000
 const HEALTHY_MS = 60 * 1000
 
+/**
+ * @param {{ start: () => void, schedule?: (fn: () => void, ms: number) => any, cancel?: (handle: any) => void, now?: () => number }} deps
+ */
 function createRespawner({ start, schedule = setTimeout, cancel = clearTimeout, now = Date.now }) {
   let delay = FIRST_MS
   let startedAt = 0

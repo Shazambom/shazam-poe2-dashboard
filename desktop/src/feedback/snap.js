@@ -10,16 +10,21 @@
 // guard still cannot write user data. A screenshot never blocks a report: any failure marks
 // `partial` and the sweep carries on; the window is destroyed and the filter removed in `finally`.
 'use strict'
-const path = require('path')
+const { ignored } = require('../ignored.js')
+const path = require('node:path')
 
 const SNAP_URL_SUFFIX = '/?snap=1'
 const WIDTH = 1200
 const QUALITY = 60
 
-const withTimeout = (p, ms) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), ms))])
+const withTimeout = (p, ms) => Promise.race([p, new Promise((_, rej) => { setTimeout(() => rej(new Error('timeout')), ms) })])
 const jpeg = (img) => img.resize({ width: WIDTH }).toJPEG(QUALITY)
 const whyNot = (e) => (e && e.message === 'timeout' ? 'timeout' : `error: ${String(e && e.message || e).slice(0, 80)}`)
 
+/**
+ * @param {{ uiUrl: string, bounds: { width: number, height: number }, dests: any[], BrowserWindow: any, session: any,
+ *   visibleWin: any, backgroundColor?: string, perScreenMs?: number, totalMs?: number }} opts
+ */
 async function sweepScreens({ uiUrl, bounds, dests, BrowserWindow, session, visibleWin, backgroundColor,
                               perScreenMs = 2500, totalMs = 20000 }) {
   const screens = {}
@@ -54,10 +59,10 @@ async function sweepScreens({ uiUrl, bounds, dests, BrowserWindow, session, visi
     for (const d of dests) if (!screens[d.id] && !missing[d.id]) missing[d.id] = whyNot(e)
   }
   finally {
-    try { session.webRequest.onBeforeRequest({ urls }, null) } catch {}
-    try { if (snap && !snap.isDestroyed()) snap.destroy() } catch {}
+    try { session.webRequest.onBeforeRequest({ urls }, null) } catch (e) { ignored('feedback:snap-filter-off', e) }
+    try { if (snap && !snap.isDestroyed()) snap.destroy() } catch (e) { ignored('feedback:snap-destroy', e) }
   }
   return { screens, partial, missing }
 }
 
-module.exports = { sweepScreens, SNAP_URL_SUFFIX, WIDTH, QUALITY }
+module.exports = { sweepScreens, SNAP_URL_SUFFIX }

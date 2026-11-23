@@ -6,10 +6,9 @@ const {
   makeRechecker,
   projectRows,
   defaultWait,
-  SEARCH_POLICY,
-  FETCH_POLICY,
 } = require('./listings.js')
 
+/** @param {import('./listings.js').TradeDeps} deps */
 function makeRelaxChecker({ request, budget, log = () => {}, wait = defaultWait }) {
   const recheck = makeRechecker({ request, budget, log, wait, sample: false, tag: 'relax' })
   async function check(req) {
@@ -21,4 +20,4 @@ function makeRelaxChecker({ request, budget, log = () => {}, wait = defaultWait 
   return check
 }
 
-module.exports = { makeRelaxChecker, projectRows, SEARCH_POLICY, FETCH_POLICY }
+module.exports = { makeRelaxChecker, projectRows }

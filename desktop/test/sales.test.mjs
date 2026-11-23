@@ -8,10 +8,10 @@ const { makeSalesFetcher, POLICY } = require('../src/trade/sales.js')
 const ROW = { time: '2026-09-16T20:11:03Z', item_id: 'abc', item: { name: 'Hate Pelt', typeLine: 'Vaal Regalia', rarity: 'Rare' }, price: { amount: 3, currency: 'divine' }, account: { name: 'SECRET' } }
 function harness({ status = 200, body = JSON.stringify({ result: [ROW] }), acquireFails = false } = {}) {
   const calls = { acquire: [], observe: [], requests: [], posts: [] }, lines = []
-  globalThis.fetch = async (url, opts) => { calls.posts.push({ url, body: JSON.parse(opts.body) }); return { json: async () => ({ ok: true, new: 1, total: 7, credited: 1, added: { divine: 3 } }) } }
+  globalThis.fetch = /** @type {any} a fetch double */ (async (url, opts) => { calls.posts.push({ url, body: JSON.parse(opts.body) }); return { json: async () => ({ ok: true, new: 1, total: 7, credited: 1, added: { divine: 3 } }) } })
   const f = makeSalesFetcher({
     request: async (r) => { calls.requests.push(r); return { status, headers: { 'x-rate-limit-rules': 'ip', 'retry-after': '20', date: 'Sun, 04 Oct 2026 02:00:00 GMT' }, body } },
-    budget: { acquire: async (p) => { calls.acquire.push(p); if (acquireFails) { const e = new Error('rl'); e.retryAfter = 9; throw e } }, observe: (p, s, h) => calls.observe.push([p, s, h]) },
+    budget: { acquire: async (p) => { calls.acquire.push(p); if (acquireFails) { const e = /** @type {Error & { retryAfter?: number }} */ (new Error('rl')); e.retryAfter = 9; throw e } }, observe: (p, s, h) => calls.observe.push([p, s, h]) },
     backendUrl: () => 'http://127.0.0.1:8210', log: (l) => lines.push(l),
   })
   return { f, calls, lines }

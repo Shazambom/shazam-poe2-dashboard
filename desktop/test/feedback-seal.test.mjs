@@ -61,7 +61,8 @@ test('the wrong private key fails; truncated input throws a named error', () => 
 
 // Cross-language pin: a file sealed by ops/feedback-bot/arbseal.py opens here.
 const FIX = new URL('./fixtures/feedback/', import.meta.url).pathname
-test('opens a file sealed by the Python side (fixture)', { skip: !existsSync(join(FIX, 'sealed-by-python.arb')) && 'fixture missing' }, () => {
+test('opens a file sealed by the Python side (fixture)', () => {
+  assert.ok(existsSync(join(FIX, 'sealed-by-python.arb')), 'the tracked fixture sealed-by-python.arb is missing: regenerate it with ops/feedback-bot/bot/arbseal.py')
   const priv = readFileSync(join(FIX, 'test-key.pem'), 'utf8')
   const got = open(readFileSync(join(FIX, 'sealed-by-python.arb')), priv)
   assert.equal(got.toString(), readFileSync(join(FIX, 'plain.txt'), 'utf8'))

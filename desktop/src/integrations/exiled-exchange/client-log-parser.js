@@ -18,6 +18,17 @@ const AFK = /^: AFK mode is now (ON|OFF)\./
 
 const RENDERER_EVENT_TYPES = new Set(['area-gen', 'zone', 'afk-on', 'afk-off'])
 
+// The event a ': …' system line describes (zone, AFK, trade), tried in that order, or null.
+function colonEvent(body) {
+  const zone = ZONE.exec(body)
+  if (zone) return { type: 'zone', zone: zone[1] }
+  const afk = AFK.exec(body)
+  if (afk) return { type: afk[1] === 'ON' ? 'afk-on' : 'afk-off' }
+  const trade = TRADE.exec(body)
+  if (trade) return { type: trade[1] === 'accepted' ? 'trade-accepted' : 'trade-cancelled' }
+  return null
+}
+
 function parseLine(line) {
   if (typeof line !== 'string') return null
   const trimmed = line.trim()
@@ -27,21 +38,21 @@ function parseLine(line) {
   const ch = body.charCodeAt(0)
   // Fast reject: only ':', '@', or 'G' (Generating level ...) can ever match an event.
   if (ch !== 58 && ch !== 64 && ch !== 71) return null
+  /** @type {null | { type: string, ts?: number, [field: string]: any }} */
   let ev = null
-  let w
   if (ch === 58) {
-    if ((w = ZONE.exec(body))) ev = { type: 'zone', zone: w[1] }
-    else if ((w = AFK.exec(body))) ev = { type: w[1] === 'ON' ? 'afk-on' : 'afk-off' }
-    else if ((w = TRADE.exec(body))) ev = { type: w[1] === 'accepted' ? 'trade-accepted' : 'trade-cancelled' }
+    ev = colonEvent(body)
   } else if (ch === 71) {
-    if ((w = AREA_GEN.exec(body))) ev = { type: 'area-gen', level: Number(w[1]), areaId: w[2], seed: w[3] }
-  } else if ((w = WHISPER.exec(body))) {
-    ev = { type: w[1] === 'From' ? 'whisper-in' : 'whisper-out', name: w[2].trim(), text: w[3] }
+    const gen = AREA_GEN.exec(body)
+    if (gen) ev = { type: 'area-gen', level: Number(gen[1]), areaId: gen[2], seed: gen[3] }
+  } else {
+    const whisper = WHISPER.exec(body)
+    if (whisper) ev = { type: whisper[1] === 'From' ? 'whisper-in' : 'whisper-out', name: whisper[2].trim(), text: whisper[3] }
   }
   if (!ev) return null
   const m = HEAD.exec(trimmed.slice(0, sep + 1))
   if (!m) return null
-  ev.ts = new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]).getTime()   // Client.txt stamps local time
+  ev.ts = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), Number(m[4]), Number(m[5]), Number(m[6])).getTime()   // Client.txt stamps local time
   return ev
 }
 
@@ -50,4 +61,4 @@ function toRendererEvent(ev) {
   return ev && RENDERER_EVENT_TYPES.has(ev.type) ? ev : null
 }
 
-module.exports = { parseLine, toRendererEvent, RENDERER_EVENT_TYPES }
+module.exports = { parseLine, toRendererEvent }

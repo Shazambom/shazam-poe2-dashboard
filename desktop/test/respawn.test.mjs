@@ -35,6 +35,7 @@ test('an exit we asked for (quit, update) is never restarted', () => {
 })
 
 test('quitting cancels a restart that is waiting, and nothing restarts after it', () => {
+  /** @type {any} */
   let cleared = null, fired = 0
   const r = createRespawner({ start: () => { fired++ }, schedule: (fn, ms) => ({ fn, ms }), cancel: (h) => { cleared = h }, now: () => 0 })
   r.started(); r.exited({ requested: false })
