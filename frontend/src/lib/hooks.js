@@ -16,15 +16,17 @@ export function useApi(fn, deps) {
   const [busy, setBusy] = useState(true)
   const [nonce, setNonce] = useState(0)
   const tick = useSync(s => s.tick)
+  const inputs = useDependencyList(deps)
+  const getRequest = useEffectEvent(() => fn)
   useEffect(() => {
     let live = true
     setBusy(true)
-    Promise.resolve().then(fn)
+    Promise.resolve().then(getRequest())
       .then(d => { if (live) { setData(d); setErr(null) } })
       .catch(e => { if (live) setErr(cleanErr(e)) })
       .finally(() => { if (live) setBusy(false) })
     return () => { live = false }
-  }, [...deps, nonce, tick])
+  }, [inputs, nonce, tick])
   return { data, err, busy, reload: () => setNonce(n => n + 1), setData }
 }
 
