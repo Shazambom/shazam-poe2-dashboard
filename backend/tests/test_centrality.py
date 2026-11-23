@@ -48,7 +48,7 @@ def _star():
     return g
 
 
-# ---------------------------------------------------------------- PageRank (hub)
+# ---------------------------------------------------------------- PageRank hub tests
 def test_pagerank_hub_outranks_leaves():
     g = _star()
     rv = g.ref_values()
@@ -83,7 +83,7 @@ def test_pagerank_dangling_node_is_safe():
     assert abs(sum(pr.values()) - 1.0) < 1e-6
 
 
-# ---------------------------------------------------------- betweenness (bridge)
+# ---------------------------------------------------------- betweenness bridge tests
 def test_betweenness_flags_the_bridge():
     """a <-> m <-> b, no direct a-b: every a↔b route passes through m, so m is the bridge."""
     g = Graph({"reference": "m", "league": "T", "max_steps": 4})
@@ -98,7 +98,7 @@ def test_betweenness_flags_the_bridge():
     assert bl.get("m", 0.0) > bl.get("b", 0.0)
 
 
-# ---------------------------------------------------------------- hubs() + scores()
+# ---------------------------------------------------------------- hub and score tests
 def test_hubs_returns_top_n_by_pagerank():
     g = _star()
     rv = g.ref_values()

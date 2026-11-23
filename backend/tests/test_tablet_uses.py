@@ -96,7 +96,7 @@ def test_a_changed_tablet_page_gives_nothing():
     assert modpool.tablet_unique_pages("<html><body>no list</body></html>") == []
 
 
-# ------------------------------------------------------------------ refresh (shazam)
+# ------------------------------------------------------------------ tablet refresh tests
 @pytest.fixture
 def fake_pages(monkeypatch):
     served = {"Tablet": page("Tablet")}

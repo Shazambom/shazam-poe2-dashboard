@@ -500,7 +500,7 @@ def families_from(export: Export) -> list:
     return out
 
 
-# ------------------------------------------------------------------ sections (derived)
+# ------------------------------------------------------------------ derived sections for mod pools
 _CAN_ROLL = re.compile(r"Can roll (\w+) modifiers", re.I)
 
 
@@ -1095,7 +1095,7 @@ def store(result: dict) -> None:
     )
 
 
-# ------------------------------------------------------------------ reads (endpoints)
+# ------------------------------------------------------------------ endpoint readers
 _pools_cache: tuple | None = None
 _currencies_cache: tuple | None = None
 _pool_cache: dict[str, dict | None] = {}

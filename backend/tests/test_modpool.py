@@ -225,7 +225,7 @@ def test_the_ring_life_family_matches_poe2db(derived):
     )
 
 
-# ------------------------------------------------------------------ sections (derived)
+# ------------------------------------------------------------------ derived pool section tests
 def test_sections_are_derived_from_the_data_not_listed(derived):
     secs = {s["id"]: s for s in derived.sections}
     assert derived.sections[0]["id"] == "base"
