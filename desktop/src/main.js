@@ -806,7 +806,7 @@ ipcMain.handle('diag:log', (_e, p) => diagLog(p?.marker, p?.line))
 // Clipboard-add: MAIN reads and classifies; only the classification crosses (never the text).
 ipcMain.handle('clipboard:classify', async () => {
   const { classify, MAX_CLIP } = require('./clipboard-add.js')
-  let text = ''
+  let text
   try { text = String((await clipboard.readText()) || '').slice(0, MAX_CLIP) } catch { text = '' }   // read once: classify and build see one text
   const cls = classify(text)
   if (cls.kind !== 'item') return cls
@@ -821,7 +821,7 @@ ipcMain.handle('clipboard:classify', async () => {
 // text). { item } when the clipboard holds an item, { item: null, reason } otherwise.
 ipcMain.handle('mods:item', async () => {
   const { classify, MAX_CLIP } = require('./clipboard-add.js')
-  let text = ''
+  let text
   try { text = String((await clipboard.readText()) || '').slice(0, MAX_CLIP) } catch { text = '' }   // read once: classify and parse see one text
   const cls = classify(text)
   if (cls.kind !== 'item') return { item: null, reason: cls.kind === 'none' && !cls.len ? 'empty' : 'not-item' }

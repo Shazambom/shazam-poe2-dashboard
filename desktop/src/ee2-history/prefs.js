@@ -39,7 +39,7 @@ function prefsFromConfig(cfg) {
 }
 
 function readPrefs() {
-  let cfg = null
+  let cfg
   try { cfg = require('../integrations/exiled-exchange/ee2-config.js').loadConfig() } catch { cfg = null }
   return prefsFromConfig(cfg)
 }

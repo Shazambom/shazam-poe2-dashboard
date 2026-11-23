@@ -19,7 +19,7 @@ function fire(getWin) {
 function registerHotkey(getWin, combo) {
   if (current) { try { globalShortcut.unregister(current) } catch {} current = null }
   if (!combo) return { ok: false, combo }
-  let ok = false
+  let ok
   try { ok = globalShortcut.register(combo, () => fire(getWin)) } catch { ok = false }
   if (ok) current = combo
   return { ok, combo }

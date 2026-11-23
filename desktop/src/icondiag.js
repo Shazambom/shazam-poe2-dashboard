@@ -40,7 +40,7 @@ function install({ win, session, backendUrl, log }) {
 
   const report = async (when) => {
     /** @type {string | { loaded_at: number | null, n: number, withIcon: number }} */
-    let data = 'unreachable'
+    let data
     try {
       const d = await (await fetch(`${backendUrl()}/api/currencies`, { signal: AbortSignal.timeout(8000) })).json()
       const list = d.currencies || []

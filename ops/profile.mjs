@@ -238,7 +238,7 @@ function profileArtifacts(opts) {
     }
     selftestTimes.sort((a, b) => a - b)
 
-    let pyi = { available: false }
+    let pyi
     try {
       const py = findPython(true)
       const raw = execFileSync(py, [path.join(__dirname, 'profile-backend.py'), '--pyi-inspect', binPath], {

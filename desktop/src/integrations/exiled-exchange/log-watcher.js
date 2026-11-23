@@ -79,7 +79,7 @@ class LogWatcher {
       ? ((await exists(this._explicitPath)) ? this._explicitPath : null)
       : await findLog()
     if (!file || this._stopped) return null
-    let size = 0
+    let size
     try { size = (await fsp.stat(file)).size } catch { size = 0 }
     if (this._stopped) return null
     this._file = file
