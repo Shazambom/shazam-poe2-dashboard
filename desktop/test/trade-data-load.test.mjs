@@ -12,7 +12,7 @@ const UNIQUEPRICE = require.resolve('../src/trade/uniqueprice.js')
 const fresh = (file) => { delete require.cache[file]; return require(file) }
 // Which fs function each module reads its data through (mocked to count and to fail reads).
 /** @type {Record<'modsearch' | 'uniqueprice', { target: any, name: string }>} */
-const READS = { modsearch: { target: fs.promises, name: 'readFile' }, uniqueprice: { target: fs, name: 'readFileSync' } }
+const READS = { modsearch: { target: fs.promises, name: 'readFile' }, uniqueprice: { target: fs.promises, name: 'readFile' } }
 const LIFE = { text: '+# to maximum Life', affix: 'prefix', bases: ['Gold Ring'] }
 // Reads of EE2's data only (requiring a module reads its source through the same fs).
 const dataReads = (mock) => mock.mock.calls.filter(c => String(c.arguments[0]).includes('ee2-query')).length
@@ -76,4 +76,14 @@ test('modsearch: overlapping first calls share one read of the catalogue', async
   assert.deepEqual(c, d)
   assert.equal(c.category, 'accessory.ring')
   assert.equal(dataReads(reads), 3, 'stats.json, the bundle and items.ndjson, once each')
+})
+
+test('uniqueprice: overlapping first calls share one read of the list', async (t) => {
+  const reads = t.mock.method(READS.uniqueprice.target, READS.uniqueprice.name)
+  const U = fresh(UNIQUEPRICE)
+  const [a, b, c] = await Promise.all([U.uniques(), U.uniques(), U.uniques()])
+  assert.ok(a.length > 500)
+  assert.equal(b, a)
+  assert.equal(c, a)
+  assert.equal(dataReads(reads), 1)
 })

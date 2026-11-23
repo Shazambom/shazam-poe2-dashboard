@@ -75,8 +75,8 @@ test('not logged in, rate-limited, refused by the budget: each says so and stops
   assert.equal(fetchRl.calls.requests.length, 1)
 })
 
-test('the uniques come from the trade site\'s own item list (EE2 data), name and base', () => {
-  const list = U.uniques()
+test('the uniques come from the trade site\'s own item list (EE2 data), name and base', async () => {
+  const list = await U.uniques()
   assert.ok(list.length > 500)
   assert.ok(list.some(u => u.name === 'Headhunter' && u.type === 'Heavy Belt'))
   assert.ok(list.every(u => u.name && u.type))
