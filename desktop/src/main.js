@@ -23,6 +23,7 @@ const { makeRing } = require('./feedback/ring.js')
 const { applyChannel } = require('./updater-channel.js')
 const { createRespawner, onceGone } = require('./respawn.js')
 const { boot } = require('./startup.js')
+const { staticFile } = require('./ui-files.js')
 
 // Log rings for "Report a problem" (local only — a report is a file the user drags into Discord):
 // every console.log line of this process, the updater's lines, and the backend's output tail.
@@ -241,12 +242,13 @@ function startUiServer(dist) {
       req.pipe(p)
       return
     }
-    let f = path.join(dist, u.pathname === '/' ? 'index.html' : u.pathname)
-    if (!f.startsWith(dist) || !fs.existsSync(f) || fs.statSync(f).isDirectory()) f = path.join(dist, 'index.html')
-    const headers = { 'Content-Type': MIME[path.extname(f)] || 'application/octet-stream' }
-    if (u.pathname.startsWith('/assets/')) headers['Cache-Control'] = 'public, max-age=31536000, immutable'
-    res.writeHead(200, headers)
-    fs.createReadStream(f).pipe(res)
+    // A file of the bundle: looked up without blocking main; the /api proxy above never waits on it.
+    staticFile(fs.promises, dist, u.pathname).then((f) => {
+      const headers = { 'Content-Type': MIME[path.extname(f)] || 'application/octet-stream' }
+      if (u.pathname.startsWith('/assets/')) headers['Cache-Control'] = 'public, max-age=31536000, immutable'
+      res.writeHead(200, headers)
+      fs.createReadStream(f).pipe(res)
+    }).catch((e) => { ignored('ui:serve-file', e); res.destroy() })
   })
   return new Promise(resolve => {
     server.listen(0, '127.0.0.1', () => {
