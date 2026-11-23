@@ -42,13 +42,16 @@ function candidateLogPaths(platform = process.platform, home = os.homedir()) {
   ]
 }
 
-async function exists(p) {
+// Can this process read the file? A readability check (access R_OK), not an existence check: a log that
+// exists but cannot be read is no use to tail. For "does it exist" use fs-exists.js (stat; access is
+// wrong inside app.asar).
+async function isReadable(p) {
   try { await fsp.access(p, fs.constants.R_OK); return true } catch { return false }
 }
 
 async function findLog() {
   for (const p of candidateLogPaths()) {
-    if (await exists(p)) return p
+    if (await isReadable(p)) return p
   }
   return null
 }
@@ -77,7 +80,7 @@ class LogWatcher {
     if (this._file) return this._file
     this._stopped = false
     const file = this._explicitPath
-      ? ((await exists(this._explicitPath)) ? this._explicitPath : null)
+      ? ((await isReadable(this._explicitPath)) ? this._explicitPath : null)
       : await findLog()
     if (!file || this._stopped) return null
     let size

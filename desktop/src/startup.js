@@ -9,6 +9,7 @@
 // those orderings the code actually needs.
 'use strict'
 const path = require('node:path')
+const { exists } = require('./fs-exists.js')
 
 /**
  * One startup step and the steps that must be complete before it starts, each with its reason.
@@ -59,19 +60,6 @@ async function step(env, id, fn) {
   return out
 }
 
-// fs.existsSync's answer, without blocking: false for any error (missing, unreadable parent). Asked through
-// stat, never access: Electron's fs.promises.access answers ENOENT for a directory inside app.asar, which is
-// where the packaged app-dist lives.
-/** @param {StartupEnv} env @param {string} p */
-async function exists(env, p) {
-  try {
-    await env.fs.stat(p)
-    return true
-  } catch {
-    return false
-  }
-}
-
 // A bundled per-platform binary: the packed location (extraResources) preferred, then the dev
 // location. `found` is the existing path or null; `expected` is the packed path to report when
 // nothing is found (a packaging regression). Shared by the backend and the analytics sidecar.
@@ -79,7 +67,7 @@ async function exists(env, p) {
 async function findBundledBin(env, dir, name) {
   const packed = path.join(env.resourcesPath || '', dir, name)
   const dev = path.join(env.appRoot, dir, name)
-  const found = await exists(env, packed) ? packed : (await exists(env, dev) ? dev : null)
+  const found = await exists(env.fs, packed) ? packed : (await exists(env.fs, dev) ? dev : null)
   return { found, expected: packed }
 }
 
@@ -98,7 +86,7 @@ async function findMarketSeed(env) {
   const seedNames = ['market-seed.sqlite.gz', 'market-seed.sqlite']
   for (const d of seedDirs) {
     for (const n of seedNames) {
-      const p = path.join(d, n); if (await exists(env, p)) return p
+      const p = path.join(d, n); if (await exists(env.fs, p)) return p
     }
   }
   return ''
@@ -138,7 +126,7 @@ async function planBackend(env) {
 async function resolveUiDist(env) {
   const candidates = [path.join(env.appRoot, 'app-dist'), path.join(env.appRoot, '..', 'frontend', 'dist')]
   for (const dist of candidates) {
-    if (await exists(env, path.join(dist, 'index.html'))) return dist
+    if (await exists(env.fs, path.join(dist, 'index.html'))) return dist
   }
   throw new Error(`no UI bundle: no index.html in ${candidates.join(' or ')}`)
 }

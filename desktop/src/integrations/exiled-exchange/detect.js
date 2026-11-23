@@ -13,6 +13,7 @@
 //      out to tasklist/ps, so it's optional and fully guarded).
 'use strict'
 const { ignored } = require('../../ignored.js')
+const { exists } = require('../../fs-exists.js')
 
 const fs = require('node:fs')
 const os = require('node:os')
@@ -36,14 +37,12 @@ function configDirs() {
   return [path.join(xdg, 'exiled-exchange-2')]
 }
 
-// Does the path exist? (fs.existsSync's answer, without blocking: false on any error.)
-const exists = (p) => fs.promises.access(p).then(() => true, () => false)
 
 async function findConfig() {
   for (const dir of configDirs()) {
     const cfg = path.join(dir, 'apt-data', 'config.json')
-    if (await exists(cfg)) return { dir, config: cfg }
-    if (await exists(dir)) return { dir, config: null }
+    if (await exists(fs.promises, cfg)) return { dir, config: cfg }
+    if (await exists(fs.promises, dir)) return { dir, config: null }
   }
   return null
 }
