@@ -305,7 +305,9 @@ const reportLogin = (lines) => telemetry.installLog('login', lines, { max: 20000
 
 function connectPoeFlow() {
   return new Promise((resolve) => {
-    const login = new BrowserWindow({ width: 1100, height: 800, parent: win, show: false, title: 'Log in to Path of Exile' })
+    // sandbox and contextIsolation are Electron 45's defaults for this window (no nodeIntegration), stated.
+    const login = new BrowserWindow({ width: 1100, height: 800, parent: win, show: false, title: 'Log in to Path of Exile',
+      webPreferences: { sandbox: true, contextIsolation: true } })
     const buf = [`ua=${login.webContents.getUserAgent()}`]
     const wc = login.webContents
     // Keep the GGG/Steam login redirect chain inside the app (child popups inherit
@@ -428,7 +430,7 @@ ipcMain.handle('poe-set-cookie', async (_e, cookie) => {
 ipcMain.handle('open-trade', (_e, url) => {
   if (!isPoeUrl(url)) return false
   const w = new BrowserWindow({ width: 1280, height: 900, title: 'Path of Exile — Trade',
-    backgroundColor: BACKDROP.trade, webPreferences: { sandbox: true, zoomFactor: 1 } })
+    backgroundColor: BACKDROP.trade, webPreferences: { sandbox: true, contextIsolation: true, zoomFactor: 1 } })   // contextIsolation: Electron's default, stated
   w.loadURL(url)
   return true
 })
