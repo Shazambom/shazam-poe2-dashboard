@@ -8,7 +8,7 @@
 // layout, components or copy.
 import { ignoredError } from './ignoredError.js'
 import { create } from 'zustand'
-import { useStatus, onSettingsTheme } from './statusStore.js'
+import { useStatus, onSettingsTheme, persistSettings } from './statusStore.js'
 import { TOKEN_KEYS, isCustomId, isLightTheme, validTable, sanitizeTable } from './themeDerive.js'
 
 export const THEMES = [
@@ -77,7 +77,7 @@ export const useTheme = create((set, get) => ({
   apply: (id) => {
     const t = paintTheme(id, get().tableOf(id))
     set({ id: t, previewing: false })
-    useStatus.getState().saveSettings({ theme: t }).catch(() => ignoredError('save theme choice'))
+    persistSettings({ theme: t }).catch(() => ignoredError('save theme choice'))   // kept and retried on failure
   },
   // Settings arrived (boot / another device): the blob wins over the localStorage mirror.
   sync: (id, customs) => {

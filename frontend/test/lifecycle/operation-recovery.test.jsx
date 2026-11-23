@@ -10,6 +10,7 @@ import NotificationsPanel from '../../src/components/NotificationsPanel.jsx'
 import { useStatus } from '../../src/lib/statusStore.js'
 import { saveHistoryPrefs } from '../../src/lib/ee2History.js'
 import { useWorkspace } from '../../src/lib/workspaceStore.js'
+import { useTheme } from '../../src/lib/themeStore.js'
 import { api, bus } from '../../src/lib/api.js'
 import { installApiMock, jsonResponse } from './setup.js'
 
@@ -208,4 +209,34 @@ it('EE2 history: a failed save keeps the preference in effect and is retried unt
   expect(sent).toHaveLength(3)
   expect(useWorkspace.getState().historyPrefs.waystoneStats).toBe(false)
   expect(toasts).not.toHaveBeenCalled()
+})
+
+it('theme: a failed save keeps the chosen theme painted, even across a settings load, and is retried until it lands', async () => {
+  const down = { on: true }
+  const sent = []
+  installApiMock({
+    'GET /api/settings': { league: 'Test League', reference: 'exalted', theme: 'ash', notifications: {} },
+    'PUT /api/settings': (_url, _init, body) => {
+      sent.push(body.patch)
+      return down.on ? jsonResponse({ detail: 'database is locked' }, 500) : jsonResponse({ theme: 'ash', ...body.patch })
+    },
+  })
+  useTheme.getState().apply('vaal')
+  await settle()
+  expect(sent).toEqual([{ theme: 'vaal' }])
+  expect(document.documentElement.dataset.theme).toBe('vaal')
+  await act(async () => { await useStatus.getState().loadSettings() })   // the saved blob still says 'ash'
+  expect(document.documentElement.dataset.theme).toBe('vaal')
+  expect(useTheme.getState().id).toBe('vaal')
+  await advance(1000)
+  expect(sent).toHaveLength(2)
+  down.on = false
+  await advance(4000)
+  expect(sent).toEqual([{ theme: 'vaal' }, { theme: 'vaal' }, { theme: 'vaal' }])
+  await advance(60000)
+  expect(sent).toHaveLength(3)
+  expect(document.documentElement.dataset.theme).toBe('vaal')
+  expect(toasts).not.toHaveBeenCalled()
+  useTheme.getState().apply('vault')
+  await settle()
 })
