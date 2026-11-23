@@ -4,7 +4,7 @@ import { useWorkspace, loadWorkspace } from './workspaceStore.js'
 import { toast, bus } from './api.js'
 import { unlockSound } from './ping-sound.js'
 import { notify } from './notifications.js'
-import { nav } from './nav.js'
+import './nav.js'
 import { hasTradeEngine as isDesktop } from './session.js'
 import { flatten } from './tree.js'
 

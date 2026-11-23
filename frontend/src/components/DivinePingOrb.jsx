@@ -3,7 +3,6 @@ import { useSignals, sigKey } from '../lib/signalStore.js'
 import { useIcons, lookup } from '../lib/icons.js'
 import Cur from './Cur.jsx'
 import Rate from './Rate.jsx'
-import { fmt } from '../lib/api.js'
 
 // The market-signal inbox: a golden Divine Orb that appears in the topbar when the sidecar has
 // fired 'about to move' signals — the wealth/economy counterpart to the red Vaal trade-ping orb.

@@ -1,7 +1,7 @@
 import React, { Suspense, lazy, useEffect, useRef, useState } from 'react'
 import { motion, AnimatePresence, MotionConfig } from 'motion/react'
 import { THEMES, useTheme } from './lib/themeStore.js'
-import { api, fmt, bus, surface } from './lib/api.js'
+import { api, bus, surface } from './lib/api.js'
 import { diag } from './lib/diag.js'
 import { useStatus, startStatusPolling } from './lib/statusStore.js'
 import { useCurrencies } from './lib/icons.js'

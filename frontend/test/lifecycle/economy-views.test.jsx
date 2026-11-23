@@ -1,6 +1,6 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
-import { installApiMock, DEFAULT_CURRENCIES } from './setup.js'
+import { installApiMock } from './setup.js'
 import HoldView from '../../src/components/HoldView.jsx'
 import MarketView from '../../src/components/MarketView.jsx'
 import InflationView from '../../src/components/InflationView.jsx'
