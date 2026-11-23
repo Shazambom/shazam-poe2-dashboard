@@ -46,7 +46,7 @@ export default function SettingsView({ currencies, onSaved, onReportProblem }) {
   useEffect(() => {
     useStatus.getState().loadSettings().then(x => { setS(x); arm() }).catch(() => ignoredError('load settings editor'))
     api.goldFees().then(setFees).catch(() => ignoredError('load gold fees'))
-  }, [])
+  }, [arm])
   if (!s) return <div className="single hint">Loading settings…</div>
 
   const opts = currencies?.currencies ?? []

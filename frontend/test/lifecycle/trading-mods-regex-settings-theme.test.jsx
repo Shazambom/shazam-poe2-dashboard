@@ -95,13 +95,18 @@ describe('Mods, Regex, Settings, ThemeBuilder, Trading, and App shell lifecycles
 
   it('SettingsView loads settings, renders Appearance/Market/Accounts panels, and switches theme cleanly', async () => {
     const { calls } = installApiMock()
-    render(<SettingsView currencies={DEFAULT_CURRENCIES} status={{ league: 'Test League' }} />)
+    const { rerender, unmount } = render(<SettingsView currencies={DEFAULT_CURRENCIES} />)
 
     await waitFor(() => {
       expect(calls.some(c => c.path === '/api/settings')).toBe(true)
       expect(screen.getByText('Appearance')).toBeTruthy()
       expect(screen.getByText('Market')).toBeTruthy()
     })
+    const reads = calls.filter(c => c.path === '/api/settings').length
+    rerender(<SettingsView currencies={{ ...DEFAULT_CURRENCIES }} />)
+    expect(calls.filter(c => c.path === '/api/settings')).toHaveLength(reads)
+    unmount()
+    expect(calls.filter(c => c.method === 'PUT')).toHaveLength(0)
   })
 
   it('TradingView switches across Workspace, Regex, Mods, and Live while keeping Workspace mounted', async () => {
