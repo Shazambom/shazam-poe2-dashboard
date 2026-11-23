@@ -26,7 +26,12 @@ export default function ContextMenu({ at, items, onClose }) {
   }, [onClose])
 
   const live = items.filter(i => !i.sep)
-  const run = (it) => { if (!it || it.disabled) return; if (it.children) { setSub(items.indexOf(it)); setSubSel(0); return } it.run?.(); onClose() }
+  const run = (it) => {
+    if (!it || it.disabled) return;
+    if (it.children) { setSub(items.indexOf(it)); setSubSel(0); return }
+    it.run?.();
+    onClose()
+  }
   const onKey = (e) => {
     const list = sub != null ? items[sub].children : live
     const cur = sub != null ? subSel : sel

@@ -311,7 +311,11 @@ export default function App() {
         subDests={SUB_DESTS}
         onGoSub={goSub}
         leagues={leagues} onSetLeague={setLeague}
-        onOpenCurrency={(it) => { if (!it.onBoard) return assetModal.open(it.label); setTab('Board'); setTimeout(() => nav.openCurrency(it.id), 0) }}
+        onOpenCurrency={(it) => {
+          if (!it.onBoard) return assetModal.open(it.label);
+          setTab('Board');
+          setTimeout(() => nav.openCurrency(it.id), 0)
+        }}
         screen={screen} screenCommands={screenCommands}
         commands={appCommands} onOpenSearch={(id) => { goWorkspace(); useWorkspace.getState().setActive(id) }}
       />

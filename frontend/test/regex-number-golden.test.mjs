@@ -24,7 +24,13 @@ const G = {
   minimum: [...raw.minimumGrid.flatMap((outs, r) => outs.map((out, n) => ({ in: String(n), round10: r === 1, out }))), ...raw.minimum],
   range: [...raw.rangeGrid.flatMap((byLo, r) => byLo.flatMap((byHi, lo) => byHi.map((out, hi) => ({ min: String(lo), max: String(hi), round10: r === 1, out })))), ...raw.range],
 }
-const matched = (r) => { if (r === '') return null; const re = new RegExp('^(?:' + r.replace(/\./g, '\\d') + ')$'); const out = []; for (let v = 0; v <= 999; v++) if (re.test(String(v))) out.push(v); return out.join(',') }
+const matched = (r) => {
+  if (r === '') return null;
+  const re = new RegExp('^(?:' + r.replace(/\./g, '\\d') + ')$');
+  const out = [];
+  for (let v = 0; v <= 999; v++) if (re.test(String(v))) out.push(v);
+  return out.join(',')
+}
 const wildcard = (r) => r === '.' || r === ''
 
 test('goldens are pinned to an upstream commit and cover the whole input space', () => {

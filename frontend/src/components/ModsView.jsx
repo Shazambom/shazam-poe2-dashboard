@@ -159,7 +159,10 @@ export default function ModsView() {
   return (
     <div className="mods">
       <ModsBar pools={pools} currencies={currencies} poolId={poolId || s.poolId} ilvl={s.ilvl} floor={s.floor} filter={filter} tags={tags} tagOptions={pool?.tags || []}
-               onPool={id => { if (id !== poolId) setItem(null); update({ poolId: id, tags: [] }) }} onIlvl={v => update({ ilvl: v })} onFloor={v => update({ floor: v })}
+               onPool={id => {
+                 if (id !== poolId) setItem(null);
+                 update({ poolId: id, tags: [] })
+               }} onIlvl={v => update({ ilvl: v })} onFloor={v => update({ floor: v })}
                onFilter={setFilter} onTag={toggleTag} disabled={!list.data}
                item={strip} onPaste={modItem ? () => onPaste('button') : null} onClearItem={() => setItem(null)} />
       {failed && <div className="empty">Reopen the tab to load the modifier tables.</div>}

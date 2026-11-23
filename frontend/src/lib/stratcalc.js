@@ -606,7 +606,10 @@ export function importStrats(doc, text, { newId, now }) {
   if (!got.strats.length || doc.strats.length + got.strats.length > MAX_STRATS) return null
   if (1 + Math.max(0, ...got.tree.map(height)) > MAX_DEPTH) return null
   const ids = new Map()
-  const fresh = (id, kind) => { if (!ids.has(id)) ids.set(id, newId(kind)); return ids.get(id) }
+  const fresh = (id, kind) => {
+    if (!ids.has(id)) ids.set(id, newId(kind));
+    return ids.get(id)
+  }
   const renamed = (n) => (n.kind === 'folder' ? { ...n, id: fresh(n.id, 'f'), children: (n.children || []).map(renamed) } : { ...n, id: fresh(n.id, 's') })
   const tree = got.tree.map(renamed)
   const strats = got.strats.map(s => unpriced({ ...s, id: fresh(s.id, 's'), updatedAt: now, timer: { startedAt: null, elapsedMs: s.timer.elapsedMs } }))

@@ -36,7 +36,10 @@ const j = async (r) => {
 }
 // Wrap a promise so failures always surface as a toast instead of dying silently.
 export const surface = (p, okText) => p
-  .then(r => { if (okText) toast(okText); return r })
+  .then(r => {
+    if (okText) toast(okText);
+    return r
+  })
   .catch(e => { toast(cleanErr(e), false); throw e })
 // Blank = unset, for query strings AND POST bodies (an empty filter box holds '').
 const set = (o) => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined && v !== null && v !== ''))

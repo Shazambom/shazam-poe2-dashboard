@@ -100,7 +100,12 @@ export const useTheme = create((set, get) => ({
   },
   // Live preview while editing (unsaved): paint the table, remember nothing. `endPreview` restores the choice.
   preview: (colors) => { if (validTable(colors)) { paintTable(colors); set({ previewing: true }) } },
-  endPreview: () => { const { id, previewing } = get(); if (!previewing) return; set({ previewing: false }); paintTheme(id, get().tableOf(id)) },
+  endPreview: () => {
+    const { id, previewing } = get();
+    if (!previewing) return;
+    set({ previewing: false });
+    paintTheme(id, get().tableOf(id))
+  },
 }))
 
 onSettingsTheme((id, customs) => useTheme.getState().sync(id, customs))

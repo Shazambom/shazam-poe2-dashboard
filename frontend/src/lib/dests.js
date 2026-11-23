@@ -97,7 +97,10 @@ export function settle({ quietMs = 250, maxMs = 2000 } = {}) {
   return new Promise(res => {
     const tick = () => {
       const now = Date.now()
-      if (inflight === 0) { if (quietSince == null) quietSince = now; if (now - quietSince >= quietMs) return res() }
+      if (inflight === 0) {
+        if (quietSince == null) quietSince = now;
+        if (now - quietSince >= quietMs) return res()
+      }
       else quietSince = null
       if (now - t0 >= maxMs) return res()
       setTimeout(tick, 50)

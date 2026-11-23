@@ -231,10 +231,20 @@ export default function WorkspaceView({ league, visible = true }) {
   // Enter open · F2 rename · ⌫ delete (with undo) · ⌘N new search · ⌘⇧N new group · Esc clears the filter.
   const onTreeKey = useCallback((e, node) => {
     const mod = e.metaKey || e.ctrlKey
-    if (mod && (e.key === 'n' || e.key === 'N')) { e.preventDefault(); e.stopPropagation(); if (e.shiftKey) newGroup(); else newSearch(node?.data.kind === 'folder' ? node.data.id : null); return }
+    if (mod && (e.key === 'n' || e.key === 'N')) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.shiftKey) newGroup(); else newSearch(node?.data.kind === 'folder' ? node.data.id : null);
+      return
+    }
     if (mod && (e.key === 'v' || e.key === 'V')) { e.preventDefault(); e.stopPropagation(); clipboardAdd(); return }
     if (!node) return
-    if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); if (node.data.kind === 'folder') node.toggle(); else selectNode(node.data.id); return }
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      e.stopPropagation();
+      if (node.data.kind === 'folder') node.toggle(); else selectNode(node.data.id);
+      return
+    }
     if (e.key === 'F2') { e.preventDefault(); e.stopPropagation(); node.edit(); return }
     if (e.key === 'Backspace' || e.key === 'Delete') {
       e.preventDefault(); e.stopPropagation()

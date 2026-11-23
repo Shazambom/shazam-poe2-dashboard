@@ -142,7 +142,12 @@ function rng(seed) {
   const int = (lo, hi) => lo + Math.floor(next() * (hi - lo + 1))
   const pick = (arr) => arr[int(0, arr.length - 1)]
   const chance = (p) => next() < p
-  const sample = (arr, n) => { const a2 = [...arr]; const out = []; while (out.length < n && a2.length) out.push(a2.splice(int(0, a2.length - 1), 1)[0]); return out }
+  const sample = (arr, n) => {
+    const a2 = [...arr];
+    const out = [];
+    while (out.length < n && a2.length) out.push(a2.splice(int(0, a2.length - 1), 1)[0]);
+    return out
+  }
   return { next, int, pick, chance, sample }
 }
 

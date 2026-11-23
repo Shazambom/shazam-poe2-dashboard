@@ -92,7 +92,10 @@ export function useReprice({ wv, node, navUrl, inHistory, remountKey, league, vi
       d[step] = 'pending'
       fetchIds({ league: s.league, searchId: s.id, ids }).then((r) => {
         d[step] = stepAfter(r)   // a cancel (moved away and back) is tried again; a refusal is final
-        if (!r?.ok) { if (r?.error !== 'cancelled') diag('ws', `reprice-${step} fail=${r?.error}`); return }
+        if (!r?.ok) {
+          if (r?.error !== 'cancelled') diag('ws', `reprice-${step} fail=${r?.error}`);
+          return
+        }
         TAP.merge(wcId, s.id, r.rows)
         remember(SIBLINGS, TAP.pageOf(wcId), TAP.seenAtOf(wcId) ?? Date.now(), prices.P, { sampled: true })
       }).catch(() => { d[step] = 'done' })   // an IPC failure: give up on this search
@@ -143,7 +146,10 @@ export function useReprice({ wv, node, navUrl, inHistory, remountKey, league, vi
     const t0 = Date.now()
     const r = await recheck({ league: s.league, query: equivalentQuery(s.body?.query) }).catch(() => null)
     setChecking(null)
-    if (!r?.ok) { if (r?.error !== 'cancelled') diag('ws', `reprice-find fail=${r?.error} ms=${Date.now() - t0}`); return }
+    if (!r?.ok) {
+      if (r?.error !== 'cancelled') diag('ws', `reprice-find fail=${r?.error} ms=${Date.now() - t0}`);
+      return
+    }
     remember(SIBLINGS, pageFromRecheck(r, s.league, s.body?.query, page.options, prices.P), Date.now(), prices.P, { sampled: true })
     setTick(t => t + 1)
     diag('ws', `reprice-find rows=${r.rows.length} ms=${Date.now() - t0}`)   // how long the user saw "Checking…"

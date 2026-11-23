@@ -42,7 +42,11 @@ function Node({ node, style, dragHandle }) {
         <input className="ws-edit" autoFocus defaultValue={d.name} aria-label="Rename"
           onClick={e => e.stopPropagation()}
           onBlur={e => node.submit(e.target.value)}
-          onKeyDown={e => { e.stopPropagation(); if (e.key === 'Enter') node.submit(e.currentTarget.value); if (e.key === 'Escape') node.reset() }} />
+          onKeyDown={e => {
+            e.stopPropagation();
+            if (e.key === 'Enter') node.submit(e.currentTarget.value);
+            if (e.key === 'Escape') node.reset()
+          }} />
       ) : (
         <span className="ws-name" title={rowTitle(d)}>{d.name}</span>
       )}

@@ -36,7 +36,10 @@ function masked(line) {
   }
   return { disp, mask }
 }
-const clean = (mask, a, b) => { for (let i = a; i < b; i++) if (mask[i]) return false; return true }
+const clean = (mask, a, b) => {
+  for (let i = a; i < b; i++) if (mask[i]) return false;
+  return true
+}
 
 // Plain candidates, shortest first: substrings of the line.
 function* plain(line) {
@@ -57,8 +60,16 @@ function* bridged(line) {
   const { disp, mask } = masked(line)
   const n = disp.length
   const holes = []
-  for (let i = 0; i < n; i++) if (mask[i] && (i === 0 || !mask[i - 1])) { let j = i; while (j < n && mask[j]) j++; holes.push([i, j]) }
-  const pieces = (from, to) => { const out = []; for (let a = from; a < to; a++) for (let b = a + 1; b <= to && b - a <= PIECE; b++) if (clean(mask, a, b)) out.push([a, b]); return out }
+  for (let i = 0; i < n; i++) if (mask[i] && (i === 0 || !mask[i - 1])) {
+    let j = i;
+    while (j < n && mask[j]) j++;
+    holes.push([i, j])
+  }
+  const pieces = (from, to) => {
+    const out = [];
+    for (let a = from; a < to; a++) for (let b = a + 1; b <= to && b - a <= PIECE; b++) if (clean(mask, a, b)) out.push([a, b]);
+    return out
+  }
   const sides = holes.map(([hs, he]) => [pieces(0, hs), pieces(he, n)])
   for (let total = 2; total <= 2 * PIECE; total++) {
     for (const [lefts, rights] of sides) for (const [la, lb] of lefts) {

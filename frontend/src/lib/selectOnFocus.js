@@ -20,7 +20,10 @@ export function installSelectOnFocus(doc) {
     pressed.focus?.()                         // focusin selects it
   }
   const focus = (e) => { if (selectable(e.target)) e.target.select() }
-  const up = (e) => { if (pressed && e.target === pressed) e.preventDefault(); pressed = null }
+  const up = (e) => {
+    if (pressed && e.target === pressed) e.preventDefault();
+    pressed = null
+  }
   const on = [['mousedown', down], ['focusin', focus], ['mouseup', up]]
   for (const [t, f] of on) doc.addEventListener(t, f, true)
   return () => { for (const [t, f] of on) doc.removeEventListener(t, f, true) }

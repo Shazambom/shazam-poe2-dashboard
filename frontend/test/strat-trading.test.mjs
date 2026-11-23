@@ -49,7 +49,11 @@ test('a new search lands in "From strats" (made once), named after the line; the
 test('nothing is written before the workspace has loaded', async () => {
   const s = fakeStore([], false)
   let tick = 0
-  const p = T.openInTrading({ query: BREACH, name: 'B', league: 'L', store: s.get, go: () => {}, wait: () => { tick++; if (tick === 3) s.get().loaded = true; return Promise.resolve() } })
+  const p = T.openInTrading({ query: BREACH, name: 'B', league: 'L', store: s.get, go: () => {}, wait: () => {
+    tick++;
+    if (tick === 3) s.get().loaded = true;
+    return Promise.resolve()
+  } })
   await p
   assert.equal(tick, 3)
   assert.ok(s.calls.length > 0, 'once loaded, it goes ahead')

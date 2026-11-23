@@ -54,7 +54,12 @@ function fakes() {
   return { deps, es: () => es, timers, fire }
 }
 
-const recorder = () => { const calls = []; const h = {}; for (const k of ['meta', 'routes', 'scores', 'done', 'fail']) h[k] = (x) => calls.push([k, x]); return { calls, h } }
+const recorder = () => {
+  const calls = [];
+  const h = {};
+  for (const k of ['meta', 'routes', 'scores', 'done', 'fail']) h[k] = (x) => calls.push([k, x]);
+  return { calls, h }
+}
 
 test('a finished search reports done once and stops its watchdog', () => {
   const f = fakes(); const { calls, h } = recorder()

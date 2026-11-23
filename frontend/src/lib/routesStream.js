@@ -24,7 +24,11 @@ export function streamSearch(url, h, deps = globalThis) {
   let over = false
   const stop = () => { over = true; deps.clearTimeout(timer); es.close() }
   const arm = () => { deps.clearTimeout(timer); timer = deps.setTimeout(() => { if (!over) { stop(); (h.timeout || h.fail)(null) } }, SEARCH_IDLE_MS) }
-  const on = (type, fn) => es.addEventListener(type, (e) => { if (over) return; arm(); fn(e) })
+  const on = (type, fn) => es.addEventListener(type, (e) => {
+    if (over) return;
+    arm();
+    fn(e)
+  })
   on('meta', e => h.meta(JSON.parse(e.data)))
   on('routes', e => h.routes(JSON.parse(e.data)))
   on('scores', e => h.scores(JSON.parse(e.data)))

@@ -76,7 +76,10 @@ export default function RoutesView({ capital, status, currencies }) {
       // The authoritative top list, whether this was a fresh search or a cached replay
       // (lib/routesStream.js): one population for the banding, so the rows don't change on reload.
       done: (d) => { retries.current = 0; setRoutes(finishRoutes(accRef.current, d)); setCounts(d); setStreaming(false) },
-      fail: (msg) => { if (msg) setErr(msg); setStreaming(false) },
+      fail: (msg) => {
+        if (msg) setErr(msg);
+        setStreaming(false)
+      },
       // a busy backend, not an empty market: search again, a couple of times, then stop and say so
       timeout: () => { if (retries.current < SEARCH_RETRIES) { retries.current += 1; load() } else { setErr('the search is taking too long — press refresh to try again'); setStreaming(false) } },
     })
@@ -144,7 +147,11 @@ export default function RoutesView({ capital, status, currencies }) {
     const sd = Math.sqrt(vals.reduce((a, b) => a + (b - mean) ** 2, 0) / vals.length)
     if (!(sd > 0)) return all()
     // σ better-than-mean: +ve = better. Non-finite (∞ velocity / free gold) counts as top-tier.
-    const sig = (r) => { const v = acc(r); if (!Number.isFinite(v)) return (v > 0) === desc ? 9 : -9; return (desc ? v - mean : mean - v) / sd }
+    const sig = (r) => {
+      const v = acc(r);
+      if (!Number.isFinite(v)) return (v > 0) === desc ? 9 : -9;
+      return (desc ? v - mean : mean - v) / sd
+    }
     let kept = routes.filter(r => sig(r) >= 1)
     if (!kept.length) return all()
     kept = display(kept).slice(0, limit)

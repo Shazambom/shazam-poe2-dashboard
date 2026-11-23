@@ -110,11 +110,18 @@ function ClockBox({ ms, on, onSet }) {
   if (draft == null) {
     return <button type="button" className={`scalc-clock ${on ? 'on' : ''}`} title="Edit time" onClick={() => setDraft(sc.clock(ms))}>{sc.clock(ms)}</button>
   }
-  const done = () => { const v = sc.parseDuration(draft); if (v != null) onSet(v); setDraft(null) }
+  const done = () => {
+    const v = sc.parseDuration(draft);
+    if (v != null) onSet(v);
+    setDraft(null)
+  }
   return (
     <input className="scalc-clock scalc-clock-in" type="text" aria-label="Session time" autoFocus value={draft}
       onChange={e => setDraft(e.target.value)} onBlur={done}
-      onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); if (e.key === 'Escape') setDraft(null) }} />
+      onKeyDown={e => {
+        if (e.key === 'Enter') e.currentTarget.blur();
+        if (e.key === 'Escape') setDraft(null)
+      }} />
   )
 }
 
@@ -193,12 +200,20 @@ function StratRow({ node, style, dragHandle }) {
       {folder && node.isEditing
         ? <input className="ws-edit" autoFocus defaultValue={d.name} aria-label="Folder name" onClick={e => e.stopPropagation()}
             onBlur={e => node.submit(e.target.value)}
-            onKeyDown={e => { e.stopPropagation(); if (e.key === 'Enter') node.submit(e.currentTarget.value); if (e.key === 'Escape') node.reset() }} />
+            onKeyDown={e => {
+              e.stopPropagation();
+              if (e.key === 'Enter') node.submit(e.currentTarget.value);
+              if (e.key === 'Escape') node.reset()
+            }} />
         : active
           ? <input ref={nameBox} key={`${d.id}:${d.name}`} className="scalc-strat-input" type="text" aria-label="Strat name" defaultValue={d.name}
               onClick={e => e.stopPropagation()}
               onBlur={e => onRename(d.id, e.target.value, d.name)}
-              onKeyDown={e => { e.stopPropagation(); if (e.key === 'Enter') e.currentTarget.blur(); if (e.key === 'Escape') { e.currentTarget.value = d.name; e.currentTarget.blur() } }} />
+              onKeyDown={e => {
+                e.stopPropagation();
+                if (e.key === 'Enter') e.currentTarget.blur();
+                if (e.key === 'Escape') { e.currentTarget.value = d.name; e.currentTarget.blur() }
+              }} />
           : <span className="ws-name">{d.name}</span>}
       {!folder && d.id === runningId && <span className="dot ok" title="Running" />}
       {!folder && <span className="scalc-rate"><Div v={rateOf(d.id)} size={12} /></span>}
@@ -412,7 +427,10 @@ export default function StratCalcView({ league, currencies }) {
   const names = useMemo(() => Object.fromEntries(costOptions.map(c => [c.id, c.name])), [costOptions])
   const options = useMemo(() => {
     const twice = new Set(), seen = new Set()
-    for (const u of uniques) { if (seen.has(u.name)) twice.add(u.name); seen.add(u.name) }
+    for (const u of uniques) {
+      if (seen.has(u.name)) twice.add(u.name);
+      seen.add(u.name)
+    }
     return [...costOptions, ...uniques.map(u => ({ id: uniqueId(u), name: twice.has(u.name) ? `${u.name} (${u.type})` : u.name, keywords: [u.type], unique: u }))]
   }, [costOptions, uniques])
   const tablets = useMemo(() => tabletOptions(uses), [uses])
@@ -478,7 +496,11 @@ export default function StratCalcView({ league, currencies }) {
   ]
   const treeCtx = (now) => ({
     activeId: doc.active, nameBox, runningId: doc.strats.find(z => sc.running(z.timer))?.id ?? null,
-    rateOf: (id) => { if (stoppedRates.has(id)) return stoppedRates.get(id); const x = doc.strats.find(z => z.id === id); return x ? sc.tally(x, prices, now, uses).perHour : null },
+    rateOf: (id) => {
+      if (stoppedRates.has(id)) return stoppedRates.get(id);
+      const x = doc.strats.find(z => z.id === id);
+      return x ? sc.tally(x, prices, now, uses).perHour : null
+    },
     onSelect: (id) => change(d => sc.select(d, id)),
     onMenu: (e, d, node) => setMenu({ at: { x: e.clientX, y: e.clientY }, id: d.id, kind: d.kind, node }),
     onDelete: (d) => (d.kind === 'folder' ? deleteFolderDeep(d.id) : deleteStrat(d.id)),

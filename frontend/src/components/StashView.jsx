@@ -114,7 +114,11 @@ export default function StashView({ league }) {
     if (!id || n == null) return
     pickRef.current = ''
     recordPendingEdit(capitalDirty, id, { kind: 'add', delta: n })
-    setQty(r => { const next = addAmount(r, id, n); if (next !== r) save(next); return next })
+    setQty(r => {
+      const next = addAmount(r, id, n);
+      if (next !== r) save(next);
+      return next
+    })
     unfold(id); setPick('')
   }
   // The sales column pins below the pinned header: its real height, measured (it wraps on narrow windows).
@@ -130,7 +134,11 @@ export default function StashView({ league }) {
   const [q, setQ] = useState('')
   const searchRef = useRef(null)
   const folded = (g) => isFolded(g, folds, total, q)
-  const toggleFold = (g) => setFolds(f => { const n = flipFold(g, f, total, q); if (n !== f) writeFolds(n); return n })
+  const toggleFold = (g) => setFolds(f => {
+    const n = flipFold(g, f, total, q);
+    if (n !== f) writeFolds(n);
+    return n
+  })
   // An added currency opens its group so the user sees it land.
   const unfold = (id) => setFolds(f => ({ ...f, [groupOf[id] || UNGROUPED]: false }))   // for now; the saved folds stay as the user left them
   useEffect(() => {
@@ -332,7 +340,11 @@ export default function StashView({ league }) {
   useEffect(() => { if (tick !== tick0.current) { tick0.current = tick; refresh(false) } }, [tick])
   const prices = sales.prices ?? status?.wealth_prices
   const stats = useMemo(() => salesStats(sales.rows, ref, prices), [sales.rows, ref, prices])
-  const byName = useMemo(() => { const m = new Map(); for (const n of flatten(tree, x => x.kind === 'search')) if (n.name) m.set(n.name.toLowerCase(), n.id); return m }, [tree])
+  const byName = useMemo(() => {
+    const m = new Map();
+    for (const n of flatten(tree, x => x.kind === 'search')) if (n.name) m.set(n.name.toLowerCase(), n.id);
+    return m
+  }, [tree])
   const openRow = (r) => { setOpen(o => (o === r ? null : r)); diag('sales', 'sales-open') }
 
   const hit = useMemo(() => stashMatches(rows, q), [rows, q])

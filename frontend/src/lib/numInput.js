@@ -42,11 +42,26 @@ export function parseNum(raw) {
   }
   /** @returns {number} */
   const factor = () => {
-    if (toks[i] === '(') { i++; const v = expr(); if (toks[i++] !== ')') throw 0; return v }
-    const v = num(toks[i++]); if (v == null) throw 0; return v
+    if (toks[i] === '(') {
+      i++;
+      const v = expr();
+      if (toks[i++] !== ')') throw 0;
+      return v
+    }
+    const v = num(toks[i++]);
+    if (v == null) throw 0;
+    return v
   }
-  const term = () => { let v = factor(); while (toks[i] === '*' || toks[i] === '/') v = toks[i++] === '*' ? v * factor() : v / factor(); return v }
-  const expr = () => { let v = term(); while (toks[i] === '+' || toks[i] === '-') v = toks[i++] === '+' ? v + term() : v - term(); return v }
+  const term = () => {
+    let v = factor();
+    while (toks[i] === '*' || toks[i] === '/') v = toks[i++] === '*' ? v * factor() : v / factor();
+    return v
+  }
+  const expr = () => {
+    let v = term();
+    while (toks[i] === '+' || toks[i] === '-') v = toks[i++] === '+' ? v + term() : v - term();
+    return v
+  }
   try {
     const v = expr()
     return i === toks.length && Number.isFinite(v) && v >= 0 ? v : null

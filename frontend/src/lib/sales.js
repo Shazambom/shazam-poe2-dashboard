@@ -17,7 +17,10 @@ export function salesStats(rows, ref, prices, now = Date.now()) {
   const raw = new Map()
   for (const r of rows || []) {
     const t = Date.parse(r.time)
-    if (Number.isFinite(t)) { if (now - t < DAY) today++; if (now - t < 7 * DAY) week++ }
+    if (Number.isFinite(t)) {
+      if (now - t < DAY) today++;
+      if (now - t < 7 * DAY) week++
+    }
     const cur = r.price && String(r.price.currency || '')
     if (cur && Number.isFinite(Number(r.price.amount))) raw.set(cur, (raw.get(cur) || 0) + Number(r.price.amount))
   }
@@ -70,7 +73,9 @@ export function itemCardProps(item) {
     if (lines.length) blocks.push({ kind, lines: lines.map(text => ({ text })) })
   }
   const flags = []
-  if (it.corrupted) flags.push('Corrupted'); if (it.mirrored) flags.push('Mirrored'); if (it.identified === false) flags.push('Unidentified')
+  if (it.corrupted) flags.push('Corrupted');
+  if (it.mirrored) flags.push('Mirrored');
+  if (it.identified === false) flags.push('Unidentified')
   if (flags.length) blocks.push({ kind: 'flags', lines: flags.map(text => ({ text })) })
   return { name: it.name || '', typeLine: it.typeLine || it.baseType || '', rarity: rarityOf(it), icon: it.icon || null, blocks }
 }
