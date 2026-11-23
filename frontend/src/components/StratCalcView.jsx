@@ -63,7 +63,7 @@ function NumBox({ value, onChange, whole = false, label, autoFocus = false, plac
   return (
     <input className={`scalc-in${found ? ' scalc-found' : ''}`} type="text" inputMode="decimal" aria-label={label} placeholder={placeholder}
       autoFocus={autoFocus} value={draft ?? shownNum(value)}
-     
+
       onChange={e => { setDraft(e.target.value); const n = sc.parseNum(e.target.value); if (n != null) onChange(fix(n)) }}
       onBlur={settle} onKeyDown={onKey} />
   )
