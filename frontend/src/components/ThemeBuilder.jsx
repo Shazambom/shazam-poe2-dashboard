@@ -43,7 +43,13 @@ export default function ThemeBuilder() {
   }, [])
 
   const editing = useMemo(() => customs.find(t => t.id === editId) || null, [customs, editId])
-  useEffect(() => { setDraft(editing ? { ...editing, colors: { ...editing.colors } } : null); setExported('') }, [editing?.id])
+  const editingId = editing?.id
+  const [draftId, setDraftId] = useState(editingId)
+  if (draftId !== editingId) {
+    setDraftId(editingId)
+    setDraft(editing ? { ...editing, colors: { ...editing.colors } } : null)
+    setExported('')
+  }
 
   const persist = (list) => useTheme.getState().saveCustoms(list).catch(() => toast('Could not save themes', false))
   const upsert = (theme) => persist(customs.some(t => t.id === theme.id) ? customs.map(t => (t.id === theme.id ? theme : t)) : [...customs, theme])

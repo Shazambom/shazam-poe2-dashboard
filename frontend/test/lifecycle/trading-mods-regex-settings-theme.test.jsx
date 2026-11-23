@@ -76,8 +76,15 @@ describe('Mods, Regex, Settings, ThemeBuilder, Trading, and App shell lifecycles
       expect(useTheme.getState().customs.length).toBeGreaterThanOrEqual(1)
     })
 
-    // Unmount cleanly while debounce timers could still be pending
+    const name = await screen.findByLabelText('Name')
+    const save = vi.spyOn(useTheme.getState(), 'saveCustoms')
+    vi.useFakeTimers()
+    fireEvent.change(name, { target: { value: 'Unsaved name' } })
+    act(() => useTheme.setState(s => ({ customs: s.customs.map(t => ({ ...t, name: 'Stored name' })) })))
+    expect(name.value).toBe('Unsaved name')
     expect(() => unmount()).not.toThrow()
+    act(() => vi.advanceTimersByTime(1000))
+    expect(save).not.toHaveBeenCalled()
   })
 
   it('SettingsView loads settings, renders Appearance/Market/Accounts panels, and switches theme cleanly', async () => {
