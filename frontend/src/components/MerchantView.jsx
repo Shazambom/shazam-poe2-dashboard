@@ -1,3 +1,4 @@
+import { useClockValue } from '../lib/clock.js'
 import { shopCache, marketCache, marketInFlight, priceCache, clearMerchantShopCache } from '../lib/merchantCache.js'
 import { ignoredError } from '../lib/ignoredError.js'
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
@@ -199,6 +200,7 @@ export default function MerchantView({ league }) {
 
   const cachedMarket = sel ? marketCache.get(sel) : null
   const [shop, setShop] = useState(() => (sel && accountSlot ? shopCache.get(cacheKey) || null : null))
+  const canLoadMore = useClockValue(now => !!(shop && shop.remainingIds > 0 && (!shop.cursorExpiresAt || now < shop.cursorExpiresAt)))
   const activeAccount = oauthAccount || shop?.account || sessionAccount
   const doneKey = sel && activeAccount ? doneStorageKeyOf(sel, activeAccount) : ''
   const [market, setMarket] = useState(() => (
@@ -642,7 +644,6 @@ export default function MerchantView({ league }) {
     )
   }
 
-  const canLoadMore = !!(shop && shop.remainingIds > 0 && (!shop.cursorExpiresAt || Date.now() < shop.cursorExpiresAt))
   const orderLabel = (shop?.sort || fetchOrder) === 'price_desc' ? 'highest price first' : 'oldest first'
   const oppositeOrder = (shop?.sort || fetchOrder) === 'price_desc' ? 'oldest' : 'price_desc'
   const oppositeLabel = oppositeOrder === 'oldest' ? 'Fetch oldest instead' : 'Fetch highest-priced instead'
