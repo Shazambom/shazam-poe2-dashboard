@@ -102,7 +102,7 @@ def _m1_split_from_legacy(conn: sqlite3.Connection) -> None:
     """
     done = conn.execute("SELECT value FROM user_meta WHERE key='split_done'").fetchone()
     if done and done[0] == "1":
-        return
+        return None
     backup = DB_PATH.with_suffix(DB_PATH.suffix + ".premigration")
     if not DB_PATH.exists():
         if backup.exists():
@@ -117,7 +117,7 @@ def _m1_split_from_legacy(conn: sqlite3.Connection) -> None:
         conn.execute(
             "INSERT OR REPLACE INTO user_meta(key, value) VALUES('split_done','1')"
         )
-        return
+        return None
 
     log.info("legacy split: lifting user rows out of %s", DB_PATH)
     legacy = sqlite3.connect(str(DB_PATH), timeout=30)
