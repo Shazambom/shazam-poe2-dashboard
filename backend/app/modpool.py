@@ -1328,7 +1328,7 @@ async def refresh(force: bool = False) -> dict:
         bench = []
         log.warning("bench recipes: poe2db unreachable (%s)", exc)
     if bench:
-        db.kv_set("bench_recipes", bench)
+        await run_in_threadpool(db.kv_set, "bench_recipes", bench)
     else:
         pages_error = "; ".join(
             filter(
