@@ -32,14 +32,14 @@ def lines(monkeypatch):
 def test_t0_is_one_greppable_line_with_a_kind(lines):
     devtelemetry.t0("seed-failed", "OSError: EBADF")
     assert lines == [("T0", "seed-failed: OSError: EBADF")]
-    assert devtelemetry.T0_KINDS >= {
+    assert {
         "seed-failed",
         "unseeded",
         "seed-unreadable",
         "digest-cold",
         "league-full-crawl",
         "mods-empty",
-    }
+    } <= devtelemetry.T0_KINDS
 
 
 # ------------------------------------------------------------------ the seed step

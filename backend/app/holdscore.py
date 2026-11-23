@@ -303,7 +303,7 @@ def _signals(
     moves = [
         math.log(sm[b] / sm[a])
         for a, b in zip(ages, ages[1:])
-        if b - a == 1 and DISCOVERY_DAY <= a and b <= t - SKIP_DAYS
+        if b - a == 1 and a >= DISCOVERY_DAY and b <= t - SKIP_DAYS
     ]
     sd = statistics.pstdev(moves) if len(moves) >= 4 else 0.0
     steady = (

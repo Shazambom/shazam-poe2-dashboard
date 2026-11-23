@@ -43,7 +43,7 @@ def test_get_settings_merges_stored_over_defaults():
 def test_get_settings_defaults_are_not_mutated():
     before = copy.deepcopy(settings.DEFAULTS)
     settings.get_settings()
-    assert settings.DEFAULTS == before
+    assert before == settings.DEFAULTS
 
 
 # ----------------------------------------------------------------- movers

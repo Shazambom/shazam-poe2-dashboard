@@ -37,17 +37,17 @@ def test_one_anchor_table():
     assert set(a) == {"divine", "mirror", "lock", "chaos"}
     assert a["divine"].item_id == 291 and a["lock"].item_id == 4287
     assert a["divine"].metadata_id.endswith("CurrencyModValues")
-    assert marketseries.DIVINE_ID == a["divine"].item_id
-    assert holdscore.NUMERAIRES == {
+    assert a["divine"].item_id == marketseries.DIVINE_ID
+    assert {
         k: (v.item_id, v.name) for k, v in a.items() if k != "chaos"
-    }
-    assert leaguehistory.ITEMS == {v.item_id: v.name for v in a.values()}
+    } == holdscore.NUMERAIRES
+    assert {v.item_id: v.name for v in a.values()} == leaguehistory.ITEMS
     assert leaguehistory.DEFAULT_ITEM == 291 and leaguehistory.MIRROR_ITEM == 295
-    assert inflation.ANCHORS == {
+    assert {
         k: (v.name, v.metadata_id)
         for k, v in a.items()
         if k in ("divine", "mirror", "lock")
-    }
+    } == inflation.ANCHORS
 
 
 def test_currencies_endpoint_exposes_anchors():
