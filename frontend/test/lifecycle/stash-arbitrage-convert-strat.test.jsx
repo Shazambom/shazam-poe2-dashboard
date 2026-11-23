@@ -91,17 +91,17 @@ describe('Stash, Arbitrage SSE, Convert, and StratCalc lifecycles', () => {
 
   it('RoutesView streams SSE meta/routes/done and closes EventSource cleanly on unmount', async () => {
     installApiMock()
-    const { unmount } = render(<RoutesView />)
+    const { rerender, unmount } = render(<RoutesView />)
 
     await waitFor(() => {
-      expect(FakeEventSource.instances.length).toBeGreaterThanOrEqual(1)
+      expect(FakeEventSource.instances).toHaveLength(1)
     })
 
     const es = FakeEventSource.instances[FakeEventSource.instances.length - 1]
     expect(es.url).toContain('/api/routes/stream')
 
     act(() => {
-      es.emit('meta', { reference: 'exalted', candidates: 12, window_h: 24 })
+      es.emit('meta', { reference: 'exalted', candidates: 12, window_h: 24, capital: { divine: 10 } })
       es.emit('routes', [{
         id: 'loop-1',
         start: 'divine',
@@ -143,6 +143,16 @@ describe('Stash, Arbitrage SSE, Convert, and StratCalc lifecycles', () => {
       expect(document.querySelector('.detail')).toBeTruthy()
     })
 
+    rerender(<RoutesView capital={{ reference: 'exalted' }} />)
+    expect(FakeEventSource.instances).toHaveLength(1)
+    // The initial, immediate search key settles before the next edit is debounced.
+    await act(async () => { await new Promise(resolve => { setTimeout(resolve, 550) }) })
+    const start = screen.getByLabelText('Start from')
+    fireEvent.change(start, { target: { value: 'divine' } })
+    expect(start.value).toBe('divine')
+    expect(FakeEventSource.instances).toHaveLength(1)
+    await waitFor(() => expect(FakeEventSource.instances).toHaveLength(2))
+    expect(FakeEventSource.instances[1].closed).toBe(false)
     // Unmount cleanup also closes any active in-flight stream
     unmount()
     expect(FakeEventSource.instances.every(i => i.closed)).toBe(true)

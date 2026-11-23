@@ -1,6 +1,6 @@
 import LoadingRows from './LoadingRows.jsx'
 import { ignoredError } from '../lib/ignoredError.js'
-import React, { useEffect, useMemo, useRef, useState } from 'react'
+import React, { useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
 import { finishRoutes, streamSearch } from '../lib/routesStream.js'
 import { api, fmt } from '../lib/api.js'
@@ -86,22 +86,28 @@ export default function RoutesView({ capital, status, currencies }) {
     })
   }
 
+  // An interval and its timeout retries keep the search they were started with.
+  const currentSearch = useEffectEvent(() => load)
+  const refreshFromTick = useEffectEvent(() => { if (searchKey != null) load() })
+
   // The filters live in the user's settings: loaded once, saved (debounced) on every edit.
   const { save, arm, flush } = useAutosave(next => useStatus.getState().saveSettings({ filters: filtersToSave(next) }), 800)
   useEffect(() => {
     ensureSettings().then(s => { setF(filtersFromSettings(s.filters)); setLoaded(true); arm() })
       .catch(() => setLoaded(true))              // no settings: search with the defaults, once
-  }, [])
+  }, [arm])
   // The first key applies at once; later edits are debounced.
   const searchKey = useDebounced(filterKey, 500) ?? filterKey
   useEffect(() => {
     if (searchKey == null) return
-    load()
+    const search = currentSearch()
+    search()
     return () => esRef.current?.()
   }, [searchKey])
   useEffect(() => {
     if (searchKey == null) return
-    const t = setInterval(() => { if (document.visibilityState === 'visible' && !streaming) load() }, 120000)
+    const search = currentSearch()
+    const t = setInterval(() => { if (document.visibilityState === 'visible' && !streaming) search() }, 120000)
     return () => clearInterval(t)
   }, [searchKey, streaming])
 
@@ -122,7 +128,7 @@ export default function RoutesView({ capital, status, currencies }) {
   }
 
   // Manual refresh from the topbar ⟳ re-runs the search.
-  useEffect(() => { if (tick > 0 && searchKey != null) load() }, [tick])
+  useEffect(() => { if (tick > 0) refreshFromTick() }, [tick])
 
   const update = (k, v) => { const next = { ...f, [k]: v }; setF(next); save(next) }
   const set = (k) => (e) => update(k, e.target.type === 'checkbox' ? e.target.checked : e.target.value)
