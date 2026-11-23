@@ -26,15 +26,15 @@ from . import (
 from .currencies import registry
 from .settings import get_settings
 
-_TABLES = (
-    "league_daily",
-    "item_meta",
-    "digest_markets",
-    "orderbook",
-    "capital",
-    "kv",
-    "kv_ops",
-)
+_COUNT_QUERIES = {
+    "league_daily": "SELECT COUNT(*) FROM league_daily",
+    "item_meta": "SELECT COUNT(*) FROM item_meta",
+    "digest_markets": "SELECT COUNT(*) FROM digest_markets",
+    "orderbook": "SELECT COUNT(*) FROM orderbook",
+    "capital": "SELECT COUNT(*) FROM capital",
+    "kv": "SELECT COUNT(*) FROM kv",
+    "kv_ops": "SELECT COUNT(*) FROM kv_ops",
+}
 # Probes ride the SAME httpx client as every real fetch (so a PyInstaller SSL/cert failure shows
 # up here), but on the lenient `static` policy and concurrently: a diagnostic must answer in a
 # second or two, not queue behind the exchange sweep's 1-per-6s trade budget.
@@ -48,11 +48,11 @@ _PROBES = {
 def _db_counts(league: str) -> dict:
     counts: dict = {}
     with db.q() as c:
-        for t in _TABLES:
+        for table, query in _COUNT_QUERIES.items():
             try:
-                counts[t] = c.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0]
+                counts[table] = c.execute(query).fetchone()[0]
             except Exception as e:
-                counts[t] = f"err:{e}"
+                counts[table] = f"err:{e}"
         try:
             counts["league_daily[current_league]"] = c.execute(
                 "SELECT COUNT(*) FROM league_daily WHERE league=?", (league,)

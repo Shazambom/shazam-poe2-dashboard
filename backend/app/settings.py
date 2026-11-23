@@ -3,6 +3,7 @@ from __future__ import annotations
 import copy
 import logging
 import time
+from string import Template
 
 from . import cache, db, leaguehistory, marketseries
 from .arbpresets import (
@@ -205,6 +206,11 @@ def youngest_league() -> str:
     return val
 
 
+_LEAGUE_FIRST_DAY = Template(
+    "SELECT league, MIN(day) FROM league_daily WHERE league IN ($leagues) GROUP BY league"
+)
+
+
 def _youngest_now() -> str:
     live_ids = _fresh_trade_league_ids()
     current = [lg for lg in db.kv_get(marketseries.CURRENT_LEAGUES_KEY, []) or [] if lg]
@@ -223,7 +229,7 @@ def _youngest_now() -> str:
         first = {
             r[0]: r[1]
             for r in c.execute(
-                f"SELECT league, MIN(day) FROM league_daily WHERE league IN ({','.join('?' * len(current))}) GROUP BY league",
+                db.sql_with_lists(_LEAGUE_FIRST_DAY, leagues=len(current)),
                 current,
             )
         }

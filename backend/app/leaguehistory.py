@@ -20,6 +20,7 @@ import logging
 import re
 import time
 import urllib.parse
+from string import Template
 from typing import TypedDict
 
 from . import cache, db, devtelemetry, gateway, marketseries
@@ -345,6 +346,12 @@ def _merge_meta_bridge(new: dict[str, str]) -> None:
     )
 
 
+_DELETE_WITHDRAWN_DAYS = Template(
+    "DELETE FROM league_daily WHERE league=? AND item_id=? AND day BETWEEN ? AND ? "
+    "AND day NOT IN ($days)"
+)
+
+
 async def fetch_item(name: str, item_id: int, current: bool) -> int:
     """Pull one item's daily history into league_daily and stamp it. Returns the rows stored; raises
     on a failed request (nothing is stamped then). For a league still running, a stored day inside
@@ -362,8 +369,7 @@ async def fetch_item(name: str, item_id: int, current: bool) -> int:
             if current:
                 days = [r[2] for r in rows]
                 c.execute(
-                    f"DELETE FROM league_daily WHERE league=? AND item_id=? AND day BETWEEN ? AND ? "
-                    f"AND day NOT IN ({','.join('?' * len(days))})",
+                    db.sql_with_lists(_DELETE_WITHDRAWN_DAYS, days=len(days)),
                     (name, item_id, min(days), max(days), *days),
                 )
             c.executemany(

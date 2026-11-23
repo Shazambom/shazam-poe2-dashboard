@@ -27,10 +27,14 @@ def keeps_lh_current():
     """A crawl records the simulated league as current; later tests expect that key untouched."""
     before = db.kv_get("lh_current")
     yield
+    queries = {
+        "kv_ops": "DELETE FROM kv_ops WHERE key=?",
+        "kv": "DELETE FROM kv WHERE key=?",
+    }
     table = db._kv_table("lh_current")
     with db.tx() as c:
         if before is None:
-            c.execute(f"DELETE FROM {table} WHERE key='lh_current'")
+            c.execute(queries[table], ("lh_current",))
     if before is not None:
         db.kv_set("lh_current", before)
 

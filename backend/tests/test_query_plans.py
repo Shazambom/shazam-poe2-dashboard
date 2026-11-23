@@ -90,11 +90,15 @@ def test_one_markets_history_seeks_the_pair_index_instead_of_scanning_the_window
     """The query `digest.pair_history` runs. It asks for one market's hours; it must not read
     every market's."""
     _fill()
-    sql = (
-        "SELECT * FROM digest_markets WHERE league=? AND hour>=? "
-        "AND ((cur_a IN (?) AND cur_b IN (?)) OR (cur_a IN (?) AND cur_b IN (?)))"
-    )
-    plan = _plan(sql, (LEAGUE, 0, "cur_a7", "cur_b7", "cur_b7", "cur_a7"))
+    executed = []
+    with db.q() as connection:
+        connection.set_trace_callback(executed.append)
+        try:
+            assert digest.pair_history(LEAGUE, "divine", "exalted", hours=HOURS + 1)
+        finally:
+            connection.set_trace_callback(None)
+    (sql,) = executed
+    plan = _plan(sql, ())
     assert "idx_digest_pair_hour" in plan, plan
     assert "idx_digest_league_hour" not in plan, plan
 

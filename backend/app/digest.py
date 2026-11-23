@@ -14,6 +14,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
+from string import Template
 
 import httpx
 
@@ -359,8 +360,7 @@ def _window_rates(league: str, hours: int) -> dict[tuple[str, str], float]:
     now = _hour(time.time())
     with db.q() as c:
         rows = c.execute(
-            "SELECT hour, cur_a, cur_b, vol_a, vol_b FROM digest_markets "
-            "WHERE league=? AND hour>=?" + TRADED_ONLY,
+            _TRADED_ROWS,
             (league, now - hours * 3600),
         ).fetchall()
     return _fold_rates(rows, now)
@@ -392,6 +392,21 @@ def _fold_rates(rows, now: int) -> dict[tuple[str, str], float]:
 TRADED_ONLY = (
     " AND vol_a IS NOT NULL AND vol_a <> 0 AND vol_b IS NOT NULL AND vol_b <> 0"
 )
+_TRADED_ROWS = Template(
+    "SELECT hour, cur_a, cur_b, vol_a, vol_b FROM digest_markets "
+    "WHERE league=? AND hour>=?$traded"
+).substitute(traded=TRADED_ONLY)
+_PAIR_HISTORY = Template(
+    Template(
+        """SELECT hour, cur_a, cur_b, vol_a, vol_b FROM digest_markets WHERE league=? AND hour>=?
+                AND ((cur_a IN ($a) AND cur_b IN ($b)) OR (cur_a IN ($b) AND cur_b IN ($a)))$traded ORDER BY hour"""
+    ).safe_substitute(traded=TRADED_ONLY)
+)
+_PARTNER_VOLUME = Template(
+    """SELECT cur_a, cur_b, SUM(vol_a) va, SUM(vol_b) vb FROM digest_markets
+                    WHERE league=? AND hour>=? AND (cur_a IN ($ids) OR cur_b IN ($ids))
+                    GROUP BY cur_a, cur_b"""
+)
 
 
 def pair_history(league: str, a: str, b: str, hours: int = 168) -> list[dict]:
@@ -403,12 +418,7 @@ def pair_history(league: str, a: str, b: str, hours: int = 168) -> list[dict]:
     since = _hour(time.time()) - hours * 3600
     with db.q() as c:
         rows = c.execute(
-            (
-                """SELECT hour, cur_a, cur_b, vol_a, vol_b FROM digest_markets WHERE league=? AND hour>=?
-                AND ((cur_a IN ({a}) AND cur_b IN ({b})) OR (cur_a IN ({b}) AND cur_b IN ({a})))"""
-                + TRADED_ONLY
-                + " ORDER BY hour"
-            ).format(a=",".join("?" * len(metas_a)), b=",".join("?" * len(metas_b))),
+            db.sql_with_lists(_PAIR_HISTORY, a=len(metas_a), b=len(metas_b)),
             (league, since, *metas_a, *metas_b, *metas_b, *metas_a),
         ).fetchall()
     series = []
@@ -432,8 +442,7 @@ def window_history(league: str, hours: int = 168):
     since = _hour(time.time()) - hours * 3600
     with db.q() as c:
         rows = c.execute(
-            "SELECT hour, cur_a, cur_b, vol_a, vol_b FROM digest_markets "
-            "WHERE league=? AND hour>=?" + TRADED_ONLY,
+            _TRADED_ROWS,
             (league, since),
         ).fetchall()
     by_pair: dict[tuple[str, str], list] = {}
@@ -515,12 +524,9 @@ def _partners(league: str, want: str, hours: int) -> list[tuple[str, float]]:
     out: list[tuple[str, float]] = []
     if metas:
         since = _hour(time.time()) - hours * 3600
-        ph = ",".join("?" * len(metas))
         with db.q() as c:
             rows = c.execute(
-                f"""SELECT cur_a, cur_b, SUM(vol_a) va, SUM(vol_b) vb FROM digest_markets
-                    WHERE league=? AND hour>=? AND (cur_a IN ({ph}) OR cur_b IN ({ph}))
-                    GROUP BY cur_a, cur_b""",
+                db.sql_with_lists(_PARTNER_VOLUME, ids=len(metas)),
                 (league, since, *metas, *metas),
             ).fetchall()
         agg: dict[str, float] = {}

@@ -8,6 +8,7 @@ import threading
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
+from string import Template
 from typing import Any
 
 from . import devtelemetry
@@ -579,14 +580,27 @@ def q() -> Iterator[sqlite3.Connection]:
     yield _conn()
 
 
+def sql_with_lists(query: Template, /, **lengths: int) -> str:
+    """Expand bind markers for IN lists. Callers supply fixed SQL templates and bind all values."""
+    return query.substitute(
+        {name: ",".join("?" * size) for name, size in lengths.items()}
+    )
+
+
 def _kv_table(key: str) -> str:
     return "kv" if _is_user_kv(key) else "kv_ops"
+
+
+_KV_SELECT = {
+    "kv": "SELECT value FROM kv WHERE key=?",
+    "kv_ops": "SELECT value FROM kv_ops WHERE key=?",
+}
 
 
 def kv_get(key: str, default: Any = None) -> Any:
     table = _kv_table(key)
     with q() as c:
-        row = c.execute(f"SELECT value FROM {table} WHERE key=?", (key,)).fetchone()
+        row = c.execute(_KV_SELECT[table], (key,)).fetchone()
     return json.loads(row["value"]) if row else default
 
 
@@ -602,9 +616,7 @@ def kv_set(key: str, value: Any) -> None:
 
 def _kv_read(c: sqlite3.Connection, key: str, default: Any = None) -> Any:
     """A kv value inside a transaction the caller holds (routed like kv_get)."""
-    row = c.execute(
-        f"SELECT value FROM {_kv_table(key)} WHERE key=?", (key,)
-    ).fetchone()
+    row = c.execute(_KV_SELECT[_kv_table(key)], (key,)).fetchone()
     return json.loads(row["value"]) if row else default
 
 
@@ -749,10 +761,11 @@ def sales_leagues() -> list[str]:
 
 def sales_count(league: str | None = None) -> int:
     with q() as c:
-        return c.execute(
-            "SELECT COUNT(*) FROM sales" + (" WHERE league=?" if league else ""),
-            (league,) if league else (),
-        ).fetchone()[0]
+        if league:
+            return c.execute(
+                "SELECT COUNT(*) FROM sales WHERE league=?", (league,)
+            ).fetchone()[0]
+        return c.execute("SELECT COUNT(*) FROM sales").fetchone()[0]
 
 
 COUNTED_AT = "capital_counted_at"  # {currency: when the user last set it, "*": when counting began}

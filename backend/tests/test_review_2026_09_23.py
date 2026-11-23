@@ -16,6 +16,7 @@ import sys
 import time
 from collections import defaultdict
 from pathlib import Path
+from string import Template
 
 import pytest
 
@@ -114,9 +115,9 @@ def test_production_every_line_ends_on_its_number_when_fed_what_the_board_feeds_
     window before folding, so it compares two folds over the same rows and cannot see this."""
     league, now = _newest_league()
     rows = _prod_rows(
-        "SELECT hour, cur_a, cur_b, vol_a, vol_b FROM digest_markets WHERE league=? AND hour>=?"
-        + digest.TRADED_ONLY
-        + " ORDER BY hour",
+        Template(
+            "SELECT hour, cur_a, cur_b, vol_a, vol_b FROM digest_markets WHERE league=? AND hour>=?$traded ORDER BY hour"
+        ).substitute(traded=digest.TRADED_ONLY),
         league,
         now - (168 + board.RATE_WARMUP_H) * 3600,
     )
@@ -587,8 +588,10 @@ def test_production_the_rule_revives_deep_wide_markets_and_no_thin_one():
     `depth_balance`) come back; every market with a thin side stays dead."""
     league, now = _newest_league()
     rows = _prod_rows(
-        "SELECT hour, cur_a, cur_b, vol_a, vol_b, hi_stock_a, hi_stock_b FROM digest_markets "
-        "WHERE league=? AND hour>=?" + digest.TRADED_ONLY + " ORDER BY hour",
+        Template(
+            "SELECT hour, cur_a, cur_b, vol_a, vol_b, hi_stock_a, hi_stock_b FROM digest_markets "
+            "WHERE league=? AND hour>=?$traded ORDER BY hour"
+        ).substitute(traded=digest.TRADED_ONLY),
         league,
         now - 48 * 3600,
     )
@@ -709,9 +712,9 @@ def test_a_market_that_last_traded_yesterday_still_ends_its_line_on_todays_numbe
 def test_production_every_line_ends_on_its_number_stale_markets_included():
     league, now = _newest_league()
     rows = _prod_rows(
-        "SELECT hour, cur_a, cur_b, vol_a, vol_b FROM digest_markets WHERE league=? AND hour>=?"
-        + digest.TRADED_ONLY
-        + " ORDER BY hour",
+        Template(
+            "SELECT hour, cur_a, cur_b, vol_a, vol_b FROM digest_markets WHERE league=? AND hour>=?$traded ORDER BY hour"
+        ).substitute(traded=digest.TRADED_ONLY),
         league,
         now - (168 + board.RATE_WARMUP_H) * 3600,
     )
@@ -778,9 +781,13 @@ def _prod_copy(currencies, hours=48):
     ids = [registry.metas(c)[0] for c in ("exalted", "divine", "chaos")] + list(
         currencies
     )
-    marks = ",".join("?" * len(ids))
     rows = _prod_rows(
-        f"SELECT * FROM digest_markets WHERE league=? AND hour>=? AND cur_a IN ({marks}) AND cur_b IN ({marks})",
+        db.sql_with_lists(
+            Template(
+                "SELECT * FROM digest_markets WHERE league=? AND hour>=? AND cur_a IN ($ids) AND cur_b IN ($ids)"
+            ),
+            ids=len(ids),
+        ),
         league,
         now - hours * 3600,
         *ids,

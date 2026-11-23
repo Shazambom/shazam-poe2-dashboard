@@ -21,6 +21,7 @@ from __future__ import annotations
 import math
 import statistics
 import time
+from string import Template
 
 from . import cache, db, marketseries
 from .currencies import registry
@@ -67,6 +68,11 @@ VELOCITY_WINDOW_H = 7 * 24  # 7-day OLS log-trend for Per day pace (%/day)
 
 
 _metas = registry.metas
+_CROSS_MARKET_ROWS = Template(
+    """SELECT hour, cur_a, cur_b, vol_a, vol_b FROM digest_markets
+            WHERE league=? AND hour>=? AND ((cur_a IN ($soft) AND cur_b IN ($hard))
+                              OR (cur_a IN ($hard) AND cur_b IN ($soft)))"""
+)
 
 
 def _hourly_soft_per_hard(
@@ -75,11 +81,10 @@ def _hourly_soft_per_hard(
     """{hour: (soft_units_per_hard_unit, hard_volume)} from executed volume ratios."""
     if not soft_metas or not hard_metas:
         return {}
-    sp, hp = ",".join("?" * len(soft_metas)), ",".join("?" * len(hard_metas))
     rows = c.execute(
-        f"""SELECT hour, cur_a, cur_b, vol_a, vol_b FROM digest_markets
-            WHERE league=? AND hour>=? AND ((cur_a IN ({sp}) AND cur_b IN ({hp}))
-                              OR (cur_a IN ({hp}) AND cur_b IN ({sp})))""",
+        db.sql_with_lists(
+            _CROSS_MARKET_ROWS, soft=len(soft_metas), hard=len(hard_metas)
+        ),
         (league, since, *soft_metas, *hard_metas, *hard_metas, *soft_metas),
     ).fetchall()
     soft_set = set(soft_metas)
