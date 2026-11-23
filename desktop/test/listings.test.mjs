@@ -235,8 +235,7 @@ test('recheck: identical checks already in flight share one search', async () =>
 // and a new click on the same search after a cancel starts a fresh check (not the cancelled one).
 test('recheck: cancelled while the search is in flight → no fetch is sent; a later click runs fresh', async () => {
   const sent = []
-  let f
-  f = L.makeRechecker({
+  const f = L.makeRechecker({
     request: async (r) => {
       sent.push(r.method)
       if (r.method === 'POST') { f.cancel(); return { status: 200, headers: {}, body: JSON.stringify({ id: 'S1', result: [ID(1), ID(2)], total: 2 }) } }

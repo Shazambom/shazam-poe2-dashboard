@@ -13,7 +13,7 @@ function harness(over = {}) {
   const handlers = {}, calls = []
   const win = { webContents: { id: 1, startDrag: () => {}, capturePage: async () => ({}) }, getBounds: () => ({ width: 1440, height: 847 }) }
   const userData = mkdtempSync(join(tmpdir(), 'arb-fb-'))
-  let t = 1_000_000
+  const t = 1_000_000
   registerFeedback({
     ipcMain: { handle: (ch, fn) => { handlers[ch] = fn } },
     BrowserWindow: class {}, session: {}, win, uiUrl: 'http://127.0.0.1:1', backendUrl: 'http://127.0.0.1:2', userData,

@@ -141,8 +141,7 @@ test('budget wait-once retries once; cancel aborts waiting or in-flight search w
 
   // Cancel while search is in flight -> no fetch sent, returns cancelled.
   const sent = []
-  let c
-  c = R.makeRelaxChecker({
+  const c = R.makeRelaxChecker({
     request: async (req) => {
       sent.push(req.method)
       if (req.method === 'POST') {
