@@ -376,7 +376,7 @@ ipcMain.handle('notify', (_e, { title, body, tag } = {}) => {
   if (!Notification.isSupported()) { console.log('[notify] not supported on this OS'); return false }
   try {
     const n = new Notification({ title: String(title || 'Arbiter'), body: String(body || ''), silent: true })
-    n.on('click', () => { try { if (win) { if (win.isMinimized()) win.restore(); win.show(); win.focus(); win.webContents.send('notify:click', tag) } } catch (e) { ignored('notify:click', e) } })
+    n.on('click', () => { try { if (win) { if (win.isMinimized()) { win.restore() } win.show(); win.focus(); win.webContents.send('notify:click', tag) } } catch (e) { ignored('notify:click', e) } })
     n.on('show', () => console.log('[notify] shown:', title))
     n.on('failed', (_ev, err) => console.log('[notify] failed:', err))
     n.show()
@@ -515,7 +515,7 @@ ipcMain.handle('update:setChannel', (_e, beta) => {
 // recolour the current window's gutter now. Presets are keyed into BACKDROPS; a custom theme brings its hex.
 ipcMain.handle('ui:setTheme', (_e, id, backdrop) => {
   if (typeof id !== 'string') return false
-  if (id === 'custom') { if (!BACKDROP_HEX.test(String(backdrop || ''))) return false; settings.customBackdrop = String(backdrop).toLowerCase() }
+  if (id === 'custom') { if (!BACKDROP_HEX.test(String(backdrop || ''))) { return false } settings.customBackdrop = String(backdrop).toLowerCase() }
   else if (!BACKDROPS[id]) return false
   settings.theme = id
   saveSettings()
@@ -702,7 +702,7 @@ if (!app.requestSingleInstanceLock()) {
   app.quit()
 } else {
   app.on('second-instance', () => {
-    if (win) { if (win.isMinimized()) win.restore(); win.focus() }
+    if (win) { if (win.isMinimized()) { win.restore() } win.focus() }
   })
 }
 
@@ -841,7 +841,7 @@ const stopAll = () => { stopTrade(); stopEe2Integration(); stopClientLogWatcher(
 app.on('before-quit', (e) => {
   if (!_flushedForQuit && win && !win.isDestroyed()) {
     e.preventDefault()
-    const done = () => { if (_flushedForQuit) return; _flushedForQuit = true; app.quit() }
+    const done = () => { if (_flushedForQuit) { return } _flushedForQuit = true; app.quit() }
     ipcMain.once('ws:flushed', done)
     setTimeout(done, 1000)
     try { win.webContents.send('ws:flush') } catch { done() }

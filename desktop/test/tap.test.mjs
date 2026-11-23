@@ -26,7 +26,7 @@ function fakeContents({ id = 7, bodies = {}, attachThrows = false, bodyFails = n
   /** @type {any} a fake Electron.Debugger */
   const dbg = new EventEmitter()
   const commands = []
-  dbg.attach = () => { if (attachThrows) throw new Error('already attached') ; dbg.attached = true }
+  dbg.attach = () => { if (attachThrows) { throw new Error('already attached')  } dbg.attached = true }
   dbg.isAttached = () => !!dbg.attached
   dbg.sendCommand = async (method, params) => {
     commands.push(method)

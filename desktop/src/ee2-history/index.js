@@ -40,7 +40,7 @@ function createHistoryConsumer({ manager, worker, prefs, send = null, log = () =
   let warmTimer = null
   let status = { present: false, running: false, configRead: false, leagueId: null, warm: false }
 
-  const readPrefs = () => { if (!cachedPrefs) cachedPrefs = prefs(); return cachedPrefs }
+  const readPrefs = () => { if (!cachedPrefs) { cachedPrefs = prefs() } return cachedPrefs }
   let searchPrefs = { waystoneStats: true }
   const invalidatePrefs = () => { cachedPrefs = null }
 
@@ -48,7 +48,7 @@ function createHistoryConsumer({ manager, worker, prefs, send = null, log = () =
     if (proc) return proc
     if (lastFailure && now() - lastFailure < RESTART_MIN_MS) return null
     try {
-      proc = worker.spawn({ onExit: (info) => { proc = null; if (!info?.idle) lastFailure = now(); status.warm = false } }); status.warm = true
+      proc = worker.spawn({ onExit: (info) => { proc = null; if (!info?.idle) { lastFailure = now() } status.warm = false } }); status.warm = true
       if (typeof proc.warm === 'function') proc.warm().then(r => { if (r) log(`warm ms=${r.ms} items=${r.items} stats=${r.stats}`) }).catch(e => log(`warm-fail err="${String(e && e.message || e).slice(0, 160)}"`))
     } catch (e) { lastFailure = now(); proc = null; log(`history-skip reason=worker spawn="${String(e && e.message || e).slice(0, 80)}"`) }
     return proc
@@ -112,7 +112,7 @@ function createHistoryConsumer({ manager, worker, prefs, send = null, log = () =
     const { prefs: pf, source } = readPrefs()
     status.leagueId = pf.leagueId || null
     log(`history-attached cfg=${source === 'ee2' ? 'ok' : 'default'} league="${pf.leagueId || ''}" allSel=${Boolean(pf.defaultAllSelected)} range=${pf.searchStatRange} stock=${Boolean(pf.activateStockFilter)}`)
-    if (info?.running) { clearTimeout(warmTimer); warmTimer = setTimeout(warm, info.initial ? WARM_DELAY_MS : 0); if (warmTimer.unref) warmTimer.unref(); if (!info.initial) warm() }
+    if (info?.running) { clearTimeout(warmTimer); warmTimer = setTimeout(warm, info.initial ? WARM_DELAY_MS : 0); if (warmTimer.unref) { warmTimer.unref() } if (!info.initial) warm() }
   }
   const onMissing = () => { status = { ...status, present: false, running: false } }
   const onError = () => {}

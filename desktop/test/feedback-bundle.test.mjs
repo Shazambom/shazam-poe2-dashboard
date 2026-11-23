@@ -60,7 +60,7 @@ test('get is called only for the four state endpoints — never /api/session or 
 })
 
 test('a rejecting or hanging get still yields a bundle, with { error } in that slot', async () => {
-  const i = inputs({ get: async (p) => { if (p === '/api/diag') throw new Error('down'); if (p === '/api/status') return new Promise(() => {}); return {} }, timeoutMs: 50 })
+  const i = inputs({ get: async (p) => { if (p === '/api/diag') { throw new Error('down') } if (p === '/api/status') { return new Promise(() => {}) } return {} }, timeoutMs: 50 })
   const doc = unpack(await buildBundle(i))
   assert.match(doc.state.diag.error, /down/)
   assert.match(doc.state.status.error, /timeout/i)

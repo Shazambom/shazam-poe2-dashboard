@@ -184,7 +184,7 @@ async function streamUp(rel, file, name, size) {
     })
     const started = Date.now(), samples = [{ t: started, bytes: 0 }]
     let done = false, sentAllAt = 0
-    const finish = (ok, why) => { if (done) return; done = true; clearInterval(tick); req.destroy(); src.destroy(); resolve({ ok, why }) }
+    const finish = (ok, why) => { if (done) { return } done = true; clearInterval(tick); req.destroy(); src.destroy(); resolve({ ok, why }) }
     const src = createReadStream(file, { highWaterMark: 256 * 1024 })
     const tick = setInterval(() => {
       const now = Date.now(), bytes = Math.max(0, (req.socket?.bytesWritten || 0))

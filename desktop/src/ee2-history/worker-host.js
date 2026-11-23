@@ -59,7 +59,7 @@ function spawnWorker({ onExit } = {}) {
   }
   const build = (raw, prefs) => request({ t: 'build', raw, prefs })
   const parse = (raw) => request({ t: 'parse', raw })
-  const kill = () => { if (dead) return; try { child.kill() } catch (e) { ignored('ee2-worker:kill', e) } }
+  const kill = () => { if (dead) { return } try { child.kill() } catch (e) { ignored('ee2-worker:kill', e) } }
   return { build, parse, warm, kill }
 }
 

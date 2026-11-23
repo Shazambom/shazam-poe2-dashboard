@@ -8,7 +8,7 @@ function derive() {
   const items = JSON.parse(fs.readFileSync(path.join(dataDir, 'trade', 'items.json'), 'utf8'))
   const stats = JSON.parse(fs.readFileSync(path.join(dataDir, 'trade', 'stats.json'), 'utf8'))
   const itemData = new Set()
-  for (const cat of items.result) for (const { type, text } of cat.entries) { if (type) itemData.add(type); if (text) itemData.add(text) }
+  for (const cat of items.result) for (const { type, text } of cat.entries) { if (type) { itemData.add(type) } if (text) itemData.add(text) }
   const statData = new Map(), statDataSet = new Set()
   for (const { id: modType, entries } of stats.result) for (const { id, text } of entries) {
     let m = statData.get(text); if (!m) { m = {}; statData.set(text, m) }

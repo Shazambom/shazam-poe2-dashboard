@@ -94,7 +94,7 @@ async function bundle(renderer) {
     [path.join(src, 'assets/client-string-loader.ts')]: shim('clientstrings.js'),
   }
   const ALIAS_PKG = { vue: shim('vue.js'), '@vueuse/core': shim('vueuse.js') }
-  const resolveTs = (p) => { for (const c of [p, p + '.ts', p + '.js', path.join(p, 'index.ts')]) if (fs.existsSync(c) && fs.statSync(c).isFile()) return c; return null }
+  const resolveTs = (p) => { for (const c of [p, p + '.ts', p + '.js', path.join(p, 'index.ts')]) { if (fs.existsSync(c) && fs.statSync(c).isFile()) { return c } } return null }
   const plugin = {
     name: 'ee2-aliases',
     setup(b) {
@@ -106,7 +106,7 @@ async function bundle(renderer) {
         else if (a.path.startsWith('.') && a.resolveDir) abs = path.join(a.resolveDir, a.path)
         if (!abs) return undefined
         const file = resolveTs(abs)
-        if (!file) { if (a.path.startsWith('@')) throw new Error(`cannot resolve ${a.path} from ${a.importer}`); return undefined }
+        if (!file) { if (a.path.startsWith('@')) { throw new Error(`cannot resolve ${a.path} from ${a.importer}`) } return undefined }
         return ALIAS_ABS[file] ? { path: ALIAS_ABS[file], external: true } : { path: file }
       })
     },

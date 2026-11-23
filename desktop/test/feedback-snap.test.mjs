@@ -22,15 +22,15 @@ function harness(plan = {}) {
       log.push('new'); this.opts = opts; this._d = false
       this.webContents = {
         id: 77,
-        executeJavaScript: async (js) => { log.push(`js:${js}`); if (plan.jsThrows?.test(js)) throw new Error('js failed'); if (plan.jsHangs?.test(js)) return new Promise(() => {}); return true },
-        capturePage: async (_r, o) => { log.push(`cap:${o?.stayHidden ? 'hidden' : 'plain'}`); if (plan.capThrows) throw new Error('cap'); return image('snap') },
+        executeJavaScript: async (js) => { log.push(`js:${js}`); if (plan.jsThrows?.test(js)) { throw new Error('js failed') } if (plan.jsHangs?.test(js)) { return new Promise(() => {}) } return true },
+        capturePage: async (_r, o) => { log.push(`cap:${o?.stayHidden ? 'hidden' : 'plain'}`); if (plan.capThrows) { throw new Error('cap') } return image('snap') },
       }
     }
-    loadURL(u) { log.push(`load:${u}`); if (plan.loadThrows) return Promise.reject(new Error('load')); return Promise.resolve() }
+    loadURL(u) { log.push(`load:${u}`); if (plan.loadThrows) { return Promise.reject(new Error('load')) } return Promise.resolve() }
     destroy() { this._d = true; destroyed++; log.push('destroy') }
     isDestroyed() { return this._d }
   }
-  const visibleWin = { webContents: { capturePage: async () => { log.push('cap:visible'); if (plan.visibleThrows) throw new Error('v'); return image('visible') } } }
+  const visibleWin = { webContents: { capturePage: async () => { log.push('cap:visible'); if (plan.visibleThrows) { throw new Error('v') } return image('visible') } } }
   const run = (over = {}) => sweepScreens({ uiUrl: 'http://127.0.0.1:1234', bounds: { width: 1440, height: 847 }, dests: DESTS,
     BrowserWindow, session: sessionDouble, visibleWin, perScreenMs: 30, totalMs: 500, ...over })
   return { log, run, filter: () => filter, destroyed: () => destroyed }
