@@ -29,6 +29,8 @@ import time
 from collections.abc import Iterable
 from itertools import permutations
 
+from starlette.concurrency import run_in_threadpool
+
 from . import db, digest, gateway, pairscore, session
 from .config import (
     ORDERBOOK_SWEEP_SECONDS,
@@ -486,7 +488,7 @@ async def sweeper() -> None:
 
 async def leagues(force: bool = False) -> list[dict]:
     """League ids as the trade site names them (cached 30 min). Public endpoint, trade policy."""
-    cached = db.kv_get("trade_leagues")
+    cached = await run_in_threadpool(db.kv_get, "trade_leagues")
     if cached and not force and time.time() - cached["at"] < TRADE_LEAGUES_TTL_S:
         return cached["leagues"]
     r = await gateway.request(
@@ -501,7 +503,9 @@ async def leagues(force: bool = False) -> list[dict]:
         for league in r.json().get("result", [])
         if league.get("id")
     ]
-    db.kv_set("trade_leagues", {"at": time.time(), "leagues": out})
+    await run_in_threadpool(
+        db.kv_set, "trade_leagues", {"at": time.time(), "leagues": out}
+    )
     from . import settings
 
     settings.forget_youngest()
