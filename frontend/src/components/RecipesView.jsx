@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { api } from '../lib/api.js'
 import { ignoredError } from '../lib/ignoredError.js'
 import { useAutosave } from '../lib/hooks.js'
+import { withRetry } from '../lib/retry.js'
 import Cur from './Cur.jsx'
 import Toggle from './Toggle.jsx'
 
@@ -13,7 +14,11 @@ export default function RecipesView({ currencies, embedded = false }) {
   const [list, setList] = useState(null)
   const { state, save, arm } = useAutosave(async (next) => setList(await api.putRecipes(next)), 800)
   useEffect(() => {
-    api.recipes().then(l => { setList(l); arm() }).catch(() => ignoredError('load recipes'))
+    let live = true
+    withRetry(() => api.recipes(), { onFail: () => ignoredError('load recipes'), stop: () => !live })
+      .then(l => { if (live) { setList(l); arm() } })
+      .catch(() => ignoredError('load recipes'))
+    return () => { live = false }
   }, [arm])
   const opts = currencies?.currencies ?? []
 
