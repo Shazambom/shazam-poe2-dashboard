@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 /**
  * Packaged macOS Arbiter.app end-to-end smoke test via Chrome DevTools Protocol (CDP).
  *

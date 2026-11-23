@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 // Refresh the vendored EE2 query port (desktop/src/vendor/ee2-query) from a pinned EE2 release:
 //   node scripts/sync-ee2.mjs                 # latest GitHub release tag of Kvan7/Exiled-Exchange-2
 //   node scripts/sync-ee2.mjs --tag v0.16.3   # pin a tag

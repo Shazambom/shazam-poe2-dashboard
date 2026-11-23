@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 // Release assets, done safely — the ONE tool both halves of a release use (Windows CI and
 // publish-github.sh), so the two can't drift. Fixes docs/bugs/2026-09-17-release-publish-not-atomic.md:
 //
