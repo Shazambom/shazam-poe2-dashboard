@@ -3,7 +3,7 @@
 // GGG's own server) — nothing is bundled or re-hosted. Lets any view render a
 // currency as its icon with the name on hover, keyed by trade id OR by name.
 import { ignoredError } from './ignoredError.js'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import { api } from './api.js'
 
 export const CDN = 'https://web.poecdn.com'
@@ -65,15 +65,32 @@ export function iconFailed() {
   }, _imgDelay)
 }
 export function iconLoaded() { _imgDelay = 5000 }
+// An inactive icon keeps the last value it received. A later subscription catches
+// it up without invalidating healthy icons on every retry.
+const inactiveSubscription = () => () => {}
+
+function useIconSubscription(initialValue, subscribe, active = true) {
+  const [store] = useState(() => {
+    let snapshot = initialValue
+    return {
+      getSnapshot: () => snapshot,
+      subscribe: notify => subscribe(next => {
+        snapshot = next
+        notify()
+      }),
+    }
+  })
+  return useSyncExternalStore(active ? store.subscribe : inactiveSubscription, store.getSnapshot, store.getSnapshot)
+}
+
+function subscribeEpoch(receive) {
+  epochSubs.add(receive)
+  receive(_epoch)
+  return () => epochSubs.delete(receive)
+}
+
 export function useIconEpoch(active = true) {
-  const [e, setE] = useState(_epoch)
-  useEffect(() => {
-    if (!active) return
-    epochSubs.add(setE)
-    setE(_epoch)
-    return () => epochSubs.delete(setE)
-  }, [active])
-  return e
+  return useIconSubscription(_epoch, subscribeEpoch, active)
 }
 
 // The ONE /api/currencies fetch, as a store: `raw` (the payload, incl. anchors + unmapped ids),
