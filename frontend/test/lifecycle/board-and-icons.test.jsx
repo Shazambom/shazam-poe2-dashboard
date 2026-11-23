@@ -41,7 +41,7 @@ describe('Board, CardDetail, and Cur icon lifecycles', () => {
 
   it('isolates broken icon retry epochs so healthy Cur icons never remount on a sibling 404', () => {
     vi.useFakeTimers()
-    render(
+    const { unmount } = render(
       <div>
         <Cur id="divine" size={18} />
         <Cur id="chaos" size={18} />
@@ -67,5 +67,9 @@ describe('Board, CardDetail, and Cur icon lifecycles', () => {
     expect(afterImgs[0]).toBe(divineImg)
     // Broken Chaos Orb retried and mounted a fresh img element
     expect(afterImgs[1]).not.toBe(chaosImg)
+    fireEvent.error(afterImgs[1])
+    unmount()
+    act(() => { vi.advanceTimersByTime(20000) })
+    expect(document.querySelectorAll('img.cur-img')).toHaveLength(0)
   })
 })

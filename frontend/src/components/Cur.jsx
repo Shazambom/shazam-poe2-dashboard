@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useEffectEvent, useState } from 'react'
 import { useIcons, lookup, iconFailed, iconLoaded, useIconEpoch } from '../lib/icons.js'
 
 // Render a currency as its CDN icon, with the name shown on hover (native title).
@@ -12,11 +12,12 @@ const Cur = React.memo(function Cur({ id, name, size = 18, text = false, classNa
   const [broken, setBroken] = useState(false)
   const [attempt, setAttempt] = useState(0)
   const epoch = useIconEpoch(broken)
-  useEffect(() => {
+  const retryBroken = useEffectEvent(() => {
     if (!broken) return
     setBroken(false)
     setAttempt(a => a + 1)
-  }, [epoch])
+  })
+  useEffect(() => { retryBroken() }, [epoch])
   const rec = lookup({ id, name })
   const label = rec?.name || name || id || '?'
   const icon = rec?.icon
