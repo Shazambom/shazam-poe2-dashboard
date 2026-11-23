@@ -77,7 +77,8 @@ async function run(files, { platform = 'darwin', mkdirError = null, failReady = 
   return { calls: fs.calls, marks, logs, hooks, error, booted, timeline }
 }
 
-const FULL = [BIN, join(RES, 'market-seed', 'market-seed.sqlite.gz'), join(APP, 'app-dist')]
+const UI_INDEX = join(APP, 'app-dist', 'index.html')
+const FULL = [BIN, join(RES, 'market-seed', 'market-seed.sqlite.gz'), UI_INDEX]
 
 test('startup runs in the current order: binary, data dir, seed, sidecar, launch, ready, UI bundle, UI server', async () => {
   const r = await run(FULL)
@@ -99,7 +100,7 @@ test('startup runs in the current order: binary, data dir, seed, sidecar, launch
     `exists ${join(RES, 'market-seed', 'market-seed.sqlite.gz')}`,
     `exists ${join(RES, 'sidecar-bin', 'poe2arb-sidecar')}`,
     `exists ${join(APP, 'sidecar-bin', 'poe2arb-sidecar')}`,
-    `exists ${join(APP, 'app-dist')}`,
+    `exists ${UI_INDEX}`,
   ])
   assert.deepEqual(r.logs, [
     `[backend] market seed: ${join(RES, 'market-seed', 'market-seed.sqlite.gz')}`,
@@ -148,10 +149,10 @@ test('the backend is launched with exactly the binary, data dir, seed and sideca
 })
 
 test('missing backend binary: no data dir, seed or sidecar, no launch; ready gets null; the UI is still served', async () => {
-  const r = await run([join(APP, 'app-dist')])
+  const r = await run([UI_INDEX])
   assert.equal(r.error, null)
   assert.deepEqual(r.calls, [
-    `exists ${BIN}`, `exists ${join(APP, 'backend-bin', 'poe2arb-backend')}`, `exists ${join(APP, 'app-dist')}`,
+    `exists ${BIN}`, `exists ${join(APP, 'backend-bin', 'poe2arb-backend')}`, `exists ${UI_INDEX}`,
   ])
   assert.deepEqual(r.marks, ['backend-bin:start', 'backend-bin:done', 'backend-ready:start', 'backend-ready:done',
     'ui-dist:start', 'ui-dist:done', 'ui-server:start', 'ui-server:done'])
@@ -210,8 +211,8 @@ test('a ready step that throws stops startup before the UI server', async () => 
 
 test('UI bundle: desktop/app-dist when it exists, else frontend/dist', async () => {
   const env = (files) => ({ fs: fakeFs(files), resourcesPath: RES, appRoot: APP, platform: 'darwin', dataDir: () => DATA, log: () => {} })
-  assert.equal(await resolveUiDist(env([join(APP, 'app-dist')])), join(APP, 'app-dist'))
-  assert.equal(await resolveUiDist(env([])), join(APP, '..', 'frontend', 'dist'))
+  assert.equal(await resolveUiDist(env([UI_INDEX])), join(APP, 'app-dist'))
+  assert.equal(await resolveUiDist(env([join(APP, '..', 'frontend', 'dist', 'index.html')])), join(APP, '..', 'frontend', 'dist'))
 })
 
 // Interleaving: a slow disk (every call takes a different time; mkdir the slowest) must not let any
@@ -233,8 +234,8 @@ test('a slow, uneven disk changes nothing: same marks, same calls, every edge ho
   assert.ok(inside(`mkdir ${DATA} {"recursive":true}`, 'data-dir'))
   assert.ok(inside(`exists ${join(RES, 'market-seed', 'market-seed.sqlite.gz')}`, 'market-seed'))
   assert.ok(inside(`exists ${join(APP, 'sidecar-bin', 'poe2arb-sidecar')}`, 'sidecar-bin'))
-  assert.ok(inside(`exists ${join(APP, 'app-dist')}`, 'ui-dist'))
-  const noBin = await run([join(APP, 'app-dist')], { delay: slowMs })
+  assert.ok(inside(`exists ${UI_INDEX}`, 'ui-dist'))
+  const noBin = await run([UI_INDEX], { delay: slowMs })
   assertEdges(noBin.marks, ['data-dir', 'market-seed', 'sidecar-bin', 'backend-launch'])
 })
 
@@ -256,4 +257,20 @@ test('the UI bundle is found through stat, which works on a directory inside app
   const r = await run(FULL)
   assert.equal(r.error, null)
   assert.deepEqual(r.hooks.served, [join(APP, 'app-dist')])
+})
+
+// A packaged build once served a directory that did not exist: every request answered an uncaught ENOENT and
+// the window stayed blank. The bundle is the first candidate that holds index.html (asked through stat, the one
+// call that works inside app.asar); with neither, startup fails with both paths named, before the UI server.
+test('the UI bundle is the first candidate holding index.html; with neither, startup fails before serving', async () => {
+  const devIndex = join(APP, '..', 'frontend', 'dist', 'index.html')
+  const half = await run([BIN, devIndex])   // app-dist without index.html (a half-built bundle) is passed over
+  assert.equal(half.error, null)
+  assert.deepEqual(half.hooks.served, [join(APP, '..', 'frontend', 'dist')])
+  assert.deepEqual(half.calls.slice(-2), [`exists ${UI_INDEX}`, `exists ${devIndex}`])
+  const none = await run([BIN])
+  assert.match(String(none.error), /index\.html/)
+  assert.ok(String(none.error).includes(join(APP, 'app-dist')) && String(none.error).includes(join(APP, '..', 'frontend', 'dist')), 'both paths named')
+  assert.deepEqual(none.hooks.served, [])
+  assert.deepEqual(none.marks.slice(-1), ['ui-dist:start'])
 })

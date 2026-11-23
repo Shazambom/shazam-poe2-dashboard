@@ -131,12 +131,16 @@ async function planBackend(env) {
   return { bin, dataDir, marketSeed, sidecarBin }
 }
 
-// The built frontend: desktop/app-dist when packaged or built, else the frontend's own dist.
+// The built frontend: desktop/app-dist when packaged or built, else the frontend's own dist; the first
+// that holds index.html. With neither, startup fails here, naming both: serving a bundle that is not
+// there leaves a blank window.
 /** @param {StartupEnv} env */
 async function resolveUiDist(env) {
-  return await exists(env, path.join(env.appRoot, 'app-dist'))
-    ? path.join(env.appRoot, 'app-dist')
-    : path.join(env.appRoot, '..', 'frontend', 'dist')
+  const candidates = [path.join(env.appRoot, 'app-dist'), path.join(env.appRoot, '..', 'frontend', 'dist')]
+  for (const dist of candidates) {
+    if (await exists(env, path.join(dist, 'index.html'))) return dist
+  }
+  throw new Error(`no UI bundle: no index.html in ${candidates.join(' or ')}`)
 }
 
 /**
