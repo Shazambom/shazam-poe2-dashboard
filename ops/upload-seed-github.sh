@@ -17,25 +17,28 @@ UP="https://uploads.github.com/repos/$GH_REPO"
 AUTH=(-H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json")
 
 # Ensure the release exists (create if missing). It's a rolling, non-source release.
-rel=$(curl -fsS "${AUTH[@]}" "$API/releases/tags/$TAG" 2>/dev/null || true)
+rel=$(curl -fsS "${AUTH[@]}" "$API/releases/tags/$TAG" 2> /dev/null || true)
 rid=$(printf '%s' "$rel" | sed -n 's/.*"id": *\([0-9]\+\).*/\1/p' | head -1)
 if [ -z "$rid" ]; then
   rel=$(curl -fsS "${AUTH[@]}" -X POST "$API/releases" \
     -d "{\"tag_name\":\"$TAG\",\"name\":\"Market seed (rolling)\",\"body\":\"Prebuilt market snapshot bundled into desktop builds. Auto-updated.\",\"prerelease\":true}")
   rid=$(printf '%s' "$rel" | sed -n 's/.*"id": *\([0-9]\+\).*/\1/p' | head -1)
 fi
-[ -n "$rid" ] || { echo "could not resolve release id for $TAG"; exit 1; }
+[ -n "$rid" ] || {
+  echo "could not resolve release id for $TAG"
+  exit 1
+}
 
 for f in "$@"; do
   name=$(basename "$f")
   # Delete an existing asset of the same name (assets are immutable otherwise). Parse the
   # JSON with python — GitHub returns compact JSON (no space after ':'), which defeats a
   # grep/sed match and would leave the old asset in place → 422 on re-upload.
-  existing=$(curl -fsS "${AUTH[@]}" "$API/releases/$rid/assets" | \
-    python3 -c "import sys,json; print(next((str(a['id']) for a in json.load(sys.stdin) if a['name']=='$name'),''))" || true)
-  [ -n "$existing" ] && curl -fsS "${AUTH[@]}" -X DELETE "$API/releases/assets/$existing" >/dev/null || true
+  existing=$(curl -fsS "${AUTH[@]}" "$API/releases/$rid/assets" \
+    | python3 -c "import sys,json; print(next((str(a['id']) for a in json.load(sys.stdin) if a['name']=='$name'),''))" || true)
+  [ -n "$existing" ] && curl -fsS "${AUTH[@]}" -X DELETE "$API/releases/assets/$existing" > /dev/null || true
   echo "uploading $name ..."
   curl -fsS "${AUTH[@]}" -H "Content-Type: application/octet-stream" \
-    --data-binary @"$f" "$UP/releases/$rid/assets?name=$name" >/dev/null
+    --data-binary @"$f" "$UP/releases/$rid/assets?name=$name" > /dev/null
 done
 echo "done: uploaded $# asset(s) to $GH_REPO release $TAG"

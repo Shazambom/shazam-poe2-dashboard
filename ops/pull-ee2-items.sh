@@ -12,7 +12,7 @@ HOST="${SHAZAM_HOST:-shazam@192.168.1.250}"
 LOG="${SHAZAM_INSTALL_LOG:-/home/shazam/shazam-poe2-dashboard/data/install-reports.log}"
 OUT="$ROOT/desktop/test/fixtures/ee2/live"
 mkdir -p "$OUT"
-ssh "$HOST" "cat '$LOG'" | python3 - "$OUT" <<'EOF'
+ssh "$HOST" "cat '$LOG'" | python3 - "$OUT" << 'EOF'
 import re, sys, pathlib
 out = pathlib.Path(sys.argv[1])
 log = sys.stdin.read()

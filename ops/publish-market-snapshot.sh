@@ -22,14 +22,14 @@ CONTAINER="${SEED_CONTAINER:-shazam-poe2-dashboard-backend-1}"
 EXPORT_PY="$(dirname "$0")/export-market-snapshot.py"
 UPLOADER="${SEED_UPLOADER:-$(dirname "$0")/upload-seed-github.sh}"
 OUT="$REPO/data/market-seed.sqlite.gz"
-PUBLISHED="$REPO/data/market-seed.published-cut"   # the .cut of the last seed that reached GitHub
+PUBLISHED="$REPO/data/market-seed.published-cut" # the .cut of the last seed that reached GitHub
 
 echo "=== $(date -u +%FT%TZ) publish-market-snapshot ==="
 
 # Rebuild the mod-pool tables on the day's first publish only (backend/app/modpool.py: the RePoE
 # PoE2 export + ~100 poe2db pages → mod_pools / mod_currencies), so the seed carries this patch's
 # pools without the hourly runs re-reading poe2db. A failed rebuild keeps the previous tables.
-if ! grep -q "\"date\": \"$(date -u +%F)\"" "$PUBLISHED" 2>/dev/null; then
+if ! grep -q "\"date\": \"$(date -u +%F)\"" "$PUBLISHED" 2> /dev/null; then
   sudo docker exec -i "$CONTAINER" python -m app.modpool --force \
     || echo "WARN: mod pool refresh failed; the seed carries the previous mod tables"
 fi
@@ -43,18 +43,31 @@ sudo docker exec -i "$CONTAINER" python - \
   --only-if-newer /data/market-seed.published-cut < "$EXPORT_PY"
 rc=$?
 set -e
-[ "$rc" -eq 3 ] && { echo "no newer verified day; nothing to publish"; exit 0; }
-[ "$rc" -eq 0 ] || { echo "FATAL: exporter failed (exit $rc)"; exit "$rc"; }
-[ -f "$OUT" ] && [ -f "$OUT.version" ] && [ -f "$OUT.cut" ] || { echo "FATAL: exporter produced no $OUT(.version/.cut)"; exit 1; }
+[ "$rc" -eq 3 ] && {
+  echo "no newer verified day; nothing to publish"
+  exit 0
+}
+[ "$rc" -eq 0 ] || {
+  echo "FATAL: exporter failed (exit $rc)"
+  exit "$rc"
+}
+[ -f "$OUT" ] && [ -f "$OUT.version" ] && [ -f "$OUT.cut" ] || {
+  echo "FATAL: exporter produced no $OUT(.version/.cut)"
+  exit 1
+}
 echo "exported v$(cat "$OUT.version") ($(du -h "$OUT" | cut -f1))"
 
 # Publish to the GitHub release asset. Uses the REST API directly (no gh CLI on shazam). The
 # token lives in ~/.poe2-gh-token (placed by ops/refresh-gh-token.sh, chmod 600, never committed).
 export GH_REPO="${GH_REPO:-Shazambom/shazam-poe2-dashboard}"
 if [ -z "${GH_TOKEN:-}" ] && [ -r "/home/shazam/.poe2-gh-token" ]; then
-  GH_TOKEN="$(cat "/home/shazam/.poe2-gh-token")"; export GH_TOKEN
+  GH_TOKEN="$(cat "/home/shazam/.poe2-gh-token")"
+  export GH_TOKEN
 fi
-[ -n "${GH_TOKEN:-}" ] || { echo "FATAL: no GitHub token — run ops/refresh-gh-token.sh to place ~/.poe2-gh-token"; exit 1; }
+[ -n "${GH_TOKEN:-}" ] || {
+  echo "FATAL: no GitHub token — run ops/refresh-gh-token.sh to place ~/.poe2-gh-token"
+  exit 1
+}
 "$UPLOADER" "$OUT" "$OUT.version"
 cp "$OUT.cut" "$PUBLISHED"
 echo "published v$(cat "$OUT.version") via $(basename "$UPLOADER")"

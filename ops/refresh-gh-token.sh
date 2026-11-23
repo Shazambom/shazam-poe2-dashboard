@@ -20,7 +20,10 @@ GH_REPO="${GH_REPO:-Shazambom/shazam-poe2-dashboard}"
 
 get_token() {
   if [ "${1:-}" = "--from-gh" ]; then
-    command -v gh >/dev/null || { echo "gh not found on this machine" >&2; exit 1; }
+    command -v gh > /dev/null || {
+      echo "gh not found on this machine" >&2
+      exit 1
+    }
     gh auth token
   else
     # Read silently from the controlling terminal so the value never lands in scrollback,
@@ -37,7 +40,7 @@ get_token "${1:-}" | $SSH 'umask 077; cat > ~/.poe2-gh-token && chmod 600 ~/.poe
 
 echo "validating from shazam (token not shown)..."
 # Validate WITHOUT echoing the token: read it on shazam, call the API, print only the result.
-$SSH "GH_REPO='$GH_REPO' bash -s" <<'REMOTE'
+$SSH "GH_REPO='$GH_REPO' bash -s" << 'REMOTE'
 set -euo pipefail
 TOK=$(cat ~/.poe2-gh-token)
 who=$(curl -fsS -H "Authorization: Bearer $TOK" -H "Accept: application/vnd.github+json" \

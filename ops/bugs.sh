@@ -15,32 +15,50 @@
 set -euo pipefail
 REMOTE=${REMOTE:-/home/shazam/shazam-poe2-dashboard}
 CLI="python3 $REMOTE/ops/feedback-bot/bugs.py --inbox $REMOTE/feedback-inbox"
-ID_RE='^([0-9A-HJ-NP-Z]{6}(-[0-9]+)?|posts/[0-9]+)$'   # a report folder, never anything a shell would read
+ID_RE='^([0-9A-HJ-NP-Z]{6}(-[0-9]+)?|posts/[0-9]+)$' # a report folder, never anything a shell would read
 
-check_id() { [[ "$1" =~ $ID_RE ]] || { echo "not a report id: $1" >&2; exit 2; }; }
+check_id() { [[ "$1" =~ $ID_RE ]] || {
+  echo "not a report id: $1" >&2
+  exit 2
+}; }
 
-cmd=${1:-}; shift || true
+cmd=${1:-}
+shift || true
 case "$cmd" in
   list)
     state=${1:-new}
-    [[ "$state" =~ ^(new|triaged|open|resolved|closed|all)$ ]] || { echo "unknown state: $state" >&2; exit 2; }
-    sshshazambom sudo "$CLI list --state $state" ;;
+    [[ "$state" =~ ^(new|triaged|open|resolved|closed|all)$ ]] || {
+      echo "unknown state: $state" >&2
+      exit 2
+    }
+    sshshazambom sudo "$CLI list --state $state"
+    ;;
   pull)
-    check_id "$1"; mkdir -p "$2"
-    sshshazambom sudo "tar czf - -C $REMOTE/feedback-inbox $1" | tar xzf - -C "$2"
-    echo "$2/$1" ;;
-  triage|close)
     check_id "$1"
-    sshshazambom sudo "$CLI act $1 $cmd" ;;
+    mkdir -p "$2"
+    sshshazambom sudo "tar czf - -C $REMOTE/feedback-inbox $1" | tar xzf - -C "$2"
+    echo "$2/$1"
+    ;;
+  triage | close)
+    check_id "$1"
+    sshshazambom sudo "$CLI act $1 $cmd"
+    ;;
   resolve-shipped)
     ref=${1:-$(git tag --list 'desktop-v*' --sort=-v:refname | head -1)}
-    [[ "$ref" =~ ^desktop-v[0-9]+\.[0-9]+\.[0-9]+$ ]] && git rev-parse --verify -q "refs/tags/$ref" >/dev/null \
-      || { echo "not a stable release tag: ${ref:-none} (only a stable desktop-v<x.y.z> release resolves reports)" >&2; exit 2; }
+    [[ "$ref" =~ ^desktop-v[0-9]+\.[0-9]+\.[0-9]+$ ]] && git rev-parse --verify -q "refs/tags/$ref" > /dev/null \
+      || {
+        echo "not a stable release tag: ${ref:-none} (only a stable desktop-v<x.y.z> release resolves reports)" >&2
+        exit 2
+      }
     for r in $(sshshazambom sudo "$CLI list --state open" | python3 -c 'import json,sys; [print(r["report"]) for r in json.load(sys.stdin)]'); do
       check_id "$r"
       if [ -n "$(git log "$ref" -F --grep "Fixes-Report: $r" --format=%h)" ]; then
-        sshshazambom sudo "$CLI act $r resolve" >/dev/null && echo "resolved $r"
+        sshshazambom sudo "$CLI act $r resolve" > /dev/null && echo "resolved $r"
       fi
-    done ;;
-  *) sed -n '2,12p' "$0"; exit 2 ;;
+    done
+    ;;
+  *)
+    sed -n '2,12p' "$0"
+    exit 2
+    ;;
 esac
