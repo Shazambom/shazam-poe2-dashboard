@@ -77,11 +77,11 @@ test('oversize screens are dropped largest-first under the cap and screensPartia
   assert.ok('strategy-hold' in doc.screens, 'the smallest screen survives')
 })
 
-test('installId is 32 hex, created once at 0600 and stable across reads', () => {
+test('installId is 32 hex, created once at 0600 and stable across reads', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'arb-iid-'))
-  const a = installId(dir)
+  const a = await installId(dir)
   assert.match(a, /^[0-9a-f]{32}$/)
-  assert.equal(installId(dir), a)
+  assert.equal(await installId(dir), a)
   assert.equal(statSync(join(dir, 'install-id')).mode & 0o777, 0o600)
   assert.equal(readFileSync(join(dir, 'install-id'), 'utf8').trim(), a)
 })
