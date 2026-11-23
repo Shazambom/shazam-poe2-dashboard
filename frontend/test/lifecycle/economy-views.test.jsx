@@ -24,7 +24,9 @@ describe('Economy views lifecycles (Hold, Market, Inflation, Movers)', () => {
   })
 
   it('MarketView loads top markets + edges and queries pair history on click', async () => {
-    const { calls } = installApiMock()
+    const { calls } = installApiMock({
+      '/api/market/top': [{ a: 'chaos', b: 'exalted', volume_a: 10, volume_b: 100, rate: 10 }],
+    })
     render(<MarketView />)
 
     await waitFor(() => {
@@ -32,13 +34,14 @@ describe('Economy views lifecycles (Hold, Market, Inflation, Movers)', () => {
       expect(calls.some(c => c.path === '/api/market/edges')).toBe(true)
     })
 
-    const row = document.querySelector('tbody tr')
-    if (row) {
-      fireEvent.click(row)
-      await waitFor(() => {
-        expect(calls.some(c => c.path === '/api/market/history')).toBe(true)
-      })
-    }
+    const marketTable = await screen.findByRole('columnheader', { name: 'Market' })
+    const row = marketTable.closest('table').querySelector('tbody tr')
+    expect(row).toBeTruthy()
+    fireEvent.click(row)
+    await waitFor(() => {
+      expect(calls.some(c => c.path === '/api/market/history' &&
+        new URL(c.url, 'http://localhost').searchParams.get('a') === 'chaos')).toBe(true)
+    })
   })
 
   it('InflationView loads inflation, cross-league, and marketcap endpoints cleanly', async () => {
