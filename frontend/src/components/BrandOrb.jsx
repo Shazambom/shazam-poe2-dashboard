@@ -1,3 +1,4 @@
+import { ignoredError } from '../lib/ignoredError.js'
 import { useEffect, useRef, useState } from 'react'
 import { api } from '../lib/api.js'
 import { backfillLabel } from '../lib/backfillLabel.js'
@@ -31,15 +32,15 @@ export default function BrandOrb({ onDone }) {
   useEffect(() => {
     let timer, alive = true
     const tick = async () => {
-      let d = null
-      try { d = await api.backfill() } catch {}
+      let d
+      try { d = await api.backfill() } catch { d = null }
       if (!alive) return
       const on = !!(d && d.running && (d.phase === 'crawling' || d.phase === 'leagues'))
       setRunning(on)
       if (on) {
         setLabel(backfillLabel(d))
       }
-      if (wasRunning.current && !on) { try { onDone && onDone() } catch {} }   // finished → refresh views
+      if (wasRunning.current && !on) { try { onDone && onDone() } catch { ignoredError('refresh after backfill') } }   // finished → refresh views
       wasRunning.current = on
       timer = setTimeout(tick, on ? 1500 : 8000)   // poll fast while building
     }

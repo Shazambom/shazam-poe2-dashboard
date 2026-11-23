@@ -1,3 +1,4 @@
+import { ignoredError } from './ignoredError.js'
 import { bus } from './api.js'
 import { useStatus } from './statusStore.js'
 import { playPing, DEFAULT_TONE, DEFAULT_VOLUME } from './ping-sound.js'
@@ -43,9 +44,9 @@ export function osNotify(title, body, { tag, onClick } = {}) {
       return true
     }
     if (!('Notification' in window)) return null
-    if (Notification.permission === 'default') Notification.requestPermission().catch?.(() => {})
+    if (Notification.permission === 'default') Notification.requestPermission().catch?.(() => ignoredError('request notification permission'))
     const n = new Notification(title, { body, tag, silent: true })
-    if (onClick) n.onclick = () => { onClick(); try { window.focus?.() } catch {} }
+    if (onClick) n.onclick = () => { onClick(); try { window.focus?.() } catch { ignoredError('focus notification window') } }
     return n
   } catch { return null }
 }

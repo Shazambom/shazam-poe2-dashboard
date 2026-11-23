@@ -1,3 +1,4 @@
+import { ignoredError } from '../../src/lib/ignoredError.js'
 import { afterEach, vi } from 'vitest'
 import { cleanup } from '@testing-library/react'
 
@@ -48,7 +49,7 @@ if (typeof Element !== 'undefined' && typeof Element.prototype.animate === 'func
   const nativeAnimate = Element.prototype.animate
   Element.prototype.animate = function animateWithHandledFinished(...args) {
     const anim = nativeAnimate.apply(this, args)
-    anim?.finished?.catch(() => {})
+    anim?.finished?.catch(() => ignoredError('cancel test animation'))
     return anim
   }
 }

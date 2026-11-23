@@ -1,6 +1,7 @@
 // Feature 3: "Close-enough" fuzzy rare finder hook for Trading → Workspace and ExiledExchange2 History.
 // Ephemeral overlay over the active search: never mutates node.q or node.slug in workspaceStore.
 // Reuses TAP data exposed by useReprice without duplicating listeners, and cancels on row/tab switch.
+import { ignoredError } from './ignoredError.js'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api, toast } from './api.js'
 import { diag } from './diag.js'
@@ -70,7 +71,7 @@ export function useRelax({
     if (nodeQuery || !node || node.kind !== 'search' || node.live || !node.slug) return () => { live = false }
     searchOfLink(tradeUrl(node, league, false))
       .then(j => { if (live) setDecodedSlugQuery(j?.query || null) })
-      .catch(() => {})
+      .catch(() => ignoredError('read trade search'))
     return () => { live = false }
   }, [nodeId, node?.slug, node?.kind, node?.live, league, nodeQuery])
 

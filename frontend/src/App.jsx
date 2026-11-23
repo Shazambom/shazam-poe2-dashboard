@@ -1,3 +1,4 @@
+import { ignoredError } from './lib/ignoredError.js'
 import React, { Suspense, lazy, useEffect, useRef, useState } from 'react'
 import { motion, AnimatePresence, MotionConfig } from 'motion/react'
 import { THEMES, useTheme } from './lib/themeStore.js'
@@ -67,7 +68,7 @@ export default function App() {
   useEffect(() => {
     const q = new URLSearchParams(window.location.search)
     if (q.get('oauth')) { setTab('Settings'); window.history.replaceState({}, '', '/') }
-    if (window.poe2desktop?.getVersion) window.poe2desktop.getVersion().then(setAppVersion).catch(() => {})
+    if (window.poe2desktop?.getVersion) window.poe2desktop.getVersion().then(setAppVersion).catch(() => ignoredError('load app version'))
     api.leagues().then(setLeagues).catch(() => setLeagues([]))
     return startStatusPolling()
   }, [])
@@ -124,7 +125,7 @@ export default function App() {
   }, [lastNew])
   useEffect(() => {
     let live = true
-    const load = () => api.leagueArc().then(d => { if (live) setArcCtx(d) }).catch(() => {})
+    const load = () => api.leagueArc().then(d => { if (live) setArcCtx(d) }).catch(() => ignoredError('load league arc'))
     load()
     const t = setInterval(load, 300000)
     return () => { live = false; clearInterval(t) }
@@ -215,7 +216,7 @@ export default function App() {
     try {
       await surface(useStatus.getState().saveSettings({ league }))
       await refreshHeader()
-    } catch {}
+    } catch { ignoredError('switch league') }
   }
 
   const doConnect = async () => {

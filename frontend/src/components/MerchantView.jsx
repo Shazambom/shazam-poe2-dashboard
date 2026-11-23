@@ -1,3 +1,4 @@
+import { ignoredError } from '../lib/ignoredError.js'
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/shallow'
 import { api, bus, copyText, fmt, toast, undoToast } from '../lib/api.js'
@@ -117,7 +118,7 @@ function writeDoneMap(key, map) {
   try {
     if (Object.keys(map).length === 0) localStorage.removeItem(key)
     else localStorage.setItem(key, JSON.stringify(map))
-  } catch {}
+  } catch { ignoredError('store completed listings') }
 }
 
 // When `complete` is true (full shop loaded), drop missing ids too; when partial/truncated,
@@ -239,7 +240,7 @@ export default function MerchantView({ league }) {
 
   useEffect(() => {
     mountedRef.current = true
-    ensureSettings().catch(() => {})
+    ensureSettings().catch(() => ignoredError('load merchant settings'))
     return () => {
       mountedRef.current = false
       useSync.getState().setBusy(false)
@@ -247,7 +248,7 @@ export default function MerchantView({ league }) {
   }, [])
 
   useEffect(() => {
-    if (desktop && !workspaceLoaded) loadWorkspace().catch(() => {})
+    if (desktop && !workspaceLoaded) loadWorkspace().catch(() => ignoredError('load trading workspace'))
   }, [desktop, workspaceLoaded])
 
   useEffect(() => {
@@ -622,7 +623,7 @@ export default function MerchantView({ league }) {
 
   const openInWorkspace = (row) => {
     const st = useWorkspace.getState()
-    if (!st.loaded) loadWorkspace().catch(() => {})
+    if (!st.loaded) loadWorkspace().catch(() => ignoredError('load trading workspace'))
     if (row.workspaceId) {
       st.setActive(row.workspaceId)
     } else {

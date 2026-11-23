@@ -1,3 +1,4 @@
+import { ignoredError } from '../lib/ignoredError.js'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { api, fmt, surface, toast } from '../lib/api.js'
 import { wealthDigits, stashUnit, STASH_UNITS } from '../lib/wealth.js'
@@ -26,7 +27,7 @@ const POLL_MS = 10 * 60 * 1000
 const lastFetchAt = new Map()
 const FOLD_KEY = 'arbiter:stash-folded'
 const readFolds = () => { try { return JSON.parse(localStorage.getItem(FOLD_KEY)) || {} } catch { return {} } }
-const writeFolds = (f) => { try { localStorage.setItem(FOLD_KEY, JSON.stringify(f)) } catch {} }
+const writeFolds = (f) => { try { localStorage.setItem(FOLD_KEY, JSON.stringify(f)) } catch { ignoredError('store folded groups') } }
 
 // The Stash tab: what you hold, grouped by the game's own category for each item (lib/stash.js), with
 // net worth and liquid net worth, and the trade site's Merchant History beside it (new sales are credited
@@ -71,7 +72,7 @@ export default function StashView({ league }) {
   // ---- the "count toward liquid net worth" switches (settings `stash_counted`; only choices are stored)
   const stored = useStatus(s => s.settings?.stash_counted)
   const [choices, setChoices] = useState(null)
-  useEffect(() => { ensureSettings().catch(() => {}) }, [])
+  useEffect(() => { ensureSettings().catch(() => ignoredError('load stash settings')) }, [])
   // Stored choices load under any made before the settings arrived (those are newer).
   useEffect(() => { if (stored) setChoices(c => ({ ...stored, ...(c || {}) })) }, [stored])
   const choose = (patch) => {
@@ -155,7 +156,7 @@ export default function StashView({ league }) {
     mountedRef.current = true
     return () => { mountedRef.current = false; activeRefresh.current = null }
   }, [])
-  const loadSales = (lg) => api.sales(lg).then(d => { if (mountedRef.current && selRef.current === lg) setSales(d) }).catch(() => {})
+  const loadSales = (lg) => api.sales(lg).then(d => { if (mountedRef.current && selRef.current === lg) setSales(d) }).catch(() => ignoredError('load sales'))
   useEffect(() => { if (sel) loadSales(sel) }, [sel])
   // If an earlier mount's in-flight sales fetch lands a credit or commits detached edits after this StashView
   // opened, reconcile into the editor BEFORE salesFetching releases this mount's held edits.
@@ -200,7 +201,7 @@ export default function StashView({ league }) {
     const base = useStatus.getState().capital
     if (!base) return
     const { qty: next, needsSave } = reconcileCapital(base, capitalDirty)
-    if (needsSave) await commitCapital(next, { notifyCredit: true }).catch(() => {})
+    if (needsSave) await commitCapital(next, { notifyCredit: true }).catch(() => ignoredError('save capital'))
   }
   const refresh = async (auto = false) => {
     if (!isDesktop || !sel || activeRefresh.current || useStatus.getState().salesFetching) return

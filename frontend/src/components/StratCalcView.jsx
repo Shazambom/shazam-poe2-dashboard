@@ -1,3 +1,4 @@
+import { ignoredError } from '../lib/ignoredError.js'
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Tree } from 'react-arborist'
 import { api, bus, fmt, toast, undoToast } from '../lib/api.js'
@@ -314,7 +315,7 @@ export default function StratCalcView({ league, currencies }) {
     useStratStore.getState().load({ createIfEmpty: true })
   }, [])
   const tick = useSync(s => s.tick)
-  usePoll(() => api.stratPrices().then(d => setPrices(d.prices || {})).catch(() => {}), PRICE_POLL_MS, [tick])
+  usePoll(() => api.stratPrices().then(d => setPrices(d.prices || {})).catch(() => ignoredError('poll strategy prices')), PRICE_POLL_MS, [tick])
 
   // An Undo needs this view mounted (it runs through `change`): leaving it takes the toast along.
   useEffect(() => () => bus.emit({ id: 'sc-undo', dismiss: true }), [])
@@ -350,7 +351,7 @@ export default function StratCalcView({ league, currencies }) {
 
   // Uniques: the trade site's own list, from the desktop shell (the web build has no trade session).
   useEffect(() => {
-    window.poe2desktop?.trade?.uniques?.().then(l => setUniques(Array.isArray(l) ? l : [])).catch(() => {})
+    window.poe2desktop?.trade?.uniques?.().then(l => setUniques(Array.isArray(l) ? l : [])).catch(() => ignoredError('load unique items'))
   }, [])
 
   // A unique's price floor: one background trade search at a time (the shared budget paces them) for
@@ -487,7 +488,7 @@ export default function StratCalcView({ league, currencies }) {
       blocked.current = false
       change(d => sc.restale(sc.select(d, id), id))
       setRefreshing(id)
-      api.stratPrices().then(r => setPrices(r.prices || {})).catch(() => {})
+      api.stratPrices().then(r => setPrices(r.prices || {})).catch(() => ignoredError('load strategy prices'))
     },
     refreshing: refreshing && pending ? refreshing : null,
     // A rename counts only when the name changed, so clicking in and out never reorders anything.

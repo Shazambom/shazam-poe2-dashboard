@@ -97,8 +97,8 @@ export default function ModsView() {
     const family = pool?.sections.flatMap(sec => sec[affix] || []).find(f => f.id === id)
     const meta = pools.find(p => p.id === poolId)
     if (!family || !meta || !modLookup) return
-    let found = null
-    try { found = await modLookup({ text: family.text, affix, bases: meta.keywords || [] }) } catch {}
+    let found
+    try { found = await modLookup({ text: family.text, affix, bases: meta.keywords || [] }) } catch { found = null }
     const built = familyQuery(family, meta, found)
     if (!built) { toast('Search this modifier by hand on the trade site', false); return }
     const ws = useWorkspace.getState()

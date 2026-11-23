@@ -1,3 +1,4 @@
+import { ignoredError } from './ignoredError.js'
 import React, { useEffect } from 'react'
 import { usePings } from './pingStore.js'
 import { useWorkspace, loadWorkspace } from './workspaceStore.js'
@@ -84,9 +85,9 @@ export function useLiveSync(league) {
         usePings.getState().setSearchState({ itemId: n.id, state: 'connecting' })
         window.poe2desktop.trade.startSearch(n.id, league, n.slug, n.type)
           .then(r => { if (r && !r.ok && r.reason === 'budget') { useWorkspace.getState().setField(n.id, { armed: false }); toast('Live-search cap reached — stop one first', false) } })
-          .catch(() => {})
+          .catch(() => ignoredError('start live search'))
       })
-      current.forEach(id => { if (!desired.includes(id)) window.poe2desktop.trade.stopSearch(id).catch(() => {}) })
+      current.forEach(id => { if (!desired.includes(id)) window.poe2desktop.trade.stopSearch(id).catch(() => ignoredError('stop live search')) })
     }
     const unsubWs = useWorkspace.subscribe(reconcile)
     const unsubEng = usePings.subscribe((s, p) => { if ((s.engine.activeIds || []).length !== (p.engine.activeIds || []).length) reconcile() })

@@ -1,3 +1,4 @@
+import { ignoredError } from '../lib/ignoredError.js'
 import { useEffect, useState } from 'react'
 import { isDesktop } from '../lib/session.js'
 
@@ -31,7 +32,7 @@ export default function DownloadApp() {
         const a = pickAsset(j.assets || [], os)
         if (a) setRel({ name: a.name, url: a.browser_download_url, version: (j.tag_name || '').replace(/^desktop-v/, '') })
       })
-      .catch(() => {})
+      .catch(() => ignoredError('load download links'))
   }, [os])
 
   if (isDesktop) return null

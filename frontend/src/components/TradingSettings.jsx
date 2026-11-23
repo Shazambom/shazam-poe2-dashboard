@@ -1,3 +1,4 @@
+import { ignoredError } from '../lib/ignoredError.js'
 import { useEffect, useRef, useState } from 'react'
 import { toast } from '../lib/api.js'
 import { isDesktop } from '../lib/session.js'
@@ -56,7 +57,7 @@ function Ee2HistorySettings() {
   const [status, setStatus] = useState(null)
   useEffect(() => {
     let live = true
-    const poll = () => window.poe2desktop?.ee2?.status?.().then(st => { if (live) setStatus(st) }).catch(() => {})
+    const poll = () => window.poe2desktop?.ee2?.status?.().then(st => { if (live) setStatus(st) }).catch(() => ignoredError('poll companion status'))
     poll(); const t = setInterval(poll, 10000)
     return () => { live = false; clearInterval(t) }
   }, [])
@@ -83,7 +84,7 @@ export default function TradingSettings() {
   const [capturing, setCapturing] = useState(false)
 
   useEffect(() => {
-    if (window.poe2desktop?.hotkey) window.poe2desktop.hotkey.get().then(r => setHotkey(r?.combo || 'CommandOrControl+G')).catch(() => {})
+    if (window.poe2desktop?.hotkey) window.poe2desktop.hotkey.get().then(r => setHotkey(r?.combo || 'CommandOrControl+G')).catch(() => ignoredError('load hotkey'))
   }, [])
 
   // Capture a key combo for the hotkey (desktop).

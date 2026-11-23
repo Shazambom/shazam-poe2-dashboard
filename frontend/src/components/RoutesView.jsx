@@ -1,3 +1,4 @@
+import { ignoredError } from '../lib/ignoredError.js'
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
 import { finishRoutes, streamSearch } from '../lib/routesStream.js'
@@ -108,7 +109,7 @@ export default function RoutesView({ capital, status, currencies }) {
   // nothing to react to, so the pick searches itself.
   const pick = async (p) => {
     flushSync(() => setRev(r => r + 1))
-    await flush().catch(() => {})
+    await flush().catch(() => ignoredError('flush route settings'))
     const s = await useStatus.getState().saveSettings(p.values).catch(() => null)
     if (!s) return
     const next = filtersFromSettings(s.filters)

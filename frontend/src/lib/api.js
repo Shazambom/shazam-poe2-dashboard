@@ -22,11 +22,12 @@ export const cleanErr = (e) => String(e?.message || e).replace(/^\d+ /, '')
 
 const j = async (r) => {
   if (!r.ok) {
-    let text = await r.text()
+    const raw = await r.text()
+    let text
     try {
-      const d = JSON.parse(text)
+      const d = JSON.parse(raw)
       text = typeof d.detail === 'string' ? d.detail : JSON.stringify(d.detail ?? d)
-    } catch {}
+    } catch { text = raw }
     const err = new Error(text || `HTTP ${r.status}`)
     err.status = r.status
     throw err

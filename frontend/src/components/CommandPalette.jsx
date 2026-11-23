@@ -1,3 +1,4 @@
+import { ignoredError } from '../lib/ignoredError.js'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'motion/react'
 import { api } from '../lib/api.js'
@@ -24,7 +25,7 @@ export default function CommandPalette({ open, onClose, tabs, onGoTab, subDests 
     if (!open) return
     setQ(''); setSel(0)
     setHere(usableHere(screenCommands[screen] || []))
-    api.board().then(d => setRows(d?.rows || [])).catch(() => {})
+    api.board().then(d => setRows(d?.rows || [])).catch(() => ignoredError('load board commands'))
     const t = setTimeout(() => inputRef.current?.focus(), 10)
     return () => clearTimeout(t)
   }, [open])

@@ -6,6 +6,7 @@
 // (the id, and the active custom table, read before first paint so the app never flashes the default),
 // and the desktop shell (the pre-CSS window backdrop, via poe2desktop.setTheme). Nothing here touches
 // layout, components or copy.
+import { ignoredError } from './ignoredError.js'
 import { create } from 'zustand'
 import { useStatus, onSettingsTheme } from './statusStore.js'
 import { TOKEN_KEYS, isCustomId, isLightTheme, validTable, sanitizeTable } from './themeDerive.js'
@@ -51,9 +52,9 @@ export function paintTheme(id, colors = null) {
     if (t === DEFAULT_THEME) delete html().dataset.theme
     else html().dataset.theme = t
   }
-  try { localStorage.setItem(KEY, t) } catch {}
-  try { if (custom) localStorage.setItem(CUSTOM_KEY, JSON.stringify({ id: t, colors })); else localStorage.removeItem(CUSTOM_KEY) } catch {}
-  try { window.poe2desktop?.setTheme?.(custom ? 'custom' : t, custom ? colors['--backdrop'] : undefined) } catch {}
+  try { localStorage.setItem(KEY, t) } catch { ignoredError('store theme choice') }
+  try { if (custom) localStorage.setItem(CUSTOM_KEY, JSON.stringify({ id: t, colors })); else localStorage.removeItem(CUSTOM_KEY) } catch { ignoredError('store custom theme') }
+  try { window.poe2desktop?.setTheme?.(custom ? 'custom' : t, custom ? colors['--backdrop'] : undefined) } catch { ignoredError('paint desktop theme') }
   return t
 }
 
@@ -63,7 +64,7 @@ export function bootTheme() {
   try {
     id = localStorage.getItem(KEY) || DEFAULT_THEME
     if (isCustomId(id)) { const m = JSON.parse(localStorage.getItem(CUSTOM_KEY) || 'null'); colors = m && m.id === id ? m.colors : null }
-  } catch {}
+  } catch { colors = null }
   return paintTheme(id, colors)
 }
 

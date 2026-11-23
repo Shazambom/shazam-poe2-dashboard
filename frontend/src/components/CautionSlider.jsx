@@ -1,3 +1,4 @@
+import { ignoredError } from '../lib/ignoredError.js'
 import { useEffect, useRef, useState } from 'react'
 import { useStatus, ensureSettings } from '../lib/statusStore.js'
 
@@ -16,7 +17,7 @@ export default function CautionSlider({ value, range, onChange }) {
 
   // Follow the server's value until the user touches it (it owns the default).
   useEffect(() => { if (!dragging.current && value != null) setK(value) }, [value])
-  useEffect(() => { ensureSettings().catch(() => {}) }, [])
+  useEffect(() => { ensureSettings().catch(() => ignoredError('load caution settings')) }, [])
 
   const commit = (next) => {
     dragging.current = true

@@ -1,3 +1,4 @@
+import { ignoredError } from '../lib/ignoredError.js'
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'motion/react'
 import { api, fmt, surface, toast } from '../lib/api.js'
@@ -95,7 +96,7 @@ export default function BoardView() {
   const setNum = (id, n) => {
     const next = { ...numById, [id]: n }
     setNumById(next)
-    try { localStorage.setItem('board.num.v1', JSON.stringify(next)) } catch {}
+    try { localStorage.setItem('board.num.v1', JSON.stringify(next)) } catch { ignoredError('store board currency') }
   }
 
   // The picks ride along so each card's trend is the history of the market it is shown in.
@@ -140,7 +141,7 @@ export default function BoardView() {
   const openAsset = (name, inNum) => assetModal.open(name, inNum)
   useEffect(() => {
     if (!isDesktop) return
-    ensureSettings().then(s => setWatchlist(s.watchlist || [])).catch(() => {})
+    ensureSettings().then(s => setWatchlist(s.watchlist || [])).catch(() => ignoredError('load watchlist'))
   }, [])
   // Manual refresh from the topbar ⟳ (bumps the shared tick) refreshes the mounted view.
   useEffect(() => { if (tick > 0) refresh() }, [tick])

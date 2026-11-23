@@ -2,6 +2,7 @@
 // on GGG's CDN (e.g. "/gen/image/…"). We reference those at runtime (a hotlink to
 // GGG's own server) — nothing is bundled or re-hosted. Lets any view render a
 // currency as its icon with the name on hover, keyed by trade id OR by name.
+import { ignoredError } from './ignoredError.js'
 import { useEffect, useMemo, useState } from 'react'
 import { api } from './api.js'
 
@@ -30,7 +31,7 @@ export function loadIcons() {
       if (c.name) byName.set(c.name.toLowerCase(), rec)
     }
     _index = { byId, byName, raw: d, list: items }
-    subs.forEach(fn => { try { fn(_index) } catch {} })
+    subs.forEach(fn => { try { fn(_index) } catch { ignoredError('notify icon listener') } })
     if (!d.loaded_at) retrySoon()       // backend hasn't fetched names/icons yet — it retries, so do we
     return _index
   }).catch(() => { _index = { byId: new Map(), byName: new Map(), raw: null, list: [] }; retrySoon(); return _index })
@@ -60,7 +61,7 @@ export function iconFailed() {
     _imgTimer = null
     _epoch += 1
     _imgDelay = Math.min(_imgDelay * 3, 300000)
-    epochSubs.forEach(fn => { try { fn(_epoch) } catch {} })
+    epochSubs.forEach(fn => { try { fn(_epoch) } catch { ignoredError('notify icon epoch listener') } })
   }, _imgDelay)
 }
 export function iconLoaded() { _imgDelay = 5000 }

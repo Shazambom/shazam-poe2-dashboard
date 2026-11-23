@@ -1,3 +1,4 @@
+import { ignoredError } from '../lib/ignoredError.js'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useWorkspace, loadWorkspace, HISTORY_SYS } from '../lib/workspaceStore.js'
 import { tradeUrl, tradeHome, queryUrl, parseTradeUrl, isAuthBounceUrl, openTrade, isDesktop } from '../lib/session.js'
@@ -59,7 +60,7 @@ async function ensureInstantBuyout(el) {
     return 'no-option';
   })()`
   for (let i = 0; i < 10; i++) {
-    try { const r = await el.executeJavaScript(code); if (r === 'set' || r === 'already') return r } catch {}
+    try { const r = await el.executeJavaScript(code); if (r === 'set' || r === 'already') return r } catch { ignoredError('inspect trade page') }
     await new Promise(res => { setTimeout(res, 900) })
   }
   // Gave up: report what the dropdown actually says so the caller only hints when it is truly
@@ -353,8 +354,8 @@ export default function WorkspaceView({ league, visible = true }) {
     if (!isDesktop || !window.poe2desktop?.trade?.onWebviewNav) return
     return window.poe2desktop.trade.onWebviewNav((p) => {
       // Only the embedded webview drives the workspace — never the open-trade pop-out.
-      let myId = null
-      try { myId = wv.current?.getWebContentsId() } catch {}
+      let myId
+      try { myId = wv.current?.getWebContentsId() } catch { myId = null }
       if (!shouldAcceptNav(p, myId)) return
       const { url, phase } = p
       if (isAuthBounceUrl(url)) authBouncedRef.current = true

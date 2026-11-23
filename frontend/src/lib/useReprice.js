@@ -1,6 +1,7 @@
 // Trading → Workspace "Reprice in <currency>" (docs/reprice-design.md): the trade tap's view of this window's
 // page (desktop/src/trade/tap.js) → at most one offer; apply() replaces the saved search with the repriced one,
 // with a 10 s undo. The rules are in reprice.js; this only wires events, prices, the store and telemetry.
+import { ignoredError } from './ignoredError.js'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api, undoToast } from './api.js'
 import { diag } from './diag.js'
@@ -52,8 +53,8 @@ export function useReprice({ wv, node, navUrl, inHistory, remountKey, league, vi
   // search gets the room (owner, 2026-10-03).
   useEffect(() => () => { window.poe2desktop?.trade?.listingsCancel?.() }, [remountKey, visible])
 
-  let wcId = null
-  try { wcId = wv.current?.getWebContentsId() ?? null } catch {}
+  let wcId
+  try { wcId = wv.current?.getWebContentsId() ?? null } catch { wcId = null }
   const own = wcId == null ? null : TAP.pageOf(wcId)
   // A window that is gone (another row, ↻) leaves the store: its rows are not evidence any more.
   useEffect(() => (wcId == null ? undefined : () => TAP.drop(wcId)), [wcId])
@@ -63,7 +64,7 @@ export function useReprice({ wv, node, navUrl, inHistory, remountKey, league, vi
   useEffect(() => {
     let live = true
     setRowQuery(null)
-    searchOfLink(navUrl || '').then(j => { if (live) setRowQuery(j?.query || null) }).catch(() => {})
+    searchOfLink(navUrl || '').then(j => { if (live) setRowQuery(j?.query || null) }).catch(() => ignoredError('read search query'))
     return () => { live = false }
   }, [navUrl])
   // The window's own page, or — when the site redrew a search it ran moments ago from its own cache, with no

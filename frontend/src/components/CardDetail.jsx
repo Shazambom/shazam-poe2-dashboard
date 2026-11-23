@@ -1,3 +1,4 @@
+import { ignoredError } from '../lib/ignoredError.js'
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'motion/react'
 import { api, fmt, toast } from '../lib/api.js'
@@ -90,7 +91,7 @@ export default function CardDetail({ r, num, factor, numOptions, onNum, prices, 
   useEffect(() => {
     const opener = document.activeElement
     closeRef.current?.focus()
-    return () => { try { opener?.focus?.() } catch {} }
+    return () => { try { opener?.focus?.() } catch { ignoredError('restore card focus') } }
   }, [])
   return (
     <motion.div className="detail-backdrop" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose}>

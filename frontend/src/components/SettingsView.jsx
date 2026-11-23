@@ -1,3 +1,4 @@
+import { ignoredError } from '../lib/ignoredError.js'
 import { refreshTweaks, useTweaks } from '../lib/tweaks.js'
 import { useEffect, useState } from 'react'
 import { api, surface, toast } from '../lib/api.js'
@@ -44,7 +45,7 @@ export default function SettingsView({ currencies, onSaved, onReportProblem }) {
 
   useEffect(() => {
     useStatus.getState().loadSettings().then(x => { setS(x); arm() })
-    api.goldFees().then(setFees).catch(() => {})
+    api.goldFees().then(setFees).catch(() => ignoredError('load gold fees'))
   }, [])
   if (!s) return <div className="single hint">Loading settings…</div>
 
@@ -94,7 +95,7 @@ export default function SettingsView({ currencies, onSaved, onReportProblem }) {
                 : <> Not loaded yet{fees?.state?.last_error ? ` — ${fees.state.last_error}` : ''}.</>}
             </p>
             <div className="row" style={{ marginBottom: 12 }}>
-              <RefreshButton busy={busy} onClick={async () => { setBusy(true); try { setFees(await surface(api.refreshGoldFees(), 'Gold fees refreshed')) } catch {} finally { setBusy(false) } }} title="Refresh gold fees from game data" />
+              <RefreshButton busy={busy} onClick={async () => { setBusy(true); try { setFees(await surface(api.refreshGoldFees(), 'Gold fees refreshed')) } catch { ignoredError('refresh gold fees') } finally { setBusy(false) } }} title="Refresh gold fees from game data" />
               <span className="hint">Gold fees from game data</span>
             </div>
             <div className="field"><label>Fee applies to</label>
@@ -127,7 +128,7 @@ export default function SettingsView({ currencies, onSaved, onReportProblem }) {
                     <tr key={m}>
                       <td><code>{m.split('/').pop()}</code></td>
                       <td><input className="btn" list="cur-ids-2" placeholder="trade id" value={mapTo[m] ?? ''} onChange={e => setMapTo(x => ({ ...x, [m]: e.target.value }))} /></td>
-                      <td><button type="button" className="btn small" disabled={!mapTo[m]} onClick={() => surface(api.mapCurrency(m, mapTo[m]), 'Linked').then(onSaved).catch(() => {})}>Link</button></td>
+                      <td><button type="button" className="btn small" disabled={!mapTo[m]} onClick={() => surface(api.mapCurrency(m, mapTo[m]), 'Linked').then(onSaved).catch(() => ignoredError('map currency'))}>Link</button></td>
                     </tr>
                   ))}
                 </tbody>
@@ -153,7 +154,7 @@ export default function SettingsView({ currencies, onSaved, onReportProblem }) {
 function BetaChannelToggle() {
   const desk = isDesktop ? window.poe2desktop : null
   const [st, setSt] = useState(null)
-  useEffect(() => { desk?.getChannel?.().then(setSt).catch(() => {}) }, [])
+  useEffect(() => { desk?.getChannel?.().then(setSt).catch(() => ignoredError('read release channel')) }, [])
   if (!desk?.getChannel) return null
   const toggle = async (v) => {
     try { setSt(refreshTweaks(await desk.setChannel(v))); toast(v ? 'Beta channel on — checking for updates…' : 'Back on stable channel') } catch {}

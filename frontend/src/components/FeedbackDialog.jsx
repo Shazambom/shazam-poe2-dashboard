@@ -1,3 +1,4 @@
+import { ignoredError } from '../lib/ignoredError.js'
 import { useEffect, useRef, useState } from 'react'
 import { motion } from 'motion/react'
 
@@ -27,7 +28,7 @@ export default function FeedbackDialog({ onClose }) {
   useEffect(() => {
     const opener = document.activeElement
     closeRef.current?.focus()
-    return () => { try { opener?.focus?.() } catch {} }
+    return () => { try { opener?.focus?.() } catch { ignoredError('restore dialog focus') } }
   }, [])
   const name = st.shortId ? `arbiter-report-${st.shortId}` : null
   return (

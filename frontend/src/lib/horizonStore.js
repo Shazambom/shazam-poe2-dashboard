@@ -1,3 +1,4 @@
+import { ignoredError } from './ignoredError.js'
 import { create } from 'zustand'
 
 // The ONE app-wide time horizon (lookback window). Every view that used to carry its own
@@ -18,7 +19,7 @@ export const useHorizon = create((set) => ({
   hours: load(),
   setHours: (h) => {
     if (!HOURS.includes(h)) return
-    try { localStorage.setItem(KEY, String(h)) } catch {}
+    try { localStorage.setItem(KEY, String(h)) } catch { ignoredError('store time window') }
     set({ hours: h })
   },
 }))

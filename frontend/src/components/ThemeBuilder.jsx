@@ -1,3 +1,4 @@
+import { ignoredError } from '../lib/ignoredError.js'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from '../lib/api.js'
 import { THEMES, DEFAULT_THEME, useTheme } from '../lib/themeStore.js'
@@ -33,7 +34,7 @@ export default function ThemeBuilder() {
   const saveTimer = useRef(null)
   const previewTimer = useRef(null)
 
-  useEffect(() => { loadPresets().then(setPresets).catch(() => {}) }, [])
+  useEffect(() => { loadPresets().then(setPresets).catch(() => ignoredError('load theme presets')) }, [])
   // Leaving the builder ends any preview (the chosen theme comes back) and cancels pending timers.
   useEffect(() => () => {
     clearTimeout(previewTimer.current)

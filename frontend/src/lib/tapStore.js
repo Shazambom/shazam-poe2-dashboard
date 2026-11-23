@@ -2,6 +2,7 @@
 // A reloaded window's search can finish before its <webview> reports its id to the view (seen in the packaged app,
 // 2026-10-03), so the view never filters events itself: every event lands in its window's page here, and the view
 // reads its own window's page. Pages are reprice.js pages; the price options are site-wide.
+import { ignoredError } from './ignoredError.js'
 import { EMPTY, observe, SIBLING_TTL_MS } from './reprice.js'
 import { canon } from './canon.js'
 
@@ -17,7 +18,7 @@ export function makeTapStore() {
   const subs = new Set()
   let options = null
   let prices = null
-  const notify = () => subs.forEach(f => { try { f() } catch {} })
+  const notify = () => subs.forEach(f => { try { f() } catch { ignoredError('notify trade listener') } })
   const get = (wcId) => pages.get(wcId) || EMPTY
   const keep = (page, now) => {
     if (!page.search) return

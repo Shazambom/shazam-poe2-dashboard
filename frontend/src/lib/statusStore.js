@@ -1,3 +1,4 @@
+import { ignoredError } from './ignoredError.js'
 import { create } from 'zustand'
 import { api } from './api.js'
 import { nextPollMs } from './capital.js'
@@ -41,7 +42,7 @@ export const useStatus = create((set, get) => ({
   // or race a sales fetch on a fresh mount. `counted`: currencies whose total the user typed.
   saveCapital: (entries, counted = [], edits = null) => {
     const prev = capitalQueue
-    const run = prev.catch(() => {}).then(async () => {
+    const run = prev.catch(() => ignoredError('resume capital queue')).then(async () => {
       const sendCounted = failedCounted.size ? [...new Set([...failedCounted, ...counted])] : counted
       failedCounted.clear()
       const pendingEdits = edits?.size ? restoreFailedEdits(failedEdits, edits) : new Map(failedEdits)
@@ -80,7 +81,7 @@ export const useStatus = create((set, get) => ({
   // One at a time, in the order made: a later save always lands last (an Arbitrage preset after a pending edit).
   saveSettings: (patch) => {
     const run = settingsQueue.then(() => api.putSettings(patch))
-    settingsQueue = run.catch(() => {})
+    settingsQueue = run.catch(() => ignoredError('resume settings queue'))
     return run.then(s => { set({ settings: s }); return s })
   },
 }))
@@ -109,6 +110,6 @@ export function startStatusPolling(ms = 30000) {
     if (!stopped) t = setTimeout(tick, nextPollMs(useStatus.getState().capital, ms))
   }
   tick()
-  ensureSettings().catch(() => {})
+  ensureSettings().catch(() => ignoredError('load settings'))
   return () => { stopped = true; clearTimeout(t) }
 }
