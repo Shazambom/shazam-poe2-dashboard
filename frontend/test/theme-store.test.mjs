@@ -32,7 +32,7 @@ const { tables } = presetTables(readFileSync(join(SRC, 'styles.css'), 'utf8'))
 const T = await import('../src/lib/themeStore.js')
 
 const custom = { id: 'custom-0badf00d', name: 'Mine', base: 'ash', colors: { ...tables.ash, '--bg': '#010203', '--backdrop': '#0a0b0c' } }
-const wait = () => new Promise(r => setTimeout(r, 5))
+const wait = () => new Promise(r => { setTimeout(r, 5) })
 
 test('a preset paints only the attribute; the default clears it', () => {
   assert.equal(T.paintTheme('ash'), 'ash')

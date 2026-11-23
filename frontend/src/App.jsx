@@ -231,9 +231,9 @@ export default function App() {
     window.__arbiterSnap = async ({ section, sub }) => {
       goSub(section, sub)
       await new Promise(res => { const tick = () => (useStatus.getState().status ? res() : setTimeout(tick, 50)); tick() })
-      await new Promise(res => setTimeout(res, 100))   // let the view mount and fire its loads
+      await new Promise(res => { setTimeout(res, 100) })   // let the view mount and fire its loads
       await settle()
-      await new Promise(res => requestAnimationFrame(() => requestAnimationFrame(res)))
+      await new Promise(res => { requestAnimationFrame(() => requestAnimationFrame(res)) })
       return true
     }
     return () => { delete window.__arbiterSnap }

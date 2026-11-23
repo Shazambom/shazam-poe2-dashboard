@@ -379,7 +379,7 @@ describe('WorkspaceView Close-enough fuzzy rare finder lifecycle', () => {
 
       window.poe2desktop.trade.relax = vi.fn(async () => ({ ok: false, error: 'cancelled' }))
       fireEvent.click(screen.getByRole('button', { name: 'Close enough' }))
-      await new Promise(r => setTimeout(r, 20))
+      await new Promise(r => { setTimeout(r, 20) })
       expect(events.length).toBe(2)
     } finally {
       off()

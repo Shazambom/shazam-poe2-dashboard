@@ -4,7 +4,7 @@ import assert from 'node:assert/strict'
 globalThis.fetch = async () => ({ ok: true, status: 200, json: async () => ({ workspace: { version: 2, tree: [] } }), text: async () => '' })
 const { useWorkspace, HISTORY_SYS, HISTORY_NAME, HISTORY_CAP, MAX_Q_BYTES, sanitize } = await import('../src/lib/workspaceStore.js')
 const st = () => useWorkspace.getState()
-const sleep = (ms) => new Promise(r => setTimeout(r, ms))
+const sleep = (ms) => new Promise(r => { setTimeout(r, ms) })
 const Q = JSON.stringify({ query: { name: 'Headhunter', type: 'Heavy Belt' }, sort: { price: 'asc' } })
 
 test('ensureFolder finds the sys folder anywhere (renamed/moved) and creates it at root index 0 otherwise', async () => {

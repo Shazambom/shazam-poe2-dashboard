@@ -9,7 +9,7 @@ const { filterHits } = await import('../src/lib/tree.js')
 const { buildPaletteItems } = await import('../src/lib/palette.js')
 const { liveLabel, LIVE_CONNECT_TIMEOUT } = await import('../src/lib/pingStore.js')
 const st = () => useWorkspace.getState()
-const sleep = (ms) => new Promise(r => setTimeout(r, ms))
+const sleep = (ms) => new Promise(r => { setTimeout(r, ms) })
 
 test('duplicate() inserts a fresh-id copy right after the source, never armed', async () => {
   st().hydrate({ version: 2, tree: [{ id: 'f', kind: 'folder', name: 'F', children: [

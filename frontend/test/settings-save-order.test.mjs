@@ -16,11 +16,11 @@ test('settings saves go out one at a time, in the order they were made', async (
   api.putSettings = (patch) => { sent.push(patch.n); return patch.n === 1 ? first.p : second.p }
   const a = useStatus.getState().saveSettings({ n: 1 })
   const b = useStatus.getState().saveSettings({ n: 2 })
-  await new Promise(r => setTimeout(r, 0))
+  await new Promise(r => { setTimeout(r, 0) })
   assert.deepEqual(sent, [1], 'the second waits for the first')
   first.res({ v: 1 })
   await a
-  await new Promise(r => setTimeout(r, 0))
+  await new Promise(r => { setTimeout(r, 0) })
   assert.deepEqual(sent, [1, 2])
   second.res({ v: 2 })
   await b

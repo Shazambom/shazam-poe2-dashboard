@@ -60,7 +60,7 @@ async function ensureInstantBuyout(el) {
   })()`
   for (let i = 0; i < 10; i++) {
     try { const r = await el.executeJavaScript(code); if (r === 'set' || r === 'already') return r } catch {}
-    await new Promise(res => setTimeout(res, 900))
+    await new Promise(res => { setTimeout(res, 900) })
   }
   // Gave up: report what the dropdown actually says so the caller only hints when it is truly
   // NOT Instant Buyout (a slow load that lands there anyway must not raise a false hint).

@@ -9,7 +9,7 @@ globalThis.fetch = async (url, opts = {}) => {
 }
 const { useWorkspace, HISTORY_SYS, HISTORY_NAME, HISTORY_PREFS } = await import('../src/lib/workspaceStore.js')
 const st = () => useWorkspace.getState()
-const sleep = (ms) => new Promise(r => setTimeout(r, ms))
+const sleep = (ms) => new Promise(r => { setTimeout(r, ms) })
 const Q = (n) => JSON.stringify({ query: { name: n } })
 const intent = (name, q, extra = {}) => ({ source: 'ee2', origin: 'ee2', q, name, item: { name, baseType: 'Belt', rarity: 'Unique', itemClass: 'Belts' }, folder: HISTORY_SYS, ...extra })
 const hist = () => st().tree.find(n => n.sys === HISTORY_SYS)
