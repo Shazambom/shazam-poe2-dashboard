@@ -1,4 +1,4 @@
-import React from 'react'
+import 'react'
 import { motion } from 'motion/react'
 
 // The one sub-tab strip (Stash / Economy / Trading). `layoutId` must be unique per section or

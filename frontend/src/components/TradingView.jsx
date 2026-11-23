@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import SubTabs from './SubTabs.jsx'
 import { subsOf } from '../lib/dests.js'
 import { nav } from '../lib/nav.js'

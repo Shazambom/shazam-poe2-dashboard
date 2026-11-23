@@ -1,4 +1,4 @@
-import React from 'react'
+import 'react'
 import Cur from './Cur.jsx'
 import Rate from './Rate.jsx'
 import { lines } from '../lib/mods/format.jsx'

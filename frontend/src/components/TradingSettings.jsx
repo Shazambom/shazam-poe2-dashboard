@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { toast } from '../lib/api.js'
 import { isDesktop } from '../lib/session.js'
 import { useWorkspace, exportWorkspace } from '../lib/workspaceStore.js'

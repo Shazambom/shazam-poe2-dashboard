@@ -1,4 +1,4 @@
-import React, { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 
 // A right-click menu anchored at a point. `items`: [{ label, key?, run?, children?, disabled?, sep? }] —
 // `children` opens a submenu on hover/→. Closes on Escape, outside click, scroll, or after a run.

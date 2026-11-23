@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { isDesktop } from '../lib/session.js'
 
 // Version + seamless updater, merged into ONE topbar element (desktop only). Idle, it IS the

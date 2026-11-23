@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useSignals, sigKey } from '../lib/signalStore.js'
 import { useIcons, lookup } from '../lib/icons.js'
 import Cur from './Cur.jsx'

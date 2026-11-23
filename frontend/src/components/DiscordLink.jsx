@@ -1,4 +1,4 @@
-import React from 'react'
+import 'react'
 
 // "Join our Discord" — the Discord mark as the button, in the top bar. Desktop opens the invite
 // through main (the OS browser); the web app links straight out. One invite for the whole app.

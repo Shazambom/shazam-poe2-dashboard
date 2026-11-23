@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useStatus, ensureSettings } from '../lib/statusStore.js'
 
 // CAUTION: how much a steady price is worth to you. The board ranks kept value, steadiness, a

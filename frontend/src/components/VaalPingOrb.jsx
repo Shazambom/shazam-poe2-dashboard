@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { usePings } from '../lib/pingStore.js'
 import { useIcons, lookup } from '../lib/icons.js'
 

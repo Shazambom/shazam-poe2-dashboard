@@ -1,4 +1,4 @@
-import React from 'react'
+import 'react'
 import { fmt } from '../lib/api.js'
 import { useStatus } from '../lib/statusStore.js'
 import { nativeAmount, wealthShown, wealthNumber, wealthDigits, wealthText } from '../lib/wealth.js'

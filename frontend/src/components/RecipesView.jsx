@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { api } from '../lib/api.js'
 import { useAutosave } from '../lib/hooks.js'
 import Cur from './Cur.jsx'

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import Toggle from './Toggle.jsx'
 import Seg from './Seg.jsx'
 import ModPicker from './ModPicker.jsx'

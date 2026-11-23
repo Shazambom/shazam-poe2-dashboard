@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import ModsBar from './ModsBar.jsx'
 import ModTable from './ModTable.jsx'
 import { ModSection, GrantList, essenceRows, augmentRows } from './ModSection.jsx'

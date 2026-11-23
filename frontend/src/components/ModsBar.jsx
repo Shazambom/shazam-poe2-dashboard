@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import { useState } from 'react'
 import CurrencyPicker from './CurrencyPicker.jsx'
 import Cur from './Cur.jsx'
 import Num from './Num.jsx'

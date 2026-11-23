@@ -1,4 +1,4 @@
-import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { opensUp, room } from '../lib/dropdown.js'
 import Cur from './Cur.jsx'
 import { norm, search } from '../lib/search.js'

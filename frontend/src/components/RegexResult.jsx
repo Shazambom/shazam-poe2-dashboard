@@ -1,4 +1,4 @@
-import React from 'react'
+import 'react'
 import Toggle from './Toggle.jsx'
 import { LIMIT, overLimit } from '../lib/regex/index.js'
 

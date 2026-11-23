@@ -1,4 +1,4 @@
-import React from 'react'
+import 'react'
 
 // The app's segmented control: one of `options` ([key, label, ⌘K marker?]) is on. Reuses the `.seg` /
 // `.seg-btn` classes the Hold and Economy pages already draw by hand.

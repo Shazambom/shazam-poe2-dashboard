@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { isDesktop } from '../lib/session.js'
 
 // "Download desktop app" button for the web dashboard. Reads the latest GitHub release and

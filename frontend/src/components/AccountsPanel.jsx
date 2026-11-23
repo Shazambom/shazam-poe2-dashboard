@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { api, fmt } from '../lib/api.js'
 import { connectBridge, connectSession } from '../lib/session.js'
 import { useStatus } from '../lib/statusStore.js'

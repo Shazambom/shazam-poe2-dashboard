@@ -1,5 +1,5 @@
 import { refreshTweaks, useTweaks } from '../lib/tweaks.js'
-import React, { useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { api, surface, toast } from '../lib/api.js'
 import { useAutosave } from '../lib/hooks.js'
 import { useStatus } from '../lib/statusStore.js'

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useWorkspace, loadWorkspace, HISTORY_SYS } from '../lib/workspaceStore.js'
 import { tradeUrl, tradeHome, queryUrl, parseTradeUrl, isAuthBounceUrl, openTrade, isDesktop } from '../lib/session.js'
 import { shouldAcceptNav, homeCapture } from '../lib/webview.js'

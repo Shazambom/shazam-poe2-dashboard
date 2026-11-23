@@ -1,4 +1,4 @@
-import React, { useEffect, useReducer, useRef } from 'react'
+import { useEffect, useReducer, useRef } from 'react'
 import { pingTransition, TIMED_TRANSITIONS, buttonView } from '../lib/pingMachine.js'
 import { toast, cleanErr } from '../lib/api.js'
 import { presence as PRESENCE } from '../theme.js'

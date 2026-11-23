@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { motion } from 'motion/react'
 import { searchOfLink } from '../lib/session.js'
 import { savedSearches, searchOfNode, useWorkspace } from '../lib/workspaceStore.js'

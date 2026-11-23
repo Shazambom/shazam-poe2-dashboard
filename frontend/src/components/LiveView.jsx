@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { usePings, liveLabel } from '../lib/pingStore.js'
 import { useWorkspace, loadWorkspace } from '../lib/workspaceStore.js'
 import PingButton from './PingButton.jsx'

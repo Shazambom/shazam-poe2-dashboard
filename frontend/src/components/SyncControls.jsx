@@ -1,4 +1,4 @@
-import React from 'react'
+import 'react'
 import { fmt } from '../lib/api.js'
 import { useSync } from '../lib/syncStore.js'
 import RefreshButton from './RefreshButton.jsx'

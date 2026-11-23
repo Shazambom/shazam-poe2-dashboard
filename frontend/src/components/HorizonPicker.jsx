@@ -1,4 +1,4 @@
-import React from 'react'
+import 'react'
 import { useHorizon, HORIZONS } from '../lib/horizonStore.js'
 
 // The app-wide time-horizon picker (was per-view). Reuses the shared .seg segmented control.

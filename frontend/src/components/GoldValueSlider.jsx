@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useStatus, ensureSettings } from '../lib/statusStore.js'
 import { lookup, useIcons } from '../lib/icons.js'
 import Cur from './Cur.jsx'
