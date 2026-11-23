@@ -30,7 +30,7 @@ export default function RegexView() {
     // Saving is armed only once the stored blob is in hand: a failed load shows defaults but
     // must never write them over the user's saved selections.
     ensureSettings().then(x => { setS(merge(x.regex_tools)); arm() }).catch(() => { setS(merge(null)); toast('Could not load your saved settings', false) })
-  }, [])
+  }, [arm])
 
   const kind = s?.kind || 'waystone'
   const cfg = s?.[kind]

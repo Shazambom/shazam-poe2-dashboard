@@ -39,8 +39,8 @@ describe('Mods, Regex, Settings, ThemeBuilder, Trading, and App shell lifecycles
   })
 
   it('RegexView loads saved settings and generates a live PoE2 regex string when toggled', async () => {
-    installApiMock()
-    render(<RegexView />)
+    const { calls } = installApiMock()
+    const { rerender, unmount } = render(<RegexView />)
 
     await waitFor(() => {
       expect(screen.getAllByText(/Waystones/i).length).toBeGreaterThanOrEqual(1)
@@ -56,6 +56,12 @@ describe('Mods, Regex, Settings, ThemeBuilder, Trading, and App shell lifecycles
       const copyBtn = document.querySelector('button[data-cmd="regex-copy"]')
       expect(copyBtn?.disabled).toBe(false)
     })
+    const draft = document.querySelector('input.rx-string').value
+    rerender(<RegexView />)
+    expect(document.querySelector('input.rx-string').value).toBe(draft)
+    expect(calls.filter(c => c.method === 'GET' && c.path === '/api/settings')).toHaveLength(1)
+    unmount()
+    await waitFor(() => expect(calls.filter(c => c.method === 'PUT' && c.path === '/api/settings')).toHaveLength(1))
   })
 
   it('ThemeBuilder loads all shipped presets via virtual:theme-presets, forks a custom theme, and cleans timers on unmount', async () => {
