@@ -1,5 +1,6 @@
+import { createStore, useStore } from 'zustand'
 import { ignoredError } from '../lib/ignoredError.js'
-import { useCallback, useEffect, useEffectEvent, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useEffectEvent, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { api, fmt, surface, toast } from '../lib/api.js'
 import { wealthDigits, stashUnit, STASH_UNITS } from '../lib/wealth.js'
 import { useAutosave } from '../lib/hooks.js'
@@ -29,6 +30,25 @@ const FOLD_KEY = 'arbiter:stash-folded'
 const readFolds = () => { try { return JSON.parse(localStorage.getItem(FOLD_KEY)) || {} } catch { return {} } }
 const writeFolds = (f) => { try { localStorage.setItem(FOLD_KEY, JSON.stringify(f)) } catch { ignoredError('store folded groups') } }
 
+function createCapitalDraft() {
+  const store = createStore(() => null)
+  const setQty = update => store.setState(update, true)
+  return {
+    store, setQty,
+    invalidate(discard) {
+      discard()
+      capitalDirty.clear()
+      setQty(null)
+    },
+    seed(capital, arm, save) {
+      const { qty, needsSave } = reconcileCapital(capital, capitalDirty)
+      setQty(qty)
+      arm()
+      if (needsSave) save(qty)
+    },
+  }
+}
+
 // The Stash tab: what you hold, grouped by the game's own category for each item (lib/stash.js), with
 // net worth and liquid net worth, and the trade site's Merchant History beside it (new sales are credited
 // to the holdings). Holdings edit here; the Arbitrage rail only shows the part a loop may start from.
@@ -42,7 +62,9 @@ export default function StashView({ league }) {
   // The store's capital is THE copy: a save puts the server's answer there, and a poll that started
   // before a save never overwrites it (statusStore).
   const data = useStatus(s => s.capital)
-  const [qty, setQty] = useState(null)          // { currency: "qty as typed" }
+  const [draft] = useState(createCapitalDraft)
+  const qty = useStore(draft.store)
+  const { setQty } = draft
   const qtyRef = useRef(null)
   useLayoutEffect(() => { qtyRef.current = qty }, [qty])
   // Unsaved edits live in the store-shared `capitalDirty` Map so edits held during a fetch or restored
@@ -184,15 +206,13 @@ export default function StashView({ league }) {
     if (needsSave) save(next)
     else discard()
     if (selRef.current) loadSales(selRef.current)
-  }, [creditRev, data, save, discard])
+  }, [creditRev, data, save, discard, setQty])
   // If any mount's post-credit capital reload fails, drop stale quantities on the active editor too so it
   // cannot save a pre-credit balance before refreshHeader() delivers the credited holdings.
   useEffect(() => {
     if (!capitalStale) return
-    discard()
-    capitalDirty.clear()
-    setQty(null)
-  }, [capitalStale, discard])
+    draft.invalidate(discard)
+  }, [capitalStale, discard, draft])
   // Hold autosave across ALL Stash mounts while any sales fetch is in flight or holdings are stale, so a
   // remounted editor cannot send a pre-credit full-balance PUT over an in-flight credit before reconciliation.
   useEffect(() => {
@@ -201,13 +221,9 @@ export default function StashView({ league }) {
   }, [salesFetching, capitalStale, hold, release])
   // Seeded once from whichever copy arrives first, rebased with any shared unsaved edits (e.g. a failed unmount PUT)
   // and scheduled for retry (held automatically if salesFetching/capitalStale is active).
-  const seed = useCallback((cap) => {
-    const { qty: next, needsSave } = reconcileCapital(cap, capitalDirty)
-    setQty(next)
-    arm()
-    if (needsSave) save(next)
-  }, [arm, save])
-  useEffect(() => { if (!qty && data && !capitalSaving && !capitalStale) seed(data) }, [data, qty, capitalSaving, capitalStale, seed])
+  useEffect(() => {
+    if (!qty && data && !capitalSaving && !capitalStale) draft.seed(data, arm, save)
+  }, [data, qty, capitalSaving, capitalStale, draft, arm, save])
   const commitDetachedEdits = async () => {
     if (!capitalDirty.size) return
     discard()

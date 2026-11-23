@@ -44,3 +44,23 @@ it('opens the Board before routing an OAuth callback to Settings and consumes it
     window.history.replaceState({}, '', original)
   }
 })
+
+it('keeps Board selected while its OAuth-return request starts, then allows manual navigation', async () => {
+  const seen = []
+  const original = window.location.href
+  installApiMock({ '/api/board': () => {
+    seen.push([screen.getByRole('tab', { selected: true }).textContent, window.location.search])
+    return { rows: [] }
+  } })
+  try {
+    window.history.replaceState({}, '', '/?oauth=ok')
+    render(<App />)
+    await waitFor(() => expect(screen.getByRole('tab', { selected: true }).textContent).toBe('Settings'))
+    expect(seen[0]).toEqual(['Board', '?oauth=ok'])
+    expect(window.location.search).toBe('')
+    fireEvent.click(screen.getByRole('tab', { name: 'Board' }))
+    expect(screen.getByRole('tab', { selected: true }).textContent).toBe('Board')
+  } finally {
+    window.history.replaceState({}, '', original)
+  }
+})

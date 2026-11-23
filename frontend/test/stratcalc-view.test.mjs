@@ -29,9 +29,17 @@ test('the sidebar: a "Strats" card with a drag-and-drop folder tree, like trade 
   assert.ok(code.includes('<ContextMenu') && /label: 'Duplicate'/.test(code) && /label: 'Rename'/.test(code) && /label: 'Delete'/.test(code))
 })
 
-test('the clock ticks only where time shows: the lists and pickers never re-render each second', () => {
+test('the clock ticks only where time shows: the lists and pickers never re-render each second', async (t) => {
+  const { createClock } = await import('../src/lib/clock.js')
+  const interval = t.mock.method(globalThis, 'setInterval', () => 17)
+  const clear = t.mock.method(globalThis, 'clearInterval', () => {})
   assert.ok(code.includes('function Live('), 'a small live part owns the 1 s tick')
-  assert.equal((code.match(/setInterval\(sample, 1000\)/g) || []).length, 1, 'one ticking interval, inside Live')
+  const clock = createClock()
+  clock.subscribe(false, () => {})()
+  assert.equal(interval.mock.callCount(), 0)
+  clock.subscribe(true, () => {})()
+  assert.deepEqual(interval.mock.calls.map(call => call.arguments[1]), [1000])
+  assert.deepEqual(clear.mock.calls.map(call => call.arguments), [[17]])
   assert.ok(!/export default function StratCalcView[\s\S]*const \[now, setNow\]/.test(code), 'the view itself holds no clock state')
 })
 

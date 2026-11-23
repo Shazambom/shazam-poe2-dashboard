@@ -1,3 +1,4 @@
+import { useClockValue } from '../lib/clock.js'
 import { shopCache, marketCache, marketInFlight, priceCache, clearMerchantShopCache } from '../lib/merchantCache.js'
 import { ignoredError } from '../lib/ignoredError.js'
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
@@ -44,6 +45,26 @@ const SORT_COLS = [
   { key: 'age', label: 'Age', num: true },
   { key: 'verdict', label: 'Verdict', num: true },
 ]
+
+function floorSnapshot(inputs) {
+  const quotes = new Map(priceCache)
+  let snapshot
+  return {
+    inputs,
+    read(now) {
+      if (snapshot) return snapshot
+      const { enriched, sel, prices, wealthPrices, exchangeFn } = inputs
+      snapshot = new Map()
+      for (const row of enriched) {
+        const quote = quotes.get(`${sel}|${row.floorQuery}`)
+        if (quote && now - quote.at < PRICE_TTL_MS) {
+          snapshot.set(row.id, summarizeFloorCheck(quote.res, row, prices, wealthPrices, exchangeFn))
+        }
+      }
+      return snapshot
+    },
+  }
+}
 
 function sumRef(rows) {
   let sum = 0, any = false
@@ -199,6 +220,7 @@ export default function MerchantView({ league }) {
 
   const cachedMarket = sel ? marketCache.get(sel) : null
   const [shop, setShop] = useState(() => (sel && accountSlot ? shopCache.get(cacheKey) || null : null))
+  const canLoadMore = useClockValue(now => !!(shop && shop.remainingIds > 0 && (!shop.cursorExpiresAt || now < shop.cursorExpiresAt)))
   const activeAccount = oauthAccount || shop?.account || sessionAccount
   const doneKey = sel && activeAccount ? doneStorageKeyOf(sel, activeAccount) : ''
   const [market, setMarket] = useState(() => (
@@ -215,7 +237,6 @@ export default function MerchantView({ league }) {
   const [showDone, setShowDone] = useState(false)
   const [prevDoneMap, setPrevDoneMap] = useState(null)
   const [pendingPrices, setPendingPrices] = useState(() => new Set())
-  const [priceTick, setPriceTick] = useState(0)   // bumps when module priceCache receives a response
 
   const mountedRef = useRef(true)
   const selRef = useRef(sel)
@@ -337,6 +358,17 @@ export default function MerchantView({ league }) {
     }
   }, [desktop, sel, isLoggedIn, oauthAccount, sessionAccount, accountSlot, fetchOrder, setBusy])
 
+  const [shopScope, setShopScope] = useState(null)
+  if (!shopScope || shopScope.key !== cacheKey || shopScope.desktop !== desktop || shopScope.oauth !== oauthAccount || shopScope.league !== sel) {
+    setShopScope({ key: cacheKey, desktop, oauth: oauthAccount, league: sel })
+    const cached = sel && accountSlot ? shopCache.get(cacheKey) || null : null
+    setShop(cached)
+    if (!oauthAccount) setSessionAccount(cached?.account || '')
+    setError(null)
+    setOpenId(null)
+    setBusyMode(null)
+  }
+
   const runShopFetchRef = useRef(runShopFetch)
   useLayoutEffect(() => { runShopFetchRef.current = runShopFetch }, [runShopFetch])
 
@@ -350,11 +382,8 @@ export default function MerchantView({ league }) {
   // on tab open, league switch, login, or fetchOrder change (zero extra Load button friction).
   useEffect(() => {
     const cached = sel && accountSlot ? shopCache.get(cacheKey) || null : null
-    setShop(cached)
-    if (!oauthAccount) setSessionAccount(cached?.account || '')
-    setError(null)
-    setOpenId(null)
-    setBusy(null)
+    busyRef.current = null
+    useSync.getState().setBusy(false)
     if (desktop && sel && accountSlot && !cached) {
       runShopFetchRef.current({ sort: fetchOrder, more: false })
     }
@@ -364,7 +393,7 @@ export default function MerchantView({ league }) {
       busyRef.current = null
       window.poe2desktop?.merchant?.cancel?.({ scope: 'fetch' })
     }
-  }, [desktop, cacheKey, sel, accountSlot, fetchOrder, oauthAccount, setBusy])
+  }, [desktop, cacheKey, sel, accountSlot, fetchOrder, oauthAccount])
 
   // Done marks and their Undo belong to the selected league and account.
   const [doneScope, setDoneScope] = useState(doneKey)
@@ -391,15 +420,17 @@ export default function MerchantView({ league }) {
     return () => window.removeEventListener('keydown', onKey)
   }, [shop])
 
+  const [marketScope, setMarketScope] = useState({ desktop, league: sel })
+  if (marketScope.desktop !== desktop || marketScope.league !== sel) {
+    setMarketScope({ desktop, league: sel })
+    if (desktop && sel) {
+      setMarket(cachedMarket ? { prices: cachedMarket.prices, inflation: cachedMarket.inflation, sales: cachedMarket.sales || [] } : { ...market, sales: [] })
+    }
+  }
+
   // Load local loopback pricing, inflation series, and Merchant History sales with a short module cache (no GGG traffic).
   useEffect(() => {
     if (!desktop || !sel) return undefined
-    const cached = marketCache.get(sel)
-    if (cached) {
-      setMarket({ prices: cached.prices, inflation: cached.inflation, sales: cached.sales || [] })
-    } else {
-      setMarket(prev => ({ ...prev, sales: [] }))
-    }
     let alive = true
     fetchMarketIfStale(sel).then(next => {
       if (!alive || !next) return
@@ -500,17 +531,11 @@ export default function MerchantView({ league }) {
   const pairUnit = stashUnit(shopTotalRef, ref, wealthPrices, unitChoice)
   const commonUnit = pairUnit || 'divine'
 
-  const floorById = useMemo(() => {
-    const map = new Map()
-    const nowMs = Date.now()
-    for (const r of enriched) {
-      const cached = priceCache.get(`${sel}|${r.floorQuery}`)
-      if (cached && nowMs - cached.at < PRICE_TTL_MS) {
-        map.set(r.id, summarizeFloorCheck(cached.res, r, prices, wealthPrices, exchangeFn))
-      }
-    }
-    return map
-  }, [enriched, sel, prices, wealthPrices, exchangeFn, priceTick])
+  const floorInputs = useMemo(() => ({ enriched, sel, prices, wealthPrices, exchangeFn }), [enriched, sel, prices, wealthPrices, exchangeFn])
+  const [floors, setFloors] = useState(() => floorSnapshot(floorInputs))
+  if (floors.inputs !== floorInputs) setFloors(floorSnapshot(floorInputs))
+  const floorById = useClockValue(floors.read)
+  const publishQuotes = () => setFloors(previous => floorSnapshot(previous.inputs))
 
   const openRecentSale = useMemo(() => {
     if (!openId) return null
@@ -573,7 +598,7 @@ export default function MerchantView({ league }) {
     const priceKey = `${sel}|${row.floorQuery}`
     const cached = priceCache.get(priceKey)
     if (cached && Date.now() - cached.at < PRICE_TTL_MS) {
-      setPriceTick(t => t + 1)
+      publishQuotes()
       return
     }
     if (pendingPrices.has(priceKey)) return
@@ -606,7 +631,7 @@ export default function MerchantView({ league }) {
     } finally {
       if (mountedRef.current) {
         setPendingPrices(prev => { const n = new Set(prev); n.delete(priceKey); return n })
-        setPriceTick(t => t + 1)
+        publishQuotes()
       }
     }
   }
@@ -642,7 +667,6 @@ export default function MerchantView({ league }) {
     )
   }
 
-  const canLoadMore = !!(shop && shop.remainingIds > 0 && (!shop.cursorExpiresAt || Date.now() < shop.cursorExpiresAt))
   const orderLabel = (shop?.sort || fetchOrder) === 'price_desc' ? 'highest price first' : 'oldest first'
   const oppositeOrder = (shop?.sort || fetchOrder) === 'price_desc' ? 'oldest' : 'price_desc'
   const oppositeLabel = oppositeOrder === 'oldest' ? 'Fetch oldest instead' : 'Fetch highest-priced instead'

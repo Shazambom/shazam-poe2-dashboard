@@ -1,6 +1,7 @@
 // Trading → Workspace "Reprice in <currency>" (docs/reprice-design.md): the trade tap's view of this window's
 // page (desktop/src/trade/tap.js) → at most one offer; apply() replaces the saved search with the repriced one,
 // with a 10 s undo. The rules are in reprice.js; this only wires events, prices, the store and telemetry.
+import { createStore, useStore } from 'zustand'
 import { ignoredError } from './ignoredError.js'
 import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
 import { api, undoToast } from './api.js'
@@ -10,13 +11,20 @@ import { verdict, remember, applies, repriceQuery, ranRepriced, samplePlan, gapP
 import { makeTapStore } from './tapStore.js'
 import { searchOfLink } from './session.js'
 
-const SIBLINGS = new Map()       // the same search under other price filters (memory only, 5 minutes)
+const evidenceStore = createStore(() => ({ prices: null, siblings: new Map() }))
 const PRICES_TTL_MS = 5 * 60_000
 // Every tap event lands in its window's page at once, listened to or not: a reloaded window's search can finish
 // before its <webview> reports its id to this view (packaged app, 2026-10-03).
 const TAP = makeTapStore()
 let prices = { P: null, at: 0 }
 let tapOn = false
+
+function publishEvidence(update) {
+  const previous = evidenceStore.getState().siblings
+  const siblings = update ? new Map(previous) : previous
+  update?.(siblings)
+  evidenceStore.setState({ prices: prices.P, siblings })
+}
 
 function loadPrices() {
   if (prices.P && Date.now() - prices.at < PRICES_TTL_MS) return
@@ -25,7 +33,9 @@ function loadPrices() {
     if (!r?.prices || !Object.keys(r.prices).length) return
     prices = { P: r.prices, at: Date.now() }
     TAP.setPrices(r.prices)
-    for (const { page, at } of TAP.freshPages()) remember(SIBLINGS, page, at, r.prices)   // rows that loaded before the prices did, aged from when they were seen
+    publishEvidence(siblings => {
+      for (const { page, at } of TAP.freshPages()) remember(siblings, page, at, r.prices)   // rows that loaded before the prices did, aged from when they were seen
+    })
   }).catch(() => { prices.at = 0 })
 }
 
@@ -37,7 +47,7 @@ function listen() {
     if (e?.wcId == null) return
     if (e.kind === 'search') loadPrices()
     TAP.ingest(e, prices.P)
-    if (e.kind === 'fetch') remember(SIBLINGS, TAP.pageOf(e.wcId), TAP.seenAtOf(e.wcId) ?? Date.now(), prices.P)   // evidence ages from the search
+    publishEvidence(e.kind === 'fetch' ? siblings => remember(siblings, TAP.pageOf(e.wcId), TAP.seenAtOf(e.wcId) ?? Date.now(), prices.P) : null)
   })
 }
 
@@ -45,10 +55,10 @@ export function useReprice({ wv, node, navUrl, inHistory, remountKey, league, vi
   const offered = useRef(null)    // the search id an offer was last logged for
   const verify = useRef(null)     // { currency, after: search id }: the next search should filter on it
   const deeper = useRef({ id: null, sample: 'todo', gap: 'todo' })   // per search: the sample, then one fill-in
-  const [tick, setTick] = useState(0)
+  const evidence = useStore(evidenceStore)
   const [checking, setChecking] = useState(null)   // the search key a "Find cheapest" is running for
 
-  useEffect(() => { listen(); return TAP.subscribe(() => setTick(t => t + 1)) }, [])
+  useEffect(listen, [])
   // Moving on (another row, ↻, a hidden sub-tab, leaving Trading) drops every fetch still waiting, so the new
   // search gets the room (owner, 2026-10-03).
   useEffect(() => () => { window.poe2desktop?.trade?.listingsCancel?.() }, [remountKey, visible])
@@ -62,22 +72,23 @@ export function useReprice({ wv, node, navUrl, inHistory, remountKey, league, vi
   // The row's own query, from its link (a run search's slug is its query): the page counts only once it holds it.
   const nodeId = node?.id ?? null
   const selectedId = useEffectEvent(() => nodeId)
-  const [decodedLink, setDecodedLink] = useState(null)
+  const [decoder] = useState(() => createStore(() => null))
+  const decodedLink = useStore(decoder)
   const rowQuery = decodedLink?.query ?? null
   useEffect(() => {
     let live = true
     const owner = selectedId()
-    setDecodedLink(null)
+    decoder.setState(null, true)
     searchOfLink(navUrl || '').then(j => {
-      if (live && j?.query) setDecodedLink({ nodeId: owner, query: j.query })
+      if (live && j?.query) decoder.setState({ nodeId: owner, query: j.query }, true)
     }).catch(() => ignoredError('read search query'))
     return () => { live = false }
-  }, [navUrl])
+  }, [decoder, navUrl])
   // The window's own page, or — when the site redrew a search it ran moments ago from its own cache, with no
   // request the tap could see — the last page seen for that exact search (5 minutes).
   const page = own && pageIsRows(own, rowQuery) ? own : (rowQuery && TAP.recentFor(league, rowQuery)) || own
   const shown = !!page && visible && applies({ node, inHistory, navUrl }) && pageIsRows(page, rowQuery)
-  const offer = useMemo(() => (shown ? verdict(page, prices.P, { siblings: SIBLINGS }) : null), [tick, shown, page])
+  const offer = useMemo(() => (shown ? verdict(page, evidence.prices, evidence) : null), [evidence, shown, page])
 
   // Beta telemetry: did the page run the repriced search?
   useEffect(() => {
@@ -103,10 +114,10 @@ export function useReprice({ wv, node, navUrl, inHistory, remountKey, league, vi
           return
         }
         TAP.merge(wcId, s.id, r.rows)
-        remember(SIBLINGS, TAP.pageOf(wcId), TAP.seenAtOf(wcId) ?? Date.now(), prices.P, { sampled: true })
+        publishEvidence(siblings => remember(siblings, TAP.pageOf(wcId), TAP.seenAtOf(wcId) ?? Date.now(), prices.P, { sampled: true }))
       }).catch(() => { d[step] = 'done' })   // an IPC failure: give up on this search
     }
-    if (d.sample === 'todo' && sampledRecently(SIBLINGS, s.league, s.body?.query)) { d.sample = 'done'; d.gap = 'done'; return }   // cached
+    if (d.sample === 'todo' && sampledRecently(evidence.siblings, s.league, s.body?.query)) { d.sample = 'done'; d.gap = 'done'; return }   // cached
     if (d.sample === 'todo') {
       const ids = samplePlan(target)
       if (ids.length) run(ids, 'sample'); else d.sample = 'done'
@@ -117,7 +128,7 @@ export function useReprice({ wv, node, navUrl, inHistory, remountKey, league, vi
       const ids = gapPlan(target, prices.P)
       if (ids.length) run(ids, 'gap'); else d.gap = 'done'
     }
-  }, [tick, shown, own, rowQuery, wcId])
+  }, [evidence, shown, own, rowQuery, wcId])
 
   useEffect(() => {
     const id = page?.search?.id
@@ -156,11 +167,10 @@ export function useReprice({ wv, node, navUrl, inHistory, remountKey, league, vi
       if (r?.error !== 'cancelled') diag('ws', `reprice-find fail=${r?.error} ms=${Date.now() - t0}`);
       return
     }
-    remember(SIBLINGS, pageFromRecheck(r, s.league, s.body?.query, page.options, prices.P), Date.now(), prices.P, { sampled: true })
-    setTick(t => t + 1)
+    publishEvidence(siblings => remember(siblings, pageFromRecheck(r, s.league, s.body?.query, page.options, prices.P), Date.now(), prices.P, { sampled: true }))
     diag('ws', `reprice-find rows=${r.rows.length} ms=${Date.now() - t0}`)   // how long the user saw "Checking…"
   }, [page, checking])
-  const known = key != null && sampledRecently(SIBLINGS, page.search.league, page.search.body?.query)
+  const known = key != null && sampledRecently(evidence.siblings, page.search.league, page.search.body?.query)
   const emptyExact = !!page?.search && !page.search.ids?.length
   const state = findState({ shown, filtered: !!page?.search && currencyFiltered(page.search.body), judgeable: !!page && judgeable(page, prices.P), empty: emptyExact, offer, checking: checking != null && checking === key, known })
 

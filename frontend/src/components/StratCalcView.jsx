@@ -1,4 +1,5 @@
 import { ignoredError } from '../lib/ignoredError.js'
+import { createClock } from '../lib/clock.js'
 import React, { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { Tree } from 'react-arborist'
 import { api, bus, fmt, toast, undoToast } from '../lib/api.js'
@@ -95,19 +96,6 @@ function Flash({ value, bump, children }) {
 
 // The one place the clock ticks: re-renders its children (the clock, the hero, the sidebar's rates)
 // once a second while a strat runs; the lists and pickers around it never re-render for time.
-function createClock() {
-  let now = Date.now()
-  return {
-    read: () => now,
-    subscribe(running, notify) {
-      const sample = () => { now = Date.now(); notify() }
-      sample()
-      if (!running) return () => {}
-      const timer = setInterval(sample, 1000)
-      return () => clearInterval(timer)
-    },
-  }
-}
 function Live({ running, children }) {
   const [clock] = useState(createClock)
   const subscribe = useCallback(notify => clock.subscribe(running, notify), [clock, running])

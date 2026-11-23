@@ -44,3 +44,24 @@ it('samples the controls mounted with the palette and keeps those commands until
   expect(screen.queryByText('Choose holding')).toBeNull()
   unmount()
 })
+
+it('resets the selected command and filter and samples the newly enabled control on reopen', async () => {
+  installApiMock()
+  const command = vi.fn()
+  const view = (open, enabled) => <>
+    <CommandPalette open={open} onClose={() => {}} tabs={['Alpha', 'Alpine']} leagues={[]} screen="Board"
+      screenCommands={{ Board: [{ id: 'mounted', label: 'Board command', target: 'mounted', run: command }] }} />
+    <button type="button" data-cmd="mounted" disabled={!enabled}>Target</button>
+  </>
+  const { rerender } = render(view(true, false))
+  const field = () => screen.getByPlaceholderText(/Search screens/)
+  fireEvent.change(field(), { target: { value: 'Al' } })
+  fireEvent.keyDown(field(), { key: 'ArrowDown' })
+  expect(document.querySelector('.cmdk-item.sel .cmdk-label').textContent).toBe('Alpine')
+  rerender(view(false, false))
+  rerender(view(true, true))
+  expect(field().value).toBe('')
+  expect(document.querySelector('.cmdk-item.sel .cmdk-label').textContent).toBe('Board command')
+  fireEvent.keyDown(field(), { key: 'Enter' })
+  expect(command).toHaveBeenCalledTimes(1)
+})

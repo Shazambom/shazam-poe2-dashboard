@@ -3,7 +3,7 @@ import { act, render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { installApiMock } from './setup.js'
 import StashTab from '../../src/components/StashTab.jsx'
 import MerchantView from '../../src/components/MerchantView.jsx'
-import { _resetMerchantCache } from '../../src/lib/merchantCache.js'
+import { _resetMerchantCache, shopCache } from '../../src/lib/merchantCache.js'
 import { useStatus } from '../../src/lib/statusStore.js'
 import { useSync } from '../../src/lib/syncStore.js'
 import { useWorkspace } from '../../src/lib/workspaceStore.js'
@@ -710,6 +710,76 @@ describe('Stash → Merchant (MerchantView) lifecycle', () => {
     await waitFor(() => expect(screen.getByText('Fresh Ring')).toBeTruthy())
     expect(window.poe2desktop.connectSession).toHaveBeenCalledTimes(1)
     expect(window.poe2desktop.merchant.fetch).toHaveBeenCalledTimes(2)
+  })
+
+  it('expires a cached cursor at its exact deadline on rerender without fetching a page', async () => {
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(NOW)
+    const fetchShop = window.poe2desktop.merchant.fetch
+    const shop = await fetchShop.getMockImplementation()()
+    fetchShop.mockResolvedValue({ ...shop, remainingIds: 50, truncated: true, cursorExpiresAt: NOW + 10 })
+    const view = () => <MerchantView league="Test League" />
+    const { rerender } = render(view())
+    const more = await screen.findByRole('button', { name: /load next 50/i })
+    clock.mockReturnValue(NOW + 9)
+    rerender(view())
+    expect(more.isConnected).toBe(true)
+    clock.mockReturnValue(NOW + 10)
+    expect(more.isConnected).toBe(true)
+    rerender(view())
+    expect(screen.queryByRole('button', { name: /load next 50/i })).toBeNull()
+    expect(fetchShop).toHaveBeenCalledTimes(1)
+  })
+
+  it('publishes a delayed floor, retains it on unrelated renders and expires it on a pricing update', async () => {
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(NOW)
+    const quote = Promise.withResolvers()
+    const check = window.poe2desktop.merchant.priceCheck.mockReturnValue(quote.promise)
+    const { rerender } = render(<MerchantView league="Test League" />)
+    fireEvent.click(await screen.findByRole('button', { name: /check floor for headhunter/i }))
+    expect(screen.queryByTitle(/cheapest instant buyout/i)).toBeNull()
+    expect(check.mock.calls[0][0].query.query.status).toEqual({ option: 'securable' })
+    await act(async () => quote.resolve({ ok: true, total: 1, listings: [{ amount: 130, currency: 'exalted' }] }))
+    expect(screen.getByTitle(/cheapest instant buyout/i)).toBeTruthy()
+    clock.mockReturnValue(NOW + 300000)
+    rerender(<MerchantView league="Test League" />)
+    expect(screen.getByTitle(/cheapest instant buyout/i)).toBeTruthy()
+    act(() => useStatus.setState(({ status }) => ({ status: { ...status, wealth_prices: { ...status.wealth_prices, divine: 105 } } })))
+    expect(screen.queryByTitle(/cheapest instant buyout/i)).toBeNull()
+    expect(check).toHaveBeenCalledTimes(1)
+  })
+
+  it('switches shop and ledger together, cancels before fetching, and rejects superseded completions', async () => {
+    const history = { rows: [{ time: isoAgoDays(2), item_id: 'sale', price: { amount: 240, currency: 'exalted' },
+      item: { name: 'Headhunter', typeLine: 'Heavy Belt', rarity: 'Unique' } }] }
+    const lateSales = Promise.withResolvers()
+    const nextSales = Promise.withResolvers()
+    installApiMock({ '/api/sales': url => {
+      const league = new URL(url, 'http://localhost').searchParams.get('league')
+      return league === 'Old' ? history : (league === 'Pending' ? lateSales.promise : nextSales.promise)
+    } })
+    const { fetch: fetchShop, cancel } = window.poe2desktop.merchant
+    const lateShop = Promise.withResolvers()
+    const example = await fetchShop.getMockImplementation()()
+    fetchShop.mockResolvedValueOnce(example).mockReturnValueOnce(lateShop.promise)
+    const { rerender } = render(<MerchantView league="Old" />)
+    const details = () => fireEvent.click(screen.getByText('Headhunter').closest('button'))
+    await screen.findByText('Headhunter')
+    details()
+    expect(screen.getByText('Your sales history')).toBeTruthy()
+    shopCache.set('Cached|oauthshop#1234|price_desc', shopCache.get('Old|oauthshop#1234|price_desc'))
+    rerender(<MerchantView league="Pending" />)
+    expect(screen.queryByText('Headhunter')).toBeNull()
+    expect(cancel.mock.calls.map(([opts]) => opts.scope)).toEqual(['all', 'fetch'])
+    expect(cancel.mock.invocationCallOrder.at(-1)).toBeLessThan(fetchShop.mock.invocationCallOrder[1])
+    rerender(<MerchantView league="Cached" />)
+    details()
+    expect(screen.queryByText('Your sales history')).toBeNull()
+    await act(async () => { lateSales.resolve(history); lateShop.resolve({ ...example, rows: [] }) })
+    expect(screen.getByText('Headhunter', { selector: '.merchant-item-name' })).toBeTruthy()
+    expect(screen.queryByText('Your sales history')).toBeNull()
+    await act(async () => nextSales.resolve(history))
+    expect(screen.getByText('Your sales history')).toBeTruthy()
+    expect(fetchShop).toHaveBeenCalledTimes(2)
   })
 
   it('checks the pagination deadline on a render and keeps a published floor price until a market input changes', async () => {

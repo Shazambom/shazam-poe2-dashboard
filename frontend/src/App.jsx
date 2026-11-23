@@ -1,5 +1,6 @@
 import { ignoredError } from './lib/ignoredError.js'
 import React, { Suspense, lazy, useEffect, useEffectEvent, useRef, useState } from 'react'
+import { createStore, useStore } from 'zustand'
 import { motion, AnimatePresence, MotionConfig } from 'motion/react'
 import { THEMES, useTheme } from './lib/themeStore.js'
 import { api, bus, surface } from './lib/api.js'
@@ -46,7 +47,9 @@ const TABS = ['Board', 'Stash', 'Trading', 'Economy', 'Settings']   // owner's o
 // Screens that consume useHorizon (the rest ignore the global time window).
 const HORIZON_SCREENS = new Set(['board', 'economy-hold', 'economy-movers'])
 export default function App() {
-  const [tab, setTab] = useState('Board')
+  const [navigation] = useState(() => createStore(() => 'Board'))
+  const tab = useStore(navigation)
+  const setTab = navigation.setState
   const status = useStatus(s => s.status)
   const capital = useStatus(s => s.capital)
   const settings = useStatus(s => s.settings)
@@ -72,7 +75,7 @@ export default function App() {
     if (window.poe2desktop?.getVersion) window.poe2desktop.getVersion().then(setAppVersion).catch(() => ignoredError('load app version'))
     api.leagues().then(setLeagues).catch(() => setLeagues([]))
     return startStatusPolling()
-  }, [])
+  }, [setTab])
   // The ONE toast stack. A toast with an `id` replaces an earlier one with the same id (the live
   // ping banner: newest ping on top); `{id, dismiss:true}` removes it; `node` renders custom content.
   useEffect(() => bus.on(t => {
@@ -101,7 +104,7 @@ export default function App() {
     }
     window.addEventListener('keydown', h)
     return () => window.removeEventListener('keydown', h)
-  }, [])
+  }, [setTab])
 
   // Phase 4: the market-signal inbox (Divine orb) polls in the background (signalStore); a change
   // in the fired set pings — sound, OS notification, and a banner in the toast stack whose Open
@@ -135,7 +138,7 @@ export default function App() {
   }, [status?.league])
 
   // Jump to Trading → Live (used by the ping banner, the VaalPingOrb, and the hotkey).
-  const goLive = React.useCallback(() => { nav.openTrading('live'); setTab('Trading') }, [])
+  const goLive = React.useCallback(() => { nav.openTrading('live'); setTab('Trading') }, [setTab])
   // (The hidden feedback window, `?snap=1`, gets a preload without `trade`, so the three desktop
   // hooks below no-op there by construction; it photographs, nothing else.)
   useLiveWiring(goLive)
@@ -177,14 +180,14 @@ export default function App() {
       else nav.openSub(section, sub)
     }
     setTab(section)
-  }, [])
+  }, [setTab])
   const goScreen = React.useCallback((id) => { const d = DESTS.find(x => x.id === id); if (d) goSub(d.section, d.sub) }, [goSub])
   // ⌘K workspace commands: each lands on Trading → Workspace and mutates the store directly.
   const goWorkspace = React.useCallback(() => {
     nav.openTrading('workspace')
     setSubs(m => ({ ...m, Trading: 'workspace' }))
     setTab('Trading')
-  }, [])
+  }, [setTab])
   useEffect(() => nav.on(e => {
     if (e.type === 'goTrading') goSub('Trading', e.sub || 'workspace')
     if (e.type === 'goStash') {
@@ -193,7 +196,7 @@ export default function App() {
       setTab('Stash')
     }
     if (e.type === 'goEconomy') goSub('Economy', e.sub || 'inflation')
-  }), [goSub])
+  }), [goSub, setTab])
   const ee2Present = useWorkspace(s => s.ee2Present)
   const hasHistoryRows = useWorkspace(s => !!(findWhere(s.tree, n => n.kind === 'folder' && n.sys === HISTORY_SYS)?.children || []).length)
   const customThemes = useTheme(s => s.customs)
