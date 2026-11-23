@@ -730,6 +730,24 @@ describe('Stash → Merchant (MerchantView) lifecycle', () => {
     expect(fetchShop).toHaveBeenCalledTimes(1)
   })
 
+  it('publishes a delayed floor, retains it on unrelated renders and expires it on a pricing update', async () => {
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(NOW)
+    const quote = Promise.withResolvers()
+    const check = window.poe2desktop.merchant.priceCheck.mockReturnValue(quote.promise)
+    const { rerender } = render(<MerchantView league="Test League" />)
+    fireEvent.click(await screen.findByRole('button', { name: /check floor for headhunter/i }))
+    expect(screen.queryByTitle(/cheapest instant buyout/i)).toBeNull()
+    expect(check.mock.calls[0][0].query.query.status).toEqual({ option: 'securable' })
+    await act(async () => quote.resolve({ ok: true, total: 1, listings: [{ amount: 130, currency: 'exalted' }] }))
+    expect(screen.getByTitle(/cheapest instant buyout/i)).toBeTruthy()
+    clock.mockReturnValue(NOW + 300000)
+    rerender(<MerchantView league="Test League" />)
+    expect(screen.getByTitle(/cheapest instant buyout/i)).toBeTruthy()
+    act(() => useStatus.setState(({ status }) => ({ status: { ...status, wealth_prices: { ...status.wealth_prices, divine: 105 } } })))
+    expect(screen.queryByTitle(/cheapest instant buyout/i)).toBeNull()
+    expect(check).toHaveBeenCalledTimes(1)
+  })
+
   it('checks the pagination deadline on a render and keeps a published floor price until a market input changes', async () => {
     const clock = vi.spyOn(Date, 'now').mockReturnValue(NOW)
     const fetchShop = window.poe2desktop.merchant.fetch
