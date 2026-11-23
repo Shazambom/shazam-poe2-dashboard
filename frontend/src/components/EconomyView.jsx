@@ -1,4 +1,4 @@
-import React, { Suspense, lazy, useEffect, useState } from 'react'
+import { Suspense, lazy, useEffect, useState } from 'react'
 import SubTabs from './SubTabs.jsx'
 import { subsOf } from '../lib/dests.js'
 import { nav } from '../lib/nav.js'

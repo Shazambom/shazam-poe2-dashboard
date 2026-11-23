@@ -1,3 +1,4 @@
+import { ignoredError } from './ignoredError.js'
 import { create } from 'zustand'
 
 // The ONE app-wide time horizon (lookback window). Every view that used to carry its own
@@ -18,7 +19,12 @@ export const useHorizon = create((set) => ({
   hours: load(),
   setHours: (h) => {
     if (!HOURS.includes(h)) return
-    try { localStorage.setItem(KEY, String(h)) } catch {}
+    try { localStorage.setItem(KEY, String(h)) } catch { ignoredError('store time window') }
     set({ hours: h })
   },
 }))
+
+// Canonical hours → range label (matches the board/hold horizon pickers).
+export function rangeLabel(hours) {
+  return { 24: '24h', 72: '3d', 168: '7d', 336: '14d' }[hours] || `${Math.max(1, Math.round((hours || 24) / 24))}d`
+}

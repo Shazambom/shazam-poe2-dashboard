@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 // Arbiter UI style linter — zero dependencies, one source of truth.
 //
 // WHY THIS EXISTS (and not stylelint): the worst color drift in this app lives in
@@ -80,144 +79,149 @@ function contrast(a, b) {
   return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05)
 }
 
-// ---- Parse every token block: `:root {` is the source of truth (the default theme);
-//      `:root[data-theme="x"] {` blocks are presets that override it. ----
-const cssText = readFileSync(CSS, 'utf8')
-const cssLines = cssText.split('\n')
-const blocks = []   // { name, start, end, tokens: Map(--name → value), line: Map(--name → lineNo) }
-for (let i = 0; i < cssLines.length; i++) {
-  const m = cssLines[i].match(/^\s*:root(\[data-theme="([a-z0-9-]+)"\])?\s*\{/)
-  if (!m) continue
-  const end = cssLines.findIndex((l, j) => j > i && l.includes('}'))
-  if (end === -1) { console.error(`Unterminated token block at styles.css:${i + 1}`); process.exit(2) }
-  const tokens = new Map(), line = new Map()
-  for (let j = i + 1; j < end; j++) {
-    for (const t of cssLines[j].matchAll(/(--[a-z0-9-]+)\s*:\s*([^;]+);/gi)) { tokens.set(t[1], t[2].trim()); line.set(t[1], j + 1) }
-  }
-  blocks.push({ name: m[2] || 'root', start: i, end, tokens, line })
-}
-const root = blocks.find(b => b.name === 'root')
-if (!root) { console.error('Could not locate :root block in styles.css'); process.exit(2) }
-const inTokenBlock = (i) => blocks.some(b => i > b.start && i < b.end)
-
-const tokenValue = root.tokens         // --name → raw value string (default theme)
-const tokenByHex = new Map()           // normalized hex → --name  (color tokens only)
-for (const [name, v] of tokenValue) {
-  const hexes = v.match(HEX)
-  if (hexes && hexes.length === 1 && v === hexes[0]) tokenByHex.set(norm(hexes[0]), name)
-}
-// Themed colours' channel triplets, for check 7: "212,172,82" → --accent-rgb
-const tripletToken = new Map()
-for (const [name, v] of tokenValue) if (name.endsWith('-rgb')) tripletToken.set(v.replace(/\s+/g, ''), name)
-
-const nearestToken = (hex) => {
-  let best = null, bd = Infinity
-  for (const [h, name] of tokenByHex) { const d = dist(hex, h); if (d < bd) { bd = d; best = { name, hex: h, d } } }
-  return best
-}
-
-// ---- Checks 1, 6: .jsx has no raw hex and no raw checkboxes. ----
-function walk(dir) {
-  for (const name of readdirSync(dir)) {
-    const p = join(dir, name)
-    if (statSync(p).isDirectory()) { walk(p); continue }
-    if (!p.endsWith('.jsx')) continue
-    const rel = relative(ROOT, p)
-    readFileSync(p, 'utf8').split('\n').forEach((ln, i) => {
-      for (const raw of ln.match(HEX) || []) {
-        const hex = norm(raw)
-        const tok = tokenByHex.get(hex)
-        if (tok) err(rel, i + 1, `raw hex ${raw} == var(${tok}) — use the token, don't paste the hex`)
-        else {
-          const n = nearestToken(hex)
-          const hint = n && n.d < NEAR_THRESHOLD ? ` (near var(${n.name}) ${n.hex} — likely the same color, drifted)` : ''
-          err(rel, i + 1, `raw hex ${raw} in JSX — colors belong in styles.css tokens / theme.js, not inline${hint}`)
-        }
-      }
-      if (/type\s*=\s*["']checkbox["']/.test(ln)) err(rel, i + 1, 'raw <input type="checkbox"> is banned — use <Toggle> (components/Toggle.jsx)')
-    })
-  }
-}
-walk(SRC)
-
-// ---- Check 3: theme.js is var() aliases; the only hex allowed is the chart-only extras. ----
-readFileSync(THEME, 'utf8').split('\n').forEach((ln, i) => {
-  for (const raw of ln.match(HEX) || []) {
-    const hex = norm(raw)
-    if (CHART_EXTRAS.has(hex)) continue
-    const tok = tokenByHex.get(hex)
-    err('src/theme.js', i + 1, tok ? `hex ${raw} == var(${tok}) — theme.js aliases tokens as 'var(${tok})', it does not mirror hex` : `hex ${raw} is not a registered chart extra — theme.js carries no UI colours`)
-  }
-})
-
-// ---- Checks 2, 4, 5, 7: literals in styles.css outside the token blocks. ----
-cssLines.forEach((ln, i) => {
-  if (inTokenBlock(i)) return
-  for (const m of ln.matchAll(HEX)) {
-    const raw = m[0], hex = norm(raw)
-    const tok = tokenByHex.get(hex)
-    if (tok) {
-      const fallback = new RegExp(`var\\(\\s*${tok}\\s*,\\s*${raw}\\s*\\)`, 'i')
-      if (fallback.test(ln)) err('src/styles.css', i + 1, `redundant fallback var(${tok}, ${raw}) — the fallback duplicates the token; drop it`)
-      else err('src/styles.css', i + 1, `raw hex ${raw} == var(${tok}) — use the token`)
-      continue
+function checkStyles() {
+  // ---- Parse every token block: `:root {` is the source of truth (the default theme);
+  //      `:root[data-theme="x"] {` blocks are presets that override it. ----
+  const cssText = readFileSync(CSS, 'utf8')
+  const cssLines = cssText.split('\n')
+  const blocks = []   // { name, start, end, tokens: Map(--name → value), line: Map(--name → lineNo) }
+  for (let i = 0; i < cssLines.length; i++) {
+    const m = cssLines[i].match(/^\s*:root(\[data-theme="([a-z0-9-]+)"\])?\s*\{/)
+    if (!m) continue
+    const end = cssLines.findIndex((l, j) => j > i && l.includes('}'))
+    if (end === -1) { console.error(`Unterminated token block at styles.css:${i + 1}`); return 2 }
+    const tokens = new Map(), line = new Map()
+    for (let j = i + 1; j < end; j++) {
+      for (const t of cssLines[j].matchAll(/(--[a-z0-9-]+)\s*:([^;]+);/gi)) { tokens.set(t[1], t[2].trim()); line.set(t[1], j + 1) }
     }
-    const n = nearestToken(hex)
-    if (n && n.d < NEAR_THRESHOLD) err('src/styles.css', i + 1, `${raw} is a near-duplicate of var(${n.name}) ${n.hex} — unify to the token`)
-    else err('src/styles.css', i + 1, `raw hex ${raw} outside the token blocks — declare a semantic token in :root and use var(--token)`)
+    blocks.push({ name: m[2] || 'root', start: i, end, tokens, line })
   }
-  for (const m of ln.matchAll(RGBA)) {
-    const trip = `${m[1]},${m[2]},${m[3]}`
-    const tok = tripletToken.get(trip)
-    if (tok) err('src/styles.css', i + 1, `literal rgba(${trip},…) is the ${tok.replace('-rgb', '')} colour — use rgba(var(${tok}), a) so presets can change it`)
-  }
-})
+  const root = blocks.find(b => b.name === 'root')
+  if (!root) { console.error('Could not locate :root block in styles.css'); return 2 }
+  const inTokenBlock = (i) => blocks.some(b => i > b.start && i < b.end)
 
-// ---- Check 8: presets. ----
-const themedKeys = [...tokenValue.keys()].filter(k => !isNeverThemed(k))
-for (const b of blocks) {
-  if (b.name === 'root') continue
-  const file = 'src/styles.css', at = b.start + 1
-  const missing = themedKeys.filter(k => !b.tokens.has(k))
-  const extra = [...b.tokens.keys()].filter(k => !tokenValue.has(k))
-  const forbidden = [...b.tokens.keys()].filter(k => isNeverThemed(k))
-  if (missing.length) err(file, at, `preset "${b.name}" is missing ${missing.length} token(s): ${missing.join(', ')} — a preset redeclares every themed token`)
-  if (extra.length) err(file, at, `preset "${b.name}" declares tokens :root does not have: ${extra.join(', ')}`)
-  if (forbidden.length) err(file, at, `preset "${b.name}" may not override ${forbidden.join(', ')} (never themed)`)
-  const hexOf = (k) => { const v = b.tokens.get(k); const h = v && v.match(HEX); return h && h.length === 1 && v === h[0] ? norm(h[0]) : null }
-  for (const [trip, col] of RGB_PAIRS) {
-    const h = hexOf(col), t = b.tokens.get(trip)
-    if (h && t && t.replace(/\s+/g, '') !== rgb(h).join(',')) err(file, b.line.get(trip), `preset "${b.name}": ${trip} is ${t} but ${col} is ${h} (${rgb(h).join(',')}) — keep the triplet equal to its colour`)
+  const tokenValue = root.tokens         // --name → raw value string (default theme)
+  const tokenByHex = new Map()           // normalized hex → --name  (color tokens only)
+  for (const [name, v] of tokenValue) {
+    const hexes = v.match(HEX)
+    if (hexes && hexes.length === 1 && v === hexes[0]) tokenByHex.set(norm(hexes[0]), name)
   }
+  // Themed colours' channel triplets, for check 7: "212,172,82" → --accent-rgb
+  const tripletToken = new Map()
+  for (const [name, v] of tokenValue) if (name.endsWith('-rgb')) tripletToken.set(v.replace(/\s+/g, ''), name)
+
+  const nearestToken = (hex) => {
+    let best = null, bd = Infinity
+    for (const [h, name] of tokenByHex) { const d = dist(hex, h); if (d < bd) { bd = d; best = { name, hex: h, d } } }
+    return best
+  }
+
+  // ---- Checks 1, 6: .jsx has no raw hex and no raw checkboxes. ----
+  function walk(dir) {
+    for (const name of readdirSync(dir)) {
+      const p = join(dir, name)
+      if (statSync(p).isDirectory()) { walk(p); continue }
+      if (!p.endsWith('.jsx')) continue
+      const rel = relative(ROOT, p)
+      readFileSync(p, 'utf8').split('\n').forEach((ln, i) => {
+        for (const raw of ln.match(HEX) || []) {
+          const hex = norm(raw)
+          const tok = tokenByHex.get(hex)
+          if (tok) err(rel, i + 1, `raw hex ${raw} == var(${tok}) — use the token, don't paste the hex`)
+          else {
+            const n = nearestToken(hex)
+            const hint = n && n.d < NEAR_THRESHOLD ? ` (near var(${n.name}) ${n.hex} — likely the same color, drifted)` : ''
+            err(rel, i + 1, `raw hex ${raw} in JSX — colors belong in styles.css tokens / theme.js, not inline${hint}`)
+          }
+        }
+        if (/type\s*=\s*["']checkbox["']/.test(ln)) err(rel, i + 1, 'raw <input type="checkbox"> is banned — use <Toggle> (components/Toggle.jsx)')
+      })
+    }
+  }
+  walk(SRC)
+
+  // ---- Check 3: theme.js is var() aliases; the only hex allowed is the chart-only extras. ----
+  readFileSync(THEME, 'utf8').split('\n').forEach((ln, i) => {
+    for (const raw of ln.match(HEX) || []) {
+      const hex = norm(raw)
+      if (CHART_EXTRAS.has(hex)) continue
+      const tok = tokenByHex.get(hex)
+      err('src/theme.js', i + 1, tok ? `hex ${raw} == var(${tok}) — theme.js aliases tokens as 'var(${tok})', it does not mirror hex` : `hex ${raw} is not a registered chart extra — theme.js carries no UI colours`)
+    }
+  })
+
+  // ---- Checks 2, 4, 5, 7: literals in styles.css outside the token blocks. ----
+  cssLines.forEach((ln, i) => {
+    if (inTokenBlock(i)) return
+    for (const m of ln.matchAll(HEX)) {
+      const raw = m[0], hex = norm(raw)
+      const tok = tokenByHex.get(hex)
+      if (tok) {
+        const fallback = new RegExp(`var\\(\\s*${tok}\\s*,\\s*${raw}\\s*\\)`, 'i')
+        if (fallback.test(ln)) err('src/styles.css', i + 1, `redundant fallback var(${tok}, ${raw}) — the fallback duplicates the token; drop it`)
+        else err('src/styles.css', i + 1, `raw hex ${raw} == var(${tok}) — use the token`)
+        continue
+      }
+      const n = nearestToken(hex)
+      if (n && n.d < NEAR_THRESHOLD) err('src/styles.css', i + 1, `${raw} is a near-duplicate of var(${n.name}) ${n.hex} — unify to the token`)
+      else err('src/styles.css', i + 1, `raw hex ${raw} outside the token blocks — declare a semantic token in :root and use var(--token)`)
+    }
+    for (const m of ln.matchAll(RGBA)) {
+      const trip = `${m[1]},${m[2]},${m[3]}`
+      const tok = tripletToken.get(trip)
+      if (tok) err('src/styles.css', i + 1, `literal rgba(${trip},…) is the ${tok.replace('-rgb', '')} colour — use rgba(var(${tok}), a) so presets can change it`)
+    }
+  })
+
+  // ---- Check 8: presets. ----
+  const themedKeys = [...tokenValue.keys()].filter(k => !isNeverThemed(k))
+  for (const b of blocks) {
+    if (b.name === 'root') continue
+    const file = 'src/styles.css', at = b.start + 1
+    const missing = themedKeys.filter(k => !b.tokens.has(k))
+    const extra = [...b.tokens.keys()].filter(k => !tokenValue.has(k))
+    const forbidden = [...b.tokens.keys()].filter(k => isNeverThemed(k))
+    if (missing.length) err(file, at, `preset "${b.name}" is missing ${missing.length} token(s): ${missing.join(', ')} — a preset redeclares every themed token`)
+    if (extra.length) err(file, at, `preset "${b.name}" declares tokens :root does not have: ${extra.join(', ')}`)
+    if (forbidden.length) err(file, at, `preset "${b.name}" may not override ${forbidden.join(', ')} (never themed)`)
+    const hexOf = (k) => { const v = b.tokens.get(k); const h = v && v.match(HEX); return h && h.length === 1 && v === h[0] ? norm(h[0]) : null }
+    for (const [trip, col] of RGB_PAIRS) {
+      const h = hexOf(col), t = b.tokens.get(trip)
+      if (h && t && t.replace(/\s+/g, '') !== rgb(h).join(',')) err(file, b.line.get(trip), `preset "${b.name}": ${trip} is ${t} but ${col} is ${h} (${rgb(h).join(',')}) — keep the triplet equal to its colour`)
+    }
+    for (const [fg, bg, min] of CONTRAST) {
+      const a = hexOf(fg), c = hexOf(bg)
+      if (!a || !c) continue
+      const r = contrast(a, c)
+      if (r < min) err(file, b.line.get(fg), `preset "${b.name}": ${fg} ${a} on ${bg} ${c} is ${r.toFixed(2)}:1, needs ≥ ${min}:1`)
+    }
+    for (const [fg, bg, alpha, min] of TINT_CONTRAST) {
+      const a = hexOf(fg), c = hexOf(bg)
+      if (!a || !c) continue
+      const tinted = blendHex(a, c, alpha)
+      const r = contrast(a, tinted)
+      if (r < min) err(file, b.line.get(fg), `preset "${b.name}": ${fg} ${a} on ${alpha * 100}% tinted ${bg} (${tinted}) is ${r.toFixed(2)}:1, needs ≥ ${min}:1`)
+    }
+  }
+  // The default theme is held to the same contrast bar (it is the reference the presets copy).
   for (const [fg, bg, min] of CONTRAST) {
-    const a = hexOf(fg), c = hexOf(bg)
-    if (!a || !c) continue
+    const a = tokenValue.get(fg), c = tokenValue.get(bg)
+    if (!a || !c || !IS_HEX.test(a) || !IS_HEX.test(c)) continue
     const r = contrast(a, c)
-    if (r < min) err(file, b.line.get(fg), `preset "${b.name}": ${fg} ${a} on ${bg} ${c} is ${r.toFixed(2)}:1, needs ≥ ${min}:1`)
+    if (r < min) err('src/styles.css', root.line.get(fg), `:root ${fg} ${a} on ${bg} ${c} is ${r.toFixed(2)}:1, needs ≥ ${min}:1`)
   }
   for (const [fg, bg, alpha, min] of TINT_CONTRAST) {
-    const a = hexOf(fg), c = hexOf(bg)
-    if (!a || !c) continue
+    const a = tokenValue.get(fg), c = tokenValue.get(bg)
+    if (!a || !c || !IS_HEX.test(a) || !IS_HEX.test(c)) continue
     const tinted = blendHex(a, c, alpha)
     const r = contrast(a, tinted)
-    if (r < min) err(file, b.line.get(fg), `preset "${b.name}": ${fg} ${a} on ${alpha * 100}% tinted ${bg} (${tinted}) is ${r.toFixed(2)}:1, needs ≥ ${min}:1`)
+    if (r < min) err('src/styles.css', root.line.get(fg), `:root ${fg} ${a} on ${alpha * 100}% tinted ${bg} (${tinted}) is ${r.toFixed(2)}:1, needs ≥ ${min}:1`)
   }
-}
-// The default theme is held to the same contrast bar (it is the reference the presets copy).
-for (const [fg, bg, min] of CONTRAST) {
-  const a = tokenValue.get(fg), c = tokenValue.get(bg)
-  if (!a || !c || !IS_HEX.test(a) || !IS_HEX.test(c)) continue
-  const r = contrast(a, c)
-  if (r < min) err('src/styles.css', root.line.get(fg), `:root ${fg} ${a} on ${bg} ${c} is ${r.toFixed(2)}:1, needs ≥ ${min}:1`)
-}
-for (const [fg, bg, alpha, min] of TINT_CONTRAST) {
-  const a = tokenValue.get(fg), c = tokenValue.get(bg)
-  if (!a || !c || !IS_HEX.test(a) || !IS_HEX.test(c)) continue
-  const tinted = blendHex(a, c, alpha)
-  const r = contrast(a, tinted)
-  if (r < min) err('src/styles.css', root.line.get(fg), `:root ${fg} ${a} on ${alpha * 100}% tinted ${bg} (${tinted}) is ${r.toFixed(2)}:1, needs ≥ ${min}:1`)
+
+  console.log('')
+  if (errors) { console.log(`✖ ${errors} error(s) — style tokens not respected. See docs/ui-styleguide.md`); return 1 }
+  console.log(`✓ style tokens respected${blocks.length > 1 ? ` · ${blocks.length - 1} preset(s) checked` : ''}`)
+  return 0
 }
 
-console.log('')
-if (errors) { console.log(`✖ ${errors} error(s) — style tokens not respected. See docs/ui-styleguide.md`); process.exit(1) }
-console.log(`✓ style tokens respected${blocks.length > 1 ? ` · ${blocks.length - 1} preset(s) checked` : ''}`)
+process.exitCode = checkStyles()

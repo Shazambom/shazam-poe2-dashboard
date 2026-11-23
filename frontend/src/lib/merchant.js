@@ -15,10 +15,10 @@ export const STALE_DAYS = 3
 export const STALE_MS = STALE_DAYS * 24 * 3600 * 1000
 export const BLEED_PCT = 0.15
 export const DUST_CHAOS = 2
-export const DUST_DIV_FALLBACK = 0.02
+const DUST_DIV_FALLBACK = 0.02
 export const HARD_CURRENCIES = new Set(['divine', 'mirror', 'hinekoras-lock'])
 export const MAX_REGEX_LEN = LIMIT - 1   // 249 chars — strictly inside PoE 2's 250-char stash box
-export const VERDICT_RANK = { reprice: 0, cut: 1, vendor: 2, fresh: 3 }
+const VERDICT_RANK = { reprice: 0, cut: 1, vendor: 2, fresh: 3 }
 
 // Linear interpolation on a sorted [{ t, v }] series (t in epoch seconds).
 function sampleSeries(points, tSec) {
@@ -79,7 +79,7 @@ function computeBleed(currency, indexedMs, inflation, inflMap) {
   return { pct: 1 - ((vThen / dThen) / (vNow / dNow)), capped, windowDays }
 }
 
-export function dustThresholdDiv(prices = {}, wealthPrices = null, exchangeFn = null) {
+function dustThresholdDiv(prices = {}, wealthPrices = null, exchangeFn = null) {
   const ex = exchangeFn || makeExchange(prices, wealthPrices)
   const dust = ex(DUST_CHAOS, 'chaos', 'divine')
   return dust != null ? dust : DUST_DIV_FALLBACK
@@ -592,7 +592,7 @@ export function matchRecentSale(row, salesRows) {
     const it = s.item || {}
     const sName = String(it.name || '').trim().toLowerCase()
     const sType = String(it.typeLine || it.baseType || '').trim().toLowerCase()
-    let hit = false
+    let hit
     if (rarity === 'unique') {
       hit = !!name && sName === name
     } else if (name) {

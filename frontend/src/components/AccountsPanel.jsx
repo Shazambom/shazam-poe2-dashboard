@@ -1,8 +1,9 @@
-import React, { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { api, fmt } from '../lib/api.js'
+import { ignoredError } from '../lib/ignoredError.js'
 import { connectBridge, connectSession } from '../lib/session.js'
 import { useStatus } from '../lib/statusStore.js'
-import { clearMerchantShopCache } from './MerchantView.jsx'
+import { clearMerchantShopCache } from '../lib/merchantCache.js'
 
 const ago = (t) => t ? fmt.age(Date.now() / 1000 - t) + ' ago' : '–'
 
@@ -12,15 +13,14 @@ export default function AccountsPanel({ onChange }) {
   const oa = useStatus(s => s.status?.oauth ?? null)
   const load = useStatus(s => s.refresh)
   const [cookie, setCookie] = useState('')
-  const [msg, setMsg] = useState(null)
+  const [msg, setMsg] = useState(() => {
+    const q = new URLSearchParams(window.location.search)
+    if (q.get('oauth') === 'ok') return { ok: true, text: 'Logged in with Path of Exile.' }
+    if (q.get('oauth') === 'error') return { ok: false, text: `Login failed: ${q.get('msg')}` }
+    return null
+  })
   const [busy, setBusy] = useState(false)
   const host = window.location.origin
-
-  useEffect(() => {
-    const q = new URLSearchParams(window.location.search)
-    if (q.get('oauth') === 'ok') setMsg({ ok: true, text: 'Logged in with Path of Exile.' })
-    if (q.get('oauth') === 'error') setMsg({ ok: false, text: `Login failed: ${q.get('msg')}` })
-  }, [])
 
   const desktop = connectBridge() === 'desktop'   // live order book is a desktop-app feature
   const bridgeConnect = async () => {
@@ -38,7 +38,7 @@ export default function AccountsPanel({ onChange }) {
       const r = await api.connectSession(raw)
       // Desktop: also mirror the cookie into the Electron session so the embedded
       // Trade site is logged in (paste otherwise only reaches the backend).
-      if (window.poe2desktop?.setCookie) { try { await window.poe2desktop.setCookie(raw) } catch {} }
+      if (window.poe2desktop?.setCookie) { try { await window.poe2desktop.setCookie(raw) } catch { ignoredError('mirror login cookie') } }
       clearMerchantShopCache()
       setMsg({ ok: true, text: r.message }); setCookie(''); await load(); onChange?.()
     }
@@ -56,25 +56,25 @@ export default function AccountsPanel({ onChange }) {
       <h2>Account</h2>
       {sess?.connected ? (
         <p className="notice">Connected{sess.label ? ` · ${sess.label}` : ''} · set {ago(sess.set_at)} · last successful fetch {ago(sess.last_ok)}.
-          {' '}{sess.source !== 'env' && <button className="btn small" onClick={async () => { await api.disconnectSession(); clearMerchantShopCache(); await load(); onChange?.() }}>Disconnect</button>}
+          {' '}{sess.source !== 'env' && <button type="button" className="btn small" onClick={async () => { await api.disconnectSession(); clearMerchantShopCache(); await load(); onChange?.() }}>Disconnect</button>}
         </p>
       ) : desktop ? (
         <>
           {/* Owner, 2026-10-08: one Connect, the in-app login; the browser-and-paste steps are a fallback. */}
           <div className="row" style={{ margin: '10px 0' }}>
-            <button className="btn primary" disabled={busy} onClick={bridgeConnect}>{busy ? 'Connecting…' : 'Connect'}</button>
+            <button type="button" className="btn primary" disabled={busy} onClick={bridgeConnect}>{busy ? 'Connecting…' : 'Connect'}</button>
             <span className="hint">Signs you in to pathofexile.com in a window of this app.</span>
           </div>
           <details className="adv">
             <summary>Other ways to connect</summary>
             <ol className="hint" style={{ margin: '10px 0', lineHeight: 1.7 }}>
-              <li><button className="btn small" onClick={() => window.poe2desktop?.openLogin?.()}>Open pathofexile.com login in your browser ↗</button>
+              <li><button type="button" className="btn small" onClick={() => window.poe2desktop?.openLogin?.()}>Open pathofexile.com login in your browser ↗</button>
                 {' '}— if the in-app window gets stuck on Cloudflare or Steam.</li>
               <li>Press <b>F12 → Application → Cookies → <code>POESESSID</code></b> and copy its value.</li>
               <li>Paste it here:
                 <div className="row" style={{ marginTop: 6 }}>
                   <input className="btn" type="password" placeholder="POESESSID" value={cookie} onChange={e => setCookie(e.target.value)} style={{ width: 300 }} autoComplete="off" />
-                  <button className="btn" disabled={!cookie || busy} onClick={connect}>{busy ? 'Verifying…' : 'Use this cookie'}</button>
+                  <button type="button" className="btn" disabled={!cookie || busy} onClick={connect}>{busy ? 'Verifying…' : 'Use this cookie'}</button>
                 </div>
               </li>
             </ol>
@@ -97,8 +97,8 @@ export default function AccountsPanel({ onChange }) {
           <p className="hint">Client <code>{oa.client_id}</code> ({oa.client_type}), redirect <code>{oa.redirect_uri}</code>.</p>
         )}
         <div className="row">
-          {!oa.logged_in && <button className="btn primary" onClick={login}>Log in with Path of Exile</button>}
-          {oa.logged_in && <button className="btn" onClick={async () => { await api.oauthLogout(); clearMerchantShopCache(); await load(); onChange?.() }}>Log out</button>}
+          {!oa.logged_in && <button type="button" className="btn primary" onClick={login}>Log in with Path of Exile</button>}
+          {oa.logged_in && <button type="button" className="btn" onClick={async () => { await api.oauthLogout(); clearMerchantShopCache(); await load(); onChange?.() }}>Log out</button>}
         </div>
         {!oa.logged_in && (
           <p className="hint">The button works when the dashboard is open at <code>{oa.redirect_uri.replace(/\/callback$/, '')}</code> (same machine or SSH tunnel);

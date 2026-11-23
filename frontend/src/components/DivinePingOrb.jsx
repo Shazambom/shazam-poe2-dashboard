@@ -1,9 +1,8 @@
-import React, { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useSignals, sigKey } from '../lib/signalStore.js'
 import { useIcons, lookup } from '../lib/icons.js'
 import Cur from './Cur.jsx'
 import Rate from './Rate.jsx'
-import { fmt } from '../lib/api.js'
 
 // The market-signal inbox: a golden Divine Orb that appears in the topbar when the sidecar has
 // fired 'about to move' signals — the wealth/economy counterpart to the red Vaal trade-ping orb.
@@ -32,7 +31,7 @@ export default function DivinePingOrb({ onOpenSignal }) {
 
   return (
     <div className="divine-orb-wrap" ref={ref}>
-      <button className={`divine-orb ${intensity}`} onClick={() => setOpen(o => !o)}
+      <button type="button" className={`divine-orb ${intensity}`} onClick={() => setOpen(o => !o)}
         title="Market signals — what's about to move"
         aria-label={`${unseen} market signal${unseen === 1 ? '' : 's'}`} aria-expanded={open}>
         {divine
@@ -44,19 +43,19 @@ export default function DivinePingOrb({ onOpenSignal }) {
         <div className="signal-inbox" role="menu">
           <div className="signal-inbox-head">
             <span>What's about to move</span>
-            {unseen > 0 && <button className="link-btn" onClick={() => ackAll()}>dismiss all</button>}
+            {unseen > 0 && <button type="button" className="link-btn" onClick={() => ackAll()}>dismiss all</button>}
           </div>
           <ul className="signal-list">
             {signals.map(s => (
               <li key={sigKey(s)} className={`signal-row ${s.acked ? 'acked' : ''}`}>
-                <button className="signal-main" onClick={() => { onOpenSignal(s); setOpen(false) }}
+                <button type="button" className="signal-main" onClick={() => { onOpenSignal(s); setOpen(false) }}
                   title="Open detail">
                   <Cur name={s.name} size={18} />
                   <span className="signal-name">{s.name}</span>
                   <span className="signal-vz" title="price when it fired"><Rate value={s.close} num="exalted" size={12} bold={false} /></span>
                 </button>
                 {!s.acked && (
-                  <button className="signal-x" title="Dismiss" aria-label="Dismiss signal"
+                  <button type="button" className="signal-x" title="Dismiss" aria-label="Dismiss signal"
                     onClick={() => ack([sigKey(s)])}>×</button>
                 )}
               </li>

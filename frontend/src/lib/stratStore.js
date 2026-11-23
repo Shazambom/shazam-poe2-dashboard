@@ -2,6 +2,7 @@
 // Lifting the strat document out of StratCalcView lets background Client.txt events
 // pause/resume the active strat's timer and count maps even when another tab is open,
 // persisting through the shared debounced autosave controller.
+import { ignoredError } from './ignoredError.js'
 import { useEffect } from 'react'
 import { create } from 'zustand'
 import { api, cleanErr, toast } from './api.js'
@@ -18,7 +19,7 @@ import {
 
 const newId = (kind) => `${kind}_${uid()}`
 
-let pendingEvents = []   // Client.txt events received before the strat doc hydrated
+const pendingEvents = []   // Client.txt events received before the strat doc hydrated
 let loadPromise = null
 
 function makeAutosave(setState) {
@@ -170,7 +171,7 @@ export function useStratAutoTimer() {
     let live = true
     clientLog.status?.().then(st => {
       if (live) useStratStore.getState().setWatching(!!st?.watching)
-    }).catch(() => {})
+    }).catch(() => ignoredError('read client log status'))
     const offStatus = clientLog.onStatus?.(st => {
       if (live) useStratStore.getState().setWatching(!!st?.watching)
     })

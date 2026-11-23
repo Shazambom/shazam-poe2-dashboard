@@ -1,10 +1,11 @@
-import React from 'react'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import { installApiMock, DEFAULT_CURRENCIES } from './setup.js'
 import StashView from '../../src/components/StashView.jsx'
 import RoutesView from '../../src/components/RoutesView.jsx'
 import ConvertView from '../../src/components/ConvertView.jsx'
+import * as sc from '../../src/lib/stratcalc.js'
+import { useStratStore } from '../../src/lib/stratStore.js'
 import StratCalcView from '../../src/components/StratCalcView.jsx'
 import { useStatus } from '../../src/lib/statusStore.js'
 import { loadIcons } from '../../src/lib/icons.js'
@@ -18,7 +19,8 @@ class FakeEventSource {
     FakeEventSource.instances.push(this)
   }
   addEventListener(type, fn) {
-    ;(this.listeners[type] ||= []).push(fn)
+    this.listeners[type] ||= []
+    this.listeners[type].push(fn)
   }
   emit(type, payload) {
     const ev = { data: JSON.stringify(payload) }
@@ -56,7 +58,7 @@ describe('Stash, Arbitrage SSE, Convert, and StratCalc lifecycles', () => {
 
   it('StashView edits holdings and flushes pending PUT /api/capital on unmount', async () => {
     const { calls } = installApiMock()
-    const { unmount } = render(<StashView />)
+    const { rerender, unmount } = render(<StashView />)
 
     await waitFor(() => {
       expect(document.querySelectorAll('input[type="number"], input[inputmode="decimal"], input').length).toBeGreaterThan(0)
@@ -66,30 +68,78 @@ describe('Stash, Arbitrage SSE, Convert, and StratCalc lifecycles', () => {
     expect(numInput).toBeTruthy()
 
     fireEvent.change(numInput, { target: { value: '25' } })
+    rerender(<StashView />)
+    expect(numInput.value).toBe('25')
+    expect(calls.filter(c => c.method === 'PUT' && c.path === '/api/capital')).toHaveLength(0)
     // Unmount immediately before the autosave debounce fires → unmount flush must persist the edit
     unmount()
 
     await waitFor(() => {
       const puts = calls.filter(c => c.method === 'PUT' && c.path === '/api/capital')
-      expect(puts.length).toBeGreaterThanOrEqual(1)
+      expect(puts).toHaveLength(1)
       const lastEntries = puts[puts.length - 1].body.entries
       expect(Object.values(lastEntries)).toContain(25)
     })
   })
 
+  it('discards a held pre-credit balance and seeds the replacement without saving stale quantities', async () => {
+    const { calls } = installApiMock()
+    const capital = useStatus.getState().capital
+    const { unmount } = render(<StashView />)
+    const quantity = await screen.findByDisplayValue('10')
+    act(() => useStatus.setState({ salesFetching: true }))
+    fireEvent.change(quantity, { target: { value: '25' } })
+    expect(quantity.value).toBe('25')
+    act(() => useStatus.setState({ capitalStale: true, salesFetching: false }))
+    expect(screen.getByText('Loading your stash…')).toBeTruthy()
+    expect(screen.queryByDisplayValue('25')).toBeNull()
+    const rows = capital.rows.map(row => row.currency === 'divine' ? { ...row, qty: 12 } : row)
+    act(() => useStatus.setState({ capital: { ...capital, rows }, capitalStale: false }))
+    expect(await screen.findByDisplayValue('12')).toBeTruthy()
+    unmount()
+    expect(calls.filter(call => call.method === 'PUT' && call.path === '/api/capital')).toHaveLength(0)
+  })
+
+  it('keeps a local counting choice when saved choices for other currencies arrive', async () => {
+    const { calls } = installApiMock()
+    const { unmount } = render(<StashView />)
+    const divine = await screen.findByRole('switch', { name: 'Count Divine Orb toward liquid net worth' })
+    const exalted = screen.getByRole('switch', { name: 'Count Exalted Orb toward liquid net worth' })
+    expect(divine.getAttribute('aria-checked')).toBe('true')
+    fireEvent.click(divine)
+    await waitFor(() => expect(calls.filter(c => c.method === 'PUT' && c.path === '/api/settings')).toHaveLength(1))
+    act(() => useStatus.setState(s => ({ settings: { ...s.settings, stash_counted: { divine: true, exalted: false } } })))
+    expect(divine.getAttribute('aria-checked')).toBe('false')
+    expect(exalted.getAttribute('aria-checked')).toBe('false')
+    unmount()
+    expect(calls.filter(c => c.method === 'PUT' && c.path === '/api/settings')).toHaveLength(1)
+  })
+
+  it('leaves the route loading state when the stream reports a failure', async () => {
+    installApiMock()
+    const { container } = render(<RoutesView />)
+    await waitFor(() => expect(container.querySelectorAll('.sk-row')).toHaveLength(6))
+    const [stream] = FakeEventSource.instances
+    act(() => stream.emit('error', { error: 'backend unavailable' }))
+    expect(stream.closed).toBe(true)
+    expect(container.querySelectorAll('.sk-row')).toHaveLength(0)
+    expect(container.querySelector('[aria-label="searching"]')).toBeNull()
+    expect(screen.getByText(/Couldn't load routes: backend unavailable/)).toBeTruthy()
+  })
+
   it('RoutesView streams SSE meta/routes/done and closes EventSource cleanly on unmount', async () => {
     installApiMock()
-    const { unmount } = render(<RoutesView />)
+    const { rerender, unmount } = render(<RoutesView />)
 
     await waitFor(() => {
-      expect(FakeEventSource.instances.length).toBeGreaterThanOrEqual(1)
+      expect(FakeEventSource.instances).toHaveLength(1)
     })
 
     const es = FakeEventSource.instances[FakeEventSource.instances.length - 1]
     expect(es.url).toContain('/api/routes/stream')
 
     act(() => {
-      es.emit('meta', { reference: 'exalted', candidates: 12, window_h: 24 })
+      es.emit('meta', { reference: 'exalted', candidates: 12, window_h: 24, capital: { divine: 10 } })
       es.emit('routes', [{
         id: 'loop-1',
         start: 'divine',
@@ -131,6 +181,16 @@ describe('Stash, Arbitrage SSE, Convert, and StratCalc lifecycles', () => {
       expect(document.querySelector('.detail')).toBeTruthy()
     })
 
+    rerender(<RoutesView capital={{ reference: 'exalted' }} />)
+    expect(FakeEventSource.instances).toHaveLength(1)
+    // The initial, immediate search key settles before the next edit is debounced.
+    await act(async () => { await new Promise(resolve => { setTimeout(resolve, 550) }) })
+    const start = screen.getByLabelText('Start from')
+    fireEvent.change(start, { target: { value: 'divine' } })
+    expect(start.value).toBe('divine')
+    expect(FakeEventSource.instances).toHaveLength(1)
+    await waitFor(() => expect(FakeEventSource.instances).toHaveLength(2))
+    expect(FakeEventSource.instances[1].closed).toBe(false)
     // Unmount cleanup also closes any active in-flight stream
     unmount()
     expect(FakeEventSource.instances.every(i => i.closed)).toBe(true)
@@ -151,11 +211,42 @@ describe('Stash, Arbitrage SSE, Convert, and StratCalc lifecycles', () => {
 
   it('StratCalcView loads saved strats and renders calculator cleanly', async () => {
     const { calls } = installApiMock()
-    render(<StratCalcView />)
+    const { rerender, unmount } = render(<StratCalcView />)
 
     await waitFor(() => {
       expect(calls.some(c => c.path === '/api/strategy/calc')).toBe(true)
     })
     expect(document.body.textContent.length).toBeGreaterThan(0)
+    const maps = await screen.findByLabelText('Maps run')
+    fireEvent.focus(maps)
+    fireEvent.change(maps, { target: { value: '3*2' } })
+    rerender(<StratCalcView currencies={DEFAULT_CURRENCIES} />)
+    expect(maps.value).toBe('3*2')
+    expect(calls.filter(c => c.path === '/api/strategy/calc' && !c.url.includes('prices=1') && c.method === 'GET')).toHaveLength(1)
+    unmount()
+    expect(screen.queryByLabelText('Maps run')).toBeNull()
   })
+  it('preserves map and tablet prices in their selected currencies when unlinking', async () => {
+    const now = Date.now()
+    const search = { query: { query: {}, sort: { price: 'asc' } }, league: 'Test League' }
+    let doc = sc.newStrat(sc.blankDoc(), { id: 's', name: 'Prices', now })
+    doc = sc.addTablet(doc, 's', { id: 't', now })
+    doc = sc.recordMapsPrice(sc.linkMaps(doc, 's', search, now), 's', 2, now, 'chaos')
+    doc = sc.recordLinkPrice(sc.linkTablet(doc, 's', 't', search, now), 's', 't', 3, now, 'exalted')
+    installApiMock({ '/api/strategy/calc': { calc: doc, prices: { chaos: 0.5, exalted: 0.25, divine: 1 }, uses: [] } })
+    useStratStore.setState({ doc: null })
+    const { unmount } = render(<StratCalcView league="Test League" />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Trade search for maps' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Unlink' }))
+    const active = () => sc.activeStrat(useStratStore.getState().doc)
+    expect(active().maps).toMatchObject({ price: 4, cur: 'chaos' })
+    expect(active().maps.link).toBeUndefined()
+    fireEvent.click(screen.getByRole('button', { name: 'Trade search for Any tablet' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Unlink' }))
+    expect(active().tablets.lines[0]).toMatchObject({ price: 12, cur: 'exalted' })
+    expect(active().tablets.lines[0].link).toBeUndefined()
+    unmount()
+    await useStratStore.getState().flush()
+  })
+
 })

@@ -1,4 +1,4 @@
-import React from 'react'
+import 'react'
 import { api } from '../lib/api.js'
 import { useApi } from '../lib/hooks.js'
 

@@ -1,7 +1,8 @@
-import React, { Suspense, lazy, useEffect, useRef, useState } from 'react'
+import { ignoredError } from './lib/ignoredError.js'
+import React, { Suspense, lazy, useEffect, useEffectEvent, useRef, useState } from 'react'
 import { motion, AnimatePresence, MotionConfig } from 'motion/react'
 import { THEMES, useTheme } from './lib/themeStore.js'
-import { api, fmt, bus, surface } from './lib/api.js'
+import { api, bus, surface } from './lib/api.js'
 import { diag } from './lib/diag.js'
 import { useStatus, startStatusPolling } from './lib/statusStore.js'
 import { useCurrencies } from './lib/icons.js'
@@ -17,7 +18,7 @@ import { notify } from './lib/notifications.js'
 import Wealth from './components/Wealth.jsx'
 import { liquidNetWorth } from './lib/stash.js'
 import { stashUnit } from './lib/wealth.js'
-import { useAssetModal } from './components/CardDetail.jsx'
+import { useAssetModal } from './components/useAssetModal.jsx'
 import CommandPalette from './components/CommandPalette.jsx'
 import { connectBridge, connectSessionWithToast } from './lib/session.js'
 import { useWorkspace, HISTORY_SYS } from './lib/workspaceStore.js'
@@ -67,7 +68,7 @@ export default function App() {
   useEffect(() => {
     const q = new URLSearchParams(window.location.search)
     if (q.get('oauth')) { setTab('Settings'); window.history.replaceState({}, '', '/') }
-    if (window.poe2desktop?.getVersion) window.poe2desktop.getVersion().then(setAppVersion).catch(() => {})
+    if (window.poe2desktop?.getVersion) window.poe2desktop.getVersion().then(setAppVersion).catch(() => ignoredError('load app version'))
     api.leagues().then(setLeagues).catch(() => setLeagues([]))
     return startStatusPolling()
   }, [])
@@ -106,12 +107,14 @@ export default function App() {
   // action lands on the SAME CardDetail the orb opens. Phase 3: poll the league-arc anchor for the
   // topbar day chip. Both re-key on league change; both degrade silently when the sidecar is idle.
   useEffect(() => (SNAP ? undefined : startSignalPolling()), [status?.league])
+  const getAssetOpener = useEffectEvent(() => assetModal.open)
   const lastNew = useSignals(s => s.lastNew)
   useEffect(() => {
     if (SNAP || !lastNew?.signals?.length) return
     const names = lastNew.signals.map(s => s.name)
     const title = `${names.length} new market signal${names.length === 1 ? '' : 's'}`
-    const openFirst = () => assetModal.open(names[0])   // the card is app-global: open it where the user is
+    const openAsset = getAssetOpener()
+    const openFirst = () => openAsset(names[0])   // the card is app-global: open it where the user is
     notify('signals', { title, body: names.slice(0, 3).join(', '), tag: `signals-${lastNew.at}`, onOpen: openFirst, ttl: 12000, node: (
       <div className="ping-banner">
         <span className="pb-dot online" />
@@ -119,12 +122,12 @@ export default function App() {
           <div className="pb-name">◆ {title}</div>
           <div className="pb-sub muted">{names.slice(0, 3).join(' · ')}{names.length > 3 ? ` +${names.length - 3}` : ''}</div>
         </div>
-        <button className="btn small primary pb-go" onClick={() => { bus.emit({ id: 'signals', dismiss: true }); openFirst() }}>Open</button>
+        <button type="button" className="btn small primary pb-go" onClick={() => { bus.emit({ id: 'signals', dismiss: true }); openFirst() }}>Open</button>
       </div>) })
-  }, [lastNew]) // eslint-disable-line
+  }, [lastNew])
   useEffect(() => {
     let live = true
-    const load = () => api.leagueArc().then(d => { if (live) setArcCtx(d) }).catch(() => {})
+    const load = () => api.leagueArc().then(d => { if (live) setArcCtx(d) }).catch(() => ignoredError('load league arc'))
     load()
     const t = setInterval(load, 300000)
     return () => { live = false; clearInterval(t) }
@@ -149,7 +152,7 @@ export default function App() {
     window.addEventListener('pagehide', hide)
     const offQuit = window.poe2desktop?.ws?.onFlush?.(() => {
       const t0 = Date.now()
-      flushAll().then(() => diag('ws', `ws-flush-on-quit ok ms=${Date.now() - t0}`)).catch(() => {}).finally(() => window.poe2desktop.ws.flushed())
+      flushAll().then(() => diag('ws', `ws-flush-on-quit ok ms=${Date.now() - t0}`)).catch(() => ignoredError('flush edits on quit')).finally(() => window.poe2desktop.ws.flushed())
     })
     return () => { document.removeEventListener('visibilitychange', flush); window.removeEventListener('pagehide', hide); offQuit?.() }
   }, [])
@@ -215,7 +218,7 @@ export default function App() {
     try {
       await surface(useStatus.getState().saveSettings({ league }))
       await refreshHeader()
-    } catch {}
+    } catch { ignoredError('switch league') }
   }
 
   const doConnect = async () => {
@@ -231,9 +234,9 @@ export default function App() {
     window.__arbiterSnap = async ({ section, sub }) => {
       goSub(section, sub)
       await new Promise(res => { const tick = () => (useStatus.getState().status ? res() : setTimeout(tick, 50)); tick() })
-      await new Promise(res => setTimeout(res, 100))   // let the view mount and fire its loads
+      await new Promise(res => { setTimeout(res, 100) })   // let the view mount and fire its loads
       await settle()
-      await new Promise(res => requestAnimationFrame(() => requestAnimationFrame(res)))
+      await new Promise(res => { requestAnimationFrame(() => requestAnimationFrame(res)) })
       return true
     }
     return () => { delete window.__arbiterSnap }
@@ -250,19 +253,19 @@ export default function App() {
         <div className="topbar-row">
           <BrandOrb onDone={refreshHeader} />
           <h1>Arbiter</h1>
-          <button className="cmdk-chip" title="Command palette (⌘K)" onClick={() => setCmdOpen(true)}>
+          <button type="button" className="cmdk-chip" title="Command palette (⌘K)" onClick={() => setCmdOpen(true)}>
             <span className="cmdk-k">⌘K</span> Search
           </button>
-          <nav className="tabs" role="tablist">
+          <div className="tabs" role="tablist">
             {TABS.map(t => (
-              <button key={t} role="tab" aria-selected={tab === t} onClick={() => setTab(t)}>
+              <button type="button" key={t} role="tab" aria-selected={tab === t} onClick={() => setTab(t)}>
                 {t}
                 {t === 'Trading' && <VaalPingOrb onClick={goLive} />}
                 {tab === t && <motion.span className="tab-underline" layoutId="tab-underline"
                   transition={{ type: 'spring', stiffness: 420, damping: 34 }} />}
               </button>
             ))}
-          </nav>
+          </div>
           <span className="tb-spacer" />
           <RefreshControls />
           <DivinePingOrb onOpenSignal={(s) => assetModal.open(s.name)} />
@@ -310,7 +313,11 @@ export default function App() {
         subDests={SUB_DESTS}
         onGoSub={goSub}
         leagues={leagues} onSetLeague={setLeague}
-        onOpenCurrency={(it) => { if (!it.onBoard) return assetModal.open(it.label); setTab('Board'); setTimeout(() => nav.openCurrency(it.id), 0) }}
+        onOpenCurrency={(it) => {
+          if (!it.onBoard) return assetModal.open(it.label);
+          setTab('Board');
+          setTimeout(() => nav.openCurrency(it.id), 0)
+        }}
         screen={screen} screenCommands={screenCommands}
         commands={appCommands} onOpenSearch={(id) => { goWorkspace(); useWorkspace.getState().setActive(id) }}
       />

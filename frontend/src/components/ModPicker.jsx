@@ -9,18 +9,23 @@ import { matching, norm } from '../lib/search.js'
 // Rows show the mod's text with # where the roll goes, as the tooltip does.
 function ModPicker({ mods, selected, hide, onToggle, onMin, header, children, cmd }) {
   const [filter, setFilter] = useState('')
-  const [settled, setSettled] = useState(0)
+  const filterKey = norm(filter)
+  // Snapshot the selection used to rank the list. Toggling a row updates its
+  // controls immediately, while its position stays put until the pointer leaves.
+  const snapshot = () => ({ mods, hide, selected, filter, filterKey })
+  const [order, setOrder] = useState(snapshot)
+  if (order.mods !== mods || order.hide !== hide || order.filterKey !== filterKey) setOrder(snapshot())
   const shown = useMemo(() => {
-    const pool = mods.filter(m => !(hide?.has(m.id) && !selected.has(m.id)))
-    const kept = matching(pool, filter, m => [m.text])
-    return [...kept.filter(m => selected.has(m.id)), ...kept.filter(m => !selected.has(m.id))]
-  }, [mods, hide, norm(filter), settled]) // eslint-disable-line react-hooks/exhaustive-deps
+    const pool = order.mods.filter(m => !(order.hide?.has(m.id) && !order.selected.has(m.id)))
+    const kept = matching(pool, order.filter, m => [m.text])
+    return [...kept.filter(m => order.selected.has(m.id)), ...kept.filter(m => !order.selected.has(m.id))]
+  }, [order])
   const minOf = (id) => (selected instanceof Map ? selected.get(id) : 0) || ''
   return (
     <div className="rx-picker rx-surface">
       <div className="rx-head"><span className="settings-sub">{header}</span>{children}</div>
       <input className="ws-filter-input" data-cmd={cmd} value={filter} onChange={e => setFilter(e.target.value)} placeholder="Filter modifiers" spellCheck={false} />
-      <div className="rx-list" role="listbox" aria-multiselectable="true" aria-label={header} onMouseLeave={() => setSettled(n => n + 1)}>
+      <div className="rx-list" role="listbox" tabIndex={-1} aria-multiselectable="true" aria-label={header} onMouseLeave={() => setOrder(snapshot())}>
         {shown.map(m => {
           const on = selected.has(m.id)
           return (

@@ -1,4 +1,4 @@
-import React from 'react'
+import 'react'
 import { useHorizon, HORIZONS } from '../lib/horizonStore.js'
 
 // The app-wide time-horizon picker (was per-view). Reuses the shared .seg segmented control.
@@ -9,7 +9,7 @@ export default function HorizonPicker() {
   return (
     <div className="seg horizon-seg" title="Time window — applies across the app">
       {HORIZONS.map(([label, h]) => (
-        <button key={h} className={`seg-btn ${hours === h ? 'on' : ''}`} onClick={() => setHours(h)}>{label}</button>
+        <button type="button" key={h} className={`seg-btn ${hours === h ? 'on' : ''}`} onClick={() => setHours(h)}>{label}</button>
       ))}
     </div>
   )

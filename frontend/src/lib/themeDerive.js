@@ -16,7 +16,7 @@ export const PRIMARIES = [
 export const PRIMARY_KEYS = PRIMARIES.map(([k]) => k)
 
 // Every themed token, in the order the preset blocks in styles.css write them (grouped per line).
-export const EXPORT_LINES = [
+const EXPORT_LINES = [
   ['--bg', '--bg-2', '--panel', '--panel-2', '--panel-hi', '--surface-1', '--surface-pop'],
   ['--line', '--line-strong', '--line-hover'],
   ['--ink', '--ink-2', '--muted'],
@@ -127,14 +127,6 @@ export function rederive(colors, nextPrimaries) {
   }
   for (const [trip, col] of Object.entries(TRIPLET_OF)) out[trip] = hexToTriplet(out[col])
   return out
-}
-
-// A whole table from primaries + optional derived-token overrides.
-export function buildTable(primaries, overrides = {}) {
-  const t = derive(primaries)
-  for (const [k, v] of Object.entries(overrides)) if (DERIVED_KEYS.includes(k) && tokenHex(k, v)) t[k] = isTriplet(k) ? v : normHex(v)
-  for (const [trip, col] of Object.entries(TRIPLET_OF)) t[trip] = hexToTriplet(t[col])
-  return t
 }
 
 // Every contrast rule the table fails: [{ fg, bg, ratio, min, alpha? }].

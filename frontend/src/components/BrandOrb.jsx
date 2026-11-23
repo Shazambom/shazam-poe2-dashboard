@@ -1,4 +1,5 @@
-import React, { useEffect, useRef, useState } from 'react'
+import { ignoredError } from '../lib/ignoredError.js'
+import { useEffect, useRef, useState } from 'react'
 import { api } from '../lib/api.js'
 import { backfillLabel } from '../lib/backfillLabel.js'
 
@@ -27,28 +28,33 @@ export default function BrandOrb({ onDone }) {
   const [label, setLabel] = useState('')
   const [idx, setIdx] = useState(() => rand(ORBS.length))
   const wasRunning = useRef(false)
+  const [notifyDone] = useState(() => onDone)
 
   useEffect(() => {
     let timer, alive = true
     const tick = async () => {
-      let d = null
-      try { d = await api.backfill() } catch {}
+      let d
+      try { d = await api.backfill() } catch { d = null }
       if (!alive) return
       const on = !!(d && d.running && (d.phase === 'crawling' || d.phase === 'leagues'))
       setRunning(on)
       if (on) {
         setLabel(backfillLabel(d))
       }
-      if (wasRunning.current && !on) { try { onDone && onDone() } catch {} }   // finished → refresh views
+      if (wasRunning.current && !on) { try { notifyDone?.() } catch { ignoredError('refresh after backfill') } }   // finished → refresh views
       wasRunning.current = on
       timer = setTimeout(tick, on ? 1500 : 8000)   // poll fast while building
     }
     tick()
     return () => { alive = false; clearTimeout(timer) }
-  }, []) // eslint-disable-line
+  }, [notifyDone])
 
   // Each completed rotation swaps to a different random orb (never repeat back-to-back).
-  const onIter = () => setIdx(i => { let n = rand(ORBS.length); if (n === i) n = (n + 1) % ORBS.length; return n })
+  const onIter = () => setIdx(i => {
+    let n = rand(ORBS.length);
+    if (n === i) n = (n + 1) % ORBS.length;
+    return n
+  })
 
   return (
     <img

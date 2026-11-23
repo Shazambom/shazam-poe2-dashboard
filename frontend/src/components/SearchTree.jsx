@@ -31,9 +31,20 @@ function Node({ node, style, dragHandle }) {
   const cls = ['ws-node', isFolder ? 'folder' : 'search', active ? 'active' : '', d.done ? 'done' : '',
     node.willReceiveDrop ? 'drop-target' : '', node.isDragging ? 'dragging' : '', node.isFocused ? 'focused' : '', node.isSelected ? 'selected' : ''].join(' ')
   return (
-    <div className={cls} style={style} ref={dragHandle} role="treeitem" aria-level={node.level + 1} data-id={d.id}
+    <div className={cls} style={style} ref={dragHandle} role="treeitem" tabIndex={node.isFocused ? 0 : -1} aria-level={node.level + 1} data-id={d.id}
       aria-expanded={isFolder ? node.isOpen : undefined} aria-selected={active || undefined}
-      onClick={() => isFolder ? node.toggle() : onSelect(d.id, node)}
+      onKeyDown={e => {
+        if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) {
+          e.preventDefault()
+          e.stopPropagation()
+          e.currentTarget.click()
+        }
+      }}
+      onClick={e => {
+        if (e.target.closest('.ws-confirm')) e.stopPropagation()
+        else if (isFolder) node.toggle()
+        else onSelect(d.id, node)
+      }}
       onContextMenu={onContext ? (e) => { e.preventDefault(); e.stopPropagation(); node.focus(); onContext(e, d, node) } : undefined}>
       <span className="ws-grip" aria-hidden="true" title="Drag to move">⋮⋮</span>
       <span className="ws-caret">{isFolder ? (node.isOpen ? '▾' : '▸') : ''}</span>
@@ -42,7 +53,11 @@ function Node({ node, style, dragHandle }) {
         <input className="ws-edit" autoFocus defaultValue={d.name} aria-label="Rename"
           onClick={e => e.stopPropagation()}
           onBlur={e => node.submit(e.target.value)}
-          onKeyDown={e => { e.stopPropagation(); if (e.key === 'Enter') node.submit(e.currentTarget.value); if (e.key === 'Escape') node.reset() }} />
+          onKeyDown={e => {
+            e.stopPropagation();
+            if (e.key === 'Enter') node.submit(e.currentTarget.value);
+            if (e.key === 'Escape') node.reset()
+          }} />
       ) : (
         <span className="ws-name" title={rowTitle(d)}>{d.name}</span>
       )}
@@ -73,7 +88,7 @@ export default function SearchTree({ onSelect = () => {}, renderTrailing = () =>
   // Folders open as the store remembers them (arborist would otherwise open every folder on every
   // mount); the ExiledExchange2 History folder always starts collapsed — it's a log, not the work.
   // arborist reads this once at mount, so the tree is keyed on `loaded` to mount with the real tree.
-  const initialOpen = useMemo(() => initialOpenState(tree), [loaded]) // eslint-disable-line
+  const initialOpen = useMemo(() => initialOpenState(tree), [tree])
   const hits = useMemo(() => filterHits(data, filter), [data, filter])
   const wrap = useRef(null)
   const [dims, setDims] = useState({ w: 260, h: 480 })

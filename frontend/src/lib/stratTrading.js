@@ -17,7 +17,7 @@ async function sameSearch(tree, query, league) {
   return null
 }
 
-export async function openInTrading({ query, name, league, store, go, wait = () => new Promise(r => setTimeout(r, 100)), tries = 100 }) {
+export async function openInTrading({ query, name, league, store, go, wait = () => new Promise(r => { setTimeout(r, 100) }), tries = 100 }) {
   go()
   for (let i = 0; !store().loaded; i++) {
     if (i >= tries) return

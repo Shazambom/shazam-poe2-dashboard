@@ -1,5 +1,4 @@
-import React from 'react'
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { describe, it, test, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import { installApiMock, DEFAULT_CURRENCIES } from './setup.js'
 import ModsView from '../../src/components/ModsView.jsx'
@@ -27,7 +26,7 @@ describe('Mods, Regex, Settings, ThemeBuilder, Trading, and App shell lifecycles
 
   it('ModsView loads pools, selects ring pool, and displays prefix/suffix modifiers', async () => {
     const { calls } = installApiMock()
-    render(<ModsView />)
+    const { rerender, unmount } = render(<ModsView />)
 
     await waitFor(() => {
       expect(calls.some(c => c.path === '/api/mods/pools')).toBe(true)
@@ -37,11 +36,19 @@ describe('Mods, Regex, Settings, ThemeBuilder, Trading, and App shell lifecycles
     await waitFor(() => {
       expect(document.body.textContent).toMatch(/maximum Life/i)
     })
+    const filter = screen.getByLabelText('Filter')
+    fireEvent.change(filter, { target: { value: 'Life' } })
+    rerender(<ModsView />)
+    expect(filter.value).toBe('Life')
+    expect(calls.filter(c => c.path === '/api/mods/pools')).toHaveLength(1)
+    expect(calls.filter(c => c.path === '/api/mods/pool/ring')).toHaveLength(1)
+    unmount()
+    expect(calls.filter(c => c.method === 'PUT')).toHaveLength(0)
   })
 
   it('RegexView loads saved settings and generates a live PoE2 regex string when toggled', async () => {
-    installApiMock()
-    render(<RegexView />)
+    const { calls } = installApiMock()
+    const { rerender, unmount } = render(<RegexView />)
 
     await waitFor(() => {
       expect(screen.getAllByText(/Waystones/i).length).toBeGreaterThanOrEqual(1)
@@ -57,6 +64,12 @@ describe('Mods, Regex, Settings, ThemeBuilder, Trading, and App shell lifecycles
       const copyBtn = document.querySelector('button[data-cmd="regex-copy"]')
       expect(copyBtn?.disabled).toBe(false)
     })
+    const draft = document.querySelector('input.rx-string').value
+    rerender(<RegexView />)
+    expect(document.querySelector('input.rx-string').value).toBe(draft)
+    expect(calls.filter(c => c.method === 'GET' && c.path === '/api/settings')).toHaveLength(1)
+    unmount()
+    await waitFor(() => expect(calls.filter(c => c.method === 'PUT' && c.path === '/api/settings')).toHaveLength(1))
   })
 
   it('ThemeBuilder loads all shipped presets via virtual:theme-presets, forks a custom theme, and cleans timers on unmount', async () => {
@@ -77,19 +90,58 @@ describe('Mods, Regex, Settings, ThemeBuilder, Trading, and App shell lifecycles
       expect(useTheme.getState().customs.length).toBeGreaterThanOrEqual(1)
     })
 
-    // Unmount cleanly while debounce timers could still be pending
+    const name = await screen.findByLabelText('Name')
+    const save = vi.spyOn(useTheme.getState(), 'saveCustoms')
+    vi.useFakeTimers()
+    fireEvent.change(name, { target: { value: 'Unsaved name' } })
+    act(() => useTheme.setState(s => ({ customs: s.customs.map(t => ({ ...t, name: 'Stored name' })) })))
+    expect(name.value).toBe('Unsaved name')
     expect(() => unmount()).not.toThrow()
+    act(() => vi.advanceTimersByTime(1000))
+    expect(save).not.toHaveBeenCalled()
   })
 
   it('SettingsView loads settings, renders Appearance/Market/Accounts panels, and switches theme cleanly', async () => {
     const { calls } = installApiMock()
-    render(<SettingsView currencies={DEFAULT_CURRENCIES} status={{ league: 'Test League' }} />)
+    const { rerender, unmount } = render(<SettingsView currencies={DEFAULT_CURRENCIES} />)
 
     await waitFor(() => {
       expect(calls.some(c => c.path === '/api/settings')).toBe(true)
       expect(screen.getByText('Appearance')).toBeTruthy()
       expect(screen.getByText('Market')).toBeTruthy()
     })
+    const reads = calls.filter(c => c.path === '/api/settings').length
+    rerender(<SettingsView currencies={{ ...DEFAULT_CURRENCIES }} />)
+    expect(calls.filter(c => c.path === '/api/settings')).toHaveLength(reads)
+    unmount()
+    expect(calls.filter(c => c.method === 'PUT')).toHaveLength(0)
+  })
+
+  it('reads the update channel once when settings opens', async () => {
+    const getChannel = vi.spyOn(window.poe2desktop, 'getChannel')
+    const { rerender, unmount } = render(<SettingsView />)
+    await screen.findByText('Diagnostics')
+    const reads = getChannel.mock.calls.length
+    expect(reads).toBeGreaterThan(0)
+    rerender(<SettingsView currencies={DEFAULT_CURRENCIES} />)
+    unmount()
+    expect(getChannel).toHaveBeenCalledTimes(reads)
+  })
+
+  test('it probes once the Diagnostics section is opened', async () => {
+    const { calls } = installApiMock()
+    const { unmount } = render(<SettingsView />)
+    const details = (await screen.findByText('Diagnostics')).closest('details')
+    expect(calls.filter(c => c.path === '/api/diag')).toHaveLength(0)
+    details.open = true
+    fireEvent(details, new Event('toggle'))
+    await waitFor(() => expect(calls.filter(c => c.path === '/api/diag')).toHaveLength(1))
+    details.open = false
+    fireEvent(details, new Event('toggle'))
+    details.open = true
+    fireEvent(details, new Event('toggle'))
+    unmount()
+    expect(calls.filter(c => c.path === '/api/diag')).toHaveLength(1)
   })
 
   it('TradingView switches across Workspace, Regex, Mods, and Live while keeping Workspace mounted', async () => {
@@ -112,6 +164,35 @@ describe('Mods, Regex, Settings, ThemeBuilder, Trading, and App shell lifecycles
     fireEvent.click(screen.getByRole('tab', { name: /Workspace/i }))
     await waitFor(() => {
       expect(wsContainer().style.display).toBe('flex')
+    })
+  })
+
+  it('restores the modifier families expanded for a pool when the view reopens', async () => {
+    const first = render(<ModsView />)
+    const row = await screen.findByRole('button', { name: /maximum Life/i })
+    expect(row.getAttribute('aria-expanded')).toBe('false')
+    fireEvent.click(row)
+    expect(row.getAttribute('aria-expanded')).toBe('true')
+    first.unmount()
+    const second = render(<ModsView />)
+    const restored = await screen.findByRole('button', { name: /maximum Life/i })
+    expect(restored.getAttribute('aria-expanded')).toBe('true')
+    fireEvent.click(restored)
+    expect(restored.getAttribute('aria-expanded')).toBe('false')
+    second.unmount()
+  })
+
+  it('opens an off-board currency by its display name in the app-wide card', async () => {
+    const { calls } = installApiMock()
+    render(<App />)
+    fireEvent.keyDown(window, { key: 'k', metaKey: true })
+    const input = await screen.findByPlaceholderText('Search screens, actions, currencies…')
+    fireEvent.change(input, { target: { value: 'Mirror of Kalandra' } })
+    fireEvent.click(await screen.findByText('Mirror of Kalandra', { selector: '.cmdk-label' }))
+    await waitFor(() => {
+      const asset = calls.find(c => c.path === '/api/asset')
+      expect(new URL(asset?.url || '/', 'http://localhost').searchParams.get('q')).toBe('Mirror of Kalandra')
+      expect(document.querySelector('.card-detail')).toBeTruthy()
     })
   })
 

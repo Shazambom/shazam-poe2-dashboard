@@ -18,7 +18,7 @@ globalThis.fetch = async (url, opts = {}) => {
 }
 
 const { useWorkspace, loadWorkspace } = await import('../src/lib/workspaceStore.js')
-const sleep = (ms) => new Promise(r => setTimeout(r, ms))
+const sleep = (ms) => new Promise(r => { setTimeout(r, ms) })
 const puts = () => calls.filter(c => c.method === 'PUT')
 
 test('a failed load sets loadError and refuses to persist mutations', async () => {

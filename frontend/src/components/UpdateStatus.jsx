@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { isDesktop } from '../lib/session.js'
 
 // Version + seamless updater, merged into ONE topbar element (desktop only). Idle, it IS the
@@ -9,10 +9,9 @@ export default function UpdateStatus({ version }) {
   const [st, setSt] = useState(null)
 
   useEffect(() => {
-    if (!bridge?.onUpdate) return
-    const off = bridge.onUpdate(setSt)
-    return off
-  }, []) // eslint-disable-line
+    const updater = isDesktop ? window.poe2desktop : null
+    return updater?.onUpdate?.(setSt)
+  }, [])
 
   if (!bridge?.onUpdate) return null
 
@@ -22,12 +21,12 @@ export default function UpdateStatus({ version }) {
     </span>
   }
   if (st?.phase === 'ready') {
-    return <button className="update-chip ready" title={`Version ${st.version || ''} downloaded — click to install and restart`}
+    return <button type="button" className="update-chip ready" title={`Version ${st.version || ''} downloaded — click to install and restart`}
       onClick={() => bridge.installUpdate()}>↻ Install update{st.version ? ` ${st.version}` : ''}</button>
   }
   if (st?.phase === 'manual') {
     // macOS (unsigned): can't hot-swap, so the button opens the DMG for a drag-install.
-    return <button className="update-chip ready" title={`Download Arbiter ${st.version || ''} — open the DMG and drag to Applications`}
+    return <button type="button" className="update-chip ready" title={`Download Arbiter ${st.version || ''} — open the DMG and drag to Applications`}
       onClick={() => bridge.installUpdate()}>↓ Update{st.version ? ` ${st.version}` : ''}</button>
   }
   if (st?.phase === 'checking') return <span className="update-chip" title="Checking for updates">checking…</span>
@@ -37,7 +36,7 @@ export default function UpdateStatus({ version }) {
   // a ✓ marks that the last check found us current.
   const uptodate = st?.phase === 'none'
   return (
-    <button className={`ver-chip ${uptodate ? 'ok' : ''}`} onClick={() => bridge.checkUpdate?.()}
+    <button type="button" className={`ver-chip ${uptodate ? 'ok' : ''}`} onClick={() => bridge.checkUpdate?.()}
       title={uptodate ? "You're on the latest version — click to re-check" : 'Click to check for updates'}>
       v{version || '?'}{uptodate ? ' ✓' : ''}
     </button>

@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from 'react'
+import { ignoredError } from '../lib/ignoredError.js'
+import { useEffect, useState } from 'react'
 import { useStatus, ensureSettings } from '../lib/statusStore.js'
 import { lookup, useIcons } from '../lib/icons.js'
 import Cur from './Cur.jsx'
@@ -30,8 +31,8 @@ export default function GoldValueSlider({ onCommit }) {
     ensureSettings().then(s => {
       const gv = Number(s.gold_value_per_1k) || 0.01
       setGpd(Math.min(GPD_MAX, Math.max(GPD_MIN, Math.round(1000 / gv))))
-    }).catch(() => {})
-  }, []) // eslint-disable-line
+    }).catch(() => ignoredError('load gold value'))
+  }, [arm])
 
   const commit = (nextGpd) => { setGpd(nextGpd); save(nextGpd) }
 

@@ -286,7 +286,7 @@ export function addUnique(rows, { name, type }) {
 const valued = (listings, prices) => (listings || []).filter(l => l.amount > 0)
   .map(l => ({ div: saleValueRef(l, 'divine', prices), currency: l.currency })).filter(v => v.div != null).sort((a, b) => a.div - b.div)
 const listingDivs = (listings, prices) => valued(listings, prices).map(v => v.div)
-export const AVG_OF = 10
+const AVG_OF = 10
 export const cheapestListings = (listings, prices) => valued(listings, prices).slice(0, AVG_OF)
 
 export const floorDiv = (listings, prices) => listingDivs(listings, prices)[0] ?? null
@@ -472,9 +472,9 @@ export function parseDuration(raw) {
   if (!s) return null
   let m = /^(\d+):([0-5]?\d)(?::([0-5]?\d))?$/.exec(s)
   if (m) return ((+m[1] * 60 + +m[2]) * 60 + +(m[3] ?? 0)) * 1000
-  m = /^(?:(\d*\.?\d+)\s*h)?\s*(?:(\d*\.?\d+)\s*m)?\s*(?:(\d*\.?\d+)\s*s)?$/.exec(s)
+  m = /^(?:(\d+(?:\.\d+)?|\.\d+)\s*h\s*)?(?:(\d+(?:\.\d+)?|\.\d+)\s*m\s*)?(?:(\d+(?:\.\d+)?|\.\d+)\s*s)?$/.exec(s)
   if (m && (m[1] || m[2] || m[3])) return Math.round(((+(m[1] ?? 0) * 60 + +(m[2] ?? 0)) * 60 + +(m[3] ?? 0)) * 1000)
-  if (/^\d*\.?\d+$/.test(s)) return Math.round(Number(s) * 60_000)
+  if (/^(?:\d+(?:\.\d+)?|\.\d+)$/.test(s)) return Math.round(Number(s) * 60_000)
   return null
 }
 
@@ -606,7 +606,10 @@ export function importStrats(doc, text, { newId, now }) {
   if (!got.strats.length || doc.strats.length + got.strats.length > MAX_STRATS) return null
   if (1 + Math.max(0, ...got.tree.map(height)) > MAX_DEPTH) return null
   const ids = new Map()
-  const fresh = (id, kind) => { if (!ids.has(id)) ids.set(id, newId(kind)); return ids.get(id) }
+  const fresh = (id, kind) => {
+    if (!ids.has(id)) ids.set(id, newId(kind));
+    return ids.get(id)
+  }
   const renamed = (n) => (n.kind === 'folder' ? { ...n, id: fresh(n.id, 'f'), children: (n.children || []).map(renamed) } : { ...n, id: fresh(n.id, 's') })
   const tree = got.tree.map(renamed)
   const strats = got.strats.map(s => unpriced({ ...s, id: fresh(s.id, 's'), updatedAt: now, timer: { startedAt: null, elapsedMs: s.timer.elapsedMs } }))

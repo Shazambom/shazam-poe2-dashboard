@@ -1,8 +1,8 @@
-import React from 'react'
+import 'react'
 
 // "Join our Discord" — the Discord mark as the button, in the top bar. Desktop opens the invite
 // through main (the OS browser); the web app links straight out. One invite for the whole app.
-export const DISCORD_INVITE = 'https://discord.gg/xxEDMkfqJg'
+const DISCORD_INVITE = 'https://discord.gg/xxEDMkfqJg'
 
 const Mark = () => (
   <svg viewBox="0 0 127.14 96.36" width="20" height="16" aria-hidden="true" fill="currentColor">

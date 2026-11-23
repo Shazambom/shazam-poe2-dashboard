@@ -12,7 +12,6 @@ export function normHex(hex) {
   if (/^#[0-9a-f]{3}$/.test(h)) h = '#' + [...h.slice(1)].map(c => c + c).join('')
   return /^#[0-9a-f]{6}$/.test(h) ? h : null
 }
-export const isHex = (hex) => normHex(hex) !== null
 
 export function hexToRgb(hex) {
   const h = normHex(hex)
@@ -29,7 +28,7 @@ export const hexToTriplet = (hex) => hexToRgb(hex).join(',')
 const toLinear = (c) => { c /= 255; return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4 }
 const fromLinear = (c) => { c = Math.max(0, Math.min(1, c)); return 255 * (c <= 0.0031308 ? 12.92 * c : 1.055 * c ** (1 / 2.4) - 0.055) }
 
-export function rgbToOklab([r, g, b]) {
+function rgbToOklab([r, g, b]) {
   const R = toLinear(r), G = toLinear(g), B = toLinear(b)
   const l = Math.cbrt(0.4122214708 * R + 0.5363325363 * G + 0.0514459929 * B)
   const m = Math.cbrt(0.2119034982 * R + 0.6806995451 * G + 0.1073969566 * B)
@@ -51,7 +50,7 @@ function oklabToLinear([L, a, b]) {
     -0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s,
   ]
 }
-export function oklabToRgb(lab) {
+function oklabToRgb(lab) {
   return oklabToLinear(lab).map(fromLinear)
 }
 const inGamut = (lab) => oklabToLinear(lab).every(c => c >= -1e-4 && c <= 1 + 1e-4)
@@ -60,13 +59,13 @@ export const hexToOklab = (hex) => rgbToOklab(hexToRgb(hex))
 export const oklabToHex = (lab) => rgbToHex(oklabToRgb(lab))
 
 // OKLCH: [L 0..1, C ≥ 0, h degrees 0..360)
-export function oklabToOklch([L, a, b]) {
+function oklabToOklch([L, a, b]) {
   const C = Math.hypot(a, b)
   let h = (Math.atan2(b, a) * 180) / Math.PI
   if (h < 0) h += 360
   return [L, C, C < 1e-6 ? 0 : h]
 }
-export function oklchToOklab([L, C, h]) {
+function oklchToOklab([L, C, h]) {
   const r = (h * Math.PI) / 180
   return [L, C * Math.cos(r), C * Math.sin(r)]
 }
@@ -92,7 +91,6 @@ export function adjustL(hex, dL) {
   return oklchToHex([L + dL, C, h])
 }
 export function withL(hex, L) { const [, C, h] = hexToOklch(hex); return oklchToHex([L, C, h]) }
-export function withChroma(hex, C) { const [L, , h] = hexToOklch(hex); return oklchToHex([L, C, h]) }
 export const lightness = (hex) => hexToOklch(hex)[0]
 export const isLight = (hex) => luminance(hex) > 0.4
 

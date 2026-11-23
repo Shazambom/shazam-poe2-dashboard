@@ -1,4 +1,4 @@
-import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { opensUp, room } from '../lib/dropdown.js'
 import Cur from './Cur.jsx'
 import { norm, search } from '../lib/search.js'
@@ -15,13 +15,14 @@ const CREATE = '\u0000create'   // the "Add “…”" row's id: never a real op
 // `onCreate(text)`, when given, offers a typed name that matches no option as a new entry ("Add “…”");
 // `known` (a Set of lowercased names) lists names that exist even when not offered, so they are never "added".
 // `onClear`, when given: the user typed over a pick (it is dropped until they choose again).
-export default function CurrencyPicker({ value, onChange, options = [], placeholder = 'search…', renderIcon = defaultIcon, onCreate = null, known = null, onClear = null, cmd }) {
+export default function CurrencyPicker({ value, onChange, options = [], placeholder = 'search…', renderIcon = defaultIcon, onCreate = null, known = null, onClear = null, cmd, inputId }) {
   const [open, setOpen] = useState(false)
   const [q, setQ] = useState('')
   const [sel, setSel] = useState(0)
   const [up, setUp] = useState(false)   // open the list upward when it would be cut off below
   const boxRef = useRef(null)
-  const inputRef = useRef(null)
+  const listId = useId()
+  const fieldId = inputId || `${listId}-input`
 
   const selected = useMemo(() => options.find(o => o.id === value), [options, value])
   const matches = useMemo(() => {
@@ -38,7 +39,7 @@ export default function CurrencyPicker({ value, onChange, options = [], placehol
     document.addEventListener('mousedown', h)
     return () => document.removeEventListener('mousedown', h)
   }, [])
-  useEffect(() => { if (sel > matches.length - 1) setSel(0) }, [matches.length, sel])
+  if (sel > 0 && sel >= matches.length) setSel(0)
   // keep the highlighted row in view as you arrow through
   useEffect(() => {
     if (open) boxRef.current?.querySelector('.cmdk-item.sel')?.scrollIntoView({ block: 'nearest' })
@@ -65,20 +66,23 @@ export default function CurrencyPicker({ value, onChange, options = [], placehol
 
   return (
     <div className="curpick" ref={boxRef} data-cmd={cmd}>
-      <div className={`curpick-box ${open ? 'open' : ''}`} onClick={() => { setOpen(true); inputRef.current?.focus() }}>
+      <label htmlFor={fieldId} className={`curpick-box ${open ? 'open' : ''}`}>
         {selected && !open && renderIcon && renderIcon(selected, 18)}
-        <input ref={inputRef} className="curpick-input"
+        <input id={fieldId} role="combobox" aria-label={inputId ? undefined : placeholder}
+          aria-autocomplete="list" aria-expanded={open} aria-controls={listId}
+          aria-activedescendant={open && matches[sel] && sel < 80 ? `${listId}-${sel}` : undefined}
+          onClick={e => { setOpen(true); e.currentTarget.focus() }} className="curpick-input"
           value={open ? q : (selected?.name ?? '')}
           placeholder={placeholder}
           onFocus={() => { setOpen(true); setSel(0) }}
           onChange={e => { setQ(e.target.value); setSel(0); setOpen(true); if (value) onClear?.() }}   // typing replaces the pick
           onKeyDown={onKey} />
-      </div>
+      </label>
       {open && (
-        <div className={`curpick-pop ${up ? 'up' : ''}`}>
+        <div id={listId} role="listbox" aria-label={placeholder} className={`curpick-pop ${up ? 'up' : ''}`}>
           {matches.length === 0 && <div className="cmdk-empty">No matches</div>}
           {matches.slice(0, 80).map((o, i) => (
-            <div key={o.id} className={`cmdk-item ${i === sel ? 'sel' : ''}`}
+            <div key={o.id} id={`${listId}-${i}`} role="option" tabIndex={-1} aria-selected={i === sel} className={`cmdk-item ${i === sel ? 'sel' : ''}`}
               onMouseMove={() => setSel(i)} onMouseDown={e => { e.preventDefault(); choose(o) }}>
               {renderIcon && !o.create && <span className="cmdk-ic">{renderIcon(o, 16)}</span>}
               <span className="cmdk-label">{o.name}</span>

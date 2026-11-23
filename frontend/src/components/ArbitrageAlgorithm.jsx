@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from 'react'
+import { ignoredError } from '../lib/ignoredError.js'
+import { useEffect, useState } from 'react'
 import { useAutosave } from '../lib/hooks.js'
 import { useStatus } from '../lib/statusStore.js'
 import Knob from './Knob.jsx'
@@ -19,7 +20,7 @@ export default function ArbitrageAlgorithm({ onSaved }) {
     })
     onSaved?.()
   }, 800)
-  useEffect(() => { useStatus.getState().loadSettings().then(x => { setS(x); arm() }).catch(() => {}) }, []) // eslint-disable-line
+  useEffect(() => { useStatus.getState().loadSettings().then(x => { setS(x); arm() }).catch(() => ignoredError('load arbitrage settings')) }, [arm])
   if (!s) return null
   const set = (k, v) => setS(x => { const n = { ...x, [k]: v }; save(n); return n })
   const setWeight = (k, v) => setS(x => { const n = { ...x, rank_weights: { ...x.rank_weights, [k]: Number(v) } }; save(n); return n })

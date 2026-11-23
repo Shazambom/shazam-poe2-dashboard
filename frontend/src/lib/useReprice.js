@@ -1,7 +1,8 @@
 // Trading → Workspace "Reprice in <currency>" (docs/reprice-design.md): the trade tap's view of this window's
 // page (desktop/src/trade/tap.js) → at most one offer; apply() replaces the saved search with the repriced one,
 // with a 10 s undo. The rules are in reprice.js; this only wires events, prices, the store and telemetry.
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { ignoredError } from './ignoredError.js'
+import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
 import { api, undoToast } from './api.js'
 import { diag } from './diag.js'
 import { useWorkspace } from './workspaceStore.js'
@@ -52,18 +53,24 @@ export function useReprice({ wv, node, navUrl, inHistory, remountKey, league, vi
   // search gets the room (owner, 2026-10-03).
   useEffect(() => () => { window.poe2desktop?.trade?.listingsCancel?.() }, [remountKey, visible])
 
-  let wcId = null
-  try { wcId = wv.current?.getWebContentsId() ?? null } catch {}
+  let wcId
+  try { wcId = wv.current?.getWebContentsId() ?? null } catch { wcId = null }
   const own = wcId == null ? null : TAP.pageOf(wcId)
   // A window that is gone (another row, ↻) leaves the store: its rows are not evidence any more.
   useEffect(() => (wcId == null ? undefined : () => TAP.drop(wcId)), [wcId])
 
   // The row's own query, from its link (a run search's slug is its query): the page counts only once it holds it.
-  const [rowQuery, setRowQuery] = useState(null)
+  const nodeId = node?.id ?? null
+  const selectedId = useEffectEvent(() => nodeId)
+  const [decodedLink, setDecodedLink] = useState(null)
+  const rowQuery = decodedLink?.query ?? null
   useEffect(() => {
     let live = true
-    setRowQuery(null)
-    searchOfLink(navUrl || '').then(j => { if (live) setRowQuery(j?.query || null) }).catch(() => {})
+    const owner = selectedId()
+    setDecodedLink(null)
+    searchOfLink(navUrl || '').then(j => {
+      if (live && j?.query) setDecodedLink({ nodeId: owner, query: j.query })
+    }).catch(() => ignoredError('read search query'))
     return () => { live = false }
   }, [navUrl])
   // The window's own page, or — when the site redrew a search it ran moments ago from its own cache, with no
@@ -91,7 +98,10 @@ export function useReprice({ wv, node, navUrl, inHistory, remountKey, league, vi
       d[step] = 'pending'
       fetchIds({ league: s.league, searchId: s.id, ids }).then((r) => {
         d[step] = stepAfter(r)   // a cancel (moved away and back) is tried again; a refusal is final
-        if (!r?.ok) { if (r?.error !== 'cancelled') diag('ws', `reprice-${step} fail=${r?.error}`); return }
+        if (!r?.ok) {
+          if (r?.error !== 'cancelled') diag('ws', `reprice-${step} fail=${r?.error}`);
+          return
+        }
         TAP.merge(wcId, s.id, r.rows)
         remember(SIBLINGS, TAP.pageOf(wcId), TAP.seenAtOf(wcId) ?? Date.now(), prices.P, { sampled: true })
       }).catch(() => { d[step] = 'done' })   // an IPC failure: give up on this search
@@ -107,7 +117,7 @@ export function useReprice({ wv, node, navUrl, inHistory, remountKey, league, vi
       const ids = gapPlan(target, prices.P)
       if (ids.length) run(ids, 'gap'); else d.gap = 'done'
     }
-  }, [tick, shown, own, rowQuery])
+  }, [tick, shown, own, rowQuery, wcId])
 
   useEffect(() => {
     const id = page?.search?.id
@@ -115,7 +125,7 @@ export function useReprice({ wv, node, navUrl, inHistory, remountKey, league, vi
       offered.current = id
       diag('ws', `reprice-offer lead=${offer.lead} best=${offer.currency} gap=${Math.round(offer.gap * 100)}%`)
     }
-  }, [offer])
+  }, [offer, page?.search?.id])
 
   const apply = useCallback(async () => {
     const p = page
@@ -142,7 +152,10 @@ export function useReprice({ wv, node, navUrl, inHistory, remountKey, league, vi
     const t0 = Date.now()
     const r = await recheck({ league: s.league, query: equivalentQuery(s.body?.query) }).catch(() => null)
     setChecking(null)
-    if (!r?.ok) { if (r?.error !== 'cancelled') diag('ws', `reprice-find fail=${r?.error} ms=${Date.now() - t0}`); return }
+    if (!r?.ok) {
+      if (r?.error !== 'cancelled') diag('ws', `reprice-find fail=${r?.error} ms=${Date.now() - t0}`);
+      return
+    }
     remember(SIBLINGS, pageFromRecheck(r, s.league, s.body?.query, page.options, prices.P), Date.now(), prices.P, { sampled: true })
     setTick(t => t + 1)
     diag('ws', `reprice-find rows=${r.rows.length} ms=${Date.now() - t0}`)   // how long the user saw "Checking…"
@@ -153,7 +166,9 @@ export function useReprice({ wv, node, navUrl, inHistory, remountKey, league, vi
 
   return {
     offer, apply, state, find,
-    own, rowQuery,
+    own,
+    // A decoded address can outlive the webview that supplied it during a row switch.
+    rowQuery: decodedLink?.nodeId === nodeId ? rowQuery : null,
     prices: page?.prices || prices.P,
     options: page?.options || TAP.options(),
     emptyExact,

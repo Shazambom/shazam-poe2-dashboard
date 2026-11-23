@@ -8,7 +8,7 @@ import assert from 'node:assert/strict'
 globalThis.fetch = async () => ({ ok: true, status: 200, json: async () => ({ workspace: { version: 2, tree: [] } }), text: async () => '' })
 const { useWorkspace, HISTORY_SYS } = await import('../src/lib/workspaceStore.js')
 const st = () => useWorkspace.getState()
-const sleep = (ms) => new Promise(r => setTimeout(r, ms))
+const sleep = (ms) => new Promise(r => { setTimeout(r, ms) })
 const fresh = async (tree) => { st().hydrate({ version: 2, tree, layout: null, openTabs: [] }); await sleep(5) }
 const S = (id, name, extra = {}) => ({ id, kind: 'search', name, type: 'search', slug: 's' + id, live: false, ...extra })
 const Q = '{"query":{"status":{"option":"securable"},"filters":{"trade_filters":{"disabled":false,"filters":{"price":{"option":"vaal"}}}}},"sort":{"price":"asc"}}'

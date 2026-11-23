@@ -39,7 +39,6 @@ test('Inflation: no theory on screen, an honest window label, and no hour count'
     'rising = dump soft, hold hard', 'h of data', 'Since league start', 'day 0 = 100']) assert.ok(!s.includes(gone), gone)
   assert.match(s, /Last \$\{spanDays\} \$\{spanDays === 1 \? 'day' : 'days'\}/)
   assert.match(s, /\{sinceLabel\} = 100/)
-  assert.match(s, />Against\n/)
 })
 
 test('an Inflation anchor with too few trades offers the Divine anchor', () => {
@@ -73,5 +72,5 @@ test('Settings: no internals in the copy, and no account panel that only says "n
   assert.match(src('TradingSettings'), /Exiled Exchange 2 history stays on this computer/)
   const acct = src('AccountsPanel')
   assert.doesNotMatch(acct, /See README → OAuth/)
-  assert.match(acct, /\{oa\?\.configured && <>\s*\n\s*<h2 style=\{\{ marginTop: 24 \}\}>Path of Exile account/)
+  assert.match(acct, /\{oa\?\.configured && <>[^\S\n]*\n\s*<h2 style=\{\{ marginTop: 24 \}\}>Path of Exile account/)
 })

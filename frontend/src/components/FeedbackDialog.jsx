@@ -1,4 +1,5 @@
-import React, { useEffect, useRef, useState } from 'react'
+import { ignoredError } from '../lib/ignoredError.js'
+import { useEffect, useRef, useState } from 'react'
 import { motion } from 'motion/react'
 
 // "Report a problem" (desktop only). Opening it packages the report at once — the app's state, logs
@@ -11,13 +12,13 @@ export default function FeedbackDialog({ onClose }) {
   const [st, setSt] = useState({ phase: 'packaging' })   // packaging | ready | error
   useEffect(() => {
     let live = true
-    fb?.package().then(r => {
+    window.poe2desktop?.feedback?.package().then(r => {
       if (!live) return
       if (!r || r.error) setSt({ phase: 'error', message: r?.error || 'could not package a report' })
       else setSt({ phase: 'ready', shortId: r.shortId })
     }).catch(e => live && setSt({ phase: 'error', message: String(e?.message || e) }))
     return () => { live = false }
-  }, []) // eslint-disable-line
+  }, [])
   useEffect(() => {
     const h = (e) => { if (e.key === 'Escape') onClose() }
     window.addEventListener('keydown', h); return () => window.removeEventListener('keydown', h)
@@ -27,7 +28,7 @@ export default function FeedbackDialog({ onClose }) {
   useEffect(() => {
     const opener = document.activeElement
     closeRef.current?.focus()
-    return () => { try { opener?.focus?.() } catch {} }
+    return () => { try { opener?.focus?.() } catch { ignoredError('restore dialog focus') } }
   }, [])
   const name = st.shortId ? `arbiter-report-${st.shortId}` : null
   return (
@@ -35,7 +36,7 @@ export default function FeedbackDialog({ onClose }) {
       <motion.div className="card-detail fb-dialog" role="dialog" aria-modal="true" aria-label="Report a problem"
         initial={{ opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.98 }}
         transition={{ duration: 0.18, ease: [0.22, 0.61, 0.36, 1] }} onClick={e => e.stopPropagation()}>
-        <button ref={closeRef} className="cd-close" onClick={onClose} title="Close (Esc)">×</button>
+        <button type="button" ref={closeRef} className="cd-close" onClick={onClose} title="Close (Esc)">×</button>
         <div className="cd-head"><span className="cd-title">Report a problem</span></div>
         {st.phase === 'packaging' && <p className="fb-note muted"><i className="spin" /> Packaging a report…</p>}
         {st.phase === 'error' && <p className="fb-note muted">Couldn't package a report ({st.message}).</p>}
@@ -47,8 +48,8 @@ export default function FeedbackDialog({ onClose }) {
             </div>
             <p className="fb-note muted">Drag this into <b>#bug-reports</b> on Discord and write up what you're experiencing.</p>
             <div className="fb-actions">
-              <button className="btn small primary" onClick={() => fb.discord()}>Open Discord</button>
-              <button className="btn small" onClick={() => fb.reveal(st.shortId)}>Show file</button>
+              <button type="button" className="btn small primary" onClick={() => fb.discord()}>Open Discord</button>
+              <button type="button" className="btn small" onClick={() => fb.reveal(st.shortId)}>Show file</button>
             </div>
           </>
         )}

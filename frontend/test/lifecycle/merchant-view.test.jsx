@@ -1,9 +1,9 @@
-import React from 'react'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { act, render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { installApiMock } from './setup.js'
 import StashTab from '../../src/components/StashTab.jsx'
-import MerchantView, { _resetMerchantCache } from '../../src/components/MerchantView.jsx'
+import MerchantView from '../../src/components/MerchantView.jsx'
+import { _resetMerchantCache } from '../../src/lib/merchantCache.js'
 import { useStatus } from '../../src/lib/statusStore.js'
 import { useSync } from '../../src/lib/syncStore.js'
 import { useWorkspace } from '../../src/lib/workspaceStore.js'
@@ -149,6 +149,8 @@ describe('Stash → Merchant (MerchantView) lifecycle', () => {
     expect(document.querySelector('.merchant-summary')).toBeTruthy()
     expect(document.querySelector('.merchant-acct-chip')).toBeNull()
 
+    first.rerender(<MerchantView league="Test League" />)
+    expect(window.poe2desktop.merchant.fetch).toHaveBeenCalledTimes(1)
     // Top-bar ⟳ sync tick triggers manual shop refresh
     useSync.setState(s => ({ tick: s.tick + 1 }))
     await waitFor(() => expect(window.poe2desktop.merchant.fetch).toHaveBeenCalledTimes(2))
@@ -159,6 +161,8 @@ describe('Stash → Merchant (MerchantView) lifecycle', () => {
     expect(screen.getByText('Headhunter')).toBeTruthy()
     expect(window.poe2desktop.merchant.fetch).toHaveBeenCalledTimes(2)
     second.unmount()
+    act(() => useSync.setState(s => ({ tick: s.tick + 1 })))
+    expect(window.poe2desktop.merchant.fetch).toHaveBeenCalledTimes(2)
   })
 
   it('filters verdicts, searches inline, copies Ange regex, runs inline floor check on Uniques, opens Rares in Workspace, and marks done with Undo', async () => {
@@ -626,6 +630,14 @@ describe('Stash → Merchant (MerchantView) lifecycle', () => {
     fireEvent.click(screen.getByRole('button', { name: /mark session first item done/i }))
     expect(screen.queryByText('Session First Item')).toBeNull()
     expect(screen.getByText(/1 done/i)).toBeTruthy()
+    first.rerender(<MerchantView league="Other League" />)
+    await waitFor(() => expect(screen.queryByText(/1 done/i)).toBeNull())
+    await waitFor(() => expect(screen.getByText('Session First Item')).toBeTruthy())
+    expect(window.poe2desktop.merchant.fetch).toHaveBeenCalledTimes(2)
+    first.rerender(<MerchantView league="Test League" />)
+    await waitFor(() => expect(screen.getByText(/1 done/i)).toBeTruthy())
+    expect(screen.queryByText('Session First Item')).toBeNull()
+    expect(window.poe2desktop.merchant.fetch).toHaveBeenCalledTimes(2)
     first.unmount()
 
     // Remount hits shopCache (0 extra fetches) and must preserve doneKey + doneMap + write new done marks
@@ -633,7 +645,7 @@ describe('Stash → Merchant (MerchantView) lifecycle', () => {
     expect(screen.queryByText('Session First Item')).toBeNull()
     expect(screen.getByText('Session Second Item')).toBeTruthy()
     expect(screen.getByText(/1 done/i)).toBeTruthy()
-    expect(window.poe2desktop.merchant.fetch).toHaveBeenCalledTimes(1)
+    expect(window.poe2desktop.merchant.fetch).toHaveBeenCalledTimes(2)
 
     fireEvent.click(screen.getByRole('button', { name: /mark session second item done/i }))
     expect(screen.getByText(/2 done/i)).toBeTruthy()
@@ -698,5 +710,30 @@ describe('Stash → Merchant (MerchantView) lifecycle', () => {
     await waitFor(() => expect(screen.getByText('Fresh Ring')).toBeTruthy())
     expect(window.poe2desktop.connectSession).toHaveBeenCalledTimes(1)
     expect(window.poe2desktop.merchant.fetch).toHaveBeenCalledTimes(2)
+  })
+
+  it('checks the pagination deadline on a render and keeps a published floor price until a market input changes', async () => {
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(NOW)
+    const fetchShop = window.poe2desktop.merchant.fetch
+    const exampleShop = fetchShop.getMockImplementation()
+    fetchShop.mockImplementation(async () => ({
+      ...await exampleShop(), total: 60, remainingIds: 50, truncated: true, cursorExpiresAt: NOW + 300000,
+    }))
+    const { rerender, unmount } = render(<MerchantView league="Test League" />)
+    await screen.findByRole('button', { name: /load next 50/i })
+    fireEvent.click(screen.getByRole('button', { name: /check floor for headhunter/i }))
+    await screen.findByTitle(/cheapest instant buyout/i)
+    expect(window.poe2desktop.merchant.priceCheck).toHaveBeenCalledTimes(1)
+    clock.mockReturnValue(NOW + 300001)
+    expect(screen.getByRole('button', { name: /load next 50/i })).toBeTruthy()
+    rerender(<MerchantView league="Test League" />)
+    expect(screen.queryByRole('button', { name: /load next 50/i })).toBeNull()
+    expect(screen.getByTitle(/cheapest instant buyout/i)).toBeTruthy()
+    act(() => useStatus.setState(prev => ({ status: { ...prev.status, wealth_prices: { ...prev.status.wealth_prices, divine: 101 } } })))
+    expect(screen.queryByTitle(/cheapest instant buyout/i)).toBeNull()
+    expect(screen.getByRole('button', { name: /check floor for headhunter/i })).toBeTruthy()
+    expect(window.poe2desktop.merchant.priceCheck).toHaveBeenCalledTimes(1)
+    expect(window.poe2desktop.merchant.fetch).toHaveBeenCalledTimes(1)
+    unmount()
   })
 })

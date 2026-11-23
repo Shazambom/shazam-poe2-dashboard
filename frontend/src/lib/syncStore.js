@@ -1,3 +1,4 @@
+import { ignoredError } from './ignoredError.js'
 import { create } from 'zustand'
 import { api } from './api.js'
 
@@ -11,6 +12,6 @@ export const useSync = create((set) => ({
   busy: false,      // active view sets this while refreshing → topbar ⟳ spins
 
   // The one ⟳ (owner, 2026-10-08: no second refresh anywhere): reload the mounted view and kick the market-data sync.
-  requestRefresh: () => { api.syncDigest().catch(() => {}); set((s) => ({ tick: s.tick + 1 })) },
+  requestRefresh: () => { api.syncDigest().catch(() => ignoredError('request digest sync')); set((s) => ({ tick: s.tick + 1 })) },
   setBusy: (b) => set({ busy: !!b }),
 }))

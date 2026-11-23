@@ -1,11 +1,12 @@
-import React from 'react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
+import { render, renderHook, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import { installApiMock } from './setup.js'
 import WorkspaceView from '../../src/components/WorkspaceView.jsx'
 import { bus } from '../../src/lib/api.js'
 import { useWorkspace, HISTORY_SYS } from '../../src/lib/workspaceStore.js'
 import { encodeSlug } from '../../src/lib/reprice.js'
+import { useRelax } from '../../src/lib/useRelax.js'
+import * as session from '../../src/lib/session.js'
 
 const EE2_RARE_QUERY = {
   query: {
@@ -77,16 +78,18 @@ describe('WorkspaceView Close-enough fuzzy rare finder lifecycle', () => {
   // useReprice registers its onTap listener once per module load; keep the captured callback across tests.
   let tapHandler = null
   let navHandler = null
+  let apiCalls
 
   beforeEach(() => {
     navHandler = null
-    installApiMock({
+    const apiMock = installApiMock({
       '/api/strategy/calc': {
         calc: null,
         prices: { divine: 1, chaos: 0.09, vaal: 0.012, exalted: 0.0015 },
         uses: [],
       },
     })
+    apiCalls = apiMock.calls
     if (!tapHandler) {
       window.poe2desktop.trade.onTap = vi.fn((cb) => { tapHandler = cb; return () => {} })
     }
@@ -102,6 +105,63 @@ describe('WorkspaceView Close-enough fuzzy rare finder lifecycle', () => {
         { id: 'r1', amount: 100, currency: 'vaal' },
       ],
     }))
+  })
+
+  const savedMods = ['explicit.stat_armour', 'explicit.stat_spirit', 'explicit.stat_accuracy']
+
+  // The outgoing guest can still report its address or listings while the next
+  // saved link is being decoded locally. Only a user click should broaden it.
+  async function switchToCompressedSearch(afterExact) {
+    const body = structuredClone(EE2_RARE_QUERY)
+    body.query.stats[0].filters = savedMods.map(id => ({ id, value: { min: 10 } }))
+    const next = { id: 'next', kind: 'search', name: 'Saved armour search', slug: await encodeSlug(body.query) }
+    const first = { id: 'first', kind: 'search', name: 'Saved life search', slug: await encodeSlug(EE2_RARE_QUERY.query) }
+    seedTree(afterExact ? first.id : 's1', [first, next])
+    const request = window.poe2desktop.trade.relax
+    const guest = () => document.querySelector('webview')
+    const contents = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'getWebContentsId')
+    Object.defineProperty(HTMLElement.prototype, 'getWebContentsId', { configurable: true, value: () => 79 })
+    try {
+      const { rerender, unmount } = render(<WorkspaceView league="Test League" visible />)
+      fireEvent.click(await screen.findByRole('button', { name: 'Close enough' }))
+      await screen.findByText('Relaxed')
+      const url = guest().getAttribute('src')
+      const previous = JSON.parse(new URL(url).searchParams.get('q'))
+      expect(previous.query.status.option).toBe('securable')
+      act(() => tapHandler({ kind: 'search', wcId: 79, id: 'previous', league: 'Test League', body: previous, ids: [] }))
+      if (afterExact) fireEvent.click(screen.getByRole('button', { name: 'Exact' }))
+      else await act(async () => navHandler({ wcId: 79, phase: 'stop', url }))
+      act(() => useWorkspace.getState().setActive(next.id))
+      const selected = guest()
+      const address = selected.getAttribute('src')
+      expect(address).toContain(next.slug)
+      rerender(<WorkspaceView league="Test League" visible />)
+      act(() => tapHandler({ kind: 'fetch', wcId: 79, searchId: 'previous', rows: [] }))
+      const broaden = await screen.findByRole('button', { name: 'Close enough' })
+      expect(guest()).toBe(selected)
+      expect(selected.getAttribute('src')).toBe(address)
+      expect(request).toHaveBeenCalledTimes(1)
+      fireEvent.click(broaden)
+      await screen.findByText('Relaxed')
+      expect(request).toHaveBeenCalledTimes(2)
+      const queries = request.mock.calls.map(([payload]) => payload.query)
+      expect(queries.map(query => query.status.option)).toEqual(['securable', 'securable'])
+      expect(JSON.parse(new URL(guest().getAttribute('src')).searchParams.get('q')).query.status.option).toBe('securable')
+      expect(apiCalls.every(call => call.url.startsWith('/api/'))).toBe(true)
+      unmount()
+      return queries[1].stats[0].filters.map(filter => filter.id)
+    } finally {
+      if (contents) Object.defineProperty(HTMLElement.prototype, 'getWebContentsId', contents)
+      else Reflect.deleteProperty(HTMLElement.prototype, 'getWebContentsId')
+    }
+  }
+
+  it('broadens the newly selected saved link after the outgoing relaxed webview reports its address', async () => {
+    expect(await switchToCompressedSearch(false)).toEqual(savedMods)
+  })
+
+  it('broadens the newly selected saved link after Exact on another compressed search', async () => {
+    expect(await switchToCompressedSearch(true)).toEqual(savedMods)
   })
 
   it('shows Close enough on EE2 History rare, highlights on empty exact, shows Relaxing…, applies real-rate currency selection, relaxes further, snaps back to Exact, and never mutates node.q', async () => {
@@ -248,7 +308,7 @@ describe('WorkspaceView Close-enough fuzzy rare finder lifecycle', () => {
   it('shows No matches when relaxed search returns 0, preserves exact TAP page on Exact (C4), and resets/cancels when leaving Workspace', async () => {
     window.poe2desktop.trade.relax = vi.fn(async () => ({ ok: true, searchId: 'RX0', total: 0, rows: [] }))
     seedTree('h1')
-    const { rerender } = render(<WorkspaceView league="Test League" visible={true} />)
+    const { rerender, unmount } = render(<WorkspaceView league="Test League" visible={true} />)
     const wv = document.querySelector('webview')
     wv.getWebContentsId = () => 91
 
@@ -283,6 +343,10 @@ describe('WorkspaceView Close-enough fuzzy rare finder lifecycle', () => {
       expect(screen.getByRole('button', { name: 'Close enough' })).toBeTruthy()
       expect(screen.queryByText('No matches')).toBeNull()
     })
+    expect(window.poe2desktop.trade.relax).toHaveBeenCalledTimes(2)
+    const beforeUnmount = window.poe2desktop.trade.relaxCancel.mock.calls.length
+    unmount()
+    expect(window.poe2desktop.trade.relaxCancel).toHaveBeenCalledTimes(beforeUnmount + 1)
   })
 
   it('remounts latest captured slug on Exact (C5) and uses live webview TAP search over stale disabled node.q', async () => {
@@ -360,6 +424,22 @@ describe('WorkspaceView Close-enough fuzzy rare finder lifecycle', () => {
     })
   })
 
+  it('the trade window\'s address is recomputed on a reload (↻), from the saved row', () => {
+    seedTree('s1')
+    const { unmount } = render(<WorkspaceView league="Test League" visible />)
+    const first = document.querySelector('webview')
+    expect(first.getAttribute('src')).toContain('orig-slug')
+    act(() => useWorkspace.getState().setField('s1', { slug: 'replacement' }))
+    expect(document.querySelector('webview')).toBe(first)
+    expect(first.getAttribute('src')).toContain('orig-slug')
+    fireEvent.click(screen.getByRole('button', { name: 'Reload' }))
+    const second = document.querySelector('webview')
+    expect(second).not.toBe(first)
+    expect(second.getAttribute('src')).toContain('replacement')
+    unmount()
+    expect(document.querySelector('webview')).toBeNull()
+  })
+
   it('surfaces rate/auth relax errors via toast and stays silent on cancelled', async () => {
     const events = []
     const off = bus.on((t) => events.push(t))
@@ -380,7 +460,7 @@ describe('WorkspaceView Close-enough fuzzy rare finder lifecycle', () => {
 
       window.poe2desktop.trade.relax = vi.fn(async () => ({ ok: false, error: 'cancelled' }))
       fireEvent.click(screen.getByRole('button', { name: 'Close enough' }))
-      await new Promise(r => setTimeout(r, 20))
+      await new Promise(r => { setTimeout(r, 20) })
       expect(events.length).toBe(2)
     } finally {
       off()
@@ -399,11 +479,13 @@ describe('WorkspaceView Close-enough fuzzy rare finder lifecycle', () => {
       q: rareQ,
       auto: false,
     }])
-    render(<WorkspaceView league="Test League" visible={true} />)
+    const { rerender, unmount } = render(<WorkspaceView league="Test League" visible={true} />)
     const wv = document.querySelector('webview')
     wv.getWebContentsId = () => 101
     const origSrc = wv.getAttribute('src')
     expect(origSrc).toContain('?q=')
+    rerender(<WorkspaceView league="Test League" visible={true} />)
+    expect(document.querySelector('webview')).toBe(wv)
 
     // Simulate GGG sign-in redirect stripping ?q= and landing on an empty-search slug.
     act(() => {
@@ -426,6 +508,8 @@ describe('WorkspaceView Close-enough fuzzy rare finder lifecycle', () => {
       navHandler?.({ wcId: 102, phase: 'nav', url: 'https://www.pathofexile.com/trade2/search/poe2/Test%20League/REAL_QUERY_SLUG' })
     })
     expect(useWorkspace.getState().nodeById('q_node').slug).toBe('REAL_QUERY_SLUG')
+    unmount()
+    expect(document.querySelector('webview')).toBeNull()
   })
 
   it('never leaks an idle rare row baseQueryRef when switching to an ineligible Unique or a different Rare before TAP fires', async () => {
@@ -476,6 +560,43 @@ describe('WorkspaceView Close-enough fuzzy rare finder lifecycle', () => {
     expect(sentIds).toEqual(['explicit.stat_es', 'explicit.stat_int', 'explicit.stat_spirit'])
   })
 
+  it('keeps the new saved row and webview address when a late fetch belongs to the old relaxed page', async () => {
+    const newMods = ['explicit.stat_armour', 'explicit.stat_spirit', 'explicit.stat_accuracy']
+    const body = structuredClone(EE2_RARE_QUERY)
+    body.query.stats[0].filters = newMods.map(id => ({ id, value: { min: 10 } }))
+    seedTree('s1', [{ id: 's2', kind: 'search', name: 'New rare', q: JSON.stringify(body) }])
+    const descriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'getWebContentsId')
+    Object.defineProperty(HTMLElement.prototype, 'getWebContentsId', { configurable: true, value: () => 71 })
+    try {
+      const { rerender, unmount } = render(<WorkspaceView league="Test League" visible />)
+      fireEvent.click(await screen.findByRole('button', { name: 'Close enough' }))
+      await screen.findByText('Relaxed')
+      const guest = () => document.querySelector('webview')
+      const previous = JSON.parse(new URL(guest().getAttribute('src')).searchParams.get('q'))
+      expect(previous.query.status.option).toBe('securable')
+      act(() => tapHandler({ kind: 'search', wcId: 71, id: 'late', league: 'Test League', body: previous, ids: [] }))
+      fireEvent.click(screen.getByRole('button', { name: 'Exact' }))
+      act(() => useWorkspace.getState().setActive('s2'))
+      const selected = guest()
+      const address = selected.getAttribute('src')
+      expect(JSON.parse(new URL(address).searchParams.get('q')).query).toEqual(body.query)
+      rerender(<WorkspaceView league="Test League" visible />)
+      act(() => tapHandler({ kind: 'fetch', wcId: 71, searchId: 'late', rows: [] }))
+      expect(guest()).toBe(selected)
+      expect(selected.getAttribute('src')).toBe(address)
+      expect(window.poe2desktop.trade.relax).toHaveBeenCalledTimes(1)
+      fireEvent.click(await screen.findByRole('button', { name: 'Close enough' }))
+      await waitFor(() => expect(window.poe2desktop.trade.relax).toHaveBeenCalledTimes(2))
+      const sent = window.poe2desktop.trade.relax.mock.calls[1][0].query
+      expect(sent.stats[0].filters.map(f => f.id)).toEqual(newMods)
+      expect(sent.status.option).toBe('securable')
+      unmount()
+    } finally {
+      if (descriptor) Object.defineProperty(HTMLElement.prototype, 'getWebContentsId', descriptor)
+      else Reflect.deleteProperty(HTMLElement.prototype, 'getWebContentsId')
+    }
+  })
+
   it('shows a clickable Connect PoE account button when trade.relax fails with auth on an already-connected session and immediately re-runs relax after reconnecting', async () => {
     const { useStatus } = await import('../../src/lib/statusStore.js')
     installApiMock({
@@ -524,3 +645,34 @@ describe('WorkspaceView Close-enough fuzzy rare finder lifecycle', () => {
   })
 })
 
+
+it('discards pending local slug decodes after leaving and revisiting the same saved row', async () => {
+  const reads = []
+  const decode = vi.spyOn(session, 'searchOfLink').mockImplementation(() => {
+    const read = Promise.withResolvers()
+    reads.push(read)
+    return read.promise
+  })
+  const broaden = vi.spyOn(window.poe2desktop.trade, 'relax')
+  const first = { id: 'A', kind: 'search', slug: 'saved-one' }
+  const second = { id: 'B', kind: 'search', slug: 'saved-two' }
+  const { result, rerender, unmount } = renderHook(node => useRelax({
+    node, league: 'Test League', remountKey: node.id,
+  }), { initialProps: first })
+  rerender({ ...first })
+  expect(decode).toHaveBeenCalledTimes(1)
+  rerender(second)
+  rerender(first)
+  expect(decode.mock.calls.map(([url]) => new URL(url).pathname.split('/').at(-1))).toEqual(['saved-one', 'saved-two', 'saved-one'])
+  await act(async () => {
+    reads[1].resolve(EE2_RARE_QUERY)
+    reads[0].resolve(EE2_RARE_QUERY)
+    await Promise.all([reads[0].promise, reads[1].promise])
+  })
+  expect(result.current.preview).toBeNull()
+  await act(async () => { reads[2].resolve(EE2_RARE_QUERY); await reads[2].promise })
+  expect(result.current.preview?.total).toBe(5)
+  expect(result.current.relaxUrl).toBeNull()
+  expect(broaden).not.toHaveBeenCalled()
+  unmount()
+})

@@ -19,7 +19,7 @@ export const CASH = ['chaos', 'exalted', 'divine']
 export const UNGROUPED = 'Other'
 
 // A group this small (share of net worth) starts folded so the screen opens on what matters.
-export const FOLD_SHARE = 0.005
+const FOLD_SHARE = 0.005
 
 export const isCounted = (id, choices, dflt) => choices?.[id] ?? !!dflt
 
@@ -92,7 +92,7 @@ export const flipFold = (group, folds, total, q) =>
   String(q || '').trim() ? folds : { ...folds, [group.name]: !isFolded(group, folds, total, '') }
 
 // Convert /api/capital rows into the editor's { currency: qty } map, always including default CASH rows.
-export function capitalQty(cap) {
+function capitalQty(cap) {
   const r = Object.fromEntries(CASH.map(p => [p, 0]))
   for (const x of cap?.rows || []) r[x.currency] = x.qty
   return r
@@ -166,5 +166,5 @@ export const arbitrageHoldings = (capital) =>
 
 // A group's accent: the `--grp-<category>` token in styles.css, or the neutral muted ink for a category
 // the game adds before it has a colour. Colour is styling only — it never decides a group.
-export const groupSlug = (name) => String(name || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+const groupSlug = (name) => String(name || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
 export const groupAccent = (name) => `var(--grp-${groupSlug(name)}, var(--muted))`

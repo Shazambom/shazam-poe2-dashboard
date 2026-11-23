@@ -1,4 +1,5 @@
-import React, { useEffect, useRef, useState } from 'react'
+import { ignoredError } from '../lib/ignoredError.js'
+import { useEffect, useRef, useState } from 'react'
 import { toast } from '../lib/api.js'
 import { isDesktop } from '../lib/session.js'
 import { useWorkspace, exportWorkspace } from '../lib/workspaceStore.js'
@@ -29,17 +30,17 @@ function WorkspaceTransfer() {
       let doc; try { doc = JSON.parse(t) } catch { toast('Not a JSON file', false); return }
       const r = useWorkspace.getState().importWorkspace(doc, mode)
       if (r.error) toast(r.error, false); else toast(`Imported ${r.added} item${r.added === 1 ? '' : 's'} (${mode})`)
-    })
+    }).catch(() => ignoredError('read workspace import'))
   }
   return (
     <>
       <h4 className="settings-sub">Workspace</h4>
       <div className="set-row">
-        <button className="btn small" onClick={doExport}>Export searches…</button>
-        <button className="btn small" onClick={() => fileRef.current?.click()}>Import…</button>
+        <button type="button" className="btn small" onClick={doExport}>Export searches…</button>
+        <button type="button" className="btn small" onClick={() => fileRef.current?.click()}>Import…</button>
         <span className="seg">
-          <button className={`seg-btn ${mode === 'merge' ? 'on' : ''}`} onClick={() => setMode('merge')} title="Add the file's searches next to yours">Merge</button>
-          <button className={`seg-btn ${mode === 'replace' ? 'on' : ''}`} onClick={() => setMode('replace')} title="Replace your curated searches with the file's (the EE2 history folder is kept)">Replace</button>
+          <button type="button" className={`seg-btn ${mode === 'merge' ? 'on' : ''}`} onClick={() => setMode('merge')} title="Add the file's searches next to yours">Merge</button>
+          <button type="button" className={`seg-btn ${mode === 'replace' ? 'on' : ''}`} onClick={() => setMode('replace')} title="Replace your curated searches with the file's (the EE2 history folder is kept)">Replace</button>
         </span>
         <input ref={fileRef} type="file" accept="application/json,.json" hidden onChange={onFile} aria-label="Import searches file" />
         <span className="muted" style={{ fontSize: 12 }}>Exiled Exchange 2 history stays on this computer</span>
@@ -56,7 +57,7 @@ function Ee2HistorySettings() {
   const [status, setStatus] = useState(null)
   useEffect(() => {
     let live = true
-    const poll = () => window.poe2desktop?.ee2?.status?.().then(st => { if (live) setStatus(st) }).catch(() => {})
+    const poll = () => window.poe2desktop?.ee2?.status?.().then(st => { if (live) setStatus(st) }).catch(() => ignoredError('poll companion status'))
     poll(); const t = setInterval(poll, 10000)
     return () => { live = false; clearInterval(t) }
   }, [])
@@ -68,7 +69,7 @@ function Ee2HistorySettings() {
       <div className="set-row"><Toggle checked={prefs.enabled} onChange={v => saveHistoryPrefs({ enabled: v })} label="Record copied items" /></div>
       <div className="set-row"><span style={{ width: 120 }}>Keep last</span><input type="number" min={20} max={1000} step={10} defaultValue={prefs.max} key={`max${prefs.max}`} onBlur={num('max', 20, 1000)} style={{ width: 90 }} /><span className="muted" style={{ fontSize: 12 }}>entries (20–1000)</span></div>
       <div className="set-row"><span style={{ width: 120 }}>Keep for</span><input type="number" min={7} max={90} defaultValue={prefs.retentionDays} key={`ret${prefs.retentionDays}`} onBlur={num('retentionDays', 7, 90)} style={{ width: 90 }} /><span className="muted" style={{ fontSize: 12 }}>days (7–90)</span></div>
-      <div className="set-row"><span style={{ width: 120 }} /><button className="btn small" onClick={() => clearHistoryWithUndo()}>Clear history</button><span className="muted ee2-status" style={{ fontSize: 12 }}>{line}</span></div>
+      <div className="set-row"><span style={{ width: 120 }} /><button type="button" className="btn small" onClick={() => clearHistoryWithUndo()}>Clear history</button><span className="muted ee2-status" style={{ fontSize: 12 }}>{line}</span></div>
       <h4 className="settings-sub">ExiledExchange2 searches</h4>
       <div className="set-row"><Toggle checked={prefs.waystoneStats} onChange={v => saveHistoryPrefs({ waystoneStats: v })} label="Match waystone pack size, rarity and drop chance" /></div>
     </>
@@ -83,7 +84,7 @@ export default function TradingSettings() {
   const [capturing, setCapturing] = useState(false)
 
   useEffect(() => {
-    if (window.poe2desktop?.hotkey) window.poe2desktop.hotkey.get().then(r => setHotkey(r?.combo || 'CommandOrControl+G')).catch(() => {})
+    if (window.poe2desktop?.hotkey) window.poe2desktop.hotkey.get().then(r => setHotkey(r?.combo || 'CommandOrControl+G')).catch(() => ignoredError('load hotkey'))
   }, [])
 
   // Capture a key combo for the hotkey (desktop).
@@ -101,7 +102,7 @@ export default function TradingSettings() {
     window.poe2desktop.hotkey.set(combo).then(r => {
       if (r?.ok) { setHotkey(combo); toast(`Hotkey set to ${combo}`) }
       else toast(`${combo} is taken by another app — pick another`, false)
-    })
+    }).catch(() => ignoredError('register focus hotkey'))
   }
 
   return (
@@ -112,7 +113,7 @@ export default function TradingSettings() {
       {isDesktop ? (
         <div className="set-row">
           <span style={{ width: 120 }}>Focus hotkey</span>
-          <button className="btn small" tabIndex={0} onKeyDown={onKey} onClick={() => setCapturing(true)}>
+          <button type="button" className="btn small" tabIndex={0} onKeyDown={onKey} onClick={() => setCapturing(true)}>
             {capturing ? 'Press a combo…' : hotkey.replace('CommandOrControl', '⌘/Ctrl')}
           </button>
           <span className="muted" style={{ fontSize: 12 }}>raises Arbiter to Trading → Live</span>

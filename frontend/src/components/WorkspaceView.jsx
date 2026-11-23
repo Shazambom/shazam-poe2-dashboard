@@ -1,4 +1,5 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { ignoredError } from '../lib/ignoredError.js'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useWorkspace, loadWorkspace, HISTORY_SYS } from '../lib/workspaceStore.js'
 import { tradeUrl, tradeHome, queryUrl, parseTradeUrl, isAuthBounceUrl, openTrade, isDesktop } from '../lib/session.js'
 import { shouldAcceptNav, homeCapture } from '../lib/webview.js'
@@ -59,8 +60,8 @@ async function ensureInstantBuyout(el) {
     return 'no-option';
   })()`
   for (let i = 0; i < 10; i++) {
-    try { const r = await el.executeJavaScript(code); if (r === 'set' || r === 'already') return r } catch {}
-    await new Promise(res => setTimeout(res, 900))
+    try { const r = await el.executeJavaScript(code); if (r === 'set' || r === 'already') return r } catch { ignoredError('inspect trade page') }
+    await new Promise(res => { setTimeout(res, 900) })
   }
   // Gave up: report what the dropdown actually says so the caller only hints when it is truly
   // NOT Instant Buyout (a slow load that lands there anyway must not raise a false hint).
@@ -165,10 +166,13 @@ export default function WorkspaceView({ league, visible = true }) {
     page: reprice.own, rowQuery: reprice.rowQuery, prices: reprice.prices, options: reprice.options, emptyExact: reprice.emptyExact,
   })
   const relaxActiveRef = useRef(false)
-  relaxActiveRef.current = relax.active
-  useEffect(() => {
+  useLayoutEffect(() => { relaxActiveRef.current = relax.active }, [relax.active])
+  const windowKey = `${remountKey}:${relax.relaxTick}`
+  const [navKey, setNavKey] = useState(windowKey)
+  if (navKey !== windowKey) {
+    setNavKey(windowKey)
     setNavState({ url: '', loading: false, hint: '' })
-  }, [remountKey, relax.relaxTick])
+  }
   useEffect(() => {
     if (relax.relaxUrl) window.poe2desktop?.trade?.listingsCancel?.()
   }, [relax.relaxUrl])
@@ -230,10 +234,20 @@ export default function WorkspaceView({ league, visible = true }) {
   // Enter open · F2 rename · ⌫ delete (with undo) · ⌘N new search · ⌘⇧N new group · Esc clears the filter.
   const onTreeKey = useCallback((e, node) => {
     const mod = e.metaKey || e.ctrlKey
-    if (mod && (e.key === 'n' || e.key === 'N')) { e.preventDefault(); e.stopPropagation(); if (e.shiftKey) newGroup(); else newSearch(node?.data.kind === 'folder' ? node.data.id : null); return }
+    if (mod && (e.key === 'n' || e.key === 'N')) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.shiftKey) newGroup(); else newSearch(node?.data.kind === 'folder' ? node.data.id : null);
+      return
+    }
     if (mod && (e.key === 'v' || e.key === 'V')) { e.preventDefault(); e.stopPropagation(); clipboardAdd(); return }
     if (!node) return
-    if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); if (node.data.kind === 'folder') node.toggle(); else selectNode(node.data.id); return }
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      e.stopPropagation();
+      if (node.data.kind === 'folder') node.toggle(); else selectNode(node.data.id);
+      return
+    }
     if (e.key === 'F2') { e.preventDefault(); e.stopPropagation(); node.edit(); return }
     if (e.key === 'Backspace' || e.key === 'Delete') {
       e.preventDefault(); e.stopPropagation()
@@ -265,7 +279,7 @@ export default function WorkspaceView({ league, visible = true }) {
       { label: 'Open', key: '↵', disabled: !isSearch, run: () => selectNode(d.id) },
       { label: isDesktop ? 'Open in window' : 'Open in browser', disabled: !url, run: () => openTrade(url) },
       { label: 'Copy link', disabled: !url, run: () => copyText(url) },
-      { sep: true },
+      { id: 'search-actions', sep: true },
       ...(isDesktop && d.kind === 'folder' && d.sys !== HISTORY_SYS ? [{ label: 'Add from clipboard here', key: '⌘V', run: () => clipboardAdd(d.id) }] : []),
       ...(d.kind === 'folder' && d.sys === HISTORY_SYS ? [{ label: 'Clear history', danger: true, run: () => clearHistoryWithUndo() }] : []),
       { label: 'Rename', key: 'F2', disabled: d.kind === 'folder' && !!d.sys, run: () => setTimeout(() => node.edit(), 0) },
@@ -273,9 +287,9 @@ export default function WorkspaceView({ league, visible = true }) {
       ...(isSearch && d.q && d.slug && !inHistory(d.id) ? [{ label: 'Re-run from item', run: () => rerunFromItem(d.id) }] : []),
       ...(d.kind === 'folder' ? [{ label: 'Sort A–Z', run: () => sortChildren(d.id) }] : []),
       ...(isDesktop && d.kind === 'folder' && d.sys !== HISTORY_SYS ? [{ label: 'Go live: all searches', run: () => goLiveAll(d.id) }, { label: 'Stop all live searches', run: () => { const n = disarmFolder(d.id); toast(n ? `Stopped ${n}` : 'None were live', !!n) } }] : []),
-      { label: d.done ? 'Mark not done' : 'Mark done', disabled: !isSearch, run: () => setField(d.id, { done: !d.done }) },
-      { label: 'Move to', children: [{ label: 'Top level', run: () => move(d.id, null, 0) }, ...folders.map(f => ({ label: f.name, run: () => move(d.id, f.id, 0) }))] },
-      { sep: true },
+      { id: 'mark-done', label: d.done ? 'Mark not done' : 'Mark done', disabled: !isSearch, run: () => setField(d.id, { done: !d.done }) },
+      { label: 'Move to', children: [{ id: 'root', label: 'Top level', run: () => move(d.id, null, 0) }, ...folders.map(f => ({ id: `folder:${f.id}`, label: f.name, run: () => move(d.id, f.id, 0) }))] },
+      { id: 'delete-actions', sep: true },
       { label: 'Delete', key: '⌫', danger: true, run: () => requestDelete(d) },
     ]
   }, [menu, league, selectNode, duplicate, setField, move, requestDelete, clipboardAdd, rerunFromItem, sortChildren, goLiveAll, disarmFolder, inHistory])
@@ -315,10 +329,16 @@ export default function WorkspaceView({ league, visible = true }) {
   // node must not re-navigate the webview it came from (that would reload mid-build). The
   // <webview key={activeId}> remounts on switch, so this doubles as restore-on-launch and
   // restore-on-remount with no imperative navigation.
-  const mountUrl = useMemo(() => {
+  const readAddress = () => {
     const n = activeId ? useWorkspace.getState().nodeById(activeId) : null
-    return n?.slug ? tradeUrl(n, league, n.live) : (n?.q && !n.degraded) ? queryUrl(n, league) : tradeHome(league)
-  }, [activeId, league, rerunTick, wvNonce, relax.relaxTick])   // ↻ or Exact reloads the row's latest saved search, not a stale initial mount URL
+    const url = n?.slug ? tradeUrl(n, league, n.live) : (n?.q && !n.degraded) ? queryUrl(n, league) : tradeHome(league)
+    return { windowKey, league, activeId, url }
+  }
+  const [address, setAddress] = useState(readAddress)
+  if (address.windowKey !== windowKey || address.league !== league || address.activeId !== activeId) {
+    setAddress(readAddress())
+  }
+  const mountUrl = address.url
   const viewUrl = relax.relaxUrl || mountUrl
 
   // A tab mounted on the Instant Buyout home: the site's own landing slug for it is not the user's search.
@@ -353,8 +373,8 @@ export default function WorkspaceView({ league, visible = true }) {
     if (!isDesktop || !window.poe2desktop?.trade?.onWebviewNav) return
     return window.poe2desktop.trade.onWebviewNav((p) => {
       // Only the embedded webview drives the workspace — never the open-trade pop-out.
-      let myId = null
-      try { myId = wv.current?.getWebContentsId() } catch {}
+      let myId
+      try { myId = wv.current?.getWebContentsId() } catch { myId = null }
       if (!shouldAcceptNav(p, myId)) return
       const { url, phase } = p
       if (isAuthBounceUrl(url)) authBouncedRef.current = true
@@ -391,7 +411,7 @@ export default function WorkspaceView({ league, visible = true }) {
       if (n.slug !== parsed.slug || n.live !== parsed.live || n.type !== parsed.type) {
         setField(id, { type: parsed.type, slug: parsed.slug, live: parsed.live })
       }
-      if (n.auto !== false && wv.current) readSearchName(wv.current).then(name => { if (name) autoName(id, name) })
+      if (n.auto !== false && wv.current) readSearchName(wv.current).then(name => { if (name) autoName(id, name) }).catch(() => ignoredError('read search name'))
     })
   }, [nodeById, setField, autoName, inHistory])
 
@@ -404,7 +424,7 @@ export default function WorkspaceView({ league, visible = true }) {
         <div className="notice error ws-load-error" role="alert">
           <b>Couldn't load your searches</b>
           <span className="muted">{loadError}</span>
-          <button className="btn small" onClick={() => loadWorkspace()}>Retry</button>
+          <button type="button" className="btn small" onClick={() => loadWorkspace()}>Retry</button>
         </div>
       </div>
     )
@@ -424,35 +444,35 @@ export default function WorkspaceView({ league, visible = true }) {
             <span className={`ws-save-dot ${saveState}`} title={saveTitle} aria-label={saveTitle} role="status" />
             <span className="spacer" />
             {isDesktop && ee2Present && <Toggle checked={historyOn} onChange={v => saveHistoryPrefs({ enabled: v })} label="EE2" ariaLabel="EE2 history" title="EE2 history — record every item copied in game under ExiledExchange2 History" />}
-            {isDesktop && <button className="ws-icon-btn" title="Add from clipboard (⌘⇧V)" aria-label="Add from clipboard" onClick={() => clipboardAdd()}>⎘</button>}
-            <button className="ws-icon-btn" title="New group" aria-label="New group" onClick={newGroup}>📁</button>
-            <button className="ws-icon-btn primary" title="New search" aria-label="New search" onClick={() => newSearch(null)}>+</button>
+            {isDesktop && <button type="button" className="ws-icon-btn" title="Add from clipboard (⌘⇧V)" aria-label="Add from clipboard" onClick={() => clipboardAdd()}>⎘</button>}
+            <button type="button" className="ws-icon-btn" title="New group" aria-label="New group" onClick={newGroup}>📁</button>
+            <button type="button" className="ws-icon-btn primary" title="New search" aria-label="New search" onClick={() => newSearch(null)}>+</button>
           </div>
           {tree.length > 0 && (
             <div className="ws-filter">
               <input className="ws-filter-input" placeholder="Filter searches…" aria-label="Filter searches" value={filter}
                 onChange={e => setFilter(e.target.value)} onKeyDown={e => { if (e.key === 'Escape') { setFilter(''); e.currentTarget.blur() } }} />
-              {filter && <button className="ws-mini on" title="Clear filter" aria-label="Clear filter" onClick={() => setFilter('')}>✕</button>}
+              {filter && <button type="button" className="ws-mini on" title="Clear filter" aria-label="Clear filter" onClick={() => setFilter('')}>✕</button>}
             </div>)}
           {tree.length === 0
             ? <div className="ws-tree ws-empty">
-                <button className="ws-empty-add" onClick={() => newSearch(null)}>+ New search</button>
+                <button type="button" className="ws-empty-add" onClick={() => newSearch(null)}>+ New search</button>
                 <p className="ws-empty-hint">{EMPTY_HINT}{isDesktop && historyOn ? EMPTY_HINT_EE2 : '.'}</p>
               </div>
             : (
               <SearchTree treeRef={treeApi} filter={filter} onSelect={selectNode} onContext={openMenu} onKey={onTreeKey} onDelete={(id) => { const n = nodeById(id); if (n) requestDelete(n) }} renderTrailing={(d, node) => (
                 confirmId === d.id
-                  ? <span className="ws-confirm" onClick={e => e.stopPropagation()}>
+                  ? <span className="ws-confirm">
                       <span>Delete {(d.children || []).length} inside?</span>
-                      <button className="ws-mini on" title="Confirm delete" aria-label="Confirm delete" onClick={() => deleteNode(d.id)}>✓</button>
-                      <button className="ws-mini on" title="Cancel" aria-label="Cancel" onClick={() => setConfirmId(null)}>✕</button>
+                      <button type="button" className="ws-mini on" title="Confirm delete" aria-label="Confirm delete" onClick={() => deleteNode(d.id)}>✓</button>
+                      <button type="button" className="ws-mini on" title="Cancel" aria-label="Cancel" onClick={() => setConfirmId(null)}>✕</button>
                     </span>
                   : <>
-                      {d.kind === 'folder' && d.sys === HISTORY_SYS && <button className="ws-mini" title="Clear history" aria-label="Clear history" onClick={e => { e.stopPropagation(); clearHistoryWithUndo() }}>🗑</button>}
-                      {d.kind === 'folder' && d.sys !== HISTORY_SYS && <button className="ws-mini" title="New search here" aria-label="New search here" onClick={e => { e.stopPropagation(); newSearch(d.id) }}>+</button>}
-                      {d.kind === 'search' && <button className={`ws-mini ${d.done ? 'on' : ''}`} title={d.done ? 'Mark not done' : 'Mark done'} aria-label={d.done ? 'Mark not done' : 'Mark done'} aria-pressed={!!d.done} onClick={e => { e.stopPropagation(); setField(d.id, { done: !d.done }) }}>✓</button>}
-                      {!(d.kind === 'folder' && d.sys) && <button className="ws-mini" title="Rename" aria-label="Rename" onClick={e => { e.stopPropagation(); node.edit() }}>✎</button>}
-                      <button className="ws-mini" title="Delete" aria-label="Delete" onClick={e => { e.stopPropagation(); requestDelete(d) }}>×</button>
+                      {d.kind === 'folder' && d.sys === HISTORY_SYS && <button type="button" className="ws-mini" title="Clear history" aria-label="Clear history" onClick={e => { e.stopPropagation(); clearHistoryWithUndo() }}>🗑</button>}
+                      {d.kind === 'folder' && d.sys !== HISTORY_SYS && <button type="button" className="ws-mini" title="New search here" aria-label="New search here" onClick={e => { e.stopPropagation(); newSearch(d.id) }}>+</button>}
+                      {d.kind === 'search' && <button type="button" className={`ws-mini ${d.done ? 'on' : ''}`} title={d.done ? 'Mark not done' : 'Mark done'} aria-label={d.done ? 'Mark not done' : 'Mark done'} aria-pressed={!!d.done} onClick={e => { e.stopPropagation(); setField(d.id, { done: !d.done }) }}>✓</button>}
+                      {!(d.kind === 'folder' && d.sys) && <button type="button" className="ws-mini" title="Rename" aria-label="Rename" onClick={e => { e.stopPropagation(); node.edit() }}>✎</button>}
+                      <button type="button" className="ws-mini" title="Delete" aria-label="Delete" onClick={e => { e.stopPropagation(); requestDelete(d) }}>×</button>
                     </>
               )} />
             )}
@@ -460,7 +480,7 @@ export default function WorkspaceView({ league, visible = true }) {
       )}
 
       {/* Collapse/expand the searches rail (click) or resize it (drag) — control sits on the boundary. */}
-      <button className={`ws-divider ${collapsed ? 'collapsed' : ''}`} title={collapsed ? 'Show searches' : 'Hide searches · drag to resize'}
+      <button type="button" className={`ws-divider ${collapsed ? 'collapsed' : ''}`} title={collapsed ? 'Show searches' : 'Hide searches · drag to resize'}
         aria-label={collapsed ? 'Show searches' : 'Hide searches'} aria-expanded={!collapsed}
         onMouseDown={onDividerDown} onClick={() => { if (downCollapsed.current) setLayout({ collapsed: false }) }}>
         <span>{collapsed ? '»' : '«'}</span>
@@ -472,20 +492,20 @@ export default function WorkspaceView({ league, visible = true }) {
             <div className="ws-webhint">
               {activeNode
                 ? <span className="ws-webhint-name" title={navState.url || viewUrl}>{activeNode.name}</span>
-                : <span className="ws-webhint-name ws-webhint-empty">Press <button className="ws-inline-add" onClick={() => newSearch(null)} aria-label="New search">+</button> to build a search · Paste a trade URL{isDesktop && historyOn ? EMPTY_HINT_EE2 : '.'}</span>}
+                : <span className="ws-webhint-name ws-webhint-empty">Press <button type="button" className="ws-inline-add" onClick={() => newSearch(null)} aria-label="New search">+</button> to build a search · Paste a trade URL{isDesktop && historyOn ? EMPTY_HINT_EE2 : '.'}</span>}
               {navState.hint && <span className="ws-chip" title="The site's delivery dropdown could not be set automatically">{navState.hint}</span>}
               {!sessionOk && <span className="ws-chip warn" title="No PoE trade session is connected — the site may show a login page and captures can silently fail. Connect it in Settings → Accounts.">no session</span>}
               {activeNode && (activeNode.slug || activeNode.q
                 ? <>
                     <span className="ws-chip ok">{activeNode.q ? 'from item' : 'captured'}</span>
                     {activeNode.live && <span className="ws-chip live">live</span>}
-                    {reprice.state === 'reprice' && <button className="ws-chip act" title={`Re-run this search priced in ${reprice.offer.text} and save it`} onClick={reprice.apply}>
+                    {reprice.state === 'reprice' && <button type="button" className="ws-chip act" title={`Re-run this search priced in ${reprice.offer.text} and save it`} onClick={reprice.apply}>
                       <Cur id={reprice.offer.currency} size={14} />Reprice in {reprice.offer.text}</button>}
-                    {reprice.state === 'find' && <button className="ws-chip find" title="Check whether this search is cheaper in another currency" onClick={reprice.find}>Find cheapest</button>}
+                    {reprice.state === 'find' && <button type="button" className="ws-chip find" title="Check whether this search is cheaper in another currency" onClick={reprice.find}>Find cheapest</button>}
                     {reprice.state === 'checking' && <span className="ws-chip" role="status">Checking…</span>}
                     {reprice.state === 'cheapest' && <span className="ws-chip ok" role="status">Already cheapest</span>}
                     {relax.state === 'idle' && relax.preview && (
-                      <button
+                      <button type="button"
                         className={`ws-chip ${relax.emptyExact ? 'act' : 'find'}`}
                         title="Broaden this search to similar items"
                         onClick={relax.apply}
@@ -511,7 +531,7 @@ export default function WorkspaceView({ league, visible = true }) {
                           {relax.state === 'relaxed' ? 'Relaxed' : 'No matches'}
                         </span>
                         {relax.level === 1 && relax.summary?.canRelaxFurther && (
-                          <button
+                          <button type="button"
                             className="ws-chip find"
                             title="Broaden this search further"
                             onClick={relax.further}
@@ -519,15 +539,15 @@ export default function WorkspaceView({ league, visible = true }) {
                             Relax further
                           </button>
                         )}
-                        <button className="ws-chip find" title="Return to the exact search" onClick={relax.reset}>Exact</button>
+                        <button type="button" className="ws-chip find" title="Return to the exact search" onClick={relax.reset}>Exact</button>
                       </>
                     )}
                   </>
                 : <span className="ws-chip">build your search — it captures automatically</span>)}
               <span className="spacer" />
-              {activeUrl && <button className="ws-mini on" title="Copy link" aria-label="Copy link" onClick={() => copyText(activeUrl)}>⧉</button>}
-              {activeUrl && <button className="ws-mini on" title="Open in window" aria-label="Open in window" onClick={() => openTrade(activeUrl)}>↗</button>}
-              <button className="ws-mini on" title="Reload" aria-label="Reload" onClick={() => setWvNonce(n => n + 1)}>↻</button>
+              {activeUrl && <button type="button" className="ws-mini on" title="Copy link" aria-label="Copy link" onClick={() => copyText(activeUrl)}>⧉</button>}
+              {activeUrl && <button type="button" className="ws-mini on" title="Open in window" aria-label="Open in window" onClick={() => openTrade(activeUrl)}>↗</button>}
+              <button type="button" className="ws-mini on" title="Reload" aria-label="Reload" onClick={() => setWvNonce(n => n + 1)}>↻</button>
             </div>
             <div className={`ws-progress ${navState.loading ? 'on' : ''}`} aria-hidden="true" />
             {!SNAP && <webview key={`${activeId || 'home'}:${wvNonce}:${rerunTick}:${relax.relaxTick}`} ref={wv} src={viewUrl} className="ws-webview" allowpopups="true" />}
@@ -535,7 +555,7 @@ export default function WorkspaceView({ league, visible = true }) {
         ) : (
           <div className="ws-overlay">
             <p className="muted">The embedded trade window is desktop-only. Add searches here and open them in a browser tab.
-              {activeNode?.slug && <><br /><button className="btn small primary" onClick={() => openTrade(tradeUrl(activeNode, league, false))}>Open “{activeNode.name}” in a tab</button></>}
+              {activeNode?.slug && <><br /><button type="button" className="btn small primary" onClick={() => openTrade(tradeUrl(activeNode, league, false))}>Open “{activeNode.name}” in a tab</button></>}
             </p>
           </div>
         )}

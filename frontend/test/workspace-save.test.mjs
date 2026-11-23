@@ -13,7 +13,7 @@ globalThis.fetch = async (url, opts = {}) => {
   return { ok: true, status: 200, json: async () => ({ workspace: puts.at(-1) }), text: async () => '' }
 }
 const { useWorkspace, loadWorkspace } = await import('../src/lib/workspaceStore.js')
-const sleep = (ms) => new Promise(r => setTimeout(r, ms))
+const sleep = (ms) => new Promise(r => { setTimeout(r, ms) })
 const st = () => useWorkspace.getState()
 
 test('saveState goes idle → dirty → saving → idle; flush() sends exactly one payload equal to state', async () => {

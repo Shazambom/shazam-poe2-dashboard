@@ -1,22 +1,23 @@
+import { ignoredError } from './ignoredError.js'
 // Tiny nav event bus: lets the command palette (or anything) ask a view to focus
 // something — e.g. open a currency's detail on the Board — without prop-drilling.
 const subs = new Set()
 let pendingTrading = null   // survives the race when TradingView isn't mounted/subscribed yet
 export const nav = {
   on(fn) { subs.add(fn); return () => subs.delete(fn) },
-  openCurrency(id) { subs.forEach(f => { try { f({ type: 'openCurrency', id }) } catch {} }) },
+  openCurrency(id) { subs.forEach(f => { try { f({ type: 'openCurrency', id }) } catch { ignoredError('notify currency listener') } }) },
   // Ask the Trading tab to switch to a sub-view ('workspace' | 'live'). Records a pending
   // target so a freshly-mounting TradingView lands there even if it missed the event.
-  openTrading(sub) { pendingTrading = sub; subs.forEach(f => { try { f({ type: 'openTrading', sub }) } catch {} }) },
+  openTrading(sub) { pendingTrading = sub; subs.forEach(f => { try { f({ type: 'openTrading', sub }) } catch { ignoredError('notify trading listener') } }) },
   consumePendingTrading() { const s = pendingTrading; pendingTrading = null; return s },
   // Ask the app to show the Trading tab at a sub-view (default Workspace: the Strat Calculator's "Open in Trading").
-  goTrading(sub = 'workspace') { subs.forEach(f => { try { f({ type: 'goTrading', sub }) } catch {} }) },
+  goTrading(sub = 'workspace') { subs.forEach(f => { try { f({ type: 'goTrading', sub }) } catch { ignoredError('notify workspace listener') } }) },
   // Ask the app to show the Stash tab on its stash (the Arbitrage rail, the top bar's empty state).
-  goStash() { subs.forEach(f => { try { f({ type: 'goStash' }) } catch {} }) },
+  goStash() { subs.forEach(f => { try { f({ type: 'goStash' }) } catch { ignoredError('notify stash listener') } }) },
   // Ask the app to show the Economy tab at a sub-view (e.g. Merchant Currency Watch -> Inflation).
-  goEconomy(sub = 'inflation') { subs.forEach(f => { try { f({ type: 'goEconomy', sub }) } catch {} }) },
+  goEconomy(sub = 'inflation') { subs.forEach(f => { try { f({ type: 'goEconomy', sub }) } catch { ignoredError('notify economy listener') } }) },
   // Ask a section container (Stash/Economy) to switch to a sub-view.
-  openSub(section, sub) { subs.forEach(f => { try { f({ type: 'openSub', section, sub }) } catch {} }) },
+  openSub(section, sub) { subs.forEach(f => { try { f({ type: 'openSub', section, sub }) } catch { ignoredError('notify subview listener') } }) },
   // A section container reports the sub-view it shows, so App knows the current screen (⌘K lists its actions first).
-  reportSub(section, sub) { subs.forEach(f => { try { f({ type: 'sub', section, sub }) } catch {} }) },
+  reportSub(section, sub) { subs.forEach(f => { try { f({ type: 'sub', section, sub }) } catch { ignoredError('notify active subview listener') } }) },
 }

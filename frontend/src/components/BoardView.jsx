@@ -1,14 +1,16 @@
-import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { ignoredError } from '../lib/ignoredError.js'
+import React, { useEffect, useEffectEvent, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'motion/react'
 import { api, fmt, surface, toast } from '../lib/api.js'
 import { nav } from '../lib/nav.js'
 import { isDesktop } from '../lib/session.js'
 import Cur from './Cur.jsx'
-import CardDetail, { Spark, useAssetModal, rangeLabel } from './CardDetail.jsx'
+import CardDetail, { Spark } from './CardDetail.jsx'
+import { useAssetModal } from './useAssetModal.jsx'
 import { useCurrencies } from '../lib/icons.js'
 import { useStatus, ensureSettings } from '../lib/statusStore.js'
 import CurrencyPicker from './CurrencyPicker.jsx'
-import { useHorizon } from '../lib/horizonStore.js'
+import { rangeLabel, useHorizon } from '../lib/horizonStore.js'
 import { useSync } from '../lib/syncStore.js'
 import { usePoll } from '../lib/hooks.js'
 import { factorFor, trendIn, valueIn, readable, flipChange } from '../lib/price.js'
@@ -48,14 +50,14 @@ const Tile = React.forwardRef(function Tile({ r, num, factor, prices, numOptions
       whileHover={{ y: -3 }}
       transition={{ duration: 0.18, ease: [0.22, 0.61, 0.36, 1], delay: Math.min(index * 0.012, 0.07) }}
       className="price-tile clickable"
-      onClick={() => onOpen?.(r.id)}
+      onClick={e => { if (e.target.closest('.pt-num-row')) e.stopPropagation(); else onOpen?.(r.id) }}
       role="button" tabIndex={0}
-      onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen?.(r.id) } }}
+      onKeyDown={e => { if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); onOpen?.(r.id) } }}
     >
       <div className="pt-head">
         <span className={`pt-name${(r.name || '').length > 14 ? ' long' : ''}`}><Cur id={r.id} text /></span>
         {r.hub && <span className="pt-hub" title="Hub — a central market; a lot of value routes through it">⬢</span>}
-        {onRemove && <button className="pt-remove" title="Remove from board" onClick={e => { e.stopPropagation(); onRemove(r.id) }}>×</button>}
+        {onRemove && <button type="button" className="pt-remove" title="Remove from board" onClick={e => { e.stopPropagation(); onRemove(r.id) }}>×</button>}
       </div>
       <div className="pt-mid">
         {mid == null ? <span className="muted">no price</span>
@@ -66,7 +68,7 @@ const Tile = React.forwardRef(function Tile({ r, num, factor, prices, numOptions
       {/* one caption: when the price last moved; which source gave it stays in the backend (styleguide §0.1) */}
       <div className="pt-foot muted">{r.age_s != null ? <>{r.source === 'scout' ? 'updated' : 'traded'} {fmt.age(r.age_s)} ago</> : ' '}</div>
       {onNum && numOptions.length > 0 && (
-        <div className="pt-num-row" onClick={e => e.stopPropagation()}>priced in{' '}
+        <div className="pt-num-row">priced in{' '}
           <select value={num} onChange={e => onNum(r.id, e.target.value)} title="Currency this card is priced in (defaults to its highest-volume market)">
             {numOptions.filter(o => o.id !== r.id).map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
           </select>
@@ -76,13 +78,16 @@ const Tile = React.forwardRef(function Tile({ r, num, factor, prices, numOptions
   )
 })
 
-export default function BoardView({ status }) {
+const EMPTY_ROWS = []
+const EMPTY_PRICES = {}
+
+export default function BoardView() {
   const [data, setData] = useState(null)
   const [hold, setHold] = useState(null)             // hold leaderboard (top-3 stores of value) — feeds the pulse strip
   const [movers, setMovers] = useState(null)         // biggest movers by |% change| over the window (full universe)
   const assetModal = useAssetModal()                 // shared "zoom into any asset by name" modal (pulse-strip items)
   const [err, setErr] = useState(null)
-  const [busy, setBusy] = useState(false)
+  const refreshPending = useRef(false)
   const winH = useHorizon(s => s.hours)              // app-wide horizon (topbar picker)
   const tick = useSync(s => s.tick)                  // topbar ⟳ pulse → refresh this view
   const setSyncBusy = useSync(s => s.setBusy)        // drive the topbar ⟳ spinner
@@ -95,7 +100,7 @@ export default function BoardView({ status }) {
   const setNum = (id, n) => {
     const next = { ...numById, [id]: n }
     setNumById(next)
-    try { localStorage.setItem('board.num.v1', JSON.stringify(next)) } catch {}
+    try { localStorage.setItem('board.num.v1', JSON.stringify(next)) } catch { ignoredError('store board currency') }
   }
 
   // The picks ride along so each card's trend is the history of the market it is shown in.
@@ -118,10 +123,12 @@ export default function BoardView({ status }) {
   }
   const removeCur = (id) => saveWatchlist((watchlist || []).filter(x => x !== id))
   const refresh = async () => {
-    if (busy) return
-    setBusy(true); setSyncBusy(true)
+    if (refreshPending.current) return
+    refreshPending.current = true
+    setSyncBusy(true)
     await load()
-    setBusy(false); setSyncBusy(false)
+    refreshPending.current = false
+    setSyncBusy(false)
   }
   usePoll(load, 30000, [winH, numsParam])
   // command palette → open a currency's detail here
@@ -140,18 +147,19 @@ export default function BoardView({ status }) {
   const openAsset = (name, inNum) => assetModal.open(name, inNum)
   useEffect(() => {
     if (!isDesktop) return
-    ensureSettings().then(s => setWatchlist(s.watchlist || [])).catch(() => {})
+    ensureSettings().then(s => setWatchlist(s.watchlist || [])).catch(() => ignoredError('load watchlist'))
   }, [])
   // Manual refresh from the topbar ⟳ (bumps the shared tick) refreshes the mounted view.
-  useEffect(() => { if (tick > 0) refresh() }, [tick]) // eslint-disable-line
+  const refreshFromTick = useEffectEvent(refresh)
+  useEffect(() => { if (tick > 0) refreshFromTick() }, [tick])
 
   const ref = data?.reference ?? 'ref'
-  const rows = data?.rows ?? []
-  const prices = data?.prices ?? {}
+  const rows = data?.rows ?? EMPTY_ROWS
+  const prices = data?.prices ?? EMPTY_PRICES
   // Currencies a card can be priced in = those with a known reference price, richest first.
   const numOptions = useMemo(() => Object.keys(prices)
     .sort((a, b) => (prices[b] || 0) - (prices[a] || 0))
-    .map(id => ({ id, name: nameOf(id) })), [prices, nameOf]) // eslint-disable-line
+    .map(id => ({ id, name: nameOf(id) })), [prices, nameOf])
   // Effective numeraire for a card: user override → backend's highest-volume default → reference.
   // Never price a currency against itself (a 1:1 is useless) — fall back to divine/ref.
   const numFor = (r) => {
@@ -212,7 +220,7 @@ export default function BoardView({ status }) {
                 const num = numFor(r)
                 const val = valueIn(r.id, r.mid, num, prices)
                 return (
-                  <button key={r.id} className="pulse-chip clickable" title={`${r.name || nameOf(r.id)} — central market · expand chart`}
+                  <button type="button" key={r.id} className="pulse-chip clickable" title={`${r.name || nameOf(r.id)} — central market · expand chart`}
                     onClick={() => setOpenId(r.id)}>
                     <Cur id={r.id} size={16} /><span className="pulse-v"><Rate value={val} num={num} size={12} bold={false} /></span>
                   </button>
@@ -224,7 +232,7 @@ export default function BoardView({ status }) {
             <div className="pulse-group holds">
               <span className="pulse-group-label" title="Top stores of value vs Divine (hold score). Click to expand its chart.">Hold</span>
               {pulse.holds.map((a, i) => (
-                <button key={a.id} className="pulse-chip clickable" title={`#${i + 1} to hold · ${a.name} — expand chart`}
+                <button type="button" key={a.id} className="pulse-chip clickable" title={`#${i + 1} to hold · ${a.name} — expand chart`}
                   onClick={() => openAsset(a.name, 'divine')}>
                   <span className="pulse-rank">{i + 1}</span><Cur name={a.name} size={16} />
                   <span className={`pulse-v ${a.ret_pct >= 0 ? 'gain' : 'loss'}`}>{fmt.pct(a.ret_pct)}</span></button>
@@ -235,7 +243,7 @@ export default function BoardView({ status }) {
             <div className="pulse-group movers">
               <span className="pulse-group-label" title="Biggest % moves across all currencies over the window. Click to expand its chart.">Movers</span>
               {pulse.movers.map((a, i) => (
-                <button key={a.id} className="pulse-chip clickable" title={`#${i + 1} biggest move across all currencies · ${a.name} — expand chart`}
+                <button type="button" key={a.id} className="pulse-chip clickable" title={`#${i + 1} biggest move across all currencies · ${a.name} — expand chart`}
                   onClick={() => openAsset(a.name, a.num)}>
                   <span className="pulse-rank">{i + 1}</span><Cur name={a.name} size={16} />
                   <span className={`pulse-v ${a.change_pct >= 0 ? 'gain' : 'loss'}`}>{fmt.pct(a.change_pct)}</span></button>
@@ -256,8 +264,8 @@ export default function BoardView({ status }) {
       {err && <div className="notice error">{err}</div>}
       {data === null && !err && (
         <div className="price-grid">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <div key={i} className="price-tile skeleton" style={{ animationDelay: `${i * 0.08}s` }}>
+          {[0, 0.08, 0.16, 0.24, 0.32, 0.4].map(delay => (
+            <div key={delay} className="price-tile skeleton" style={{ animationDelay: `${delay}s` }}>
               <div className="sk sk-name" /><div className="sk sk-num" /><div className="sk sk-spark" /><div className="sk sk-foot" />
             </div>
           ))}

@@ -1,4 +1,4 @@
-import React from 'react'
+import 'react'
 
 // One bounded slider: label with the current value, the range, and what its two ends mean.
 // Sliders, not number boxes (owner, 2026-09-23): the only values on offer are the ones that mean

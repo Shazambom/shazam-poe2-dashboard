@@ -1,4 +1,4 @@
-import React from 'react'
+import 'react'
 
 // The app's only on/off control — a themed slider switch. Raw checkbox inputs are
 // BANNED (enforced by npm run lint:style); use this everywhere instead. It's a single

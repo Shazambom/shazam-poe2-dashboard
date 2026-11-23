@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import { useState } from 'react'
 import CurrencyPicker from './CurrencyPicker.jsx'
 import Cur from './Cur.jsx'
 import Num from './Num.jsx'
@@ -21,23 +21,23 @@ export default function ModsBar({ pools, currencies, poolId, ilvl, floor, filter
     <div className="mods-bar rx-surface">
       <div className="mods-controls">
         <div className="field mods-pool">
-          <label>Item type</label>
-          <CurrencyPicker value={poolId} onChange={onPool} options={pools} placeholder={disabled ? 'Loading…' : 'Search item types'} renderIcon={null} cmd="mods-type" />
+          <label htmlFor="mods-item-type">Item type</label>
+          <CurrencyPicker inputId="mods-item-type" value={poolId} onChange={onPool} options={pools} placeholder={disabled ? 'Loading…' : 'Search item types'} renderIcon={null} cmd="mods-type" />
         </div>
         <Num label="Item level" value={ilvl} min={1} max={100} onChange={onIlvl} />
         <Num label="Min level" value={floor} min={0} max={100} placeholder="any" onChange={onFloor} />
         <div className="field mods-orb">
-          <label>Orb</label>
-          <CurrencyPicker value={orb} onChange={pickOrb} options={orbs} placeholder="Search orbs" renderIcon={orbIcon} />
+          <label htmlFor="mods-orb">Orb</label>
+          <CurrencyPicker inputId="mods-orb" value={orb} onChange={pickOrb} options={orbs} placeholder="Search orbs" renderIcon={orbIcon} />
         </div>
         <div className="field mods-filter">
-          <label>Filter</label>
-          <input className="ws-filter-input" data-cmd="mods-filter" value={filter} onChange={e => onFilter(e.target.value)} placeholder="Filter modifiers" spellCheck={false} />
+          <label htmlFor="mods-filter">Filter</label>
+          <input id="mods-filter" className="ws-filter-input" data-cmd="mods-filter" value={filter} onChange={e => onFilter(e.target.value)} placeholder="Filter modifiers" spellCheck={false} />
         </div>
         {onPaste && (
           <div className="field mods-paste">
-            <label>Item</label>
-            <button type="button" className="btn small" data-cmd="mods-paste" onClick={onPaste}>Paste item</button>
+            <label htmlFor="mods-paste">Item</label>
+            <button id="mods-paste" type="button" className="btn small" data-cmd="mods-paste" onClick={onPaste}>Paste item</button>
           </div>
         )}
       </div>

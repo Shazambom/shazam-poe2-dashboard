@@ -19,7 +19,7 @@ test('defaults: banner + sound on, OS off, for both families', () => {
 
 test('notify() dispatches only the channels the family has enabled', () => {
   const calls = []
-  N.setChannels({ sound: (v) => calls.push(['sound', v]), os: (t, b, o) => calls.push(['os', t]) })
+  N.setChannels({ sound: (v) => calls.push(['sound', v]), os: t => calls.push(['os', t]) })
   const toasts = []; const off = bus.on(t => toasts.push(t))
   useStatus.setState({ settings: { notifications: { volume: 0.7, live: { os: true, sound: false }, signals: { banner: false } } } })
   N.notify('live', { title: 'Ping: X', body: 'b', node: 'NODE' })

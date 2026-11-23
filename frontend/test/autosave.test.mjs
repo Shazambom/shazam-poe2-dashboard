@@ -15,7 +15,7 @@ test('flush waits for an already in-flight save before resolving', async () => {
   const a = createAutosave(() => { calls++; return save1.p }, 5)
   a.arm()
   a.save({ divine: 100 })
-  await new Promise(r => setTimeout(r, 20))
+  await new Promise(r => { setTimeout(r, 20) })
   assert.equal(calls, 1, 'debounce timer started the save')
 
   let flushed = false
@@ -40,7 +40,7 @@ test('concurrent saves serialize so an older write cannot overtake a newer write
   }, 5)
   a.arm()
   a.save({ v: 1 })
-  await new Promise(r => setTimeout(r, 15))
+  await new Promise(r => { setTimeout(r, 15) })
   a.save({ v: 2 })
   const fl = a.flush()
   await Promise.resolve()
@@ -60,7 +60,7 @@ test('unmount flushes an unheld pending edit synchronously and ignores later sav
 
   a.release()
   a.save({ v: 2 })
-  await new Promise(r => setTimeout(r, 60))
+  await new Promise(r => { setTimeout(r, 60) })
   assert.deepEqual(saved, [{ v: 1 }], 'stale closures after unmount cannot schedule further writes')
 })
 
@@ -80,7 +80,7 @@ test('unmount preserves FIFO order on a shared queue even while a prior save is 
   const a = createAutosave((p) => enqueue(p.label, p.waitFirst), 5)
   a.arm()
   a.save({ label: 'drag-1', waitFirst: true })
-  await new Promise(r => setTimeout(r, 15))
+  await new Promise(r => { setTimeout(r, 15) })
   a.save({ label: 'drag-2', waitFirst: false })
   // Simulate RoutesView preset click: unmount slider, then immediately enqueue preset.
   a.unmount()
@@ -100,7 +100,7 @@ test('unmount skips a held pending edit and discard clears pending before releas
   a.hold()
   a.save({ v: 'unreconciled' })
   a.unmount()
-  await new Promise(r => setTimeout(r, 30))
+  await new Promise(r => { setTimeout(r, 30) })
   assert.deepEqual(saved, [], 'held unreconciled edit must not flush on unmount')
 
   const saved2 = []
@@ -110,7 +110,7 @@ test('unmount skips a held pending edit and discard clears pending before releas
   b.save({ v: 'stale' })
   b.discard()
   b.release()
-  await new Promise(r => setTimeout(r, 30))
+  await new Promise(r => { setTimeout(r, 30) })
   assert.deepEqual(saved2, [], 'discard prevents release from sending stale pre-credit edit')
 })
 
@@ -123,15 +123,15 @@ test('edits made while a write is in flight coalesce into one follow-up save wit
   }, 5)
   a.arm()
   a.save({ v: 1 })
-  await new Promise(r => setTimeout(r, 15))
+  await new Promise(r => { setTimeout(r, 15) })
   assert.equal(sent.length, 1)
   a.save({ v: 2 })
-  await new Promise(r => setTimeout(r, 15))
+  await new Promise(r => { setTimeout(r, 15) })
   a.save({ v: 3 })
-  await new Promise(r => setTimeout(r, 15))
+  await new Promise(r => { setTimeout(r, 15) })
   assert.equal(sent.length, 1, 'second write waits while first is still in flight')
   first.res()
-  await new Promise(r => setTimeout(r, 25))
+  await new Promise(r => { setTimeout(r, 25) })
   assert.deepEqual(sent, [{ v: 1 }, { v: 3 }], 'superseded snapshot v:2 is coalesced into v:3')
 })
 
@@ -174,10 +174,10 @@ test('hold cancels an already scheduled debounce timer and keeps the edit pendin
   a.arm()
   a.save({ v: 1 })
   a.hold()
-  await new Promise(r => setTimeout(r, 35))
+  await new Promise(r => { setTimeout(r, 35) })
   assert.deepEqual(saved, [], 'held timer must not fire')
   a.release()
-  await new Promise(r => setTimeout(r, 35))
+  await new Promise(r => { setTimeout(r, 35) })
   assert.deepEqual(saved, [{ v: 1 }], 'release reschedules and commits the pending edit')
 })
 
@@ -192,9 +192,9 @@ test('flush returns false when a due follow-up save throws synchronously while a
   }, 5, { onError: (e) => errs.push(e.message) })
   a.arm()
   a.save({ v: 1 })
-  await new Promise(r => setTimeout(r, 15))
+  await new Promise(r => { setTimeout(r, 15) })
   a.save({ v: 2 })
-  await new Promise(r => setTimeout(r, 15)) // marks follow-up as due while first is in flight
+  await new Promise(r => { setTimeout(r, 15) }) // marks follow-up as due while first is in flight
   const fl = a.flush()
   first.res()
   assert.equal(await fl, false, 'flush must observe synchronous failure of due follow-up')
@@ -209,7 +209,7 @@ test('flush observes async rejection and sync throw when unmount flushes a pendi
   const a = createAutosave(() => (++calls1 === 1 ? first1.p : second1.p), 5)
   a.arm()
   a.save({ v: 1 })
-  await new Promise(r => setTimeout(r, 15))
+  await new Promise(r => { setTimeout(r, 15) })
   a.save({ v: 2 })
   const fl1 = a.flush()
   a.unmount()
@@ -227,7 +227,7 @@ test('flush observes async rejection and sync throw when unmount flushes a pendi
   }, 5)
   b.arm()
   b.save({ v: 1 })
-  await new Promise(r => setTimeout(r, 15))
+  await new Promise(r => { setTimeout(r, 15) })
   b.save({ v: 2 })
   const fl2 = b.flush()
   b.unmount()

@@ -1,8 +1,9 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { ignoredError } from '../lib/ignoredError.js'
+import React, { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { Tree } from 'react-arborist'
 import { api, bus, fmt, toast, undoToast } from '../lib/api.js'
 import { usePoll } from '../lib/hooks.js'
-import { uid } from '../lib/session.js'
+import { uid, queryUrl } from '../lib/session.js'
 import { find } from '../lib/tree.js'
 import { useSync } from '../lib/syncStore.js'
 import * as sc from '../lib/stratcalc.js'
@@ -15,7 +16,6 @@ import Seg from './Seg.jsx'
 import Toggle from './Toggle.jsx'
 import TradeBuilder from './TradeBuilder.jsx'
 import { baseQuery, fullTabletQuery, waystonePriceQuery } from '../lib/regex/trade.js'
-import { queryUrl } from '../lib/session.js'
 import { nav } from '../lib/nav.js'
 import { openInTrading } from '../lib/stratTrading.js'
 import { useWorkspace } from '../lib/workspaceStore.js'
@@ -26,6 +26,7 @@ import { useStratStore } from '../lib/stratStore.js'
 // hour. The math, the strats and the input rules are lib/stratcalc.js; the strats autosave to the user
 // kv `strat_calc`; prices are divines per unit off the backend's one value table.
 
+const EMPTY_COST_OPTIONS = []
 const PRICE_POLL_MS = 60_000
 const HOLD_DELAY_MS = 400    // +1 held: repeats after this…
 const HOLD_EVERY_MS = 90     // …this often
@@ -63,7 +64,7 @@ function NumBox({ value, onChange, whole = false, label, autoFocus = false, plac
   return (
     <input className={`scalc-in${found ? ' scalc-found' : ''}`} type="text" inputMode="decimal" aria-label={label} placeholder={placeholder}
       autoFocus={autoFocus} value={draft ?? shownNum(value)}
-     
+
       onChange={e => { setDraft(e.target.value); const n = sc.parseNum(e.target.value); if (n != null) onChange(fix(n)) }}
       onBlur={settle} onKeyDown={onKey} />
   )
@@ -93,15 +94,23 @@ function Flash({ value, bump, children }) {
 
 // The one place the clock ticks: re-renders its children (the clock, the hero, the sidebar's rates)
 // once a second while a strat runs; the lists and pickers around it never re-render for time.
+function createClock() {
+  let now = Date.now()
+  return {
+    read: () => now,
+    subscribe(running, notify) {
+      const sample = () => { now = Date.now(); notify() }
+      sample()
+      if (!running) return () => {}
+      const timer = setInterval(sample, 1000)
+      return () => clearInterval(timer)
+    },
+  }
+}
 function Live({ running, children }) {
-  const [now, setNow] = useState(() => Date.now())
-  useEffect(() => {
-    setNow(Date.now())
-    if (!running) return
-    const t = setInterval(() => setNow(Date.now()), 1000)
-    return () => clearInterval(t)
-  }, [running])
-  return children(now)
+  const [clock] = useState(createClock)
+  const subscribe = useCallback(notify => clock.subscribe(running, notify), [clock, running])
+  return children(useSyncExternalStore(subscribe, clock.read, clock.read))
 }
 
 // The session clock; click it to correct the time (a forgotten pause): 1:04:12, 1h 20m, 90m.
@@ -110,11 +119,18 @@ function ClockBox({ ms, on, onSet }) {
   if (draft == null) {
     return <button type="button" className={`scalc-clock ${on ? 'on' : ''}`} title="Edit time" onClick={() => setDraft(sc.clock(ms))}>{sc.clock(ms)}</button>
   }
-  const done = () => { const v = sc.parseDuration(draft); if (v != null) onSet(v); setDraft(null) }
+  const done = () => {
+    const v = sc.parseDuration(draft);
+    if (v != null) onSet(v);
+    setDraft(null)
+  }
   return (
     <input className="scalc-clock scalc-clock-in" type="text" aria-label="Session time" autoFocus value={draft}
       onChange={e => setDraft(e.target.value)} onBlur={done}
-      onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); if (e.key === 'Escape') setDraft(null) }} />
+      onKeyDown={e => {
+        if (e.key === 'Enter') e.currentTarget.blur();
+        if (e.key === 'Escape') setDraft(null)
+      }} />
   )
 }
 
@@ -182,8 +198,15 @@ function StratRow({ node, style, dragHandle }) {
   const active = d.id === activeId
   const cls = [folder ? 'folder' : 'search', active ? 'active' : '', node.willReceiveDrop ? 'drop-target' : '', node.isDragging ? 'dragging' : ''].join(' ')
   return (
-    <div className={`ws-node ${cls}`} style={style} ref={dragHandle} role="treeitem" aria-level={node.level + 1}
+    <div className={`ws-node ${cls}`} style={style} ref={dragHandle} role="treeitem" tabIndex={node.isFocused ? 0 : -1} aria-level={node.level + 1}
       aria-expanded={folder ? node.isOpen : undefined} aria-selected={active || undefined}
+      onKeyDown={e => {
+        if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) {
+          e.preventDefault()
+          e.stopPropagation()
+          e.currentTarget.click()
+        }
+      }}
       onClick={() => (folder ? node.toggle() : onSelect(d.id))}
       onDoubleClick={() => (folder ? node.edit() : setTimeout(() => nameBox.current?.focus(), 0))}
       onContextMenu={e => { e.preventDefault(); e.stopPropagation(); onMenu(e, d, node) }}>
@@ -193,17 +216,25 @@ function StratRow({ node, style, dragHandle }) {
       {folder && node.isEditing
         ? <input className="ws-edit" autoFocus defaultValue={d.name} aria-label="Folder name" onClick={e => e.stopPropagation()}
             onBlur={e => node.submit(e.target.value)}
-            onKeyDown={e => { e.stopPropagation(); if (e.key === 'Enter') node.submit(e.currentTarget.value); if (e.key === 'Escape') node.reset() }} />
+            onKeyDown={e => {
+              e.stopPropagation();
+              if (e.key === 'Enter') node.submit(e.currentTarget.value);
+              if (e.key === 'Escape') node.reset()
+            }} />
         : active
           ? <input ref={nameBox} key={`${d.id}:${d.name}`} className="scalc-strat-input" type="text" aria-label="Strat name" defaultValue={d.name}
               onClick={e => e.stopPropagation()}
               onBlur={e => onRename(d.id, e.target.value, d.name)}
-              onKeyDown={e => { e.stopPropagation(); if (e.key === 'Enter') e.currentTarget.blur(); if (e.key === 'Escape') { e.currentTarget.value = d.name; e.currentTarget.blur() } }} />
+              onKeyDown={e => {
+                e.stopPropagation();
+                if (e.key === 'Enter') e.currentTarget.blur();
+                if (e.key === 'Escape') { e.currentTarget.value = d.name; e.currentTarget.blur() }
+              }} />
           : <span className="ws-name">{d.name}</span>}
       {!folder && d.id === runningId && <span className="dot ok" title="Running" />}
       {!folder && <span className="scalc-rate"><Div v={rateOf(d.id)} size={12} /></span>}
-      {!folder && <span onClick={e => e.stopPropagation()}><RefreshButton className="scalc-refresh" title="Refresh its prices"
-        busy={refreshing === d.id} onClick={() => onRefresh(d.id)} /></span>}
+      {!folder && <span><RefreshButton className="scalc-refresh" title="Refresh its prices"
+        busy={refreshing === d.id} onClick={e => { e.stopPropagation(); onRefresh(d.id) }} /></span>}
       <button type="button" className="scalc-x" title={folder ? 'Delete the folder and its strats' : 'Delete'} aria-label={`Delete ${d.name}`}
         onClick={e => { e.stopPropagation(); onDelete(d) }}>×</button>
     </div>
@@ -218,7 +249,7 @@ function StratTree({ doc, ctx, change, treeRef }) {
       : { id: n.id, kind: 'strat', name: names[n.id] ?? '' }))
     return map(doc.tree)
   }, [doc.tree, names])
-  const initialOpen = useMemo(() => Object.fromEntries(sc.flattenFolders(doc.tree).map(f => [f.id, f.open])), []) // eslint-disable-line
+  const [initialOpen] = useState(() => Object.fromEntries(sc.flattenFolders(doc.tree).map(f => [f.id, f.open])))
   const wrap = useRef(null)
   const [dims, setDims] = useState({ w: 240, h: 300 })
   useEffect(() => {
@@ -313,9 +344,9 @@ export default function StratCalcView({ league, currencies }) {
   // Prices follow the market every minute and on the app-wide ⟳.
   useEffect(() => {
     useStratStore.getState().load({ createIfEmpty: true })
-  }, []) // eslint-disable-line
+  }, [])
   const tick = useSync(s => s.tick)
-  usePoll(() => api.stratPrices().then(d => setPrices(d.prices || {})).catch(() => {}), PRICE_POLL_MS, [tick])
+  usePoll(() => api.stratPrices().then(d => setPrices(d.prices || {})).catch(() => ignoredError('poll strategy prices')), PRICE_POLL_MS, [tick])
 
   // An Undo needs this view mounted (it runs through `change`): leaving it takes the toast along.
   useEffect(() => () => bus.emit({ id: 'sc-undo', dismiss: true }), [])
@@ -336,14 +367,13 @@ export default function StratCalcView({ league, currencies }) {
 
   // Space starts/pauses, M counts a map — only while this view is mounted, and never while a box
   // has the focus or the palette / a menu is open (lib/stratcalc.js shortcut).
-  const keys = useRef(null)
-  keys.current = (a) => (a === 'toggle' ? toggleRun() : addMaps(1))
+  const runShortcut = useEffectEvent(a => (a === 'toggle' ? toggleRun() : addMaps(1)))
   useEffect(() => {
     const onKey = (e) => {
       const a = sc.shortcut(e, { typing: sc.isTyping(document.activeElement), overlay: !!document.querySelector(OVERLAY) })
       if (!a) return
       e.preventDefault()
-      keys.current(a)
+      runShortcut(a)
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -351,7 +381,7 @@ export default function StratCalcView({ league, currencies }) {
 
   // Uniques: the trade site's own list, from the desktop shell (the web build has no trade session).
   useEffect(() => {
-    window.poe2desktop?.trade?.uniques?.().then(l => setUniques(Array.isArray(l) ? l : [])).catch(() => {})
+    window.poe2desktop?.trade?.uniques?.().then(l => setUniques(Array.isArray(l) ? l : [])).catch(() => ignoredError('load unique items'))
   }, [])
 
   // A unique's price floor: one background trade search at a time (the shared budget paces them) for
@@ -363,8 +393,7 @@ export default function StratCalcView({ league, currencies }) {
   const wakeTimer = useRef(null)
   useEffect(() => () => clearTimeout(wakeTimer.current), [])
   const blocked = useRef(false)
-  const pricesRef = useRef(prices)
-  pricesRef.current = prices
+  const priceFound = useEffectEvent((job, result) => SP.priceFound(job, result, prices))
   const open = doc && sc.activeStrat(doc)
   // A linked tablet search is priced the same way, held to the tablet's full uses: the average of its
   // cheapest ten listings.
@@ -381,7 +410,7 @@ export default function StratCalcView({ league, currencies }) {
     setPending(key)
     trade.priceQuery({ query: job.query, league }).then(res => {
       if (res?.ok) {
-        const found = SP.priceFound(job, res, pricesRef.current), now = Date.now()
+        const found = priceFound(job, res), now = Date.now()
         if (found.div != null) change(d => SP.recordFound(d, stratId, job, found, now))
         else if (found.retry) SP.retryLater(retryAt.current, job, found.retry, now)   // no prices yet: again in a minute
       } else if (res?.error === 'auth') blocked.current = true
@@ -394,7 +423,7 @@ export default function StratCalcView({ league, currencies }) {
         clearTimeout(wakeTimer.current)
         wakeTimer.current = setTimeout(() => setWake(w => w + 1), until - Date.now() + 250)
       }
-    }).catch(() => {}).finally(() => setPending(null))
+    }).catch(() => ignoredError('price strategy search')).finally(() => setPending(null))
   }, [open, league, pending, change, uses, wake])
 
   // +1 held repeats; released, left or cancelled, it stops.
@@ -408,11 +437,14 @@ export default function StratCalcView({ league, currencies }) {
     hold.current = { t: setTimeout(() => { hold.current = { i: setInterval(() => addMaps(1), HOLD_EVERY_MS) } }, HOLD_DELAY_MS) }
   }
 
-  const costOptions = currencies?.currencies ?? []
+  const costOptions = currencies?.currencies ?? EMPTY_COST_OPTIONS
   const names = useMemo(() => Object.fromEntries(costOptions.map(c => [c.id, c.name])), [costOptions])
   const options = useMemo(() => {
     const twice = new Set(), seen = new Set()
-    for (const u of uniques) { if (seen.has(u.name)) twice.add(u.name); seen.add(u.name) }
+    for (const u of uniques) {
+      if (seen.has(u.name)) twice.add(u.name);
+      seen.add(u.name)
+    }
     return [...costOptions, ...uniques.map(u => ({ id: uniqueId(u), name: twice.has(u.name) ? `${u.name} (${u.type})` : u.name, keywords: [u.type], unique: u }))]
   }, [costOptions, uniques])
   const tablets = useMemo(() => tabletOptions(uses), [uses])
@@ -466,19 +498,23 @@ export default function StratCalcView({ league, currencies }) {
   const menuItems = !menu ? [] : menu.kind === 'folder' ? [
     { label: 'Rename', run: () => menu.node.edit() },
     ...(window.poe2desktop?.ws ? [{ label: 'Export…', run: () => exportNode(menu.id) }] : []),
-    { sep: true },
+    { id: 'delete-actions', sep: true },
     { label: 'Delete folder, keep strats', run: () => deleteFolder(menu.id) },
     { label: 'Delete folder and its strats', run: () => deleteFolderDeep(menu.id) },
   ] : [
     { label: 'Duplicate', run: () => change(d => sc.duplicate(d, menu.id, { id: newId('s'), now: Date.now() })) },
     { label: 'Rename', run: () => { change(d => sc.select(d, menu.id)); setTimeout(() => nameBox.current?.focus(), 0) } },
     ...(window.poe2desktop?.ws ? [{ label: 'Export…', run: () => exportNode(menu.id) }] : []),
-    { sep: true },
+    { id: 'delete-actions', sep: true },
     { label: 'Delete', run: () => deleteStrat(menu.id) },
   ]
   const treeCtx = (now) => ({
     activeId: doc.active, nameBox, runningId: doc.strats.find(z => sc.running(z.timer))?.id ?? null,
-    rateOf: (id) => { if (stoppedRates.has(id)) return stoppedRates.get(id); const x = doc.strats.find(z => z.id === id); return x ? sc.tally(x, prices, now, uses).perHour : null },
+    rateOf: (id) => {
+      if (stoppedRates.has(id)) return stoppedRates.get(id);
+      const x = doc.strats.find(z => z.id === id);
+      return x ? sc.tally(x, prices, now, uses).perHour : null
+    },
     onSelect: (id) => change(d => sc.select(d, id)),
     onMenu: (e, d, node) => setMenu({ at: { x: e.clientX, y: e.clientY }, id: d.id, kind: d.kind, node }),
     onDelete: (d) => (d.kind === 'folder' ? deleteFolderDeep(d.id) : deleteStrat(d.id)),
@@ -488,7 +524,7 @@ export default function StratCalcView({ league, currencies }) {
       blocked.current = false
       change(d => sc.restale(sc.select(d, id), id))
       setRefreshing(id)
-      api.stratPrices().then(r => setPrices(r.prices || {})).catch(() => {})
+      api.stratPrices().then(r => setPrices(r.prices || {})).catch(() => ignoredError('load strategy prices'))
     },
     refreshing: refreshing && pending ? refreshing : null,
     // A rename counts only when the name changed, so clicking in and out never reorders anything.
@@ -522,7 +558,7 @@ export default function StratCalcView({ league, currencies }) {
     )
   }
 
-  const t = sc.tally(s, prices, Date.now(), uses)   // the cost lines (they don't change with time)
+  const t = sc.tally(s, prices, 0, uses)   // the cost lines (they don't change with time)
   const on = sc.running(s.timer)
   const sign = (v) => (v == null ? '' : v < 0 ? 'loss' : v > 0 ? 'gain' : '')
   // A cost line's value, once it costs something (or can't be priced): no "0 ◆" on an empty line.
@@ -562,12 +598,18 @@ export default function StratCalcView({ league, currencies }) {
   const n = built && sc.usesOf(built, uses)
   const target = building === 'maps' ? {
     title: 'Waystones', x: s.maps, base: baseQuery({ category: { option: 'map.waystone' } }, []),
-    priced: waystonePriceQuery, link: (d, f) => sc.linkMaps(d, d.active, f, Date.now()), unlink: (d) => sc.unlinkMaps(d, d.active, Date.now(), prices),
+    priced: waystonePriceQuery,
   } : built ? {
     title: tabletName(built), x: built,
     base: { query: { ...baseQuery({ category: { option: 'map.tablet' } }, []).query, ...(built.base ? { type: built.base } : {}), ...(built.name ? { name: built.name } : {}) } },
-    priced: (q) => fullTabletQuery(q, n ?? 10), link: (d, f) => sc.linkTablet(d, d.active, built.id, f, Date.now()), unlink: (d) => sc.unlinkTablet(d, d.active, built.id, Date.now(), prices),
+    priced: (q) => fullTabletQuery(q, n ?? 10),
   } : null
+  const link = (d, f, now) => building === 'maps'
+    ? sc.linkMaps(d, d.active, f, now)
+    : sc.linkTablet(d, d.active, built.id, f, now)
+  const unlink = (d, now) => building === 'maps'
+    ? sc.unlinkMaps(d, d.active, now, prices)
+    : sc.unlinkTablet(d, d.active, built.id, now, prices)
   const toTrading = (query, name) => { setBuilding(null); openInTrading({ query, name, league, store: useWorkspace.getState, go: () => nav.goTrading() }) }
   const backToAdd = () => lootAdd.current?.querySelector('.curpick-input')?.focus()
 
@@ -677,14 +719,14 @@ export default function StratCalcView({ league, currencies }) {
       {target && (
         <TradeBuilder league={league} title={`Trade search · ${target.title}`} url={queryUrl({ q: JSON.stringify(target.priced(target.x.link?.query ?? target.base)) }, league)}
           onClose={() => setBuilding(null)}
-          onUnlink={target.x.link ? () => { editDoc(target.unlink); setBuilding(null) } : null}
+          onUnlink={target.x.link ? () => { editDoc(d => unlink(d, Date.now())); setBuilding(null) } : null}
           onOpenTrading={target.x.link && (building === 'maps' || n != null)
             ? () => toTrading(target.priced(target.x.link.query), target.x.link.query.query?.type ?? target.title) : null}
           onUse={(f) => {
             // the search it already holds (as linked, or as the window opened it): keep its price, spend no search
             const held = target.x.link
             if (!(held && (SP.sameSearch(f, held.query) || SP.sameSearch(f, target.priced(held.query))))) {
-              SP.relinked(retryAt.current, building); editDoc(d => target.link(d, f))
+              SP.relinked(retryAt.current, building); editDoc(d => link(d, f, Date.now()))
             }
             setBuilding(null)
           }} />

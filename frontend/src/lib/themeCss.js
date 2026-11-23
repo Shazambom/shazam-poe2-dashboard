@@ -3,7 +3,12 @@
 // no imports) so the builder, the exporter and the node tests share ONE reading of the CSS.
 
 // Tokens a preset never touches: the one list, which scripts/lint-style.mjs imports.
-export const NEVER_THEMED = new Set([
+const NEVER_THEMED = new Set([
+  '--update-error', '--webview-bg', '--vaal-alert',
+  '--ink-on-alert', '--teleport-hot', '--teleport-stale',
+  '--ink-on-teleport-stale', '--ink-on-teleport-pending', '--teleport-rate',
+  '--ping-banner-bg', '--ink-on-update-ready', '--update-ready-start',
+  '--update-ready-end',
   '--afk', '--offline',
   '--rarity-normal', '--rarity-magic', '--rarity-rare', '--rarity-unique', '--rarity-gem', '--rarity-currency',
   '--radius', '--radius-lg', '--shadow-1', '--shadow-2', '--ease', '--font', '--mono', '--card-gradient', '--glow-gold',
@@ -26,7 +31,7 @@ export function parseThemeBlocks(cssText) {
     if (end === -1) break
     const tokens = new Map()
     for (let j = i + 1; j < end; j++) {
-      for (const t of lines[j].matchAll(/(--[a-z0-9-]+)\s*:\s*([^;]+);/gi)) tokens.set(t[1], t[2].trim())
+      for (const t of lines[j].matchAll(/(--[a-z0-9-]+)\s*:([^;]+);/gi)) tokens.set(t[1], t[2].trim())
     }
     if (m[2]) out.presets[m[2]] = tokens; else out.root = tokens
   }

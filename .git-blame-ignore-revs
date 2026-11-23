@@ -2,3 +2,7 @@
 82258f15554c3b47fcee0e310b4ff2e23a215616
 # Ruff formatting of Python sources
 2db629b3572e78d8d035f12002200574fec1eb61
+# Strip trailing whitespace from the StratCalc input.
+91aab0e132cb7cf8ccf24cea282e1292b514638c
+# ESLint multiline block formatting
+a0e15f02446789a18d9f6a149c88bdff6a23c3d2

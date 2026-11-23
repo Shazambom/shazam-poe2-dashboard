@@ -14,7 +14,7 @@ test('shouldAcceptNav matches the embedded webview id and tolerates the legacy b
 // lands on its slug, and the workspace saved it into the blank row as an "everything" search.
 test('a new tab\'s own landing slug is never saved; the next search the user runs is', async () => {
   const { homeCapture } = await import('../src/lib/webview.js')
-  let s = homeCapture.start(true)                       // mounted on the Instant Buyout home
+  const s = homeCapture.start(true)                       // mounted on the Instant Buyout home
   let r = homeCapture.next(s, 'homeSlug')
   assert.equal(r.capture, false, 'the site\'s own search for the home page')
   r = homeCapture.next(r.state, 'mySearch')

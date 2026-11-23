@@ -1,12 +1,13 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
 import ModsBar from './ModsBar.jsx'
 import ModTable from './ModTable.jsx'
-import { ModSection, GrantList, essenceRows, augmentRows } from './ModSection.jsx'
+import { ModSection, GrantList } from './ModSection.jsx'
+import { essenceRows, augmentRows } from '../lib/mods/grants.js'
 import { useStatus, ensureSettings } from '../lib/statusStore.js'
 import { useApi, useAutosave } from '../lib/hooks.js'
 import { api, toast } from '../lib/api.js'
 import { diag } from '../lib/diag.js'
-import { sessionFor, pasted } from '../lib/mods/index.js'
+import { sessionFor, rememberOpen, pasted } from '../lib/mods/index.js'
 import { prepare, atLevel, visible, modMatches, AFFIXES } from '../lib/mods/pool.js'
 import { merge } from '../lib/mods/defaults.js'
 import { familyQuery } from '../lib/mods/trade.js'
@@ -23,6 +24,7 @@ const REGEX_TABLES = { waystone: waystoneTable, tablet: tabletTable }
 // Desktop only: the trade site's names for a mod and a kind come from main (EE2's data).
 const modLookup = typeof window !== 'undefined' ? window.poe2desktop?.trade?.modLookup : null
 const modItem = typeof window !== 'undefined' ? window.poe2desktop?.trade?.modItem : null
+const EMPTY_POOLS = []
 const PASTE_FAIL = { empty: 'Copy an item in game first', 'not-item': 'The clipboard holds no item', worker: 'Reading items is not available right now', timeout: 'Reading items is not available right now' }
 
 const TITLES = { prefix: 'Prefix', suffix: 'Suffix', corrupted: 'Corrupted', enchant: 'Upgrade' }
@@ -35,16 +37,16 @@ const TITLES = { prefix: 'Prefix', suffix: 'Suffix', corrupted: 'Corrupted', enc
 export default function ModsView() {
   const [s, setS] = useState(null)
   const [filter, setFilter] = useState('')
-  const [open, setOpen] = useState({ rows: new Set(), sections: new Set() })
+  const [open, setOpen] = useState({ poolId: null, rows: new Set(), sections: new Set() })
   const { save, arm } = useAutosave(async (next) => { await useStatus.getState().saveSettings({ mods_tools: next }) }, 800)
   useEffect(() => {
     // Saving is armed only once the stored blob is in hand: a failed load shows defaults but
     // must never write them over the user's saved pool.
     ensureSettings().then(x => { setS(merge(x.mods_tools)); arm() }).catch(() => { setS(merge(null)); toast('Could not load your saved settings', false) })
-  }, []) // eslint-disable-line
+  }, [arm])
 
   const list = useApi(() => api.modPools(), [])
-  const pools = list.data?.pools || []
+  const pools = list.data?.pools || EMPTY_POOLS
   const currencies = list.data?.currencies || []
   const poolId = s && pools.length ? (pools.find(p => p.id === s.poolId) || pools[0]).id : null
   const fetched = useApi(() => (poolId ? api.modPool(poolId).then(prepare) : Promise.resolve(null)), [poolId])
@@ -65,15 +67,10 @@ export default function ModsView() {
     if (item && pool && reported.current !== item) { reported.current = item; diag('mods', pasteDiag(pool.id, item, match, pastedVia.current)) }
   }, [item, pool, match])
   // Ctrl+V (Cmd+V) anywhere on the page pastes the copied item, as the button does (desktop only).
-  const pasteRef = useRef(null)
-  useEffect(() => {
-    if (!modItem) return undefined
-    const onKey = (e) => { if (isPasteShortcut(e)) { e.preventDefault(); pasteRef.current?.('key') } }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [])
   const onItem = useMemo(() => (item ? new Map(match.rolled.flatMap(r => r.ids.map(id => [id, onItemLabel(r)]))) : null), [match, item])
-  const levels = useMemo(() => (pool && s ? pool.sections.map(sec => atLevel(sec, s.ilvl, sec.floored ? s.floor : 0, onItem)) : null), [pool, s?.ilvl, s?.floor, onItem])
+  const ready = !!s
+  const ilvl = s?.ilvl, floor = s?.floor
+  const levels = useMemo(() => (pool && ready ? pool.sections.map(sec => atLevel(sec, ilvl, sec.floored ? floor : 0, onItem)) : null), [pool, ready, ilvl, floor, onItem])
   const tags = useMemo(() => new Set(s?.tags || []), [s?.tags])
   const hit = useMemo(() => levels && modMatches(levels, filter), [levels, filter])
   const shown = useMemo(() => levels && levels.map(level => Object.fromEntries(AFFIXES.filter(a => level[a]).map(a => [a, visible(level[a].rows, { tags, hit })]))), [levels, tags, hit])
@@ -85,10 +82,15 @@ export default function ModsView() {
 
   // The session's open rows and sections for this pool, read once per pool and written back
   // on every toggle (a new Set each time, so the memoised rows see the change).
-  useEffect(() => { if (poolId) { const st = sessionFor(poolId); setOpen({ rows: new Set(st.rows), sections: new Set(st.sections) }) } }, [poolId])
+  if (poolId !== open.poolId) {
+    const stored = sessionFor(poolId)
+    setOpen(poolId
+      ? { poolId, rows: new Set(stored?.rows), sections: new Set(stored?.sections) }
+      : { ...open, poolId })
+  }
   const toggleIn = useCallback((kind, id) => setOpen(o => {
     const next = new Set(o[kind]); if (next.has(id)) next.delete(id); else next.add(id)
-    if (poolId) sessionFor(poolId)[kind] = next
+    if (poolId) rememberOpen(poolId, kind, next)
     return { ...o, [kind]: next }
   }), [poolId])
   const toggleRow = useCallback((id) => toggleIn('rows', id), [toggleIn])
@@ -97,8 +99,8 @@ export default function ModsView() {
     const family = pool?.sections.flatMap(sec => sec[affix] || []).find(f => f.id === id)
     const meta = pools.find(p => p.id === poolId)
     if (!family || !meta || !modLookup) return
-    let found = null
-    try { found = await modLookup({ text: family.text, affix, bases: meta.keywords || [] }) } catch {}
+    let found
+    try { found = await modLookup({ text: family.text, affix, bases: meta.keywords || [] }) } catch { found = null }
     const built = familyQuery(family, meta, found)
     if (!built) { toast('Search this modifier by hand on the trade site', false); return }
     const ws = useWorkspace.getState()
@@ -122,12 +124,11 @@ export default function ModsView() {
     nav.openTrading('regex')
   }, [pool, pools, poolId])
 
-  if (!s) return null
   const update = (p) => { const n = { ...s, ...p }; setS(n); save(n) }
   // Paste item: main reads the clipboard and hands over the parse; the pool follows the base.
   const onPaste = async (via = 'button') => {
     pastedVia.current = via
-    let r = null
+    let r
     try { r = await modItem() } catch { r = { item: null, reason: 'worker' } }
     if (!r?.item) { toast(PASTE_FAIL[r?.reason] || PASTE_FAIL['not-item'], false); return }
     const target = poolFor(pools, r.item)
@@ -135,7 +136,14 @@ export default function ModsView() {
     setItem(r.item)
     update({ poolId: target.id, tags: target.id === poolId ? s.tags : [], ...(r.item.itemLevel ? { ilvl: r.item.itemLevel } : {}) })
   }
-  pasteRef.current = onPaste
+  const pasteFromKey = useEffectEvent(() => { if (s) onPaste('key') })
+  useEffect(() => {
+    if (!modItem) return undefined
+    const onKey = (e) => { if (isPasteShortcut(e)) { e.preventDefault(); pasteFromKey() } }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+  if (!s) return null
   const strip = item ? { name: item.name, base: item.baseType, ilvl: item.itemLevel, count: match.count, slots: slotsFor(item.rarity), plain: isPlainCopy(item) } : null
   const toggleTag = (id) => update({ tags: tags.has(id) ? s.tags.filter(t => t !== id) : [...s.tags, id] })
   const empty = tags.size > 0 || filter.trim() !== '' ? 'Clear the filter or a tag to see more.' : 'Nothing rolls here.'
@@ -158,7 +166,10 @@ export default function ModsView() {
   return (
     <div className="mods">
       <ModsBar pools={pools} currencies={currencies} poolId={poolId || s.poolId} ilvl={s.ilvl} floor={s.floor} filter={filter} tags={tags} tagOptions={pool?.tags || []}
-               onPool={id => { if (id !== poolId) setItem(null); update({ poolId: id, tags: [] }) }} onIlvl={v => update({ ilvl: v })} onFloor={v => update({ floor: v })}
+               onPool={id => {
+                 if (id !== poolId) setItem(null);
+                 update({ poolId: id, tags: [] })
+               }} onIlvl={v => update({ ilvl: v })} onFloor={v => update({ floor: v })}
                onFilter={setFilter} onTag={toggleTag} disabled={!list.data}
                item={strip} onPaste={modItem ? () => onPaste('button') : null} onClearItem={() => setItem(null)} />
       {failed && <div className="empty">Reopen the tab to load the modifier tables.</div>}

@@ -6,7 +6,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { finishRoutes } from '../src/lib/routesStream.js'
+import { finishRoutes, streamSearch, SEARCH_IDLE_MS } from '../src/lib/routesStream.js'
 
 const loop = (id, score) => ({ id, score })
 
@@ -36,7 +36,6 @@ test('the page uses it on done', async () => {
 })
 
 // ---- the page never waits on a dead search (docs/learnability-plan.md part 5) -------------------------------
-import { streamSearch, SEARCH_IDLE_MS } from '../src/lib/routesStream.js'
 
 function fakes() {
   const timers = new Map(); let nextId = 1; let es
@@ -55,7 +54,12 @@ function fakes() {
   return { deps, es: () => es, timers, fire }
 }
 
-const recorder = () => { const calls = []; const h = {}; for (const k of ['meta', 'routes', 'scores', 'done', 'fail']) h[k] = (x) => calls.push([k, x]); return { calls, h } }
+const recorder = () => {
+  const calls = [];
+  const h = {};
+  for (const k of ['meta', 'routes', 'scores', 'done', 'fail']) h[k] = (x) => calls.push([k, x]);
+  return { calls, h }
+}
 
 test('a finished search reports done once and stops its watchdog', () => {
   const f = fakes(); const { calls, h } = recorder()
@@ -139,6 +143,10 @@ test('a superseded search (closed by the page) never reports anything again', ()
 test('the routes page searches through streamSearch and always leaves the searching state on failure', () => {
   const src = readFileSync(new URL('../src/components/RoutesView.jsx', import.meta.url), 'utf8')
   assert.match(src, /streamSearch\(api\.routesStreamUrl\(streamQuery\(f\)\)/)
-  assert.match(src, /fail: \(msg\) => \{ if \(msg\) setErr\(msg\); setStreaming\(false\) \}/)
+  const f = fakes(), { calls, h } = recorder()
+  streamSearch('/api/routes/stream', h, f.deps)
+  f.es().emit('error', { error: 'backend unavailable' })
+  assert.deepEqual(calls, [['fail', 'backend unavailable']])
+  assert.equal(f.es().closed, true)
   assert.doesNotMatch(src, /new EventSource\(/, 'one search lifecycle, in the lib')
 })

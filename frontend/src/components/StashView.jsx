@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react'
+import { ignoredError } from '../lib/ignoredError.js'
+import { useCallback, useEffect, useEffectEvent, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { api, fmt, surface, toast } from '../lib/api.js'
 import { wealthDigits, stashUnit, STASH_UNITS } from '../lib/wealth.js'
 import { useAutosave } from '../lib/hooks.js'
@@ -26,7 +27,7 @@ const POLL_MS = 10 * 60 * 1000
 const lastFetchAt = new Map()
 const FOLD_KEY = 'arbiter:stash-folded'
 const readFolds = () => { try { return JSON.parse(localStorage.getItem(FOLD_KEY)) || {} } catch { return {} } }
-const writeFolds = (f) => { try { localStorage.setItem(FOLD_KEY, JSON.stringify(f)) } catch {} }
+const writeFolds = (f) => { try { localStorage.setItem(FOLD_KEY, JSON.stringify(f)) } catch { ignoredError('store folded groups') } }
 
 // The Stash tab: what you hold, grouped by the game's own category for each item (lib/stash.js), with
 // net worth and liquid net worth, and the trade site's Merchant History beside it (new sales are credited
@@ -43,7 +44,7 @@ export default function StashView({ league }) {
   const data = useStatus(s => s.capital)
   const [qty, setQty] = useState(null)          // { currency: "qty as typed" }
   const qtyRef = useRef(null)
-  qtyRef.current = qty
+  useLayoutEffect(() => { qtyRef.current = qty }, [qty])
   // Unsaved edits live in the store-shared `capitalDirty` Map so edits held during a fetch or restored
   // after a failed unmount PUT survive across Stash mounts; `statusStore.saveCapital` carries failed recount
   // cutoffs and edits forward into any newer queued PUT and restores into `capitalDirty` only if the queue tail rejects.
@@ -70,10 +71,14 @@ export default function StashView({ league }) {
 
   // ---- the "count toward liquid net worth" switches (settings `stash_counted`; only choices are stored)
   const stored = useStatus(s => s.settings?.stash_counted)
-  const [choices, setChoices] = useState(null)
-  useEffect(() => { ensureSettings().catch(() => {}) }, [])
+  const [lastStored, setLastStored] = useState(stored)
+  const [choices, setChoices] = useState(() => stored ? { ...stored } : null)
+  useEffect(() => { ensureSettings().catch(() => ignoredError('load stash settings')) }, [])
   // Stored choices load under any made before the settings arrived (those are newer).
-  useEffect(() => { if (stored) setChoices(c => ({ ...stored, ...(c || {}) })) }, [stored]) // eslint-disable-line
+  if (stored !== lastStored) {
+    setLastStored(stored)
+    if (stored) setChoices(c => ({ ...stored, ...(c || {}) }))
+  }
   const choose = (patch) => {
     setChoices(c => ({ ...(c || {}), ...patch }))
     // A switched-off holding also stops being arbitrage capital: re-read the holdings once saved.
@@ -91,7 +96,7 @@ export default function StashView({ league }) {
   const rows = useMemo(() => Object.keys(qty || {}).map(c => {
     const v = data?.rows.find(r => r.currency === c)
     return { ...(v || {}), currency: c, name: nameOf(c), typed: qty[c] }
-  }), [qty, data, nameOf]) // eslint-disable-line
+  }), [qty, data, nameOf])
   const dflt = data?.counted_by_default   // the one default (backend settings.STASH_COUNTED_BY_DEFAULT)
   const groups = useMemo(() => stashGroups(rows, groupOf, choices, dflt), [rows, groupOf, choices, dflt])
   const total = netWorth(rows)
@@ -106,16 +111,21 @@ export default function StashView({ league }) {
   // The add bar (pinned at the top): pick a currency, say how many, Add.
   const [pick, setPick] = useState('')
   const pickRef = useRef('')            // the pick as of now: a second press in the same instant finds none
-  pickRef.current = pick
+  useLayoutEffect(() => { pickRef.current = pick }, [pick])
   const [amount, setAmount] = useState('1')
   const addPicked = () => {
     const id = pickRef.current, n = parseAmount(amount)
     if (!id || n == null) return
     pickRef.current = ''
     recordPendingEdit(capitalDirty, id, { kind: 'add', delta: n })
-    setQty(r => { const next = addAmount(r, id, n); if (next !== r) save(next); return next })
+    setQty(r => {
+      const next = addAmount(r, id, n);
+      if (next !== r) save(next);
+      return next
+    })
     unfold(id); setPick('')
   }
+  const awaitingHoldings = qty == null
   // The sales column pins below the pinned header: its real height, measured (it wraps on narrow windows).
   const viewRef = useRef(null), headRef = useRef(null)
   useEffect(() => {
@@ -124,12 +134,16 @@ export default function StashView({ league }) {
     const ro = new ResizeObserver(() => view.style.setProperty('--stash-head-h', `${head.offsetHeight}px`))
     ro.observe(head)
     return () => ro.disconnect()
-  }, [qty == null]) // eslint-disable-line
+  }, [awaitingHoldings])
   const [folds, setFolds] = useState(readFolds)
   const [q, setQ] = useState('')
   const searchRef = useRef(null)
   const folded = (g) => isFolded(g, folds, total, q)
-  const toggleFold = (g) => setFolds(f => { const n = flipFold(g, f, total, q); if (n !== f) writeFolds(n); return n })
+  const toggleFold = (g) => setFolds(f => {
+    const n = flipFold(g, f, total, q);
+    if (n !== f) writeFolds(n);
+    return n
+  })
   // An added currency opens its group so the user sees it land.
   const unfold = (id) => setFolds(f => ({ ...f, [groupOf[id] || UNGROUPED]: false }))   // for now; the saved folds stay as the user left them
   useEffect(() => {
@@ -149,13 +163,13 @@ export default function StashView({ league }) {
   const [lastFetch, setLastFetch] = useState(null)
   const mountedRef = useRef(true)
   const selRef = useRef(sel)
-  selRef.current = sel
+  useLayoutEffect(() => { selRef.current = sel }, [sel])
   const activeRefresh = useRef(null)
   useEffect(() => {
     mountedRef.current = true
     return () => { mountedRef.current = false; activeRefresh.current = null }
   }, [])
-  const loadSales = (lg) => api.sales(lg).then(d => { if (mountedRef.current && selRef.current === lg) setSales(d) }).catch(() => {})
+  const loadSales = (lg) => api.sales(lg).then(d => { if (mountedRef.current && selRef.current === lg) setSales(d) }).catch(() => ignoredError('load sales'))
   useEffect(() => { if (sel) loadSales(sel) }, [sel])
   // If an earlier mount's in-flight sales fetch lands a credit or commits detached edits after this StashView
   // opened, reconcile into the editor BEFORE salesFetching releases this mount's held edits.
@@ -170,7 +184,7 @@ export default function StashView({ league }) {
     if (needsSave) save(next)
     else discard()
     if (selRef.current) loadSales(selRef.current)
-  }, [creditRev, data]) // eslint-disable-line
+  }, [creditRev, data, save, discard])
   // If any mount's post-credit capital reload fails, drop stale quantities on the active editor too so it
   // cannot save a pre-credit balance before refreshHeader() delivers the credited holdings.
   useEffect(() => {
@@ -178,29 +192,29 @@ export default function StashView({ league }) {
     discard()
     capitalDirty.clear()
     setQty(null)
-  }, [capitalStale]) // eslint-disable-line
+  }, [capitalStale, discard])
   // Hold autosave across ALL Stash mounts while any sales fetch is in flight or holdings are stale, so a
   // remounted editor cannot send a pre-credit full-balance PUT over an in-flight credit before reconciliation.
   useEffect(() => {
     if (salesFetching || capitalStale) hold()
     else release()
-  }, [salesFetching, capitalStale]) // eslint-disable-line
+  }, [salesFetching, capitalStale, hold, release])
   // Seeded once from whichever copy arrives first, rebased with any shared unsaved edits (e.g. a failed unmount PUT)
   // and scheduled for retry (held automatically if salesFetching/capitalStale is active).
-  const seed = (cap) => {
+  const seed = useCallback((cap) => {
     const { qty: next, needsSave } = reconcileCapital(cap, capitalDirty)
     setQty(next)
     arm()
     if (needsSave) save(next)
-  }
-  useEffect(() => { if (!qty && data && !capitalSaving && !capitalStale) seed(data) }, [data, qty, capitalSaving, capitalStale]) // eslint-disable-line
+  }, [arm, save])
+  useEffect(() => { if (!qty && data && !capitalSaving && !capitalStale) seed(data) }, [data, qty, capitalSaving, capitalStale, seed])
   const commitDetachedEdits = async () => {
     if (!capitalDirty.size) return
     discard()
     const base = useStatus.getState().capital
     if (!base) return
     const { qty: next, needsSave } = reconcileCapital(base, capitalDirty)
-    if (needsSave) await commitCapital(next, { notifyCredit: true }).catch(() => {})
+    if (needsSave) await commitCapital(next, { notifyCredit: true }).catch(() => ignoredError('save capital'))
   }
   const refresh = async (auto = false) => {
     if (!isDesktop || !sel || activeRefresh.current || useStatus.getState().salesFetching) return
@@ -316,22 +330,29 @@ export default function StashView({ league }) {
       if (acquiredFetch && !activeRefresh.current && !useStatus.getState().capitalStale) release()
     }
   }
+  const currentRefresh = useEffectEvent(() => refresh)
+  const refreshFromTick = useEffectEvent(() => refresh(false))
   // A 10-minute timer while mounted (= while the Stash tab is visible). Desktop only.
   useEffect(() => {
     if (!isDesktop || !sel) return
-    refresh(true)
-    const t = setInterval(() => { if (document.visibilityState !== 'hidden') refresh(true) }, POLL_MS)
+    const run = currentRefresh()
+    run(true)
+    const t = setInterval(() => { if (document.visibilityState !== 'hidden') run(true) }, POLL_MS)
     return () => {
       clearInterval(t)
       activeRefresh.current = null
       setBusy(false)
     }
-  }, [sel]) // eslint-disable-line
+  }, [sel])
   // Topbar ⟳ = this tab's own refresh (a manual one).
-  useEffect(() => { if (tick !== tick0.current) { tick0.current = tick; refresh(false) } }, [tick]) // eslint-disable-line
+  useEffect(() => { if (tick !== tick0.current) { tick0.current = tick; refreshFromTick() } }, [tick])
   const prices = sales.prices ?? status?.wealth_prices
   const stats = useMemo(() => salesStats(sales.rows, ref, prices), [sales.rows, ref, prices])
-  const byName = useMemo(() => { const m = new Map(); for (const n of flatten(tree, x => x.kind === 'search')) if (n.name) m.set(n.name.toLowerCase(), n.id); return m }, [tree])
+  const byName = useMemo(() => {
+    const m = new Map();
+    for (const n of flatten(tree, x => x.kind === 'search')) if (n.name) m.set(n.name.toLowerCase(), n.id);
+    return m
+  }, [tree])
   const openRow = (r) => { setOpen(o => (o === r ? null : r)); diag('sales', 'sales-open') }
 
   const hit = useMemo(() => stashMatches(rows, q), [rows, q])
@@ -368,9 +389,9 @@ export default function StashView({ league }) {
             <i style={{ flexGrow: counted }} />{total - counted > 0 && <i className="off" style={{ flexGrow: total - counted }} />}
           </div>)}
         <div className="seg stash-unit" role="group" aria-label="Value in">
-          <button className={`seg-btn ${unitChoice == null ? 'on' : ''}`} onClick={() => chooseUnit(null)}>Auto</button>
+          <button type="button" className={`seg-btn ${unitChoice == null ? 'on' : ''}`} onClick={() => chooseUnit(null)}>Auto</button>
           {STASH_UNITS.map(u => (
-            <button key={u} className={`seg-btn ${unitChoice === u ? 'on' : ''}`} data-unit={u} onClick={() => chooseUnit(u)}><Cur id={u} size={14} /></button>
+            <button type="button" key={u} className={`seg-btn ${unitChoice === u ? 'on' : ''}`} data-unit={u} onClick={() => chooseUnit(u)}><Cur id={u} size={14} /></button>
           ))}
         </div>
       </div>
@@ -382,7 +403,7 @@ export default function StashView({ league }) {
             return (
               <section key={g.name} className={`stash-group ${shut ? 'folded' : ''} ${g.counted === false ? 'dim' : ''}`} style={{ '--grp': groupAccent(g.name) }}>
                 <div className="stash-group-head">
-                  <button className="stash-fold" onClick={() => toggleFold(g)} aria-expanded={!shut}>
+                  <button type="button" className="stash-fold" onClick={() => toggleFold(g)} aria-expanded={!shut}>
                     <span className="stash-icon">{icons[g.name] && <Cur id={icons[g.name]} size={24} />}</span>
                     <svg className="stash-chev" viewBox="0 0 10 10" width="10" height="10" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true"><path d="M2 3.5 5 6.5 8 3.5" /></svg>
                     <span className="stash-name">{g.name}</span>
@@ -406,7 +427,7 @@ export default function StashView({ league }) {
                               : (syncing || r.value_ref == null) && Number(r.typed) > 0 ? <span className="muted">…</span> : null}
                           </span>
                           <Toggle size="sm" checked={on} onChange={v => choose({ [r.currency]: v })} ariaLabel={`Count ${r.name} toward liquid net worth`} title="Count toward liquid net worth" />
-                          {CASH.includes(r.currency) ? <span /> : <button className="cap-x" title="Remove" aria-label={`Remove ${r.name}`} onClick={() => remove(r.currency)}>×</button>}
+                          {CASH.includes(r.currency) ? <span /> : <button type="button" className="cap-x" title="Remove" aria-label={`Remove ${r.name}`} onClick={() => remove(r.currency)}>×</button>}
                         </div>)
                     })}
                   </div>)}
@@ -435,14 +456,14 @@ export default function StashView({ league }) {
               const isOpen = open === r
               return (
                 <div key={`${r.item_id}:${r.time}`} className={`sale-row ${rarityOf(it)} ${isOpen ? 'open' : ''}`}>
-                  <button className="sale-main" onClick={() => openRow(r)} aria-expanded={isOpen}>
+                  <button type="button" className="sale-main" onClick={() => openRow(r)} aria-expanded={isOpen}>
                     {it.icon ? <img className="sale-icon" src={it.icon} alt="" loading="lazy" /> : <span className="sale-icon" />}
                     <span className="sale-name"><span className={`sale-glyph ${rarityOf(it)}`} aria-hidden="true">◆</span>{name}{it.name && it.typeLine ? <span className="muted sale-base"> {it.typeLine}</span> : null}</span>
                     <span className="spacer" />
                     <span className="sale-price">{r.price ? <><b>{r.price.amount}</b> <Cur id={r.price.currency} size={14} /></> : <span className="muted">unpriced</span>}</span>
                     <span className="muted sale-time" title={r.time}>{relativeTime(r.time)}</span>
                   </button>
-                  {wsId && <button className="ws-mini on" title="Open this search in the workspace" aria-label="Open in workspace" onClick={() => { useWorkspace.getState().setActive(wsId); nav.openTrading('workspace') }}>🔎</button>}
+                  {wsId && <button type="button" className="ws-mini on" title="Open this search in the workspace" aria-label="Open in workspace" onClick={() => { useWorkspace.getState().setActive(wsId); nav.openTrading('workspace') }}>🔎</button>}
                   {isOpen && <div className="sale-card"><ItemCard item={it} /></div>}
                 </div>)
             })}

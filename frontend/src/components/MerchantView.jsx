@@ -1,4 +1,6 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { shopCache, marketCache, marketInFlight, priceCache, clearMerchantShopCache } from '../lib/merchantCache.js'
+import { ignoredError } from '../lib/ignoredError.js'
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/shallow'
 import { api, bus, copyText, fmt, toast, undoToast } from '../lib/api.js'
 import { useStatus, ensureSettings } from '../lib/statusStore.js'
@@ -24,17 +26,13 @@ import {
   sortMerchantRows,
   summarizeFloorCheck,
 } from '../lib/merchant.js'
-import { useAssetModal } from './CardDetail.jsx'
+import { useAssetModal } from './useAssetModal.jsx'
 import Cur from './Cur.jsx'
 import ItemCard from './ItemCard.jsx'
 import Seg from './Seg.jsx'
 import Wealth, { Native } from './Wealth.jsx'
 
 // Module caches survive tab switches so returning to Merchant never re-polls GGG automatically.
-const shopCache = new Map()      // `${league}|${acctLower}|${sort}` -> shop snapshot (FIFO max 10)
-const marketCache = new Map()    // league -> { prices, inflation, sales, fetchedAt }
-const marketInFlight = new Map() // league -> Promise<market | null>
-const priceCache = new Map()     // `${league}|${floorQuery}` -> { res, at } (FIFO max 200)
 const MARKET_TTL_MS = 60_000
 const PRICE_TTL_MS = 5 * 60_000
 const MAX_SHOP_CACHE = 10
@@ -46,17 +44,6 @@ const SORT_COLS = [
   { key: 'age', label: 'Age', num: true },
   { key: 'verdict', label: 'Verdict', num: true },
 ]
-
-export function clearMerchantShopCache() {
-  shopCache.clear()
-}
-
-export function _resetMerchantCache() {
-  shopCache.clear()
-  marketCache.clear()
-  marketInFlight.clear()
-  priceCache.clear()
-}
 
 function sumRef(rows) {
   let sum = 0, any = false
@@ -117,7 +104,7 @@ function writeDoneMap(key, map) {
   try {
     if (Object.keys(map).length === 0) localStorage.removeItem(key)
     else localStorage.setItem(key, JSON.stringify(map))
-  } catch {}
+  } catch { ignoredError('store completed listings') }
 }
 
 // When `complete` is true (full shop loaded), drop missing ids too; when partial/truncated,
@@ -199,6 +186,7 @@ export default function MerchantView({ league }) {
   const sel = league || statusLeague
   const isLoggedIn = Boolean(oauthAccount || sessionConnected)
   const [sessionAccount, setSessionAccount] = useState('')
+  if (!sessionConnected && sessionAccount) setSessionAccount('')
   const [connecting, setConnecting] = useState(false)
   const searchInputRef = useRef(null)
 
@@ -231,7 +219,7 @@ export default function MerchantView({ league }) {
 
   const mountedRef = useRef(true)
   const selRef = useRef(sel)
-  selRef.current = sel
+  useLayoutEffect(() => { selRef.current = sel }, [sel])
   const activeReqRef = useRef(null)
   const busyRef = useRef(null)
   const tick = useSync(s => s.tick)
@@ -239,7 +227,7 @@ export default function MerchantView({ league }) {
 
   useEffect(() => {
     mountedRef.current = true
-    ensureSettings().catch(() => {})
+    ensureSettings().catch(() => ignoredError('load merchant settings'))
     return () => {
       mountedRef.current = false
       useSync.getState().setBusy(false)
@@ -247,12 +235,11 @@ export default function MerchantView({ league }) {
   }, [])
 
   useEffect(() => {
-    if (desktop && !workspaceLoaded) loadWorkspace().catch(() => {})
+    if (desktop && !workspaceLoaded) loadWorkspace().catch(() => ignoredError('load trading workspace'))
   }, [desktop, workspaceLoaded])
 
   useEffect(() => {
     if (!sessionConnected) {
-      setSessionAccount('')
       for (const k of [...shopCache.keys()]) {
         if (k.includes('|__session__:')) shopCache.delete(k)
       }
@@ -351,7 +338,7 @@ export default function MerchantView({ league }) {
   }, [desktop, sel, isLoggedIn, oauthAccount, sessionAccount, accountSlot, fetchOrder, setBusy])
 
   const runShopFetchRef = useRef(runShopFetch)
-  runShopFetchRef.current = runShopFetch
+  useLayoutEffect(() => { runShopFetchRef.current = runShopFetch }, [runShopFetch])
 
   // Cancel all merchant calls (shop fetch + inline floor checks) on unmount or league/login change.
   useEffect(() => {
@@ -379,11 +366,15 @@ export default function MerchantView({ league }) {
     }
   }, [desktop, cacheKey, sel, accountSlot, fetchOrder, oauthAccount, setBusy])
 
-  // Reload session done-state when league or logged-in account changes.
-  useEffect(() => {
+  // Done marks and their Undo belong to the selected league and account.
+  const [doneScope, setDoneScope] = useState(doneKey)
+  if (doneKey !== doneScope) {
+    setDoneScope(doneKey)
     setDoneMap(readDoneMap(doneKey))
     setPrevDoneMap(null)
     setShowDone(false)
+  }
+  useEffect(() => {
     bus.emit({ id: 'merchant-done', dismiss: true })
     return () => bus.emit({ id: 'merchant-done', dismiss: true })
   }, [doneKey])
@@ -413,7 +404,7 @@ export default function MerchantView({ league }) {
     fetchMarketIfStale(sel).then(next => {
       if (!alive || !next) return
       setMarket({ prices: next.prices, inflation: next.inflation, sales: next.sales || [] })
-    })
+    }).catch(() => ignoredError('refresh merchant prices'))
     return () => { alive = false }
   }, [desktop, sel])
 
@@ -451,7 +442,7 @@ export default function MerchantView({ league }) {
 
   // Top-bar ⟳ refreshes the shop on demand.
   const refreshRef = useRef(refresh)
-  refreshRef.current = refresh
+  useLayoutEffect(() => { refreshRef.current = refresh }, [refresh])
   useEffect(() => {
     if (tick !== tick0.current) {
       tick0.current = tick
@@ -622,7 +613,7 @@ export default function MerchantView({ league }) {
 
   const openInWorkspace = (row) => {
     const st = useWorkspace.getState()
-    if (!st.loaded) loadWorkspace().catch(() => {})
+    if (!st.loaded) loadWorkspace().catch(() => ignoredError('load trading workspace'))
     if (row.workspaceId) {
       st.setActive(row.workspaceId)
     } else {
@@ -836,7 +827,7 @@ export default function MerchantView({ league }) {
                   <span className="muted merchant-batch-label">{batchContext.label} Ange regex:</span>
                   {batchContext.chunks.map((c, idx) => (
                     <button
-                      key={idx}
+                      key={c.names[0]}
                       type="button"
                       className="btn small"
                       title={c.regex}

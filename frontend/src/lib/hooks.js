@@ -1,6 +1,6 @@
 import { startPoll } from './poll.js'
 import { createAutosave } from './autosave.js'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useEffectEvent, useLayoutEffect, useState } from 'react'
 import { cleanErr, toast } from './api.js'
 import { useSync } from './syncStore.js'
 
@@ -16,15 +16,17 @@ export function useApi(fn, deps) {
   const [busy, setBusy] = useState(true)
   const [nonce, setNonce] = useState(0)
   const tick = useSync(s => s.tick)
+  const inputs = useDependencyList(deps)
+  const getRequest = useEffectEvent(() => fn)
   useEffect(() => {
     let live = true
     setBusy(true)
-    Promise.resolve().then(fn)
+    Promise.resolve().then(getRequest())
       .then(d => { if (live) { setData(d); setErr(null) } })
       .catch(e => { if (live) setErr(cleanErr(e)) })
       .finally(() => { if (live) setBusy(false) })
     return () => { live = false }
-  }, [...deps, nonce, tick]) // eslint-disable-line
+  }, [inputs, nonce, tick])
   return { data, err, busy, reload: () => setNonce(n => n + 1), setData }
 }
 
@@ -34,16 +36,16 @@ export function useApi(fn, deps) {
 // doesn't trigger a write). Failures surface as a toast.
 export function useAutosave(saver, delay = 700) {
   const [state, setState] = useState('')
-  const ctrl = useRef(null)
-  if (!ctrl.current) {
-    ctrl.current = createAutosave(saver, delay, {
-      onState: setState,
-      onError: (e) => toast(cleanErr(e), false),
-    })
-  }
-  ctrl.current.setSaver(saver)
-  useEffect(() => { ctrl.current.mount(); return () => ctrl.current.unmount() }, [])
-  const { save, flush, hold, release, discard, arm } = ctrl.current
+  const [ctrl] = useState(() => createAutosave(saver, delay, {
+    onState: setState,
+    onError: e => toast(cleanErr(e), false),
+  }))
+  useLayoutEffect(() => { ctrl.setSaver(saver) }, [ctrl, saver])
+  useEffect(() => {
+    ctrl.mount()
+    return () => ctrl.unmount()
+  }, [ctrl])
+  const { save, flush, hold, release, discard, arm } = ctrl
   return { state, save, flush, hold, release, discard, arm }
 }
 
@@ -54,10 +56,22 @@ export function useDebounced(value, ms = 500) {
   return v
 }
 
+// Callers key requests on primitive values or object identity. Keep one list identity
+// until an element changes, using the same comparison as React's effect dependencies.
+function useDependencyList(values) {
+  const [previous, setPrevious] = useState(() => [...values])
+  if (previous.length === values.length && values.every((value, i) => Object.is(value, previous[i]))) {
+    return previous
+  }
+  const next = [...values]
+  setPrevious(next)
+  return next
+}
+
 // Poll `fn` every `ms` while the window is visible, and at once when the user comes back to it
 // (lib/poll.js). Restarts when `deps` change.
 export function usePoll(fn, ms, deps = []) {
-  const ref = useRef(fn)
-  ref.current = fn
-  useEffect(() => startPoll(() => ref.current(), ms), [ms, ...deps]) // eslint-disable-line
+  const run = useEffectEvent(fn)
+  const inputs = useDependencyList(deps)
+  useEffect(() => startPoll(() => run(), ms), [ms, inputs])
 }

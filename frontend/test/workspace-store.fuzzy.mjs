@@ -9,7 +9,7 @@
 //   * ids stay unique; activeId always resolves to a real search node.
 //
 // Run:  node frontend/test/workspace-store.fuzzy.mjs
-import assert from 'node:assert'
+import assert from 'node:assert/strict'
 
 // The store's debounced persist() calls api.putWorkspace -> fetch. Stub fetch so it no-ops
 // (and so we can capture the exact payload that WOULD hit the DB — the "saved" doc).
@@ -45,7 +45,8 @@ const randSlug = () => 'H4sIAAAAAAAA' + Array.from({ length: 40 + Math.floor(rnd
 function uniqueSearch() {
   const name = ITEMS[itemCursor % ITEMS.length] + ' #' + itemCursor
   itemCursor++
-  const n = searchNode({ type: chance(0.2) ? 'search' : 'search', slug: randSlug(), live: chance(0.3) }, name)
+  rnd()  // Preserve the seeded sequence used by existing fuzz runs.
+  const n = searchNode({ type: 'search', slug: randSlug(), live: chance(0.3) }, name)
   n.armed = chance(0.4); n.done = chance(0.3)
   return n
 }
@@ -81,7 +82,7 @@ const store = useWorkspace.getState.bind(useWorkspace)
 
 let treesRun = 0, cyclesRun = 0, opsRun = 0, totalNodes = 0
 
-function runTree(t) {
+function runTree() {
   const tree = randTree(2 + Math.floor(rnd() * 3), 4)
   const sids = searchIds(tree)
   const doc = { version: 2, tree, layout: null, openTabs: [], activeId: sids.length ? pick(sids) : null }
@@ -148,7 +149,7 @@ function runTree(t) {
           if (node) subtreeSlugs(node).forEach(sl => removed.add(sl))
           s.remove(victim)
         }
-      } catch (e) { throw new Error(`op ${kind} threw: ${e.message}`) }
+      } catch (e) { throw new Error(`op ${kind} threw: ${e.message}`, { cause: e }) }
       opsRun++
     }
 
@@ -189,7 +190,7 @@ function runTree(t) {
   void originalCount
 }
 
-for (let t = 0; t < 30; t++) runTree(t)
+for (let t = 0; t < 30; t++) runTree()
 
 console.log(`OK: ${treesRun} fuzzy trees, ${cyclesRun} save/rerender cycles, ${opsRun} random ops, ` +
   `${totalNodes} node-checks — zero data loss, zero id collisions`)

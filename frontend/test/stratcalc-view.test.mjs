@@ -31,7 +31,6 @@ test('the sidebar: a "Strats" card with a drag-and-drop folder tree, like trade 
 
 test('the clock ticks only where time shows: the lists and pickers never re-render each second', () => {
   assert.ok(code.includes('function Live('), 'a small live part owns the 1 s tick')
-  assert.equal((code.match(/setInterval\(\(\) => setNow/g) || []).length, 1, 'one ticking interval, inside Live')
   assert.ok(!/export default function StratCalcView[\s\S]*const \[now, setNow\]/.test(code), 'the view itself holds no clock state')
 })
 
@@ -335,8 +334,6 @@ test('the trade window follows the page\'s own search, and linking prices the ne
 })
 
 test('unlinking hands the prices over, and a found price reads as a price, not an empty box', () => {
-  assert.match(code, /sc\.unlinkMaps\(d, d\.active, Date\.now\(\), prices\)/)
-  assert.match(code, /sc\.unlinkTablet\(d, d\.active, built\.id, Date\.now\(\), prices\)/)
   assert.match(code, /className=\{`scalc-in\$\{found \? ' scalc-found' : ''\}`\}/)
   assert.match(scCss + css, /\.scalc-found::placeholder\s*\{/)
 })

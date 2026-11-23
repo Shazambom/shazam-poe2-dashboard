@@ -104,7 +104,7 @@ test('entering a combat zone resumes the clock and increments maps.count once pe
   r = applyClientLogEvent(state, { type: 'area-gen', level: 80, areaId: 'MapCrypt', seed: '222', ts: 250 }, doc, 160_000)
   state = r.state
   r = applyClientLogEvent(state, { type: 'zone', zone: 'Crypt', ts: 252 }, doc, 162_000)
-  state = r.state; doc = r.doc
+  doc = r.doc
   assert.equal(r.action, 'resume-and-count')
   assert.equal(sc.activeStrat(doc).maps.count, 2, 'new seed increments maps.count even with same zone name')
   assert.equal(sc.running(sc.activeStrat(doc).timer), true)
@@ -137,7 +137,7 @@ test('seedless fallback counts once per new combat zone name and skips same-zone
   assert.equal(sc.running(sc.activeStrat(doc).timer), false)
 
   r = applyClientLogEvent(state, { type: 'zone', zone: 'Savannah', ts: 50 }, doc, 50_000)
-  state = r.state; doc = r.doc
+  doc = r.doc
   assert.equal(sc.running(sc.activeStrat(doc).timer), true)
   assert.equal(sc.activeStrat(doc).maps.count, 2)
 })
@@ -244,7 +244,7 @@ test('manual pause inside a map keeps timer paused until the next distinct insta
   state = r.state; doc = r.doc
   assert.equal(sc.running(sc.activeStrat(doc).timer), false)
   r = applyClientLogEvent(state, { type: 'zone', zone: 'Savannah', ts: 65 }, doc, 65_000)
-  state = r.state; doc = r.doc
+  doc = r.doc
   assert.equal(sc.running(sc.activeStrat(doc).timer), true, 'manual resume re-enabled auto-resume for current instance')
 })
 

@@ -1,5 +1,6 @@
+import { ignoredError } from '../lib/ignoredError.js'
 import { refreshTweaks, useTweaks } from '../lib/tweaks.js'
-import React, { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { api, surface, toast } from '../lib/api.js'
 import { useAutosave } from '../lib/hooks.js'
 import { useStatus } from '../lib/statusStore.js'
@@ -16,12 +17,11 @@ import ThemeBuilder from './ThemeBuilder.jsx'
 
 // Everything auto-saves (debounced) — there is no Save button. The league lives
 // in the top bar; essentials are visible; the rest sits behind "Advanced".
-export default function SettingsView({ currencies, status, onSaved, onReportProblem }) {
+export default function SettingsView({ currencies, onSaved, onReportProblem }) {
   const [s, setS] = useState(null)
   const [mapTo, setMapTo] = useState({})
   const [fees, setFees] = useState(null)
   const [busy, setBusy] = useState(false)
-  const [diagOpen, setDiagOpen] = useState(false)
   const tweaks = useTweaks()                     // knobs show on beta and dev clients only
 
   // The PUT payload: the editable subset, numbers coerced (blank → the default).
@@ -43,9 +43,9 @@ export default function SettingsView({ currencies, status, onSaved, onReportProb
   }, 800)
 
   useEffect(() => {
-    useStatus.getState().loadSettings().then(x => { setS(x); arm() })
-    api.goldFees().then(setFees).catch(() => {})
-  }, []) // eslint-disable-line
+    useStatus.getState().loadSettings().then(x => { setS(x); arm() }).catch(() => ignoredError('load settings editor'))
+    api.goldFees().then(setFees).catch(() => ignoredError('load gold fees'))
+  }, [arm])
   if (!s) return <div className="single hint">Loading settings…</div>
 
   const opts = currencies?.currencies ?? []
@@ -58,7 +58,7 @@ export default function SettingsView({ currencies, status, onSaved, onReportProb
       <div className="settings-top">
         <p className="hint save-state" style={{ minHeight: 18 }} aria-live="polite">{state === 'saving' ? 'saving…' : state === 'saved' ? 'saved ✓' : ''}</p>
         {window.poe2desktop?.feedback && onReportProblem && (
-          <button className="btn small bug-btn" onClick={onReportProblem}><span aria-hidden="true">🐞</span> Submit a bug</button>
+          <button type="button" className="btn small bug-btn" onClick={onReportProblem}><span aria-hidden="true">🐞</span> Submit a bug</button>
         )}
       </div>
       <div className="two-col">
@@ -74,8 +74,8 @@ export default function SettingsView({ currencies, status, onSaved, onReportProb
 
           <h2 style={{ marginTop: 28 }}>Market</h2>
           <p className="hint">The league is set from the dropdown in the top bar.</p>
-          <div className="field"><label>Reference currency for values</label>
-            <CurrencyPicker value={s.reference} onChange={id => set('reference', id)} options={opts} placeholder="reference currency…" />
+          <div className="field"><label htmlFor="settings-reference">Reference currency for values</label>
+            <CurrencyPicker inputId="settings-reference" value={s.reference} onChange={id => set('reference', id)} options={opts} placeholder="reference currency…" />
           </div>
           {tweaks && <>
             <div className="check"><Toggle checked={s.allow_digest_edges} onChange={v => set('allow_digest_edges', v)} label="Fill missing pairs from hourly market data" /></div>
@@ -94,18 +94,18 @@ export default function SettingsView({ currencies, status, onSaved, onReportProb
                 : <> Not loaded yet{fees?.state?.last_error ? ` — ${fees.state.last_error}` : ''}.</>}
             </p>
             <div className="row" style={{ marginBottom: 12 }}>
-              <RefreshButton busy={busy} onClick={async () => { setBusy(true); try { setFees(await surface(api.refreshGoldFees(), 'Gold fees refreshed')) } catch {} finally { setBusy(false) } }} title="Refresh gold fees from game data" />
+              <RefreshButton busy={busy} onClick={async () => { setBusy(true); try { setFees(await surface(api.refreshGoldFees(), 'Gold fees refreshed')) } catch { ignoredError('refresh gold fees') } finally { setBusy(false) } }} title="Refresh gold fees from game data" />
               <span className="hint">Gold fees from game data</span>
             </div>
-            <div className="field"><label>Fee applies to</label>
-              <select value={s.gold_model.fee_side ?? 'buy'} onChange={e => setGold('fee_side', e.target.value)}>
+            <div className="field"><label htmlFor="settings-fee-side">Fee applies to</label>
+              <select id="settings-fee-side" value={s.gold_model.fee_side ?? 'buy'} onChange={e => setGold('fee_side', e.target.value)}>
                 <option value="buy">units received (buy side)</option>
                 <option value="sell">units given (sell side)</option>
               </select>
             </div>
-            <div className="field"><label>Extra gold per order (usually 0)</label><input type="number" value={s.gold_model.base_per_order} onChange={e => setGold('base_per_order', Number(e.target.value))} /></div>
-            <div className="field"><label>Manual overrides (id=gold, comma separated)</label>
-              <input defaultValue={perUnitText} onBlur={e => {
+            <div className="field"><label htmlFor="settings-gold-per-order">Extra gold per order (usually 0)</label><input id="settings-gold-per-order" type="number" value={s.gold_model.base_per_order} onChange={e => setGold('base_per_order', Number(e.target.value))} /></div>
+            <div className="field"><label htmlFor="settings-gold-overrides">Manual overrides (id=gold, comma separated)</label>
+              <input id="settings-gold-overrides" defaultValue={perUnitText} onBlur={e => {
                 const m = {}; e.target.value.split(',').forEach(p => { const [k, v] = p.split('='); if (k && v && !isNaN(Number(v))) m[k.trim()] = Number(v) }); setGold('per_unit', m)
               }} />
             </div>
@@ -126,8 +126,8 @@ export default function SettingsView({ currencies, status, onSaved, onReportProb
                   {currencies.unmapped_metadata_ids.map(m => (
                     <tr key={m}>
                       <td><code>{m.split('/').pop()}</code></td>
-                      <td><input className="btn" list="cur-ids-2" placeholder="trade id" value={mapTo[m] ?? ''} onChange={e => setMapTo(x => ({ ...x, [m]: e.target.value }))} /></td>
-                      <td><button className="btn small" disabled={!mapTo[m]} onClick={() => surface(api.mapCurrency(m, mapTo[m]), 'Linked').then(onSaved).catch(() => {})}>Link</button></td>
+                      <td><input className="btn" list="cur-ids-2" aria-label={`Trade currency for ${m}`} placeholder="trade id" value={mapTo[m] ?? ''} onChange={e => setMapTo(x => ({ ...x, [m]: e.target.value }))} /></td>
+                      <td><button type="button" className="btn small" disabled={!mapTo[m]} onClick={() => surface(api.mapCurrency(m, mapTo[m]), 'Linked').then(onSaved).catch(() => ignoredError('map currency'))}>Link</button></td>
                     </tr>
                   ))}
                 </tbody>
@@ -136,11 +136,7 @@ export default function SettingsView({ currencies, status, onSaved, onReportProb
             </details>
           )}
 
-          <details className="adv" onToggle={e => setDiagOpen(e.currentTarget.open)}>
-            <summary>Diagnostics</summary>
-            <BetaChannelToggle />
-            <DiagPanel open={diagOpen} />
-          </details>
+          <DiagPanel />
         </div>
       </div>
     </div>
@@ -153,10 +149,10 @@ export default function SettingsView({ currencies, status, onSaved, onReportProb
 function BetaChannelToggle() {
   const desk = isDesktop ? window.poe2desktop : null
   const [st, setSt] = useState(null)
-  useEffect(() => { desk?.getChannel?.().then(setSt).catch(() => {}) }, [])
+  useEffect(() => { if (isDesktop) window.poe2desktop?.getChannel?.().then(setSt).catch(() => ignoredError('read release channel')) }, [])
   if (!desk?.getChannel) return null
   const toggle = async (v) => {
-    try { setSt(refreshTweaks(await desk.setChannel(v))); toast(v ? 'Beta channel on — checking for updates…' : 'Back on stable channel') } catch {}
+    try { setSt(refreshTweaks(await desk.setChannel(v))); toast(v ? 'Beta channel on — checking for updates…' : 'Back on stable channel') } catch { ignoredError('change release channel') }
   }
   return (
     <div style={{ marginBottom: 12 }}>
@@ -176,7 +172,8 @@ function BetaChannelToggle() {
 // Local self-diagnostics (no data leaves the machine): backend health, DB row counts,
 // backfill/digest state, and a live connectivity probe — to see why prices are/aren't
 // flowing on the self-contained desktop build.
-function DiagPanel({ open }) {
+function DiagPanel() {
+  const wasOpen = useRef(false)
   const [d, setD] = useState(null)
   const [err, setErr] = useState(null)
   const [busy, setBusy] = useState(false)
@@ -186,22 +183,31 @@ function DiagPanel({ open }) {
     setBusy(false)
   }
   // The probe counts the market tables and checks outbound connectivity: only when asked to look.
-  useEffect(() => { if (open && !d) run() }, [open]) // eslint-disable-line
+  const onToggle = e => {
+    const open = e.currentTarget.open
+    if (open === wasOpen.current) return
+    wasOpen.current = open
+    if (open && !d) run()
+  }
   const text = d ? JSON.stringify(d, null, 2) : ''
   return (
-    <div>
-      <div className="row" style={{ gap: 8, marginBottom: 8 }}>
-        <RefreshButton className="small" busy={busy} onClick={run} title="Refresh diagnostics" />
-        <button className="btn small" disabled={!text} onClick={() => { navigator.clipboard?.writeText(text); toast('Diagnostics copied') }}>Copy</button>
+    <details className="adv" onToggle={onToggle}>
+      <summary>Diagnostics</summary>
+      <BetaChannelToggle />
+      <div>
+        <div className="row" style={{ gap: 8, marginBottom: 8 }}>
+          <RefreshButton className="small" busy={busy} onClick={run} title="Refresh diagnostics" />
+          <button type="button" className="btn small" disabled={!text} onClick={() => { navigator.clipboard?.writeText(text); toast('Diagnostics copied') }}>Copy</button>
+        </div>
+        {err && <div className="notice error">{err}</div>}
+        {d && (
+          <>
+            <p className="hint">{Object.entries(d.connectivity || {}).map(([k, v]) => <span key={k} className="feed" style={{ marginRight: 12 }}><span className={`dot ${String(v).startsWith('ERR') ? 'off' : 'ok'}`} />{k}</span>)}</p>
+            <details className="adv"><summary>Raw report</summary><pre className="diag-pre">{text}</pre></details>
+          </>
+        )}
       </div>
-      {err && <div className="notice error">{err}</div>}
-      {d && (
-        <>
-          <p className="hint">{Object.entries(d.connectivity || {}).map(([k, v]) => <span key={k} className="feed" style={{ marginRight: 12 }}><span className={`dot ${String(v).startsWith('ERR') ? 'off' : 'ok'}`} />{k}</span>)}</p>
-          <details className="adv"><summary>Raw report</summary><pre className="diag-pre">{text}</pre></details>
-        </>
-      )}
-    </div>
+    </details>
   )
 }
 
@@ -213,8 +219,8 @@ function ThemeRow() {
   const customs = useTheme(s => s.customs)
   const options = [...THEMES, ...customs.map(t => ({ id: t.id, name: `${t.name} ·` }))]
   return (
-    <div className="field"><label>Theme</label>
-      <CurrencyPicker value={id} onChange={apply} options={options} placeholder="theme…" renderIcon={null} />
+    <div className="field"><label htmlFor="settings-theme">Theme</label>
+      <CurrencyPicker inputId="settings-theme" value={id} onChange={apply} options={options} placeholder="theme…" renderIcon={null} />
     </div>
   )
 }

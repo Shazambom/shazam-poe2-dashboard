@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useMemo, useState } from 'react'
 import { api, cleanErr, fmt, toast } from '../lib/api.js'
 import Cur from './Cur.jsx'
 import CurrencyPicker from './CurrencyPicker.jsx'
@@ -28,7 +28,12 @@ function ConvertView({ currencies, capital }) {
   // The box holds a real number: what you hold of `have`, else 1, until you type your own.
   const amount = dirty ? typed : String(held[have] || 1)
   // QA 2026-10-08: a result drawn for the last pair stayed on screen under the new icons; a new pair starts clean.
-  useEffect(() => { setRes(null) }, [have, want])
+  const changeHave = (id) => {
+    if (id !== have) { setHave(id); setRes(null) }
+  }
+  const changeWant = (id) => {
+    if (id !== want) { setWant(id); setRes(null) }
+  }
   const effAmount = Number(amount) || 1
 
   const run = async () => {
@@ -57,12 +62,12 @@ function ConvertView({ currencies, capital }) {
         <span className="hint">Cheapest way to turn one currency into another</span>
       </div>
       <div className="convert-form">
-        <label className="convert-field" data-cmd="convert-have">Have<CurrencyPicker value={have} onChange={setHave} options={opts} placeholder="have…" /></label>
+        <div className="convert-field" data-cmd="convert-have"><label htmlFor="convert-have">Have</label><CurrencyPicker inputId="convert-have" value={have} onChange={changeHave} options={opts} placeholder="have…" /></div>
         <span className="convert-arrow">→</span>
-        <label className="convert-field">Want<CurrencyPicker value={want} onChange={setWant} options={opts} placeholder="want…" /></label>
+        <div className="convert-field"><label htmlFor="convert-want">Want</label><CurrencyPicker inputId="convert-want" value={want} onChange={changeWant} options={opts} placeholder="want…" /></div>
         <label className="convert-field amount">Amount<input type="number" min="1"
           value={amount} onChange={e => { setDirty(true); setTyped(e.target.value) }} /></label>
-        <button className="btn primary" disabled={busy} onClick={run}>{busy ? 'Finding…' : 'Find route'}</button>
+        <button type="button" className="btn primary" disabled={busy} onClick={run}>{busy ? 'Finding…' : 'Find route'}</button>
       </div>
 
       {res && !best && <p className="muted">{res.min_amount

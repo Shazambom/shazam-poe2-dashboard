@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import Toggle from './Toggle.jsx'
 import Seg from './Seg.jsx'
 import ModPicker from './ModPicker.jsx'
@@ -30,7 +30,7 @@ export default function RegexView() {
     // Saving is armed only once the stored blob is in hand: a failed load shows defaults but
     // must never write them over the user's saved selections.
     ensureSettings().then(x => { setS(merge(x.regex_tools)); arm() }).catch(() => { setS(merge(null)); toast('Could not load your saved settings', false) })
-  }, []) // eslint-disable-line
+  }, [arm])
 
   const kind = s?.kind || 'waystone'
   const cfg = s?.[kind]
@@ -45,7 +45,7 @@ export default function RegexView() {
     if (!s) return
     if (seen.current === null) { seen.current = text; return }
     if (text !== seen.current) { seen.current = text; if (s.autoCopy && text) copyText(text, 'Regex', true) }
-  }, [text, s]) // eslint-disable-line
+  }, [text, s])
 
   if (!s) return null
 

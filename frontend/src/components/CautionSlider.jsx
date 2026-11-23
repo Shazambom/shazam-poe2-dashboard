@@ -1,4 +1,5 @@
-import React, { useEffect, useRef, useState } from 'react'
+import { ignoredError } from '../lib/ignoredError.js'
+import { useEffect, useRef, useState } from 'react'
 import { useStatus, ensureSettings } from '../lib/statusStore.js'
 
 // CAUTION: how much a steady price is worth to you. The board ranks kept value, steadiness, a
@@ -16,7 +17,7 @@ export default function CautionSlider({ value, range, onChange }) {
 
   // Follow the server's value until the user touches it (it owns the default).
   useEffect(() => { if (!dragging.current && value != null) setK(value) }, [value])
-  useEffect(() => { ensureSettings().catch(() => {}) }, [])
+  useEffect(() => { ensureSettings().catch(() => ignoredError('load caution settings')) }, [])
 
   const commit = (next) => {
     dragging.current = true
@@ -25,7 +26,7 @@ export default function CautionSlider({ value, range, onChange }) {
     timer.current = setTimeout(() => {
       dragging.current = false
       onChange?.(next)                                     // re-rank now
-      useStatus.getState().saveSettings({ hold_caution: next }).catch(() => {})
+      useStatus.getState().saveSettings({ hold_caution: next }).catch(() => ignoredError('save caution setting'))
     }, 350)                                                // debounce the drag, then persist
   }
 

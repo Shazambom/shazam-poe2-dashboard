@@ -12,7 +12,7 @@ export function Loop({ r }) {
   return (
     <span className="loop">
       {r.path_names.map((n, i) => (
-        <React.Fragment key={i}>
+        <React.Fragment key={JSON.stringify((r.path || r.path_names).slice(0, i + 1))}>
           {i > 0 && (() => {
             const step = r.steps[i - 1]
             const kind = r.kinds[i - 1]
@@ -60,7 +60,7 @@ export function Detail({ r, refCur }) {
         </thead>
         <tbody>
           {r.steps.map((s, i) => (
-            <tr key={i}>
+            <tr key={JSON.stringify(r.steps.slice(0, i + 1).map(step => [step.from, step.to, step.kind]))}>
               <td>{i + 1} · {stepText(s)}{s.unconverted > 0.5 && <span className="muted"> (+{fmt.n(s.unconverted)} left over)</span>}</td>
               <td className="num">{fmt.rate(s.rate)}</td>
               <td className="num">{s.gold ? fmt.n(s.gold) : <span className="muted">free</span>}</td>

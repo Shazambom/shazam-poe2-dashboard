@@ -1,7 +1,8 @@
 // Feature 3: "Close-enough" fuzzy rare finder hook for Trading → Workspace and ExiledExchange2 History.
 // Ephemeral overlay over the active search: never mutates node.q or node.slug in workspaceStore.
 // Reuses TAP data exposed by useReprice without duplicating listeners, and cancels on row/tab switch.
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { ignoredError } from './ignoredError.js'
+import { useCallback, useEffect, useEffectEvent, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { api, toast } from './api.js'
 import { diag } from './diag.js'
 import { connectSession, queryUrl, searchOfLink, tradeUrl } from './session.js'
@@ -44,16 +45,20 @@ export function useRelax({
   const nodeId = node?.id ?? null
   const [st, setSt] = useState(() => ({ ...IDLE, relaxTick: 0 }))
   const [connecting, setConnecting] = useState(false)
-  const [decodedSlugQuery, setDecodedSlugQuery] = useState(null)
+  const [decodedSlug, setDecodedSlug] = useState(null)
+  // A TAP search object belongs to one observed search; fetches only replace its rows.
+  // The outgoing webview can still expose its relaxed search after another row is selected.
+  const search = page?.search
+  const [relaxedSearch, setRelaxedSearch] = useState(null)
   const mountedRef = useRef(true)
   const reqRef = useRef(0)
-  const baseQueryRef = useRef(null) // { nodeId, query } | null
-  const stalePageIdRef = useRef(null)
+  const [snapshot, setSnapshot] = useState({ nodeId, query: null, stalePageId: null })
   const prevNodeIdRef = useRef(nodeId)
   const pageIdRef = useRef(null)
-  pageIdRef.current = page?.search?.id ?? null
+  const pageId = page?.search?.id ?? null
+  useLayoutEffect(() => { pageIdRef.current = pageId }, [pageId])
   const stRef = useRef(st)
-  stRef.current = st
+  useLayoutEffect(() => { stRef.current = st }, [st])
 
   useEffect(() => {
     mountedRef.current = true
@@ -61,33 +66,39 @@ export function useRelax({
   }, [])
 
   // Synchronous query extraction for EE2 History & item-built nodes (node.q already present).
-  const nodeQuery = useMemo(() => parseNodeQuery(node), [node?.q, node?.degraded])
+  const q = node?.q, degraded = node?.degraded
+  const nodeQuery = useMemo(() => parseNodeQuery({ q, degraded }), [q, degraded])
+  const kind = node?.kind, live = node?.live, slug = node?.slug
+  const slugSource = useMemo(() => (
+    !nodeQuery && kind === 'search' && !live && slug ? { nodeId, league, slug } : null
+  ), [nodeQuery, kind, live, slug, nodeId, league])
+  const readSearchType = useEffectEvent(() => node?.type)
+  const decodedSlugQuery = slugSource && decodedSlug?.slugSource === slugSource ? decodedSlug.query : null
 
   // Async fallback for saved slug searches that don't store node.q.
   useEffect(() => {
-    let live = true
-    setDecodedSlugQuery(null)
-    if (nodeQuery || !node || node.kind !== 'search' || node.live || !node.slug) return () => { live = false }
-    searchOfLink(tradeUrl(node, league, false))
-      .then(j => { if (live) setDecodedSlugQuery(j?.query || null) })
-      .catch(() => {})
-    return () => { live = false }
-  }, [nodeId, node?.slug, node?.kind, node?.live, league, nodeQuery])
+    if (!slugSource) return
+    let current = true
+    const url = tradeUrl({ type: readSearchType(), slug: slugSource.slug }, slugSource.league, false)
+    searchOfLink(url)
+      .then(j => { if (current && j?.query) setDecodedSlug({ slugSource, query: j.query }) })
+      .catch(() => ignoredError('read trade search'))
+    return () => { current = false }
+  }, [slugSource])
 
   // Clear snapshot when switching rows; cancel in-flight check on row switch, reload, league change, or leaving Workspace.
   // If a relaxed ?q= webview was mounted, also bump relaxTick and blacklist its TAP page id so any in-flight
-  // trade-site redirect cannot overwrite the saved node.slug or poison baseQueryRef.
+  // trade-site redirect cannot overwrite the saved node.slug or replace the exact query snapshot.
   useEffect(() => {
     const nodeChanged = prevNodeIdRef.current !== nodeId
-    if (nodeChanged) {
-      prevNodeIdRef.current = nodeId
-      baseQueryRef.current = null
-      stalePageIdRef.current = null
+    prevNodeIdRef.current = nodeId
+    if (!nodeChanged && stRef.current.relaxUrl) {
+      const stalePageId = pageIdRef.current
+      setSnapshot(prev => ({ ...prev, stalePageId }))
     }
     reqRef.current += 1
     setSt(prev => {
       if (prev.status === 'idle' && prev.level === 0 && !prev.relaxUrl && !prev.authRequired) return prev
-      if (!nodeChanged && prev.relaxUrl) stalePageIdRef.current = pageIdRef.current
       return { ...IDLE, relaxTick: prev.relaxUrl ? prev.relaxTick + 1 : prev.relaxTick }
     })
     return () => {
@@ -97,10 +108,15 @@ export function useRelax({
   }, [nodeId, league, visible, remountKey])
 
   const liveEligibleNode = !!node && node.kind === 'search' && !node.live
-  const livePageQuery = page?.search?.id != null && page.search.id !== stalePageIdRef.current
-    ? (page.search.body?.query || null)
+  const sameNode = snapshot.nodeId === nodeId
+  const stalePageId = sameNode ? snapshot.stalePageId : null
+  if (st.relaxUrl && st.relaxedNodeId === nodeId && search && search !== relaxedSearch) {
+    setRelaxedSearch(search)
+  }
+  const livePageQuery = search !== relaxedSearch && pageId != null && pageId !== stalePageId
+    ? (search.body?.query || null)
     : null
-  const snappedBase = baseQueryRef.current?.nodeId === nodeId ? baseQueryRef.current.query : null
+  const snappedBase = sameNode ? snapshot.query : null
   const exactQuery = useMemo(() => {
     if (!liveEligibleNode) return null
     if (st.level === 0) {
@@ -111,26 +127,24 @@ export function useRelax({
       if (rowQuery) return rowQuery
     }
     return snappedBase || nodeQuery || decodedSlugQuery
-  }, [nodeId, liveEligibleNode, st.level, livePageQuery, snappedBase, nodeQuery, decodedSlugQuery, rowQuery])
+  }, [liveEligibleNode, st.level, livePageQuery, snappedBase, nodeQuery, decodedSlugQuery, rowQuery])
 
-  // Snapshot the unrelaxed query after commit (never mutate refs during render).
-  useEffect(() => {
-    if (st.level === 0 && exactQuery) {
-      baseQueryRef.current = { nodeId, query: exactQuery }
-    }
-  }, [nodeId, st.level, exactQuery])
+  // The unrelaxed query belongs to the selected row. Keep it while a relaxed
+  // webview is active and clear its page blacklist on a row switch.
+  if (!sameNode || (st.level === 0 && exactQuery && exactQuery !== snappedBase)) {
+    setSnapshot({ nodeId, query: st.level === 0 ? exactQuery : snappedBase, stalePageId })
+  }
 
   const preview = useMemo(() => (exactQuery ? relaxPreview(exactQuery, 1) : null), [exactQuery])
 
   const run = useCallback(async (targetLevel) => {
     const relaxRpc = window.poe2desktop?.trade?.relax
     if (!relaxRpc) return
-    const currentBase = baseQueryRef.current?.nodeId === nodeId ? baseQueryRef.current.query : null
-    const sourceQuery = targetLevel === 1 ? (exactQuery || currentBase) : currentBase
+    const sourceQuery = targetLevel === 1 ? (exactQuery || snappedBase) : snappedBase
     const relaxed = relaxQuery(sourceQuery, targetLevel)
     if (!relaxed) return
 
-    baseQueryRef.current = { nodeId, query: sourceQuery }
+    setSnapshot(prev => ({ ...prev, nodeId, query: sourceQuery }))
     const myReq = ++reqRef.current
     const prevStatus = stRef.current.status
     setSt(prev => ({ ...prev, status: 'checking', authRequired: false, authLevel: null }))
@@ -184,11 +198,12 @@ export function useRelax({
       level: targetLevel,
       summary: relaxed.summary,
       relaxUrl: url,
+      relaxedNodeId: nodeId,
       authRequired: false,
       authLevel: null,
       relaxTick: prev.relaxTick + 1,
     }))
-  }, [nodeId, exactQuery, league, prices, options])
+  }, [nodeId, exactQuery, snappedBase, league, prices, options])
 
   const apply = useCallback(() => run(1), [run])
   const further = useCallback(() => run(2), [run])
@@ -216,7 +231,10 @@ export function useRelax({
 
   const reset = useCallback(() => {
     reqRef.current += 1
-    if (stRef.current.relaxUrl) stalePageIdRef.current = pageIdRef.current
+    if (stRef.current.relaxUrl) {
+      const stalePageId = pageIdRef.current
+      setSnapshot(prev => ({ ...prev, stalePageId }))
+    }
     window.poe2desktop?.trade?.relaxCancel?.()
     setSt(prev => ({
       ...IDLE,

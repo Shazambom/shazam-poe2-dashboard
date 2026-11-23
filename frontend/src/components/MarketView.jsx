@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts'
 import { api, fmt } from '../lib/api.js'
 import { useApi } from '../lib/hooks.js'
@@ -9,6 +9,7 @@ import CurrencyPicker from './CurrencyPicker.jsx'
 import Toggle from './Toggle.jsx'
 import Wealth from './Wealth.jsx'
 
+const EMPTY_EDGES = []
 const AXIS = { fill: chart.axis, fontSize: 11 }
 const TIP = { background: chart.tooltipBg, border: `1px solid ${chart.tooltipBorder}` }
 const hourLabel = fmt.hourLabel
@@ -17,7 +18,7 @@ export default function MarketView({ currencies }) {
   const [pair, setPair] = useState({ a: 'divine', b: 'exalted' })
   const [q, setQ] = useState('')
   const [byValue, setByValue] = useState(false)   // false = raw turnover, true = Exalted-normalized value
-  const edges = useApi(() => api.edges(), []).data ?? []
+  const edges = useApi(() => api.edges(), []).data ?? EMPTY_EDGES
   const top = useApi(() => api.topMarkets(byValue ? 'value' : 'activity'), [byValue]).data ?? []
   const hist = useApi(() => api.history(pair.a, pair.b), [pair.a, pair.b]).data
 
@@ -77,8 +78,8 @@ export default function MarketView({ currencies }) {
             <table>
               <thead><tr><th>Market</th><th className="num">{byValue ? 'Value traded' : 'Traded · 24h'}</th><th className="num">Rate</th></tr></thead>
               <tbody>
-                {top.slice(0, 15).map((m, i) => (
-                  <tr key={i} style={{ cursor: 'pointer' }} onClick={() => setPair({ a: m.a, b: m.b })}>
+                {top.slice(0, 15).map(m => (
+                  <tr key={JSON.stringify([m.a, m.b])} style={{ cursor: 'pointer' }} onClick={() => setPair({ a: m.a, b: m.b })}>
                     <td><Cur id={m.a} name={names[m.a]} /> › <Cur id={m.b} name={names[m.b]} /></td>
                     <td className="num">
                       {byValue
@@ -101,8 +102,8 @@ export default function MarketView({ currencies }) {
       <table>
         <thead><tr><th>From</th><th>To</th><th>Source</th><th className="num">Rate</th><th className="num">Depth</th><th className="num">Capacity (from units)</th><th className="num">Age</th></tr></thead>
         <tbody>
-          {shown.map((e, i) => (
-            <tr key={i}>
+          {shown.map(e => (
+            <tr key={JSON.stringify([e.from, e.to, e.kind, e.meta?.recipe_id])}>
               <td><Cur id={e.from} name={e.from_name} /></td><td><Cur id={e.to} name={e.to_name} /></td>
               <td><i className={`k ${e.kind}`} style={{ display: 'inline-block', marginRight: 6 }} />{e.kind}{e.kind === 'recipe' && <span className="muted"> {e.meta?.name}</span>}</td>
               <td className="num">{fmt.rate(e.rate)}</td>

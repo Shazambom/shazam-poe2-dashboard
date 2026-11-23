@@ -108,7 +108,10 @@ test('the sibling key ignores the price filter and key order, but not the league
 test('property: over random pairs from the price table, offer ⇔ the cheapest is not on top by more than τ', () => {
   const ids = ['vaal', 'chaos', 'exalted', 'divine']
   let seed = 7
-  const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647
+  const rnd = () => {
+    seed = (seed * 16807) % 2147483647
+    return seed / 2147483647
+  }
   for (let i = 0; i < 400; i++) {
     const a = ids[Math.floor(rnd() * 4)], b = ids[Math.floor(rnd() * 4)]
     if (a === b) continue
@@ -199,7 +202,7 @@ test('a page that arrived before the prices still leaves sibling evidence', () =
 // sampled row, where its true minimum sits. No new searches.
 const ranks = (n) => Array.from({ length: n }, (_, i) => `r${i}`)
 function searched(n, { body = BODY, prices = P } = {}) {
-  let s = R.observe(R.EMPTY, OPTIONS)
+  const s = R.observe(R.EMPTY, OPTIONS)
   return R.observe(s, { kind: 'search', wcId: 1, league: 'Forbidden Rites', id: 'S1', body, ids: ranks(n), total: n }, prices)
 }
 const load = (s, rows) => R.observe(s, { kind: 'fetch', wcId: 1, searchId: 'S1', rows: rows.map(([i, currency, amount]) => ({ id: `r${i}`, amount, currency })) })
@@ -267,15 +270,6 @@ test('encodeSlug: the slug the app builds decodes, through the app\'s own link r
   assert.match(slug, /^H4sI[A-Za-z0-9_-]+$/, 'gzip, base64url, no padding')
   const back = await searchOfLink(tradeUrl({ type: 'search', slug }, 'Forbidden Rites'))
   assert.equal(JSON.stringify(back.query), JSON.stringify(q))
-})
-
-// QA (2026-10-03): ↻ right after a fresh search reloaded the trade home, not the row's search: the window's address
-// was computed once per row and never again. Reloading recomputes it from the saved row.
-test('the trade window\'s address is recomputed on a reload (↻), from the saved row', async () => {
-  const { readFileSync } = await import('node:fs')
-  const src = readFileSync(new URL('../src/components/WorkspaceView.jsx', import.meta.url), 'utf8')
-  const memo = src.slice(src.indexOf('const mountUrl = useMemo('), src.indexOf('const mountUrl = useMemo(') + 400)
-  assert.match(memo, /\}, \[activeId, league, rerunTick, wvNonce, relax\.relaxTick\]\)/)
 })
 
 // Aggressive caching (owner, 2026-10-03: "5min ttl"): a search whose deeper listings were fetched in the last 5

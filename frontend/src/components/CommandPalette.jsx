@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react'
+import { ignoredError } from '../lib/ignoredError.js'
+import { useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'motion/react'
 import { api } from '../lib/api.js'
 import { useWorkspace } from '../lib/workspaceStore.js'
@@ -20,11 +21,12 @@ export default function CommandPalette({ open, onClose, tabs, onGoTab, subDests 
   const inputRef = useRef(null)
   const listRef = useRef(null)
 
+  const availableCommands = useEffectEvent(() => usableHere(screenCommands[screen] || []))
   useEffect(() => {
     if (!open) return
     setQ(''); setSel(0)
-    setHere(usableHere(screenCommands[screen] || []))
-    api.board().then(d => setRows(d?.rows || [])).catch(() => {})
+    setHere(availableCommands())
+    api.board().then(d => setRows(d?.rows || [])).catch(() => ignoredError('load board commands'))
     const t = setTimeout(() => inputRef.current?.focus(), 10)
     return () => clearTimeout(t)
   }, [open])
@@ -32,7 +34,7 @@ export default function CommandPalette({ open, onClose, tabs, onGoTab, subDests 
   const items = useMemo(() => buildPaletteItems({ tabs, subDests, rows, currencies, leagues, commands, tree, screen,
     screenCommands: { ...screenCommands, [screen]: here }, q }), [tabs, subDests, rows, currencies, leagues, commands, tree, screen, screenCommands, here, q])
 
-  useEffect(() => { if (sel > items.length - 1) setSel(0) }, [items.length, sel])
+  if (sel > 0 && sel >= items.length) setSel(0)
   // keep the selected row in view as you arrow through
   useEffect(() => {
     const el = listRef.current?.querySelector('.cmdk-item.sel')
@@ -69,7 +71,10 @@ export default function CommandPalette({ open, onClose, tabs, onGoTab, subDests 
             <div className="cmdk-list" ref={listRef}>
               {items.length === 0 && <div className="cmdk-empty">No matches</div>}
               {items.slice(0, 60).map((it, i) => (
-                <div key={it.kind + it.id} className={`cmdk-item ${i === sel ? 'sel' : ''}`}
+                <div key={it.kind + it.id} role="button" tabIndex={-1} className={`cmdk-item ${i === sel ? 'sel' : ''}`}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); run(it) }
+                  }}
                   onMouseMove={() => setSel(i)} onClick={() => run(it)}>
                   <span className="cmdk-ic">{it.kind === 'cur' ? <Cur id={it.id} size={16} /> : it.kind === 'league' ? '◆' : it.kind === 'sub' ? '→' : it.kind === 'ws' ? '⌕' : it.kind === 'cmd' ? '⌘' : '↗'}</span>
                   <span className="cmdk-label">{it.label}</span>

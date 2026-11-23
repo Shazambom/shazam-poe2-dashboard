@@ -1,3 +1,4 @@
+import { ignoredError } from './ignoredError.js'
 import { create } from 'zustand'
 import { api } from './api.js'
 
@@ -36,7 +37,7 @@ export const useSignals = create((set, get) => ({
         loaded: true,
         ...(fresh.length ? { lastNew: { at: Date.now(), signals: fresh } } : {}),
       })
-    } catch { /* down sidecar/endpoint → just keep the last state; never throw into the UI */ }
+    } catch { /* down sidecar/endpoint → just keep the last state; never throw into the UI */ ignoredError('refresh signals') }
   },
   ack: async (keys) => { try { await api.ackSignals(keys, false) } finally { await get().refresh() } },
   ackAll: async () => { try { await api.ackSignals(null, true) } finally { await get().refresh() } },

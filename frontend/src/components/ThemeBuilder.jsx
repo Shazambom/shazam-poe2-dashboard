@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react'
+import { ignoredError } from '../lib/ignoredError.js'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from '../lib/api.js'
 import { THEMES, DEFAULT_THEME, useTheme } from '../lib/themeStore.js'
 import {
@@ -33,7 +34,7 @@ export default function ThemeBuilder() {
   const saveTimer = useRef(null)
   const previewTimer = useRef(null)
 
-  useEffect(() => { loadPresets().then(setPresets).catch(() => {}) }, [])
+  useEffect(() => { loadPresets().then(setPresets).catch(() => ignoredError('load theme presets')) }, [])
   // Leaving the builder ends any preview (the chosen theme comes back) and cancels pending timers.
   useEffect(() => () => {
     clearTimeout(previewTimer.current)
@@ -42,7 +43,13 @@ export default function ThemeBuilder() {
   }, [])
 
   const editing = useMemo(() => customs.find(t => t.id === editId) || null, [customs, editId])
-  useEffect(() => { setDraft(editing ? { ...editing, colors: { ...editing.colors } } : null); setExported('') }, [editing?.id]) // eslint-disable-line
+  const editingId = editing?.id
+  const [draftId, setDraftId] = useState(editingId)
+  if (draftId !== editingId) {
+    setDraftId(editingId)
+    setDraft(editing ? { ...editing, colors: { ...editing.colors } } : null)
+    setExported('')
+  }
 
   const persist = (list) => useTheme.getState().saveCustoms(list).catch(() => toast('Could not save themes', false))
   const upsert = (theme) => persist(customs.some(t => t.id === theme.id) ? customs.map(t => (t.id === theme.id ? theme : t)) : [...customs, theme])
@@ -75,7 +82,7 @@ export default function ThemeBuilder() {
   const doExport = (t) => {
     const text = `${exportCss(t)}\n${exportJson(t)}\n`
     setEditId(t.id); setExported(text)
-    navigator.clipboard?.writeText(text).then(() => toast('Theme CSS + JSON copied')).catch(() => {})
+    navigator.clipboard?.writeText(text).then(() => toast('Theme CSS + JSON copied')).catch(() => ignoredError('copy theme export'))
   }
   const use = (t) => { clearTimeout(previewTimer.current); useTheme.getState().apply(t.id) }
 
@@ -89,7 +96,7 @@ export default function ThemeBuilder() {
         <select value={base} onChange={e => setBase(e.target.value)} style={{ width: 200 }}>
           {THEMES.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
         </select>
-        <button className="btn small" disabled={!presets} onClick={create}>Create</button>
+        <button type="button" className="btn small" disabled={!presets} onClick={create}>Create</button>
       </div>
 
       {customs.length > 0 && (
@@ -97,14 +104,14 @@ export default function ThemeBuilder() {
           <tbody>
             {customs.map(t => (
               <tr key={t.id}>
-                <td><button className="btn small" style={{ fontWeight: t.id === editId ? 700 : 400 }} onClick={() => setEditId(t.id)}>{t.name}</button></td>
+                <td><button type="button" className="btn small" style={{ fontWeight: t.id === editId ? 700 : 400 }} onClick={() => setEditId(t.id)}>{t.name}</button></td>
                 <td className="hint">{t.id === chosen ? 'in use' : NAMES[t.base] ? `from ${NAMES[t.base]}` : ''}</td>
-                <td>
+                <td aria-label={`Actions for ${t.name}`}>
                   <div className="row">
-                    <button className="btn small" disabled={t.id === chosen} onClick={() => use(t)}>Use</button>
-                    <button className="btn small" onClick={() => duplicate(t)}>Duplicate</button>
-                    <button className="btn small" onClick={() => doExport(t)}>Export</button>
-                    <button className="btn small" onClick={() => remove(t)}>Delete</button>
+                    <button type="button" className="btn small" disabled={t.id === chosen} onClick={() => use(t)}>Use</button>
+                    <button type="button" className="btn small" onClick={() => duplicate(t)}>Duplicate</button>
+                    <button type="button" className="btn small" onClick={() => doExport(t)}>Export</button>
+                    <button type="button" className="btn small" onClick={() => remove(t)}>Delete</button>
                   </div>
                 </td>
               </tr>
@@ -115,8 +122,8 @@ export default function ThemeBuilder() {
 
       {draft && (
         <div>
-          <div className="field"><label>Name</label>
-            <input value={draft.name} onChange={e => update({ ...draft, name: e.target.value })} />
+          <div className="field"><label htmlFor="theme-draft-name">Name</label>
+            <input id="theme-draft-name" value={draft.name} onChange={e => update({ ...draft, name: e.target.value })} />
           </div>
           <div className="row" style={{ marginBottom: 10 }}>
             {PRIMARIES.map(([k, name]) => (
@@ -128,7 +135,7 @@ export default function ThemeBuilder() {
           {issues.length > 0 && (
             <p className="hint" style={{ marginTop: 0 }}>
               {issues.map(i => `${label(i.fg)} on ${label(i.bg)} is ${i.ratio.toFixed(1)}:1 (needs ${i.min}:1)`).join(' · ')}
-              {' '}<button className="btn small" onClick={() => update({ ...draft, colors: autoFixContrast(draft.colors) })}>Auto-fix</button>
+              {' '}<button type="button" className="btn small" onClick={() => update({ ...draft, colors: autoFixContrast(draft.colors) })}>Auto-fix</button>
             </p>
           )}
           <details className="adv">
@@ -138,7 +145,7 @@ export default function ThemeBuilder() {
                 <div className="field" key={k} style={{ marginBottom: 0, width: 84 }}><label>{label(k)}</label>
                   <div className="row" style={{ gap: 2 }}>
                     <input type="color" value={swatchHex(k, draft.colors[k])} onChange={e => setDerived(k, e.target.value)} title={k} style={{ height: 30, padding: 2, width: 44 }} />
-                    <button className="btn small" onClick={() => resetDerived(k)} title="Back to the derived value">↺</button>
+                    <button type="button" className="btn small" onClick={() => resetDerived(k)} title="Back to the derived value">↺</button>
                   </div>
                 </div>
               ))}

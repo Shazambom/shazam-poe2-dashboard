@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import { useState } from 'react'
 import { typed, settle } from '../lib/numInput.js'
 
 // Exact numbers, not sliders (owner, 2026-09-24): people are precise about the mods they want.

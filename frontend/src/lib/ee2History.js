@@ -1,10 +1,10 @@
-import { useEffect } from 'react'
+import { ignoredError } from './ignoredError.js'
+import React, { useEffect } from 'react'
 import { useWorkspace, HISTORY_PREFS, HISTORY_MAX_LIMIT } from './workspaceStore.js'
 import { useStatus, ensureSettings } from './statusStore.js'
 import { diag } from './diag.js'
 import { hasTradeEngine as isDesktop } from './session.js'
 import { bus, toast } from './api.js'
-import React from 'react'
 
 // 🗑 / context menu / Settings / ⌘K all clear through here: one toast, one undo slot.
 export function clearHistoryWithUndo() {
@@ -32,7 +32,7 @@ export async function saveHistoryPrefs(patch) {
   ws.setHistoryPrefs(next)
   window.poe2desktop?.ee2?.setEnabled?.(next.enabled)
   window.poe2desktop?.ee2?.setSearchPrefs?.({ waystoneStats: next.waystoneStats })
-  try { await useStatus.getState().saveSettings({ ee2History: next }) } catch {}
+  try { await useStatus.getState().saveSettings({ ee2History: next }) } catch { ignoredError('save history preferences') }
   return next
 }
 
@@ -51,19 +51,19 @@ function reportHistoryEvent(e) {
 // to main on mount and on change; prefs from settings; hourly expiry. Inert on web.
 export function useEe2History() {
   useEffect(() => {
-    ensureSettings().then(s => useWorkspace.getState().setHistoryPrefs(historyPrefsFromSettings(s))).catch(() => {})
+    ensureSettings().then(s => useWorkspace.getState().setHistoryPrefs(historyPrefsFromSettings(s))).catch(() => ignoredError('load history preferences'))
     const offEvent = useWorkspace.subscribe((s, prev) => { if (s.lastHistoryEvent && s.lastHistoryEvent !== prev.lastHistoryEvent) reportHistoryEvent(s.lastHistoryEvent) })
     const hourly = setInterval(() => useWorkspace.getState().expireHistory(Date.now()), 3600 * 1000)
     if (!isDesktop || !window.poe2desktop?.trade?.onIngest) return () => { offEvent(); clearInterval(hourly) }
     const handle = (intent) => {
       const r = useWorkspace.getState().ingest(intent)
-      try { window.poe2desktop.trade.ingestAck({ id: intent?.id, result: r.result, reason: r.reason }) } catch {}
+      try { window.poe2desktop.trade.ingestAck({ id: intent?.id, result: r.result, reason: r.reason }) } catch { ignoredError('acknowledge history event') }
       return r
     }
     if (import.meta.env.DEV) window.__ee2HistoryTestHook = handle
     const offIngest = window.poe2desktop.trade.onIngest(handle)
     // EE2 presence gates the whole feature's UI; the package re-detects every 30 s, so poll at that cadence.
-    const pollPresence = () => window.poe2desktop.ee2?.status?.().then(st => useWorkspace.getState().setEe2Present(!!st?.present)).catch(() => {})
+    const pollPresence = () => window.poe2desktop.ee2?.status?.().then(st => useWorkspace.getState().setEe2Present(!!st?.present)).catch(() => ignoredError('poll companion status'))
     pollPresence(); const presenceTimer = setInterval(pollPresence, 30000)
     window.poe2desktop.ee2?.setEnabled?.(useWorkspace.getState().historyPrefs.enabled)
     window.poe2desktop.ee2?.setSearchPrefs?.({ waystoneStats: useWorkspace.getState().historyPrefs.waystoneStats })

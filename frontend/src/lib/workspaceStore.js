@@ -54,7 +54,7 @@ export function initialOpenState(tree) {
 }
 export const HISTORY_NAME = 'ExiledExchange2 History'
 export const HISTORY_CAP = 200       // default rows kept in the history folder (newest first); Settings can change it
-export const HISTORY_RETENTION_DAYS = 14
+const HISTORY_RETENTION_DAYS = 14
 export const HISTORY_PREFS = Object.freeze({ enabled: true, max: HISTORY_CAP, retentionDays: HISTORY_RETENTION_DAYS, waystoneStats: true })
 export const HISTORY_MAX_LIMIT = 1000  // the backend's 5000-node guard leaves room; Settings clamps 20…1000
 export const MAX_Q_BYTES = 16 * 1024 // a q larger than this is dropped (degraded row), never PUT
@@ -156,7 +156,11 @@ export const useWorkspace = create((set, get) => ({
   lastHistoryEvent: null,   // { type:'add'|'bump'|'cap'|'expire'|'clear', … } — the renderer's telemetry hook reads this
   activeId: null,   // which search entry is open in the trade window (persisted → restores on relaunch)
 
-  setActive: (id) => { if (get().loadError) return; set({ activeId: id }); persist(get, set) },
+  setActive: (id) => {
+    if (get().loadError) return;
+    set({ activeId: id });
+    persist(get, set)
+  },
 
   hydrate: (doc) => {
     armed = false
@@ -192,7 +196,11 @@ export const useWorkspace = create((set, get) => ({
   // PUT now (cancelling the debounce). Resolves when the request settled either way.
   flush: () => (saveTimer || get().saveState !== 'idle' ? save(get, set) : Promise.resolve()),
 
-  setLayout: (patch) => { if (get().loadError) return; set(s => ({ layout: { ...(s.layout || {}), ...patch } })); persist(get, set) },
+  setLayout: (patch) => {
+    if (get().loadError) return;
+    set(s => ({ layout: { ...(s.layout || {}), ...patch } }));
+    persist(get, set)
+  },
 
   addFolder: (parentId = null) => {
     if (get().loadError) return null
@@ -211,11 +219,27 @@ export const useWorkspace = create((set, get) => ({
     persist(get, set); return node.id
   },
   // System folders (the history folder) keep their name; everything else renames and stops auto-naming.
-  rename: (id, name) => { if (get().loadError) return; set(s => ({ tree: mapNode(s.tree, id, n => (n.kind === 'folder' && n.sys ? n : { ...n, name, auto: false })) })); persist(get, set) },
+  rename: (id, name) => {
+    if (get().loadError) return;
+    set(s => ({ tree: mapNode(s.tree, id, n => (n.kind === 'folder' && n.sys ? n : { ...n, name, auto: false })) }));
+    persist(get, set)
+  },
   // The DOM scraper's name: only for SEARCH rows still marked auto (never a folder, never a renamed/ingested row).
-  autoName: (id, name) => { if (get().loadError) return; set(s => ({ tree: mapNode(s.tree, id, n => (n.kind !== 'search' || n.auto === false ? n : { ...n, name })) })); persist(get, set) },
-  setField: (id, patch) => { if (get().loadError) return; set(s => ({ tree: mapNode(s.tree, id, n => ({ ...n, ...patch })) })); persist(get, set) },
-  toggleOpen: (id) => { if (get().loadError) return; set(s => ({ tree: mapNode(s.tree, id, n => ({ ...n, open: !n.open })) })); persist(get, set) },
+  autoName: (id, name) => {
+    if (get().loadError) return;
+    set(s => ({ tree: mapNode(s.tree, id, n => (n.kind !== 'search' || n.auto === false ? n : { ...n, name })) }));
+    persist(get, set)
+  },
+  setField: (id, patch) => {
+    if (get().loadError) return;
+    set(s => ({ tree: mapNode(s.tree, id, n => ({ ...n, ...patch })) }));
+    persist(get, set)
+  },
+  toggleOpen: (id) => {
+    if (get().loadError) return;
+    set(s => ({ tree: mapNode(s.tree, id, n => ({ ...n, open: !n.open })) }));
+    persist(get, set)
+  },
   // A copy of a search right after its source: same query, fresh id, never live/done.
   duplicate: (id) => {
     if (get().loadError) return null
@@ -368,7 +392,11 @@ export const useWorkspace = create((set, get) => ({
     // In place, so the row comes back byte-identical (key order included).
     // The window reloads only when the restored row is the one showing (review 2026-10-03: an undo after moving on
     // reloaded the other row and lost the search being edited there).
-    set(s => ({ tree: mapNode(s.tree, id, n => { const out = { ...n }; if (!('q' in prev)) delete out.q; return Object.assign(out, prev) }), rerunTick: s.rerunTick + (s.activeId === id ? 1 : 0) }))
+    set(s => ({ tree: mapNode(s.tree, id, n => {
+      const out = { ...n };
+      if (!('q' in prev)) delete out.q;
+      return Object.assign(out, prev)
+    }), rerunTick: s.rerunTick + (s.activeId === id ? 1 : 0) }))
     persist(get, set)
   },
   // Folders first, then A–Z (case-insensitive); `null` sorts the root.
@@ -383,7 +411,11 @@ export const useWorkspace = create((set, get) => ({
   removeMany: (ids) => {
     if (get().loadError) return []
     const recs = []
-    for (const id of ids) { const w = locate(get().tree, id); if (!w) continue; recs.push({ ...w, order: recs.length }) }
+    for (const id of ids) {
+      const w = locate(get().tree, id);
+      if (!w) continue;
+      recs.push({ ...w, order: recs.length })
+    }
     if (!recs.length) return []
     set(s => {
       let tree = s.tree

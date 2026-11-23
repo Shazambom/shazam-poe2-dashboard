@@ -1,4 +1,6 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react'
+import LoadingRows from './LoadingRows.jsx'
+import { ignoredError } from '../lib/ignoredError.js'
+import React, { useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
 import { finishRoutes, streamSearch } from '../lib/routesStream.js'
 import { api, fmt } from '../lib/api.js'
@@ -75,30 +77,39 @@ export default function RoutesView({ capital, status, currencies }) {
       // The authoritative top list, whether this was a fresh search or a cached replay
       // (lib/routesStream.js): one population for the banding, so the rows don't change on reload.
       done: (d) => { retries.current = 0; setRoutes(finishRoutes(accRef.current, d)); setCounts(d); setStreaming(false) },
-      fail: (msg) => { if (msg) setErr(msg); setStreaming(false) },
+      fail: (msg) => {
+        if (msg) setErr(msg);
+        setStreaming(false)
+      },
       // a busy backend, not an empty market: search again, a couple of times, then stop and say so
       timeout: () => { if (retries.current < SEARCH_RETRIES) { retries.current += 1; load() } else { setErr('the search is taking too long — press refresh to try again'); setStreaming(false) } },
     })
   }
+
+  // An interval and its timeout retries keep the search they were started with.
+  const currentSearch = useEffectEvent(() => load)
+  const refreshFromTick = useEffectEvent(() => { if (searchKey != null) load() })
 
   // The filters live in the user's settings: loaded once, saved (debounced) on every edit.
   const { save, arm, flush } = useAutosave(next => useStatus.getState().saveSettings({ filters: filtersToSave(next) }), 800)
   useEffect(() => {
     ensureSettings().then(s => { setF(filtersFromSettings(s.filters)); setLoaded(true); arm() })
       .catch(() => setLoaded(true))              // no settings: search with the defaults, once
-  }, []) // eslint-disable-line
+  }, [arm])
   // The first key applies at once; later edits are debounced.
   const searchKey = useDebounced(filterKey, 500) ?? filterKey
   useEffect(() => {
     if (searchKey == null) return
-    load()
+    const search = currentSearch()
+    search()
     return () => esRef.current?.()
-  }, [searchKey]) // eslint-disable-line
+  }, [searchKey])
   useEffect(() => {
     if (searchKey == null) return
-    const t = setInterval(() => { if (document.visibilityState === 'visible' && !streaming) load() }, 120000)
+    const search = currentSearch()
+    const t = setInterval(() => { if (document.visibilityState === 'visible' && !streaming) search() }, 120000)
     return () => clearInterval(t)
-  }, [searchKey, streaming]) // eslint-disable-line
+  }, [searchKey, streaming])
 
   const active = activePreset(presets, settings)
   // A pick is an ordinary settings save of the preset's values, made after any edit still waiting to save: the
@@ -108,7 +119,7 @@ export default function RoutesView({ capital, status, currencies }) {
   // nothing to react to, so the pick searches itself.
   const pick = async (p) => {
     flushSync(() => setRev(r => r + 1))
-    await flush().catch(() => {})
+    await flush().catch(() => ignoredError('flush route settings'))
     const s = await useStatus.getState().saveSettings(p.values).catch(() => null)
     if (!s) return
     const next = filtersFromSettings(s.filters)
@@ -117,7 +128,7 @@ export default function RoutesView({ capital, status, currencies }) {
   }
 
   // Manual refresh from the topbar ⟳ re-runs the search.
-  useEffect(() => { if (tick > 0 && searchKey != null) load() }, [tick]) // eslint-disable-line
+  useEffect(() => { if (tick > 0) refreshFromTick() }, [tick])
 
   const update = (k, v) => { const next = { ...f, [k]: v }; setF(next); save(next) }
   const set = (k) => (e) => update(k, e.target.type === 'checkbox' ? e.target.checked : e.target.value)
@@ -143,7 +154,11 @@ export default function RoutesView({ capital, status, currencies }) {
     const sd = Math.sqrt(vals.reduce((a, b) => a + (b - mean) ** 2, 0) / vals.length)
     if (!(sd > 0)) return all()
     // σ better-than-mean: +ve = better. Non-finite (∞ velocity / free gold) counts as top-tier.
-    const sig = (r) => { const v = acc(r); if (!Number.isFinite(v)) return (v > 0) === desc ? 9 : -9; return (desc ? v - mean : mean - v) / sd }
+    const sig = (r) => {
+      const v = acc(r);
+      if (!Number.isFinite(v)) return (v > 0) === desc ? 9 : -9;
+      return (desc ? v - mean : mean - v) / sd
+    }
     let kept = routes.filter(r => sig(r) >= 1)
     if (!kept.length) return all()
     kept = display(kept).slice(0, limit)
@@ -177,9 +192,9 @@ export default function RoutesView({ capital, status, currencies }) {
         </>}
 
         <h2>Filters</h2>
-        {tweaks && <div className="field"><label>Minimum margin %</label><input type="number" step="0.1" value={f.min_margin_pct} onChange={set('min_margin_pct')} /></div>}
-        <div className="field"><label>Start from</label>
-          <select value={f.start} onChange={set('start')}>
+        {tweaks && <div className="field"><label htmlFor="route-min-margin-pct">Minimum margin %</label><input id="route-min-margin-pct" type="number" step="0.1" value={f.min_margin_pct} onChange={set('min_margin_pct')} /></div>}
+        <div className="field"><label htmlFor="route-start">Start from</label>
+          <select id="route-start" value={f.start} onChange={set('start')}>
             <option value="">Everything I hold</option>
             {held.map(c => <option key={c} value={c}>{nameOf(c)}</option>)}
           </select>
@@ -187,19 +202,19 @@ export default function RoutesView({ capital, status, currencies }) {
 
         {tweaks && <details className="adv">
           <summary>More filters</summary>
-          <div className="field"><label>Minimum margin, in exalted</label><input type="number" step="0.1" value={f.min_margin_ref} onChange={set('min_margin_ref')} /></div>
-          <div className="field"><label>Maximum gold per loop</label><input type="number" step="100" placeholder="no limit" value={f.max_gold} onChange={set('max_gold')} /></div>
-          <div className="field"><label>Minimum margin per 1k gold</label><input type="number" step="0.01" placeholder="no limit" value={f.min_margin_per_1k_gold} onChange={set('min_margin_per_1k_gold')} /></div>
-          <div className="field"><label>Minimum liquidity, in exalted</label><input type="number" step="1" placeholder="no limit" value={f.min_liquidity_ref} onChange={set('min_liquidity_ref')} />
+          <div className="field"><label htmlFor="route-min-margin-ref">Minimum margin, in exalted</label><input id="route-min-margin-ref" type="number" step="0.1" value={f.min_margin_ref} onChange={set('min_margin_ref')} /></div>
+          <div className="field"><label htmlFor="route-max-gold">Maximum gold per loop</label><input id="route-max-gold" type="number" step="100" placeholder="no limit" value={f.max_gold} onChange={set('max_gold')} /></div>
+          <div className="field"><label htmlFor="route-min-margin-per-1k-gold">Minimum margin per 1k gold</label><input id="route-min-margin-per-1k-gold" type="number" step="0.01" placeholder="no limit" value={f.min_margin_per_1k_gold} onChange={set('min_margin_per_1k_gold')} /></div>
+          <div className="field"><label htmlFor="route-min-liquidity-ref">Minimum liquidity, in exalted</label><input id="route-min-liquidity-ref" type="number" step="1" placeholder="no limit" value={f.min_liquidity_ref} onChange={set('min_liquidity_ref')} />
             {f.min_liquidity_ref !== '' && Number(f.min_liquidity_ref) < 200 && <span className="warn-hint">⚠ Below 200 you'll see routes you can't actually fill — expect a bad time.</span>}</div>
-          <div className="field"><label>Minimum velocity, exalted/h per 1k gold</label><input type="number" step="0.01" placeholder="no limit" value={f.min_velocity} onChange={set('min_velocity')} /></div>
-          <div className="field"><label>Minimum traded volume, exalted per hour</label><input type="number" step="1" placeholder="no limit" value={f.min_volume_ref_per_h} onChange={set('min_volume_ref_per_h')} />
+          <div className="field"><label htmlFor="route-min-velocity">Minimum velocity, exalted/h per 1k gold</label><input id="route-min-velocity" type="number" step="0.01" placeholder="no limit" value={f.min_velocity} onChange={set('min_velocity')} /></div>
+          <div className="field"><label htmlFor="route-min-volume-ref-per-h">Minimum traded volume, exalted per hour</label><input id="route-min-volume-ref-per-h" type="number" step="1" placeholder="no limit" value={f.min_volume_ref_per_h} onChange={set('min_volume_ref_per_h')} />
             {f.min_volume_ref_per_h !== '' && Number(f.min_volume_ref_per_h) < 100 && <span className="warn-hint">⚠ Below 100/h markets are too thin to trust — expect a bad time.</span>}</div>
-          <div className="field"><label>Maximum minutes per step</label><input type="number" step="5" placeholder="no limit" value={f.max_step_minutes} onChange={set('max_step_minutes')}
+          <div className="field"><label htmlFor="route-max-step-minutes">Maximum minutes per step</label><input id="route-max-step-minutes" type="number" step="5" placeholder="no limit" value={f.max_step_minutes} onChange={set('max_step_minutes')}
             title="How long the slowest step would take at that market's own trading pace: the units you push in ÷ the units it trades per hour." /></div>
-          <div className="field"><label>Maximum estimated fill time, hours</label><input type="number" step="0.5" placeholder="no limit" value={f.max_fill_hours} onChange={set('max_fill_hours')} /></div>
+          <div className="field"><label htmlFor="route-max-fill-hours">Maximum estimated fill time, hours</label><input id="route-max-fill-hours" type="number" step="0.5" placeholder="no limit" value={f.max_fill_hours} onChange={set('max_fill_hours')} /></div>
           <div className="check"><Toggle checked={!!f.exclude_recipes} onChange={v => update('exclude_recipes', v)} label="Exchange steps only" /></div>
-          <div className="field"><label>Show at most</label><input type="number" value={f.limit} onChange={set('limit')} /></div>
+          <div className="field"><label htmlFor="route-limit">Show at most</label><input id="route-limit" type="number" value={f.limit} onChange={set('limit')} /></div>
         </details>}
         {tweaks && <ArbitrageAlgorithm key={`algo-${rev}`} onSaved={load} />}
 
@@ -216,7 +231,7 @@ export default function RoutesView({ capital, status, currencies }) {
         )}
 
         {streaming && routes.length === 0 ? (
-          <table><tbody>{Array.from({ length: 6 }).map((_, i) => <tr key={i}><td colSpan={NCOLS}><div className="sk sk-row" /></td></tr>)}</tbody></table>
+          <table><LoadingRows columns={NCOLS} label="Loading routes" /></table>
         ) : !streaming && counts && routes.length === 0 ? (
           <div className="empty">
             <b>{(counts?.total_candidates ?? 0) === 0 ? 'No loops yet.' : 'No loop clears your thresholds.'}</b><br />
@@ -245,7 +260,7 @@ export default function RoutesView({ capital, status, currencies }) {
               {shown.map(({ r, band }, i) => (
                 <React.Fragment key={r.id}>
                   {banded.active && i > 0 && band !== shown[i - 1].band && (
-                    <tr className="std-sep" aria-hidden="true"><td colSpan={NCOLS}><span className="std-bar" /></td></tr>
+                    <tr className="std-sep" aria-hidden="true"><td colSpan={NCOLS} aria-hidden="true"><span className="std-bar" /></td></tr>
                   )}
                   <tr className="route" aria-expanded={open === r.id} onClick={() => setOpen(open === r.id ? null : r.id)}>
                     <td className="loop-cell"><Loop r={r} /></td>

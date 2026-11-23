@@ -1,9 +1,10 @@
-import React, { useMemo, useState } from 'react'
+import LoadingRows from './LoadingRows.jsx'
+import { useMemo, useState } from 'react'
 import { api, fmt } from '../lib/api.js'
 import { useApi } from '../lib/hooks.js'
 import Cur from './Cur.jsx'
 import Rate from './Rate.jsx'
-import { useAssetModal } from './CardDetail.jsx'
+import { useAssetModal } from './useAssetModal.jsx'
 import { useHorizon } from '../lib/horizonStore.js'
 import CautionSlider from './CautionSlider.jsx'
 import { arrowCell } from '../lib/arrows.js'
@@ -54,7 +55,7 @@ export default function HoldView() {
         <span className="spacer" />
         <div className="seg">
           {numeraires.map(({ id: k, name }) => (
-            <button key={k} className={`seg-btn ${numeraire === k ? 'on' : ''}`} title={name} onClick={() => setNumeraire(k)}>vs <Cur name={name} size={14} /></button>
+            <button type="button" key={k} className={`seg-btn ${numeraire === k ? 'on' : ''}`} title={name} onClick={() => setNumeraire(k)}>vs <Cur name={name} size={14} /></button>
           ))}
         </div>
         <CautionSlider value={data?.k} range={data?.k_range} onChange={setK} />
@@ -69,7 +70,7 @@ export default function HoldView() {
 
       {/* ---- Hold leaderboard ---- */}
       <>
-        {(busy || data?.building) && rows.length === 0 && <table><tbody>{Array.from({ length: 6 }).map((_, i) => <tr key={i}><td colSpan={8}><div className="sk sk-row" /></td></tr>)}</tbody></table>}
+        {(busy || data?.building) && rows.length === 0 && <table><LoadingRows columns={8} label="Loading holdings" /></table>}
         {!busy && rows.length === 0 && !data?.building && category === 'all' && <div className="empty">Nothing to hold yet.</div>}
         {!busy && rows.length === 0 && category !== 'all' && <div className="empty">Nothing to hold in {category} right now — pick another category.</div>}
         {rows.length > 0 && (

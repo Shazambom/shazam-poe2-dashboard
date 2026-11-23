@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react'
+import React, { useMemo, useState } from 'react'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine, Legend, CartesianGrid } from 'recharts'
 import { api, fmt } from '../lib/api.js'
 import { useApi } from '../lib/hooks.js'
@@ -80,6 +80,7 @@ const arrowPct = (v) => (v == null ? '–' : `${v >= 0 ? '▲' : '▼'} ${Math.a
 
 // Fixed color slots for core currencies so lines never swap colors across anchor switches (theme.js).
 const CORE_COLOR_SLOT = { annul: 0, chaos: 1, divine: 2, vaal: 3, exalted: 4 }
+const EMPTY_LEAGUES = []
 const CORE_SLOTS = Object.keys(CORE_COLOR_SLOT).length
 
 export default function InflationView({ league }) {
@@ -87,13 +88,15 @@ export default function InflationView({ league }) {
   const [overrides, setOverrides] = useState(() => ({}))   // explicit per-currency graph toggle overrides
   const isOn = (c) => overrides[c.id] ?? (c.default_on !== false)
   const toggleCur = (c) => setOverrides(prev => ({ ...prev, [c.id]: !(prev[c.id] ?? (c.default_on !== false)) }))
-  const { data, err, busy } = useApi(() => api.inflation(anchor), [anchor, league])
-
-  // Never show the previous anchor/league's stats or flash empty state on the synchronous switch commit.
-  const reqKey = `${league || ''}|${anchor}`
-  const prevKey = useRef(reqKey)
-  useEffect(() => { prevKey.current = reqKey }, [reqKey])
-  const switching = prevKey.current !== reqKey
+  // A league switch reloads the same anchor. Mark the view as switching immediately,
+  // including the render before useApi starts the next request.
+  const request = useMemo(() => ({ anchor, key: `${league || ''}|${anchor}` }), [league, anchor])
+  const [startedKey, setStartedKey] = useState(request.key)
+  const { data, err, busy } = useApi(() => {
+    setStartedKey(request.key)
+    return api.inflation(request.anchor)
+  }, [request])
+  const switching = startedKey !== request.key
   const curData = (data && (!data.anchor || data.anchor === anchor) && (!league || !data.league || data.league === league)) ? data : null
   const loading = busy || switching
 
@@ -122,9 +125,9 @@ export default function InflationView({ league }) {
       <div className="board-bar">
         <h2 style={{ margin: 0 }}>Inflation</h2>
         <span className="spacer" />
-        <label className="hint" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>Against
-          <CurrencyPicker value={anchor} onChange={setAnchor} options={anchors} placeholder="anchor…" cmd="inflation-anchor" />
-        </label>
+        <div className="hint" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><label htmlFor="inflation-anchor">Against</label>
+          <CurrencyPicker inputId="inflation-anchor" value={anchor} onChange={setAnchor} options={anchors} placeholder="anchor…" cmd="inflation-anchor" />
+        </div>
       </div>
 
       {err && <div className="notice error">{err}</div>}
@@ -276,7 +279,7 @@ const CrossLeague = React.memo(function CrossLeague({ league }) {
   const { data, err, busy } = useApi(() => api.inflationCross(item), [item])
   const items = data?.items ?? []
 
-  const leagues = data?.leagues ?? []
+  const leagues = data?.leagues ?? EMPTY_LEAGUES
   const cur = useMemo(() => pickLeague(leagues, league), [leagues, league])
   const { rows, keys } = useMemo(() =>   // bold the selected league (else freshest active), not an arbitrary current
     mergeSeries(leagues, { x: 'age', val: 'index', meta: lg => ({ id: lg.league, current: lg.league === cur?.league }) }), [leagues, cur])
@@ -286,9 +289,9 @@ const CrossLeague = React.memo(function CrossLeague({ league }) {
       <div className="board-bar">
         <h2 style={{ margin: 0 }}>Across leagues <span className="muted" style={{ fontWeight: 400 }}>· {data?.item_name || 'Divine'} priced in Exalted, each league rebased to day-0 = 100 and aligned by day-of-league</span></h2>
         <span className="spacer" />
-        <label className="hint" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>Against
-          <CurrencyPicker value={item} onChange={setItem} options={items} placeholder="anchor…" />
-        </label>
+        <div className="hint" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><label htmlFor="inflation-cross-anchor">Against</label>
+          <CurrencyPicker inputId="inflation-cross-anchor" value={item} onChange={setItem} options={items} placeholder="anchor…" />
+        </div>
       </div>
       {err && <div className="notice error">{err}</div>}
       <div className="chart-box" style={{ height: 340 }}>

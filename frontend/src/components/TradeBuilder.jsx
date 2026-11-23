@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react'
+import { ignoredError } from '../lib/ignoredError.js'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { motion } from 'motion/react'
 import { searchOfLink } from '../lib/session.js'
 import { savedSearches, searchOfNode, useWorkspace } from '../lib/workspaceStore.js'
@@ -17,7 +18,7 @@ import CurrencyPicker from './CurrencyPicker.jsx'
 // `onOpenTrading`, when given, shows the linked search on the Trading tab. The page itself is never scripted or
 // navigated by the app.
 export default function TradeBuilder({ title, url, league, onUse, onClose, onUnlink = null, onOpenTrading = null }) {
-  const trade = window.poe2desktop?.trade
+  const [initialUrl] = useState(url)  // later addresses arrive as navigation events
   const wv = useRef(null)
   const [found, setFound] = useState(null)    // the search the window's address holds
   const tree = useWorkspace(s => s.tree)
@@ -30,20 +31,21 @@ export default function TradeBuilder({ title, url, league, onUse, onClose, onUnl
 
   useEffect(() => {
     const el = wv.current
+    const trade = window.poe2desktop?.trade
     if (!el || !trade?.onWebviewNav) return
     const move = (e) => setFound(f => windowSearch(f, e))   // lib/stratPricing.js (tested with a fake trade site)
-    searchOfLink(url).then(search => move({ kind: 'open', search }))   // the search it opens on
+    searchOfLink(initialUrl).then(search => move({ kind: 'open', search })).catch(() => ignoredError('read initial trade search'))   // the search it opens on
     let id = null
     const ready = () => { id = el.getWebContentsId() }
     el.addEventListener('dom-ready', ready, { once: true })
     const off = trade.onWebviewNav(p => {
       if (id == null || p.phase !== 'nav' || !shouldAcceptNav(p, id)) return
-      searchOfLink(p.url).then(search => move({ kind: 'nav', search }))
+      searchOfLink(p.url).then(search => move({ kind: 'nav', search })).catch(() => ignoredError('read navigated trade search'))
     })
     // The page's own search (the trade tap): a run search can land on a short id its address doesn't carry.
     const offTap = trade.onTap?.(e => { if (id != null && e?.kind === 'search' && e.wcId === id) move({ kind: 'tap', body: e.body }) })
     return () => { el.removeEventListener('dom-ready', ready); off?.(); offTap?.() }
-  }, []) // eslint-disable-line
+  }, [initialUrl])
 
   useEffect(() => {
     const h = (e) => { if (e.key === 'Escape' && !e.defaultPrevented) onClose() }   // an open list handles its own Esc
@@ -57,7 +59,7 @@ export default function TradeBuilder({ title, url, league, onUse, onClose, onUnl
       <motion.div className="card-detail tb-dialog" role="dialog" aria-modal="true" aria-label={title}
         initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }}
         transition={{ duration: 0.18, ease: [0.22, 0.61, 0.36, 1] }} onClick={e => e.stopPropagation()}>
-        <button className="cd-close" onClick={onClose} title="Close (Esc)">×</button>
+        <button type="button" className="cd-close" onClick={onClose} title="Close (Esc)">×</button>
         <div className="cd-head"><span className="cd-title">{title}</span></div>
         <webview ref={wv} src={url} className="ws-webview tb-webview" allowpopups="true" />
         <div className="tb-foot">
@@ -68,7 +70,7 @@ export default function TradeBuilder({ title, url, league, onUse, onClose, onUnl
           {saved.length > 0 && (
             <span className="tb-saved">
               <CurrencyPicker value="" placeholder="Your searches…" options={saved} renderIcon={null}
-                onChange={id => { const o = saved.find(x => x.id === id); if (o) searchOfNode(o.node, league).then(take) }} />
+                onChange={id => { const o = saved.find(x => x.id === id); if (o) return searchOfNode(o.node, league).then(take, () => take(null)) }} />
             </span>
           )}
           {onOpenTrading && <button type="button" className="btn" onClick={onOpenTrading}>Open in Trading</button>}

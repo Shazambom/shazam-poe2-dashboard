@@ -19,7 +19,7 @@ test('historyPrefsFromSettings clamps and defaults', () => {
 })
 
 test('saveHistoryPrefs writes the store, tells main, and PUTs settings.ee2History; off → dropped/disabled', async () => {
-  st().hydrate({ version: 2, tree: [], layout: null, openTabs: [] }); await new Promise(r => setTimeout(r, 5))
+  st().hydrate({ version: 2, tree: [], layout: null, openTabs: [] }); await new Promise(r => { setTimeout(r, 5) })
   const next = await saveHistoryPrefs({ enabled: false })
   assert.equal(next.enabled, false)
   assert.deepEqual(st().historyPrefs, { enabled: false, max: 200, retentionDays: 14, waystoneStats: true })

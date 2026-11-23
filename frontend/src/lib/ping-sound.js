@@ -1,3 +1,4 @@
+import { ignoredError } from './ignoredError.js'
 // Notification tones: CC0 (public-domain) recordings — the best-rated, most-downloaded CC0
 // notification/chime sounds on Freesound plus CreatorAssets' CC0 modern chimes (sources, ratings
 // and licences in public/sounds/LICENSE.txt) — loudness-normalised at encode time so no tone is
@@ -42,7 +43,7 @@ function audioContext() {
 // Browser autoplay policy: the audio context must be resumed inside a user gesture.
 // Call once from a click/keydown handler early in the app's life.
 export function unlockSound() {
-  try { audioContext() } catch {}
+  try { audioContext() } catch { ignoredError('unlock audio') }
 }
 
 async function bufferFor(tone) {
@@ -67,5 +68,5 @@ export function playPing(volume = DEFAULT_VOLUME, tone = DEFAULT_TONE, { preview
     src.buffer = buf
     src.connect(gain); gain.connect(c.destination)
     src.start()
-  }).catch(() => {})
+  }).catch(() => ignoredError('play ping'))
 }

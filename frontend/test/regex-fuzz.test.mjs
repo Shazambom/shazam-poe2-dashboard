@@ -117,7 +117,7 @@ export function search(string, tooltip) {
     const neg = t.startsWith('!')
     const body = neg ? t.slice(1) : t
     let rx
-    try { rx = new RegExp(body, 'i') } catch (e) { throw new Error(`bad regex ${body}: ${e.message}`) }
+    try { rx = new RegExp(body, 'i') } catch (e) { throw new Error(`bad regex ${body}: ${e.message}`, { cause: e }) }
     const hit = lines.some(line => rx.test(line))
     return neg ? !hit : hit
   })
@@ -129,7 +129,7 @@ export function search(string, tooltip) {
 function tabletTypeOf(text) {
   return /Ritual|Favour|Tribute/i.test(text) ? 'ritual' : /Breach|Xesht|Hiveb/i.test(text) ? 'breach'
     : /Delirium|Deliriousness|Simulacrum|Mirror/i.test(text) ? 'delirium' : /Abyss|Desecrated/i.test(text) ? 'abyss'
-    : /Vaal Beacon|Vaal Relic/i.test(text) ? 'temple' : /Map Boss|Map Bosses/i.test(text) ? 'overseer'
+    : /Vaal Beacon|Vaal Relic/i.test(text) ? 'temple' : /Map Boss/i.test(text) ? 'overseer'
     : /Expedition|Runic|Remnant|Logbook|Verisium/i.test(text) ? 'expedition' : 'any'
 }
 const WMODS = WTABLE.mods
@@ -142,7 +142,12 @@ function rng(seed) {
   const int = (lo, hi) => lo + Math.floor(next() * (hi - lo + 1))
   const pick = (arr) => arr[int(0, arr.length - 1)]
   const chance = (p) => next() < p
-  const sample = (arr, n) => { const a2 = [...arr]; const out = []; while (out.length < n && a2.length) out.push(a2.splice(int(0, a2.length - 1), 1)[0]); return out }
+  const sample = (arr, n) => {
+    const a2 = [...arr];
+    const out = [];
+    while (out.length < n && a2.length) out.push(a2.splice(int(0, a2.length - 1), 1)[0]);
+    return out
+  }
   return { next, int, pick, chance, sample }
 }
 
@@ -239,7 +244,7 @@ function check(kind, s, it, label) {
   if (got !== want) assert.equal(got, want, `${label}\n  settings ${JSON.stringify(s)}\n  string   ${str}\n  tooltip\n${render(it).split('\n').map(l => '    ' + l).join('\n')}`)
   assert.equal((str.match(/"/g) || []).length % 2, 0, `unbalanced quotes: ${str}`)
   assert.equal(str, str.trim(), `stray whitespace: [${str}]`)
-  assert.equal(/  /.test(str), false, `double space: [${str}]`)
+  assert.equal(/ {2}/.test(str), false, `double space: [${str}]`)
   return str
 }
 const S = (kind, over = {}) => ({ ...structuredClone(defaults[kind]), ...over })

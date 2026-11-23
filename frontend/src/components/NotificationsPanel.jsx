@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react'
+import { ignoredError } from '../lib/ignoredError.js'
 import { useStatus, ensureSettings } from '../lib/statusStore.js'
 import { DEFAULT_NOTIFICATIONS, notify, osNotify } from '../lib/notifications.js'
 import { playPing, TONES } from '../lib/ping-sound.js'
@@ -21,7 +22,7 @@ export default function NotificationsPanel() {
   const [n, setN] = useState(null)
   useEffect(() => { ensureSettings().then(s => setN(merge(s?.notifications))).catch(() => setN(merge())) }, [])
   if (!n) return null
-  const save = (next) => { setN(next); useStatus.getState().saveSettings({ notifications: next }).catch(() => {}) }
+  const save = (next) => { setN(next); useStatus.getState().saveSettings({ notifications: next }).catch(() => ignoredError('save notification settings')) }
   const setFlag = (fam, ch, v) => {
     save({ ...n, [fam]: { ...n[fam], [ch]: v } })
     // Turning OS notifications on sends a sample immediately, so the system's allow prompt (and
@@ -34,7 +35,7 @@ export default function NotificationsPanel() {
     <section className="settings-section">
       <h3>Notifications</h3>
       <table className="notif-table">
-        <thead><tr><th></th>{CHANNELS.map(([k, label, hint]) => <React.Fragment key={k}><th title={hint}>{label}</th>{k === 'sound' && <th title="which chime this family plays">Tone</th>}</React.Fragment>)}<th></th></tr></thead>
+        <thead><tr><th aria-label="Notification"></th>{CHANNELS.map(([k, label, hint]) => <React.Fragment key={k}><th title={hint}>{label}</th>{k === 'sound' && <th title="which chime this family plays">Tone</th>}</React.Fragment>)}<th aria-label="Preview"></th></tr></thead>
         <tbody>
           {FAMILIES.map(([fam, label, hint]) => (
             <tr key={fam}>
@@ -48,12 +49,12 @@ export default function NotificationsPanel() {
                         onChange={e => { setFlag(fam, 'tone', e.target.value); playPing(n.volume, e.target.value, { preview: true }) }}>
                         {Object.entries(TONES).map(([id, t]) => <option key={id} value={id}>{t.label}</option>)}
                       </select>
-                      <button className="btn small" title="Preview this tone" disabled={!n[fam].sound}
+                      <button type="button" className="btn small" title="Preview this tone" disabled={!n[fam].sound}
                         onClick={() => playPing(n.volume, n[fam].tone, { preview: true })}>▶</button>
                     </td>
                   )}
                 </React.Fragment>))}
-              <td><button className="btn small" title="Fires this row's enabled channels" data-cmd={fam === 'live' ? 'settings-test-sound' : undefined} onClick={() => test(fam)}>Test</button></td>
+              <td><button type="button" className="btn small" title="Fires this row's enabled channels" data-cmd={fam === 'live' ? 'settings-test-sound' : undefined} onClick={() => test(fam)}>Test</button></td>
             </tr>
           ))}
         </tbody>
@@ -61,10 +62,10 @@ export default function NotificationsPanel() {
       <div className="set-row">
         <span style={{ width: 120 }}>Ping volume</span>
         <input type="range" min="0" max="1" step="0.05" value={n.volume} onChange={e => save({ ...n, volume: Number(e.target.value) })} />
-        <button className="btn small" onClick={() => playPing(n.volume, n.live.tone, { preview: true })}>Play</button>
+        <button type="button" className="btn small" onClick={() => playPing(n.volume, n.live.tone, { preview: true })}>Play</button>
       </div>
       {!isDesktop && (n.live.os || n.signals.os) && typeof Notification !== 'undefined' && Notification.permission !== 'granted' && (
-        <p className="hint">Your browser has not granted notification permission — <button className="link-btn" onClick={() => Notification.requestPermission()}>allow</button>.</p>
+        <p className="hint">Your browser has not granted notification permission — <button type="button" className="link-btn" onClick={() => Notification.requestPermission()}>allow</button>.</p>
       )}
     </section>
   )

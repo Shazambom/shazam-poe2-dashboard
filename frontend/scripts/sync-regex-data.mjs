@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 // Build the Regex tab's tables (frontend/src/data/regex/{waystone,tablet}.json) from the
 // hand-maintained inputs. No network. Run by hand in a reviewed change; the drift test in
 // frontend/test/regex-data.test.mjs fails the gate when the tables or their inputs are stale.

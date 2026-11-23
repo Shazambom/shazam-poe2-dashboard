@@ -2,7 +2,8 @@
 // on GGG's CDN (e.g. "/gen/image/…"). We reference those at runtime (a hotlink to
 // GGG's own server) — nothing is bundled or re-hosted. Lets any view render a
 // currency as its icon with the name on hover, keyed by trade id OR by name.
-import { useEffect, useMemo, useState } from 'react'
+import { ignoredError } from './ignoredError.js'
+import { useMemo, useState, useSyncExternalStore } from 'react'
 import { api } from './api.js'
 
 export const CDN = 'https://web.poecdn.com'
@@ -30,7 +31,7 @@ export function loadIcons() {
       if (c.name) byName.set(c.name.toLowerCase(), rec)
     }
     _index = { byId, byName, raw: d, list: items }
-    subs.forEach(fn => { try { fn(_index) } catch {} })
+    subs.forEach(fn => { try { fn(_index) } catch { ignoredError('notify icon listener') } })
     if (!d.loaded_at) retrySoon()       // backend hasn't fetched names/icons yet — it retries, so do we
     return _index
   }).catch(() => { _index = { byId: new Map(), byName: new Map(), raw: null, list: [] }; retrySoon(); return _index })
@@ -44,7 +45,7 @@ function retrySoon() {
   setTimeout(() => {
     const keep = _index
     _index = null; _promise = null
-    loadIcons().then(i => { if (!i.list.length && keep?.list.length) _index = keep })
+    return loadIcons().then(i => { if (!i.list.length && keep?.list.length) _index = keep })
   }, _indexDelay)
   _indexDelay = Math.min(_indexDelay * 2, 60000)
 }
@@ -60,19 +61,36 @@ export function iconFailed() {
     _imgTimer = null
     _epoch += 1
     _imgDelay = Math.min(_imgDelay * 3, 300000)
-    epochSubs.forEach(fn => { try { fn(_epoch) } catch {} })
+    epochSubs.forEach(fn => { try { fn(_epoch) } catch { ignoredError('notify icon epoch listener') } })
   }, _imgDelay)
 }
 export function iconLoaded() { _imgDelay = 5000 }
+// An inactive icon keeps the last value it received. A later subscription catches
+// it up without invalidating healthy icons on every retry.
+const inactiveSubscription = () => () => {}
+
+function useIconSubscription(initialValue, subscribe, active = true) {
+  const [store] = useState(() => {
+    let snapshot = initialValue
+    return {
+      getSnapshot: () => snapshot,
+      subscribe: notify => subscribe(next => {
+        snapshot = next
+        notify()
+      }),
+    }
+  })
+  return useSyncExternalStore(active ? store.subscribe : inactiveSubscription, store.getSnapshot, store.getSnapshot)
+}
+
+function subscribeEpoch(receive) {
+  epochSubs.add(receive)
+  receive(_epoch)
+  return () => epochSubs.delete(receive)
+}
+
 export function useIconEpoch(active = true) {
-  const [e, setE] = useState(_epoch)
-  useEffect(() => {
-    if (!active) return
-    epochSubs.add(setE)
-    setE(_epoch)
-    return () => epochSubs.delete(setE)
-  }, [active])
-  return e
+  return useIconSubscription(_epoch, subscribeEpoch, active)
 }
 
 // The ONE /api/currencies fetch, as a store: `raw` (the payload, incl. anchors + unmapped ids),
@@ -99,14 +117,14 @@ export function lookup({ id, name } = {}) {
   return null
 }
 
-// Re-renders the caller once the index has loaded (returns the index or null).
+// A retry may be in flight with a previous successful index still displayed.
+function subscribeIndex(receive) {
+  subs.add(receive)
+  if (_index) receive(_index)
+  else loadIcons()
+  return () => subs.delete(receive)
+}
+
 export function useIcons() {
-  const [idx, setIdx] = useState(_index)
-  useEffect(() => {
-    const fn = (i) => setIdx(i)
-    subs.add(fn)                       // always: a later reload (retrySoon) must reach this caller too
-    if (_index) setIdx(_index); else loadIcons()
-    return () => subs.delete(fn)
-  }, [])
-  return idx
+  return useIconSubscription(_index, subscribeIndex)
 }

@@ -1,10 +1,11 @@
-import React, { useMemo } from 'react'
+import LoadingRows from './LoadingRows.jsx'
+import { useMemo } from 'react'
 import { api, fmt } from '../lib/api.js'
 import { useApi } from '../lib/hooks.js'
 import Cur from './Cur.jsx'
 import Wealth from './Wealth.jsx'
-import { useAssetModal, rangeLabel } from './CardDetail.jsx'
-import { useHorizon } from '../lib/horizonStore.js'
+import { useAssetModal } from './useAssetModal.jsx'
+import { rangeLabel, useHorizon } from '../lib/horizonStore.js'
 
 // Economy → Top movers (owner, 2026-10-08: broken out of Hold): the biggest upward swings across every currency over
 // the app-wide window, most first. A row opens the same zoom modal the Board uses.
@@ -22,7 +23,7 @@ export default function MoversView() {
         <h2 style={{ margin: 0 }}>Top movers <span className="muted" style={{ fontWeight: 400 }}>· biggest upward swings across all currencies over {horizon}{mv.data?.league ? ` · ${mv.data.league}` : ''}</span></h2>
       </div>
       {mv.err && <div className="notice error">{mv.err}</div>}
-      {mv.busy && rows.length === 0 && <table><tbody>{Array.from({ length: 6 }).map((_, i) => <tr key={i}><td colSpan={5}><div className="sk sk-row" /></td></tr>)}</tbody></table>}
+      {mv.busy && rows.length === 0 && <table><LoadingRows columns={5} label="Loading movers" /></table>}
       {!mv.busy && rows.length === 0 && <div className="empty">No upward movers over {horizon} yet.</div>}
       {rows.length > 0 && (
         <table>

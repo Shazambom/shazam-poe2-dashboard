@@ -1,7 +1,6 @@
-import React from 'react'
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
-import { installApiMock, DEFAULT_CURRENCIES } from './setup.js'
+import { installApiMock } from './setup.js'
 import HoldView from '../../src/components/HoldView.jsx'
 import MarketView from '../../src/components/MarketView.jsx'
 import InflationView from '../../src/components/InflationView.jsx'
@@ -24,32 +23,58 @@ describe('Economy views lifecycles (Hold, Market, Inflation, Movers)', () => {
     })
   })
 
-  it('MarketView loads top markets + edges and queries pair history on click', async () => {
+  it('keeps one cross-league request across unrelated inflation view rerenders', async () => {
     const { calls } = installApiMock()
-    render(<MarketView />)
+    const { rerender, unmount } = render(<InflationView league="A" />)
+    const reads = () => calls.filter(c => c.path === '/api/inflation/cross')
+    await waitFor(() => expect(reads()).toHaveLength(1))
+    rerender(<InflationView league="B" />)
+    unmount()
+    expect(reads()).toHaveLength(1)
+  })
+
+  it('MarketView loads top markets + edges and queries pair history on click', async () => {
+    const { calls } = installApiMock({
+      '/api/market/top': [{ a: 'chaos', b: 'exalted', volume_a: 10, volume_b: 100, rate: 10 }],
+    })
+    const { rerender, unmount } = render(<MarketView />)
 
     await waitFor(() => {
       expect(calls.some(c => c.path === '/api/market/top')).toBe(true)
       expect(calls.some(c => c.path === '/api/market/edges')).toBe(true)
     })
 
-    const row = document.querySelector('tbody tr')
-    if (row) {
-      fireEvent.click(row)
-      await waitFor(() => {
-        expect(calls.some(c => c.path === '/api/market/history')).toBe(true)
-      })
-    }
+    const filter = screen.getByPlaceholderText('Filter by currency')
+    fireEvent.change(filter, { target: { value: 'chaos' } })
+    rerender(<MarketView />)
+    expect(filter.value).toBe('chaos')
+    expect(calls.filter(c => c.path === '/api/market/edges')).toHaveLength(1)
+    const marketTable = await screen.findByRole('columnheader', { name: 'Market' })
+    const row = marketTable.closest('table').querySelector('tbody tr')
+    expect(row).toBeTruthy()
+    fireEvent.click(row)
+    await waitFor(() => {
+      expect(calls.some(c => c.path === '/api/market/history' &&
+        new URL(c.url, 'http://localhost').searchParams.get('a') === 'chaos')).toBe(true)
+    })
+    unmount()
+    expect(calls.filter(c => c.path === '/api/market/history')).toHaveLength(2)
   })
 
   it('InflationView loads inflation, cross-league, and marketcap endpoints cleanly', async () => {
     const { calls } = installApiMock()
-    render(<InflationView />)
+    const { rerender, unmount } = render(<InflationView league="A" />)
 
     await waitFor(() => {
       expect(calls.some(c => c.path === '/api/inflation')).toBe(true)
       expect(calls.some(c => c.path === '/api/inflation/marketcap')).toBe(true)
     })
+    rerender(<InflationView league="A" />)
+    expect(calls.filter(c => c.path === '/api/inflation')).toHaveLength(1)
+    rerender(<InflationView league="B" />)
+    await waitFor(() => expect(calls.filter(c => c.path === '/api/inflation')).toHaveLength(2))
+    unmount()
+    expect(calls.filter(c => c.path === '/api/inflation/marketcap')).toHaveLength(1)
   })
 
   it('InflationView labels the actual window honestly and defaults extra watchlist items off until toggled', async () => {
@@ -82,6 +107,10 @@ describe('Economy views lifecycles (Hold, Market, Inflation, Movers)', () => {
       expect(screen.getByText('Last 14 days')).toBeTruthy()
       expect(screen.getByText('7d trend')).toBeTruthy()
     })
+    const anchor = document.querySelector('[data-cmd="inflation-anchor"] input')
+    expect(screen.getAllByRole('combobox', { name: /^Against\b/ })).toContain(anchor)
+    expect(screen.getAllByText('Against').map(label => label.htmlFor)).toContain(anchor.id)
+
     // Must not falsely claim "Since league start" or "day 0 = 100" for a 14-day window
     expect(screen.queryByText('Since league start')).toBeNull()
     expect(document.body.textContent).not.toContain('day 0 = 100')

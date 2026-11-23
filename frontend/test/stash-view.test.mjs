@@ -45,7 +45,7 @@ test('the sticky sales column fits the viewport and scrolls its own overflow (bu
   const m = css.match(/\.stash-sales\s*\{([^}]*)\}/)
   assert.ok(m, '.stash-sales rule present')
   if (!/position:\s*sticky/.test(m[1])) return
-  assert.match(m[1], /max-height:\s*[^;]*(vh|dvh|svh|100%)/)
+  assert.match(m[1], /max-height:[^;]*(vh|dvh|svh|100%)/)
   assert.match(m[1], /overflow(-y)?:\s*(auto|scroll)/)
 })
 
@@ -123,7 +123,7 @@ test('Mods section headers keep the header style the old Sales head shared with 
 test('the Stash reads holdings from the store only, and a save does not re-fetch them', () => {
   const v = strip(read('../src/components/StashView.jsx'))
   assert.doesNotMatch(v, /setSaved|saved \?\? shared/)
-  assert.doesNotMatch(v, /saveCapital\(entries\)\)\s*\n?\s*refreshHeader\(\)/)
+  assert.doesNotMatch(v, /saveCapital\(entries\)\)\s*refreshHeader\(\)/)
   assert.match(v, /reconcileCapital\(/, 'a credit reconciles against authoritative server holdings instead of re-adding onto hydrated state')
   assert.doesNotMatch(v, /addCredit\(/, 'never blindly adds server credit on top of editor state')
   assert.match(v, /flush\(\)/, 'pending edits are sent before a credit is read')

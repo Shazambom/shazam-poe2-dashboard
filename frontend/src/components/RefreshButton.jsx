@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import { useState } from 'react'
 
 // The app's single refresh control: an icon-only button (no "Refresh"/"Live" text) that
 // spins on activation. One mechanism covers both cases via an infinite spin that self-stops

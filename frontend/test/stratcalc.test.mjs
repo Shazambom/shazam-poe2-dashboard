@@ -108,7 +108,7 @@ test('duplicate runs the same strat again: the setup carries over, the counts an
 })
 
 test('removing a strat opens the next most recent; restoring puts it back exactly', () => {
-  let d = mk(mk(mk(sc.blankDoc(), 'a', 'A', 1), 'b', 'B', 2), 'c', 'C', 3)
+  const d = mk(mk(mk(sc.blankDoc(), 'a', 'A', 1), 'b', 'B', 2), 'c', 'C', 3)
   const before = d
   const { doc, removed } = sc.removeStrat(d, 'c')
   assert.deepEqual(doc.strats.map(s => s.id).sort(), ['a', 'b'])
@@ -540,7 +540,7 @@ test('selecting the strat that is already open changes nothing (no save when you
 const ids = (tree) => tree.map(n => n.kind === 'folder' ? { [n.name]: ids(n.children) } : n.id)
 
 test('every strat sits in the tree once: new strats go on top, a stored tree is reconciled with the strats', () => {
-  let d = mk(mk(sc.blankDoc(), 'a', 'A'), 'b', 'B')
+  const d = mk(mk(sc.blankDoc(), 'a', 'A'), 'b', 'B')
   assert.deepEqual(ids(d.tree), ['b', 'a'], 'newest on top')
   const raw = { ...d, tree: [{ id: 'f', kind: 'folder', name: 'Ritual', open: true, children: [{ id: 'a', kind: 'strat' }, { id: 'gone', kind: 'strat' }] }] }
   assert.deepEqual(ids(sc.normalize(raw).tree), ['b', { Ritual: ['a'] }], 'a strat missing from the tree comes back on top; a deleted one drops out')

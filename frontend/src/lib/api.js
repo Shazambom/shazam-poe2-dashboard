@@ -22,11 +22,12 @@ export const cleanErr = (e) => String(e?.message || e).replace(/^\d+ /, '')
 
 const j = async (r) => {
   if (!r.ok) {
-    let text = await r.text()
+    const raw = await r.text()
+    let text
     try {
-      const d = JSON.parse(text)
+      const d = JSON.parse(raw)
       text = typeof d.detail === 'string' ? d.detail : JSON.stringify(d.detail ?? d)
-    } catch {}
+    } catch { text = raw }
     const err = new Error(text || `HTTP ${r.status}`)
     err.status = r.status
     throw err
@@ -35,7 +36,10 @@ const j = async (r) => {
 }
 // Wrap a promise so failures always surface as a toast instead of dying silently.
 export const surface = (p, okText) => p
-  .then(r => { if (okText) toast(okText); return r })
+  .then(r => {
+    if (okText) toast(okText);
+    return r
+  })
   .catch(e => { toast(cleanErr(e), false); throw e })
 // Blank = unset, for query strings AND POST bodies (an empty filter box holds '').
 const set = (o) => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined && v !== null && v !== ''))

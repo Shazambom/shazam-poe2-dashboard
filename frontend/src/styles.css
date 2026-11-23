@@ -19,6 +19,20 @@
   --card-gradient: linear-gradient(165deg, var(--panel-hi) -20%, var(--panel) 45%);   /* elevated card */
   --gain: #6fce9f;
   --loss: #e07a68;
+  /* Fixed alert and embedded surface colours, shared by every preset. */
+  --update-error: #e06b6b;
+  --webview-bg: #0e0f13;
+  --vaal-alert: #e83c3c;
+  --ink-on-alert: #fff;
+  --teleport-hot: #c8403e;
+  --teleport-stale: #7a3a3a;
+  --ink-on-teleport-stale: #f0d0d0;
+  --ink-on-teleport-pending: #08120c;
+  --teleport-rate: #8a6a2a;
+  --ping-banner-bg: #191b22;
+  --ink-on-update-ready: #0e1a12;
+  --update-ready-start: #8fd6a8;
+  --update-ready-end: #4f9e73;
   --afk: #e0a83a;
   --offline: #e8615f;
   --live: #7fb4d9;
@@ -136,7 +150,6 @@ html[data-theme="vaal"] { --grp-mix: 78%; }
    same problem. Divinity only. */
 :root[data-theme="divinity"] .cur-img { filter: url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27%3E%3Cfilter id=%27c%27%3E%3CfeComponentTransfer%3E%3CfeFuncA type=%27linear%27 slope=%273%27 intercept=%27-0.6%27/%3E%3C/feComponentTransfer%3E%3C/filter%3E%3C/svg%3E#c"); }
 
-* { box-sizing: border-box; }
 html, body, #root { height: 100%; margin: 0; }
 body {
   background:
@@ -161,12 +174,11 @@ a { color: var(--live); }
 
 /* craft touches: selection, themed scrollbars, crisper icons */
 ::selection { background: rgba(var(--accent-rgb),.28); color: var(--ink); }
-* { scrollbar-width: thin; scrollbar-color: var(--line-strong) transparent; }
+* { box-sizing: border-box; scrollbar-width: thin; scrollbar-color: var(--line-strong) transparent; }
 ::-webkit-scrollbar { width: 11px; height: 11px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--line-strong); border-radius: 10px; border: 3px solid transparent; background-clip: content-box; }
 ::-webkit-scrollbar-thumb:hover { background: var(--line-hover); background-clip: content-box; }
-.cur-img { filter: drop-shadow(0 1px 2px rgba(0,0,0,.5)); }
 /* gold focus ring on inputs/selects for a cohesive, tactile feel */
 .field input, .field select, .field textarea, .league-select { transition: border-color .12s var(--ease), box-shadow .12s var(--ease); }
 .app { display: grid; grid-template-rows: auto 1fr; height: 100%; overflow-x: hidden; }
@@ -204,7 +216,7 @@ a { color: var(--live); }
 }
 .brand-logo { width: 24px; height: 24px; object-fit: contain; vertical-align: middle; }
 .cur { display: inline-flex; align-items: center; gap: 4px; vertical-align: middle; }
-.cur-img { object-fit: contain; vertical-align: middle; }
+.cur-img { filter: drop-shadow(0 1px 2px rgba(0,0,0,.5)); object-fit: contain; vertical-align: middle; }
 .cur-name { white-space: nowrap; }
 .ver-chip { font-size: 11px; color: var(--muted); background: transparent; border: 1px solid var(--line-strong); border-radius: 999px; padding: 1px 7px; cursor: pointer; margin-left: 2px; }
 .ver-chip:hover { color: var(--ink-2); border-color: var(--muted); }
@@ -226,7 +238,7 @@ a { color: var(--live); }
 .cmdk-hint { color: var(--muted); font-size: 11.5px; white-space: nowrap; }
 .cmdk-foot { display: flex; gap: 18px; padding: 8px 14px; border-top: 1px solid var(--line); color: var(--muted); font-size: 11.5px; }
 .cmdk-foot b { color: var(--ink-2); font-weight: 600; }
-.update-chip.err { color: #e06b6b; cursor: help; }
+.update-chip.err { color: var(--update-error); cursor: help; }
 /* Cold-backfill indicator: the header orb spins and swaps orbs each rotation. */
 .brand-logo.orb-spin { animation: spin 1s linear infinite; filter: drop-shadow(0 0 4px rgba(120,180,240,.7)); }
 @media (prefers-reduced-motion: reduce) { .brand-logo.orb-spin { animation-duration: 3s; } }
@@ -280,7 +292,6 @@ a { color: var(--live); }
 .ws-divider:not(.collapsed) { cursor: col-resize; }
 .ws-divider span { font-size: 11px; opacity: .6; }
 .ws-divider:hover span { opacity: 1; }
-.ws-rail-head { flex-wrap: nowrap; }
 .ws-rail-head > * { flex-shrink: 0; }
 .trade-ws.resizing { user-select: none; cursor: col-resize; }
 .trade-ws.resizing .ws-webview { pointer-events: none; }   /* the guest page would swallow mousemove mid-drag */
@@ -426,7 +437,7 @@ a { color: var(--live); }
 .ws-mini.on { opacity: 1; color: var(--ink-2); }
 .ws-undo { display: flex; align-items: center; gap: 12px; padding: 10px 14px; }
 .ws-undo-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ws-rail-head { display: flex; align-items: center; gap: 6px; padding: 9px 10px; border-bottom: 1px solid var(--line); font-size: 13px; }
+.ws-rail-head { flex-wrap: nowrap; display: flex; align-items: center; gap: 6px; padding: 9px 10px; border-bottom: 1px solid var(--line); font-size: 13px; }
 .ws-icon-btn { background: var(--line); border: 0; color: var(--ink-2); width: 26px; height: 24px; border-radius: 6px;
   cursor: pointer; font-size: 14px; line-height: 1; display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; }
 .ws-icon-btn:hover { background: var(--line-strong); color: var(--ink); }
@@ -461,7 +472,7 @@ a { color: var(--live); }
 .live-badge { font-size: 10px; font-weight: 700; color: var(--offline); border: 1px solid rgba(232,97,95,.5); border-radius: 4px; padding: 0 4px; letter-spacing: .04em; text-transform: uppercase; }
 /* Right side: the embedded trade window (or the empty-state overlay). */
 .ws-main { flex: 1 1 auto; min-width: 0; min-height: 0; position: relative; display: flex; flex-direction: column;
-  border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: #0e0f13; } /* style-ok: near-black behind the embedded webview, intentionally below --bg */
+  border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--webview-bg); } /* near-black behind the embedded webview, intentionally below --bg */
 .ws-webhint { display: flex; align-items: center; gap: 10px; padding: 6px 12px; border-bottom: 1px solid var(--line); font-size: 12px; min-height: 30px; min-width: 0; overflow: hidden; flex: 0 0 auto; }
 .ws-webhint-empty { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; white-space: normal; }
 .ws-webhint-empty .ws-inline-add { width: 18px; height: 18px; font-size: 12px; }
@@ -483,7 +494,7 @@ a { color: var(--live); }
   background: none; border: 0; cursor: pointer; line-height: 0; z-index: 2; }
 .vaal-orb-img, .vaal-orb-glyph { width: 20px; height: 20px; display: block; border-radius: 50%;
   filter: drop-shadow(0 0 4px rgba(232,60,60,.9)); }
-.vaal-orb-glyph { color: #e83c3c; font-size: 18px; }
+.vaal-orb-glyph { color: var(--vaal-alert); font-size: 18px; }
 .vaal-orb.hot .vaal-orb-img { animation: vaal-spin 1.5s linear infinite, vaal-pulse 1s var(--ease) infinite; }
 .vaal-orb.warm .vaal-orb-img { animation: vaal-spin 2.4s linear infinite, vaal-pulse 1.8s var(--ease) infinite; }
 .vaal-orb.cool .vaal-orb-img { animation: vaal-spin 3s linear infinite; opacity: .9; }
@@ -491,7 +502,7 @@ a { color: var(--live); }
 .vaal-orb.cold .vaal-orb-img { filter: grayscale(.7) drop-shadow(0 0 2px rgba(160,60,60,.4)); opacity: .55; }
 .vaal-orb.shatter .vaal-orb-img { animation: vaal-shatter .5s var(--ease) forwards; }
 .vaal-orb-badge { position: absolute; top: -6px; right: -8px; min-width: 15px; height: 15px; padding: 0 3px;
-  background: #e83c3c; color: #fff; font-size: 10px; font-weight: 800; line-height: 15px; text-align: center;
+  background: var(--vaal-alert); color: var(--ink-on-alert); font-size: 10px; font-weight: 800; line-height: 15px; text-align: center;
   border-radius: 8px; box-shadow: 0 0 6px rgba(232,60,60,.7); }
 @keyframes vaal-spin { to { transform: rotate(360deg); } }
 @keyframes vaal-pulse { 0%,100% { filter: drop-shadow(0 0 3px rgba(232,60,60,.7)); } 50% { filter: drop-shadow(0 0 9px rgba(232,60,60,1)); } }
@@ -518,16 +529,16 @@ a { color: var(--live); }
 .ping-sub { display: flex; align-items: center; gap: 10px; font-size: 12px; margin-top: 2px; }
 .ping-presence { font-weight: 600; }
 .btn.teleport { font-weight: 700; min-width: 130px; }
-.btn.teleport.hot { background: linear-gradient(180deg,var(--offline),#c8403e); color: #fff; border-color: #c8403e; box-shadow: 0 0 12px rgba(232,60,60,.4); }
-.btn.teleport.stale { background: #7a3a3a; color: #f0d0d0; }
+.btn.teleport.hot { background: linear-gradient(180deg,var(--offline),var(--teleport-hot)); color: var(--ink-on-alert); border-color: var(--teleport-hot); box-shadow: 0 0 12px rgba(232,60,60,.4); }
+.btn.teleport.stale { background: var(--teleport-stale); color: var(--ink-on-teleport-stale); }
 .btn.teleport.sending { opacity: .7; }
-.btn.teleport.pending { background: var(--gain); color: #08120c; border-color: var(--gain); }
-.btn.teleport.rate { background: #8a6a2a; color: #fff; }
+.btn.teleport.pending { background: var(--gain); color: var(--ink-on-teleport-pending); border-color: var(--gain); }
+.btn.teleport.rate { background: var(--teleport-rate); color: var(--ink-on-alert); }
 .btn.teleport.gone, .btn.teleport.expired { background: var(--line); color: var(--muted); }
 
 /* most-recent-ping banner (rendered inside the toast stack) */
-.ping-banner { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: #191b22; /* style-ok: bespoke alert surface */
-  border: 1px solid #c8403e; border-radius: 10px; box-shadow: 0 8px 30px rgba(0,0,0,.5), 0 0 14px rgba(232,60,60,.35); min-width: 300px; }
+.ping-banner { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: var(--ping-banner-bg); /* bespoke alert surface */
+  border: 1px solid var(--teleport-hot); border-radius: 10px; box-shadow: 0 8px 30px rgba(0,0,0,.5), 0 0 14px rgba(232,60,60,.35); min-width: 300px; }
 .ping-banner .pb-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); }
 .ping-banner .pb-dot.online { background: var(--gain); } .ping-banner .pb-dot.afk { background: var(--afk); } .ping-banner .pb-dot.offline { background: var(--offline); }
 .ping-banner .pb-main { flex: 1; min-width: 0; }
@@ -567,7 +578,7 @@ a { color: var(--live); }
 
 /* ---------- forms ---------- */
 .field { display: grid; gap: 4px; margin-bottom: 12px; }
-.field label { color: var(--muted); font-size: 12.5px; }
+.field label:where(:not(.curpick-box)) { color: var(--muted); font-size: 12.5px; }
 /* EVERY native text control is themed at the element level, so nothing can fall through to Chromium's
    default chrome (which is dark, whatever the theme). Classed variants (.btn, .league-select, .cmdk-input,
    .curpick-input, .ws-filter-input, .pt-num-row) override this by specificity. */
@@ -731,8 +742,8 @@ td.mpg { white-space: nowrap; }
 }
 .update-chip.busy { color: var(--muted); }
 .update-chip.ready {
-  cursor: pointer; color: #0e1a12; border-color: transparent; /* style-ok: dark-green ink for contrast on the green "ready" chip */
-  background: linear-gradient(135deg, #8fd6a8, var(--gain) 60%, #4f9e73);
+  cursor: pointer; color: var(--ink-on-update-ready); border-color: transparent; /* dark-green ink for contrast on the green "ready" chip */
+  background: linear-gradient(135deg, var(--update-ready-start), var(--gain) 60%, var(--update-ready-end));
   box-shadow: 0 2px 10px rgba(var(--gain-rgb),.45); animation: chip-pulse 1.8s ease-in-out 3;   /* pulses three times, then rests */
 }
 .update-chip.ready:hover { filter: brightness(1.06); }
@@ -997,8 +1008,8 @@ input[type=range] { accent-color: var(--gold); }
 .pt-chg.gain { color: var(--gain); background: rgba(var(--gain-rgb),.13); }
 .pt-chg.loss { color: var(--loss); background: rgba(var(--loss-rgb),.13); }
 /* price flashes when its value changes (up=green, down=red), then settles */
-@keyframes flash-gain { 0% { color: var(--gain); text-shadow: 0 0 14px rgba(var(--gain-rgb),.6); } 100% {} }
-@keyframes flash-loss { 0% { color: var(--loss); text-shadow: 0 0 14px rgba(var(--loss-rgb),.6); } 100% {} }
+@keyframes flash-gain { 0% { color: var(--gain); text-shadow: 0 0 14px rgba(var(--gain-rgb),.6); } }
+@keyframes flash-loss { 0% { color: var(--loss); text-shadow: 0 0 14px rgba(var(--loss-rgb),.6); } }
 .pt-num.up { animation: flash-gain .6s var(--ease); }
 .pt-num.down { animation: flash-loss .6s var(--ease); }
 .spark { display: block; }

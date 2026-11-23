@@ -1,9 +1,17 @@
+/** @typedef {Record<string, number>} PriceTable */
+/** @typedef {{trend_num?: string|null, trend?: {t: number, v: number}[]|null}} TrendRow */
+
 // Pricing a card in a numeraire. The backend hands us ONE table: `prices`, the reference-currency
 // value of every currency (Graph.values — each priced through its deepest markets). A price in any
 // numeraire is the ratio of two of them, so nothing on a card can contradict anything else on it.
 //
 // Everything downstream (mid, buy, sell, the sparkline) is `value / factor`, so the factor is
 // simply the numeraire's own value.
+/**
+ * @param {unknown} r
+ * @param {string} num
+ * @param {PriceTable|null|undefined} prices
+ */
 export function factorFor(r, num, prices) {
   return prices?.[num] ?? 1
 }
@@ -12,6 +20,12 @@ export function factorFor(r, num, prices) {
 // price comes from — a card priced by its own Divine market carries Divine points; a reference
 // history carries reference points); `factor` is factorFor(r, num). A trend already in `num`
 // passes through untouched, so the line ends where the number is.
+/**
+ * @param {TrendRow|null|undefined} r
+ * @param {string} num
+ * @param {number|null|undefined} factor
+ * @param {PriceTable|null|undefined} prices
+ */
 export function trendIn(r, num, factor, prices) {
   if (!r?.trend) return r?.trend
   const f = factor || 1
@@ -21,12 +35,24 @@ export function trendIn(r, num, factor, prices) {
 }
 
 // Value of 1 `id` (with reference price `mid`) in currency `c` — the same ratio, one table.
+/**
+ * @param {string} id
+ * @param {number|null|undefined} mid
+ * @param {string} c
+ * @param {PriceTable|null|undefined} prices
+ */
 export function valueIn(id, mid, c, prices) {
   return (mid != null && prices?.[c]) ? mid / prices[c] : null
 }
 
 // Convert `amount` of currency `from` into currency `to` using a single price table (`prices`,
 // any common unit). Same currency passes through untouched; missing or non-positive rates return null.
+/**
+ * @param {unknown} amount
+ * @param {string} from
+ * @param {string} to
+ * @param {PriceTable} prices
+ */
 export function exchange(amount, from, to, prices) {
   const a = Number(amount)
   if (!Number.isFinite(a) || !from || !to) return null
@@ -39,6 +65,11 @@ export function exchange(amount, from, to, prices) {
 
 // Build an injectable `(amount, from, to) => converted | null` exchange function over `prices`,
 // falling back to `fallbackPrices` (e.g. status.wealth_prices) or bridging through a shared divine anchor.
+/**
+ * @param {PriceTable} prices
+ * @param {PriceTable|null} [fallbackPrices]
+ * @returns {(amount: unknown, from: string, to: string) => number|null}
+ */
 export function makeExchange(prices, fallbackPrices = null) {
   return (amount, from, to) => {
     const a = Number(amount)
@@ -62,12 +93,14 @@ export function makeExchange(prices, fallbackPrices = null) {
 // The readable side (owner, 2026-10-08: "follow the volume rule and then apply readable side to the volume
 // rule"). The backend names the market; a rate below 1 in it is drawn from the other side — 0.093 Divine per
 // Chaos is "10.7 per Divine". `n` is the number to draw; `per` says it is the counterpart's side.
+/** @param {number|null|undefined} rate */
 export function readable(rate) {
   if (rate == null || !(rate > 0) || rate >= 1) return { n: rate, per: false }
   return { n: 1 / rate, per: true }
 }
 
 // The % change of the other side of a market: +25% one way is exactly -20% the other.
+/** @param {number|null|undefined} pct */
 export function flipChange(pct) {
   return pct == null ? null : -pct / (1 + pct / 100)
 }

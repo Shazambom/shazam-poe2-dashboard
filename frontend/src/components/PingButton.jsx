@@ -1,4 +1,4 @@
-import React, { useEffect, useReducer, useRef } from 'react'
+import { useEffect, useReducer, useRef } from 'react'
 import { pingTransition, TIMED_TRANSITIONS, buttonView } from '../lib/pingMachine.js'
 import { toast, cleanErr } from '../lib/api.js'
 import { presence as PRESENCE } from '../theme.js'
@@ -75,7 +75,7 @@ export default function PingButton({ ping, compact = false }) {
           {ping.flags?.inDemand && <span className="live-badge">in demand</span>}
         </div>
       </div>
-      <button className={`btn teleport ${view.cls}`} disabled={!view.enabled} onClick={onClick}>{view.label}</button>
+      <button type="button" className={`btn teleport ${view.cls}`} disabled={!view.enabled} onClick={onClick}>{view.label}</button>
     </div>
   )
 }

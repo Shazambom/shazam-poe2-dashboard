@@ -6,18 +6,24 @@ import { Price } from './ModSection.jsx'
 import Cur from './Cur.jsx'
 
 // One family row and, when open, its tiers in three bands: above the item level, in the pool,
-// below the min level. The row carries its family id for the table's delegated click and key
-// handlers, so no callback is allocated per row and the memo holds across filter keystrokes.
+// below the min level. Memoization keeps unaffected families stable across filter keystrokes.
 // The name column goes when no tier has one (a corruption implicit and its upgrade). Under the
 // tiers, what forces one (an essence, an alloy) and what it costs.
-function ModFamily({ row, open, ilvl, floor, perTier, canTrade, canStash, grants, prices }) {
+function ModFamily({ row, open, ilvl, floor, perTier, affix, onToggle, onTrade, onStash, grants, prices }) {
   const { family, k, n, chance } = row
   const named = open && namedTiers(family)
   const forced = open ? forcedBy(family, grants) : []
   const on = row.onItem !== undefined   // the pasted item carries this family: its badge ("T2", "T2 ×3", "on item")
   return (
     <div className="mods-fam-wrap">
-      <div className={`mods-fam ${k === 0 ? 'out' : ''} ${on ? 'on-item' : ''}`} role="button" aria-expanded={open} tabIndex={0} data-id={family.id}>
+      <div className={`mods-fam ${k === 0 ? 'out' : ''} ${on ? 'on-item' : ''}`} role="button" aria-expanded={open} tabIndex={0} data-id={family.id}
+           onClick={() => onToggle(family.id)}
+           onKeyDown={e => {
+             if (e.key === 'Enter' || e.key === ' ' || (open && e.key === 'Escape')) {
+               e.preventDefault()
+               onToggle(family.id)
+             }
+           }}>
         <span className="mods-caret" aria-hidden="true">{open ? '▾' : '▸'}</span>
         <span className="mods-text">{lines(family.text)}</span>
         <span className="mods-fam-tags">{family.tags.slice(0, 2).map(tagLabel).join(' · ')}</span>
@@ -29,8 +35,8 @@ function ModFamily({ row, open, ilvl, floor, perTier, canTrade, canStash, grants
           <div className="mods-tiers-head">
             <span>{perTier !== null && <>Each tier {pct(perTier)}</>}</span>
             <span className="mods-tiers-actions">
-              {canStash && <button type="button" className="btn small" data-stash={family.id}>Find in stash</button>}
-              {canTrade && <button type="button" className="btn small" data-trade={family.id}>Search on trade</button>}
+              {onStash && <button type="button" className="btn small" data-stash={family.id} onClick={() => onStash(affix, family.id)}>Find in stash</button>}
+              {onTrade && <button type="button" className="btn small" data-trade={family.id} onClick={() => onTrade(affix, family.id)}>Search on trade</button>}
             </span>
           </div>
           {family.tiers.map((t, i) => {

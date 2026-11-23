@@ -1,4 +1,4 @@
-import React from 'react'
+import 'react'
 import Cur from './Cur.jsx'
 import { fmt } from '../lib/api.js'
 import { readable } from '../lib/price.js'

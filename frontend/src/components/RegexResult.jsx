@@ -1,4 +1,4 @@
-import React from 'react'
+import 'react'
 import Toggle from './Toggle.jsx'
 import { LIMIT, overLimit } from '../lib/regex/index.js'
 
@@ -13,9 +13,9 @@ export default function RegexResult({ lead, text, onCopy, onReset, onTrade, auto
         <input className="rx-string" readOnly value={text} spellCheck={false}
                placeholder="Choose what to match below, then paste the string into the in-game search box." />
         <span className={`hint rx-len ${over ? 'over' : ''}`}>{text.length} / {LIMIT}</span>
-        <button className="btn small primary" data-cmd="regex-copy" disabled={!text} onClick={onCopy}>Copy</button>
-        {onTrade && <button className="btn small" onClick={onTrade}>Search on trade</button>}
-        <button className="btn small" onClick={onReset}>Reset</button>
+        <button type="button" className="btn small primary" data-cmd="regex-copy" disabled={!text} onClick={onCopy}>Copy</button>
+        {onTrade && <button type="button" className="btn small" onClick={onTrade}>Search on trade</button>}
+        <button type="button" className="btn small" onClick={onReset}>Reset</button>
       </div>
       {over && <span className="warn-hint">Longer than the game accepts. Turn on Round to tens or remove a modifier.</span>}
       <details className="adv">
@@ -23,8 +23,8 @@ export default function RegexResult({ lead, text, onCopy, onReset, onTrade, auto
         <div className="rx-options">
           <Toggle checked={autoCopy} onChange={onAutoCopy} label="Copy on every change" />
           <div className="field">
-            <label>Append to the string</label>
-            <input value={append} onChange={e => onAppend(e.target.value)} spellCheck={false} />
+            <label htmlFor="regex-append">Append to the string</label>
+            <input id="regex-append" value={append} onChange={e => onAppend(e.target.value)} spellCheck={false} />
           </div>
         </div>
       </details>
