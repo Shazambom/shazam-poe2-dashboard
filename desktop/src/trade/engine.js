@@ -2,6 +2,7 @@
 // WebSocket, and on each ping fetch the listing details and emit an enriched ping to the
 // renderer. Read-only discovery + the manual teleport POST — strictly human-triggered, no
 // auto-buy. See docs/trading-rework-research.md for the locked design decisions.
+const { ignored } = require('../ignored.js')
 const WebSocket = require('ws')
 const { POE, poeRequest, poeJson, cookieHeader, userAgent } = require('./proxy.js')
 const budget = require('./budget.js')
@@ -83,7 +84,7 @@ async function _connect(itemId) {
       rec.stopped = true
       _sink('trade:search-state', { itemId, state: 'auth', message: 'Reconnect your PoE session' })
     } else _sink('trade:search-state', { itemId, state: 'error', message: `HTTP ${code}` })
-    try { ws.terminate() } catch {}
+    try { ws.terminate() } catch (e) { ignored('live-search:terminate', e) }
   })
   ws.on('close', (code) => {
     rec.ws = null
@@ -133,7 +134,7 @@ function _normalize(itemId, rec, r) {
   const item = r.item || {}
   let tokenExp = 0
   const token = L.hideout_token || L.whisper_token || null
-  try { if (token) tokenExp = (JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString()).exp || 0) * 1000 } catch {}
+  try { if (token) tokenExp = (JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString()).exp || 0) * 1000 } catch (e) { ignored('live-search:token-exp', e) }
   return {
     pingId: `p_${itemId}_${r.id}`,
     itemId, searchId: rec.searchId, listingId: r.id,
@@ -153,7 +154,7 @@ function stopSearch(itemId) {
   if (!rec) return
   rec.stopped = true
   clearTimeout(rec.timer)
-  try { rec.ws?.close() } catch {}
+  try { rec.ws?.close() } catch (e) { ignored('live-search:close', e) }
   sockets.delete(itemId)
   dlog(`[trade] stopSearch item=${itemId} (live ${sockets.size}/${MAX_SOCKETS})`)
   emitState()

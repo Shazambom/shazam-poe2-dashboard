@@ -8,6 +8,7 @@
 //     prefs():  { prefs, source }                        send(channel, payload) | null while no window
 //     log(line): telemetry (marker ee2)                  now(): clock (tests)
 'use strict'
+const { ignored } = require('../ignored.js')
 const { refineQuery } = require('./refine.js')
 
 const NO_WINDOW_BUFFER = 20
@@ -55,7 +56,7 @@ function createHistoryConsumer({ manager, worker, prefs, send = null, log = () =
   function warm() { if (enabled && !proc) ensureWorker() }
 
   function emit(intent) {
-    if (sender) { try { sender('trade:ingest', intent) } catch {} return }
+    if (sender) { try { sender('trade:ingest', intent) } catch (e) { ignored('ee2-history:send-intent', e) } return }
     if (held.length >= NO_WINDOW_BUFFER) { log('ingest-drop reason=no-window'); return }
     held.push(intent)
   }
@@ -73,7 +74,7 @@ function createHistoryConsumer({ manager, worker, prefs, send = null, log = () =
     // createPresets options (CheckedItem.vue), so this is the search EE2 opens with (owner, 2026-09-28).
     try { r = await p.build(raw, pf) } catch (e) {
       const msg = String(e && e.message || e)
-      lastFailure = now(); try { p.kill?.() } catch {}; proc = null; status.warm = false
+      lastFailure = now(); try { p.kill?.() } catch (err) { ignored('ee2-history:kill-worker', err) }; proc = null; status.warm = false
       log(`history-skip reason=${/timeout/i.test(msg) ? 'timeout' : 'worker'} origin=${origin} err="${msg.slice(0, 160)}"`)
       return null
     }
@@ -90,7 +91,7 @@ function createHistoryConsumer({ manager, worker, prefs, send = null, log = () =
     const refined = q !== r.q ? ' waystone=refined' : ''
     log(`history-build origin=${origin} rarity=${r.item?.rarity || item?.rarity || '?'} name="${String(r.name).slice(0, 40)}" ms=${base.buildMs} qb=${Buffer.byteLength(q, 'utf8')} ${ticks(q)}${refined}`)
     const intent = { ...base, q, degraded: false, stage: null, name: r.name, item: r.item }
-    if (onBuilt) { try { onBuilt(intent) } catch {} }
+    if (onBuilt) { try { onBuilt(intent) } catch (e) { ignored('ee2-history:on-built', e) } }
     return intent
   }
 
@@ -98,7 +99,7 @@ function createHistoryConsumer({ manager, worker, prefs, send = null, log = () =
     const origin = item && item.origin ? item.origin : 'clipboard'
     // 4-B: an EE2 price check hits GGG's trade API on the same account/IP — a search, then a fetch —
     // so it spends a slot of each shared budget.
-    if (origin === 'ee2' && hint) { try { hint('trade-search'); hint('trade-fetch') } catch {} }
+    if (origin === 'ee2' && hint) { try { hint('trade-search'); hint('trade-fetch') } catch (e) { ignored('ee2-history:budget-hint', e) } }
     if (!enabled) { log(`history-skip reason=disabled origin=${origin}`); return }
     const raw = item && typeof item.raw === 'string' ? item.raw : ''
     if (!raw) { log(`history-skip reason=empty origin=${origin}`); return }
@@ -138,20 +139,20 @@ function createHistoryConsumer({ manager, worker, prefs, send = null, log = () =
       try { r = await p.parse(String(raw || '')) } catch (e) {
         const msg = String(e && e.message || e)
         const reason = /timeout/i.test(msg) ? 'timeout' : 'worker'
-        lastFailure = now(); try { p.kill?.() } catch {}; proc = null; status.warm = false
+        lastFailure = now(); try { p.kill?.() } catch (err) { ignored('ee2-history:kill-worker', err) }; proc = null; status.warm = false
         log(`mods-parse-skip reason=${reason} err="${msg.slice(0, 160)}"`)
         return { item: null, reason }
       }
       if (r && r.error) { log(`mods-parse-skip reason=worker stage=${r.error.stage} err="${String(r.error.message || '').slice(0, 160)}"`); return { item: null, reason: 'worker' } }
       return r ? { item: r, reason: null } : { item: null, reason: 'not-item' }
     },
-    setEnabled(v) { enabled = Boolean(v); if (!enabled && proc) { try { proc.kill?.() } catch {}; proc = null; status.warm = false } },
-    setSender(fn) { sender = fn; if (fn) { const q = held.splice(0); for (const i of q) { try { fn('trade:ingest', i) } catch {} } } },
+    setEnabled(v) { enabled = Boolean(v); if (!enabled && proc) { try { proc.kill?.() } catch (e) { ignored('ee2-history:kill-worker', e) }; proc = null; status.warm = false } },
+    setSender(fn) { sender = fn; if (fn) { const q = held.splice(0); for (const i of q) { try { fn('trade:ingest', i) } catch (e) { ignored('ee2-history:send-held', e) } } } },
     status() { return { ...status, enabled, held: held.length } },
     stop() {
       clearTimeout(warmTimer)
       manager.off('item-checked', onItem); manager.off('ee2-detected', onDetected); manager.off('ee2-missing', onMissing); manager.off('config-changed', invalidatePrefs); manager.off('error', onError)
-      try { proc?.kill?.() } catch {}; proc = null
+      try { proc?.kill?.() } catch (e) { ignored('ee2-history:kill-worker', e) }; proc = null
     },
   }
 }

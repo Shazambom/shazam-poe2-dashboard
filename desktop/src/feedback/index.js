@@ -8,6 +8,7 @@
 //   feedback:drag    → native drag of that file out of the window (into the Discord post)
 //   feedback:reveal  → show the file in Finder/Explorer;  feedback:discord → open the invite
 'use strict'
+const { ignored } = require('../ignored.js')
 const fs = require('node:fs')
 const path = require('node:path')
 const { randomBytes, randomUUID } = require('node:crypto')
@@ -47,8 +48,8 @@ function registerFeedback({ ipcMain, BrowserWindow, session, win, uiUrl, backend
     try {
       const files = fs.readdirSync(dir).filter(f => /^arbiter-report-[0-9A-HJ-NP-Z]{6}\.arb$/.test(f))
         .map(f => ({ f, t: fs.statSync(path.join(dir, f)).mtimeMs })).sort((a, b) => b.t - a.t)
-      for (const { f } of files.slice(KEEP_REPORTS)) { try { fs.unlinkSync(path.join(dir, f)) } catch {} }
-    } catch {}
+      for (const { f } of files.slice(KEEP_REPORTS)) { try { fs.unlinkSync(path.join(dir, f)) } catch (e) { ignored('feedback:prune-report', e) } }
+    } catch (e) { ignored('feedback:prune-reports', e) }
   }
 
   // The sweep's snap window shares ONE session.webRequest listener, so two sweeps at once would
@@ -64,7 +65,7 @@ function registerFeedback({ ipcMain, BrowserWindow, session, win, uiUrl, backend
     try {
       const bounds = win.getBounds()
       let shots = { screens: {}, partial: true }
-      try { shots = await sweep({ uiUrl, bounds, dests: DESTS, BrowserWindow, session, visibleWin: win }) } catch {}
+      try { shots = await sweep({ uiUrl, bounds, dests: DESTS, BrowserWindow, session, visibleWin: win }) } catch (e) { ignored('feedback:sweep-screens', e) }
       const id = shortId()
       const meta = {
         id: randomUUID(), ts: new Date(now()).toISOString(), appVersion: version, channel, platform: process.platform,

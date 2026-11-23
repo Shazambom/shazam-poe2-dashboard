@@ -19,6 +19,7 @@
 // `${hotkeyHold} + ${hotkey}`. We extract our OWN normalized list from the JSON;
 // we do not import EE2 code.
 'use strict'
+const { ignored } = require('../../ignored.js')
 
 const fs = require('node:fs')
 const os = require('node:os')
@@ -114,7 +115,7 @@ function watchConfig(onChange) {
   let timer = null
   const fire = () => {
     if (timer) clearTimeout(timer)
-    timer = setTimeout(() => { try { onChange() } catch {} }, 300)
+    timer = setTimeout(() => { try { onChange() } catch (e) { ignored('ee2-config:on-change', e) } }, 300)
     if (timer.unref) timer.unref()
   }
   try {
@@ -122,7 +123,7 @@ function watchConfig(onChange) {
     watcher.on('error', () => {})
   } catch { watcher = null }
   return () => {
-    try { watcher?.close() } catch {}
+    try { watcher?.close() } catch (e) { ignored('ee2-config:unwatch', e) }
     if (timer) clearTimeout(timer)
   }
 }

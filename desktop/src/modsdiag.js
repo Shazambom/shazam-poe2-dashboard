@@ -1,4 +1,5 @@
 'use strict'
+const { ignored } = require('./ignored.js')
 // TEMPORARY DEV DIAGNOSTIC (beta/dev only; installed behind diagTelemetryOn() in main.js).
 // Reports, at 20s, 2m and 10m after launch, what the bundled backend holds for the Mods tab
 // (pool and currency counts, the seed's snapshot version), where the league-history crawl is
@@ -27,6 +28,6 @@ function install({ win, backendUrl, log }) {
     const digest = st.err ? `err=${st.err}` : `behind_h=${st.digest?.behind_h} state=${st.digest?.state} backfilling=${st.digest?.backfilling}`
     log(`${tag} mods{${mods}} crawl{${crawl}} digest{${digest}} ui=${await dom()}`)
   }
-  for (const [ms, tag] of /** @type {Array<[number, string]>} */ ([[20000, '@20s'], [120000, '@120s'], [600000, '@10m']])) setTimeout(() => report(tag).catch(() => {}), ms)
+  for (const [ms, tag] of /** @type {Array<[number, string]>} */ ([[20000, '@20s'], [120000, '@120s'], [600000, '@10m']])) setTimeout(() => report(tag).catch((e) => ignored('modsdiag:report', e)), ms)
 }
 module.exports = { install }

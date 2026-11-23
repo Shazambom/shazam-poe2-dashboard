@@ -6,6 +6,7 @@
 // app). Any failure is silence; consumers show nothing. Attached to every trade webview from
 // app.on('web-contents-created'); consumers filter by wcId, as the navigation events already are.
 'use strict'
+const { ignored } = require('../ignored.js')
 const { projectRows } = require('./listings.js')
 
 const CHANNEL = 'trade:tap'
@@ -63,7 +64,7 @@ function attachTap(contents, send, log = () => {}, observe = () => {}) {
   const dbg = contents.debugger
   const wcId = contents.id
   const pending = new Map()   // requestId → { kind…, postData }
-  const emit = (p) => { try { send(CHANNEL, p) } catch {} }
+  const emit = (p) => { try { send(CHANNEL, p) } catch (e) { ignored('tap:send', e) } }
 
   const onMessage = (_e, method, p) => {
     if (method === 'Network.requestWillBeSent') {
@@ -74,7 +75,7 @@ function attachTap(contents, send, log = () => {}, observe = () => {}) {
       const policy = r && { search: 'trade-search', fetch: 'trade-fetch' }[r.k.kind]
       // A cached response carries old X-Rate-Limit state: only what the site just answered is current.
       const cached = p.response?.fromDiskCache || p.response?.fromPrefetchCache || p.response?.fromServiceWorker
-      if (policy && !cached) { try { observe(policy, p.response?.status, p.response?.headers || {}) } catch {} }
+      if (policy && !cached) { try { observe(policy, p.response?.status, p.response?.headers || {}) } catch (e) { ignored('tap:observe', e) } }
     } else if (method === 'Network.loadingFailed') {
       pending.delete(p?.requestId)
     } else if (method === 'Network.loadingFinished') {
@@ -85,14 +86,14 @@ function attachTap(contents, send, log = () => {}, observe = () => {}) {
         const text = b?.base64Encoded ? Buffer.from(b.body, 'base64').toString('utf8') : b?.body
         const out = project(r.k, r, parse(text), wcId)
         if (out) emit(out)
-      }, () => {})
+      }, (e) => ignored('tap:response-body', e))
     }
   }
 
   const attach = () => {
     try {
       dbg.attach('1.3')
-      _send(dbg, 'Network.enable', { maxResourceBufferSize: 4e6, maxTotalBufferSize: 2e7 }).catch(() => {})
+      _send(dbg, 'Network.enable', { maxResourceBufferSize: 4e6, maxTotalBufferSize: 2e7 }).catch((e) => ignored('tap:network-enable', e))
       log(`tap attach wc=${wcId}`)
       if (_options) emit({ kind: 'options', wcId, price: _options })
       return true

@@ -2,6 +2,7 @@
 // session under the shared rate budget with spare: 0.5 headroom so live search always keeps half
 // of every rate window. Manual refresh only; cancellable on tab leave or league switch.
 'use strict'
+const { ignored } = require('../ignored.js')
 const {
   makeRechecker,
   waitedBudgeted,
@@ -85,7 +86,7 @@ function parseProfileAccount(html) {
   const m = html.match(/\/account\/view-profile\/([^"'?#<>\s]+)/i)
   if (!m) return ''
   let slug = m[1]
-  try { slug = decodeURIComponent(slug) } catch {}
+  try { slug = decodeURIComponent(slug) } catch (e) { ignored('merchant:decode-slug', e) }
   slug = slug.trim().replace(/-(\d{4})$/, '#$1')
   return slug.length > 0 && slug.length <= MAX_ACCOUNT_LEN ? slug : ''
 }

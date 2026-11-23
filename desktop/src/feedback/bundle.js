@@ -3,6 +3,7 @@
 // Electron and no network. State comes from four credential-free endpoints only — never
 // /api/session or /api/oauth/* — then the allow-list and redactDeep run over state + logs.
 'use strict'
+const { ignored } = require('../ignored.js')
 const { gzipSync, constants } = require('node:zlib')
 const { SETTINGS_KEYS, pickAllowed, redactDeep } = require('./redact.js')
 
@@ -53,7 +54,7 @@ async function buildBundle({ meta, sources, get, readJson, bounds, screens, time
   const state = await fetchState(get, timeoutMs)
   state.settings = pickAllowed(state.settings, SETTINGS_KEYS)
   let desktop = {}
-  try { desktop = readJson() || {} } catch {}
+  try { desktop = readJson() || {} } catch (e) { ignored('feedback:read-desktop-settings', e) }
   state.desktopSettings = pickAllowed(desktop, SETTINGS_KEYS)
   state.bounds = bounds || null
   const doc = {

@@ -7,6 +7,7 @@
 // X-Rate-Limit headers so the backend's view stays exact. If the local backend is unreachable we
 // fail OPEN (same as having no budget) — the app never blocks the user on its own diagnostics.
 'use strict'
+const { ignored } = require('../ignored.js')
 
 class RateLimitError extends Error {
   constructor(retryAfter) { super(`rate-limited, retry in ${retryAfter}s`); this.retryAfter = retryAfter; this.code = 'RATE_LIMITED' }
@@ -39,8 +40,8 @@ function observe(policy, status, headers) {
     fetch(`${_backendUrl()}/api/ratelimits/observe`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ policy, status, headers: h }), signal: AbortSignal.timeout(3000),
-    }).catch(() => {})
-  } catch {}
+    }).catch((e) => ignored('budget:observe', e))
+  } catch (e) { ignored('budget:observe', e) }
 }
 
 // Tell the backend a request it didn't make just spent a slot (an EE2 price check on the same
@@ -49,8 +50,8 @@ function hint(policy) {
   try {
     fetch(`${_backendUrl()}/api/ratelimits/hint`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ policy }), signal: AbortSignal.timeout(3000),
-    }).catch(() => {})
-  } catch {}
+    }).catch((e) => ignored('budget:hint', e))
+  } catch (e) { ignored('budget:hint', e) }
 }
 
 // One trade-site request under the shared budget: reserve a slot, send, report the headers, classify.
@@ -80,7 +81,7 @@ async function budgeted({ request, budget }, policy, req, opts) {
   if (resp.status === 401 || resp.status === 403) return { ok: false, error: 'auth', status: resp.status }
   if (resp.status !== 200) return { ok: false, error: `HTTP ${resp.status}`, status: resp.status }
   let data = null
-  try { data = JSON.parse(resp.body) } catch {}
+  try { data = JSON.parse(resp.body) } catch (e) { ignored('budget:parse-body', e) }
   const date = resp.headers?.date
   return { ok: true, status: 200, data, ...(date ? { date } : {}) }
 }

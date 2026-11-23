@@ -31,6 +31,7 @@
 //   'started' / 'stopped'   lifecycle
 //   'error'        Error    non-fatal (e.g. clipboard-fallback note); never thrown
 'use strict'
+const { ignored } = require('../../ignored.js')
 
 const { EventEmitter } = require('node:events')
 const { ClipboardWatcher, captureItemBurst } = require('./clipboard-watcher')
@@ -148,9 +149,9 @@ class ExiledExchangeIntegration extends EventEmitter {
   _deactivate() {
     if (this._mode !== 'active') return
     if (this._healthTimer) { clearTimeout(this._healthTimer); this._healthTimer = null }
-    try { this._unwatchConfig?.() } catch {}
-    try { this._hotkey?.stop() } catch {}
-    try { this._clip?.stop() } catch {}
+    try { this._unwatchConfig?.() } catch (e) { ignored('ee2:unwatch-config', e) }
+    try { this._hotkey?.stop() } catch (e) { ignored('ee2:stop-hotkey', e) }
+    try { this._clip?.stop() } catch (e) { ignored('ee2:stop-clipboard', e) }
     this._unwatchConfig = null
     this._hotkey = null
     this._clip = null
@@ -177,12 +178,12 @@ class ExiledExchangeIntegration extends EventEmitter {
 
   // uiohook is healthy (a key arrived) — no need to poll the clipboard fast.
   _relaxClipboard() {
-    if (this._uiohookOk && this._clip) { try { this._clip.setIntervalMs(SLOW_MS) } catch {} }
+    if (this._uiohookOk && this._clip) { try { this._clip.setIntervalMs(SLOW_MS) } catch (e) { ignored('ee2:clipboard-slow', e) } }
   }
 
   // Speed the clipboard up to cover EE2's restore window when uiohook can't.
   _degradeToClipboard(message) {
-    if (this._clip) { try { this._clip.setIntervalMs(FAST_MS) } catch {} }
+    if (this._clip) { try { this._clip.setIntervalMs(FAST_MS) } catch (e) { ignored('ee2:clipboard-fast', e) } }
     if (!this._notifiedFallback) { this._notifiedFallback = true; this._safeError(new Error(message)) }
   }
 

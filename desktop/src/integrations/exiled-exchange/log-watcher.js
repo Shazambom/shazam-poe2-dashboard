@@ -4,6 +4,7 @@
 // log file isn't present in any candidate location, degrades silently to null —
 // never an error.
 'use strict'
+const { ignored } = require('../../ignored.js')
 
 const fs = require('node:fs')
 const fsp = fs.promises
@@ -149,7 +150,7 @@ class LogWatcher {
       this._partial = parts.pop() || ''
       for (const line of parts) {
         const t = line.trim()
-        if (t) { try { this._onLine(t) } catch {} }
+        if (t) { try { this._onLine(t) } catch (e) { ignored('client-log:on-line', e) } }
       }
       done()
     })

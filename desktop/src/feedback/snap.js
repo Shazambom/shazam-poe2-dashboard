@@ -10,6 +10,7 @@
 // guard still cannot write user data. A screenshot never blocks a report: any failure marks
 // `partial` and the sweep carries on; the window is destroyed and the filter removed in `finally`.
 'use strict'
+const { ignored } = require('../ignored.js')
 const path = require('node:path')
 
 const SNAP_URL_SUFFIX = '/?snap=1'
@@ -58,8 +59,8 @@ async function sweepScreens({ uiUrl, bounds, dests, BrowserWindow, session, visi
     for (const d of dests) if (!screens[d.id] && !missing[d.id]) missing[d.id] = whyNot(e)
   }
   finally {
-    try { session.webRequest.onBeforeRequest({ urls }, null) } catch {}
-    try { if (snap && !snap.isDestroyed()) snap.destroy() } catch {}
+    try { session.webRequest.onBeforeRequest({ urls }, null) } catch (e) { ignored('feedback:snap-filter-off', e) }
+    try { if (snap && !snap.isDestroyed()) snap.destroy() } catch (e) { ignored('feedback:snap-destroy', e) }
   }
   return { screens, partial, missing }
 }

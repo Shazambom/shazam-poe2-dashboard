@@ -12,6 +12,7 @@
 //   2. A running process whose name looks like EE2 (secondary; requires shelling
 //      out to tasklist/ps, so it's optional and fully guarded).
 'use strict'
+const { ignored } = require('../../ignored.js')
 
 const fs = require('node:fs')
 const os = require('node:os')
@@ -38,8 +39,8 @@ function configDirs() {
 function findConfig() {
   for (const dir of configDirs()) {
     const cfg = path.join(dir, 'apt-data', 'config.json')
-    try { if (fs.existsSync(cfg)) return { dir, config: cfg } } catch {}
-    try { if (fs.existsSync(dir)) return { dir, config: null } } catch {}
+    try { if (fs.existsSync(cfg)) return { dir, config: cfg } } catch (e) { ignored('ee2-detect:config-exists', e) }
+    try { if (fs.existsSync(dir)) return { dir, config: null } } catch (e) { ignored('ee2-detect:dir-exists', e) }
   }
   return null
 }
@@ -69,7 +70,7 @@ function findProcess() {
 async function detectEE2({ checkProcess = false } = {}) {
   const cfg = findConfig()
   let running = false
-  if (checkProcess) { try { running = await findProcess() } catch {} }
+  if (checkProcess) { try { running = await findProcess() } catch (e) { ignored('ee2-detect:find-process', e) } }
   const present = Boolean(cfg) || running
   return {
     present,

@@ -7,6 +7,7 @@
 //     dir); only an unpackaged dev launch without a binary points at a dev server;
 //   * being Chromium, we ARE the browser: the PoE login happens in our own window and
 //     the HttpOnly POESESSID is read from our session and handed to the backend.
+const { ignored } = require('./ignored.js')
 const { app, BrowserWindow, Menu, Notification, clipboard, dialog, ipcMain, session, shell, nativeTheme } = require('electron')
 const { spawn } = require('node:child_process')
 const fs = require('node:fs')
@@ -56,8 +57,8 @@ const BACKDROP = { get window() { return windowBackdrop(settings) }, trade: '#0c
 const settingsPath = () => path.join(app.getPath('userData'), 'desktop-settings.json')
 /** @type {{ betaChannel: boolean, theme: string, customBackdrop?: string, focusHotkey?: string }} */
 let settings = { ...DEFAULTS }
-try { settings = { ...DEFAULTS, ...JSON.parse(fs.readFileSync(settingsPath(), 'utf8')) } } catch {}
-const saveSettings = () => { try { fs.writeFileSync(settingsPath(), JSON.stringify(settings, null, 2)) } catch {} }
+try { settings = { ...DEFAULTS, ...JSON.parse(fs.readFileSync(settingsPath(), 'utf8')) } } catch (e) { ignored('settings:read', e) }
+const saveSettings = () => { try { fs.writeFileSync(settingsPath(), JSON.stringify(settings, null, 2)) } catch (e) { ignored('settings:write', e) } }
 
 let win = null
 let backendProc = null
@@ -84,7 +85,7 @@ function backendBinary() {
 
 async function waitFor(url, tries = 240) {
   for (let i = 0; i < tries; i++) {
-    try { const r = await fetch(url, { signal: AbortSignal.timeout(1500) }); if (r.ok) return true } catch {}
+    try { const r = await fetch(url, { signal: AbortSignal.timeout(1500) }); if (r.ok) return true } catch (e) { ignored('backend:wait', e) }
     await new Promise(r => setTimeout(r, i < 10 ? 100 : i < 25 ? 250 : 500))
   }
   return false
@@ -227,7 +228,7 @@ function stopBackend() {
     } else {
       backendProc.kill()
     }
-  } catch {}
+  } catch (e) { ignored('backend:kill', e) }
   backendProc = null
 }
 
@@ -358,7 +359,7 @@ function connectPoeFlow() {
 async function connectPoeSession() {   // menu entry point: adds dialogs
   const r = await connectPoeFlow()
   if (r.ok) {
-    try { require('./trade').resetMerchantAccount() } catch {}
+    try { require('./trade').resetMerchantAccount() } catch (e) { ignored('trade:reset-merchant-account', e) }
     reloadTradeWebviews()
   }
   dialog.showMessageBox(win, { message: r.ok ? `✓ ${r.message}` : `Failed: ${r.message}` })
@@ -375,7 +376,7 @@ ipcMain.handle('notify', (_e, { title, body, tag } = {}) => {
   if (!Notification.isSupported()) { console.log('[notify] not supported on this OS'); return false }
   try {
     const n = new Notification({ title: String(title || 'Arbiter'), body: String(body || ''), silent: true })
-    n.on('click', () => { try { if (win) { if (win.isMinimized()) win.restore(); win.show(); win.focus(); win.webContents.send('notify:click', tag) } } catch {} })
+    n.on('click', () => { try { if (win) { if (win.isMinimized()) win.restore(); win.show(); win.focus(); win.webContents.send('notify:click', tag) } } catch (e) { ignored('notify:click', e) } })
     n.on('show', () => console.log('[notify] shown:', title))
     n.on('failed', (_ev, err) => console.log('[notify] failed:', err))
     n.show()
@@ -388,7 +389,7 @@ ipcMain.handle('open-login', () => shell.openExternal(`${POE}/login`))
 ipcMain.handle('poe-connect', async () => {
   const r = await connectPoeFlow()
   if (r.ok) {
-    try { require('./trade').resetMerchantAccount() } catch {}
+    try { require('./trade').resetMerchantAccount() } catch (e) { ignored('trade:reset-merchant-account', e) }
     reloadTradeWebviews()   // native login lands in defaultSession; refresh an open Trade tab
   }
   return r
@@ -399,8 +400,8 @@ function reloadTradeWebviews() {
   try {
     require('electron').webContents.getAllWebContents()
       .filter(c => c.getType() === 'webview')
-      .forEach(c => { try { c.reload() } catch {} })
-  } catch {}
+      .forEach(c => { try { c.reload() } catch (e) { ignored('trade-webviews:reload', e) } })
+  } catch (e) { ignored('trade-webviews:reload-all', e) }
 }
 
 // A pasted POESESSID reaches only the backend; mirror it into the Electron session
@@ -413,7 +414,7 @@ ipcMain.handle('poe-set-cookie', async (_e, cookie) => {
       domain: '.pathofexile.com', path: '/', secure: true, httpOnly: true,
       sameSite: 'lax', expirationDate: Math.floor(Date.now() / 1000) + 30 * 24 * 3600,
     })
-    try { require('./trade').resetMerchantAccount() } catch {}
+    try { require('./trade').resetMerchantAccount() } catch (e) { ignored('trade:reset-merchant-account', e) }
     reloadTradeWebviews()
     return { ok: true }
   } catch (e) { return { ok: false, message: String(e.message || e) } }
@@ -441,7 +442,7 @@ let _latestVersion = null
 const IS_MAC = process.platform === 'darwin'
 
 function _emitUpdate(state) {
-  try { win?.webContents.send('update:status', state) } catch {}
+  try { win?.webContents.send('update:status', state) } catch (e) { ignored('update:send-status', e) }
 }
 
 const updLog = (m) => { updRing.push(m); telemetry.installLog('update', m) }   // updater diagnostics (beta/dev only, like all telemetry)
@@ -460,7 +461,7 @@ function macDmgUrl(v) { return `${GH_RELEASES}/${relTag(v)}/Arbiter-${v}-arm64.d
 
 function _applyChannel(au) {
   const beta = onBetaChannel()
-  try { applyChannel(au, beta) } catch {}
+  try { applyChannel(au, beta) } catch (e) { ignored('update:apply-channel', e) }
   return beta
 }
 
@@ -495,11 +496,11 @@ function setupUpdates() {
     })
     updLog('startup check')
     autoUpdater.checkForUpdates().catch((e) => updLog(`check-threw ${String(e.message || e)}`))
-    setInterval(() => autoUpdater.checkForUpdates().catch(() => {}), 30 * 60 * 1000)
+    setInterval(() => autoUpdater.checkForUpdates().catch((e) => ignored('update:check', e)), 30 * 60 * 1000)
   } catch (e) { console.log('[updater] disabled:', String(e)) }
 }
 
-ipcMain.handle('update:check', () => { try { _autoUpdater?.checkForUpdates() } catch {} })
+ipcMain.handle('update:check', () => { try { _autoUpdater?.checkForUpdates() } catch (e) { ignored('update:check', e) } })
 // Beta/dev channel opt-in (persisted). `locked` = the running build is itself a -beta build, so the
 // toggle can't be turned off from here (you'd need to reinstall a stable build); we surface that.
 // `tweaks` = the one beta-or-dev gate (diagTelemetryOn): the renderer shows tweakers' knobs by it (lib/tweaks.js).
@@ -507,7 +508,7 @@ ipcMain.handle('update:getChannel', () => ({ beta: onBetaChannel(), locked: isBe
 ipcMain.handle('update:setChannel', (_e, beta) => {
   settings.betaChannel = Boolean(beta)
   saveSettings()
-  if (_autoUpdater) { _applyChannel(_autoUpdater); _autoUpdater.checkForUpdates().catch(() => {}) }
+  if (_autoUpdater) { _applyChannel(_autoUpdater); _autoUpdater.checkForUpdates().catch((e) => ignored('update:check', e)) }
   return { beta: onBetaChannel(), locked: isBetaVersion(), tweaks: diagTelemetryOn() }
 })
 // UI theme (colour only): remember it so the next launch paints the right backdrop before CSS, and
@@ -518,7 +519,7 @@ ipcMain.handle('ui:setTheme', (_e, id, backdrop) => {
   else if (!BACKDROPS[id]) return false
   settings.theme = id
   saveSettings()
-  try { if (win && !win.isDestroyed()) win.setBackgroundColor(BACKDROP.window) } catch {}
+  try { if (win && !win.isDestroyed()) win.setBackgroundColor(BACKDROP.window) } catch (e) { ignored('window:backdrop', e) }
   return true
 })
 ipcMain.handle('update:install', () => {
@@ -539,8 +540,8 @@ ipcMain.handle('update:install', () => {
   // An UPDATE quit must not be held by the workspace flush below (the silent installer gives up if the
   // app is still running): ask the renderer to flush right now, best effort, and let the quit through.
   _flushedForQuit = true
-  try { win?.webContents.send('ws:flush') } catch {}
-  try { stopBackend() } catch {}
+  try { win?.webContents.send('ws:flush') } catch (e) { ignored('quit:flush-workspace', e) }
+  try { stopBackend() } catch (e) { ignored('quit:stop-backend', e) }
   setTimeout(() => {
     try { _autoUpdater?.quitAndInstall(true, true) } catch (e) { updLog(`quitAndInstall-threw ${String(e)}`); _emitUpdate({ phase: 'error', message: String(e) }) }
   }, 400)
@@ -550,8 +551,8 @@ ipcMain.handle('update:install', () => {
 // Zoom is pinned to 1 everywhere (menu.js explains the bug); this resets any guest that drifted.
 function resetTradeZoom() {
   try {
-    require('electron').webContents.getAllWebContents().forEach(c => { try { c.setZoomLevel(0); c.setZoomFactor(1) } catch {} })
-  } catch {}
+    require('electron').webContents.getAllWebContents().forEach(c => { try { c.setZoomLevel(0); c.setZoomFactor(1) } catch (e) { ignored('zoom:reset-contents', e) } })
+  } catch (e) { ignored('zoom:reset-all', e) }
 }
 
 function buildMenu() {
@@ -560,14 +561,14 @@ function buildMenu() {
     { label: 'Connect PoE trade session…', click: connectPoeSession },
     { label: 'Log out of pathofexile.com', click: async () => {
         await session.defaultSession.clearStorageData({ origin: POE })
-        try { require('./trade').resetMerchantAccount() } catch {}
+        try { require('./trade').resetMerchantAccount() } catch (e) { ignored('trade:reset-merchant-account', e) }
         dialog.showMessageBox(win, { message: 'Cleared the pathofexile.com login.' })
       } },
     { type: 'separator' },
     { label: `Backend: ${backendKind === 'local' ? 'local (this machine)' : 'dev server'}`, enabled: false },
     { type: 'separator' },
     { label: 'Open data folder', click: () => shell.openPath(path.join(app.getPath('userData'), 'data')) },
-    { label: 'Check for updates', click: () => { try { _autoUpdater?.checkForUpdates() } catch {} } },
+    { label: 'Check for updates', click: () => { try { _autoUpdater?.checkForUpdates() } catch (e) { ignored('update:check', e) } } },
   ]
   const { buildMenuTemplate } = require('./menu.js')
   Menu.setApplicationMenu(Menu.buildFromTemplate(buildMenuTemplate({ arbiter, resetTradeZoom })))
@@ -598,20 +599,20 @@ async function startEe2Integration() {
       const { readPrefs } = require('./ee2-history/prefs.js')
       _history = createHistoryConsumer({
         manager: _ee2, worker: { spawn: spawnWorker }, prefs: readPrefs,
-        send: win && !win.isDestroyed() && !win.webContents.isLoading() ? (ch, p) => { try { win.webContents.send(ch, p) } catch {} } : null,
+        send: win && !win.isDestroyed() && !win.webContents.isLoading() ? (ch, p) => { try { win.webContents.send(ch, p) } catch (e) { ignored('ee2-history:send', e) } } : null,
         log: (line) => telemetry.installLog('ee2', line),
-        hint: (policy) => { try { require('./trade/budget.js').hint(policy) } catch {} },   // 4-B shared GGG budget
+        hint: (policy) => { try { require('./trade/budget.js').hint(policy) } catch (e) { ignored('ee2-history:budget-hint', e) } },   // 4-B shared GGG budget
         onBuilt: postQuery,
       })
-      try { _unwatchEe2Config = require('./integrations/exiled-exchange/ee2-config.js').watchConfig(() => _history?.invalidatePrefs()) } catch {}
+      try { _unwatchEe2Config = require('./integrations/exiled-exchange/ee2-config.js').watchConfig(() => _history?.invalidatePrefs()) } catch (e) { ignored('ee2-config:watch', e) }
     } catch (e) { console.log('[ee2-history] disabled:', String(e)); _history = null }
     await _ee2.start()
   } catch (e) { console.log('[ee2] integration disabled:', String(e)); _ee2 = null }
 }
 function stopEe2Integration() {
-  try { _unwatchEe2Config?.() } catch {}; _unwatchEe2Config = null
-  try { _history?.stop() } catch {}; _history = null
-  try { _ee2?.stop() } catch {}
+  try { _unwatchEe2Config?.() } catch (e) { ignored('ee2-config:unwatch', e) }; _unwatchEe2Config = null
+  try { _history?.stop() } catch (e) { ignored('ee2-history:stop', e) }; _history = null
+  try { _ee2?.stop() } catch (e) { ignored('ee2:stop', e) }
   _ee2 = null
 }
 
@@ -646,7 +647,7 @@ const { parseLine: parseClientLogLine, toRendererEvent } = require('./integratio
 function handleClientLogLine(line) {
   const ev = toRendererEvent(parseClientLogLine(line))
   if (!ev) return null
-  try { win?.webContents.send('client-log:event', ev) } catch {}
+  try { win?.webContents.send('client-log:event', ev) } catch (e) { ignored('client-log:send-event', e) }
   return ev
 }
 function startClientLogWatcher() {
@@ -662,7 +663,7 @@ function startClientLogWatcher() {
       _clientLogPath = found
       if (_clientLogPath) {
         console.log('[client-log] watching:', path.basename(_clientLogPath))
-        try { win?.webContents.send('client-log:status', { watching: true }) } catch {}
+        try { win?.webContents.send('client-log:status', { watching: true }) } catch (e) { ignored('client-log:send-status', e) }
       }
       return _clientLogPath
     } catch (e) {
@@ -678,13 +679,13 @@ function startClientLogWatcher() {
   return p
 }
 function stopClientLogWatcher() {
-  try { _clientLog?.stop() } catch {}
+  try { _clientLog?.stop() } catch (e) { ignored('client-log:stop', e) }
   _clientLog = null
   _clientLogPath = null
   _clientLogStartPromise = null
 }
 ipcMain.handle('client-log:status', async () => {
-  if (_clientLogStartPromise) await _clientLogStartPromise.catch(() => {})
+  if (_clientLogStartPromise) await _clientLogStartPromise.catch((e) => ignored('client-log:start', e))
   return { watching: Boolean(_clientLogPath) }
 })
 // DIAGNOSTIC (dev launch or the beta channel — never a stable build): inject a Client.txt line for deterministic QA.
@@ -724,7 +725,7 @@ app.whenReady().then(async () => {
   startClientLogWatcher() // tails PoE 2 Client.txt if present; starts before loadURL so client-log:status awaits it
   win.loadURL(uiUrl)
   win.webContents.setWindowOpenHandler(({ url }) => { shell.openExternal(url); return { action: 'deny' } })
-  win.webContents.on('did-finish-load', () => { _history?.setSender((ch, p) => { try { win?.webContents.send(ch, p) } catch {} }) })
+  win.webContents.on('did-finish-load', () => { _history?.setSender((ch, p) => { try { win?.webContents.send(ch, p) } catch (e) { ignored('ee2-history:send', e) } }) })
   win.on('closed', () => { _history?.setSender(null) })
   // TEMPORARY DEV DIAGNOSTIC (beta/dev only): which link of the icon chain broke — see icondiag.js.
   if (diagTelemetryOn()) {
@@ -777,7 +778,7 @@ app.on('web-contents-created', (_e, contents) => {
   try { require('./trade/tap.js').attachTap(contents, (ch, p) => win?.webContents.send(ch, p), (l) => telemetry.installLog('tap', l), require('./trade/budget.js').observe) } catch (e) { console.log('[tap]', String(e)) }
   // Pin the guest's zoom: Chromium persists zoom per origin on the shared session and syncs the
   // guest to the embedder on navigation, which is how a stray ⌘+ used to stick across restarts.
-  try { contents.setZoomFactor(1); contents.setVisualZoomLevelLimits(1, 1) } catch {}
+  try { contents.setZoomFactor(1); contents.setVisualZoomLevelLimits(1, 1) } catch (e) { ignored('zoom:lock-webview', e) }
   contents.setWindowOpenHandler(({ url }) => {
     if (isAuthUrl(url)) return { action: 'allow' }
     shell.openExternal(url)
@@ -791,8 +792,8 @@ app.on('web-contents-created', (_e, contents) => {
   // so the workspace can capture a run search into the active entry (event-driven, no poll).
   // The payload names the guest (wcId) so the renderer can ignore the open-trade pop-out, and
   // the loading phases drive the workspace's progress hairline.
-  const fwd = (url, phase) => { if (isPoeUrl(url)) try { win?.webContents.send('trade:webview-nav', { url, wcId: contents.id, phase }) } catch {} }
-  contents.on('did-navigate', (_ev, url) => { try { contents.setZoomLevel(0) } catch {}; fwd(url, 'nav') })
+  const fwd = (url, phase) => { if (isPoeUrl(url)) try { win?.webContents.send('trade:webview-nav', { url, wcId: contents.id, phase }) } catch (e) { ignored('trade:webview-nav', e) } }
+  contents.on('did-navigate', (_ev, url) => { try { contents.setZoomLevel(0) } catch (e) { ignored('zoom:reset-webview', e) }; fwd(url, 'nav') })
   contents.on('did-navigate-in-page', (_ev, url) => fwd(url, 'nav'))
   contents.on('did-start-loading', () => fwd(contents.getURL(), 'start'))
   contents.on('did-stop-loading', () => fwd(contents.getURL(), 'stop'))
@@ -835,7 +836,7 @@ ipcMain.handle('mods:item', async () => {
 // has finished (previously a second before-quit listener killed the backend while ws:flush was
 // still trying to PUT /api/workspace).
 // (`_flushedForQuit` is declared up top so the update handler can set it before quitAndInstall.)
-const stopTrade = () => { try { require('./trade').engine.stopAll() } catch {}; try { require('./trade/hotkey.js').unregisterAll() } catch {} }
+const stopTrade = () => { try { require('./trade').engine.stopAll() } catch (e) { ignored('quit:stop-live-search', e) }; try { require('./trade/hotkey.js').unregisterAll() } catch (e) { ignored('quit:unregister-hotkeys', e) } }
 const stopAll = () => { stopTrade(); stopEe2Integration(); stopClientLogWatcher(); stopBackend() }
 app.on('before-quit', (e) => {
   if (!_flushedForQuit && win && !win.isDestroyed()) {

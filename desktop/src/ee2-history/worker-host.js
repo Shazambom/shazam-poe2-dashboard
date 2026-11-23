@@ -3,6 +3,7 @@
 // 3 s + a little; the process exits itself after 10 idle minutes and is re-spawned on the next use
 // by the consumer (which also throttles restarts after a failure).
 'use strict'
+const { ignored } = require('../ignored.js')
 const path = require('node:path')
 
 const IDLE_EXIT_MS = 10 * 60 * 1000
@@ -20,7 +21,7 @@ function spawnWorker({ onExit } = {}) {
   const pending = new Map()
   let seq = 0, idle = null, ready = null, dead = false, idleKill = false
 
-  const fail = (err) => { dead = true; clearTimeout(idle); for (const p of pending.values()) { clearTimeout(p.timer); p.reject(err) } pending.clear(); try { onExit?.({ idle: idleKill }) } catch {} }
+  const fail = (err) => { dead = true; clearTimeout(idle); for (const p of pending.values()) { clearTimeout(p.timer); p.reject(err) } pending.clear(); try { onExit?.({ idle: idleKill }) } catch (e) { ignored('ee2-worker:on-exit', e) } }
   child.on('exit', () => fail(new Error('worker exited')))
   child.on('message', (m) => {
     if (!m || typeof m !== 'object') return
@@ -58,7 +59,7 @@ function spawnWorker({ onExit } = {}) {
   }
   const build = (raw, prefs) => request({ t: 'build', raw, prefs })
   const parse = (raw) => request({ t: 'parse', raw })
-  const kill = () => { if (dead) return; try { child.kill() } catch {} }
+  const kill = () => { if (dead) return; try { child.kill() } catch (e) { ignored('ee2-worker:kill', e) } }
   return { build, parse, warm, kill }
 }
 

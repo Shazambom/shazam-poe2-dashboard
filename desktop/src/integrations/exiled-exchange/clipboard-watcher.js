@@ -20,6 +20,7 @@
 // We only READ the clipboard (never clear/rewrite) so we can't interfere with
 // EE2's own read/restore dance.
 'use strict'
+const { ignored } = require('../../ignored.js')
 
 // Lazy electron require so this file's pure parser can be unit-tested (and
 // self-tested via `node clipboard-watcher.js`) without an Electron runtime.
@@ -188,7 +189,7 @@ class ClipboardWatcher {
     let item
     try { item = parseItem(text) } catch { return }
     if (!item.name) return
-    try { this._onItem(item) } catch {}
+    try { this._onItem(item) } catch (e) { ignored('ee2-clipboard:on-item', e) }
   }
 }
 
@@ -219,8 +220,8 @@ function captureItemBurst({ intervalMs = 15, durationMs = 250, onItem } = {}) {
     reading = false
     if (done || !text || hash(text) === baseHash || !looksLikeItem(text)) return
     let item
-    try { item = parseItem(text) } catch {}
-    if (item && item.name) { done = true; clearInterval(timer); try { cb(item) } catch {} }
+    try { item = parseItem(text) } catch (e) { ignored('ee2-clipboard:parse', e) }
+    if (item && item.name) { done = true; clearInterval(timer); try { cb(item) } catch (e) { ignored('ee2-clipboard:burst-item', e) } }
   }, intervalMs)
   if (timer.unref) timer.unref()
   return () => { done = true; clearInterval(timer) }
