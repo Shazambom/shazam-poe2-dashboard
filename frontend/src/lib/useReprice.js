@@ -2,7 +2,7 @@
 // page (desktop/src/trade/tap.js) → at most one offer; apply() replaces the saved search with the repriced one,
 // with a 10 s undo. The rules are in reprice.js; this only wires events, prices, the store and telemetry.
 import { ignoredError } from './ignoredError.js'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
 import { api, undoToast } from './api.js'
 import { diag } from './diag.js'
 import { useWorkspace } from './workspaceStore.js'
@@ -60,11 +60,17 @@ export function useReprice({ wv, node, navUrl, inHistory, remountKey, league, vi
   useEffect(() => (wcId == null ? undefined : () => TAP.drop(wcId)), [wcId])
 
   // The row's own query, from its link (a run search's slug is its query): the page counts only once it holds it.
-  const [rowQuery, setRowQuery] = useState(null)
+  const nodeId = node?.id ?? null
+  const selectedId = useEffectEvent(() => nodeId)
+  const [decodedLink, setDecodedLink] = useState(null)
+  const rowQuery = decodedLink?.query ?? null
   useEffect(() => {
     let live = true
-    setRowQuery(null)
-    searchOfLink(navUrl || '').then(j => { if (live) setRowQuery(j?.query || null) }).catch(() => ignoredError('read search query'))
+    const owner = selectedId()
+    setDecodedLink(null)
+    searchOfLink(navUrl || '').then(j => {
+      if (live && j?.query) setDecodedLink({ nodeId: owner, query: j.query })
+    }).catch(() => ignoredError('read search query'))
     return () => { live = false }
   }, [navUrl])
   // The window's own page, or — when the site redrew a search it ran moments ago from its own cache, with no
@@ -160,7 +166,9 @@ export function useReprice({ wv, node, navUrl, inHistory, remountKey, league, vi
 
   return {
     offer, apply, state, find,
-    own, rowQuery,
+    own,
+    // A decoded address can outlive the webview that supplied it during a row switch.
+    rowQuery: decodedLink?.nodeId === nodeId ? rowQuery : null,
     prices: page?.prices || prices.P,
     options: page?.options || TAP.options(),
     emptyExact,

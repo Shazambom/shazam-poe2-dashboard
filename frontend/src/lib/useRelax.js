@@ -45,7 +45,8 @@ export function useRelax({
   const nodeId = node?.id ?? null
   const [st, setSt] = useState(() => ({ ...IDLE, relaxTick: 0 }))
   const [connecting, setConnecting] = useState(false)
-  const [decodedSlugQuery, setDecodedSlugQuery] = useState(null)
+  const [decodedSlug, setDecodedSlug] = useState(null)
+  const decodedSlugQuery = decodedSlug?.nodeId === nodeId ? decodedSlug.query : null
   // A TAP search object belongs to one observed search; fetches only replace its rows.
   // The outgoing webview can still expose its relaxed search after another row is selected.
   const search = page?.search
@@ -71,10 +72,10 @@ export function useRelax({
   // Async fallback for saved slug searches that don't store node.q.
   useEffect(() => {
     let live = true
-    setDecodedSlugQuery(null)
+    setDecodedSlug(null)
     if (nodeQuery || !node || node.kind !== 'search' || node.live || !node.slug) return () => { live = false }
     searchOfLink(tradeUrl(node, league, false))
-      .then(j => { if (live) setDecodedSlugQuery(j?.query || null) })
+      .then(j => { if (live && j?.query) setDecodedSlug({ nodeId, query: j.query }) })
       .catch(() => ignoredError('read trade search'))
     return () => { live = false }
   }, [nodeId, node?.slug, node?.kind, node?.live, league, nodeQuery])
