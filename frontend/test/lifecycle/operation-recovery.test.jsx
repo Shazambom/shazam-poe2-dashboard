@@ -240,3 +240,32 @@ it('theme: a failed save keeps the chosen theme painted, even across a settings 
   useTheme.getState().apply('vault')
   await settle()
 })
+
+it('release channel: when the switch fails, it ends on the channel actually in effect, with no new message', async () => {
+  installApiMock()
+  const desk = window.poe2desktop
+  let inEffect = { beta: false, locked: false, tweaks: false }
+  const getChannel = vi.spyOn(desk, 'getChannel').mockImplementation(async () => inEffect)
+  vi.spyOn(desk, 'setChannel').mockImplementation(async () => {
+    inEffect = { beta: true, locked: false, tweaks: true }   // main switched, then the reply was lost
+    throw new Error('reply was never sent')
+  })
+  render(<SettingsView />)
+  await settle()
+  const beta = screen.getByRole('switch', { name: /Beta updates/ })
+  expect(beta.getAttribute('aria-checked')).toBe('false')
+  const reads = getChannel.mock.calls.length
+  fireEvent.click(beta)
+  await settle()
+  expect(getChannel.mock.calls.length).toBeGreaterThan(reads)
+  expect(screen.getByRole('switch', { name: /Beta updates/ }).getAttribute('aria-checked')).toBe('true')
+
+  // A switch that did not happen: the toggle stays on the channel in effect.
+  const before = document.body.textContent
+  vi.spyOn(desk, 'setChannel').mockRejectedValue(new Error('settings file locked'))
+  fireEvent.click(screen.getByRole('switch', { name: /Beta updates/ }))
+  await settle()
+  expect(screen.getByRole('switch', { name: /Beta updates/ }).getAttribute('aria-checked')).toBe('true')
+  expect(document.body.textContent).toBe(before)
+  expect(toasts).not.toHaveBeenCalled()
+})
