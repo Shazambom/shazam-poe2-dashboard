@@ -10,3 +10,10 @@ const panel = src.slice(src.indexOf('function DiagPanel('))
 test('DiagPanel never probes on mount', () => {
   assert.ok(!/useEffect\(\(\) => \{ run\(\) \}, \[\]\)/.test(panel), 'unconditional probe on mount')
 })
+
+test('it probes once the Diagnostics section is opened', () => {
+  assert.match(panel, /function DiagPanel\(\)/)
+  assert.match(panel, /if \(open && !d\) run\(\)/)
+  assert.match(panel, /<details className="adv" onToggle=\{onToggle\}>\s*<summary>Diagnostics<\/summary>/)
+  assert.match(src, /<DiagPanel \/>/)
+})

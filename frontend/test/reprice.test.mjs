@@ -413,3 +413,13 @@ test('sampleTarget and stepAfter', () => {
   assert.equal(R.stepAfter({ ok: false, error: 'cancelled' }), 'todo', 'moved away and back: try again')
   assert.equal(R.stepAfter({ ok: false, error: 'rate' }), 'done', 'the budget said no: not this search')
 })
+
+// QA (2026-10-03): ↻ right after a fresh search reloaded the trade home, not the row's search: the window's address
+// was computed once per row and never again. Reloading recomputes it from the saved row.
+test('the trade window\'s address is recomputed on a reload (↻), from the saved row', async () => {
+  const { readFileSync } = await import('node:fs')
+  const src = readFileSync(new URL('../src/components/WorkspaceView.jsx', import.meta.url), 'utf8')
+  // the address is re-read whenever the window key changes, and the key carries every reload counter
+  assert.match(src, /const remountKey = `\$\{activeId\}:\$\{wvNonce\}:\$\{rerunTick\}`/)
+  assert.match(src, /if \(address\.windowKey !== windowKey \|\| address\.league !== league \|\| address\.activeId !== activeId\) \{\s*setAddress\(readAddress\(\)\)/)
+})

@@ -22,6 +22,7 @@ test('Settings: gold fees, recipes, the currency linker and the market switches 
 
 test('Inflation: measured against the anchor, drawn in ink with an arrow, no Hours column', () => {
   const s = src('components/InflationView.jsx')
+  assert.match(s, /<label htmlFor="inflation-anchor">Against<\/label>/)
   assert.doesNotMatch(s, /<th className="num">Hours<\/th>/)
   assert.doesNotMatch(s, /\? 'loss' : 'gain'/, 'inflation is neither a gain nor a loss')
   assert.match(s, /▲|▼/)
@@ -59,6 +60,11 @@ test('Inbox: an entry names the price, not the volume multiple', () => {
 })
 
 // QA pass (2026-10-08) on the first-contact build: four defects and the polish that follows the same rules.
+test('QA 1: Convert drops its last result when the currencies change (no stale route under new icons)', () => {
+  const s = src('components/ConvertView.jsx')
+  assert.match(s, /if \(id !== have\) \{ setHave\(id\); setRes\(null\) \}[\s\S]{0,80}if \(id !== want\) \{ setWant\(id\); setRes\(null\) \}/)
+})
+
 test('QA 2: ⌘K opens a currency that is not on the board by its name, in the app-wide card', () => {
   const p = src('components/CommandPalette.jsx')
   assert.match(p, /onOpenCurrency\(it\)/, 'the palette hands over the item, not just the id')

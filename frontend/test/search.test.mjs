@@ -157,6 +157,9 @@ test('the item picker ranks with search(), matching names, hidden keywords and t
 })
 
 test('the filter boxes keep their own order and use the shared search', () => {
+  const m = src('components/ModPicker.jsx')
+  assert.match(m, /matching\(pool, order\.filter, m => \[m\.text\]\)/)
+  assert.match(m, /const filterKey = norm\(filter\)[\s\S]{0,400}order\.filterKey !== filterKey/, 'a trailing space or a case change never reorders the list')
   const mk = src('components/MarketView.jsx')
   assert.match(mk, /useMemo\(\(\) => matching\(edges, q, e => \[`\$\{e\.from_name\} \$\{e\.to_name\} \$\{e\.from\} \$\{e\.to\}`\]\)[\s\S]{0,160}\[edges, q\]\)/, 'one joined text, so "div chaos" spans both names; searched only when the text or the list changes (recipes sort after markets)')
   assert.match(src('components/StashView.jsx'), /stashMatches\(rows, q\)/)

@@ -39,6 +39,7 @@ test('Inflation: no theory on screen, an honest window label, and no hour count'
     'rising = dump soft, hold hard', 'h of data', 'Since league start', 'day 0 = 100']) assert.ok(!s.includes(gone), gone)
   assert.match(s, /Last \$\{spanDays\} \$\{spanDays === 1 \? 'day' : 'days'\}/)
   assert.match(s, /\{sinceLabel\} = 100/)
+  assert.match(s, />Against<\/label>/)
 })
 
 test('an Inflation anchor with too few trades offers the Divine anchor', () => {
