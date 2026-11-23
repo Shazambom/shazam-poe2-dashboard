@@ -39,6 +39,8 @@ import time
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 
+from starlette.concurrency import run_in_threadpool
+
 from . import catalog, db, gamedata, gateway
 
 log = logging.getLogger("poe2arb.modpool")
@@ -985,7 +987,7 @@ async def refresh_tablet_uses(max_age: int) -> str | None:
             continue
         if u:
             uniques.append(u)
-    db.kv_set(TABLET_USES, bases + uniques)
+    await run_in_threadpool(db.kv_set, TABLET_USES, bases + uniques)
     return None
 
 
