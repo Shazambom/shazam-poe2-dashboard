@@ -8,17 +8,16 @@ cd "$(dirname "$0")"
 
 # Match the server's Python (3.12).
 PY="${PY:-$(command -v python3.12 || command -v python3 || command -v python)}"
-# Windows (Git Bash on the CI runner): PyInstaller's --add-data separator is ';' and the venv
-# activates from Scripts/. Everything else about the build is identical, which is the point —
-# CI runs THIS script rather than a second copy of the pyinstaller invocation.
-case "$(uname -s)" in MINGW* | MSYS* | CYGWIN* | Windows_NT)
-  SEP=';'
-  EXE=.exe
-  ;;
-*)
-  SEP=':'
-  EXE=
-  ;;
+# Windows (Git Bash on the CI runner): the binary has a .exe suffix and the venv activates from
+# Scripts/. Everything else about the build is identical, which is the point — CI runs THIS script
+# rather than a second copy of the pyinstaller invocation.
+case "$(uname -s)" in
+  MINGW* | MSYS* | CYGWIN* | Windows_NT)
+    EXE=.exe
+    ;;
+  *)
+    EXE=
+    ;;
 esac
 VENV=.venv-sidecar
 if [ ! -d "$VENV" ]; then "$PY" -m venv "$VENV"; fi

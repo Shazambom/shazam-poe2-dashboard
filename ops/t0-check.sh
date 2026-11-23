@@ -25,7 +25,7 @@ scp -q "$(dirname "$0")/t0-scan.py" "$HOST:/tmp/t0-scan.py" || {
   echo "T0 check: cannot reach shazam; refusing to ship blind"
   exit 1
 }
-OUT=$(ssh "$HOST" "python3 /tmp/t0-scan.py --log '$LOG' --version '$XYZ' --since '$SINCE_FMT'")
+OUT=$(ssh "$HOST" python3 /tmp/t0-scan.py --log "$(printf '%q' "$LOG")" --version "$(printf '%q' "$XYZ")" --since "$(printf '%q' "$SINCE_FMT")")
 RC=$?
 echo "$OUT"
 case "$RC" in
@@ -40,4 +40,4 @@ case "$RC" in
     RC=1
     ;;
 esac
-exit $RC
+exit "$RC"

@@ -45,11 +45,10 @@ case "$cmd" in
     ;;
   resolve-shipped)
     ref=${1:-$(git tag --list 'desktop-v*' --sort=-v:refname | head -1)}
-    [[ "$ref" =~ ^desktop-v[0-9]+\.[0-9]+\.[0-9]+$ ]] && git rev-parse --verify -q "refs/tags/$ref" > /dev/null \
-      || {
-        echo "not a stable release tag: ${ref:-none} (only a stable desktop-v<x.y.z> release resolves reports)" >&2
-        exit 2
-      }
+    if ! { [[ "$ref" =~ ^desktop-v[0-9]+\.[0-9]+\.[0-9]+$ ]] && git rev-parse --verify -q "refs/tags/$ref" > /dev/null; }; then
+      echo "not a stable release tag: ${ref:-none} (only a stable desktop-v<x.y.z> release resolves reports)" >&2
+      exit 2
+    fi
     for r in $(sshshazambom sudo "$CLI list --state open" | python3 -c 'import json,sys; [print(r["report"]) for r in json.load(sys.stdin)]'); do
       check_id "$r"
       if [ -n "$(git log "$ref" -F --grep "Fixes-Report: $r" --format=%h)" ]; then

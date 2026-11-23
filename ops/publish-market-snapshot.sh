@@ -38,9 +38,11 @@ fi
 # package (cwd=/app) the exporter imports its data policy from. Piping the script over stdin
 # keeps it decoupled from the image. Exit 3 = nothing newer than today's published seed.
 set +e
-sudo docker exec -i "$CONTAINER" python - \
-  --src /data/market.sqlite --out /data/market-seed.sqlite.gz \
-  --only-if-newer /data/market-seed.published-cut < "$EXPORT_PY"
+{
+  sudo docker exec -i "$CONTAINER" python - \
+    --src /data/market.sqlite --out /data/market-seed.sqlite.gz \
+    --only-if-newer /data/market-seed.published-cut
+} < "$EXPORT_PY"
 rc=$?
 set -e
 [ "$rc" -eq 3 ] && {

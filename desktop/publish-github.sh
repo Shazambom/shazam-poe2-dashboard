@@ -115,15 +115,22 @@ fi
 # electron-builder always names the Mac update manifest latest-mac.yml regardless of the version's
 # prerelease tag. For a -beta version, rename it to the beta channel file the beta updater fetches —
 # so a beta build emits ONLY beta-mac.yml and never disturbs stable's latest-mac.yml.
-case "$VER" in *-beta*) [ -f release/latest-mac.yml ] && mv -f release/latest-mac.yml release/beta-mac.yml ;; esac
+case "$VER" in
+  *-beta*)
+    if [ -f release/latest-mac.yml ]; then
+      mv -f release/latest-mac.yml release/beta-mac.yml
+    fi
+    ;;
+  *) ;;
+esac
 
 # Preflight: never publish a seedless build. Confirm the seed the app will bundle exists and
 # is a valid gzip, with its version sidecar (the backend reads the sidecar to decide re-seeding).
 SEED="market-seed/market-seed.sqlite.gz"
-[ -f "$SEED" ] && gzip -t "$SEED" 2> /dev/null || {
+if ! { [ -f "$SEED" ] && gzip -t "$SEED" 2> /dev/null; }; then
   echo "FATAL: $SEED missing or corrupt — run ./fetch-seed.sh"
   exit 1
-}
+fi
 [ -f "$SEED.version" ] || {
   echo "FATAL: $SEED.version sidecar missing — re-run ./fetch-seed.sh"
   exit 1

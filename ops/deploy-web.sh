@@ -24,12 +24,14 @@ case "$WHAT" in
     rsync -az --delete --exclude='__pycache__' backend/app/ "$HOST:$REMOTE/backend/app/"
     rsync -az --delete --exclude='__pycache__' backend/sidecar/ "$HOST:$REMOTE/backend/sidecar/"
     ;;
+  *) ;;
 esac
 case "$WHAT" in
   all | frontend)
     rsync -az --delete --exclude='node_modules' --exclude='dist' frontend/src/ "$HOST:$REMOTE/frontend/src/"
     rsync -az frontend/nginx.conf "$HOST:$REMOTE/frontend/nginx.conf"
     ;;
+  *) ;;
 esac
 rsync -az docker-compose.yml "$HOST:$REMOTE/docker-compose.yml"
 case "$WHAT" in
@@ -50,6 +52,7 @@ case "$WHAT" in
     echo "ops scripts synced to $HOST:~/bin"
     exit 0
     ;;
+  *) ;;
 esac
 
 SERVICES="backend frontend"

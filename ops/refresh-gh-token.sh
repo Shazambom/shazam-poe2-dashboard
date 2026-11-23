@@ -15,7 +15,6 @@
 set -euo pipefail
 
 SSH=sshshazambom
-REMOTE_FILE='~/.poe2-gh-token'
 GH_REPO="${GH_REPO:-Shazambom/shazam-poe2-dashboard}"
 
 get_token() {
