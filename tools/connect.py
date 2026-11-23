@@ -28,18 +28,55 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import webbrowser
+from functools import cache
+
+
+class _HttpRequest(urllib.request.Request):
+    def __init__(
+        self,
+        url: str,
+        *,
+        data: bytes | None,
+        method: str,
+        headers: dict[str, str],
+    ) -> None:
+        if urllib.parse.urlsplit(url).scheme not in {"http", "https"}:
+            raise ValueError("Dashboard URL must use HTTP or HTTPS")
+        super().__init__(url, data=data, method=method, headers=headers)
+
+
+@cache
+def _http_opener() -> urllib.request.OpenerDirector:
+    """Use urllib's HTTP handlers without enabling local files or other transports."""
+    opener = urllib.request.OpenerDirector()
+    proxies = {
+        scheme: url
+        for scheme, url in urllib.request.getproxies().items()
+        if scheme in {"http", "https"}
+    }
+    for handler in (
+        urllib.request.ProxyHandler(proxies),
+        urllib.request.UnknownHandler(),
+        urllib.request.HTTPHandler(),
+        urllib.request.HTTPDefaultErrorHandler(),
+        urllib.request.HTTPRedirectHandler(),
+        urllib.request.HTTPErrorProcessor(),
+        urllib.request.HTTPSHandler(),
+    ):
+        opener.add_handler(handler)
+    return opener
 
 
 def call(server: str, path: str, method: str = "GET", body: dict | None = None) -> dict:
     data = json.dumps(body).encode() if body is not None else None
-    req = urllib.request.Request(
+    req = _HttpRequest(
         server.rstrip("/") + path,
         data=data,
         method=method,
         headers={"Content-Type": "application/json"},
     )
     try:
-        with urllib.request.urlopen(req, timeout=60) as r:
+        with _http_opener().open(req, timeout=60) as r:
             return json.loads(r.read() or b"{}")
     except urllib.error.HTTPError as e:
         try:

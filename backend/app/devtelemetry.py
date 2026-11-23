@@ -18,6 +18,7 @@ import queue
 import sys
 import threading
 import urllib.request
+from functools import cache
 
 _URL = "http://192.168.1.250:8080/api/installlog?p=sidecar"
 
@@ -74,12 +75,34 @@ _worker: threading.Thread | None = None
 _lock = threading.Lock()
 
 
+@cache
+def _http_opener() -> urllib.request.OpenerDirector:
+    """Use urllib's HTTP handlers without enabling local files or other transports."""
+    opener = urllib.request.OpenerDirector()
+    proxies = {
+        scheme: url
+        for scheme, url in urllib.request.getproxies().items()
+        if scheme in {"http", "https"}
+    }
+    for handler in (
+        urllib.request.ProxyHandler(proxies),
+        urllib.request.UnknownHandler(),
+        urllib.request.HTTPHandler(),
+        urllib.request.HTTPDefaultErrorHandler(),
+        urllib.request.HTTPRedirectHandler(),
+        urllib.request.HTTPErrorProcessor(),
+        urllib.request.HTTPSHandler(),
+    ):
+        opener.add_handler(handler)
+    return opener
+
+
 def _post(body: bytes) -> None:
     try:
         req = urllib.request.Request(
             _URL, data=body, headers={"Content-Type": "text/plain"}
         )
-        urllib.request.urlopen(req, timeout=4).close()
+        _http_opener().open(req, timeout=4).close()
     except Exception:
         logging.getLogger(__name__).debug("telemetry post failed", exc_info=True)
 

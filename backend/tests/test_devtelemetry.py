@@ -16,7 +16,7 @@ from sidecar import runner
 def _capture(monkeypatch):
     calls = []
 
-    def fake_urlopen(req, timeout=None):
+    def fake_open(_opener, req, data=None, timeout=None):
         calls.append((req.full_url, req.data.decode(), dict(req.headers)))
 
         class R:
@@ -25,7 +25,7 @@ def _capture(monkeypatch):
 
         return R()
 
-    monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
+    monkeypatch.setattr(urllib.request.OpenerDirector, "open", fake_open)
     return calls
 
 
@@ -59,7 +59,7 @@ def test_never_raises(monkeypatch):
     def boom(*a, **k):
         raise OSError("down")
 
-    monkeypatch.setattr(urllib.request, "urlopen", boom)
+    monkeypatch.setattr(urllib.request.OpenerDirector, "open", boom)
     devtelemetry.tlog("sidecar", "x")
     assert devtelemetry.flush(5), "a failed post is dropped; the worker lives on"
     devtelemetry.tlog("sidecar", "y")
@@ -77,7 +77,7 @@ def test_both_processes_use_the_shared_sender():
 
 def test_a_slow_or_unreachable_server_never_blocks_the_caller(monkeypatch):
     """tlog is called straight from the backend's event loop (the crawl, the seed, the mods check).
-    A beta client off the owner's LAN waits out urlopen's timeout on every line, so the caller must
+    A beta client off the owner's LAN waits out the opener's timeout on every line, so the caller must
     only queue the line: one worker posts, in order, and flush() drains it (at exit too)."""
     import threading
     import time
@@ -85,7 +85,7 @@ def test_a_slow_or_unreachable_server_never_blocks_the_caller(monkeypatch):
     monkeypatch.setenv("ARBITER_TELEMETRY", "1")
     gate, sent = threading.Event(), []
 
-    def slow(req, timeout=None):
+    def slow(_opener, req, data=None, timeout=None):
         gate.wait(5)
         sent.append(req.data.decode().rsplit("]: ", 1)[1])
 
@@ -95,7 +95,7 @@ def test_a_slow_or_unreachable_server_never_blocks_the_caller(monkeypatch):
 
         return R()
 
-    monkeypatch.setattr(urllib.request, "urlopen", slow)
+    monkeypatch.setattr(urllib.request.OpenerDirector, "open", slow)
     t = time.monotonic()
     for i in range(3):
         devtelemetry.tlog("lh", f"line {i}")
