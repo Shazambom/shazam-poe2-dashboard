@@ -120,7 +120,7 @@ def test_discords_compute_end_to_end_identical():
             t0 = 1_700_000_000
             series[item_id] = [
                 (t0 + i * DAY, float(c), float(c) * float(v))
-                for i, (c, v) in enumerate(zip(closes, vols))
+                for i, (c, v) in enumerate(zip(closes, vols, strict=False))
             ]
             meta[item_id] = (f"item{item_id}", "currency")
 
@@ -192,7 +192,7 @@ def test_compute_weights_ranking_identical_to_dtaidistance():
         temp = float(np.median(vals)) or 1.0
         w = np.exp(-vals / temp)
         w = w / w.sum()
-        return {lg: float(wi) for lg, wi in zip(dists.keys(), w)}
+        return {lg: float(wi) for lg, wi in zip(dists.keys(), w, strict=False)}
 
     for seed in range(60):
         rng = _rng(4000 + seed)

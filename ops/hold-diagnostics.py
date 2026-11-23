@@ -48,7 +48,7 @@ def auc(pos, neg):
         for k in range(i, j + 1):
             ranks[k] = (i + j) / 2 + 1
         i = j + 1
-    rp = sum(r for r, (_v, y) in zip(ranks, allv) if y)
+    rp = sum(r for r, (_v, y) in zip(ranks, allv, strict=False) if y)
     return (rp - len(pos) * (len(pos) + 1) / 2) / (len(pos) * len(neg))
 
 

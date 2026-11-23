@@ -443,7 +443,7 @@ def test_the_shipped_window_beats_one_day_on_the_real_leagues():
 
         rx, ry = ranks(xs), ranks(ys)
         mx, my = sum(rx) / len(rx), sum(ry) / len(ry)
-        num = sum((a - mx) * (b - my) for a, b in zip(rx, ry))
+        num = sum((a - mx) * (b - my) for a, b in zip(rx, ry, strict=False))
         den = (sum((a - mx) ** 2 for a in rx) * sum((b - my) ** 2 for b in ry)) ** 0.5
         return num / den if den else None
 
@@ -549,7 +549,7 @@ def test_no_forecast_stays_no_forecast():
 def test_direction_comes_from_the_sign():
     preds = [0.30, 0.20, 0.10, 0.05, -0.05, -0.10, -0.20, -0.30]
     out = holdscore.arrows(preds)
-    for p, a in zip(preds, out):
+    for p, a in zip(preds, out, strict=False):
         if a:  # dashes carry no direction
             assert (a > 0) == (p > 0), f"{p:+} got {a}"
 
@@ -608,7 +608,9 @@ def _arrow_outcomes(delta, first_day, last_day):
             rows.append((preds[holdscore.PRED_WINDOW]["pred"], r))
         if len(rows) < 8:
             continue
-        for a, (_p, r) in zip(holdscore.arrows([p for p, _r in rows]), rows):
+        for a, (_p, r) in zip(
+            holdscore.arrows([p for p, _r in rows]), rows, strict=False
+        ):
             shown.append((a, r))
             rose.append(r > 0)
     return shown, sum(rose) / len(rose)

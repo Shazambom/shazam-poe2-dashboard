@@ -130,7 +130,11 @@ def _expected(pid):
         "filters": {**ZERO, **f},
         "max_steps": steps,
         "rank_weights": dict(
-            zip(("velocity", "margin_per_1k_gold", "margin_ref", "volume"), w)
+            zip(
+                ("velocity", "margin_per_1k_gold", "margin_ref", "volume"),
+                w,
+                strict=False,
+            )
         ),
         "step_overhead_min": overhead,
         "volume_window_h": window,

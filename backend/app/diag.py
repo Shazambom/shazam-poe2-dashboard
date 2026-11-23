@@ -109,7 +109,7 @@ async def _connectivity() -> dict:
     results = await asyncio.gather(
         *(_probe(url, policy) for url, policy in _PROBES.values())
     )
-    return dict(zip(_PROBES, results))
+    return dict(zip(_PROBES, results, strict=False))
 
 
 def _analytics(league: str) -> dict:

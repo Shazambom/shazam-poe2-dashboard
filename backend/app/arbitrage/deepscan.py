@@ -91,7 +91,8 @@ def deep_loops(
         if cyc is None:
             break
         loop = [
-            edges[index[(names[a], names[b])]] for a, b in zip(cyc, cyc[1:] + cyc[:1])
+            edges[index[(names[a], names[b])]]
+            for a, b in zip(cyc, cyc[1:] + cyc[:1], strict=False)
         ]
         loops.append(loop)
         worst = max(loop, key=overpay)

@@ -398,7 +398,11 @@ def window_grade(boards, top=TOP):
     window_overlap: the mean, over days both exist, of the share of FAR_PAIR's top ranks with the same name.
     window_same: the share of (day, pair of windows) whose scores are identical. None when unmeasured."""
     a, b = (boards.get(x, {}) for x in FAR_PAIR)
-    over = [sum(x == y for x, y in zip(a[t][0], b[t][0])) / top for t in a if t in b]
+    over = [
+        sum(x == y for x, y in zip(a[t][0], b[t][0], strict=False)) / top
+        for t in a
+        if t in b
+    ]
     labels = list(boards)
     pairs = [
         (x, y, t)
@@ -524,7 +528,7 @@ def grade_leagues(
             results = list(ex.map(_day, tasks, chunksize=4))
     else:
         results = [_day(x) for x in tasks]
-    by = dict(zip(tasks, results))
+    by = dict(zip(tasks, results, strict=False))
     out = {}
     for league in leagues:
         per, _p, _r = _league_ctx(league)

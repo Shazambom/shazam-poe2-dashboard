@@ -212,7 +212,10 @@ def _served_uses() -> list:
 
 def _first_diff(a, b) -> str:
     x, y = json.dumps(a, separators=(",", ":")), json.dumps(b, separators=(",", ":"))
-    i = next((i for i, (p, q) in enumerate(zip(x, y)) if p != q), min(len(x), len(y)))
+    i = next(
+        (i for i, (p, q) in enumerate(zip(x, y, strict=False)) if p != q),
+        min(len(x), len(y)),
+    )
     return f"reloaded …{x[max(0, i - 160) : i + 60]}… / saved …{y[max(0, i - 160) : i + 60]}…"
 
 
@@ -568,7 +571,7 @@ def test_fuzz_an_unpriced_item_is_left_out_and_named(monkeypatch):
             "tally", [{"calc": _doc(s), "prices": prices, "now": 0} for s in strats]
         )
     ]
-    for s, t in zip(strats, out):
+    for s, t in zip(strats, out, strict=False):
         want = _oracle(
             {**s, "loot": [r for r in s["loot"] if r["cur"] != "not-a-currency"]}, div
         )
@@ -597,7 +600,7 @@ def test_fuzz_a_running_clock_never_goes_backwards_and_waits_a_minute_for_a_rate
     for i in range(0, len(out), 5):
         hours = [o["hours"] for o in out[i : i + 5]]
         assert hours == sorted(hours), "the clock only moves forward"
-    for o, ms in zip(out, expect):
+    for o, ms in zip(out, expect, strict=False):
         assert _close(o["hours"], ms / H)
         assert (o["perHour"] is None) == (ms < MIN)
 
@@ -768,8 +771,8 @@ def test_fuzz_sidebar_actions_always_save_and_keep_one_timer(monkeypatch):
             steps.append(st)
         scripts.append({"steps": steps, "prices": prices})
     runs = _js("actions", scripts)
-    for script, docs in zip(scripts, runs):
-        for step, d in zip(script["steps"], docs):
+    for script, docs in zip(scripts, runs, strict=False):
+        for step, d in zip(script["steps"], docs, strict=False):
             assert d["running"] <= 1, (step, "two strats running at once")
             assert d["roundtrip"], (
                 step,

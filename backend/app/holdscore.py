@@ -296,14 +296,14 @@ def _signals(
         ys = [math.log(sm[a]) for a in win]
         mx, my = statistics.fmean(win), statistics.fmean(ys)
         sxx = sum((x - mx) ** 2 for x in win)
-        sxy = sum((x - mx) * (y - my) for x, y in zip(win, ys))
+        sxy = sum((x - mx) * (y - my) for x, y in zip(win, ys, strict=False))
         syy = sum((y - my) ** 2 for y in ys)
         trend = (sxy / sxx) * (sxy * sxy / (sxx * syy)) if sxx and syy else 0.0
     # steadiness of the settled climb: mean/sd of daily moves (Sharpe-style) and net/total movement
     # (efficiency ratio), both from DISCOVERY_DAY to SKIP_DAYS ago
     moves = [
         math.log(sm[b] / sm[a])
-        for a, b in zip(ages, ages[1:])
+        for a, b in zip(ages, ages[1:], strict=False)
         if b - a == 1 and a >= DISCOVERY_DAY and b <= t - SKIP_DAYS
     ]
     sd = statistics.pstdev(moves) if len(moves) >= 4 else 0.0
@@ -502,7 +502,9 @@ def _rank_day(
             continue
         have = [i for i, (_iid, x) in enumerate(sig) if x[name] is not None]
         if len(have) >= 2:
-            for i, r in zip(have, _pct_ranks([sig[i][1][name] for i in have])):
+            for i, r in zip(
+                have, _pct_ranks([sig[i][1][name] for i in have]), strict=False
+            ):
                 num[i] += w * r
                 den[i] += w
         if name == "record" and past:
@@ -707,7 +709,7 @@ def _predict(
         used_weights = False
         wts = [GAMMA**r for r, _lg, _f in fwd]
     vals = [f for _r, _lg, f in fwd]
-    wmean = sum(f * w for f, w in zip(vals, wts)) / sum(wts)
+    wmean = sum(f * w for f, w in zip(vals, wts, strict=False)) / sum(wts)
     return {
         "pred": math.exp(wmean) - 1,
         "band": statistics.pstdev(reads) if len(reads) > 1 else 0.0,
@@ -977,7 +979,7 @@ def _leaderboard(
             ).get("pred")
             for iid, _n, _c, m, _s in board
         ]
-        arrow_of = dict(zip((e[0] for e in board), arrows(preds)))
+        arrow_of = dict(zip((e[0] for e in board), arrows(preds), strict=False))
 
     # beta telemetry (gated off in stable builds): what the board showed, so a beta Hold list can be
     # checked from the log

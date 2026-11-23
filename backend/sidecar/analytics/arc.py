@@ -81,4 +81,4 @@ def compute_weights(cur_sig, past_sigs: dict, *, min_len: int = MIN_LEN) -> dict
     )  # scale-free: normalize distances by their spread
     w = np.exp(-vals / temp)
     w = w / w.sum()
-    return {lg: float(wi) for lg, wi in zip(dists.keys(), w)}
+    return {lg: float(wi) for lg, wi in zip(dists.keys(), w, strict=False)}

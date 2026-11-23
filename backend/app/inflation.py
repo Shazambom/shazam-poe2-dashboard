@@ -195,7 +195,7 @@ def _ols_daily_pct(
     denom = sum((x - mx) ** 2 for x in xs)
     if denom <= 0:
         return 0.0
-    slope = sum((x - mx) * (y - my) for x, y in zip(xs, ys)) / denom
+    slope = sum((x - mx) * (y - my) for x, y in zip(xs, ys, strict=False)) / denom
     slope = max(-10.0, min(10.0, slope))
     return round((math.exp(slope) - 1) * 100, 2)
 

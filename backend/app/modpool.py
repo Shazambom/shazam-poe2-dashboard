@@ -1271,7 +1271,9 @@ async def refresh(force: bool = False) -> dict:
         export = Export(
             **{
                 k: json.loads(raw[f])
-                for k, f in zip(("mods", "bases", "classes", "augments"), REPOE_FILES)
+                for k, f in zip(
+                    ("mods", "bases", "classes", "augments"), REPOE_FILES, strict=False
+                )
             }
         )
     except Exception as exc:

@@ -366,9 +366,9 @@ def test_asset_modal_is_one_source_in_the_shown_numeraire(monkeypatch):
                 "PairsLeague",
                 {
                     291: [
-                        (t, d, 1_000_000) for t, d in zip(days, div)
+                        (t, d, 1_000_000) for t, d in zip(days, div, strict=False)
                     ],  # marketseries.ANCHORS id
-                    2: [(t, 2 * d, 200_000) for t, d in zip(days, div)],
+                    2: [(t, 2 * d, 200_000) for t, d in zip(days, div, strict=False)],
                 },  # the omen: always 2 divine
                 {291: ("Divine Orb", "Currency"), 2: ("Omen of Light", "Omen")},
             ),
@@ -397,8 +397,11 @@ def test_asset_modal_is_one_source_in_the_shown_numeraire(monkeypatch):
             lambda: (
                 "PairsLeague",
                 {
-                    291: [(t, d, 1_000_000) for t, d in zip(days[:-1], div[:-1])],
-                    2: [(t, 2 * d, 200_000) for t, d in zip(days, div)],
+                    291: [
+                        (t, d, 1_000_000)
+                        for t, d in zip(days[:-1], div[:-1], strict=False)
+                    ],
+                    2: [(t, 2 * d, 200_000) for t, d in zip(days, div, strict=False)],
                 },
                 {291: ("Divine Orb", "Currency"), 2: ("Omen of Light", "Omen")},
             ),
@@ -641,7 +644,7 @@ def test_a_daily_only_mover_agrees_with_the_card_it_opens(monkeypatch):
             "_current_series",
             lambda: (
                 "PairsLeague",
-                {9: [(t, v, 5e8) for t, v in zip(days, px)]},
+                {9: [(t, v, 5e8) for t, v in zip(days, px, strict=False)]},
                 {9: ("Thingy", "Currency")},
             ),
         )
@@ -739,8 +742,8 @@ def test_movers_rows_carry_the_games_exchange_category_like_hold(monkeypatch):
             lambda: (
                 "PairsLeague",
                 {
-                    9: [(t, v, 5e8) for t, v in zip(days, up)],
-                    10: [(t, v, 5e8) for t, v in zip(days, up)],
+                    9: [(t, v, 5e8) for t, v in zip(days, up, strict=False)],
+                    10: [(t, v, 5e8) for t, v in zip(days, up, strict=False)],
                 },
                 {
                     9: ("Xesht's Reliquary Key", "vaultkeys"),

@@ -83,7 +83,7 @@ def _spearman(a, b) -> float:
 
     ra, rb = rk(a), rk(b)
     ma, mb = statistics.fmean(ra), statistics.fmean(rb)
-    num = sum((x - ma) * (y - mb) for x, y in zip(ra, rb))
+    num = sum((x - ma) * (y - mb) for x, y in zip(ra, rb, strict=False))
     den = math.sqrt(sum((x - ma) ** 2 for x in ra) * sum((y - mb) ** 2 for y in rb))
     return num / den if den else 0.0
 

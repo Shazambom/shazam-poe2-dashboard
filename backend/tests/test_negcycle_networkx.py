@@ -84,7 +84,7 @@ def test_networkx_recovery_gap_is_covered():
         for source in range(n):
             try:
                 theirs = nx.find_negative_cycle(G, source)  # closed list: first == last
-                if sum(W[(a, b)] for a, b in zip(theirs, theirs[1:])) < 0:
+                if sum(W[(a, b)] for a, b in zip(theirs, theirs[1:], strict=False)) < 0:
                     continue  # networkx got it right
             except nx.NetworkXError as e:
                 if "No negative cycles" in str(e):
@@ -100,5 +100,5 @@ def test_networkx_recovery_gap_is_covered():
 
 
 def _arr(edges):
-    u, v, w = zip(*edges) if edges else ((), (), ())
+    u, v, w = zip(*edges, strict=False) if edges else ((), (), ())
     return list(u), list(v), list(w)

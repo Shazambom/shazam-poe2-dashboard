@@ -28,7 +28,7 @@ def _selftest() -> int:
     series = {
         1: [
             (t0 + i * DAY, float(c), float(c) * float(v))
-            for i, (c, v) in enumerate(zip(closes, vols))
+            for i, (c, v) in enumerate(zip(closes, vols, strict=False))
         ]
     }
     signals = discords.compute(series, {1: ("Divine Orb", "currency")})

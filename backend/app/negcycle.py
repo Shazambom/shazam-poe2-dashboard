@@ -114,7 +114,9 @@ def bellman_ford_naive(n, src, dst, w, source, tol: float = 0.0):
     distance, predecessor = (
         a.tolist() for a in _initialize(n, source)
     )  # plain lists: the
-    edges = list(zip(src.tolist(), dst.tolist(), w.tolist()))  # loop below is scalar
+    edges = list(
+        zip(src.tolist(), dst.tolist(), w.tolist(), strict=False)
+    )  # loop below is scalar
 
     # Step 2: relax edges repeatedly
     for _ in range(n - 1):

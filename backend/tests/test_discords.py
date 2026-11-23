@@ -25,7 +25,7 @@ def _pts(closes, vols, t0=1_700_000_000):
     """[(t, close, value)] with value = close*vol, one point per day."""
     return [
         (t0 + i * DAY, float(c), float(c) * float(v))
-        for i, (c, v) in enumerate(zip(closes, vols))
+        for i, (c, v) in enumerate(zip(closes, vols, strict=False))
     ]
 
 

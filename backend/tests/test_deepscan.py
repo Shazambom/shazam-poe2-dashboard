@@ -52,7 +52,7 @@ def _graph(edges, **over):
 
 def _ring(nodes, gain):
     """A loop over `nodes` at 1:1 whose LAST hop pays `gain` (1.05 = +5% per lap)."""
-    hops = list(zip(nodes, nodes[1:] + nodes[:1]))
+    hops = list(zip(nodes, nodes[1:] + nodes[:1], strict=False))
     return [
         (a, b, gain if i == len(hops) - 1 else 1.0) for i, (a, b) in enumerate(hops)
     ]
@@ -72,7 +72,7 @@ def test_finds_a_loop_longer_than_max_steps():
     loops = deepscan.deep_loops(g, dict.fromkeys("abcde", 1.0))
     assert len(loops) == 1
     assert sorted(e.src for e in loops[0]) == list("abcde")
-    for e, nxt in zip(loops[0], loops[0][1:] + loops[0][:1]):
+    for e, nxt in zip(loops[0], loops[0][1:] + loops[0][:1], strict=False):
         assert e.dst == nxt.src  # a closed chain of real Edge objects
 
 

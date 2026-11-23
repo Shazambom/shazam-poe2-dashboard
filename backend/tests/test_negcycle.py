@@ -39,7 +39,7 @@ def arrays(edges):
     """[(u, v, w)] -> (src, dst, w) numpy arrays."""
     if not edges:
         return np.zeros(0, np.int64), np.zeros(0, np.int64), np.zeros(0)
-    u, v, w = zip(*edges)
+    u, v, w = zip(*edges, strict=False)
     return np.array(u, np.int64), np.array(v, np.int64), np.array(w, float)
 
 
@@ -64,7 +64,7 @@ def assert_negative_cycle(edges, cyc):
     W = best_weight(edges)
     assert len(cyc) >= 1 and len(set(cyc)) == len(cyc), cyc
     total = 0.0
-    for a, b in zip(cyc, cyc[1:] + cyc[:1]):
+    for a, b in zip(cyc, cyc[1:] + cyc[:1], strict=False):
         assert (a, b) in W, f"cycle {cyc} uses a non-edge {a}->{b}"
         total += W[(a, b)]
     assert total < 0, f"cycle {cyc} sums to {total}, not negative"
@@ -379,7 +379,9 @@ def test_profitable_loop_is_a_negative_cycle():
     assert loop is not None
     i = loop.index("a")
     assert loop[i:] + loop[:i] == ["a", "b", "c"]
-    gain = math.prod(rich[(a, b)] for a, b in zip(loop, loop[1:] + loop[:1]))
+    gain = math.prod(
+        rich[(a, b)] for a, b in zip(loop, loop[1:] + loop[:1], strict=False)
+    )
     assert gain == pytest.approx(1.02)
 
 
