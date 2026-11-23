@@ -88,7 +88,7 @@ export default function SearchTree({ onSelect = () => {}, renderTrailing = () =>
   // Folders open as the store remembers them (arborist would otherwise open every folder on every
   // mount); the ExiledExchange2 History folder always starts collapsed — it's a log, not the work.
   // arborist reads this once at mount, so the tree is keyed on `loaded` to mount with the real tree.
-  const initialOpen = useMemo(() => initialOpenState(tree), [loaded])
+  const initialOpen = useMemo(() => initialOpenState(tree), [tree])
   const hits = useMemo(() => filterHits(data, filter), [data, filter])
   const wrap = useRef(null)
   const [dims, setDims] = useState({ w: 260, h: 480 })
