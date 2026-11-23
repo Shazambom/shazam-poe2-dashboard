@@ -5,6 +5,8 @@ updates:
     schedule:
       interval: "weekly"
       day: "monday"
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 5
     groups:
       minor-and-patch:
@@ -17,6 +19,22 @@ updates:
     schedule:
       interval: "weekly"
       day: "monday"
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 5
+    groups:
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
+
+  - package-ecosystem: "npm"
+    directory: "/ops/lint"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 5
     groups:
       minor-and-patch:
@@ -29,6 +47,8 @@ updates:
     schedule:
       interval: "weekly"
       day: "monday"
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 5
     groups:
       minor-and-patch:
@@ -41,13 +61,31 @@ updates:
     schedule:
       interval: "weekly"
       day: "monday"
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 5
+
+  - package-ecosystem: "pip"
+    directory: "/ops/lint"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 5
+    groups:
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
 
   - package-ecosystem: "docker"
     directory: "/frontend"
     schedule:
       interval: "weekly"
       day: "monday"
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 2
 
   - package-ecosystem: "docker"
@@ -55,6 +93,8 @@ updates:
     schedule:
       interval: "weekly"
       day: "monday"
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 2
 
   - package-ecosystem: "docker"
@@ -62,6 +102,8 @@ updates:
     schedule:
       interval: "weekly"
       day: "monday"
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 2
 
   - package-ecosystem: "github-actions"
@@ -69,4 +111,6 @@ updates:
     schedule:
       interval: "weekly"
       day: "monday"
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 5
