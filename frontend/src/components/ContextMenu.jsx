@@ -46,7 +46,7 @@ export default function ContextMenu({ at, items, onClose }) {
   return (
     <div className="ctx-menu" role="menu" tabIndex={-1} ref={ref} style={{ left: pos.x, top: pos.y }} onKeyDown={onKey} onContextMenu={e => e.preventDefault()}>
       {items.map((it, i) => it.sep
-        ? <div key={i} className="ctx-sep" role="separator" />
+        ? <div key={i} className="ctx-sep" role="separator" aria-hidden="true" />
         : (
           <div key={i} role="menuitem" aria-disabled={it.disabled || undefined} aria-haspopup={it.children ? 'menu' : undefined}
             className={`ctx-item ${live.indexOf(it) === sel ? 'sel' : ''} ${it.disabled ? 'disabled' : ''} ${it.danger ? 'danger' : ''}`}

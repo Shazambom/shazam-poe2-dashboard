@@ -22,7 +22,7 @@ export default function MoversView() {
         <h2 style={{ margin: 0 }}>Top movers <span className="muted" style={{ fontWeight: 400 }}>· biggest upward swings across all currencies over {horizon}{mv.data?.league ? ` · ${mv.data.league}` : ''}</span></h2>
       </div>
       {mv.err && <div className="notice error">{mv.err}</div>}
-      {mv.busy && rows.length === 0 && <table><tbody>{Array.from({ length: 6 }).map((_, i) => <tr key={i}><td colSpan={5}><div className="sk sk-row" /></td></tr>)}</tbody></table>}
+      {mv.busy && rows.length === 0 && <table><tbody>{Array.from({ length: 6 }).map((_, i) => <tr key={i}><td colSpan={5} aria-label="Loading movers"><div className="sk sk-row" /></td></tr>)}</tbody></table>}
       {!mv.busy && rows.length === 0 && <div className="empty">No upward movers over {horizon} yet.</div>}
       {rows.length > 0 && (
         <table>

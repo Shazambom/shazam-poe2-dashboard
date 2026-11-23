@@ -33,7 +33,7 @@ export default function RecipesView({ currencies, embedded = false }) {
       </p>
       <div style={{ overflowX: 'auto' }}>
         <table>
-          <thead><tr><th>On</th><th>Name</th><th>Kind</th><th className="num">Consumes</th><th></th><th className="num">Yields</th><th></th><th></th></tr></thead>
+          <thead><tr><th>On</th><th>Name</th><th>Kind</th><th className="num">Consumes</th><th aria-label="Input currency"></th><th className="num">Yields</th><th aria-label="Output currency"></th><th aria-label="Recipe actions"></th></tr></thead>
           <tbody>
             {list.map((r, i) => {
               const inp = one(r.inputs), out = one(r.outputs)
@@ -41,13 +41,13 @@ export default function RecipesView({ currencies, embedded = false }) {
               return (
                 <tr key={r.id}>
                   <td><Toggle checked={!!r.enabled} onChange={v => upd(i, { enabled: v })} title="Enable this recipe" /></td>
-                  <td><input className="btn" value={r.name} onChange={e => upd(i, { name: e.target.value })} style={{ width: 180 }} /></td>
-                  <td><select className="btn" value={r.kind} onChange={e => upd(i, { kind: e.target.value })}>
+                  <td><input className="btn" aria-label="Recipe name" value={r.name} onChange={e => upd(i, { name: e.target.value })} style={{ width: 180 }} /></td>
+                  <td><select className="btn" aria-label="Recipe kind" value={r.kind} onChange={e => upd(i, { kind: e.target.value })}>
                     <option value="combine">combine</option><option value="disenchant">disenchant</option><option value="reforge">reforge</option><option value="vendor">vendor</option>
                   </select></td>
-                  <td className="num"><input className="btn" type="number" min="1" value={inp.qty} style={{ width: 64, textAlign: 'right' }} onChange={e => setSide(i, 'inputs', 'qty', e.target.value)} /></td>
+                  <td className="num"><input className="btn" type="number" min="1" aria-label="Quantity consumed" value={inp.qty} style={{ width: 64, textAlign: 'right' }} onChange={e => setSide(i, 'inputs', 'qty', e.target.value)} /></td>
                   <td><span className="row" style={{ gap: 6 }}>{inp.id && known(inp.id) && <Cur id={inp.id} size={18} />}<input className="btn" list="cur-ids" value={inp.id} placeholder="trade id" onChange={e => setSide(i, 'inputs', 'id', e.target.value)} style={{ width: 140, borderColor: inp.id && !known(inp.id) ? 'var(--loss)' : undefined }} /></span></td>
-                  <td className="num"><input className="btn" type="number" min="1" value={out.qty} style={{ width: 64, textAlign: 'right' }} onChange={e => setSide(i, 'outputs', 'qty', e.target.value)} /></td>
+                  <td className="num"><input className="btn" type="number" min="1" aria-label="Quantity yielded" value={out.qty} style={{ width: 64, textAlign: 'right' }} onChange={e => setSide(i, 'outputs', 'qty', e.target.value)} /></td>
                   <td><span className="row" style={{ gap: 6 }}>{out.id && known(out.id) && <Cur id={out.id} size={18} />}<input className="btn" list="cur-ids" value={out.id} placeholder="trade id" onChange={e => setSide(i, 'outputs', 'id', e.target.value)} style={{ width: 140, borderColor: out.id && !known(out.id) ? 'var(--loss)' : undefined }} /></span></td>
                   <td><button type="button" className="btn small" onClick={() => change(l => l.filter((_, j) => j !== i))}>×</button></td>
                 </tr>

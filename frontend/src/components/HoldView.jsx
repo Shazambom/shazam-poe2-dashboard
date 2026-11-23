@@ -69,7 +69,7 @@ export default function HoldView() {
 
       {/* ---- Hold leaderboard ---- */}
       <>
-        {(busy || data?.building) && rows.length === 0 && <table><tbody>{Array.from({ length: 6 }).map((_, i) => <tr key={i}><td colSpan={8}><div className="sk sk-row" /></td></tr>)}</tbody></table>}
+        {(busy || data?.building) && rows.length === 0 && <table><tbody>{Array.from({ length: 6 }).map((_, i) => <tr key={i}><td colSpan={8} aria-label="Loading holdings"><div className="sk sk-row" /></td></tr>)}</tbody></table>}
         {!busy && rows.length === 0 && !data?.building && category === 'all' && <div className="empty">Nothing to hold yet.</div>}
         {!busy && rows.length === 0 && category !== 'all' && <div className="empty">Nothing to hold in {category} right now — pick another category.</div>}
         {rows.length > 0 && (

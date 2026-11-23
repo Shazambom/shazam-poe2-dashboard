@@ -127,7 +127,7 @@ export default function SettingsView({ currencies, onSaved, onReportProblem }) {
                   {currencies.unmapped_metadata_ids.map(m => (
                     <tr key={m}>
                       <td><code>{m.split('/').pop()}</code></td>
-                      <td><input className="btn" list="cur-ids-2" placeholder="trade id" value={mapTo[m] ?? ''} onChange={e => setMapTo(x => ({ ...x, [m]: e.target.value }))} /></td>
+                      <td><input className="btn" list="cur-ids-2" aria-label={`Trade currency for ${m}`} placeholder="trade id" value={mapTo[m] ?? ''} onChange={e => setMapTo(x => ({ ...x, [m]: e.target.value }))} /></td>
                       <td><button type="button" className="btn small" disabled={!mapTo[m]} onClick={() => surface(api.mapCurrency(m, mapTo[m]), 'Linked').then(onSaved).catch(() => ignoredError('map currency'))}>Link</button></td>
                     </tr>
                   ))}

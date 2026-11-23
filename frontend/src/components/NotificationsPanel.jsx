@@ -34,7 +34,7 @@ export default function NotificationsPanel() {
     <section className="settings-section">
       <h3>Notifications</h3>
       <table className="notif-table">
-        <thead><tr><th></th>{CHANNELS.map(([k, label, hint]) => <React.Fragment key={k}><th title={hint}>{label}</th>{k === 'sound' && <th title="which chime this family plays">Tone</th>}</React.Fragment>)}<th></th></tr></thead>
+        <thead><tr><th aria-label="Notification"></th>{CHANNELS.map(([k, label, hint]) => <React.Fragment key={k}><th title={hint}>{label}</th>{k === 'sound' && <th title="which chime this family plays">Tone</th>}</React.Fragment>)}<th aria-label="Preview"></th></tr></thead>
         <tbody>
           {FAMILIES.map(([fam, label, hint]) => (
             <tr key={fam}>

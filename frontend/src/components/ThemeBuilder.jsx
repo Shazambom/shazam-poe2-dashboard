@@ -100,7 +100,7 @@ export default function ThemeBuilder() {
               <tr key={t.id}>
                 <td><button type="button" className="btn small" style={{ fontWeight: t.id === editId ? 700 : 400 }} onClick={() => setEditId(t.id)}>{t.name}</button></td>
                 <td className="hint">{t.id === chosen ? 'in use' : NAMES[t.base] ? `from ${NAMES[t.base]}` : ''}</td>
-                <td>
+                <td aria-label={`Actions for ${t.name}`}>
                   <div className="row">
                     <button type="button" className="btn small" disabled={t.id === chosen} onClick={() => use(t)}>Use</button>
                     <button type="button" className="btn small" onClick={() => duplicate(t)}>Duplicate</button>

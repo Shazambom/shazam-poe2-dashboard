@@ -224,7 +224,7 @@ export default function RoutesView({ capital, status, currencies }) {
         )}
 
         {streaming && routes.length === 0 ? (
-          <table><tbody>{Array.from({ length: 6 }).map((_, i) => <tr key={i}><td colSpan={NCOLS}><div className="sk sk-row" /></td></tr>)}</tbody></table>
+          <table><tbody>{Array.from({ length: 6 }).map((_, i) => <tr key={i}><td colSpan={NCOLS} aria-label="Loading routes"><div className="sk sk-row" /></td></tr>)}</tbody></table>
         ) : !streaming && counts && routes.length === 0 ? (
           <div className="empty">
             <b>{(counts?.total_candidates ?? 0) === 0 ? 'No loops yet.' : 'No loop clears your thresholds.'}</b><br />
@@ -253,7 +253,7 @@ export default function RoutesView({ capital, status, currencies }) {
               {shown.map(({ r, band }, i) => (
                 <React.Fragment key={r.id}>
                   {banded.active && i > 0 && band !== shown[i - 1].band && (
-                    <tr className="std-sep" aria-hidden="true"><td colSpan={NCOLS}><span className="std-bar" /></td></tr>
+                    <tr className="std-sep" aria-hidden="true"><td colSpan={NCOLS} aria-hidden="true"><span className="std-bar" /></td></tr>
                   )}
                   <tr className="route" aria-expanded={open === r.id} onClick={() => setOpen(open === r.id ? null : r.id)}>
                     <td className="loop-cell"><Loop r={r} /></td>
