@@ -11,6 +11,8 @@ import AccountsPanel from '../../src/components/AccountsPanel.jsx'
 import StratCalcView from '../../src/components/StratCalcView.jsx'
 import { useStratStore } from '../../src/lib/stratStore.js'
 import * as sc from '../../src/lib/stratcalc.js'
+import ThemeBuilder from '../../src/components/ThemeBuilder.jsx'
+import { PRIMARY_KEYS, derive } from '../../src/lib/themeDerive.js'
 import { useStatus } from '../../src/lib/statusStore.js'
 import { saveHistoryPrefs } from '../../src/lib/ee2History.js'
 import { useWorkspace } from '../../src/lib/workspaceStore.js'
@@ -356,4 +358,35 @@ it('strategy pricing: retries of a failing search are bounded, then it waits its
   expect(toasts).not.toHaveBeenCalled()
   view.unmount()
   await useStratStore.getState().flush()
+})
+
+// Export copies the CSS + JSON; when the clipboard refuses, the text is left in the builder's export box to
+// select and copy by hand (opening a theme that was not open used to clear that box in the same render).
+it('theme export: a refused clipboard write leaves the exported text on screen to copy by hand', async () => {
+  installApiMock()
+  const primaries = Object.fromEntries(PRIMARY_KEYS.map((k, i) => [k, `#${String(i + 1).repeat(6)}`]))
+  useTheme.setState({ customs: [{ id: 'custom-pin', name: 'Pinned', base: 'vault', colors: { ...derive(primaries), ...primaries } }] })
+  const had = Object.getOwnPropertyDescriptor(navigator, 'clipboard')
+  const writeText = vi.fn().mockRejectedValue(new Error('Document is not focused'))
+  Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
+  try {
+    const view = render(<ThemeBuilder />)
+    await settle()
+    fireEvent.click(screen.getByRole('button', { name: 'Export' }))
+    await settle()
+    expect(writeText).toHaveBeenCalledTimes(1)
+    const shown = view.container.querySelector('pre.diag-pre')
+    expect(shown?.textContent).toBe(writeText.mock.calls[0][0])
+    expect(shown.textContent).toContain('Pinned')
+    fireEvent.click(screen.getByRole('button', { name: 'Export' }))   // the theme is open now: same outcome
+    await settle()
+    expect(writeText).toHaveBeenCalledTimes(2)
+    expect(view.container.querySelectorAll('pre.diag-pre')).toHaveLength(1)
+    expect(view.container.querySelector('pre.diag-pre').textContent).toBe(writeText.mock.calls[1][0])
+    expect(toasts).not.toHaveBeenCalled()
+  } finally {
+    if (had) Object.defineProperty(navigator, 'clipboard', had)
+    else delete navigator.clipboard
+    useTheme.setState({ customs: [] })
+  }
 })

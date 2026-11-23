@@ -82,7 +82,10 @@ export default function ThemeBuilder() {
   const doExport = (t) => {
     const text = `${exportCss(t)}\n${exportJson(t)}\n`
     setEditId(t.id); setExported(text)
-    navigator.clipboard?.writeText(text).then(() => toast('Theme CSS + JSON copied')).catch(() => ignoredError('copy theme export'))
+    navigator.clipboard?.writeText(text).then(() => toast('Theme CSS + JSON copied')).catch(() => {
+      ignoredError('copy theme export')
+      setExported(text)   // not copied: the text stays in the export box to copy by hand
+    })
   }
   const use = (t) => { clearTimeout(previewTimer.current); useTheme.getState().apply(t.id) }
 
