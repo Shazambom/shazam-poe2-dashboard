@@ -53,6 +53,19 @@ test('feedback:package writes <userData>/reports/arbiter-report-<ID>.arb at 0600
   assert.deepEqual(input.sources.main, ['m']); assert.deepEqual(input.bounds, { width: 1440, height: 847 })
 })
 
+test('feedback:package writes what the real (asynchronous) seal returns, and the owner key opens it', async () => {
+  const { seal, open } = await import('../src/feedback/seal.js')
+  const { generateKeyPairSync } = await import('node:crypto')
+  const { publicKey, privateKey } = generateKeyPairSync('x25519')
+  const spki = publicKey.export({ type: 'spki', format: 'der' })
+  const pub = spki.subarray(spki.length - 32).toString('base64')
+  const h = harness({ sealFn: (b) => seal(b, pub) })
+  const r = await h.handlers['feedback:package'](h.from())
+  assert.equal(r.error, undefined)
+  const opened = await open(readFileSync(r.file), /** @type {string} */ (privateKey.export({ type: 'pkcs8', format: 'pem' })))
+  assert.equal(opened.toString(), 'BUNDLE')
+})
+
 test('a second request inside the throttle window returns { throttled } and writes nothing', async () => {
   const h = harness()
   const a = await h.handlers['feedback:package'](h.from())
