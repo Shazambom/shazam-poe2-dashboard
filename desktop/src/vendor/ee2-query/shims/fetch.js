@@ -13,7 +13,7 @@ function makeFetch(dataDir) {
     if (!u.startsWith('ee2data://')) throw new Error(`ee2-query: network disabled (${u.slice(0, 60)})`)
     const rel = u.slice('ee2data://'.length).replace(/^data\//, '')
     const file = path.join(dataDir, rel)
-    let buf = fs.readFileSync(file)
+    let buf = await fs.promises.readFile(file)
     // The .index.bin offsets are byte positions in the LF ndjson. A checkout that rewrote line endings
     // (Windows autocrlf did this once) would shift every offset — normalise defensively.
     if (rel.endsWith('.ndjson') && buf.includes(13)) buf = Buffer.from(buf.toString('utf8').replace(/\r\n/g, '\n'), 'utf8')

@@ -4,9 +4,9 @@
 const fs = require('node:fs'), path = require('node:path')
 let dataDir = null
 function setDataDir(d) { dataDir = d }
-function derive() {
-  const items = JSON.parse(fs.readFileSync(path.join(dataDir, 'trade', 'items.json'), 'utf8'))
-  const stats = JSON.parse(fs.readFileSync(path.join(dataDir, 'trade', 'stats.json'), 'utf8'))
+async function derive() {
+  const items = JSON.parse(await fs.promises.readFile(path.join(dataDir, 'trade', 'items.json'), 'utf8'))
+  const stats = JSON.parse(await fs.promises.readFile(path.join(dataDir, 'trade', 'stats.json'), 'utf8'))
   const itemData = new Set()
   for (const cat of items.result) for (const { type, text } of cat.entries) { if (type) { itemData.add(type) } if (text) itemData.add(text) }
   const statData = new Map(), statDataSet = new Set()
@@ -21,7 +21,7 @@ let state = null
 function useTradeData() {
   if (state) return state
   const holder = { isLoading: { value: false }, error: { value: null }, tradeItemData: { value: new Set() }, tradeStatData: { value: new Map() }, tradeStatDataSet: { value: new Set() },
-    async load() { const d = derive(); holder.tradeItemData.value = d.itemData; holder.tradeStatData.value = d.statData; holder.tradeStatDataSet.value = d.statDataSet; return { foundItems: d.itemData.size, foundStats: d.statDataSet.size } },
+    async load() { const d = await derive(); holder.tradeItemData.value = d.itemData; holder.tradeStatData.value = d.statData; holder.tradeStatDataSet.value = d.statDataSet; return { foundItems: d.itemData.size, foundStats: d.statDataSet.size } },
     expressInterest() {} }
   state = holder
   return state

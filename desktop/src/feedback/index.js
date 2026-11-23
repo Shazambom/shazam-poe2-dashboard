@@ -11,7 +11,7 @@
 const { ignored } = require('../ignored.js')
 const { backendFetch } = require('../local-backend.js')
 const { readSettingsFile } = require('../settings-store.js')
-const fs = require('node:fs')
+const fsp = require('node:fs').promises
 const path = require('node:path')
 const { randomBytes, randomUUID } = require('node:crypto')
 const os = require('node:os')
@@ -46,11 +46,13 @@ function registerFeedback({ ipcMain, BrowserWindow, session, win, uiUrl, backend
   })
   const readDesktopSettings = () => { try { return readSettingsFile(path.join(userData, 'desktop-settings.json')) } catch { return {} } }
   const rendererErrors = async () => { try { return await win.webContents.executeJavaScript('window.__arbiterErrors ? window.__arbiterErrors() : []') } catch { return [] } }
-  const prune = () => {
+  const prune = async () => {
     try {
-      const files = fs.readdirSync(dir).filter(f => /^arbiter-report-[0-9A-HJ-NP-Z]{6}\.arb$/.test(f))
-        .map(f => ({ f, t: fs.statSync(path.join(dir, f)).mtimeMs })).sort((a, b) => b.t - a.t)
-      for (const { f } of files.slice(KEEP_REPORTS)) { try { fs.unlinkSync(path.join(dir, f)) } catch (e) { ignored('feedback:prune-report', e) } }
+      const names = (await fsp.readdir(dir)).filter(f => /^arbiter-report-[0-9A-HJ-NP-Z]{6}\.arb$/.test(f))
+      const files = []
+      for (const f of names) files.push({ f, t: (await fsp.stat(path.join(dir, f))).mtimeMs })
+      files.sort((a, b) => b.t - a.t)
+      for (const { f } of files.slice(KEEP_REPORTS)) { try { await fsp.unlink(path.join(dir, f)) } catch (e) { ignored('feedback:prune-report', e) } }
     } catch (e) { ignored('feedback:prune-reports', e) }
   }
 
@@ -77,12 +79,12 @@ function registerFeedback({ ipcMain, BrowserWindow, session, win, uiUrl, backend
       }
       const src = { ...(sources() || {}), renderer: await rendererErrors() }
       const body = await bundle({ meta, sources: src, get: fetchJson, readJson: readDesktopSettings, bounds, screens: shots.screens })
-      fs.mkdirSync(dir, { recursive: true })
+      await fsp.mkdir(dir, { recursive: true })
       const file = path.join(dir, `arbiter-report-${id}.arb`)
-      fs.writeFileSync(file, sealFn(body), { mode: 0o600 })
+      await fsp.writeFile(file, sealFn(body), { mode: 0o600 })
       produced.set(id, file)
       last = { at: now(), shortId: id, file }
-      prune()
+      await prune()
       return { shortId: id, file, screensPartial: Boolean(shots.partial) }
     } catch (err) {
       return { error: String(err && err.message || err) }

@@ -36,11 +36,14 @@ function configDirs() {
   return [path.join(xdg, 'exiled-exchange-2')]
 }
 
-function findConfig() {
+// Does the path exist? (fs.existsSync's answer, without blocking: false on any error.)
+const exists = (p) => fs.promises.access(p).then(() => true, () => false)
+
+async function findConfig() {
   for (const dir of configDirs()) {
     const cfg = path.join(dir, 'apt-data', 'config.json')
-    try { if (fs.existsSync(cfg)) return { dir, config: cfg } } catch (e) { ignored('ee2-detect:config-exists', e) }
-    try { if (fs.existsSync(dir)) return { dir, config: null } } catch (e) { ignored('ee2-detect:dir-exists', e) }
+    if (await exists(cfg)) return { dir, config: cfg }
+    if (await exists(dir)) return { dir, config: null }
   }
   return null
 }
@@ -68,7 +71,7 @@ function findProcess() {
 
 // Returns { present, method, dir, config, running }. Never throws.
 async function detectEE2({ checkProcess = false } = {}) {
-  const cfg = findConfig()
+  const cfg = await findConfig()
   let running = false
   if (checkProcess) { try { running = await findProcess() } catch (e) { ignored('ee2-detect:find-process', e) } }
   const present = Boolean(cfg) || running

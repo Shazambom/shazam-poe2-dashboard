@@ -4,7 +4,9 @@
 // /api/session or /api/oauth/* — then the allow-list and redactDeep run over state + logs.
 'use strict'
 const { ignored } = require('../ignored.js')
-const { gzipSync, constants } = require('node:zlib')
+const { gzip, constants } = require('node:zlib')
+const { promisify } = require('node:util')
+const gzipAsync = promisify(gzip)
 const { SETTINGS_KEYS, pickAllowed, redactDeep } = require('./redact.js')
 
 const STATE_ENDPOINTS = ['/api/diag', '/api/status', '/api/backfill', '/api/settings']
@@ -36,13 +38,13 @@ function logsFrom(sources = {}) {
 
 // Screens are already JPEG buffers; encode them, and if the whole bundle would blow the cap drop
 // the largest ones until it fits. Size never fails a report.
-function pack(doc, screens) {
+async function pack(doc, screens) {
   const remaining = new Map(Object.entries(screens || {}).filter(([, b]) => b && b.length))
   let partial = false
   for (;;) {
     doc.screens = Object.fromEntries([...remaining].map(([k, b]) => [k, Buffer.from(b).toString('base64')]))
     doc.manifest.screensPartial = partial
-    const gz = gzipSync(Buffer.from(JSON.stringify(doc)), GZIP)
+    const gz = await gzipAsync(Buffer.from(JSON.stringify(doc)), GZIP)
     if (gz.length <= MAX_BUNDLE || remaining.size === 0) return gz
     const biggest = [...remaining].sort((a, b) => b[1].length - a[1].length)[0][0]
     remaining.delete(biggest)
