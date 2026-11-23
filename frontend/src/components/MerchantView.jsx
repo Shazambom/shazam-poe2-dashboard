@@ -46,6 +46,26 @@ const SORT_COLS = [
   { key: 'verdict', label: 'Verdict', num: true },
 ]
 
+function floorSnapshot(inputs) {
+  const quotes = new Map(priceCache)
+  let snapshot
+  return {
+    inputs,
+    read(now) {
+      if (snapshot) return snapshot
+      const { enriched, sel, prices, wealthPrices, exchangeFn } = inputs
+      snapshot = new Map()
+      for (const row of enriched) {
+        const quote = quotes.get(`${sel}|${row.floorQuery}`)
+        if (quote && now - quote.at < PRICE_TTL_MS) {
+          snapshot.set(row.id, summarizeFloorCheck(quote.res, row, prices, wealthPrices, exchangeFn))
+        }
+      }
+      return snapshot
+    },
+  }
+}
+
 function sumRef(rows) {
   let sum = 0, any = false
   for (const r of rows) {
@@ -217,7 +237,6 @@ export default function MerchantView({ league }) {
   const [showDone, setShowDone] = useState(false)
   const [prevDoneMap, setPrevDoneMap] = useState(null)
   const [pendingPrices, setPendingPrices] = useState(() => new Set())
-  const [priceTick, setPriceTick] = useState(0)   // bumps when module priceCache receives a response
 
   const mountedRef = useRef(true)
   const selRef = useRef(sel)
@@ -502,17 +521,11 @@ export default function MerchantView({ league }) {
   const pairUnit = stashUnit(shopTotalRef, ref, wealthPrices, unitChoice)
   const commonUnit = pairUnit || 'divine'
 
-  const floorById = useMemo(() => {
-    const map = new Map()
-    const nowMs = Date.now()
-    for (const r of enriched) {
-      const cached = priceCache.get(`${sel}|${r.floorQuery}`)
-      if (cached && nowMs - cached.at < PRICE_TTL_MS) {
-        map.set(r.id, summarizeFloorCheck(cached.res, r, prices, wealthPrices, exchangeFn))
-      }
-    }
-    return map
-  }, [enriched, sel, prices, wealthPrices, exchangeFn, priceTick])
+  const floorInputs = useMemo(() => ({ enriched, sel, prices, wealthPrices, exchangeFn }), [enriched, sel, prices, wealthPrices, exchangeFn])
+  const [floors, setFloors] = useState(() => floorSnapshot(floorInputs))
+  if (floors.inputs !== floorInputs) setFloors(floorSnapshot(floorInputs))
+  const floorById = useClockValue(floors.read)
+  const publishQuotes = () => setFloors(previous => floorSnapshot(previous.inputs))
 
   const openRecentSale = useMemo(() => {
     if (!openId) return null
@@ -575,7 +588,7 @@ export default function MerchantView({ league }) {
     const priceKey = `${sel}|${row.floorQuery}`
     const cached = priceCache.get(priceKey)
     if (cached && Date.now() - cached.at < PRICE_TTL_MS) {
-      setPriceTick(t => t + 1)
+      publishQuotes()
       return
     }
     if (pendingPrices.has(priceKey)) return
@@ -608,7 +621,7 @@ export default function MerchantView({ league }) {
     } finally {
       if (mountedRef.current) {
         setPendingPrices(prev => { const n = new Set(prev); n.delete(priceKey); return n })
-        setPriceTick(t => t + 1)
+        publishQuotes()
       }
     }
   }
