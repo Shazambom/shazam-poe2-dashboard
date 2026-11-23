@@ -23,16 +23,16 @@ const lastSegment = (s) => String(s).split(/[\\/]/).filter(Boolean).pop() || ''
 
 const SECRET_PATTERNS = [
   /POESESSID\s*[=:]\s*\S+/gi,
-  /Bearer\s+[\w.\-]+/g,
+  /Bearer\s+[\w.-]+/g,
   /^(Set-)?Cookie:.*$/gim,
   /"(access|refresh|id)_token"\s*:\s*"[^"]*"/gi,
-  /gAAAAA[\w=\-]+/g,                                  // Fernet tokens
+  /gAAAAA[\w=-]+/g,                                  // Fernet tokens
   /client_secret\S*/gi,
   /[?&](code|state)=[^&\s]+/g,                        // OAuth callback URLs
 ]
 // ≥ 32 hex/base64 chars on a line that also mentions a credential word.
 const KEY_LINE = /token|secret|key|sess/i
-const LONG_BLOB = /[A-Za-z0-9+/=_\-]{32,}/g
+const LONG_BLOB = /[A-Za-z0-9+/=_-]{32,}/g
 
 function scrubText(s) {
   let out = String(s)
