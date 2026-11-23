@@ -200,6 +200,7 @@ def _js(mode: str, cases: list, uses: list | None = None) -> list:
         capture_output=True,
         text=True,
         timeout=120,
+        check=False,
     )
     assert r.returncode == 0, r.stderr
     return json.loads(r.stdout)

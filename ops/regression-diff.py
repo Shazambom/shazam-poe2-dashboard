@@ -141,6 +141,7 @@ def run_side(tree: Path, snap: Path, work: Path, label: str) -> dict:
         env=env,
         capture_output=True,
         text=True,
+        check=False,
     )
     line = next((l for l in p.stdout.splitlines() if l.startswith("DUMP")), None)
     if p.returncode or not line:
@@ -311,7 +312,9 @@ def main() -> None:
             a = run_side(wt, work / "snap", work, "base")
             b = run_side(REPO, work / "snap", work, "new")
         finally:
-            subprocess.run(["git", "worktree", "remove", "--force", str(wt)], cwd=REPO)
+            subprocess.run(
+                ["git", "worktree", "remove", "--force", str(wt)], cwd=REPO, check=False
+            )
     print(f"regression diff: {base} -> working tree, data {data}")
     print(
         f"  compared {len(a['values'])} currencies, {len(a['cards'])} price cards, "

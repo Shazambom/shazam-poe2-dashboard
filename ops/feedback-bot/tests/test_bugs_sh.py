@@ -121,6 +121,7 @@ def test_main_a_branch_or_a_beta_tag_never_resolves(tmp_path):
             env=env,
             capture_output=True,
             text=True,
+            check=False,
         )
         assert r.returncode != 0 and "stable" in r.stderr, ref
     r = subprocess.run(
@@ -129,6 +130,7 @@ def test_main_a_branch_or_a_beta_tag_never_resolves(tmp_path):
         env=env,
         capture_output=True,
         text=True,
+        check=False,
     )
     assert r.returncode != 0, "resolving on a merge is gone"
     r = subprocess.run(
@@ -137,6 +139,7 @@ def test_main_a_branch_or_a_beta_tag_never_resolves(tmp_path):
         env=env,
         capture_output=True,
         text=True,
+        check=False,
     )
     assert r.returncode != 0, "no resolving by hand: only a stable release resolves"
     assert actions(remote) == []
@@ -181,6 +184,7 @@ def test_a_report_id_that_is_not_one_never_reaches_the_remote_shell(tmp_path):
             capture_output=True,
             text=True,
             cwd=tmp_path,
+            check=False,
         )
         assert r.returncode != 0, bad
     assert (

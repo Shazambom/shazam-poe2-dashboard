@@ -86,7 +86,7 @@ def set_cut(repo: Path, day: str) -> None:
 def run(s: dict) -> subprocess.CompletedProcess:
     s["log"].write_text("") if s["log"].exists() else None
     return subprocess.run(
-        ["bash", str(SCRIPT)], env=s["env"], capture_output=True, text=True
+        ["bash", str(SCRIPT)], env=s["env"], capture_output=True, text=True, check=False
     )
 
 

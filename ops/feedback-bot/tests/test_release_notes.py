@@ -171,6 +171,7 @@ def test_the_cli_checks_and_prints_the_payload(tmp_path):
         ],
         capture_output=True,
         text=True,
+        check=False,
     )
     assert bad.returncode != 0 and "no release notes" in bad.stderr
 

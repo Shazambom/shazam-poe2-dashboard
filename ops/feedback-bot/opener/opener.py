@@ -63,6 +63,7 @@ def run_one(
             stdin=subprocess.DEVNULL,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.PIPE,
+            check=False,
         )
         code, err = p.returncode, p.stderr.decode(errors="replace")[-200:]
     except subprocess.TimeoutExpired:

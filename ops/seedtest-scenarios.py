@@ -50,7 +50,10 @@ QUIET_MINUTES = {
 # ------------------------------------------------------------------ shazam plumbing
 def sh(cmd: str, check: bool = True) -> subprocess.CompletedProcess:
     r = subprocess.run(
-        ["bash", "-lc", f"sshshazambom {cmd}"], capture_output=True, text=True
+        ["bash", "-lc", f"sshshazambom {cmd}"],
+        capture_output=True,
+        text=True,
+        check=False,
     )
     if check and r.returncode != 0:
         raise RuntimeError(f"{cmd[:80]}… exited {r.returncode}: {r.stderr[-400:]}")

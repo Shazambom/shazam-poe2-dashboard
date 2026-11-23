@@ -92,6 +92,7 @@ def test_keygen_writes_a_0600_pem_and_prints_the_raw_public_key(tmp_path):
         capture_output=True,
         text=True,
         env={**os.environ, "PYTHONPATH": str(HERE.parent / "bot")},
+        check=False,
     )
     assert r.returncode == 0, r.stderr
     pem = tmp_path / "feedback-key-7.pem"
@@ -115,5 +116,6 @@ def test_keygen_writes_a_0600_pem_and_prints_the_raw_public_key(tmp_path):
         capture_output=True,
         text=True,
         env={**os.environ, "PYTHONPATH": str(HERE.parent / "bot")},
+        check=False,
     )
     assert r2.returncode != 0

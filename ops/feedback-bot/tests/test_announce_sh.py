@@ -91,7 +91,11 @@ echo "unexpected gh $*" >&2; exit 9
 
 def run(env, root, *args):
     return subprocess.run(
-        ["bash", str(SH), *args, str(root)], env=env, capture_output=True, text=True
+        ["bash", str(SH), *args, str(root)],
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
     )
 
 
@@ -192,10 +196,15 @@ def test_bugs_py_refuses_a_bad_payload_and_writes_the_drop_whole(tmp_path):
             }
         ).encode()
     ).decode()
-    assert subprocess.run([*cli, "announce", bad], capture_output=True).returncode != 0
     assert (
         subprocess.run(
-            [*cli, "announce", "not base64 !!"], capture_output=True
+            [*cli, "announce", bad], capture_output=True, check=False
+        ).returncode
+        != 0
+    )
+    assert (
+        subprocess.run(
+            [*cli, "announce", "not base64 !!"], capture_output=True, check=False
         ).returncode
         != 0
     )
@@ -209,14 +218,23 @@ def test_bugs_py_refuses_a_bad_payload_and_writes_the_drop_whole(tmp_path):
             }
         ).encode()
     ).decode()
-    assert subprocess.run([*cli, "announce", good], capture_output=True).returncode == 0
+    assert (
+        subprocess.run(
+            [*cli, "announce", good], capture_output=True, check=False
+        ).returncode
+        == 0
+    )
     assert sorted(p.name for p in (inbox / "announce").iterdir()) == ["1.2.3.json"], (
         "no temp file left behind"
     )
-    out = subprocess.run([*cli, "announced", "1.2.3"], capture_output=True, text=True)
+    out = subprocess.run(
+        [*cli, "announced", "1.2.3"], capture_output=True, text=True, check=False
+    )
     assert out.returncode != 0, "not announced until the bot records it"
     (inbox / "state.json").write_text(json.dumps({"announced": ["1.2.3"]}))
     assert (
-        subprocess.run([*cli, "announced", "1.2.3"], capture_output=True).returncode
+        subprocess.run(
+            [*cli, "announced", "1.2.3"], capture_output=True, check=False
+        ).returncode
         == 0
     )

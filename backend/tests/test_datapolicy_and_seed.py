@@ -111,6 +111,7 @@ def _run_exporter(src: Path, out: Path, *extra) -> subprocess.CompletedProcess:
         text=True,
         capture_output=True,
         cwd=str(ROOT / "backend"),
+        check=False,
     )
 
 

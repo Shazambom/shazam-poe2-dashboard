@@ -383,6 +383,7 @@ def test_any_import_order_boots_a_database_that_needs_m8(tmp_path):
             env={"DATA_DIR": str(d), "MARKET_SEED": "", "PATH": "/usr/bin:/bin"},
             capture_output=True,
             text=True,
+            check=False,
         )
         assert r.returncode == 0, f"import {first} first: {r.stderr[-400:]}"
 

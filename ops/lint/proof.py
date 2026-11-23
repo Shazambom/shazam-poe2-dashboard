@@ -107,6 +107,7 @@ def openapi() -> dict:
         env=env,
         capture_output=True,
         text=True,
+        check=False,
     )
     if r.returncode:
         raise SystemExit(f"openapi: the backend did not import\n{r.stderr[-2000:]}")
@@ -129,6 +130,7 @@ def vite() -> dict:
         cwd=ROOT / "frontend",
         capture_output=True,
         text=True,
+        check=False,
     )
     if r.returncode:
         raise SystemExit(f"vite: build failed\n{r.stderr[-2000:]}")
@@ -151,6 +153,7 @@ def desktop() -> dict:
         r = subprocess.run(
             [str(esbuild), "--minify", "--log-level=error", str(ROOT / p)],
             capture_output=True,
+            check=False,
         )
         if r.returncode:
             raise SystemExit(
@@ -163,7 +166,9 @@ def desktop() -> dict:
 def shell() -> dict:
     out = {}
     for p in tracked("*.sh"):
-        r = subprocess.run(["shfmt", "-mn", str(ROOT / p)], capture_output=True)
+        r = subprocess.run(
+            ["shfmt", "-mn", str(ROOT / p)], capture_output=True, check=False
+        )
         if r.returncode:
             raise SystemExit(f"shell: shfmt failed on {p}\n{r.stderr.decode()[-1000:]}")
         out[p] = sha(r.stdout)
