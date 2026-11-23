@@ -15,30 +15,30 @@ test('a prefix or suffix is listed on trade as explicit or desecrated; a corrupt
   assert.deepEqual(groupsFor('enchant'), ['enchant'])
 })
 
-test('a family text finds its stat ids in each group, the leading plus dropped as the site prints it', () => {
-  const r = lookup({ text: '+# to maximum Life', affix: 'prefix', bases: ['Gold Ring', 'Iron Ring'] })
+test('a family text finds its stat ids in each group, the leading plus dropped as the site prints it', async () => {
+  const r = await lookup({ text: '+# to maximum Life', affix: 'prefix', bases: ['Gold Ring', 'Iron Ring'] })
   assert.deepEqual(r.stats, [['explicit.stat_3299347043', 'desecrated.stat_3299347043']])
   assert.equal(r.category, 'accessory.ring')
-  const c = lookup({ text: '+# to maximum Mana', affix: 'corrupted', bases: ['Gold Ring'] })
-  const explicitMana = lookup({ text: '+# to maximum Mana', affix: 'prefix', bases: [] }).stats[0][0]
+  const c = await lookup({ text: '+# to maximum Mana', affix: 'corrupted', bases: ['Gold Ring'] })
+  const explicitMana = (await lookup({ text: '+# to maximum Mana', affix: 'prefix', bases: [] })).stats[0][0]
   assert.deepEqual(c.stats, [[explicitMana.replace('explicit.', 'enchant.')]], 'the same stat hash under the enchant group')
 })
 
-test('a hybrid family is one stat per line: an item must carry both', () => {
-  const r = lookup({ text: '#% increased Evasion Rating\n+# to maximum Life', affix: 'prefix', bases: ['Iron Ring'] })
+test('a hybrid family is one stat per line: an item must carry both', async () => {
+  const r = await lookup({ text: '#% increased Evasion Rating\n+# to maximum Life', affix: 'prefix', bases: ['Iron Ring'] })
   assert.equal(r.stats.length, 2)
   assert.ok(r.stats[0].some(id => id.startsWith('explicit.')) && r.stats[1].includes('explicit.stat_3299347043'))
 })
 
-test('a text the site does not list is reported, not searched', () => {
-  const r = lookup({ text: 'Charms gain # charges per Second', affix: 'prefix', bases: ['Iron Ring'] })
+test('a text the site does not list is reported, not searched', async () => {
+  const r = await lookup({ text: 'Charms gain # charges per Second', affix: 'prefix', bases: ['Iron Ring'] })
   assert.equal(r.stats, null)
   assert.equal(r.category, 'accessory.ring')
 })
 
-test("an item kind's category is the one most of its bases fall under; bases the catalogue lacks leave it unset", () => {
-  assert.equal(lookup({ text: '+# to maximum Life', affix: 'prefix', bases: ['Gold Ring'] }).category, 'accessory.ring')
-  assert.equal(lookup({ text: '+# to maximum Life', affix: 'prefix', bases: ['Armoured Vest', 'Not A Base'] }).category, 'armour.chest')
-  assert.equal(lookup({ text: '+# to maximum Life', affix: 'prefix', bases: ['Not A Base'] }).category, null)
-  assert.equal(lookup({ text: '+# to maximum Life', affix: 'prefix', bases: [] }).category, null)
+test("an item kind's category is the one most of its bases fall under; bases the catalogue lacks leave it unset", async () => {
+  assert.equal((await lookup({ text: '+# to maximum Life', affix: 'prefix', bases: ['Gold Ring'] })).category, 'accessory.ring')
+  assert.equal((await lookup({ text: '+# to maximum Life', affix: 'prefix', bases: ['Armoured Vest', 'Not A Base'] })).category, 'armour.chest')
+  assert.equal((await lookup({ text: '+# to maximum Life', affix: 'prefix', bases: ['Not A Base'] })).category, null)
+  assert.equal((await lookup({ text: '+# to maximum Life', affix: 'prefix', bases: [] })).category, null)
 })
