@@ -46,6 +46,10 @@ export function useRelax({
   const [st, setSt] = useState(() => ({ ...IDLE, relaxTick: 0 }))
   const [connecting, setConnecting] = useState(false)
   const [decodedSlugQuery, setDecodedSlugQuery] = useState(null)
+  // A TAP search object belongs to one observed search; fetches only replace its rows.
+  // The outgoing webview can still expose its relaxed search after another row is selected.
+  const search = page?.search
+  const [relaxedSearch, setRelaxedSearch] = useState(null)
   const mountedRef = useRef(true)
   const reqRef = useRef(0)
   const baseQueryRef = useRef(null) // { nodeId, query } | null
@@ -98,8 +102,11 @@ export function useRelax({
   }, [nodeId, league, visible, remountKey])
 
   const liveEligibleNode = !!node && node.kind === 'search' && !node.live
-  const livePageQuery = page?.search?.id != null && page.search.id !== stalePageIdRef.current
-    ? (page.search.body?.query || null)
+  if (st.relaxUrl && st.relaxedNodeId === nodeId && search && search !== relaxedSearch) {
+    setRelaxedSearch(search)
+  }
+  const livePageQuery = search !== relaxedSearch && search?.id != null && search.id !== stalePageIdRef.current
+    ? (search.body?.query || null)
     : null
   const snappedBase = baseQueryRef.current?.nodeId === nodeId ? baseQueryRef.current.query : null
   const exactQuery = useMemo(() => {
@@ -185,6 +192,7 @@ export function useRelax({
       level: targetLevel,
       summary: relaxed.summary,
       relaxUrl: url,
+      relaxedNodeId: nodeId,
       authRequired: false,
       authLevel: null,
       relaxTick: prev.relaxTick + 1,
