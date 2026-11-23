@@ -23,3 +23,8 @@ export const useHorizon = create((set) => ({
     set({ hours: h })
   },
 }))
+
+// Canonical hours → range label (matches the board/hold horizon pickers).
+export function rangeLabel(hours) {
+  return { 24: '24h', 72: '3d', 168: '7d', 336: '14d' }[hours] || `${Math.max(1, Math.round((hours || 24) / 24))}d`
+}

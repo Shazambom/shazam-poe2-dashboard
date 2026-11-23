@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { api, fmt } from '../lib/api.js'
 import { connectBridge, connectSession } from '../lib/session.js'
 import { useStatus } from '../lib/statusStore.js'
-import { clearMerchantShopCache } from './MerchantView.jsx'
+import { clearMerchantShopCache } from '../lib/merchantCache.js'
 
 const ago = (t) => t ? fmt.age(Date.now() / 1000 - t) + ' ago' : '–'
 

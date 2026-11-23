@@ -3,8 +3,8 @@ import { api, fmt } from '../lib/api.js'
 import { useApi } from '../lib/hooks.js'
 import Cur from './Cur.jsx'
 import Wealth from './Wealth.jsx'
-import { useAssetModal, rangeLabel } from './CardDetail.jsx'
-import { useHorizon } from '../lib/horizonStore.js'
+import { useAssetModal } from './useAssetModal.jsx'
+import { rangeLabel, useHorizon } from '../lib/horizonStore.js'
 
 // Economy → Top movers (owner, 2026-10-08: broken out of Hold): the biggest upward swings across every currency over
 // the app-wide window, most first. A row opens the same zoom modal the Board uses.

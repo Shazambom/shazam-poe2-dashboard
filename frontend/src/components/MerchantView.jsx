@@ -1,3 +1,4 @@
+import { shopCache, marketCache, marketInFlight, priceCache, clearMerchantShopCache } from '../lib/merchantCache.js'
 import { ignoredError } from '../lib/ignoredError.js'
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/shallow'
@@ -25,17 +26,13 @@ import {
   sortMerchantRows,
   summarizeFloorCheck,
 } from '../lib/merchant.js'
-import { useAssetModal } from './CardDetail.jsx'
+import { useAssetModal } from './useAssetModal.jsx'
 import Cur from './Cur.jsx'
 import ItemCard from './ItemCard.jsx'
 import Seg from './Seg.jsx'
 import Wealth, { Native } from './Wealth.jsx'
 
 // Module caches survive tab switches so returning to Merchant never re-polls GGG automatically.
-const shopCache = new Map()      // `${league}|${acctLower}|${sort}` -> shop snapshot (FIFO max 10)
-const marketCache = new Map()    // league -> { prices, inflation, sales, fetchedAt }
-const marketInFlight = new Map() // league -> Promise<market | null>
-const priceCache = new Map()     // `${league}|${floorQuery}` -> { res, at } (FIFO max 200)
 const MARKET_TTL_MS = 60_000
 const PRICE_TTL_MS = 5 * 60_000
 const MAX_SHOP_CACHE = 10
@@ -47,17 +44,6 @@ const SORT_COLS = [
   { key: 'age', label: 'Age', num: true },
   { key: 'verdict', label: 'Verdict', num: true },
 ]
-
-export function clearMerchantShopCache() {
-  shopCache.clear()
-}
-
-export function _resetMerchantCache() {
-  shopCache.clear()
-  marketCache.clear()
-  marketInFlight.clear()
-  priceCache.clear()
-}
 
 function sumRef(rows) {
   let sum = 0, any = false
