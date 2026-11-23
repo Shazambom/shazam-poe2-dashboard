@@ -13,7 +13,11 @@ function fakeDoc() {
   const on = {}
   const doc = {
     activeElement: null,
-    addEventListener: (t, f, capture) => { assert.equal(capture, true, `${t} listens in the capture phase`); (on[t] ||= []).push(f) },
+    addEventListener: (t, f, capture) => {
+      assert.equal(capture, true, `${t} listens in the capture phase`)
+      on[t] ||= []
+      on[t].push(f)
+    },
     removeEventListener: (t, f) => { on[t] = (on[t] || []).filter(g => g !== f) },
   }
   const fire = (t, target) => {

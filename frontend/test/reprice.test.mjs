@@ -108,7 +108,10 @@ test('the sibling key ignores the price filter and key order, but not the league
 test('property: over random pairs from the price table, offer ⇔ the cheapest is not on top by more than τ', () => {
   const ids = ['vaal', 'chaos', 'exalted', 'divine']
   let seed = 7
-  const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647
+  const rnd = () => {
+    seed = (seed * 16807) % 2147483647
+    return seed / 2147483647
+  }
   for (let i = 0; i < 400; i++) {
     const a = ids[Math.floor(rnd() * 4)], b = ids[Math.floor(rnd() * 4)]
     if (a === b) continue

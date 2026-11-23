@@ -18,7 +18,10 @@ export function refreshTweaks(channel) {   // the desktop's own answer: it is a 
 }
 const ask = async () => {
   if (cached != null) return cached
-  if (!isDesktop) return (cached = true)
+  if (!isDesktop) {
+    cached = true
+    return cached
+  }
   try { refreshTweaks(await window.poe2desktop.getChannel?.()) } catch { cached = false }
   return cached
 }

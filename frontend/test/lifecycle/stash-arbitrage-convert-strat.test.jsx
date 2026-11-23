@@ -17,7 +17,8 @@ class FakeEventSource {
     FakeEventSource.instances.push(this)
   }
   addEventListener(type, fn) {
-    ;(this.listeners[type] ||= []).push(fn)
+    this.listeners[type] ||= []
+    this.listeners[type].push(fn)
   }
   emit(type, payload) {
     const ev = { data: JSON.stringify(payload) }

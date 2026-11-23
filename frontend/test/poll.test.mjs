@@ -9,7 +9,11 @@ import { startPoll } from '../src/lib/poll.js'
 function env(visible = true) {
   const listeners = {}, timers = []
   let t = 0
-  const target = (name) => ({ addEventListener: (ev, fn) => { (listeners[`${name}:${ev}`] ||= []).push(fn) },
+  const target = (name) => ({ addEventListener: (ev, fn) => {
+    const key = `${name}:${ev}`
+    listeners[key] ||= []
+    listeners[key].push(fn)
+  },
     removeEventListener: (ev, fn) => { listeners[`${name}:${ev}`] = (listeners[`${name}:${ev}`] || []).filter(f => f !== fn) } })
   const e = {
     visible, timers, listeners,
