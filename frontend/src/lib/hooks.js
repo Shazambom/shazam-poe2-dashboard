@@ -1,6 +1,6 @@
 import { startPoll } from './poll.js'
 import { createAutosave } from './autosave.js'
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useEffectEvent, useLayoutEffect, useState } from 'react'
 import { cleanErr, toast } from './api.js'
 import { useSync } from './syncStore.js'
 
@@ -54,10 +54,22 @@ export function useDebounced(value, ms = 500) {
   return v
 }
 
+// Callers key requests on primitive values or object identity. Keep one list identity
+// until an element changes, using the same comparison as React's effect dependencies.
+function useDependencyList(values) {
+  const [previous, setPrevious] = useState(() => [...values])
+  if (previous.length === values.length && values.every((value, i) => Object.is(value, previous[i]))) {
+    return previous
+  }
+  const next = [...values]
+  setPrevious(next)
+  return next
+}
+
 // Poll `fn` every `ms` while the window is visible, and at once when the user comes back to it
 // (lib/poll.js). Restarts when `deps` change.
 export function usePoll(fn, ms, deps = []) {
-  const ref = useRef(fn)
-  ref.current = fn
-  useEffect(() => startPoll(() => ref.current(), ms), [ms, ...deps])
+  const run = useEffectEvent(fn)
+  const inputs = useDependencyList(deps)
+  useEffect(() => startPoll(() => run(), ms), [ms, inputs])
 }
