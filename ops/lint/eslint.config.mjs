@@ -267,6 +267,12 @@ const config = [
       'n/hashbang': 'error',
     },
   },
+  {
+    // ops/ scripts run on the Node the lint gate demands (ops/lint/package.json engines); ops/ itself
+    // has no package.json, so without this n assumes Node 16 and flags fetch and WebSocket.
+    files: ['ops/**/*.mjs'],
+    settings: { node: { version: '>=22.22.2' } },
+  },
 ]
 
 export default config.map((block) => ({ basePath, ...block }))
