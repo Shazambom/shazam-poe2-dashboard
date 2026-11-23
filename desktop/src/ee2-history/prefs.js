@@ -28,7 +28,7 @@ function prefsFromConfig(cfg) {
   const prefs = {
     leagueId: pick(c, 'leagueId'), language: pick(c, 'language'), realm: pick(c, 'realm'), preferredTradeSite: pick(c, 'preferredTradeSite'),
     searchStatRange: Number(pick(w, 'searchStatRange')) || DEFAULT_PREFS.searchStatRange,
-    defaultAllSelected: !!pick(w, 'defaultAllSelected'), activateStockFilter: !!pick(w, 'activateStockFilter'),
+    defaultAllSelected: Boolean(pick(w, 'defaultAllSelected')), activateStockFilter: Boolean(pick(w, 'activateStockFilter')),
     collapseListings: pick(w, 'collapseListings') === 'app' ? 'app' : 'api',
     savedAugments: (w && w.savedAugments && typeof w.savedAugments === 'object') ? w.savedAugments : {},
   }

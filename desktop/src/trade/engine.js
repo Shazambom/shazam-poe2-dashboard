@@ -142,7 +142,7 @@ function _normalize(itemId, rec, r) {
     indexedAt: L.indexed ? Date.parse(L.indexed) : Date.now(),
     receivedAt: Date.now(),
     token, tokenExp,
-    flags: { gone: !!r.gone, inDemand: !!L.in_demand },
+    flags: { gone: Boolean(r.gone), inDemand: Boolean(L.in_demand) },
   }
 }
 
@@ -170,8 +170,8 @@ async function teleport(token) {
   budget.observe('trade-whisper', resp.status, resp.headers)
   if (resp.status === 429) throw new budget.RateLimitError(30)
   const data = poeJson(resp) || {}
-  dlog(`[trade] teleport -> HTTP ${resp.status} success=${!!data.success}`)
-  return { success: !!data.success, status: resp.status }
+  dlog(`[trade] teleport -> HTTP ${resp.status} success=${Boolean(data.success)}`)
+  return { success: Boolean(data.success), status: resp.status }
 }
 
 module.exports = { setSink, startSearch, stopSearch, stopAll, teleport, activeCount, emitState }

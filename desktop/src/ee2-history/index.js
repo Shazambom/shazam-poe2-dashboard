@@ -102,10 +102,10 @@ function createHistoryConsumer({ manager, worker, prefs, send = null, log = () =
   }
 
   const onDetected = (info) => {
-    status = { ...status, present: !!info?.present, running: !!info?.running, configRead: !!info?.config }
+    status = { ...status, present: Boolean(info?.present), running: Boolean(info?.running), configRead: Boolean(info?.config) }
     const { prefs: pf, source } = readPrefs()
     status.leagueId = pf.leagueId || null
-    log(`history-attached cfg=${source === 'ee2' ? 'ok' : 'default'} league="${pf.leagueId || ''}" allSel=${!!pf.defaultAllSelected} range=${pf.searchStatRange} stock=${!!pf.activateStockFilter}`)
+    log(`history-attached cfg=${source === 'ee2' ? 'ok' : 'default'} league="${pf.leagueId || ''}" allSel=${Boolean(pf.defaultAllSelected)} range=${pf.searchStatRange} stock=${Boolean(pf.activateStockFilter)}`)
     if (info?.running) { clearTimeout(warmTimer); warmTimer = setTimeout(warm, info.initial ? WARM_DELAY_MS : 0); if (warmTimer.unref) warmTimer.unref(); if (!info.initial) warm() }
   }
   const onMissing = () => { status = { ...status, present: false, running: false } }
@@ -140,7 +140,7 @@ function createHistoryConsumer({ manager, worker, prefs, send = null, log = () =
       if (r && r.error) { log(`mods-parse-skip reason=worker stage=${r.error.stage} err="${String(r.error.message || '').slice(0, 160)}"`); return { item: null, reason: 'worker' } }
       return r ? { item: r, reason: null } : { item: null, reason: 'not-item' }
     },
-    setEnabled(v) { enabled = !!v; if (!enabled && proc) { try { proc.kill?.() } catch {}; proc = null; status.warm = false } },
+    setEnabled(v) { enabled = Boolean(v); if (!enabled && proc) { try { proc.kill?.() } catch {}; proc = null; status.warm = false } },
     setSender(fn) { sender = fn; if (fn) { const q = held.splice(0); for (const i of q) { try { fn('trade:ingest', i) } catch {} } } },
     status() { return { ...status, enabled, held: held.length } },
     stop() {

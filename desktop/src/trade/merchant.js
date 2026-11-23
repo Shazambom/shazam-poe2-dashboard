@@ -198,7 +198,7 @@ function makeMerchantFetcher({ request, budget, log = () => {}, wait = defaultWa
     const lg = String(league ?? '').trim()
     const rawAcct = account == null ? '' : String(account).trim()
     const sortKey = Object.prototype.hasOwnProperty.call(SORT_SPEC, sort) ? sort : 'price_desc'
-    const isMore = !!more
+    const isMore = Boolean(more)
     if (!lg || rawAcct.length > MAX_ACCOUNT_LEN) return { ok: false, error: 'bad request' }
 
     const signal = drop.signal

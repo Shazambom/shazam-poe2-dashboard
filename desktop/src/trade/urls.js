@@ -22,7 +22,7 @@ function parseTradeUrl(url) {
   const m = pathname.match(/\/trade2?\/([a-z]+)\/poe2\/[^/]+\/([^/]+?)(\/live)?\/?$/i)
     || pathname.match(/\/trade2?\/([a-z]+)\/(?!poe2\/)[^/]+\/([^/]+?)(\/live)?\/?$/i)
   if (!m) return null
-  return { type: m[1], slug: m[2], live: !!m[3] }
+  return { type: m[1], slug: m[2], live: Boolean(m[3]) }
 }
 
 function parseTradeQueryUrl(url) {

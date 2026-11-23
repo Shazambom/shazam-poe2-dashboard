@@ -41,7 +41,7 @@ function parseLine(line) {
   if (!ev) return null
   const m = HEAD.exec(trimmed.slice(0, sep + 1))
   if (!m) return null
-  ev.ts = new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]).getTime()   // Client.txt stamps local time
+  ev.ts = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), Number(m[4]), Number(m[5]), Number(m[6])).getTime()   // Client.txt stamps local time
   return ev
 }
 

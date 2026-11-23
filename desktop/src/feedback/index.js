@@ -75,7 +75,7 @@ function registerFeedback({ ipcMain, BrowserWindow, session, win, uiUrl, backend
       produced.set(id, file)
       last = { at: now(), shortId: id, file }
       prune()
-      return { shortId: id, file, screensPartial: !!shots.partial }
+      return { shortId: id, file, screensPartial: Boolean(shots.partial) }
     } catch (err) {
       return { error: String(err && err.message || err) }
     }

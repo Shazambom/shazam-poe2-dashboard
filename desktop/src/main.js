@@ -94,7 +94,7 @@ async function waitFor(url, tries = 240) {
 // beta / in dev, silent in a stable packaged build — including the updater's own lines. There is
 // one sender (telemetry.installLog) and this is its one gate.
 const isBetaVersion = () => /-beta\./.test(app.getVersion())
-const onBetaChannel = () => !!settings.betaChannel || isBetaVersion()
+const onBetaChannel = () => Boolean(settings.betaChannel) || isBetaVersion()
 const diagTelemetryOn = () => !app.isPackaged || onBetaChannel()
 telemetry.configure({ enabled: diagTelemetryOn, version: () => app.getVersion() })
 
@@ -504,7 +504,7 @@ ipcMain.handle('update:check', () => { try { _autoUpdater?.checkForUpdates() } c
 // `tweaks` = the one beta-or-dev gate (diagTelemetryOn): the renderer shows tweakers' knobs by it (lib/tweaks.js).
 ipcMain.handle('update:getChannel', () => ({ beta: onBetaChannel(), locked: isBetaVersion(), tweaks: diagTelemetryOn() }))
 ipcMain.handle('update:setChannel', (_e, beta) => {
-  settings.betaChannel = !!beta
+  settings.betaChannel = Boolean(beta)
   saveSettings()
   if (_autoUpdater) { _applyChannel(_autoUpdater); _autoUpdater.checkForUpdates().catch(() => {}) }
   return { beta: onBetaChannel(), locked: isBetaVersion(), tweaks: diagTelemetryOn() }
@@ -683,7 +683,7 @@ function stopClientLogWatcher() {
 }
 ipcMain.handle('client-log:status', async () => {
   if (_clientLogStartPromise) await _clientLogStartPromise.catch(() => {})
-  return { watching: !!_clientLogPath }
+  return { watching: Boolean(_clientLogPath) }
 })
 // DIAGNOSTIC (dev launch or the beta channel — never a stable build): inject a Client.txt line for deterministic QA.
 ipcMain.handle('dev:client-log-line', (_e, line) => {

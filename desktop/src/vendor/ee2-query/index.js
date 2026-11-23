@@ -91,7 +91,7 @@ function parseItem(raw) {
   }))
   return {
     name: item.name || '', baseType: item.info?.refName || item.info?.name || item.baseType || '', itemClass: item.category || '',
-    rarity: item.rarity || '', itemLevel: typeof item.itemLevel === 'number' ? item.itemLevel : null, corrupted: !!item.isCorrupted, mods,
+    rarity: item.rarity || '', itemLevel: typeof item.itemLevel === 'number' ? item.itemLevel : null, corrupted: Boolean(item.isCorrupted), mods,
   }
 }
 
