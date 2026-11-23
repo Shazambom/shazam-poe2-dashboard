@@ -12,12 +12,12 @@ HOST="${SHAZAM_HOST:-shazam@192.168.1.250}"
 LOG="${SHAZAM_INSTALL_LOG:-/home/shazam/shazam-poe2-dashboard/data/install-reports.log}"
 OUT="$ROOT/desktop/test/fixtures/ee2/live"
 mkdir -p "$OUT"
-ssh "$HOST" "cat '$LOG'" | python3 - "$OUT" << 'EOF'
-import re, sys, pathlib
+ssh "$HOST" cat -- "$(printf '%q' "$LOG")" | python3 -c '
+import pathlib, re, sys
 out = pathlib.Path(sys.argv[1])
 log = sys.stdin.read()
 # The server files every POST as "===== <stamp> from <client> =====\n<body>"; the body starts with
-# telemetry.js's "v<version> <platform> " prefix, then the diagnostic's own first line.
+# telemetry.js "v<version> <platform> " prefix, then the diagnostic own first line.
 blocks = re.split(r"^===== (.+?) =====\n", log, flags=re.M)
 items, queries, seen = [], [], set()
 for i in range(1, len(blocks) - 1, 2):
@@ -33,9 +33,10 @@ for i in range(1, len(blocks) - 1, 2):
         seen.add(rest)
         items.append((stamp, origin, rest))
     elif rest.startswith("http"):
-        queries.append(f"{stamp}\t{origin}\t{name or ''}\t{rest}")
+        label = name or ""
+        queries.append(f"{stamp}\t{origin}\t{label}\t{rest}")
 for n, (stamp, origin, text) in enumerate(items, 1):
     (out / f"{n:03d}-{origin}.txt").write_text(text + "\n", encoding="utf-8")
 (out / "queries.txt").write_text("\n".join(queries) + ("\n" if queries else ""), encoding="utf-8")
 print(f"{len(items)} item text(s), {len(queries)} search URL(s) → {out}")
-EOF
+' "$OUT"
