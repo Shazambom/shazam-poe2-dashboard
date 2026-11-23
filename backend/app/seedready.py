@@ -23,7 +23,8 @@ from datetime import date, timedelta
 
 import httpx
 
-from . import db, leaguehistory as lh
+from . import db
+from . import leaguehistory as lh
 
 log = logging.getLogger("poe2arb.seedready")
 

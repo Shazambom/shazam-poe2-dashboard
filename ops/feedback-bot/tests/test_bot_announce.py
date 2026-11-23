@@ -9,8 +9,8 @@ import json
 
 import pytest
 
-from test_bot import h as h  # (fixture)
 import announce
+from test_bot import h as h  # (fixture)
 
 
 def run(coro):

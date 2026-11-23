@@ -13,7 +13,6 @@ Run:  python -m pytest backend/tests/test_discords.py -q     # needs numpy + stu
 import sys
 from pathlib import Path
 
-
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # backend/
 from sidecar.analytics import discords
 

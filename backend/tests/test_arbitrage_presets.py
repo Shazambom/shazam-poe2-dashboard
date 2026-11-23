@@ -336,6 +336,7 @@ def test_a_divine_reference_user_gets_the_same_loops_as_an_exalted_one():
 
 def test_presets_endpoint_serves_the_one_definition():
     from starlette.testclient import TestClient
+
     from app.main import app
 
     got = TestClient(app).get("/api/arbitrage/presets").json()
@@ -397,7 +398,8 @@ def test_the_market_graph_keeps_its_own_volume_window_whatever_the_arbitrage_pre
     """volume_window_h is an Arbitrage knob (presets: 24 or 72). The shared market graph — Board, Hold, Convert,
     Capital, every price — reads volumes over a fixed MARKET_VOLUME_WINDOW_H, so picking a preset never moves them;
     only the route search builds its graph over the preset's window."""
-    from app import digest, settings as S
+    from app import digest
+    from app import settings as S
     from app.arbitrage import graph
 
     seen = []

@@ -48,6 +48,7 @@ def _load():
     """(negcycle, numpy) or None — the scan degrades to nothing rather than break routes."""
     try:
         import numpy as np
+
         from .. import negcycle
     except ImportError:
         return None

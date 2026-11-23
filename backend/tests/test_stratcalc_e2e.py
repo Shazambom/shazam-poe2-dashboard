@@ -34,6 +34,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # backend/
 from starlette.testclient import TestClient
+
 from app import arbitrage, db, modpool, settings, stratcalc
 from app.arbitrage.graph import Edge, Graph
 from app.main import app

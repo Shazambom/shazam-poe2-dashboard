@@ -17,10 +17,10 @@ import time
 
 import httpx
 
-from . import devtelemetry, cache, db, gateway, settings
-from .datapolicy import MARKET_RETENTION_DAYS
+from . import cache, db, devtelemetry, gateway, settings
 from .config import DIGEST_BACKFILL_HOURS, DIGEST_POLL_SECONDS, GGG_DIGEST_URL
 from .currencies import registry
+from .datapolicy import MARKET_RETENTION_DAYS
 
 log = logging.getLogger(__name__)
 

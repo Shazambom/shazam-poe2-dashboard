@@ -8,8 +8,8 @@ number the app shows or a call it makes.
     cd backend && DATA_DIR="$(mktemp -d)" MARKET_SEED= ../.venv-test/bin/python -m pytest tests/test_review_2026_09_23.py -q
 """
 
-import json
 import importlib
+import json
 import math
 import sqlite3
 import sys
@@ -25,7 +25,8 @@ from app.currencies import registry
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import test_arbitrage_golden as G
-from _proddb import PROD_DB, prod as _prod  # (opt-in: ARBITER_PROD_TESTS=1)
+from _proddb import PROD_DB  # (opt-in: ARBITER_PROD_TESTS=1)
+from _proddb import prod as _prod
 
 board = importlib.import_module(
     "app.arbitrage.board"
@@ -1196,6 +1197,7 @@ def test_the_graph_never_reads_the_bulk_exchange_books(monkeypatch):
 
 def test_graph_py_carries_no_dead_definitions():
     import inspect
+
     from app.arbitrage import graph as G_
 
     src = inspect.getsource(G_)
@@ -1214,6 +1216,7 @@ def test_graph_py_carries_no_dead_definitions():
 
 def _tlog_capture(monkeypatch):
     import threading
+
     from app import devtelemetry
 
     got = []

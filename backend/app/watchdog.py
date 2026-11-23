@@ -16,8 +16,8 @@ from __future__ import annotations
 import os
 import sys
 import threading
-from typing import BinaryIO, cast
 from collections.abc import Callable
+from typing import BinaryIO, cast
 
 
 def parent_alive(pid: int | None) -> bool:

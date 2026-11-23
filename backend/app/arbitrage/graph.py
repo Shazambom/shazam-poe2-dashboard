@@ -10,11 +10,12 @@ from __future__ import annotations
 
 import heapq
 import math
+from dataclasses import dataclass, field
+from typing import Any
+
 from .. import cache, digest, gamedata, leaguehistory, orderbook, recipes
 from ..currencies import registry
 from ..settings import get_settings
-from dataclasses import dataclass, field
-from typing import Any
 
 INF = float("inf")
 # How far a market may sit from poe2scout's independent close and still price a currency.

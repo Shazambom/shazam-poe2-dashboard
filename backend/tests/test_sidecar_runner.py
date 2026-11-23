@@ -15,9 +15,10 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # backend/
+from datetime import UTC
+
 from app import analytics
 from sidecar import runner
-from datetime import UTC
 
 DAY = 86400
 

@@ -33,6 +33,8 @@ from . import db, digest, gateway, pairscore, session
 from .config import (
     ORDERBOOK_SWEEP_SECONDS,
     TRADE_EXCHANGE_URL,
+)
+from .config import (
     TRADE_LEAGUES_TTL_S as TRADE_LEAGUES_TTL_S,
 )
 from .datapolicy import ORDERBOOK_HISTORY_RETENTION_H

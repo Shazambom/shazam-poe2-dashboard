@@ -18,10 +18,10 @@ The message itself and the payload rules are defined once, in ops/feedback-bot/b
 from __future__ import annotations
 
 import argparse
-from typing import cast
 import json
 import sys
 from pathlib import Path
+from typing import cast
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "feedback-bot" / "bot"))
 import announce  # The bot's definition of the message and its rules.

@@ -6,8 +6,8 @@ fetch candidates only: a seeded client that skips a whole league shows nothing t
 """
 
 import sys
-from typing import Any
 from pathlib import Path
+from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # backend/
 from app import leaguehistory as lh
@@ -76,6 +76,7 @@ def test_every_fetch_is_a_heartbeat_so_a_league_with_nothing_to_do_never_reads_a
     """Between leagues the crawl only fetches item universes (no per-item ticks any more); the
     orb's stall rule (no tick for 30 s) must see those fetches."""
     import asyncio
+
     from app import gateway
 
     class R:

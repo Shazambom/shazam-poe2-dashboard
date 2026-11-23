@@ -36,7 +36,6 @@ line (a stale acceptance fails too). Exit 0 only when both hold, or when nothing
 from __future__ import annotations
 
 import argparse
-from typing import cast
 import json
 import os
 import shutil
@@ -44,6 +43,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+from typing import cast
 
 REPO = Path(__file__).resolve().parents[1]
 DEFAULT_DATA = Path.home() / "Library/Application Support/Arbiter/data"

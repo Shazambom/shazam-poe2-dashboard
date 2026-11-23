@@ -16,15 +16,15 @@ production backtest first (or read its --json via --report).
 from __future__ import annotations
 
 import argparse
-from importlib.abc import Loader
-from importlib.machinery import ModuleSpec
-from typing import cast
 import importlib.util
 import json
 import math
 import random
 import statistics
+from importlib.abc import Loader
+from importlib.machinery import ModuleSpec
 from pathlib import Path
+from typing import cast
 
 _spec = importlib.util.spec_from_file_location(
     "hold_backtest", Path(__file__).with_name("hold-backtest.py")

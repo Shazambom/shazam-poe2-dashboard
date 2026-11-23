@@ -24,7 +24,6 @@ from typing import cast
 from . import arbitrage, centrality, settings
 from .currencies import registry
 
-
 # Two real hub markets of one holding disagree by a few % (a cranium's Chaos and Divine markets,
 # VWAP hours, spreads), so an honest one-hop sale can read as a small "gain" against the holding's
 # price. The convert ranker's 2% phantom-gain cap would throw those sales out; cash-out tolerates

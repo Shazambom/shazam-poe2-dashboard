@@ -2,12 +2,12 @@
 search and closes the previous stream; the backend used to keep working on the closed one to the end."""
 
 import asyncio
-from typing import cast
-
-from starlette.requests import Request
 import sys
 import threading
 from pathlib import Path
+from typing import cast
+
+from starlette.requests import Request
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # backend/
 from app.arbitrage import Graph, routes

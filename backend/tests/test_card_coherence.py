@@ -33,7 +33,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # backend/
 from app import db, digest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _proddb import PROD_DB, prod as _prod  # (opt-in: ARBITER_PROD_TESTS=1)
+from _proddb import PROD_DB  # (opt-in: ARBITER_PROD_TESTS=1)
+from _proddb import prod as _prod
 
 # `app.arbitrage` re-exports a board() FUNCTION under the same name, which shadows the submodule
 # for both `from … import board` and `import … as board`. import_module returns the module.

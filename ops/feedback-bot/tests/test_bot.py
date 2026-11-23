@@ -11,7 +11,7 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey
 
 import arbseal
-from bot import Handler, ATTACHMENT_RE
+from bot import ATTACHMENT_RE, Handler
 from conftest import valid_doc
 from opener import opener
 

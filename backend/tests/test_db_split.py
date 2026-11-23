@@ -13,8 +13,8 @@ migrations_user.py can't silently drift:
 """
 
 import gzip
-import os
 import json
+import os
 import sqlite3
 import sys
 from pathlib import Path
@@ -23,7 +23,6 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # backend/
 from app import db, migrations_user
-
 
 # ----------------------------------------------------------------- kv routing
 USER_KEYS = [

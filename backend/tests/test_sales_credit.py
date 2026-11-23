@@ -10,12 +10,13 @@ the currencies whose total the user typed) and the fetch's hand-off (POST /api/s
 """
 
 import sys
-from datetime import datetime, timedelta, UTC
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # backend/
 from starlette.testclient import TestClient
-from app import db, datapolicy
+
+from app import datapolicy, db
 from app.main import app
 
 client = TestClient(app)

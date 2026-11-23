@@ -22,7 +22,6 @@ construction and a MARKET_SCHEMA change in db.py needs no edit here. Only the ex
 """
 
 import argparse
-from typing import BinaryIO, cast
 import calendar
 import gzip
 import json
@@ -31,6 +30,7 @@ import shutil
 import sqlite3
 import sys
 import time
+from typing import BinaryIO, cast
 
 try:
     from app.datapolicy import MARKET_RETENTION_DAYS, SEED_TABLES

@@ -14,8 +14,10 @@ from test_bot import (
     Message,
     Thread,
     sealed_report,
-    h as h,
 )  # (fixture)
+from test_bot import (
+    h as h,
+)
 
 REPORTER = Author(7)
 

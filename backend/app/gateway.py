@@ -17,11 +17,10 @@ import asyncio
 import logging
 import time
 from dataclasses import dataclass, field
+from typing import cast
 from urllib.parse import urlparse
 
 import httpx
-from typing import cast
-
 from pyrate_limiter import Duration, InMemoryBucket, Limiter, Rate, RateItem
 
 from .config import USER_AGENT

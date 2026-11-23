@@ -10,13 +10,13 @@ Owner, 2026-10-04: "should only fire after confirmed released". The payload trav
 from the notes reaches a remote shell raw."""
 
 import base64
-from typing import TypedDict
 import json
 import os
 import shutil
 import stat
 import subprocess
 from pathlib import Path
+from typing import TypedDict
 
 ROOT = Path(__file__).resolve().parents[3]
 SH = ROOT / "ops" / "announce.sh"

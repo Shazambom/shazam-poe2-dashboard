@@ -19,12 +19,13 @@ import subprocess
 import sys
 import threading
 import time
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from app import analytics, sidecar_supervisor as sup
+from app import analytics
+from app import sidecar_supervisor as sup
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 

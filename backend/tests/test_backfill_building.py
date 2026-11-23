@@ -16,8 +16,10 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # backend/
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from app import db, leaguehistory as lh
-from test_seedready_sim import crawl, league, run, scout as scout  # (fixture)
+from app import db
+from app import leaguehistory as lh
+from test_seedready_sim import crawl, league, run  # (fixture)
+from test_seedready_sim import scout as scout
 
 
 @pytest.fixture

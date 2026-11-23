@@ -16,7 +16,6 @@ can only be marked seen ("triage"), since resolve / close reply in the thread wi
 from __future__ import annotations
 
 import argparse
-from typing import cast
 import base64
 import binascii
 import json
@@ -24,6 +23,7 @@ import os
 import sys
 import time
 from pathlib import Path
+from typing import cast
 
 INBOX = Path(
     os.environ.get(

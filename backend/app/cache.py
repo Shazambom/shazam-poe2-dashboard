@@ -14,9 +14,8 @@ of age. Stdlib-only.
 from __future__ import annotations
 
 import time
-from typing import Any
 from collections.abc import Callable, Hashable
-
+from typing import Any
 
 _MISS = object()
 

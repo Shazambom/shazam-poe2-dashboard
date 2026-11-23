@@ -437,6 +437,7 @@ def test_an_old_layout_local_db_and_a_refused_refresh_say_so(
     assert db._carry_crawl(new, old) == (0, 0)
     assert ("seed", "local DB has no crawl tables; nothing to carry") in lines
     from fastapi.testclient import TestClient
+
     from app import main
 
     monkeypatch.setattr(db, "MARKET_SEED_PATH", tmp_path / "seed.gz")

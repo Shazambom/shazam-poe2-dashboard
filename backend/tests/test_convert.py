@@ -240,9 +240,9 @@ def test_convert_endpoint_registered_and_delegates(monkeypatch):
     arbitrage.convert (tested via a stub so no DB/graph is needed)."""
     import asyncio
 
-    from app import arbitrage, main
-
     from starlette.routing import Route
+
+    from app import arbitrage, main
 
     assert "/api/convert" in {r.path for r in main.app.routes if isinstance(r, Route)}
 

@@ -7,11 +7,11 @@ crawl stamps were older, and the crawl restarted at 2/527.
 """
 
 import gzip
-from typing import BinaryIO, cast
 import json
 import sqlite3
 import sys
 from pathlib import Path
+from typing import BinaryIO, cast
 
 import pytest
 

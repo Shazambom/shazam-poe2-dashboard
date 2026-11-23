@@ -16,6 +16,8 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # backend/
+from starlette.testclient import TestClient
+
 from app import (
     arbitrage,
     cache,
@@ -30,8 +32,7 @@ from app import (
     settings,
 )
 from app.currencies import registry
-from starlette.testclient import TestClient
-from app.main import app, RouteQuery
+from app.main import RouteQuery, app
 
 client = TestClient(app)
 APP = Path(__file__).resolve().parents[1] / "app"

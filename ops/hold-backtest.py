@@ -54,9 +54,6 @@ on day t; `series` = {age: (price_div, value_ex)} cut at age <= t. `ctx` = {"t",
 from __future__ import annotations
 
 import argparse
-from importlib.abc import Loader
-from importlib.machinery import ModuleSpec
-from typing import cast
 import importlib.util
 import json
 import math
@@ -65,14 +62,19 @@ import sqlite3
 import statistics
 import sys
 import tempfile
+from importlib.abc import Loader
+from importlib.machinery import ModuleSpec
 from pathlib import Path
+from typing import cast
 
 os.environ.setdefault(
     "DATA_DIR", tempfile.mkdtemp(prefix="hold-backtest-")
 )  # never the app's dir
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "backend"))
 
-from app import holdscore as H, leagueregime as LR, marketseries as M
+from app import holdscore as H
+from app import leagueregime as LR
+from app import marketseries as M
 
 ROOT = Path(__file__).resolve().parents[1]
 

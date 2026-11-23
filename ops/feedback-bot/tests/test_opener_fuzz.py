@@ -11,7 +11,6 @@ from hypothesis import strategies as st
 from conftest import gz, valid_doc
 from opener import cell
 
-
 json_values = st.recursive(
     st.none()
     | st.booleans()

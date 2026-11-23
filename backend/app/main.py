@@ -5,15 +5,14 @@ import logging
 import os
 import threading
 import time
-from urllib.parse import urlsplit
 from contextlib import asynccontextmanager
-from datetime import datetime, UTC
+from datetime import UTC, datetime
+from urllib.parse import urlsplit
 
 from fastapi import Depends, FastAPI, HTTPException, Request
-from starlette.concurrency import run_in_threadpool
+from fastapi.responses import PlainTextResponse, RedirectResponse
 from pydantic import BaseModel, Field, model_validator
-
-from fastapi.responses import RedirectResponse, PlainTextResponse
+from starlette.concurrency import run_in_threadpool
 
 from . import (
     analytics,

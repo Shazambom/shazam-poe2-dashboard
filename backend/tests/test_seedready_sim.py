@@ -16,7 +16,9 @@ from pyrate_limiter import Duration, Rate
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # backend/
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from app import db, gateway, leaguehistory as lh, seedready as sr
+from app import db, gateway
+from app import leaguehistory as lh
+from app import seedready as sr
 from fake_poe2scout import FakeScout
 
 D1, D2, D3, D4, D5 = (

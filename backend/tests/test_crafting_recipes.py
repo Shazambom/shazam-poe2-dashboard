@@ -109,6 +109,7 @@ def test_refresh_stores_the_bench_list_and_keeps_the_last_good_one(
     monkeypatch, no_bench_after
 ):
     import asyncio
+
     from app import db
 
     _fake_sources(monkeypatch, _bench_page())
@@ -238,6 +239,7 @@ def test_route_edges_are_the_derived_recipes_plus_the_users_own(
     game_names, tmp_path, monkeypatch
 ):
     import json
+
     from app import recipes
 
     path = tmp_path / "recipes.json"
@@ -410,6 +412,7 @@ def test_a_new_install_starts_with_an_empty_recipes_file():
     """The shipped file held disabled templates (one a made-up "Disenchant" that looked like data);
     the game's conversions are derived now, so the user's file starts empty."""
     import json
+
     from app.config import SEED_DIR
 
     assert json.loads((SEED_DIR / "recipes.json").read_text()) == []
@@ -422,6 +425,7 @@ def test_a_recipe_that_beats_its_market_still_serialises_for_the_screens(
     serializable". A recipe that takes a market's step kept that market's Edge in `meta`, and route
     steps and the Market graph table send `meta` to the UI as JSON."""
     import json
+
     from app import arbitrage, recipes
     from app.arbitrage.board import edge_table
 

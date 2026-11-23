@@ -5,10 +5,10 @@ import os
 import shutil
 import sqlite3
 import threading
-from contextlib import contextmanager
-from datetime import datetime, timedelta, UTC
-from typing import Any
 from collections.abc import Callable, Iterator
+from contextlib import contextmanager
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
 from . import devtelemetry
 from .config import MARKET_DB_PATH, MARKET_SEED_PATH, USER_DB_PATH

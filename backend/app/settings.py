@@ -5,13 +5,16 @@ import logging
 import time
 
 from . import cache, db, leaguehistory, marketseries
-from .config import LEAGUE, TRADE_LEAGUES_TTL_S
-
 from .arbpresets import (
     ARBITRAGE_PRESETS,
-    ARBITRAGE_UNIT as ARBITRAGE_UNIT,
-    HIDDEN_KNOB_DEFAULTS as _HIDDEN,
 )  # (re-exported)
+from .arbpresets import (
+    ARBITRAGE_UNIT as ARBITRAGE_UNIT,
+)
+from .arbpresets import (
+    HIDDEN_KNOB_DEFAULTS as _HIDDEN,
+)
+from .config import LEAGUE, TRADE_LEAGUES_TTL_S
 
 log = logging.getLogger(__name__)
 

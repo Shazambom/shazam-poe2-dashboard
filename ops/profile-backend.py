@@ -14,8 +14,6 @@ Modes:
 from __future__ import annotations
 
 import argparse
-from collections.abc import Callable
-from typing import cast
 import gzip
 import json
 import math
@@ -26,7 +24,9 @@ import statistics
 import sys
 import tempfile
 import time
+from collections.abc import Callable
 from pathlib import Path
+from typing import cast
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -223,8 +223,8 @@ def run_benchmarks(db_arg: str | None, runs: int) -> dict:
         sys.path.insert(0, str(ROOT / "backend"))
 
         t_import0 = time.perf_counter()
-        from app import db, digest, holdscore, inflation, leaguearc, liquidity, settings
         import app.arbitrage
+        from app import db, digest, holdscore, inflation, leaguearc, liquidity, settings
 
         board_mod = sys.modules["app.arbitrage.board"]
         graph_mod = app.arbitrage.graph

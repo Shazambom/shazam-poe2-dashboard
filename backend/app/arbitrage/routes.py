@@ -15,6 +15,7 @@ from __future__ import annotations
 import json
 import math
 import time
+
 from .. import cache, centrality, db, devtelemetry, orderbook, pairscore
 from .. import settings as settings_mod
 from ..currencies import registry

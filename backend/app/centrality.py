@@ -20,7 +20,6 @@ touches no DB and needs no snapshot.
 
 from __future__ import annotations
 
-
 DAMPING = 0.85  # PageRank teleport/follow split (standard 0.85)
 _MAX_ITER = 100  # power-iteration cap (converges in ~tens on these small graphs)
 _TOL = 1e-9  # L1 convergence threshold

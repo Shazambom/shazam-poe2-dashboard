@@ -17,6 +17,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # backend/
 from starlette.testclient import TestClient
+
 from app import arbitrage, db
 from app.arbitrage import Edge, Graph
 from app.main import app
@@ -440,7 +441,8 @@ def test_an_exchange_asset_is_served_from_the_exchange_not_the_dailies(monkeypat
     """The same modal for something the exchange DOES trade: this hour's price from the one table,
     not yesterday's close (Preserved Cranium read 17.53 on Hold and 15.71 on the Board because the
     modal served a ~30h-old daily close)."""
-    from app import arbitrage as arb, movers
+    from app import arbitrage as arb
+    from app import movers
 
     g = _graph(monkeypatch)
     try:

@@ -704,6 +704,7 @@ def test_a_cost_is_shown_in_the_market_that_trades_the_grant_at_that_markets_rat
     }, "a pool prices its own grants only"
     assert modpool.prices("nope") is None
     from fastapi.testclient import TestClient
+
     from app import main
 
     r = TestClient(main.app).get("/api/mods/pool/wand/prices")
@@ -754,6 +755,7 @@ def test_a_desktop_install_never_rebuilds_its_mod_tables(monkeypatch, tmp_path):
     (`python -m app.modpool --force` in the publisher). A backend with a seed bundled is a desktop
     install, so POST /api/mods/refresh refuses there and never scrapes or overwrites the tables."""
     from fastapi.testclient import TestClient
+
     from app import db, main
 
     ran = []
@@ -879,6 +881,7 @@ def test_refresh_refuses_to_wipe_mod_pools_when_repoe_derives_nothing(
 ):
     """A transient empty RePoE export must never wipe mod_pools to 0 rows (shazam incident 2026-11-18)."""
     import asyncio
+
     from app import catalog, gamedata
 
     good = modpool.assemble(

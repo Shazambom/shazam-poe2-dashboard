@@ -13,7 +13,6 @@ The math, the wall-clock timers and the strats' lifecycle live in the view
 from __future__ import annotations
 
 import json
-
 import math
 
 KEY = "strat_calc"

@@ -191,6 +191,7 @@ def test_retired_saved_league_falls_back_to_youngest_while_active_permanent_and_
 
 def test_trade_leagues_cache_ttl_is_short_enough_for_launch_day(monkeypatch):
     import asyncio
+
     from app import gateway, orderbook
 
     assert orderbook.TRADE_LEAGUES_TTL_S <= 3600
@@ -315,6 +316,7 @@ def test_c5_expired_trade_leagues_and_permanent_and_hc_retirement_and_unrelated_
         # 6. orderbook.leagues() storing fresh trade_leagues must invalidate the 5-min youngest_league memo
         # automatically so a retired saved league does not fall back to itself from the stale memo.
         import asyncio
+
         from app import gateway, orderbook
 
         db.kv_set("trade_leagues", None)

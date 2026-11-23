@@ -5,6 +5,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # backend/
 from starlette.testclient import TestClient
+
 from app import arbitrage
 from app.main import app
 
@@ -24,8 +25,8 @@ def test_status_has_wealth_prices_with_the_reference_at_one():
 
 
 def test_anchor_prices_reads_the_cached_graph(monkeypatch):
-    from tests.test_arbitrage_golden import _synthetic_graph, SETTINGS
     from app import db
+    from tests.test_arbitrage_golden import SETTINGS, _synthetic_graph
 
     db.kv_set("settings", SETTINGS)
     arbitrage.invalidate_caches()
@@ -46,7 +47,7 @@ def test_the_stash_unit_choices_are_all_priced_and_the_choice_is_a_plain_setting
     monkeypatch,
 ):
     """Owner, 2026-10-12: the stash may be valued in exalted, chaos, divine, Hinekora's Lock or mirror."""
-    from app import settings, main
+    from app import main, settings
     from app.arbitrage import graph as graph_mod
 
     class G:

@@ -34,7 +34,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from app import holdscore
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _proddb import PROD_DB, prod as _prod  # (opt-in: ARBITER_PROD_TESTS=1)
+from _proddb import PROD_DB  # (opt-in: ARBITER_PROD_TESTS=1)
+from _proddb import prod as _prod
 
 
 def series(prices, value=1e8):

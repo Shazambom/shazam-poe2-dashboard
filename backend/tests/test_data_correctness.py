@@ -14,17 +14,18 @@
 """
 
 import json
-from typing import cast
 import sqlite3
 import sys
 import threading
 from pathlib import Path
+from typing import cast
 
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # backend/
-from app import analytics, db, migrations_user, settings
 from starlette.testclient import TestClient
+
+from app import analytics, db, migrations_user, settings
 from app.main import app
 
 client = TestClient(app)

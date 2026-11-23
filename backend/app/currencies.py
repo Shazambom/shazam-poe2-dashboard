@@ -27,7 +27,7 @@ import re
 import time
 from dataclasses import dataclass, field
 
-from . import db, devtelemetry, marketseries, gateway
+from . import db, devtelemetry, gateway, marketseries
 from .config import SEED_DIR, TRADE_STATIC_URL
 
 log = logging.getLogger(__name__)
