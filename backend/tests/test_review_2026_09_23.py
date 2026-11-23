@@ -11,7 +11,6 @@ number the app shows or a call it makes.
 import json
 import importlib
 import math
-import os
 import sqlite3
 import sys
 import time
@@ -21,7 +20,7 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # backend/
-from app import db, digest, holdscore, marketseries, settings
+from app import db, digest, holdscore, settings
 from app.currencies import registry
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))

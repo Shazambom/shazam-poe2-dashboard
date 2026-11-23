@@ -17,8 +17,6 @@ degenerated into raw volume weighting instead of the cap it looked like.
     python -m pytest backend/tests/test_hold_score.py -q
 """
 
-import math
-import os
 import sqlite3
 import statistics
 import sys

@@ -22,7 +22,6 @@ What must NOT change: `/api/market/history` is the raw record of what executed a
 
 import importlib
 import math
-import os
 import sqlite3
 import sys
 import time

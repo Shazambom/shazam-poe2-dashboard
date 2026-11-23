@@ -7,7 +7,7 @@ import threading
 import time
 from urllib.parse import urlsplit
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone, UTC
+from datetime import datetime, UTC
 
 from fastapi import Depends, FastAPI, HTTPException, Request
 from starlette.concurrency import run_in_threadpool
@@ -29,7 +29,6 @@ from . import (
     leaguearc,
     leaguehistory,
     liquidity,
-    migrations_user,
     modpool,
     movers,
     oauth,

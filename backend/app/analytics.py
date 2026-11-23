@@ -26,7 +26,7 @@ from __future__ import annotations
 import json
 import sqlite3
 import time
-from typing import Any, Optional, cast
+from typing import Any, cast
 
 
 def _now() -> int:

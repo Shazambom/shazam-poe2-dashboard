@@ -27,7 +27,6 @@ from app import (
     liquidity,
     marketseries,
     orderbook,
-    session,
     settings,
 )
 from app.currencies import registry

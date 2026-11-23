@@ -3,7 +3,6 @@
 DATA_DIR=$(mktemp -d) MARKET_SEED= python -m pytest backend/tests/test_sales.py -q
 """
 
-import json
 import sqlite3
 import sys
 from pathlib import Path

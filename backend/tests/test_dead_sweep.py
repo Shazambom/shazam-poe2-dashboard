@@ -4,7 +4,6 @@ DATA_DIR=$(mktemp -d) MARKET_SEED= python -m pytest backend/tests/test_dead_swee
 """
 
 import inspect
-import json
 import sys
 from pathlib import Path
 

@@ -5,7 +5,6 @@ opener's result.json, moves only fixed filenames into the inbox, acks, and recor
 import asyncio
 import gzip
 import json
-from pathlib import Path
 
 import pytest
 from cryptography.hazmat.primitives import serialization

@@ -153,7 +153,6 @@ def test_a_one_sided_fat_finger_is_not_a_price(monkeypatch):
     """Someone moving 2,000 Divine an hour for a handful of Regals is deep in Divine and nothing
     in Regals. poe2scout says a Regal is worth ~2 exalted, and a market that disagrees with the
     outside world by four orders of magnitude does not get to price it."""
-    from app import leaguehistory
 
     g = _graph(monkeypatch)
     try:

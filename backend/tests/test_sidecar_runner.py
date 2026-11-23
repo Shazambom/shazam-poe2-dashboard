@@ -38,7 +38,7 @@ def _market_db():
     c.executescript(_DDL)
     c.execute("INSERT INTO item_meta VALUES(1,'Divine Orb','currency')")
     # 30 calm liquid days + a recent volume-confirmed price anomaly at day 27.
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     rows = []
     for i in range(30):
@@ -76,7 +76,7 @@ def test_run_once_computes_discords_into_cache():
 def test_run_once_computes_arc_weights_into_cache():
     c = _market_db()
     # give a second, differently-shaped league so DTW has a field to weight over.
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     rows = []
     for i in range(20):

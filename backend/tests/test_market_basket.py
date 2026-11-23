@@ -296,7 +296,6 @@ def test_values_ignore_a_one_sided_fat_finger(g, monkeypatch):
     """2,900 Divine traded into 53 Lesser Essences of Battle in one hour: deep in Divine, worth a
     couple of Exalted everywhere else. poe2scout prices these items too, and a market that
     disagrees with that by thousands of times does not get to say what they are worth."""
-    import types
 
     scout = {c: px for c, px in (FX.get("scout_ex") or {}).items() if px}
     monkeypatch.setattr(type(g), "_scout_values", lambda self: scout, raising=False)
@@ -344,7 +343,6 @@ def test_a_fat_finger_in_the_only_market_is_not_a_price(g):
     market is the fat-finger one had its floor derived from that very trade, so both sides agreed
     and it priced at 54 Divine an essence."""
     import types
-    from app import leaguehistory
 
     fx = _graph()
     fx.add(

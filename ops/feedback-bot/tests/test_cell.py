@@ -6,7 +6,6 @@ import gzip
 import io
 import json
 import re
-import zlib
 from pathlib import Path
 
 import pytest

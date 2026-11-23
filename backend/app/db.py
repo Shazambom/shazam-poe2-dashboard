@@ -6,7 +6,7 @@ import shutil
 import sqlite3
 import threading
 from contextlib import contextmanager
-from datetime import datetime, timedelta, timezone, UTC
+from datetime import datetime, timedelta, UTC
 from typing import Any
 from collections.abc import Callable, Iterator
 

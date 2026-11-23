@@ -28,7 +28,7 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # backend/
-from app import db, digest, settings
+from app import digest, settings
 from app.arbitrage import Edge, Graph
 
 FX = json.loads(

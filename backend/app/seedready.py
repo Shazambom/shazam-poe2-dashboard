@@ -14,7 +14,6 @@ day that is final for every tracked item; the items holding it back are the only
 from __future__ import annotations
 
 import calendar
-import hashlib
 import json
 import logging
 import time

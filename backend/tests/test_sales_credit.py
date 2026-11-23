@@ -10,7 +10,7 @@ the currencies whose total the user typed) and the fetch's hand-off (POST /api/s
 """
 
 import sys
-from datetime import datetime, timedelta, timezone, UTC
+from datetime import datetime, timedelta, UTC
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # backend/
