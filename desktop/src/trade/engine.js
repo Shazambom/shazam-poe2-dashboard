@@ -15,9 +15,10 @@ const sockets = new Map()       // itemId -> { ws, slug, league, searchId, attem
 /** @type {(channel: string, payload: any) => void} */
 let _sink = () => {}            // set by index.js: (channel, payload) => webContents.send
 
-// Verbose per-event trace (startSearch / WS open / ping / stop / teleport). Off by default
-// so production is quiet; set TRADE_DEBUG=1 to re-enable while diagnosing. Failures still log.
-const DBG = !!process.env.TRADE_DEBUG
+// Verbose per-event trace (startSearch / WS open / ping / stop / teleport). Off so production is
+// quiet; flip this constant in a dev build to diagnose (no environment switch: CLAUDE.md
+// "Configuration"). Failures still log.
+const DBG = false
 const dlog = (...a) => { if (DBG) console.log(...a) }
 
 function setSink(fn) { _sink = fn }
