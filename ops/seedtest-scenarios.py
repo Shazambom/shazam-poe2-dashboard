@@ -60,17 +60,18 @@ def sh(cmd: str, check: bool = True) -> subprocess.CompletedProcess:
     return r
 
 
-def inside_full(py: str) -> subprocess.CompletedProcess:
+def inside_full(py: str, **inputs: object) -> subprocess.CompletedProcess:
     """Run a python snippet inside the TEST container (cwd /app, DATA_DIR=/data = the test DB)."""
-    b64 = base64.b64encode(py.encode()).decode()
+    bindings = f"inputs = json.loads({json.dumps(inputs)!r})\n" if inputs else ""
+    b64 = base64.b64encode((PRELUDE + bindings + py).encode()).decode()
     return sh(
         f"sudo docker exec {CONTAINER} sh -c \"'echo {b64} | base64 -d > /tmp/scn.py && python /tmp/scn.py'\"",
         check=False,
     )
 
 
-def inside(py: str) -> str:
-    r = inside_full(py)
+def inside(py: str, **inputs: object) -> str:
+    r = inside_full(py, **inputs)
     if r.returncode != 0:
         raise RuntimeError(r.stderr[-800:])
     return r.stdout
@@ -96,8 +97,7 @@ def out(x): print("RESULT " + json.dumps(x, default=str))
 def poll() -> tuple[dict, dict]:
     """Run one real poll; returns (per-league result, poe2scout requests by kind)."""
     r = inside_full(
-        PRELUDE
-        + """
+        """
 async def m():
     try: return await sr.poll()
     finally: await gateway.client().aclose()
@@ -124,9 +124,7 @@ def publish() -> subprocess.CompletedProcess:
 
 
 def cuts() -> dict:
-    return result(
-        inside(PRELUDE + 'out({lg: db.kv_get(f"seed_cut:{lg}") for lg in LEAGUES})')
-    )
+    return result(inside('out({lg: db.kv_get(f"seed_cut:{lg}") for lg in LEAGUES})'))
 
 
 def prev_day(day: str) -> str:
@@ -157,8 +155,7 @@ def preflight() -> dict:
         )
     busy = result(
         inside(
-            PRELUDE
-            + """
+            """
 import urllib.request
 out(json.load(urllib.request.urlopen("http://127.0.0.1:8000/api/backfill")))"""
         )
@@ -180,19 +177,19 @@ def s_catchup(base: dict) -> None:
     )
     picked = result(
         inside(
-            PRELUDE
-            + f"""
-picked = {{}}
+            """
+picked = {}
 for lg in LEAGUES:
-    day = db.kv_get(f"seed_cut:{{lg}}")["day"]
+    day = db.kv_get(f"seed_cut:{lg}")["day"]
     with db.tx() as c:
-        ids = [r[0] for r in c.execute("SELECT item_id FROM league_daily WHERE league=? AND day=? AND volume>3 ORDER BY item_id LIMIT {N_CATCHUP}", (lg, day))]
+        ids = [r[0] for r in c.execute("SELECT item_id FROM league_daily WHERE league=? AND day=? AND volume>3 ORDER BY item_id LIMIT ?", (lg, day, inputs["limit"]))]
         c.executemany("UPDATE league_daily SET volume=volume/3, average=average*0.9 WHERE league=? AND item_id=? AND day=?", [(lg, i, day) for i in ids])
     picked[lg] = ids
 prev = json.load(open("/data/market-seed.published-cut"))
-prev["cuts"] = {{lg: str(__import__("datetime").date.fromisoformat(v) - __import__("datetime").timedelta(days=1)) for lg, v in prev["cuts"].items()}}
+prev["cuts"] = {lg: str(__import__("datetime").date.fromisoformat(v) - __import__("datetime").timedelta(days=1)) for lg, v in prev["cuts"].items()}
 json.dump(prev, open("/data/market-seed.published-cut", "w"))
-out(picked)"""
+out(picked)""",
+            limit=N_CATCHUP,
         )
     )
     res, reqs = poll()
@@ -227,8 +224,7 @@ out(picked)"""
 
 def verify_archive(path: str) -> None:
     out = inside(
-        PRELUDE
-        + """
+        """
 import gzip, shutil, sqlite3
 with gzip.open("/data/market-seed.sqlite.gz") as fi, open("/tmp/scn.sqlite", "wb") as fo: shutil.copyfileobj(fi, fo)
 c = sqlite3.connect("/tmp/scn.sqlite")
@@ -275,18 +271,18 @@ def s_frozen(base: dict) -> None:
     )
     picked = result(
         inside(
-            PRELUDE
-            + f"""
+            """
 import datetime
-picked = {{}}
+picked = {}
 for lg in LEAGUES:
-    day = db.kv_get(f"seed_cut:{{lg}}")["day"]
+    day = db.kv_get(f"seed_cut:{lg}")["day"]
     since = str(datetime.date.fromisoformat(day) - datetime.timedelta(days=4))
     with db.tx() as c:
-        ids = [r[0] for r in c.execute("SELECT item_id FROM league_daily WHERE league=? AND day=? ORDER BY item_id DESC LIMIT {N_FROZEN}", (lg, day))]
+        ids = [r[0] for r in c.execute("SELECT item_id FROM league_daily WHERE league=? AND day=? ORDER BY item_id DESC LIMIT ?", (lg, day, inputs["limit"]))]
         c.executemany("DELETE FROM league_daily WHERE league=? AND item_id=? AND day>=?", [(lg, i, since) for i in ids])
     picked[lg] = ids
-out(picked)"""
+out(picked)""",
+            limit=N_FROZEN,
         )
     )
     res, reqs = poll()
@@ -306,8 +302,7 @@ def s_withdrawn(base: dict) -> None:
     print("\n[withdrawn] a row poe2scout does not report is planted inside the window")
     planted = result(
         inside(
-            PRELUDE
-            + """
+            """
 async def m():
     try:
         planted = {}
@@ -337,9 +332,13 @@ out(asyncio.run(m()))"""
     for lg, (item, day) in planted.items():
         gone = result(
             inside(
-                PRELUDE
-                + f"""
-with db.q() as c: out(c.execute("SELECT COUNT(*) FROM league_daily WHERE league=? AND item_id=? AND day=?", ({lg!r}, {item}, {day!r})).fetchone()[0])"""
+                """
+with db.q() as c:
+    out(c.execute("SELECT COUNT(*) FROM league_daily WHERE league=? AND item_id=? AND day=?",
+                  (inputs["league"], inputs["item"], inputs["day"])).fetchone()[0])""",
+                league=lg,
+                item=item,
+                day=day,
             )
         )
         check(
@@ -357,8 +356,13 @@ def s_guard(base: dict) -> None:
     print(f"\n[guard] {lg} loses its verified day")
     saved = result(
         inside(
-            PRELUDE
-            + f'v = db.kv_get("seed_cut:{lg}")\nwith db.tx() as c: c.execute("DELETE FROM kv_ops WHERE key=?", ("seed_cut:{lg}",))\nout(v)'
+            """
+key = "seed_cut:" + inputs["league"]
+v = db.kv_get(key)
+with db.tx() as c:
+    c.execute("DELETE FROM kv_ops WHERE key=?", (key,))
+out(v)""",
+            league=lg,
         )
     )
     try:
@@ -372,8 +376,9 @@ def s_guard(base: dict) -> None:
         check(before == after, "nothing archived")
     finally:
         inside(
-            PRELUDE
-            + f"db.kv_set('seed_cut:{lg}', json.loads({json.dumps(json.dumps(saved))}))\nout(1)"
+            'db.kv_set("seed_cut:" + inputs["league"], inputs["saved"])\nout(1)',
+            league=lg,
+            saved=saved,
         )
         check(cuts()[lg] == saved, "verified day restored")
 
@@ -384,8 +389,7 @@ def s_restart(base: dict) -> None:
     for _ in range(60):  # wait for startup and its crawl to finish
         time.sleep(15)
         r = inside_full(
-            PRELUDE
-            + 'import urllib.request\nout(json.load(urllib.request.urlopen("http://127.0.0.1:8000/api/backfill")))'
+            'import urllib.request\nout(json.load(urllib.request.urlopen("http://127.0.0.1:8000/api/backfill")))'
         )
         if (
             r.returncode == 0
@@ -402,8 +406,7 @@ def s_restart(base: dict) -> None:
 
 def status() -> None:
     out = inside(
-        PRELUDE
-        + """
+        """
 async def m():
     try:
         rows = {}

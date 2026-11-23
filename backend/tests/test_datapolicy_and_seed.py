@@ -459,3 +459,47 @@ def test_exporter_keeps_trade_leagues_in_kv_ops(tmp_path):
         d.execute("SELECT COUNT(*) FROM kv_ops WHERE key='trade_leagues'").fetchone()[0]
         == 1
     )
+
+
+def test_seed_guard_round_trips_a_quoted_league_without_a_remote_call(monkeypatch):
+    import base64
+    import os
+    import runpy
+
+    scenario = runpy.run_path(str(ROOT / "ops" / "seedtest-scenarios.py"))["s_guard"]
+    # The real snippets use the test's temporary databases. No shell command is executed.
+
+    def local_shell(cmd, check=True):
+        if "base64 -d" in cmd:
+            payload = cmd.split("echo ", 1)[1].split(" |", 1)[0]
+            source = base64.b64decode(payload).decode()
+            return subprocess.run(
+                [sys.executable, "-c", source],
+                capture_output=True,
+                text=True,
+                check=False,
+                env={
+                    **os.environ,
+                    "DATA_DIR": str(db.MARKET_DB_PATH.parent),
+                    "MARKET_SEED": "",
+                    "PYTHONPATH": str(ROOT / "backend"),
+                },
+            )
+        if "publish-market-snapshot.sh" in cmd:
+            return subprocess.CompletedProcess(cmd, 1, "", "no verified day")
+        assert "/published" in cmd
+        return subprocess.CompletedProcess(cmd, 0, "", "")
+
+    monkeypatch.setitem(scenario.__globals__, "sh", local_shell)
+    league = "Trial's League"
+    saved = {"day": "2026-09-20"}
+    key = f"seed_cut:{league}"
+    db.kv_set(key, saved)
+    monkeypatch.setitem(scenario.__globals__, "cuts", lambda: {league: db.kv_get(key)})
+    try:
+        scenario({league: saved})
+        assert db.kv_get(key) == saved
+        assert scenario.__globals__["FAILS"] == []
+    finally:
+        with db.tx() as connection:
+            connection.execute("DELETE FROM kv_ops WHERE key=?", (key,))
