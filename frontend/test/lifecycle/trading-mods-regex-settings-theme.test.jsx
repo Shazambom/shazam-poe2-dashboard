@@ -114,6 +114,20 @@ describe('Mods, Regex, Settings, ThemeBuilder, Trading, and App shell lifecycles
     })
   })
 
+  it('opens an off-board currency by its display name in the app-wide card', async () => {
+    const { calls } = installApiMock()
+    render(<App />)
+    fireEvent.keyDown(window, { key: 'k', metaKey: true })
+    const input = await screen.findByPlaceholderText('Search screens, actions, currencies…')
+    fireEvent.change(input, { target: { value: 'Mirror of Kalandra' } })
+    fireEvent.click(await screen.findByText('Mirror of Kalandra', { selector: '.cmdk-label' }))
+    await waitFor(() => {
+      const asset = calls.find(c => c.path === '/api/asset')
+      expect(new URL(asset?.url || '/', 'http://localhost').searchParams.get('q')).toBe('Mirror of Kalandra')
+      expect(document.querySelector('.card-detail')).toBeTruthy()
+    })
+  })
+
   it('App shell switches through all 5 lazy-loaded top-level tabs, opens Cmd+K, and flushes workspace on quit from any tab', async () => {
     installApiMock()
     let quitFlushCb = null

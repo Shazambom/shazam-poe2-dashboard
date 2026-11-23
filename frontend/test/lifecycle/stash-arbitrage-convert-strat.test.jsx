@@ -77,6 +77,18 @@ describe('Stash, Arbitrage SSE, Convert, and StratCalc lifecycles', () => {
     })
   })
 
+  it('leaves the route loading state when the stream reports a failure', async () => {
+    installApiMock()
+    const { container } = render(<RoutesView />)
+    await waitFor(() => expect(container.querySelectorAll('.sk-row')).toHaveLength(6))
+    const [stream] = FakeEventSource.instances
+    act(() => stream.emit('error', { error: 'backend unavailable' }))
+    expect(stream.closed).toBe(true)
+    expect(container.querySelectorAll('.sk-row')).toHaveLength(0)
+    expect(container.querySelector('[aria-label="searching"]')).toBeNull()
+    expect(screen.getByText(/Couldn't load routes: backend unavailable/)).toBeTruthy()
+  })
+
   it('RoutesView streams SSE meta/routes/done and closes EventSource cleanly on unmount', async () => {
     installApiMock()
     const { unmount } = render(<RoutesView />)

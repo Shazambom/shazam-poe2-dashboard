@@ -4,6 +4,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
+import { buildPaletteItems } from '../src/lib/palette.js'
 
 const src = (f) => readFileSync(new URL(`../src/${f}`, import.meta.url), 'utf8')
 
@@ -65,9 +66,10 @@ test('QA 1: Convert drops its last result when the currencies change (no stale r
 })
 
 test('QA 2: ⌘K opens a currency that is not on the board by its name, in the app-wide card', () => {
-  const p = src('components/CommandPalette.jsx'), a = src('App.jsx')
+  const p = src('components/CommandPalette.jsx')
   assert.match(p, /onOpenCurrency\(it\)/, 'the palette hands over the item, not just the id')
-  assert.match(a, /onOpenCurrency=\{\(it\) => \{ if \(!it\.onBoard\) return assetModal\.open\(it\.label\)/)
+  const items = buildPaletteItems({ currencies: [{ id: 'mirror', name: 'Mirror of Kalandra' }], q: 'mirror' })
+  assert.deepEqual(items.map(it => [it.id, it.label, it.onBoard]), [['mirror', 'Mirror of Kalandra', false]])
 })
 
 test('QA 3: the Per day tile says what it measures', () => {
