@@ -318,6 +318,12 @@ def _wealth_prices() -> dict:
 # existing-install listing) on every attempt, so we can see WHY it fails on a PC
 # we can't touch. Appended to DATA_DIR/install-reports.log; readable back for triage.
 _INSTALL_LOG = INSTALL_LOG_PATH
+_install_log_lock = threading.Lock()
+
+
+def _append_install_report(body: str, stamp: str, client: str) -> None:
+    with _install_log_lock, open(_INSTALL_LOG, "a", encoding="utf-8") as f:
+        f.write(f"\n===== {stamp} from {client} =====\n{body}\n")
 
 
 @app.post("/api/installlog")
@@ -326,8 +332,7 @@ async def install_log(request: Request):
     stamp = time.strftime("%Y-%m-%d %H:%M:%S")
     client = request.client.host if request.client else "?"
     try:
-        with open(_INSTALL_LOG, "a", encoding="utf-8") as f:
-            f.write(f"\n===== {stamp} from {client} =====\n{body}\n")
+        await run_in_threadpool(_append_install_report, body, stamp, client)
     except Exception as e:  # never let telemetry break the installer
         log.warning("install_log write failed: %s", e)
     log.info("install report from %s (%d bytes)", client, len(body))
