@@ -148,7 +148,7 @@ function runTree(t) {
           if (node) subtreeSlugs(node).forEach(sl => removed.add(sl))
           s.remove(victim)
         }
-      } catch (e) { throw new Error(`op ${kind} threw: ${e.message}`) }
+      } catch (e) { throw new Error(`op ${kind} threw: ${e.message}`, { cause: e }) }
       opsRun++
     }
 

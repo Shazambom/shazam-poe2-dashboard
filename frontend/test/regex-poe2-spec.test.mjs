@@ -50,7 +50,7 @@ export function poe2Search(query, advancedItemText) {
     const neg = term.startsWith('!')
     const body = neg ? term.slice(1) : term
     let re
-    try { re = new RegExp(body, 'i') } catch (e) { throw new Error(`invalid PoE 2 regex /${body}/: ${e.message}`) }
+    try { re = new RegExp(body, 'i') } catch (e) { throw new Error(`invalid PoE 2 regex /${body}/: ${e.message}`, { cause: e }) }
     const hit = lines.some(line => re.test(line))
     return neg ? !hit : hit
   })

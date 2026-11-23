@@ -117,7 +117,7 @@ export function search(string, tooltip) {
     const neg = t.startsWith('!')
     const body = neg ? t.slice(1) : t
     let rx
-    try { rx = new RegExp(body, 'i') } catch (e) { throw new Error(`bad regex ${body}: ${e.message}`) }
+    try { rx = new RegExp(body, 'i') } catch (e) { throw new Error(`bad regex ${body}: ${e.message}`, { cause: e }) }
     const hit = lines.some(line => rx.test(line))
     return neg ? !hit : hit
   })
