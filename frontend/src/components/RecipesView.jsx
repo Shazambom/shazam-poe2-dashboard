@@ -11,7 +11,7 @@ const one = (obj) => { const [k, v] = Object.entries(obj)[0] ?? ['', 1]; return 
 export default function RecipesView({ currencies, embedded = false }) {
   const [list, setList] = useState(null)
   const { state, save, arm } = useAutosave(async (next) => setList(await api.putRecipes(next)), 800)
-  useEffect(() => { api.recipes().then(l => { setList(l); arm() }) }, [])
+  useEffect(() => { api.recipes().then(l => { setList(l); arm() }) }, [arm])
   const opts = currencies?.currencies ?? []
 
   const change = (fn) => setList(l => { const n = fn(l); save(n); return n })
