@@ -150,7 +150,7 @@ class ClipboardWatcher {
       this._starting = false
       this._lastHash = this._hash(text)
       this._arm()
-    })
+    }).catch((e) => ignored('ee2-clipboard:seed', e))
   }
 
   stop() {
@@ -210,7 +210,7 @@ function captureItemBurst({ intervalMs = 15, durationMs = 250, onItem } = {}) {
   let baseHash = null
   let reading = true
   let done = false
-  readClip().then((t) => { baseHash = hash(t); reading = false })
+  readClip().then((t) => { baseHash = hash(t); reading = false }).catch((e) => ignored('ee2-clipboard:burst-seed', e))
   let elapsed = 0
   const timer = setInterval(async () => {
     elapsed += intervalMs

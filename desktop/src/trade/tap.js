@@ -86,7 +86,7 @@ function attachTap(contents, send, log = () => {}, observe = () => {}) {
         const text = b?.base64Encoded ? Buffer.from(b.body, 'base64').toString('utf8') : b?.body
         const out = project(r.k, r, parse(text), wcId)
         if (out) emit(out)
-      }, (e) => ignored('tap:response-body', e))
+      }, (e) => ignored('tap:response-body', e)).catch((e) => ignored('tap:project', e))
     }
   }
 

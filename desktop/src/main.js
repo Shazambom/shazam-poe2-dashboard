@@ -767,6 +767,10 @@ app.whenReady().then(async () => {
       return res
     })
   } catch (e) { console.log('[hotkey] register failed:', String(e)) }
+}).catch((e) => {
+  // Startup failed: put it in the log ring, then let it surface exactly as an unhandled rejection did.
+  console.log('[startup] failed:', String(e && e.stack || e))
+  throw e
 })
 
 // The embedded Trade <webview> shares the default session (so it's logged in). Keep

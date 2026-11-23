@@ -100,7 +100,7 @@ function raceAbort(promise, signal) {
     promise.then(
       (v) => { signal.removeEventListener('abort', onAbort); resolve(signal.aborted ? CANCELLED : v) },
       (e) => { signal.removeEventListener('abort', onAbort); resolve(signal.aborted ? CANCELLED : { ok: false, error: String(e?.message || e) }) },
-    )
+    ).catch((e) => ignored('merchant:race-abort', e))
   })
 }
 
