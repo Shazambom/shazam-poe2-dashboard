@@ -70,6 +70,22 @@ def _spawn(coro) -> None:
     )
 
 
+def _report_mod_snapshot() -> None:
+    try:  # beta telemetry: what the seed left us for the Mods tab
+        snap, n_pools = (
+            db._read_snapshot_version(db.MARKET_DB_PATH),
+            len(modpool.pools()),
+        )
+        devtelemetry.tlog(
+            "mods",
+            f"snapshot v{snap} pools={n_pools} currencies={len(modpool.currencies())} meta={db.kv_get('mods_meta', {}).get('pools')}",
+        )
+        if db.MARKET_SEED_PATH and n_pools == 0:
+            devtelemetry.t0("mods-empty", f"seed bundled, snapshot v{snap}, pools=0")
+    except Exception as exc:
+        log.warning("mods telemetry failed: %s", exc)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Die with our parent (Electron). Desktop sets ARBITER_PARENT_PID; the web/server env does
@@ -84,6 +100,16 @@ async def lifespan(app: FastAPI):
         watchdog.guard(parent_pid=int(_parent), stdin_eof=False)
     registry.load_static_cache()
     sidecar_supervisor.start()  # spawn + supervise the heavy-analytics sidecar (no-op if absent)
+    if not session.get_cookie():
+        log.info(
+            "no trade session yet: connect one in Settings to enable the live order book"
+        )
+    if devtelemetry.enabled():
+        try:
+            await run_in_threadpool(_report_mod_snapshot)
+        except asyncio.CancelledError:
+            sidecar_supervisor.stop()
+            raise
     tasks = [
         asyncio.create_task(registry.keep_static_fresh()),
         asyncio.create_task(digest.run_forever()),
@@ -100,26 +126,6 @@ async def lifespan(app: FastAPI):
         )
     if seed_poll_enabled():
         tasks.append(asyncio.create_task(_seed_poll_loop()))
-    if not session.get_cookie():
-        log.info(
-            "no trade session yet: connect one in Settings to enable the live order book"
-        )
-    if devtelemetry.enabled():
-        try:  # beta telemetry: what the seed left us for the Mods tab
-            snap, n_pools = (
-                db._read_snapshot_version(db.MARKET_DB_PATH),
-                len(modpool.pools()),
-            )
-            devtelemetry.tlog(
-                "mods",
-                f"snapshot v{snap} pools={n_pools} currencies={len(modpool.currencies())} meta={db.kv_get('mods_meta', {}).get('pools')}",
-            )
-            if db.MARKET_SEED_PATH and n_pools == 0:
-                devtelemetry.t0(
-                    "mods-empty", f"seed bundled, snapshot v{snap}, pools=0"
-                )
-        except Exception as exc:
-            log.warning("mods telemetry failed: %s", exc)
     yield
     for t in tasks:
         t.cancel()
