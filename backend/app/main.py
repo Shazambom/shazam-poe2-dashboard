@@ -7,9 +7,10 @@ import threading
 import time
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
+from typing import Annotated
 from urllib.parse import urlsplit
 
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.responses import PlainTextResponse, RedirectResponse
 from pydantic import BaseModel, Field, model_validator
 from starlette.concurrency import run_in_threadpool
@@ -759,12 +760,16 @@ async def hold(
 
 
 @app.get("/api/movers")
-async def movers_ep(window_h: int = 24, n: int = 3, dir: str = "both"):
+async def movers_ep(
+    window_h: int = 24,
+    n: int = 3,
+    direction: Annotated[str, Query(alias="dir")] = "both",
+):
     """Biggest movers across the full poe2scout universe, by % change over the window, in the
     league base. dir='both' ranks by |change| (gainers AND crashers); 'up'/'down' keep only
     that direction. Distinct from /api/hold's store-of-value ranking."""
     return await run_in_threadpool(
-        movers.top_movers, window_h, n, movers.MIN_VALUE_EX, dir
+        movers.top_movers, window_h, n, movers.MIN_VALUE_EX, direction
     )
 
 
@@ -1100,7 +1105,7 @@ class RouteQuery(BaseModel):
 
 
 @app.get("/api/routes/stream")
-def routes_stream(request: Request, q: RouteQuery = Depends()):
+def routes_stream(request: Request, q: Annotated[RouteQuery, Depends()]):
     """SSE version of /api/routes: loops stream out as the search finds them.
 
     Events: `meta` (once), `routes` (batches of passing loops), `done` (final
