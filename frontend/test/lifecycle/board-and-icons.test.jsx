@@ -18,13 +18,15 @@ describe('Board, CardDetail, and Cur icon lifecycles', () => {
   it('loads board cards, renders icons, and opens CardDetail on card click', async () => {
     const { calls } = installApiMock()
     const onOpen = vi.fn()
-    render(<BoardView onOpen={onOpen} />)
+    const { rerender, unmount } = render(<BoardView onOpen={onOpen} />)
 
     await waitFor(() => {
       expect(screen.getAllByText('Divine Orb').length).toBeGreaterThanOrEqual(1)
       expect(screen.getAllByText('Chaos Orb').length).toBeGreaterThanOrEqual(1)
     })
 
+    rerender(<BoardView onOpen={onOpen} />)
+    expect(calls.filter(c => c.path === '/api/board')).toHaveLength(1)
     // Currency images rendered with real src URLs
     const imgs = document.querySelectorAll('img.cur-img')
     expect(imgs.length).toBeGreaterThanOrEqual(2)
@@ -37,6 +39,9 @@ describe('Board, CardDetail, and Cur icon lifecycles', () => {
       const openedModal = document.querySelector('.modal, .detail-modal, .card-detail')
       expect(onOpen.mock.calls.length > 0 || Boolean(openedModal) || calls.some(c => c.path === '/api/asset')).toBe(true)
     })
+    unmount()
+    fireEvent.focus(window)
+    expect(calls.filter(c => c.path === '/api/board')).toHaveLength(1)
   })
 
   it('isolates broken icon retry epochs so healthy Cur icons never remount on a sibling 404', () => {

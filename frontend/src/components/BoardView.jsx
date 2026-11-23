@@ -1,5 +1,5 @@
 import { ignoredError } from '../lib/ignoredError.js'
-import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import React, { useEffect, useEffectEvent, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'motion/react'
 import { api, fmt, surface, toast } from '../lib/api.js'
 import { nav } from '../lib/nav.js'
@@ -78,6 +78,9 @@ const Tile = React.forwardRef(function Tile({ r, num, factor, prices, numOptions
   )
 })
 
+const EMPTY_ROWS = []
+const EMPTY_PRICES = {}
+
 export default function BoardView() {
   const [data, setData] = useState(null)
   const [hold, setHold] = useState(null)             // hold leaderboard (top-3 stores of value) — feeds the pulse strip
@@ -145,11 +148,12 @@ export default function BoardView() {
     ensureSettings().then(s => setWatchlist(s.watchlist || [])).catch(() => ignoredError('load watchlist'))
   }, [])
   // Manual refresh from the topbar ⟳ (bumps the shared tick) refreshes the mounted view.
-  useEffect(() => { if (tick > 0) refresh() }, [tick])
+  const refreshFromTick = useEffectEvent(refresh)
+  useEffect(() => { if (tick > 0) refreshFromTick() }, [tick])
 
   const ref = data?.reference ?? 'ref'
-  const rows = data?.rows ?? []
-  const prices = data?.prices ?? {}
+  const rows = data?.rows ?? EMPTY_ROWS
+  const prices = data?.prices ?? EMPTY_PRICES
   // Currencies a card can be priced in = those with a known reference price, richest first.
   const numOptions = useMemo(() => Object.keys(prices)
     .sort((a, b) => (prices[b] || 0) - (prices[a] || 0))
