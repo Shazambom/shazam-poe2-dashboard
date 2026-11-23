@@ -25,6 +25,7 @@ import { useWorkspace, HISTORY_SYS } from './lib/workspaceStore.js'
 import { addFromClipboard } from './lib/clipboardAdd.js'
 import { useEe2History, clearHistoryWithUndo } from './lib/ee2History.js'
 import { useStratStore, useStratAutoTimer } from './lib/stratStore.js'
+import { flushForQuit } from './lib/quitFlush.js'
 import { findWhere } from './lib/tree.js'
 import { DESTS, SCREEN_COMMANDS, SUB_DESTS, SNAP, settle } from './lib/dests.js'
 import { runTarget } from './lib/paletteRun.js'
@@ -152,7 +153,10 @@ export default function App() {
     window.addEventListener('pagehide', hide)
     const offQuit = window.poe2desktop?.ws?.onFlush?.(() => {
       const t0 = Date.now()
-      flushAll().then(() => diag('ws', `ws-flush-on-quit ok ms=${Date.now() - t0}`)).catch(() => ignoredError('flush edits on quit')).finally(() => window.poe2desktop.ws.flushed())
+      flushForQuit().then(ok => {
+        if (!ok) throw new Error('edits not written')
+        diag('ws', `ws-flush-on-quit ok ms=${Date.now() - t0}`)
+      }).catch(() => ignoredError('flush edits on quit')).finally(() => window.poe2desktop.ws.flushed())
     })
     return () => { document.removeEventListener('visibilitychange', flush); window.removeEventListener('pagehide', hide); offQuit?.() }
   }, [])

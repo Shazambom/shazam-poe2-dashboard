@@ -2,7 +2,8 @@
 // diagnostics): each test makes the operation fail and asserts the app recovers on its own, and that
 // nothing new appears on screen (no toast on the bus, no new text) while it does.
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { act, fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import App from '../../src/App.jsx'
 import RecipesView from '../../src/components/RecipesView.jsx'
 import SettingsView from '../../src/components/SettingsView.jsx'
 import CautionSlider from '../../src/components/CautionSlider.jsx'
@@ -446,4 +447,51 @@ it('focus hotkey: a failed registration leaves the shown combo and the next pres
   } finally {
     window.poe2desktop.hotkey = previous
   }
+})
+
+// App quit: main sends ws:flush and closes the window on ws:flushed or after 1 s. A pending edit whose write
+// fails is written again at once (twice at most) before the window is let go.
+async function quitWith({ wsFails, stratFails }) {
+  vi.useRealTimers()
+  const fails = { ws: wsFails, strat: stratFails }
+  const answer = (kind, body) => (fails[kind]-- > 0 ? jsonResponse({ detail: 'database is locked' }, 500) : jsonResponse(body))
+  const { calls } = installApiMock({
+    'PUT /api/trading/workspace': (_u, _i, body) => answer('ws', { workspace: body.workspace }),
+    'PUT /api/strategy/calc': (_u, _i, body) => answer('strat', { calc: body.calc }),
+  })
+  const saved = window.poe2desktop.ws
+  let quit = null
+  const flushed = vi.fn()
+  window.poe2desktop.ws = { ...saved, onFlush: vi.fn((cb) => { quit = cb; return () => {} }), flushed }
+  try {
+    useStratStore.getState().reset()
+    useStratStore.getState().hydrate(sc.newStrat(sc.blankDoc(), { id: 's', name: 'Quit', now: Date.now() }))
+    useWorkspace.getState().hydrate({ version: 2, tree: [] })
+    render(<App />)
+    await act(async () => { await new Promise(r => { setTimeout(r, 0) }) })   // the workspace arms on the next tick
+    useWorkspace.getState().importWorkspace({ version: 2, tree: [{ id: 'n_q', kind: 'search', name: 'Unsaved', slug: 'q1', type: 'search' }] })
+    useStratStore.getState().change(d => sc.rename(d, 's', 'Renamed before quit'))
+    await act(async () => { quit() })
+    await waitFor(() => { expect(flushed).toHaveBeenCalledTimes(1) }, { timeout: 2000 })
+    const puts = (path) => calls.filter(c => c.method === 'PUT' && c.path === path)
+    return { ws: puts('/api/trading/workspace'), strat: puts('/api/strategy/calc') }
+  } finally {
+    window.poe2desktop.ws = saved
+  }
+}
+
+it('quit: a pending edit whose write fails is written again before the window is let go', async () => {
+  const { ws, strat } = await quitWith({ wsFails: 1, stratFails: 1 })
+  expect(ws).toHaveLength(2)
+  expect(ws[1].body.workspace.tree.map(n => n.name)).toEqual(['Unsaved'])
+  expect(strat).toHaveLength(2)
+  expect(strat[1].body.calc.strats[0].name).toBe('Renamed before quit')
+})
+
+it('quit: the retries are bounded, so a write that keeps failing never holds the window', async () => {
+  const t0 = Date.now()
+  const { ws, strat } = await quitWith({ wsFails: 99, stratFails: 99 })
+  expect(ws).toHaveLength(3)
+  expect(strat).toHaveLength(3)
+  expect(Date.now() - t0).toBeLessThan(1000)
 })

@@ -141,6 +141,11 @@ export const useStratStore = create((set, get) => {
     noteManualResume: () => set(s => ({ autoTimer: noteManualResume(s.autoTimer) })),
 
     flush: () => autosave.flush(),
+    // Queue the current document for saving again (a failed write leaves nothing pending); flush() sends it.
+    resave: () => {
+      const doc = get().doc
+      if (doc && !SNAP) autosave.save(doc)
+    },
 
     reset: () => {
       autosave.discard()
