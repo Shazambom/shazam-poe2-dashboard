@@ -1,3 +1,4 @@
+import { createStore, useStore } from 'zustand'
 import { startPoll } from './poll.js'
 import { createAutosave } from './autosave.js'
 import { useEffect, useEffectEvent, useLayoutEffect, useState } from 'react'
@@ -11,22 +12,24 @@ import { useSync } from './syncStore.js'
 // topbar ⟳ (the sync store's `tick`), so every view that loads through this hook answers the one
 // app-wide refresh button instead of silently ignoring it.
 export function useApi(fn, deps) {
-  const [data, setData] = useState(null)
-  const [err, setErr] = useState(null)
-  const [busy, setBusy] = useState(true)
+  const [request] = useState(() => createStore(set => ({
+    data: null, err: null, busy: true,
+    setData: update => set(state => ({ data: typeof update === 'function' ? update(state.data) : update })),
+  })))
+  const { data, err, busy, setData } = useStore(request)
   const [nonce, setNonce] = useState(0)
   const tick = useSync(s => s.tick)
   const inputs = useDependencyList(deps)
   const getRequest = useEffectEvent(() => fn)
   useEffect(() => {
     let live = true
-    setBusy(true)
+    request.setState({ busy: true })
     Promise.resolve().then(getRequest())
-      .then(d => { if (live) { setData(d); setErr(null) } })
-      .catch(e => { if (live) setErr(cleanErr(e)) })
-      .finally(() => { if (live) setBusy(false) })
+      .then(d => { if (live) request.setState({ data: d, err: null }) })
+      .catch(e => { if (live) request.setState({ err: cleanErr(e) }) })
+      .finally(() => { if (live) request.setState({ busy: false }) })
     return () => { live = false }
-  }, [inputs, nonce, tick])
+  }, [inputs, nonce, request, tick])
   return { data, err, busy, reload: () => setNonce(n => n + 1), setData }
 }
 
