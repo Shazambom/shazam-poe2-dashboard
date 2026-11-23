@@ -25,8 +25,8 @@ import { connectBridge, connectSessionWithToast } from './lib/session.js'
 import { useWorkspace, HISTORY_SYS } from './lib/workspaceStore.js'
 import { addFromClipboard } from './lib/clipboardAdd.js'
 import { useEe2History, clearHistoryWithUndo } from './lib/ee2History.js'
-import { useStratStore, useStratAutoTimer } from './lib/stratStore.js'
-import { flushForQuit } from './lib/quitFlush.js'
+import { useStratAutoTimer } from './lib/stratStore.js'
+import { flushForQuit, flushOnHide } from './lib/quitFlush.js'
 import { findWhere } from './lib/tree.js'
 import { DESTS, SCREEN_COMMANDS, SUB_DESTS, SNAP, settle } from './lib/dests.js'
 import { runTarget } from './lib/paletteRun.js'
@@ -149,9 +149,8 @@ export default function App() {
   // Flush debounced workspace & strat edits on hide/quit regardless of which tab is mounted, so quitting
   // from Board/Stash/Economy/Settings never stalls 1 s waiting for ws:flushed.
   useEffect(() => {
-    const flushAll = () => Promise.all([useWorkspace.getState().flush(), useStratStore.getState().flush()])
-    const flush = () => { if (document.visibilityState === 'hidden') flushAll() }
-    const hide = () => flushAll()
+    const flush = () => { if (document.visibilityState === 'hidden') flushOnHide() }
+    const hide = flushOnHide
     document.addEventListener('visibilitychange', flush)
     window.addEventListener('pagehide', hide)
     const offQuit = window.poe2desktop?.ws?.onFlush?.(() => {

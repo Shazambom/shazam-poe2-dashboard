@@ -37,9 +37,10 @@ export function useApi(fn, deps) {
 // returned `save(payload)` debounces it and drives a 'saving'/'saved' indicator,
 // `arm()` enables saving (call it once after the initial load so hydrating state
 // doesn't trigger a write). Failures surface as a toast.
-export function useAutosave(saver, delay = 700) {
+export function useAutosave(saver, delay = 700, options) {
   const [state, setState] = useState('')
   const [ctrl] = useState(() => createAutosave(saver, delay, {
+    ...options,
     onState: setState,
     onError: e => toast(cleanErr(e), false),
   }))

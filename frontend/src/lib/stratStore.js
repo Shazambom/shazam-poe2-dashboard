@@ -7,6 +7,7 @@ import { useEffect } from 'react'
 import { create } from 'zustand'
 import { api, cleanErr, toast } from './api.js'
 import { createAutosave } from './autosave.js'
+import { registerFlush } from './quitFlush.js'
 import { SNAP } from './dests.js'
 import { uid } from './session.js'
 import * as sc from './stratcalc.js'
@@ -27,6 +28,7 @@ function makeAutosave(setState) {
     (calc) => (SNAP ? Promise.resolve() : api.putStratCalc(calc)),
     700,
     {
+      retainFailed: false, register: false,
       onState: (next) => setState(s => ({ saveState: typeof next === 'function' ? next(s.saveState) : next })),
       onError: (e) => toast(cleanErr(e), false),
     },
@@ -164,6 +166,12 @@ export const useStratStore = create((set, get) => {
     },
   }
 })
+
+registerFlush(retry => {
+  const store = useStratStore.getState()
+  if (retry) store.resave()
+  return store.flush()
+}, { onHide: true })
 
 // Mounted once in App beside useEe2History: subscribes to main's Client.txt events and
 // feeds the shared stratStore even while the user is on Board, Stash, or Trading.

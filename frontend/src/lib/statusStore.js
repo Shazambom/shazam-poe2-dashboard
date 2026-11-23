@@ -3,12 +3,12 @@ import { create } from 'zustand'
 import { api } from './api.js'
 import { nextPollMs } from './capital.js'
 import { restoreFailedEdits } from './stash.js'
+import { createSaveQueue } from './saveQueue.js'
 
 // The ONE poll of the app-level status: /api/status + /api/capital every 30s (started by App),
 // the rate budget, and the saved settings. Views that used to poll /api/session, /api/oauth/status
 // or fetch /api/settings on their own read this store; writes to settings go through saveSettings
 // so the cached copy never goes stale. `refresh()` is what a view calls after it changed something.
-let settingsQueue = Promise.resolve()   // settings writes, serialised (saveSettings)
 let capitalQueue = Promise.resolve()    // holdings writes, serialised across mounts (saveCapital)
 const failedCounted = new Set()           // recount currencies from a rejected PUT, carried into the next queued PUT
 const failedEdits = new Map()             // unsaved edits from a rejected PUT superseded by another queued PUT
@@ -33,7 +33,7 @@ export const useStatus = create((set, get) => ({
     } catch (e) { console.error(e) }
   },
   loadSettings: async () => {
-    const s = withUnsaved(await api.settings())
+    const s = settingsQueue.overlay(await api.settings())
     set({ settings: s })
     syncTheme?.(s.theme, s.custom_themes)
     return s
@@ -79,11 +79,7 @@ export const useStatus = create((set, get) => ({
     })
   },
   // One at a time, in the order made: a later save always lands last (an Arbitrage preset after a pending edit).
-  saveSettings: (patch) => {
-    const run = settingsQueue.then(() => api.putSettings(patch))
-    settingsQueue = run.catch(() => ignoredError('resume settings queue'))
-    return run.then(s => { set({ settings: withUnsaved(s) }); return s })
-  },
+  saveSettings: patch => settingsQueue.save(patch),
 }))
 
 // A user's setting change whose save failed is not lost: persistSettings keeps the latest value per key
@@ -92,43 +88,16 @@ export const useStatus = create((set, get) => ({
 // here for the next change to carry. The cached settings show them meanwhile, so every view reads the
 // user's choice rather than the stale saved one.
 const SETTINGS_RETRY_MS = [1000, 4000, 15000]
-const unsaved = new Map()
-const withUnsaved = (s) => (unsaved.size && s ? { ...s, ...Object.fromEntries(unsaved) } : s)
-let savingUnsaved = null   // the save loop running; every persistSettings call made during it shares its outcome
-let changedSince = false   // a change arrived after the loop's last send
-let endWait = null         // cuts the loop's current wait short
+const settingsQueue = createSaveQueue(patch => api.putSettings(patch), {
+  delays: SETTINGS_RETRY_MS,
+  publish: () => useStatus.setState(state => {
+    const settings = settingsQueue.overlay(state.settings)
+    return settings === state.settings ? state : { settings }
+  }),
+  acknowledge: saved => useStatus.setState({ settings: settingsQueue.overlay(saved) }),
+})
 
-// Resolves once every unsaved change has saved; rejects when the retries are spent (the values are kept).
-export function persistSettings(patch) {
-  for (const [k, v] of Object.entries(patch)) unsaved.set(k, v)
-  changedSince = true
-  useStatus.setState(st => ({ settings: withUnsaved(st.settings) }))
-  endWait?.()
-  savingUnsaved ??= saveUnsaved().finally(() => { savingUnsaved = null })
-  return savingUnsaved
-}
-
-async function saveUnsaved() {
-  let failures = 0
-  while (unsaved.size) {
-    const sent = Object.fromEntries(unsaved)
-    changedSince = false
-    try {
-      await useStatus.getState().saveSettings(sent)
-      for (const [k, v] of Object.entries(sent)) if (Object.is(unsaved.get(k), v)) unsaved.delete(k)
-      failures = 0
-    } catch (e) {
-      if (changedSince) { failures = 0; continue }   // a newer change came in during the save: send it now
-      if (failures === SETTINGS_RETRY_MS.length) throw e
-      await new Promise(resolve => {
-        const t = setTimeout(resolve, SETTINGS_RETRY_MS[failures++])
-        endWait = () => { clearTimeout(t); resolve() }
-      })
-      endWait = null
-      if (changedSince) failures = 0
-    }
-  }
-}
+export const persistSettings = patch => settingsQueue.save(patch, true)
 
 // themeStore registers this so a loaded settings blob paints its theme (no import cycle).
 let syncTheme = null

@@ -1,9 +1,11 @@
 import { ignoredError } from './ignoredError.js'
+import { registerFlush } from './quitFlush.js'
+import { retainedByWriter } from './saveQueue.js'
 // Pure debounced autosave controller shared by useAutosave (lib/hooks.js).
 // Coalesces superseded edits while a write is in flight, lets flush() report whether pending/in-flight
 // saves succeeded, flushes unheld pending edits synchronously on unmount so shared queues keep FIFO order,
 // and prevents stale async closures from scheduling writes after unmount.
-export function createAutosave(saver, delay = 700, { onState, onError } = {}) {
+export function createAutosave(saver, delay = 700, { onState, onError, retainFailed = true, register = true } = {}) {
   let getSaver = typeof saver === 'function' ? () => saver : () => null
   let timer = null
   let savedTimer = null
@@ -16,10 +18,19 @@ export function createAutosave(saver, delay = 700, { onState, onError } = {}) {
   let unmountRun = null
   let flushing = 0
   let flushFailed = false
+  let failed = null, version = 0, unregister = null
+
+  const retain = (error, payload, revision) => {
+    if (retainFailed && !retainedByWriter(error) && revision === version) failed = { payload }
+  }
+  const detach = () => {
+    if (unmounted && !inFlight && !unmountRun && !failed) { unregister?.(); unregister = null }
+  }
 
   const setState = (s) => { if (!unmounted) onState?.(s) }
 
   const run = (payload) => {
+    const revision = version
     let settled = false
     let p = null
     p = (async () => {
@@ -32,6 +43,7 @@ export function createAutosave(saver, delay = 700, { onState, onError } = {}) {
         }
         return true
       } catch (e) {
+        retain(e, payload, revision)
         if (flushing) flushFailed = true
         if (!unmounted) {
           setState('')
@@ -41,6 +53,7 @@ export function createAutosave(saver, delay = 700, { onState, onError } = {}) {
       } finally {
         settled = true
         if (p && inFlight === p) inFlight = null
+        detach()
         if (!unmounted && !held && !flushing && pending && due) dispatchPending()
       }
     })()
@@ -59,6 +72,8 @@ export function createAutosave(saver, delay = 700, { onState, onError } = {}) {
 
   const save = (payload) => {
     if (!armed || unmounted) return
+    version++
+    failed = null
     clearTimeout(timer); timer = null
     pending = { payload }
     due = false
@@ -78,6 +93,7 @@ export function createAutosave(saver, delay = 700, { onState, onError } = {}) {
   // Resolves to false if any flushed/in-flight save rejected (including synchronous throws on due follow-ups
   // or a pending save flushed synchronously by unmount() during an active flush).
   const flush = async () => {
+    if (failed && !held) { pending = failed; failed = null }
     if (!flushing) flushFailed = false
     flushing++
     let ok = true
@@ -114,6 +130,8 @@ export function createAutosave(saver, delay = 700, { onState, onError } = {}) {
   }
 
   const discard = () => {
+    version++
+    failed = null
     clearTimeout(timer); timer = null
     pending = null
     due = false
@@ -124,7 +142,9 @@ export function createAutosave(saver, delay = 700, { onState, onError } = {}) {
     unmounted = true
     clearTimeout(timer); timer = null
     clearTimeout(savedTimer); savedTimer = null
+    if (failed && !held) { pending = failed; failed = null }
     if (pending && !held) {
+      const revision = version
       const { payload } = pending
       pending = null
       due = false
@@ -133,20 +153,26 @@ export function createAutosave(saver, delay = 700, { onState, onError } = {}) {
       // flush() still awaits it and observes any sync throw or async rejection.
       let p
       try {
-        p = Promise.resolve(getSaver()?.(payload)).then(() => true, () => {
+        p = Promise.resolve(getSaver()?.(payload)).then(() => true, error => {
+          retain(error, payload, revision)
           if (flushing) flushFailed = true
           return false
         })
-      } catch {
+      } catch (error) {
+        retain(error, payload, revision)
         if (flushing) flushFailed = true
         p = Promise.resolve(false)
       }
       unmountRun = p
-      p.finally(() => { if (unmountRun === p) unmountRun = null }).catch(() => ignoredError('finish unmount save'))
+      p.finally(() => {
+        if (unmountRun === p) unmountRun = null
+        detach()
+      }).catch(() => ignoredError('finish unmount save'))
     }
+    detach()
   }
 
-  const mount = () => { unmounted = false }
+  const mount = () => { unmounted = false; if (register) unregister ??= registerFlush(flush) }
 
   return {
     save,
