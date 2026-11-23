@@ -8,6 +8,9 @@ import SettingsView from '../../src/components/SettingsView.jsx'
 import CautionSlider from '../../src/components/CautionSlider.jsx'
 import NotificationsPanel from '../../src/components/NotificationsPanel.jsx'
 import AccountsPanel from '../../src/components/AccountsPanel.jsx'
+import StratCalcView from '../../src/components/StratCalcView.jsx'
+import { useStratStore } from '../../src/lib/stratStore.js'
+import * as sc from '../../src/lib/stratcalc.js'
 import { useStatus } from '../../src/lib/statusStore.js'
 import { saveHistoryPrefs } from '../../src/lib/ee2History.js'
 import { useWorkspace } from '../../src/lib/workspaceStore.js'
@@ -312,4 +315,45 @@ it('login cookie: a pending mirror retry never overwrites a newer cookie', async
   await settle()
   await advance(60000)
   expect(setCookie.mock.calls.map(c => c[0])).toEqual(['old', 'new'])
+})
+
+// A saved strat with one unique in its loot and no price: the view searches its floor on open.
+function stratWithUnique() {
+  const doc = sc.newStrat(sc.blankDoc(), { id: 's', name: 'Uniques', now: Date.now() })
+  doc.strats[0].loot.push({ cur: null, name: 'Headhunter', base: 'Leather Belt', qty: 1, price: null })
+  installApiMock({ '/api/strategy/calc': { calc: doc, prices: { divine: 1, exalted: 0.01, chaos: 0.05 }, uses: [] } })
+  useStratStore.getState().reset()
+}
+
+it('strategy pricing: a price search that fails is tried again shortly, not an hour later', async () => {
+  stratWithUnique()
+  const priceQuery = vi.spyOn(window.poe2desktop.trade, 'priceQuery')
+    .mockRejectedValueOnce(new Error('ipc closed'))
+    .mockResolvedValue({ ok: true, listings: [] })
+  const view = render(<StratCalcView league="A" />)
+  await settle()
+  expect(priceQuery).toHaveBeenCalledTimes(1)
+  expect(priceQuery.mock.calls[0][0].league).toBe('A')
+  const after = view.container.textContent
+  await advance(1500)
+  expect(priceQuery).toHaveBeenCalledTimes(2)
+  expect(priceQuery.mock.calls[1][0]).toEqual(priceQuery.mock.calls[0][0])
+  expect(view.container.textContent).toBe(after)
+  expect(toasts).not.toHaveBeenCalled()
+  view.unmount()
+  await useStratStore.getState().flush()
+})
+
+it('strategy pricing: retries of a failing search are bounded, then it waits its hour as before', async () => {
+  stratWithUnique()
+  const priceQuery = vi.spyOn(window.poe2desktop.trade, 'priceQuery').mockRejectedValue(new Error('ipc closed'))
+  const view = render(<StratCalcView league="A" />)
+  await settle()
+  for (let i = 0; i < 25; i++) await advance(1000)   // step, so React renders between the wakes
+  expect(priceQuery).toHaveBeenCalledTimes(4)
+  for (let i = 0; i < 20; i++) await advance(60_000)
+  expect(priceQuery).toHaveBeenCalledTimes(4)
+  expect(toasts).not.toHaveBeenCalled()
+  view.unmount()
+  await useStratStore.getState().flush()
 })

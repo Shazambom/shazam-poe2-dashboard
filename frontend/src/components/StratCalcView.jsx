@@ -28,6 +28,7 @@ import { useStratStore } from '../lib/stratStore.js'
 
 const EMPTY_COST_OPTIONS = []
 const PRICE_POLL_MS = 60_000
+const PRICE_RETRY_MS = [1000, 4000, 15000]   // a price search that failed outright: tried again after these
 const HOLD_DELAY_MS = 400    // +1 held: repeats after this…
 const HOLD_EVERY_MS = 90     // …this often
 const SLOT_CHOICES = [1, 2, 3, 4].map(n => [n, String(n)])
@@ -393,6 +394,7 @@ export default function StratCalcView({ league, currencies }) {
   const wakeTimer = useRef(null)
   useEffect(() => () => clearTimeout(wakeTimer.current), [])
   const blocked = useRef(false)
+  const failedTries = useRef(new Map())         // key → searches in a row that failed outright (bounded retry)
   const priceFound = useEffectEvent((job, result) => SP.priceFound(job, result, prices))
   const open = doc && sc.activeStrat(doc)
   // A linked tablet search is priced the same way, held to the tablet's full uses: the average of its
@@ -409,6 +411,7 @@ export default function StratCalcView({ league, currencies }) {
     SP.started(retryAt.current, job, t)
     setPending(key)
     trade.priceQuery({ query: job.query, league }).then(res => {
+      failedTries.current.delete(key)
       if (res?.ok) {
         const found = priceFound(job, res), now = Date.now()
         if (found.div != null) change(d => SP.recordFound(d, stratId, job, found, now))
@@ -423,7 +426,16 @@ export default function StratCalcView({ league, currencies }) {
         clearTimeout(wakeTimer.current)
         wakeTimer.current = setTimeout(() => setWake(w => w + 1), until - Date.now() + 250)
       }
-    }).catch(() => ignoredError('price strategy search')).finally(() => setPending(null))
+    }).catch(() => {
+      ignoredError('price strategy search')
+      // The search never ran: try it again shortly, a few times, then leave it to its hourly turn.
+      const tries = failedTries.current.get(key) ?? 0
+      if (tries >= PRICE_RETRY_MS.length) return
+      failedTries.current.set(key, tries + 1)
+      SP.retryLater(retryAt.current, job, PRICE_RETRY_MS[tries], Date.now())
+      clearTimeout(wakeTimer.current)
+      wakeTimer.current = setTimeout(() => setWake(w => w + 1), Math.max(PRICE_RETRY_MS[tries], pauseUntil.current - Date.now()) + 250)
+    }).finally(() => setPending(null))
   }, [open, league, pending, change, uses, wake])
 
   // +1 held repeats; released, left or cancelled, it stops.
