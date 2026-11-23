@@ -3,7 +3,7 @@
 The visual contract for the Arbiter frontend (`frontend/`). It documents the design
 system **as actually built** — every rule here is drawn from `src/styles.css` and the
 components, not aspiration. New UI must fit this system; `npm run lint:style` enforces
-the parts that can be checked automatically (see [Enforcement](#enforcement)).
+the parts that can be checked automatically (see [Enforcement](#9-enforcement)).
 
 The look is a **dark, tactile "vault" theme**: deep slate surfaces, a single gold accent,
 IBM Plex Sans with tabular figures, hairline borders, soft shadows, and restrained gold
