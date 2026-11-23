@@ -33,11 +33,11 @@ export function parseNum(raw) {
   if (!s) return null
   // thousands groups first (1,000 · 12,345,678); a group can't start with 0, so 0,005 stays a decimal
   s = s.replace(/(?<![\d.])[1-9]\d{0,2}(?:,\d{3})+(?![\d,])/g, m => m.replace(/,/g, '')).replace(/,/g, '.').replace(/[x×]/g, '*')
-  const toks = s.match(/\d*\.?\d+[km]?|[-+*/()]|\S/g) || []
+  const toks = s.match(/(?:\d+(?:\.\d+)?|\.\d+)[km]?|[-+*/()]|\S/g) || []
   let i = 0
   /** @param {string|undefined} t */
   const num = (t) => {
-    const m = /^(\d*\.?\d+)([km]?)$/.exec(t ?? '')
+    const m = /^(\d+(?:\.\d+)?|\.\d+)([km]?)$/.exec(t ?? '')
     return m ? Number(m[1]) * (m[2] === 'k' ? 1e3 : m[2] === 'm' ? 1e6 : 1) : null
   }
   /** @returns {number} */

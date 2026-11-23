@@ -472,9 +472,9 @@ export function parseDuration(raw) {
   if (!s) return null
   let m = /^(\d+):([0-5]?\d)(?::([0-5]?\d))?$/.exec(s)
   if (m) return ((+m[1] * 60 + +m[2]) * 60 + +(m[3] ?? 0)) * 1000
-  m = /^(?:(\d*\.?\d+)\s*h)?\s*(?:(\d*\.?\d+)\s*m)?\s*(?:(\d*\.?\d+)\s*s)?$/.exec(s)
+  m = /^(?:(\d+(?:\.\d+)?|\.\d+)\s*h\s*)?(?:(\d+(?:\.\d+)?|\.\d+)\s*m\s*)?(?:(\d+(?:\.\d+)?|\.\d+)\s*s)?$/.exec(s)
   if (m && (m[1] || m[2] || m[3])) return Math.round(((+(m[1] ?? 0) * 60 + +(m[2] ?? 0)) * 60 + +(m[3] ?? 0)) * 1000)
-  if (/^\d*\.?\d+$/.test(s)) return Math.round(Number(s) * 60_000)
+  if (/^(?:\d+(?:\.\d+)?|\.\d+)$/.test(s)) return Math.round(Number(s) * 60_000)
   return null
 }
 

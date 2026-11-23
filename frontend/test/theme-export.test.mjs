@@ -22,7 +22,7 @@ test('themeCss reads Vault (bare :root) and every preset block', () => {
   // Spot-check the parser against the stylesheet itself (preset values are the owner's to change).
   const cssText = readFileSync(new URL('../src/styles.css', import.meta.url), 'utf8')
   const ashBlock = cssText.match(/:root\[data-theme="ash"\] \{([^}]*)\}/)[1]
-  assert.equal(tables.ash['--wash-rgb'], ashBlock.match(/--wash-rgb:\s*([^;]+);/)[1].trim())
+  assert.equal(tables.ash['--wash-rgb'], ashBlock.match(/--wash-rgb:([^;]+);/)[1].trim())
   assert.equal(tables.vault['--bg'], cssText.match(/:root \{[^}]*?--bg:\s*(#[0-9a-f]{6})/i)[1])
 })
 

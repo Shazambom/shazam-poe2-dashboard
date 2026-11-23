@@ -73,5 +73,5 @@ test('Settings: no internals in the copy, and no account panel that only says "n
   assert.match(src('TradingSettings'), /Exiled Exchange 2 history stays on this computer/)
   const acct = src('AccountsPanel')
   assert.doesNotMatch(acct, /See README → OAuth/)
-  assert.match(acct, /\{oa\?\.configured && <>\s*\n\s*<h2 style=\{\{ marginTop: 24 \}\}>Path of Exile account/)
+  assert.match(acct, /\{oa\?\.configured && <>[^\S\n]*\n\s*<h2 style=\{\{ marginTop: 24 \}\}>Path of Exile account/)
 })

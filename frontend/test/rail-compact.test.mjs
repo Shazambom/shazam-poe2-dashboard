@@ -19,7 +19,7 @@ test('rail floor and default are compact', () => {
 
 test('the rail is a size container and the compact query hides only text, never buttons', () => {
   assert.match(css, /\.ws-rail\s*\{[^}]*container(-type)?:\s*(rail \/ )?inline-size/)
-  const q = css.match(/@container rail \(max-width: (\d+)px\)\s*\{([^}]*\}\s*)+?\}/)
+  const q = css.match(/@container rail \(max-width: (\d+)px\)\s*\{((?:[^}]*\})+?)\s*\}/)
   assert.ok(q, 'compact container query present')
   assert.ok(+q[1] >= 250, 'breakpoint covers the wide header (≥250px)')
   const body = css.slice(q.index, q.index + q[0].length)

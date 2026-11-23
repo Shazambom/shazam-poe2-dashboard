@@ -91,7 +91,7 @@ for (let i = 0; i < cssLines.length; i++) {
   if (end === -1) { console.error(`Unterminated token block at styles.css:${i + 1}`); process.exit(2) }
   const tokens = new Map(), line = new Map()
   for (let j = i + 1; j < end; j++) {
-    for (const t of cssLines[j].matchAll(/(--[a-z0-9-]+)\s*:\s*([^;]+);/gi)) { tokens.set(t[1], t[2].trim()); line.set(t[1], j + 1) }
+    for (const t of cssLines[j].matchAll(/(--[a-z0-9-]+)\s*:([^;]+);/gi)) { tokens.set(t[1], t[2].trim()); line.set(t[1], j + 1) }
   }
   blocks.push({ name: m[2] || 'root', start: i, end, tokens, line })
 }
