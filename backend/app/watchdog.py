@@ -16,7 +16,8 @@ from __future__ import annotations
 import os
 import sys
 import threading
-from typing import Callable, Optional
+from typing import Optional
+from collections.abc import Callable
 
 
 def parent_alive(pid: int | None) -> bool:

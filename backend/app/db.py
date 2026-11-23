@@ -7,7 +7,8 @@ import sqlite3
 import threading
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone, UTC
-from typing import Any, Callable, Iterator
+from typing import Any
+from collections.abc import Callable, Iterator
 
 from . import devtelemetry
 from .config import MARKET_DB_PATH, MARKET_SEED_PATH, USER_DB_PATH
