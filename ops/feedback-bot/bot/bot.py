@@ -149,6 +149,7 @@ class Handler:
                     )
                     return None
                 await self.sleep(delay)
+        return None
 
     # ---- the post's words: title + messages, beside the report (or under posts/ without one)
     def _post_dir(self, thread_id) -> tuple[Path | None, int | None]:

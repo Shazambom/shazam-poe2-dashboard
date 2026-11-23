@@ -339,6 +339,7 @@ def main():
         json.dump({"date": today, "version": version, "cuts": cut_days}, cf)
     size_mb = os.path.getsize(out_path) / 1e6
     print(f"snapshot written: {out_path} (v{version}, {size_mb:.1f} MB)")
+    return None
 
 
 if __name__ == "__main__":
