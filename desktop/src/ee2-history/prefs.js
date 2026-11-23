@@ -38,9 +38,9 @@ function prefsFromConfig(cfg) {
   return { prefs, source: c ? 'ee2' : 'default' }
 }
 
-function readPrefs() {
+async function readPrefs() {
   let cfg
-  try { cfg = require('../integrations/exiled-exchange/ee2-config.js').loadConfig() } catch { cfg = null }
+  try { cfg = await require('../integrations/exiled-exchange/ee2-config.js').loadConfig() } catch { cfg = null }
   return prefsFromConfig(cfg)
 }
 

@@ -29,7 +29,7 @@ const ID_RE = /^[0-9A-HJ-NP-Z]{6}$/
 /**
  * @param {{ ipcMain: any, BrowserWindow: any, session: any, win: any, uiUrl: string, backendUrl: string, userData: string,
  *   version: string, channel: string, theme: () => string, sources: any, shell: any, icon: any, sweep: (o: any) => Promise<any>,
- *   bundle: (o: any) => Promise<any>, sealFn: (plain: any, ...rest: any[]) => Buffer, get?: (p: string) => Promise<any>, now?: () => number }} deps
+ *   bundle: (o: any) => Promise<any>, sealFn: (plain: any, ...rest: any[]) => Buffer | Promise<Buffer>, get?: (p: string) => Promise<any>, now?: () => number }} deps
  */
 function registerFeedback({ ipcMain, BrowserWindow, session, win, uiUrl, backendUrl, userData, version, channel, theme, sources,
                             shell, icon, sweep, bundle, sealFn, get, now = Date.now }) {
@@ -74,14 +74,14 @@ function registerFeedback({ ipcMain, BrowserWindow, session, win, uiUrl, backend
       const meta = {
         id: randomUUID(), ts: new Date(now()).toISOString(), appVersion: version, channel, platform: process.platform,
         arch: process.arch, osRelease: os.release(), electron: process.versions.electron || null,
-        installId: installId(path.join(userData, 'data')), theme: theme(), shortId: id,
+        installId: await installId(path.join(userData, 'data')), theme: theme(), shortId: id,
         screensMissing: shots.missing || {},
       }
       const src = { ...(sources() || {}), renderer: await rendererErrors() }
       const body = await bundle({ meta, sources: src, get: fetchJson, readJson: readDesktopSettings, bounds, screens: shots.screens })
       await fsp.mkdir(dir, { recursive: true })
       const file = path.join(dir, `arbiter-report-${id}.arb`)
-      await fsp.writeFile(file, sealFn(body), { mode: 0o600 })
+      await fsp.writeFile(file, await sealFn(body), { mode: 0o600 })
       produced.set(id, file)
       last = { at: now(), shortId: id, file }
       await prune()

@@ -40,19 +40,19 @@ function projectItem(it) {
   return out
 }
 
-function resolveModsSafe(it, rarity) {
+async function resolveModsSafe(it, rarity) {
   if (rarity !== 'Rare') return null
-  try { return lookupItemMods(it) } catch { return null }
+  try { return await lookupItemMods(it) } catch { return null }
 }
 
 // A string field as given, or the fallback when it is missing or not a string (fields are parsed JSON).
 const str = (v, fallback) => (typeof v === 'string' ? v : fallback)
 
 // One shop listing → its display row.
-function shopRow(x) {
+async function shopRow(x) {
   const it = x.item && typeof x.item === 'object' ? x.item : {}
   const rarity = typeof it.rarity === 'string' && it.rarity ? it.rarity : (FRAME_RARITY[it.frameType] || '')
-  const matchedMods = resolveModsSafe(it, rarity)
+  const matchedMods = await resolveModsSafe(it, rarity)
   return {
     id: x.id,
     indexed: str(x.listing?.indexed, null),
@@ -72,10 +72,11 @@ function shopRow(x) {
 }
 
 // Keep ONLY shop display fields — strip whisper, whisper_token, hideout_token, and account block.
+// Rows keep the listings' order (Promise.all keeps input order).
 function projectShopRows(json) {
-  return (Array.isArray(json?.result) ? json.result : [])
+  return Promise.all((Array.isArray(json?.result) ? json.result : [])
     .filter(x => typeof x?.id === 'string' && Number.isFinite(x.listing?.price?.amount) && typeof x.listing.price.currency === 'string')
-    .map(shopRow)
+    .map(shopRow))
 }
 
 // fetchShop's arguments, normalised: trimmed league and account, a known sort, a boolean 'more'.
@@ -229,7 +230,7 @@ function makeMerchantFetcher({ request, budget, log = () => {}, wait = defaultWa
         log(`merchant status=${f.status ?? f.error} step=fetch`)
         return { ok: false, error: f.error, status: f.status, retryAfter: f.retryAfter, rows, consumed }
       }
-      rows.push(...projectShopRows(f.data))
+      rows.push(...await projectShopRows(f.data))
       consumed += batch.length
     }
     return { ok: true, rows, consumed }

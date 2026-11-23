@@ -23,6 +23,9 @@ What is ours:
   (snapshot-backed), `assets/client-string-loader.ts` → `clientstrings.js`; plus `vue.js` / `vueuse.js`
   (inert reactivity: `RateLimiter.ts` and `common.ts` import `shallowRef`/`shallowReactive`/`createGlobalState`)
   and `fetch.js` (`ee2data://` reads from `data/`, everything else refused). Aliased at bundle time by resolved path.
+  Only the generated `vendor/bundle.cjs` imports them, through those aliases in `sync-ee2.mjs`, so a static
+  scan of the sources sees no importer: `ops/lint/knip.json` lists `shims/*.js` as entry points, or knip would
+  report their exports (and `vueuse.js`) as unused.
 - `entry.js` — the esbuild entry naming the seam; `index.js` — `buildQuery(raw, prefs)`: the ~40 lines that
   mirror `CheckedItem.vue:159-205` on a cold start (no previous popup → `currency`/`listingType` undefined).
 - `polyfills.js` — guarded ES2023/ES2025 built-ins (`Array.prototype.toSorted`, the `Set` methods, …) that

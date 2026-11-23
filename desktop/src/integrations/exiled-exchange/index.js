@@ -57,6 +57,7 @@ class ExiledExchangeIntegration extends EventEmitter {
     this._hotkey = null
     this._clip = null
     this._unwatchConfig = null
+    this._shortcutsRead = 0    // counts config reads, so only the newest one is applied
     this._healthTimer = null
     this._uiohookOk = false
     this._sawKey = false
@@ -160,9 +161,16 @@ class ExiledExchangeIntegration extends EventEmitter {
     this._mode = 'idle'
   }
 
+  // The config is read asynchronously, so two reads (a rebind right after activation) can overlap:
+  // only the newest is applied, and only to the watcher that asked (not one a deactivate dropped).
   _applyShortcuts() {
-    if (!this._hotkey) return
-    try { this._hotkey.setShortcuts(readShortcuts()) } catch (e) { this._safeError(e) }
+    const hotkey = this._hotkey
+    if (!hotkey) return
+    this._shortcutsRead += 1
+    const read = this._shortcutsRead
+    readShortcuts()
+      .then((list) => { if (read === this._shortcutsRead && hotkey === this._hotkey) hotkey.setShortcuts(list) })
+      .catch((e) => this._safeError(e))
   }
 
   _onHotkey(h) {

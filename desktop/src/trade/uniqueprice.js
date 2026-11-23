@@ -4,7 +4,7 @@
 // (policy trade-search for the search, trade-fetch for the listings). Only the prices go back to the
 // renderer, which turns them into divines with the app's one value table. Dependencies are injectable.
 'use strict'
-const fs = require('node:fs')
+const fsp = require('node:fs').promises
 const path = require('node:path')
 
 const { budgeted } = require('./budget.js')
@@ -15,23 +15,34 @@ const FETCH_POLICY = 'trade-fetch'
 const KEEP_MS = 5 * 60_000   // a search whose fetch was refused is kept this long, so its retry only fetches
 
 // Every unique the trade site knows, by name and base: its own item list (EE2's data, synced every
-// release), read once.
+// release), read once. Callers that overlap share the one read. As before, the list is kept from the
+// moment the read starts: a read that fails throws to its callers, and later calls get the list as it
+// stood (empty).
+/** @type {Promise<Array<{ name: string, type: string }>> | null} */
 let _uniques = null
 function uniques() {
   if (_uniques) return _uniques
+  /** @type {Array<{ name: string, type: string }>} */
+  const list = []
+  _uniques = loadUniques(list)
+  _uniques.catch(() => { _uniques = Promise.resolve(list) })
+  return _uniques
+}
+
+/** @param {Array<{ name: string, type: string }>} list filled in place */
+async function loadUniques(list) {
   const file = path.join(__dirname, '..', 'vendor', 'ee2-query', 'data', 'trade', 'items.json')
   const seen = new Set()
-  _uniques = []
-  for (const g of JSON.parse(fs.readFileSync(file, 'utf8')).result) {
+  for (const g of JSON.parse(await fsp.readFile(file, 'utf8')).result) {
     for (const e of g.entries) {
       if (!e.flags?.unique || !e.name || !e.type) continue
       const key = `${e.name}|${e.type}`
       if (seen.has(key)) continue
       seen.add(key)
-      _uniques.push({ name: e.name, type: e.type })
+      list.push({ name: e.name, type: e.type })
     }
   }
-  return _uniques
+  return list
 }
 
 const clean = (s) => String(s ?? '').trim()

@@ -22,49 +22,54 @@ test('constants: ARB1 magic, one key id, a 32-byte owner public key, 65 bytes of
   assert.equal(OVERHEAD, 65)
 })
 
-test('seal → open round-trips; overhead is exactly 65 bytes; two seals of the same plaintext differ', () => {
+test('seal → open round-trips; overhead is exactly 65 bytes; two seals of the same plaintext differ', async () => {
   const k = testKeys()
   const plain = Buffer.from('hello feedback ' + 'x'.repeat(1000))
-  const a = seal(plain, k.pub)
-  const b = seal(plain, k.pub)
+  const a = await seal(plain, k.pub)
+  const b = await seal(plain, k.pub)
   assert.equal(a.length, plain.length + OVERHEAD)
   assert.equal(a.subarray(0, 4).toString(), 'ARB1')
   assert.equal(a[4], KEY_ID)
   assert.notDeepEqual(a, b, 'ephemeral key + nonce make every seal unique')
-  assert.deepEqual(open(a, k.priv), plain)
-  assert.deepEqual(open(b, k.priv), plain)
+  assert.deepEqual(await open(a, k.priv), plain)
+  assert.deepEqual(await open(b, k.priv), plain)
 })
 
-test('the empty plaintext seals and opens', () => {
+test('the empty plaintext seals and opens', async () => {
   const k = testKeys()
-  assert.deepEqual(open(seal(Buffer.alloc(0), k.pub), k.priv), Buffer.alloc(0))
+  assert.deepEqual(await open(await seal(Buffer.alloc(0), k.pub), k.priv), Buffer.alloc(0))
 })
 
-test('flipping any byte — magic, keyId, ephPub, nonce, ciphertext, tag — fails to open', () => {
+test('flipping any byte — magic, keyId, ephPub, nonce, ciphertext, tag — fails to open', async () => {
   const k = testKeys()
-  const sealed = seal(Buffer.from('payload'), k.pub)
+  const sealed = await seal(Buffer.from('payload'), k.pub)
   const probes = { magic: 0, keyId: 4, ephPub: 5 + 7, nonce: 5 + 32 + 3, ciphertext: 65 - 16 + 2, tag: sealed.length - 1 }
   for (const [what, i] of Object.entries(probes)) {
     const bad = Buffer.from(sealed)
     bad[i] ^= 0x01
-    assert.throws(() => open(bad, k.priv), what)
+    await assert.rejects(async () => open(bad, k.priv), what)
   }
 })
 
-test('the wrong private key fails; truncated input throws a named error', () => {
+test('the wrong private key fails; truncated input throws a named error', async () => {
   const k = testKeys(), other = testKeys()
-  const sealed = seal(Buffer.from('payload'), k.pub)
-  assert.throws(() => open(sealed, other.priv))
-  assert.throws(() => open(sealed.subarray(0, 40), k.priv), /ARB_TRUNCATED/)
-  assert.throws(() => open(Buffer.from('NOPE' + 'x'.repeat(80)), k.priv), /ARB_BAD_MAGIC/)
+  const sealed = await seal(Buffer.from('payload'), k.pub)
+  await assert.rejects(async () => open(sealed, other.priv))
+  await assert.rejects(async () => open(sealed.subarray(0, 40), k.priv), /ARB_TRUNCATED/)
+  await assert.rejects(async () => open(Buffer.from('NOPE' + 'x'.repeat(80)), k.priv), /ARB_BAD_MAGIC/)
+})
+
+test('a public key that is not 32 bytes is refused before anything is sealed', async () => {
+  await assert.rejects(async () => seal(Buffer.from('x'), Buffer.alloc(31).toString('base64')), /ARB_BAD_PUBKEY/)
+  await assert.rejects(async () => seal(Buffer.from('x'), ''), /ARB_BAD_PUBKEY/)
 })
 
 // Cross-language pin: a file sealed by ops/feedback-bot/arbseal.py opens here.
 const FIX = new URL('./fixtures/feedback/', import.meta.url).pathname
-test('opens a file sealed by the Python side (fixture)', () => {
+test('opens a file sealed by the Python side (fixture)', async () => {
   assert.ok(existsSync(join(FIX, 'sealed-by-python.arb')), 'the tracked fixture sealed-by-python.arb is missing: regenerate it with ops/feedback-bot/bot/arbseal.py')
   const priv = readFileSync(join(FIX, 'test-key.pem'), 'utf8')
-  const got = open(readFileSync(join(FIX, 'sealed-by-python.arb')), priv)
+  const got = await open(readFileSync(join(FIX, 'sealed-by-python.arb')), priv)
   assert.equal(got.toString(), readFileSync(join(FIX, 'plain.txt'), 'utf8'))
 })
 

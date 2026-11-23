@@ -48,8 +48,8 @@ const rawEntry = (id, {
   },
 })
 
-test('projectShopRows keeps only shop fields and strips whisper, tokens, and account block', () => {
-  const rows = projectShopRows({
+test('projectShopRows keeps only shop fields and strips whisper, tokens, and account block', async () => {
+  const rows = await projectShopRows({
     result: [
       rawEntry(ID(1)),
       null,
@@ -65,7 +65,7 @@ test('projectShopRows keeps only shop fields and strips whisper, tokens, and acc
   assert.equal(rows[0].stashName, 'Shop 1')
   assert.deepEqual(rows[0].item.explicitMods, ['+50 to maximum Life'])
   assert.doesNotMatch(JSON.stringify(rows), /SecretPlayer|HeroChar|WHISPER_SECRET|HIDEOUT_SECRET|whisper|SHOULD_NOT_PASS/)
-  assert.deepEqual(projectShopRows(null), [])
+  assert.deepEqual(await projectShopRows(null), [])
 })
 
 /**
@@ -466,8 +466,8 @@ test('makeMerchantPricer keeps search ids on fetch rate-limit so retry skips tra
   assert.deepEqual(retry.listings, [{ amount: 9, currency: 'divine' }])
 })
 
-test('projectShopRows resolves Rare mods via shared modsearch catalogue without altering Unique row keys', () => {
-  const rows = projectShopRows({
+test('projectShopRows resolves Rare mods via shared modsearch catalogue without altering Unique row keys', async () => {
+  const rows = await projectShopRows({
     result: [
       rawEntry(ID(10), {
         name: 'Bramble Finger',

@@ -80,10 +80,13 @@ test('worker failure: in-flight item skipped, restart at most once per 5 minutes
   assert.equal(h.spawns.length, 2, 'restarted after the window')
 })
 
-test('warm-if-running: warmed only when the package reports EE2 running', () => {
+// The detection handler reads the prefs (a promise) before it warms the worker: let it run.
+const settled = () => new Promise(resolve => { setImmediate(resolve) })
+
+test('warm-if-running: warmed only when the package reports EE2 running', async () => {
   const h = harness()
-  h.pkg.emit('ee2-detected', { present: true, running: false }); assert.equal(h.spawns.length, 0)
-  h.pkg.emit('ee2-detected', { present: true, running: true }); assert.equal(h.spawns.length, 1)
+  h.pkg.emit('ee2-detected', { present: true, running: false }); await settled(); assert.equal(h.spawns.length, 0)
+  h.pkg.emit('ee2-detected', { present: true, running: true }); await settled(); assert.equal(h.spawns.length, 1)
   assert.ok(h.lines.some(l => l.startsWith('history-attached cfg=ok')))
 })
 
@@ -191,4 +194,50 @@ test('waystone searches are refined by default ("Match waystone stats"); switchi
   c.setSearchPrefs({ waystoneStats: false })
   const off = await c.buildIntent(WAY, 'clipboard')
   assert.equal(off.q, built)
+})
+
+// The prefs come from EE2's config.json, read asynchronously the first time: what may happen meanwhile.
+function slowPrefs() {
+  /** @type {(v?: any) => void} */
+  let release = () => {}
+  let calls = 0
+  const gate = new Promise(resolve => { release = resolve })
+  const prefs = async () => { calls += 1; await gate; return { prefs: { leagueId: 'L', language: 'en' }, source: 'ee2' } }
+  return { prefs, release: () => release(), calls: () => calls }
+}
+
+test('prefs: overlapping first reads share one read; a config change makes the next call read again', async () => {
+  const p = slowPrefs()
+  const pkg = new EventEmitter()
+  const spawns = []
+  const worker = { spawn() { spawns.push(1); return { build: async () => ({ q: '{"query":{}}', name: 'x', item: {}, buildMs: 1 }), kill() {} } } }
+  const c = createHistoryConsumer({ manager: pkg, worker, prefs: p.prefs, send: () => {}, log: () => {} })
+  pkg.emit('ee2-detected', { present: true, running: false })
+  const a = c.buildIntent(RAW, 'clipboard')
+  const b = c.buildIntent(RAW, 'clipboard')
+  p.release()
+  assert.ok(await a); assert.ok(await b)
+  assert.equal(p.calls(), 1)
+  assert.equal(c.status().leagueId, 'L')
+  c.invalidatePrefs()
+  await c.buildIntent(RAW, 'clipboard')
+  assert.equal(p.calls(), 2)
+})
+
+test('prefs read in flight: a stop or a switch-off meanwhile spawns no worker and sends nothing', async () => {
+  for (const what of ['stop', 'disable']) {
+    const p = slowPrefs()
+    const pkg = new EventEmitter()
+    const spawns = [], sent = [], lines = []
+    const worker = { spawn() { spawns.push(1); return { build: async () => ({ q: '{"query":{}}', name: 'x', item: {}, buildMs: 1 }), kill() {} } } }
+    const c = createHistoryConsumer({ manager: pkg, worker, prefs: p.prefs, send: (ch, x) => sent.push([ch, x]), log: (l) => lines.push(l) })
+    pkg.emit('ee2-detected', { present: true, running: true })
+    pkg.emit('item-checked', item('ee2'))
+    if (what === 'stop') c.stop(); else c.setEnabled(false)
+    p.release()
+    await settled(); await settled()
+    assert.equal(spawns.length, 0, `${what}: no worker for the item or the warm-up`)
+    assert.deepEqual(sent, [], what)
+    if (what === 'disable') assert.ok(lines.includes('history-skip reason=disabled origin=ee2'), lines.join('\n'))
+  }
 })

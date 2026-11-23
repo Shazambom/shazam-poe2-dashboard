@@ -21,50 +21,70 @@ const row = ri >= 0 ? argv[ri + 1] : null
 if (ri >= 0) argv.splice(ri, 2)
 const [cmd, a, b] = argv
 const port = process.env.CDP_PORT || '9222'
-const fail = (m) => { console.error(m); process.exit(1) }
-const targets = await (await fetch(`http://127.0.0.1:${port}/json`)).json()
-const t = targets.find(x => x.type === 'webview' && /^https:\/\/www\.pathofexile\.com\//.test(x.url))
-if (!t) fail('no trade window — open Trading → Workspace first')
-if (cmd === 'url') { console.log(t.url); process.exit(0) }
-// Never let a probe's search land in the owner's row (the Workspace saves searches into the active row).
-const activeId = (await (await fetch(`http://127.0.0.1:8210/api/trading/workspace`)).json())?.workspace?.activeId ?? null
-const refusal = guard({ cmd, row, activeId })
-if (refusal) fail(refusal)
-
-const ws = new WebSocket(t.webSocketDebuggerUrl)
-await new Promise((r, j) => { ws.on('open', r); ws.on('error', j) })
-let id = 0
-const ALLOWED = new Set(['Page.navigate', 'Page.captureScreenshot', 'Input.dispatchMouseEvent', 'Input.dispatchKeyEvent', 'Input.insertText'])
-const send = (method, params = {}) => {
-  if (!ALLOWED.has(method)) fail(`${method} is not allowed`)
-  return new Promise(res => { const m = ++id; const h = raw => { const j = JSON.parse(raw); if (j.id === m) { ws.off('message', h); res(j) } }; ws.on('message', h); ws.send(JSON.stringify({ id: m, method, params })) })
-}
+// A refusal or a usage error: printed on stderr, exit code 1. The script never calls process.exit; it
+// closes its socket and ends by itself.
+class Refused extends Error {}
+const fail = (m) => { throw new Refused(m) }
 const KEYS = { Enter: 13, Tab: 9, Escape: 27, Backspace: 8 }
+const ALLOWED = new Set(['Page.navigate', 'Page.captureScreenshot', 'Input.dispatchMouseEvent', 'Input.dispatchKeyEvent', 'Input.insertText'])
 
-if (cmd === 'nav') {
-  if (!/^https:\/\/www\.pathofexile\.com\/trade2\//.test(String(a))) fail('only https://www.pathofexile.com/trade2/… links')
-  const r = await send('Page.navigate', { url: a })
-  console.log(r.error ? `error ${r.error.message}` : 'navigated')
-} else if (cmd === 'click') {
-  const x = Number(a), y = Number(b)
-  if (!Number.isFinite(x) || !Number.isFinite(y)) fail('click <x> <y>')
-  for (const type of ['mousePressed', 'mouseReleased']) await send('Input.dispatchMouseEvent', { type, x, y, button: 'left', clickCount: 1 })
-  console.log(`clicked ${x},${y}`)
-} else if (cmd === 'type') {
-  await send('Input.insertText', { text: String(a ?? '') })
-  console.log('typed')
-} else if (cmd === 'key') {
-  const code = KEYS[a]
-  if (!code) fail(`key: one of ${Object.keys(KEYS).join(', ')}`)
-  for (const type of ['keyDown', 'keyUp']) await send('Input.dispatchKeyEvent', { type, key: a, code: a, windowsVirtualKeyCode: code })
-  console.log(`pressed ${a}`)
-} else if (cmd === 'wheel') {
-  await send('Input.dispatchMouseEvent', { type: 'mouseWheel', x: 600, y: 500, deltaX: 0, deltaY: Number(a) || 400 })
-  console.log('scrolled')
-} else if (cmd === 'shot') {
-  if (!a) fail('shot <out.png>')
-  const r = await send('Page.captureScreenshot', { format: 'png' })
-  writeFileSync(a, Buffer.from(r.result.data, 'base64'))
-  console.log(`saved ${a}`)
-} else fail('usage: nav <url> | click <x> <y> | type <text> | key <name> | wheel <dy> | shot <out.png> | url')
-ws.close()
+async function main() {
+  const targets = await (await fetch(`http://127.0.0.1:${port}/json`)).json()
+  const t = targets.find(x => x.type === 'webview' && /^https:\/\/www\.pathofexile\.com\//.test(x.url))
+  if (!t) fail('no trade window — open Trading → Workspace first')
+  if (cmd === 'url') { console.log(t.url); return }
+  // Never let a probe's search land in the owner's row (the Workspace saves searches into the active row).
+  const activeId = (await (await fetch(`http://127.0.0.1:8210/api/trading/workspace`)).json())?.workspace?.activeId ?? null
+  const refusal = guard({ cmd, row, activeId })
+  if (refusal) fail(refusal)
+
+  const ws = new WebSocket(t.webSocketDebuggerUrl)
+  await new Promise((r, j) => { ws.on('open', r); ws.on('error', j) })
+  try {
+    await drive(ws)
+  } finally {
+    ws.close()
+  }
+}
+
+async function drive(ws) {
+  let id = 0
+  const send = (method, params = {}) => {
+    if (!ALLOWED.has(method)) fail(`${method} is not allowed`)
+    return new Promise(res => { const m = ++id; const h = raw => { const j = JSON.parse(raw); if (j.id === m) { ws.off('message', h); res(j) } }; ws.on('message', h); ws.send(JSON.stringify({ id: m, method, params })) })
+  }
+  if (cmd === 'nav') {
+    if (!/^https:\/\/www\.pathofexile\.com\/trade2\//.test(String(a))) fail('only https://www.pathofexile.com/trade2/… links')
+    const r = await send('Page.navigate', { url: a })
+    console.log(r.error ? `error ${r.error.message}` : 'navigated')
+  } else if (cmd === 'click') {
+    const x = Number(a), y = Number(b)
+    if (!Number.isFinite(x) || !Number.isFinite(y)) fail('click <x> <y>')
+    for (const type of ['mousePressed', 'mouseReleased']) await send('Input.dispatchMouseEvent', { type, x, y, button: 'left', clickCount: 1 })
+    console.log(`clicked ${x},${y}`)
+  } else if (cmd === 'type') {
+    await send('Input.insertText', { text: String(a ?? '') })
+    console.log('typed')
+  } else if (cmd === 'key') {
+    const code = KEYS[a]
+    if (!code) fail(`key: one of ${Object.keys(KEYS).join(', ')}`)
+    for (const type of ['keyDown', 'keyUp']) await send('Input.dispatchKeyEvent', { type, key: a, code: a, windowsVirtualKeyCode: code })
+    console.log(`pressed ${a}`)
+  } else if (cmd === 'wheel') {
+    await send('Input.dispatchMouseEvent', { type: 'mouseWheel', x: 600, y: 500, deltaX: 0, deltaY: Number(a) || 400 })
+    console.log('scrolled')
+  } else if (cmd === 'shot') {
+    if (!a) fail('shot <out.png>')
+    const r = await send('Page.captureScreenshot', { format: 'png' })
+    writeFileSync(a, Buffer.from(r.result.data, 'base64'))
+    console.log(`saved ${a}`)
+  } else fail('usage: nav <url> | click <x> <y> | type <text> | key <name> | wheel <dy> | shot <out.png> | url')
+}
+
+try {
+  await main()
+} catch (e) {
+  if (!(e instanceof Refused)) throw e   // anything else fails as it did: Node prints it, exit code 1
+  console.error(e.message)
+  process.exitCode = 1
+}

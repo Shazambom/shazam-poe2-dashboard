@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
+import net from 'node:net'
 import {
   DEFAULT_BUDGETS,
+  allOrAbort,
+  waitForCdpTarget,
   compareProfiles,
   evaluateBudgets,
   extractMetrics,
@@ -121,5 +124,31 @@ describe('ops/profile.mjs CLI and comparison helpers', () => {
     assert.match(txt, /\[Packaged Runtime\]/)
     assert.match(txt, /\[Comparison vs Baseline\]/)
     assert.match(txt, /\[Budget Failures\]/)
+  })
+})
+
+// A port nothing listens on: the CDP poll against it never succeeds (connection refused, retried).
+const closedPort = () => new Promise((resolve, reject) => {
+  const srv = net.createServer()
+  srv.on('error', reject)
+  srv.listen(0, '127.0.0.1', () => { const { port } = /** @type {import('node:net').AddressInfo} */ (srv.address()); srv.close(() => resolve(port)) })
+})
+
+describe('ops/profile.mjs boot checks', () => {
+  it('a boot check that fails stops the other one at once instead of waiting out its 60 s', async () => {
+    const port = await closedPort()
+    /** @type {Promise<any> | null} */
+    let cdp = null
+    const t = performance.now()
+    await assert.rejects(allOrAbort([
+      async () => { await new Promise(resolve => { setTimeout(resolve, 100) }); throw new Error('health failed') },
+      (signal) => { cdp = waitForCdpTarget(port, performance.now(), 60000, signal); return cdp },
+    ]), /health failed/)
+    await assert.rejects(cdp, /stopped: the other boot check failed/)
+    assert.ok(performance.now() - t < 2000, `both settled in ${Math.round(performance.now() - t)} ms`)
+  })
+
+  it('both succeed: their results in order', async () => {
+    assert.deepEqual(await allOrAbort([async () => 'health', async () => 'cdp']), ['health', 'cdp'])
   })
 })

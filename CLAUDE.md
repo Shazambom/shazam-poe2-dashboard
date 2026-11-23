@@ -25,8 +25,8 @@ only**, diagnostics telemetry:
 Consequences to preserve in any change:
 
 - Never route `/api`, session, board, routes, prices, telemetry, etc. to the remote
-  server from a *packaged* desktop build. `startBackend()` in `desktop/src/main.js` is
-  local-only; the only non-local branch is a `!app.isPackaged` DEV convenience
+  server from a *packaged* desktop build. `launchBackend()`/`backendReady()` in `desktop/src/main.js`
+  are local-only; the only non-local branch is a `!app.isPackaged` DEV convenience
   (`ARBITER_DEV_BACKEND_URL`).
 - The pathofexile.com rate budget has ONE owner: the bundled backend (`gateway.Policy`). The
   Electron live-search engine reserves/reports through `POST /api/ratelimits/acquire|observe`

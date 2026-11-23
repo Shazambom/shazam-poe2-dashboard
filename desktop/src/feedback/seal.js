@@ -1,13 +1,18 @@
 // The .arb envelope: a feedback report sealed to the OWNER's public key so only the owner can read
 // it — X25519 (ephemeral → owner) → HKDF-SHA256 → AES-256-GCM, Node built-ins only. The app holds
 // only the public key; the private key lives on shazam (ops/feedback-bot/arbseal.py is the real
-// opener — the same construction byte for byte). `open()` here is for the tests.
+// opener — the same construction byte for byte). `open()` here is for the tests. Both return promises:
+// the key pair and the HKDF run on libuv's thread pool, off the main process's event loop.
 //
 //   .arb = "ARB1"(4) | keyId(1) | ephPub(32) | nonce(12) | ciphertext | tag(16)   (65 B overhead)
 //   key  = HKDF-SHA256(ikm = X25519(eph, ownerPub), salt = ephPub‖ownerPub, info = INFO, 32)
 //   AAD  = the 5 header bytes — a header edit fails the tag
 'use strict'
 const crypto = require('node:crypto')
+const { promisify } = require('node:util')
+
+const hkdf = promisify(crypto.hkdf)
+const generateKeyPair = promisify(crypto.generateKeyPair)
 
 const MAGIC = 'ARB1'
 const KEY_ID = 1                     // bump on owner-key rotation (the old PEM stays readable on shazam)
@@ -28,16 +33,17 @@ const rawPub = (b64) => {
 const importPub = (raw) => crypto.createPublicKey({ key: Buffer.concat([SPKI_PREFIX, raw]), format: 'der', type: 'spki' })
 const exportRawPub = (keyObject) => { const der = keyObject.export({ type: 'spki', format: 'der' }); return der.subarray(der.length - 32) }
 
-function deriveKey(privateKey, publicKey, ephPub, ownerPub) {
+async function deriveKey(privateKey, publicKey, ephPub, ownerPub) {
   const ikm = crypto.diffieHellman({ privateKey, publicKey })
-  return Buffer.from(crypto.hkdfSync('sha256', ikm, Buffer.concat([ephPub, ownerPub]), INFO, 32))   // hkdfSync → ArrayBuffer
+  return Buffer.from(await hkdf('sha256', ikm, Buffer.concat([ephPub, ownerPub]), INFO, 32))   // hkdf → ArrayBuffer
 }
 
-function seal(plain, ownerPubB64 = OWNER_PUB_B64, keyId = KEY_ID) {
+/** @param {Buffer} plain @param {string} [ownerPubB64] @param {number} [keyId] @returns {Promise<Buffer>} */
+async function seal(plain, ownerPubB64 = OWNER_PUB_B64, keyId = KEY_ID) {
   const ownerPub = rawPub(ownerPubB64)
-  const eph = crypto.generateKeyPairSync('x25519')
+  const eph = await generateKeyPair('x25519')
   const ephPub = exportRawPub(eph.publicKey)
-  const key = deriveKey(eph.privateKey, importPub(ownerPub), ephPub, ownerPub)
+  const key = await deriveKey(eph.privateKey, importPub(ownerPub), ephPub, ownerPub)
   const nonce = crypto.randomBytes(12)
   const header = Buffer.concat([Buffer.from(MAGIC), Buffer.from([keyId])])
   const c = crypto.createCipheriv('aes-256-gcm', key, nonce)
@@ -46,7 +52,8 @@ function seal(plain, ownerPubB64 = OWNER_PUB_B64, keyId = KEY_ID) {
   return Buffer.concat([header, ephPub, nonce, ct, c.getAuthTag()])
 }
 
-function open(sealed, privateKeyPem) {
+/** @param {Buffer} sealed @param {string | Buffer} privateKeyPem @returns {Promise<Buffer>} */
+async function open(sealed, privateKeyPem) {
   if (sealed.length < OVERHEAD) throw new Error('ARB_TRUNCATED')
   if (sealed.subarray(0, 4).toString() !== MAGIC) throw new Error('ARB_BAD_MAGIC')
   const header = sealed.subarray(0, 5)
@@ -56,7 +63,7 @@ function open(sealed, privateKeyPem) {
   const tag = sealed.subarray(sealed.length - 16)
   const privateKey = crypto.createPrivateKey(privateKeyPem)
   const ownerPub = exportRawPub(crypto.createPublicKey(privateKey))
-  const key = deriveKey(privateKey, importPub(ephPub), ephPub, ownerPub)
+  const key = await deriveKey(privateKey, importPub(ephPub), ephPub, ownerPub)
   const d = crypto.createDecipheriv('aes-256-gcm', key, nonce)
   d.setAAD(header)
   d.setAuthTag(tag)

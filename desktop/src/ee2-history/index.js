@@ -34,7 +34,7 @@ function degradedItem(item) {
 
 /**
  * @param {{ manager: import('node:events').EventEmitter, worker: { spawn: (opts?: { onExit?: (info?: { idle?: boolean }) => void }) => any },
- *   prefs: () => any, send?: ((channel: string, payload: any) => void) | null, log?: (line: string) => void,
+ *   prefs: () => any | Promise<any>, send?: ((channel: string, payload: any) => void) | null, log?: (line: string) => void,
  *   now?: () => number, hint?: ((policy: string) => void) | null, onBuilt?: ((intent: any) => void) | null }} deps
  */
 function createHistoryConsumer({ manager, worker, prefs, send = null, log = () => {}, now = Date.now, hint = null, onBuilt = null }) {
@@ -44,11 +44,12 @@ function createHistoryConsumer({ manager, worker, prefs, send = null, log = () =
   let lastFailure = 0
   let seq = 0
   const held = []               // intents waiting for a window
-  let cachedPrefs = null
+  let cachedPrefs = null         // the prefs read (a promise): callers that overlap share it
   let warmTimer = null
+  let stopped = false           // stop() ran: a prefs read that finishes afterwards starts nothing
   let status = { present: false, running: false, configRead: false, leagueId: null, warm: false }
 
-  const readPrefs = () => { if (!cachedPrefs) { cachedPrefs = prefs() } return cachedPrefs }
+  const readPrefs = () => { if (!cachedPrefs) { cachedPrefs = Promise.resolve(prefs()) } return cachedPrefs }
   let searchPrefs = { waystoneStats: true }
   const invalidatePrefs = () => { cachedPrefs = null }
 
@@ -81,9 +82,14 @@ function createHistoryConsumer({ manager, worker, prefs, send = null, log = () =
   }
 
   async function buildIntent(raw, origin, { folder = null, item = null, source = 'clipboard' } = {}) {
+    // The prefs are read before the worker is taken, so the worker is never left waiting on the read.
+    // The first read touches the disk: if the stream was switched off or the consumer stopped
+    // meanwhile, nothing is spawned for it.
+    const { prefs: pf } = await readPrefs()
+    if (stopped) return null
+    if (folder && !enabled) { log(`history-skip reason=disabled origin=${origin}`); return null }
     const p = ensureWorker()
     if (!p) { log(`history-skip reason=worker origin=${origin}`); return null }
-    const { prefs: pf } = readPrefs()
     const t0 = now()
     let r
     // The user's EE2 settings, unchanged: EE2's window builds its default ticks with the same
@@ -126,13 +132,17 @@ function createHistoryConsumer({ manager, worker, prefs, send = null, log = () =
     if (intent) emit(intent)
   }
 
-  const onDetected = (info) => {
+  // Presence is recorded at once; the league, the attached line and the warm-up follow the prefs read, in
+  // that order as before, unless the consumer was stopped meanwhile.
+  async function detected(info) {
     status = { ...status, present: Boolean(info?.present), running: Boolean(info?.running), configRead: Boolean(info?.config) }
-    const { prefs: pf, source } = readPrefs()
+    const { prefs: pf, source } = await readPrefs()
+    if (stopped) return
     status.leagueId = pf.leagueId || null
     log(`history-attached cfg=${source === 'ee2' ? 'ok' : 'default'} league="${pf.leagueId || ''}" allSel=${Boolean(pf.defaultAllSelected)} range=${pf.searchStatRange} stock=${Boolean(pf.activateStockFilter)}`)
     if (info?.running) { clearTimeout(warmTimer); warmTimer = setTimeout(warm, info.initial ? WARM_DELAY_MS : 0); if (warmTimer.unref) { warmTimer.unref() } if (!info.initial) warm() }
   }
+  const onDetected = (info) => { detected(info).catch((e) => ignored('ee2-history:detected', e)) }
   const onMissing = () => { status = { ...status, present: false, running: false } }
   const onError = () => {}
 
@@ -169,6 +179,7 @@ function createHistoryConsumer({ manager, worker, prefs, send = null, log = () =
     setSender(fn) { sender = fn; if (fn) { const q = held.splice(0); for (const i of q) { try { fn('trade:ingest', i) } catch (e) { ignored('ee2-history:send-held', e) } } } },
     status() { return { ...status, enabled, held: held.length } },
     stop() {
+      stopped = true
       clearTimeout(warmTimer)
       manager.off('item-checked', onItem); manager.off('ee2-detected', onDetected); manager.off('ee2-missing', onMissing); manager.off('config-changed', invalidatePrefs); manager.off('error', onError)
       try { proc?.kill?.() } catch (e) { ignored('ee2-history:kill-worker', e) }; proc = null

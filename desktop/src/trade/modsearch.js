@@ -3,7 +3,7 @@
 // is hand-listed: a stat's ids come from the site's stat catalogue and an item kind's category
 // from its bases, both EE2's data (vendor/ee2-query/data, synced every release), read once.
 'use strict'
-const fs = require('node:fs')
+const fsp = require('node:fs').promises
 const path = require('node:path')
 
 const DATA = path.join(__dirname, '..', 'vendor', 'ee2-query', 'data')
@@ -15,13 +15,24 @@ const BUNDLE = path.join(__dirname, '..', 'vendor', 'ee2-query', 'vendor', 'bund
 const GROUPS = { prefix: ['explicit', 'desecrated'], suffix: ['explicit', 'desecrated'], corrupted: ['enchant'], enchant: ['enchant'] }
 const groupsFor = (affix) => GROUPS[affix] || []
 
+/** @type {Promise<{ byGroup: Map<string, Map<string, string[]>>, ofBase: Map<string, string> }> | null} */
 let _cat = null
+/** @type {Map<string, Map<string, string[]>> | null} */
 let _byGroupLower = null
+
+// The catalogue, read on first use. Callers that overlap share the one read; a read that fails throws to
+// its callers and the next call reads again (nothing is kept from it).
 function catalogue() {
-  if (_cat) return _cat
+  if (!_cat) {
+    _cat = loadCatalogue().catch((e) => { _cat = null; throw e })
+  }
+  return _cat
+}
+
+async function loadCatalogue() {
   // group id → (text → [ids]): a text can sit under two ids in one group.
   const byGroup = new Map()
-  for (const g of JSON.parse(fs.readFileSync(path.join(DATA, 'trade', 'stats.json'), 'utf8')).result) {
+  for (const g of JSON.parse(await fsp.readFile(path.join(DATA, 'trade', 'stats.json'), 'utf8')).result) {
     const m = new Map()
     for (const e of g.entries) {
       const ids = m.get(e.text) || []; ids.push(e.id); m.set(e.text, ids)
@@ -29,24 +40,24 @@ function catalogue() {
     byGroup.set(g.id, m)
   }
   // EE2's own category → trade category table, read out of its bundle.
-  const src = fs.readFileSync(BUNDLE, 'utf8')
+  const src = await fsp.readFile(BUNDLE, 'utf8')
   const table = src.slice(src.indexOf('CATEGORY_TO_TRADE_ID = /* @__PURE__ */ new Map(['), src.indexOf(']);', src.indexOf('CATEGORY_TO_TRADE_ID')))
   const tradeId = new Map([...table.matchAll(/\["([^"]+)"[^,]*,\s*"([^"]+)"\]/g)].map(m => [m[1], m[2]]))
   // base name → trade category, through EE2's category of the base.
   const ofBase = new Map()
-  for (const line of fs.readFileSync(path.join(DATA, 'en', 'items.ndjson'), 'utf8').split('\n')) {
+  for (const line of (await fsp.readFile(path.join(DATA, 'en', 'items.ndjson'), 'utf8')).split('\n')) {
     if (!line) continue
     const it = JSON.parse(line)
     const cat = it.namespace === 'ITEM' && it.craftable && it.craftable.category
     if (cat && tradeId.has(cat)) ofBase.set(it.refName, tradeId.get(cat))
   }
-  _cat = { byGroup, ofBase }
-  return _cat
+  return { byGroup, ofBase }
 }
 
-function groupLowerIndex() {
+async function groupLowerIndex() {
   if (_byGroupLower) return _byGroupLower
-  const { byGroup } = catalogue()
+  const { byGroup } = await catalogue()
+  if (_byGroupLower) return _byGroupLower   // an overlapping first call built it meanwhile
   const out = new Map()
   for (const [gid, m] of byGroup) {
     const ml = new Map()
@@ -67,8 +78,8 @@ const siteText = (line) => line.replace(/^\+/, '')
 const cleanModLine = (t) => String(t ?? '').replace(/\[([^\]|]*)\|([^\]]*)\]/g, '$2').replace(/\[([^\]]*)\]/g, '$1').trim()
 
 // { stats: [[ids of line 1], [ids of line 2], …] | null, category: 'accessory.ring' | null }
-function lookup({ text, affix, bases }) {
-  const { byGroup, ofBase } = catalogue()
+async function lookup({ text, affix, bases }) {
+  const { byGroup, ofBase } = await catalogue()
   const groups = groupsFor(affix)
   const stats = String(text || '').split('\n').map(line => groups.flatMap(g => byGroup.get(g)?.get(siteText(line)) || []))
   const votes = new Map()
@@ -120,10 +131,10 @@ function rollValue(nums) {
 
 // Resolve a trade2 item JSON's rolled mod lines to trade2 stat ids + numeric roll values + category,
 // reusing the already-loaded EE2 stats.json & items.ndjson catalogue (shared with Stash → Merchant).
-function lookupItemMods(item) {
+async function lookupItemMods(item) {
   if (!item || typeof item !== 'object') return null
-  const { ofBase } = catalogue()
-  const byGroupLower = groupLowerIndex()
+  const { ofBase } = await catalogue()
+  const byGroupLower = await groupLowerIndex()
   const category = ofBase.get(item.baseType) || ofBase.get(item.typeLine) || null
   const mods = []
   const seen = new Set()
