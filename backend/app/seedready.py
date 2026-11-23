@@ -320,6 +320,8 @@ async def poll() -> dict:
     ]
     async with lh._backfill_lock:
         res = {name: await poll_league(name) for name in leagues}
-    # What the exporter trusts: which leagues are current per this poll, and when it ran.
-    db.kv_set("seed_poll", {"at": time.time(), "leagues": leagues})
+        # What the exporter trusts: which leagues are current per this poll, and when it ran.
+        await lh._finish_crawl_write(
+            db.kv_set, "seed_poll", {"at": time.time(), "leagues": leagues}
+        )
     return res

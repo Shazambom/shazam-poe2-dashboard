@@ -483,3 +483,46 @@ def test_install_log_preserves_one_complete_record_per_request(monkeypatch, tmp_
         "second report",
     }
     assert all("from 127.0.0.1 =====\n" in record for record in records)
+
+
+def test_cancelled_seed_poll_keeps_the_crawl_lock_until_its_write_finishes(
+    monkeypatch, rollback_write
+):
+    async def leagues():
+        return [{"Value": LEAGUE, "IsCurrent": True}]
+
+    async def one(league):
+        return {"league": league}
+
+    started, release = threading.Event(), threading.Event()
+    lock = asyncio.Lock()
+    commit = db.kv_set
+
+    def blocked_commit(key, value):
+        started.set()
+        assert release.wait(5), "the commit blocked the event loop"
+        commit(key, value)
+
+    monkeypatch.setattr(leaguehistory, "_backfill_lock", lock)
+    monkeypatch.setattr(leaguehistory, "_leagues", leagues)
+    monkeypatch.setattr(seedready, "poll_league", one)
+    monkeypatch.setattr(db, "kv_set", blocked_commit)
+
+    async def stop_poll():
+        task = asyncio.create_task(seedready.poll())
+        try:
+            assert await asyncio.to_thread(started.wait, 2)
+            task.cancel()
+            await asyncio.sleep(0)
+            task.cancel()
+            await asyncio.sleep(0)
+            assert lock.locked()
+            assert not task.done()
+        finally:
+            release.set()
+            with pytest.raises(asyncio.CancelledError):
+                await task
+
+    asyncio.run(stop_poll())
+    assert not lock.locked()
+    assert db.kv_get("seed_poll")["leagues"] == [LEAGUE]
