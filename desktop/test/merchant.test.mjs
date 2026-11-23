@@ -68,6 +68,10 @@ test('projectShopRows keeps only shop fields and strips whisper, tokens, and acc
   assert.deepEqual(M.projectShopRows(null), [])
 })
 
+/**
+ * @param {{ searchIds?: string[], total?: number | null, searchStatus?: number, fetchStatus?: number, refuse?: boolean,
+ *   refuseOnFetchNum?: number | null, now?: () => number }} [o]
+ */
 function harness({ searchIds = [ID(1), ID(2)], total = null, searchStatus = 200, fetchStatus = 200, refuse = false, refuseOnFetchNum = null, now = () => 1700000000000 } = {}) {
   const calls = { acquire: [], observe: [], requests: [] }
   const lines = []
@@ -96,7 +100,7 @@ function harness({ searchIds = [ID(1), ID(2)], total = null, searchStatus = 200,
         calls.acquire.push([policy, opts])
         if (policy === 'trade-fetch') fetchCount++
         if (refuse || (refuseOnFetchNum != null && policy === 'trade-fetch' && fetchCount >= refuseOnFetchNum)) {
-          const e = new Error('rl')
+          const e = /** @type {Error & { retryAfter?: number }} */ (new Error('rl'))
           e.retryAfter = 2
           throw e
         }
@@ -255,6 +259,7 @@ test('auto-resolves logged-in PoE account directly from /my-account without hitt
 
 test('cancel() and resetAccount() during in-flight /my-account resolution never poison subsequent callers or cache stale accounts', async () => {
   // 1) cancel() during /my-account resolves caller 1 as cancelled while caller 2 succeeds cleanly
+  /** @type {(value?: any) => void} */
   let releaseAcct
   const acctGate = new Promise(r => { releaseAcct = r })
   const fetcher1 = M.makeMerchantFetcher({
@@ -279,7 +284,10 @@ test('cancel() and resetAccount() during in-flight /my-account resolution never 
   assert.equal(res2.account, 'Recovered#1234')
 
   // 2) resetAccount() during pre-logout /my-account prevents stale Account A from poisoning Account B
-  let resolveOld, resolveNew
+  /** @type {(value?: any) => void} */
+  let resolveOld
+  /** @type {(value?: any) => void} */
+  let resolveNew
   let acctCall = 0
   const fetcher2 = M.makeMerchantFetcher({
     request: async (req) => {
@@ -314,6 +322,7 @@ test('cancel() and resetAccount() during in-flight /my-account resolution never 
 })
 
 test('deduplicates concurrent in-flight fetches for same league/account/sort without colliding across sorts', async () => {
+  /** @type {(value?: any) => void} */
   let releaseSearch
   const gate = new Promise(r => { releaseSearch = r })
   let searchCalls = 0
@@ -341,6 +350,7 @@ test('deduplicates concurrent in-flight fetches for same league/account/sort wit
 
 test('cancel() aborts an in-flight shop fetch and stops remaining batches', async () => {
   const ids = Array.from({ length: 25 }, (_, i) => ID(i + 1))
+  /** @type {(value?: any) => void} */
   let releaseFirstBatch
   const batchGate = new Promise(r => { releaseFirstBatch = r })
   let fetchCalls = 0
@@ -368,6 +378,7 @@ test('cancel() aborts an in-flight shop fetch and stops remaining batches', asyn
 test('makeMerchantPricer checks Instant Buyout floor with spare: 0.5 headroom, deduplicates in-flight, and cancels cleanly', async () => {
   const acquired = []
   const requests = []
+  /** @type {(value?: any) => void} */
   let release
   const gate = new Promise(r => { release = r })
   const priceCheck = M.makeMerchantPricer({
@@ -431,7 +442,7 @@ test('makeMerchantPricer keeps search ids on fetch rate-limit so retry skips tra
     budget: {
       acquire: async (policy) => {
         if (policy === 'trade-fetch' && failFetch) {
-          const e = new Error('rl')
+          const e = /** @type {Error & { retryAfter?: number }} */ (new Error('rl'))
           e.retryAfter = 1
           throw e
         }

@@ -59,7 +59,7 @@ test('budgeted: reserves, requests, observes and parses; a refusal is classified
   const calls = []
   const deps = (status, body = '{"result":[1]}', refuse = false) => ({
     request: async (r) => { calls.push(['req', r.path]); return { status, headers: { 'retry-after': '20' }, body } },
-    budget: { acquire: async (p) => { calls.push(['acq', p]); if (refuse) { const e = new Error('rl'); e.retryAfter = 9; throw e } }, observe: (p, s) => calls.push(['obs', p, s]) },
+    budget: { acquire: async (p) => { calls.push(['acq', p]); if (refuse) { const e = /** @type {Error & { retryAfter?: number }} */ (new Error('rl')); e.retryAfter = 9; throw e } }, observe: (p, s) => calls.push(['obs', p, s]) },
   })
   assert.deepEqual(await budgeted(deps(200), 'trade-search', { path: '/x' }), { ok: true, status: 200, data: { result: [1] } })
   assert.deepEqual(calls, [['acq', 'trade-search'], ['req', '/x'], ['obs', 'trade-search', 200]])

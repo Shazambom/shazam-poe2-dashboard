@@ -92,6 +92,11 @@ export function problems(tag, assets, manifests) {
 // Pure: has the upload's speed collapsed? `samples` = [{t, bytes}] (ms, cumulative bytes sent),
 // oldest first. True once a full window of history exists and the average over the last window
 // is under the floor. Never true once every byte is out (then only the response is pending).
+/**
+ * @param {Array<{ t: number, bytes: number }>} samples
+ * @param {number} total
+ * @param {{ minBps: number, windowMs: number }} [rule]
+ */
 export function stalled(samples, total, { minBps, windowMs } = STALL) {
   if (samples.length < 2) return false
   const last = samples[samples.length - 1]
@@ -305,6 +310,7 @@ async function publish(tag) {
   throw new Error(`rolled back: ${tag} is a draft again; clients stay on the previous version.`)
 }
 
+/** @param {string[]} argv */
 async function main([cmd, tag, ...rest]) {
   if (!cmd || !tag) { console.error('usage: release-assets.mjs ensure-draft <tag> <sha> | has <tag> <asset> | upload <tag> <files...> | verify <tag> [--live] | publish <tag>'); process.exit(2) }
   if (cmd === 'ensure-draft') await ensureDraft(tag, rest[0])

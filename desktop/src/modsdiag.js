@@ -27,6 +27,6 @@ function install({ win, backendUrl, log }) {
     const digest = st.err ? `err=${st.err}` : `behind_h=${st.digest?.behind_h} state=${st.digest?.state} backfilling=${st.digest?.backfilling}`
     log(`${tag} mods{${mods}} crawl{${crawl}} digest{${digest}} ui=${await dom()}`)
   }
-  for (const [ms, tag] of [[20000, '@20s'], [120000, '@120s'], [600000, '@10m']]) setTimeout(() => report(tag).catch(() => {}), ms)
+  for (const [ms, tag] of /** @type {Array<[number, string]>} */ ([[20000, '@20s'], [120000, '@120s'], [600000, '@10m']])) setTimeout(() => report(tag).catch(() => {}), ms)
 }
 module.exports = { install }

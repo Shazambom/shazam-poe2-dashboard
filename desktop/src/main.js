@@ -54,6 +54,7 @@ const windowBackdrop = (s) => (s.theme === 'custom' && BACKDROP_HEX.test(s.custo
 const BACKDROP = { get window() { return windowBackdrop(settings) }, trade: '#0c0d10' }
 
 const settingsPath = () => path.join(app.getPath('userData'), 'desktop-settings.json')
+/** @type {{ betaChannel: boolean, theme: string, customBackdrop?: string, focusHotkey?: string }} */
 let settings = { ...DEFAULTS }
 try { settings = { ...DEFAULTS, ...JSON.parse(fs.readFileSync(settingsPath(), 'utf8')) } } catch {}
 const saveSettings = () => { try { fs.writeFileSync(settingsPath(), JSON.stringify(settings, null, 2)) } catch {} }
@@ -264,7 +265,7 @@ function startUiServer() {
   })
   return new Promise(resolve => {
     server.listen(0, '127.0.0.1', () => {
-      uiUrl = `http://127.0.0.1:${server.address().port}`
+      uiUrl = `http://127.0.0.1:${/** @type {import('node:net').AddressInfo} */ (server.address()).port}`
       console.log(`[ui] serving ${dist} at ${uiUrl} -> backend ${backendUrl} (${backendKind})`)
       resolve()
     })
@@ -554,6 +555,7 @@ function resetTradeZoom() {
 }
 
 function buildMenu() {
+  /** @type {Electron.MenuItemConstructorOptions[]} */
   const arbiter = [
     { label: 'Connect PoE trade session…', click: connectPoeSession },
     { label: 'Log out of pathofexile.com', click: async () => {

@@ -7,6 +7,7 @@
 'use strict'
 
 // Waystone property line → the trade API's map filter (GGG /api/trade2/data/filters, map_filters).
+/** @type {Array<[RegExp, string]>} */
 const PROPS = [
   [/^Pack Size: \+?(\d+)%/m, 'map_packsize'],
   [/^Item Rarity: \+?(\d+)%/m, 'map_iir'],

@@ -7,8 +7,13 @@ const { budgeted } = require('./budget.js')
 
 const POLICY = 'trade-history'
 
+/** @param {import('./listings.js').TradeDeps & { backendUrl: () => string }} deps */
 function makeSalesFetcher({ request, budget, backendUrl, log = () => {} }) {
   // request({ path, referer }) → { status, headers, body }   budget: { acquire, observe }   backendUrl(): string
+  /**
+   * @param {string} league
+   * @returns {Promise<import('./budget.js').Budgeted & Record<string, any>>}
+   */
   return async function fetchSales(league) {
     const lg = String(league || '').trim()
     if (!lg) return { ok: false, error: 'no league' }
@@ -24,7 +29,7 @@ function makeSalesFetcher({ request, budget, backendUrl, log = () => {} }) {
     const result = rows.filter(r => r && r.item_id && r.time).map(r => ({ item_id: String(r.item_id), time: String(r.time), item: r.item || {}, price: r.price ? { amount: r.price.amount, currency: r.price.currency } : null }))
     // The site's clock (its Date header) lets the backend compare sale times with the user's last count.
     const siteTime = res.date ? new Date(res.date) : null
-    const body = { league: lg, result, ...(siteTime && !isNaN(siteTime) ? { server_time: siteTime.toISOString() } : {}) }
+    const body = { league: lg, result, ...(siteTime && !isNaN(/** @type {any} isNaN coerces the Date to its time value */ (siteTime)) ? { server_time: siteTime.toISOString() } : {}) }
     let ingest
     try {
       const r = await fetch(`${backendUrl()}/api/sales/ingest`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(5000) })

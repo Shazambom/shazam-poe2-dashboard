@@ -53,6 +53,12 @@ function project(k, req, res, wcId) {
 
 // contents: a webview's webContents. send(channel, payload) reaches the window; log(line) is beta telemetry.
 // observe(policy, status, headers): the page's own search/fetch rate-limit headers, into the shared budget.
+/**
+ * @param {{ id: number, debugger: Electron.Debugger, once?: Electron.WebContents['once'] }} contents
+ * @param {(channel: string, payload: any) => void} send
+ * @param {(line: string) => void} [log]
+ * @param {(policy: string, status: number, headers: Record<string, any>) => void} [observe]
+ */
 function attachTap(contents, send, log = () => {}, observe = () => {}) {
   const dbg = contents.debugger
   const wcId = contents.id

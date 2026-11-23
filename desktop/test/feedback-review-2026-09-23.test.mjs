@@ -9,12 +9,13 @@ import { fileURLToPath } from 'node:url'
 const { registerFeedback } = await import('../src/feedback/index.js')
 
 // The same harness feedback-package.test.mjs uses, with a sweep the test releases by hand.
+/** @param {Record<string, any>} [over] */
 function harness(over = {}) {
   const handlers = {}, calls = []
   const win = { webContents: { id: 1, startDrag: () => {}, capturePage: async () => ({}) }, getBounds: () => ({ width: 1440, height: 847 }) }
   const userData = mkdtempSync(join(tmpdir(), 'arb-fb-'))
   const t = 1_000_000
-  registerFeedback({
+  registerFeedback(/** @type {any} a partial double: tests that package a report pass their own sweep */ ({
     ipcMain: { handle: (ch, fn) => { handlers[ch] = fn } },
     BrowserWindow: class {}, session: {}, win, uiUrl: 'http://127.0.0.1:1', backendUrl: 'http://127.0.0.1:2', userData,
     version: '0.3.3', channel: 'beta', theme: () => 'vault',
@@ -26,7 +27,7 @@ function harness(over = {}) {
     get: async () => ({}),
     now: () => t,
     ...over,
-  })
+  }))
   return { handlers, calls, userData, from: () => ({ sender: { id: 1 } }) }
 }
 
@@ -34,6 +35,7 @@ test('closing and reopening the dialog while a report is packaging does not star
   // The sweep's snap window shares ONE session.webRequest listener; a second concurrent sweep
   // replaces the first's write filter and whichever finishes first removes the other's. So while
   // one package is in flight, another request must join it, not start another.
+  /** @type {(value?: any) => void} */
   let release
   let sweeps = 0
   const gate = new Promise(r => { release = r })

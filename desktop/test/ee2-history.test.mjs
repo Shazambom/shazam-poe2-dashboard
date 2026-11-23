@@ -9,6 +9,7 @@ const require = createRequire(import.meta.url)
 const { createHistoryConsumer, NO_WINDOW_BUFFER, RESTART_MIN_MS } = require('../src/ee2-history/index.js')
 
 const RAW = 'Item Class: Belts\nRarity: Unique\nHeadhunter\nHeavy Belt\n--------\n+41 to maximum Life\n'
+/** @param {{ build?: (raw: string, prefs: any) => Promise<any>, enabled?: boolean, hasWindow?: boolean, now?: () => number }} [o] */
 function harness({ build, enabled = true, hasWindow = true, now } = {}) {
   const pkg = new EventEmitter()
   const sent = [], lines = [], spawns = []

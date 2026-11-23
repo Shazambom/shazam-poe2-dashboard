@@ -20,6 +20,10 @@ const withTimeout = (p, ms) => Promise.race([p, new Promise((_, rej) => setTimeo
 const jpeg = (img) => img.resize({ width: WIDTH }).toJPEG(QUALITY)
 const whyNot = (e) => (e && e.message === 'timeout' ? 'timeout' : `error: ${String(e && e.message || e).slice(0, 80)}`)
 
+/**
+ * @param {{ uiUrl: string, bounds: { width: number, height: number }, dests: any[], BrowserWindow: any, session: any,
+ *   visibleWin: any, backgroundColor?: string, perScreenMs?: number, totalMs?: number }} opts
+ */
 async function sweepScreens({ uiUrl, bounds, dests, BrowserWindow, session, visibleWin, backgroundColor,
                               perScreenMs = 2500, totalMs = 20000 }) {
   const screens = {}

@@ -39,6 +39,7 @@ function install({ win, session, backendUrl, log }) {
   } catch (e) { log(`hook-failed ${String(e)}`) }
 
   const report = async (when) => {
+    /** @type {string | { loaded_at: number | null, n: number, withIcon: number }} */
     let data = 'unreachable'
     try {
       const d = await (await fetch(`${backendUrl()}/api/currencies`, { signal: AbortSignal.timeout(8000) })).json()
@@ -49,7 +50,7 @@ function install({ win, session, backendUrl, log }) {
     try { if (win() && !win().isDestroyed()) dom = await win().webContents.executeJavaScript(PROBE, true) } catch (e) { dom = `error ${String(e.message || e)}` }
     log(`${when} data=${JSON.stringify(data)} dom=${JSON.stringify(dom)} cdn=${JSON.stringify(cdn)}`)
   }
-  for (const [ms, tag] of [[20000, '@20s'], [120000, '@120s'], [600000, '@10m']]) setTimeout(() => report(tag), ms)
+  for (const [ms, tag] of /** @type {Array<[number, string]>} */ ([[20000, '@20s'], [120000, '@120s'], [600000, '@10m']])) setTimeout(() => report(tag), ms)
 }
 
 module.exports = { install }

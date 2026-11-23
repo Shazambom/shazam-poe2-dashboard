@@ -20,12 +20,27 @@ function projectRows(json) {
 const WAIT_CAP_MS = 10_000
 const defaultWait = (ms, signal) => new Promise(r => { const t = setTimeout(r, ms); signal?.addEventListener('abort', () => { clearTimeout(t); r() }, { once: true }) })
 const SPARE = 0.5   // reprice is a nice-to-have: only with half of every rate window free (owner: "be aware of our headroom")
+/** @typedef {import('./budget.js').Budgeted} Budgeted */
+/** @typedef {(ms: number, signal?: AbortSignal) => Promise<unknown>} Wait */
+/** @typedef {{ id: string, amount: number, currency: string }} Row */
+/** @typedef {(line: string) => void} Log */
+/** @typedef {{ request: import('./budget.js').BudgetDeps['request'], budget: import('./budget.js').Budget, log?: Log, wait?: Wait, now?: () => number }} TradeDeps */
+/** @type {Readonly<Budgeted>} */
 const CANCELLED = Object.freeze({ ok: false, error: 'cancelled' })
 
 const canon = (v) => (Array.isArray(v) ? `[${v.map(canon).join(',')}]` : v && typeof v === 'object' ? `{${Object.keys(v).sort().map(k => `${JSON.stringify(k)}:${canon(v[k])}`).join(',')}}` : JSON.stringify(v))
 
 // One budgeted request, a budget "not yet" waited out once (capped, abortable), never sent once cancelled.
 // Shared across listings, recheck, merchant, and relax.
+/**
+ * @param {import('./budget.js').BudgetDeps} deps
+ * @param {string} policy
+ * @param {any} req
+ * @param {AbortSignal} signal
+ * @param {Wait} wait
+ * @param {{ spare?: number }} [opts]
+ * @returns {Promise<Budgeted>}
+ */
 async function waitedBudgeted(deps, policy, req, signal, wait, opts) {
   if (signal.aborted) return CANCELLED
   let r = await budgeted(deps, policy, req, opts)
@@ -41,9 +56,14 @@ async function waitedBudgeted(deps, policy, req, signal, wait, opts) {
 // polls. cancel() drops every fetch still waiting (the user switched rows, reloaded or left the tab): it resolves
 // { ok:false, error:'cancelled' } and nothing is sent (owner: "aggressively drop searches that were triggered
 // previously to make space for the new queries").
+/** @param {TradeDeps} deps */
 function makeListingFetcher({ request, budget, log = () => {}, wait = defaultWait }) {
   const deps = { request, budget }
   let drop = new AbortController()
+  /**
+   * @param {{ league?: string, searchId?: string, ids?: string[] }} [q]
+   * @returns {Promise<Budgeted & { rows?: Row[] }>}
+   */
   async function fetchListings({ league, searchId, ids } = {}) {
     const lg = String(league ?? '').trim()
     if (!lg || !SEARCH_ID.test(String(searchId)) || !Array.isArray(ids) || !ids.length || ids.length > FETCH_MAX || !ids.every(i => LISTING_ID.test(String(i)))) {
@@ -71,6 +91,7 @@ const MAX_KEPT = 64
 // checks (with spare: 0.5 headroom and keepOnRate: true). Runs one budgeted search (Instant Buyout, cheapest
 // first), then fetches the first ten listings and a sample across the rest (up to 100 ids) so GGG's broken
 // Exalted-Equivalent sort cannot hide cheaper currencies deeper in the result. Only ids and prices come back.
+/** @param {TradeDeps & { spare?: number, keepOnRate?: boolean, sample?: boolean, tag?: string }} deps */
 function makeRechecker({ request, budget, log = () => {}, wait = defaultWait, spare = 0, keepOnRate = false, sample = true, tag = 'recheck', now = Date.now }) {
   const deps = { request, budget }
   let drop = new AbortController()
@@ -87,6 +108,10 @@ function makeRechecker({ request, budget, log = () => {}, wait = defaultWait, sp
     while (kept.size > MAX_KEPT) kept.delete(kept.keys().next().value)
   }
 
+  /**
+   * @param {{ league?: string, query?: object }} [q]
+   * @returns {Promise<Budgeted & { searchId?: string, ids?: string[], total?: number, rows?: Row[] }>}
+   */
   async function recheck({ league, query } = {}) {
     const lg = String(league ?? '').trim()
     if (!lg || !query || typeof query !== 'object' || Array.isArray(query)) return { ok: false, error: 'bad request' }

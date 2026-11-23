@@ -13,6 +13,7 @@ const BUILD_TIMEOUT_MS = 3500
 // disk. Inside a packaged app __dirname still says app.asar — point at the unpacked twin.
 const unpacked = (p) => p.replace(/app\.asar(?=[\\/])/, 'app.asar.unpacked')
 
+/** @param {{ onExit?: (info?: { idle?: boolean }) => void }} [opts] */
 function spawnWorker({ onExit } = {}) {
   const { utilityProcess } = require('electron')
   const child = utilityProcess.fork(unpacked(path.join(__dirname, 'worker.js')), [], { serviceName: 'arbiter-ee2-query', stdio: 'ignore' })

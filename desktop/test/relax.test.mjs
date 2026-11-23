@@ -51,7 +51,7 @@ function harness({ searchRes = { id: 'RX1', result: Array.from({ length: 50 }, (
     budget: {
       acquire: async (p, o) => {
         calls.acquire.push([p, o])
-        if (refuse-- > 0) { const e = new Error('rl'); e.retryAfter = 3; throw e }
+        if (refuse-- > 0) { const e = /** @type {Error & { retryAfter?: number }} */ (new Error('rl')); e.retryAfter = 3; throw e }
       },
       observe: (p, s) => calls.observe.push([p, s]),
     },
@@ -133,7 +133,7 @@ test('budget wait-once retries once; cancel aborts waiting or in-flight search w
     request: async (req) => req.method === 'POST'
       ? { status: 200, headers: {}, body: JSON.stringify({ id: 'W1', result: [ID(1)], total: 1 }) }
       : { status: 200, headers: {}, body: JSON.stringify({ result: [fullListing(ID(1), 5, 'chaos')] }) },
-    budget: { acquire: async () => { if (refusals-- > 0) { const e = new Error('rl'); e.retryAfter = 3; throw e } }, observe: () => {} },
+    budget: { acquire: async () => { if (refusals-- > 0) { const e = /** @type {Error & { retryAfter?: number }} */ (new Error('rl')); e.retryAfter = 3; throw e } }, observe: () => {} },
     wait: async (ms) => { waits.push(ms) },
   })
   assert.equal((await waitOnce({ league: 'L', query: RELAXED_Q })).ok, true)

@@ -2,6 +2,11 @@
 // on globalThis by index.js for the lifetime of the worker/CLI process (never inside main).
 'use strict'
 const fs = require('node:fs'), path = require('node:path')
+/**
+ * A fetch for EE2's data loader: serves ee2data:// from dataDir with the few Response members it reads.
+ * @param {string} dataDir
+ * @returns {(url: string | URL | Request) => Promise<any>}
+ */
 function makeFetch(dataDir) {
   return async function ee2Fetch(url) {
     const u = String(url)

@@ -27,6 +27,7 @@ function parseLine(line) {
   const ch = body.charCodeAt(0)
   // Fast reject: only ':', '@', or 'G' (Generating level ...) can ever match an event.
   if (ch !== 58 && ch !== 64 && ch !== 71) return null
+  /** @type {null | { type: string, ts?: number, [field: string]: any }} */
   let ev = null
   let w
   if (ch === 58) {

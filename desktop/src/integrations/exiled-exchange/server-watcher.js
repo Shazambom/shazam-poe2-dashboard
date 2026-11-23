@@ -117,6 +117,7 @@ async function discover(knownPort) {
 // Polls for the EE2 server and calls onUp({port,version,url}) / onDown() on
 // transitions. Never throws; if discovery tooling is missing it just stays quiet.
 class ServerWatcher {
+  /** @param {{ intervalMs?: number, onUp?: (...a: any[]) => void, onDown?: (...a: any[]) => void }} [opts] */
   constructor({ intervalMs = 15000, onUp, onDown } = {}) {
     this._intervalMs = Math.max(intervalMs, 3000)
     this._onUp = typeof onUp === 'function' ? onUp : () => {}

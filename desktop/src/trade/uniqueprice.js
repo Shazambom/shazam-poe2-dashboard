@@ -39,10 +39,15 @@ const clean = (s) => String(s ?? '').trim()
 // Any search (a unique's floor, a linked tablet or waystone search): one search under the shared
 // budget, then one fetch of its cheapest listings. Only the prices go back. This is where a priced
 // query leaves the app, so it goes out Instant Buyout, cheapest first, whatever it asked for.
+/** @param {import('./listings.js').TradeDeps & { tag?: string }} deps */
 function makeQueryPricer({ request, budget, log = () => {}, tag = 'query-price' }) {
   // request({ method, path, body, referer }) → { status, headers, body }   budget: { acquire, observe }
   const deps = { request, budget }
   const kept = new Map()   // league + query → { id, ids, total, at }: searched, not yet fetched
+  /**
+   * @param {{ query?: Record<string, any>, league?: string }} [q]
+   * @returns {Promise<import('./budget.js').Budgeted & { total?: number, listings?: Array<{ amount: number, currency: string }> }>}
+   */
   return async function priceQuery({ query, league } = {}) {
     const lg = clean(league)
     if (!query?.query || typeof query.query !== 'object' || !lg) return { ok: false, error: 'a search needs its query and the league' }

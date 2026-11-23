@@ -121,6 +121,8 @@ function pageResponse({ account, total, idsLen, offset, sortKey, res, fetchedAt,
   }
 }
 
+/** @typedef {import('./budget.js').Budgeted} Budgeted */
+/** @param {import('./listings.js').TradeDeps} deps */
 function makeMerchantFetcher({ request, budget, log = () => {}, wait = defaultWait, now = Date.now }) {
   const deps = { request, budget }
   let drop = new AbortController()
@@ -194,6 +196,10 @@ function makeMerchantFetcher({ request, budget, log = () => {}, wait = defaultWa
     return { ok: true, rows, consumed }
   }
 
+  /**
+   * @param {{ league?: string, account?: string, sort?: string, more?: boolean }} [q]
+   * @returns {Promise<Budgeted & Record<string, any>>}
+   */
   async function fetchShop({ league, account, sort = 'price_desc', more = false } = {}) {
     const lg = String(league ?? '').trim()
     const rawAcct = account == null ? '' : String(account).trim()
@@ -340,8 +346,13 @@ function makeMerchantFetcher({ request, budget, log = () => {}, wait = defaultWa
 // Merchant-scoped inline floor pricer: thin adapter over makeRechecker (desktop/src/trade/listings.js)
 // with spare: 0.5 headroom and keepOnRate: true, so Merchant gets the exact same deeper-rank sampling
 // (beating GGG's broken Exalted-Equivalent sort), in-flight dedup, and 5-min kept-search retry as Workspace.
+/** @param {import('./listings.js').TradeDeps} deps */
 function makeMerchantPricer({ request, budget, log = () => {}, wait = defaultWait, now = Date.now }) {
   const recheck = makeRechecker({ request, budget, log, wait, spare: SPARE, keepOnRate: true, tag: 'merchant-price', now })
+  /**
+   * @param {{ league?: string, query?: { query?: object } }} [q]
+   * @returns {Promise<Budgeted & { searchId?: string, total?: number, listings?: Array<{ amount: number, currency: string }>, rows?: import('./listings.js').Row[] }>}
+   */
   async function priceCheck({ league, query } = {}) {
     const lg = String(league ?? '').trim()
     if (!lg || !query?.query || typeof query.query !== 'object' || Array.isArray(query.query)) {

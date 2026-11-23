@@ -56,6 +56,7 @@ async function findLog() {
 // file size asynchronously against our tracked byte offset and buffers incomplete trailing
 // lines until a newline arrives so split writes are never dropped or truncated.
 class LogWatcher {
+  /** @param {{ intervalMs?: number, onLine?: (line: string) => void, filePath?: string | null }} [opts] */
   constructor({ intervalMs = 1000, onLine, filePath = null } = {}) {
     this._intervalMs = Math.max(intervalMs, 50)
     this._onLine = typeof onLine === 'function' ? onLine : () => {}

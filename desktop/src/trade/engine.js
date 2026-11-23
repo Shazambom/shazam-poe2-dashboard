@@ -12,6 +12,7 @@ const BACKOFF_BASE = 2000
 const BACKOFF_MAX = 60000
 
 const sockets = new Map()       // itemId -> { ws, slug, league, searchId, attempts, stopped }
+/** @type {(channel: string, payload: any) => void} */
 let _sink = () => {}            // set by index.js: (channel, payload) => webContents.send
 
 // Verbose per-event trace (startSearch / WS open / ping / stop / teleport). Off by default

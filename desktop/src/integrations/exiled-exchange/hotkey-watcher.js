@@ -61,6 +61,7 @@ class HotkeyWatcher {
   // onHotkey({action, target, shortcut, ts}) fires on a configured match.
   // onFirstKey() fires once when the FIRST key event of any kind arrives — used
   // to confirm uiohook is actually delivering events (macOS permission check).
+  /** @param {{ onHotkey?: (...a: any[]) => void, onFirstKey?: () => void, cooldownMs?: number }} [opts] */
   constructor({ onHotkey, onFirstKey, cooldownMs = 250 } = {}) {
     this._onHotkey = typeof onHotkey === 'function' ? onHotkey : () => {}
     this._onFirstKey = typeof onFirstKey === 'function' ? onFirstKey : () => {}

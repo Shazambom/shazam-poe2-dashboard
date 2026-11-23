@@ -23,6 +23,11 @@ const CROCKFORD = '0123456789ABCDEFGHJKMNPQRSTVWXYZ'   // no I, L, O, U: reads a
 const shortId = () => Array.from(randomBytes(6), b => CROCKFORD[b % 32]).join('')
 const ID_RE = /^[0-9A-HJ-NP-Z]{6}$/
 
+/**
+ * @param {{ ipcMain: any, BrowserWindow: any, session: any, win: any, uiUrl: string, backendUrl: string, userData: string,
+ *   version: string, channel: string, theme: () => string, sources: any, shell: any, icon: any, sweep: (o: any) => Promise<any>,
+ *   bundle: (o: any) => Promise<any>, sealFn: (plain: any, ...rest: any[]) => Buffer, get?: (p: string) => Promise<any>, now?: () => number }} deps
+ */
 function registerFeedback({ ipcMain, BrowserWindow, session, win, uiUrl, backendUrl, userData, version, channel, theme, sources,
                             shell, icon, sweep, bundle, sealFn, get, now = Date.now }) {
   const dir = path.join(userData, 'reports')

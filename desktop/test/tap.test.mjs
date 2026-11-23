@@ -23,6 +23,7 @@ const FILTERS_RES = { result: [
 
 // A fake webContents + debugger: records every command, serves bodies by requestId.
 function fakeContents({ id = 7, bodies = {}, attachThrows = false, bodyFails = new Set() } = {}) {
+  /** @type {any} a fake Electron.Debugger */
   const dbg = new EventEmitter()
   const commands = []
   dbg.attach = () => { if (attachThrows) throw new Error('already attached') ; dbg.attached = true }
@@ -36,6 +37,7 @@ function fakeContents({ id = 7, bodies = {}, attachThrows = false, bodyFails = n
     }
     return {}
   }
+  /** @type {any} a fake Electron.WebContents */
   const contents = new EventEmitter()
   Object.assign(contents, { id, debugger: dbg, isDevToolsOpened: () => false })
   return { contents, dbg, commands }

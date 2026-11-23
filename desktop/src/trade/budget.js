@@ -58,6 +58,19 @@ function hint(policy) {
 // the site's clock, its Date header — Sales compares sale times with it) or
 // { ok: false, error: 'rate' | 'auth' | 'HTTP n' | message, status?, retryAfter? }.
 // deps: { request(req) → { status, headers, body }, budget: { acquire, observe } } (injectable for tests).
+/**
+ * @typedef {{ status: number, headers?: Record<string, any>, body?: string }} TradeResponse
+ * @typedef {{ acquire: (policy: string, opts?: { spare?: number }) => Promise<unknown>, observe: (policy: string, status: number, headers?: Record<string, any>) => void }} Budget
+ * @typedef {{ request: (req: any) => Promise<TradeResponse>, budget: Budget }} BudgetDeps
+ * @typedef {{ ok: boolean, error?: string, status?: number, retryAfter?: number, data?: any, date?: string }} Budgeted
+ */
+/**
+ * @param {BudgetDeps} deps
+ * @param {string} policy
+ * @param {any} req
+ * @param {{ spare?: number }} [opts]
+ * @returns {Promise<Budgeted>}
+ */
 async function budgeted({ request, budget }, policy, req, opts) {
   try { await (opts ? budget.acquire(policy, opts) : budget.acquire(policy)) } catch (e) { return { ok: false, error: 'rate', retryAfter: e.retryAfter } }
   let resp

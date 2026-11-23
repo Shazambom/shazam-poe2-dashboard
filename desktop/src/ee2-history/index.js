@@ -23,6 +23,11 @@ function ticks(q) {
   } catch { return 'on=? off=?' }
 }
 
+/**
+ * @param {{ manager: import('node:events').EventEmitter, worker: { spawn: (opts?: { onExit?: (info?: { idle?: boolean }) => void }) => any },
+ *   prefs: () => any, send?: ((channel: string, payload: any) => void) | null, log?: (line: string) => void,
+ *   now?: () => number, hint?: ((policy: string) => void) | null, onBuilt?: ((intent: any) => void) | null }} deps
+ */
 function createHistoryConsumer({ manager, worker, prefs, send = null, log = () => {}, now = Date.now, hint = null, onBuilt = null }) {
   let enabled = true            // main assumes on until the renderer says otherwise (fail toward "it works")
   let sender = send

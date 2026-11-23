@@ -10,6 +10,7 @@ const {
   FETCH_POLICY,
 } = require('./listings.js')
 
+/** @param {import('./listings.js').TradeDeps} deps */
 function makeRelaxChecker({ request, budget, log = () => {}, wait = defaultWait }) {
   const recheck = makeRechecker({ request, budget, log, wait, sample: false, tag: 'relax' })
   async function check(req) {

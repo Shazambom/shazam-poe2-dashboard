@@ -4,6 +4,7 @@
 'use strict'
 const { DEFAULT_PREFS } = require('../vendor/ee2-query/shims/config.js')
 
+/** @param {{ language?: string, realm?: string, preferredTradeSite?: string }} prefs */
 function hostFor({ language, realm, preferredTradeSite }) {
   if (preferredTradeSite === 'www') return 'www.pathofexile.com'
   switch (language) {

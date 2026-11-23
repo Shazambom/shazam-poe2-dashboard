@@ -9,7 +9,7 @@ const { configure, installLog, SHAZAM } = await import('../src/telemetry.js')
 
 function capture() {
   const calls = []
-  globalThis.fetch = (url, opts) => { calls.push({ url, opts }); return Promise.resolve({ ok: true }) }
+  globalThis.fetch = /** @type {any} a fetch double */ ((url, opts) => { calls.push({ url, opts }); return Promise.resolve({ ok: true }) })
   return calls
 }
 

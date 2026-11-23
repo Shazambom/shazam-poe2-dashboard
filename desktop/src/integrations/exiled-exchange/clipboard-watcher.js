@@ -128,6 +128,7 @@ function parseItem(raw) {
 // distinct item. Dedupes consecutive identical clipboard contents. The interval
 // is adaptive: setIntervalMs() lets the manager speed us up when EE2 is active.
 class ClipboardWatcher {
+  /** @param {{ intervalMs?: number, onItem?: (item: any) => void }} [opts] */
   constructor({ intervalMs = 600, onItem } = {}) {
     this._intervalMs = this._clamp(intervalMs)
     this._onItem = typeof onItem === 'function' ? onItem : () => {}
@@ -199,6 +200,7 @@ class ClipboardWatcher {
 //
 // baseline = the clipboard hash at kickoff; we ignore it so a previously-copied
 // item doesn't get re-emitted when the current hover yields nothing.
+/** @param {{ intervalMs?: number, durationMs?: number, onItem?: (item: any) => void }} [opts] */
 function captureItemBurst({ intervalMs = 15, durationMs = 250, onItem } = {}) {
   const cb = typeof onItem === 'function' ? onItem : () => {}
   const hash = (t) => `${t.length}:${t.slice(0, 64)}`

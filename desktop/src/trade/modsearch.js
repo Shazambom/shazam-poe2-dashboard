@@ -77,6 +77,7 @@ function lookup({ text, affix, bases }) {
   return { stats: stats.every(ids => ids.length) ? stats : null, category }
 }
 
+/** @type {Array<[string, string[]]>} */
 const ITEM_MOD_GROUPS = [
   ['fracturedMods', ['fractured', 'explicit']],
   ['explicitMods', ['explicit', 'desecrated']],

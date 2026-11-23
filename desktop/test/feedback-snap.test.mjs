@@ -53,6 +53,7 @@ test('walks the full dest list: visible window first, then one hidden capture pe
 
 test('the snap window is hidden, sandboxed, isolated, without webviewTag, and its /api filter cancels only its own non-GETs', async () => {
   const h = harness()
+  /** @type {any} */
   let opts
   const BW = class { constructor(o) { opts = o; throw new Error('stop here') } }
   await h.run({ BrowserWindow: BW })

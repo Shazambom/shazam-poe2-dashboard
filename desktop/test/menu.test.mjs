@@ -12,6 +12,7 @@ test('no zoom roles anywhere; View has reload/devtools/fullscreen and the reset-
   const all = flat(t)
   for (const i of all) assert.ok(!/zoom/i.test(i.role || ''), `zoom role present: ${i.role}`)
   assert.ok(!all.some(i => i.role === 'viewMenu'), 'the viewMenu role bundles ⌘+/⌘−/⌘0')
+  /** @type {any} */
   const view = t.find(i => i.label === 'View')
   const roles = view.submenu.map(i => i.role).filter(Boolean)
   for (const r of ['reload', 'forceReload', 'toggleDevTools', 'togglefullscreen']) assert.ok(roles.includes(r), r)
