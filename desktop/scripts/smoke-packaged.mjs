@@ -17,6 +17,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { WebSocket } from 'ws'
+import { ignored } from '../src/ignored.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const DESKTOP_DIR = path.resolve(__dirname, '..')
@@ -114,7 +115,7 @@ class CdpClient {
     return res.result?.value
   }
   close() {
-    try { this.ws.close() } catch {}
+    try { this.ws.close() } catch (e) { ignored('smoke:cdp-close', e) }
   }
 }
 
@@ -128,7 +129,7 @@ async function waitForPageTarget(cdpPort, timeoutMs = 25000) {
         const page = list.find((t) => t.type === 'page' && t.webSocketDebuggerUrl && !String(t.url).startsWith('devtools://'))
         if (page) return page
       }
-    } catch {}
+    } catch (e) { ignored('smoke:cdp-targets', e) }
     await sleep(250)
   }
   throw new Error(`No Electron renderer page target found on CDP port ${cdpPort}`)
@@ -313,14 +314,14 @@ async function main() {
   } finally {
     if (cdp) cdp.close()
     if (proc.exitCode === null) {
-      try { proc.kill('SIGKILL') } catch {}
+      try { proc.kill('SIGKILL') } catch (e) { ignored('smoke:kill', e) }
       await new Promise((r) => {
         const t = setTimeout(r, 2000)
         proc.once('exit', () => { clearTimeout(t); r() })
       })
     }
     await sleep(300)
-    try { fs.rmSync(tmpUserData, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }) } catch {}
+    try { fs.rmSync(tmpUserData, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }) } catch (e) { ignored('smoke:rm-profile', e) }
   }
 }
 

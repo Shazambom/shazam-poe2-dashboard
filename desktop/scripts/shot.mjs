@@ -3,6 +3,7 @@
 //   node scripts/shot.mjs ".pulse-strip" out.png     (selector defaults to body, out to shot.png)
 import WebSocket from 'ws'
 import fs from 'node:fs'
+import { ignored } from '../src/ignored.js'
 
 const sel = process.argv[2] || 'body'
 const out = process.argv[3] || 'shot.png'
@@ -19,7 +20,7 @@ const send = (method, params) => new Promise((resolve) => {
   ws.on('message', onMsg); ws.send(JSON.stringify({ id: mid, method, params }))
 })
 // No `scale` on the clip: a scaled capture flashes device emulation on the visible window.
-process.on('SIGINT', () => { try { ws.close() } catch {}; process.exit(130) })
+process.on('SIGINT', () => { try { ws.close() } catch (e) { ignored('shot:close', e) }; process.exit(130) })
 ws.on('open', async () => {
   try {
     await send('Page.enable', {}); await send('Runtime.enable', {})
