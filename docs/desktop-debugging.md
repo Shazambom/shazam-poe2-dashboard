@@ -30,6 +30,7 @@ server that proxies `/api` to the backend. Two consequences:
 ## Steps
 
 1. **Build the UI into `app-dist`:**
+
    ```bash
    cd desktop && npm run build:frontend
    ```
@@ -37,11 +38,13 @@ server that proxies `/api` to the backend. Two consequences:
 2. **Launch with a remote-debugging port** (kill any running instance first — a
    normal launch has no debug port, and its orphaned backend keeps `:8210`; kill
    both the electron parent and the `poe2arb-backend` holding `:8210`):
+
    ```bash
    npx electron . --remote-debugging-port=9222 > /tmp/electron.log 2>&1 &
    ```
 
 3. **Wait until CDP + backend are up:**
+
    ```bash
    curl -s http://127.0.0.1:9222/json/version >/dev/null && \
    curl -s http://127.0.0.1:8210/api/status   >/dev/null && echo ready
@@ -49,11 +52,13 @@ server that proxies `/api` to the backend. Two consequences:
 
 4. **Sanity-check the data your feature depends on** — hit the local backend
    directly so you know what the UI *should* render:
+
    ```bash
    curl -s "http://127.0.0.1:8210/api/hold?horizon=1d&numeraire=divine" | python3 -m json.tool | head
    ```
 
 5. **Drive / inspect the renderer** with the CDP helpers (run from `desktop/`):
+
    ```bash
    # Evaluate any JS in the page (async is awaited). Returns JSON.
    node scripts/cdp.mjs "Array.from(document.querySelectorAll('.pulse-strip .pulse-chip')).map(c => c.innerText)"
@@ -63,7 +68,9 @@ server that proxies `/api` to the backend. Two consequences:
    # Screenshot a selector to a PNG (then Read the PNG to see it).
    node scripts/shot.mjs ".pulse-strip" pulse.png
    ```
+
    Confirm images actually loaded, not just that `<img>` exists:
+
    ```bash
    node scripts/cdp.mjs "Array.from(document.querySelectorAll('.pulse-strip img.cur-img')).map(i => ({alt:i.alt, ok:i.complete && i.naturalWidth>0}))"
    ```

@@ -67,7 +67,7 @@ test('number boxes are forgiving text boxes; the clock takes a typed time', () =
 })
 
 test('costs: maps run, per map, a tablet setup of lines, and the override as a toggle', () => {
-  // owner, 2026-10-01: "we will have to accomadate multiple tablet setups"
+  // owner, 2026-10-01: "we will have to accommodate multiple tablet setups"
   assert.ok(!code.includes('TABLET_CHOICES') && !code.includes('setPerMap'), 'no single tablets-per-map number any more')
   assert.ok(code.includes('sc.addTablet(') && code.includes('sc.editTablet(') && code.includes('sc.removeTablet('))
   assert.ok(/<TabletLine[\s\S]*?<Seg/.test(code) || /function TabletLine[\s\S]*?<Seg/.test(code), 'a line\'s slots are one tap')

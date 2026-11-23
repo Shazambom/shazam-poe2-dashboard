@@ -15,16 +15,29 @@ REPO="${GH_REPO:-Shazambom/shazam-poe2-dashboard}"
 # a later beta fixed must not block forever. No beta at all → nothing on the beta channel was
 # validated → refuse (owner rule: every stable release follows a beta push).
 SINCE=$(gh release list --repo "$REPO" --limit 50 --json tagName,publishedAt,isPrerelease \
-  -q "[.[] | select(.isPrerelease and (.tagName | startswith(\"$XYZ-beta\")))] | sort_by(.publishedAt) | last | .publishedAt" 2>/dev/null)
-[ -n "$SINCE" ] && [ "$SINCE" != "null" ] || { echo "T0 check: no $XYZ-beta.N release found; a stable release needs a beta first"; exit 1; }
-SINCE_FMT=$(date -u -j -f "%Y-%m-%dT%H:%M:%SZ" "$SINCE" "+%Y-%m-%d %H:%M:%S" 2>/dev/null || date -u -d "$SINCE" "+%Y-%m-%d %H:%M:%S")
-scp -q "$(dirname "$0")/t0-scan.py" "$HOST:/tmp/t0-scan.py" || { echo "T0 check: cannot reach shazam; refusing to ship blind"; exit 1; }
-OUT=$(ssh "$HOST" "python3 /tmp/t0-scan.py --log '$LOG' --version '$XYZ' --since '$SINCE_FMT'"); RC=$?
+  -q "[.[] | select(.isPrerelease and (.tagName | startswith(\"$XYZ-beta\")))] | sort_by(.publishedAt) | last | .publishedAt" 2> /dev/null)
+[ -n "$SINCE" ] && [ "$SINCE" != "null" ] || {
+  echo "T0 check: no $XYZ-beta.N release found; a stable release needs a beta first"
+  exit 1
+}
+SINCE_FMT=$(date -u -j -f "%Y-%m-%dT%H:%M:%SZ" "$SINCE" "+%Y-%m-%d %H:%M:%S" 2> /dev/null || date -u -d "$SINCE" "+%Y-%m-%d %H:%M:%S")
+scp -q "$(dirname "$0")/t0-scan.py" "$HOST:/tmp/t0-scan.py" || {
+  echo "T0 check: cannot reach shazam; refusing to ship blind"
+  exit 1
+}
+OUT=$(ssh "$HOST" python3 /tmp/t0-scan.py --log "$(printf '%q' "$LOG")" --version "$(printf '%q' "$XYZ")" --since "$(printf '%q' "$SINCE_FMT")")
+RC=$?
 echo "$OUT"
 case "$RC" in
   0) echo "T0 check: $XYZ beta line clear and validated by a healthy beta client since $SINCE_FMT" ;;
   2) echo "T0 check: BLOCKED — a beta client reported a full-sync fallback on the $XYZ line since $SINCE_FMT (see above)" ;;
-  3) echo "T0 check: NOT VALIDATED — no beta client has reported a healthy seed and mod tables since $SINCE_FMT; silence is not validation" ; RC=1 ;;
-  *) echo "T0 check: could not read the telemetry log on shazam; refusing to ship blind" ; RC=1 ;;
+  3)
+    echo "T0 check: NOT VALIDATED — no beta client has reported a healthy seed and mod tables since $SINCE_FMT; silence is not validation"
+    RC=1
+    ;;
+  *)
+    echo "T0 check: could not read the telemetry log on shazam; refusing to ship blind"
+    RC=1
+    ;;
 esac
-exit $RC
+exit "$RC"

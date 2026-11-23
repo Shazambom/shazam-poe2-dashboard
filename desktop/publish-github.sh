@@ -19,21 +19,27 @@ set -euo pipefail
 cd "$(dirname "$0")"
 REPO="Shazambom/shazam-poe2-dashboard"
 # Releases are cut from main: CI builds main's head and the published tag lands on it.
-[ "$(git branch --show-current)" = "main" ] || { echo "FATAL: releases are cut from main (on '$(git branch --show-current)')"; exit 1; }
+[ "$(git branch --show-current)" = "main" ] || {
+  echo "FATAL: releases are cut from main (on '$(git branch --show-current)')"
+  exit 1
+}
 VER=$(node -p "require('./package.json').version")
+
+# TEST GATE — runs before anything remote or generated (EE2 sync, commit, push, CI trigger, upload).
+# A red test aborts the release here; GitHub Actions never sees it (owner directive: tests gate the
+# deploy scripts, not CI).
+../ops/run-tests.sh
 
 # EE2 QUERY PORT SYNC — refresh desktop/src/vendor/ee2-query from EE2's latest release tag, snapshot
 # GGG's trade data, regenerate the goldens with EE2's own code (docs/trading-workspace-roadmap.md §8).
-# Network is required to release anyway; a failing step aborts. The refreshed vendor/data/goldens are
-# part of the release commit (review the golden diff `git diff --stat test/goldens/ee2-query`).
+# Network is required to release anyway; a failing step aborts. If the sync changes files, re-run the
+# test gate before committing so a broken vendor update never gets committed or pushed.
 node scripts/sync-ee2.mjs ${EE2_TAG:+--tag "$EE2_TAG"}
 git add -A src/vendor/ee2-query test/goldens/ee2-query
-git diff --cached --quiet || git commit -q -m "chore(ee2-query): sync vendored EE2 port for $VER" -m "Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
-
-# TEST GATE — runs before anything remote (tag push, CI trigger, upload). A red test aborts
-# the release here; GitHub Actions never sees it (owner directive: tests gate the deploy
-# scripts, not CI).
-../ops/run-tests.sh
+if ! git diff --cached --quiet; then
+  ../ops/run-tests.sh
+  git commit -q -m "chore(ee2-query): sync vendored EE2 port for $VER" -m "Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
+fi
 
 # REGRESSION GATE (owner, 2026-09-30) — also before anything remote. The last stable version and this
 # code run on the same snapshot of the owner's data; every difference in what users see (prices, busiest
@@ -41,7 +47,10 @@ git diff --cached --quiet || git commit -q -m "chore(ee2-query): sync vendored E
 # for THIS version in ops/regression-accept.txt, or the release stops. Fails closed without the data.
 # 0.3.8-beta.1/2 passed every test and moved 17 prices by up to 4300%; this is what would have caught it.
 python3 ../ops/regression-diff.py --version "$VER" --accept ../ops/regression-accept.txt \
-  || { echo "FATAL: regression diff: an unaccepted difference (or no data to compare); not publishing $VER"; exit 1; }
+  || {
+    echo "FATAL: regression diff: an unaccepted difference (or no data to compare); not publishing $VER"
+    exit 1
+  }
 # Stable tags are `desktop-v<ver>`; BETA tags are the bare semver `<ver>` (e.g. 0.2.54-beta.1).
 # Why: electron-updater's GitHub provider parses the TAG as semver on the prerelease/channel path
 # (`if (!semver.valid(hrefTag)) continue`), and the `desktop-v` prefix makes every tag invalid →
@@ -52,14 +61,26 @@ case "$VER" in *-beta*) TAG="$VER" ;; *) TAG="desktop-v${VER}" ;; esac
 # T0 gate (owner directive 2026-09-25): a full-sync fallback reported on the beta channel is a hard
 # blocker for stable. ops/t0-check.sh reads shazam's beta telemetry log for this version's beta line
 # and fails closed. Betas themselves are not gated: they are how the blockers get found.
-case "$VER" in *-beta*) ;; *) ../ops/t0-check.sh "$VER" || { echo "FATAL: T0 blocker on the beta line of $VER (or the check could not run); not shipping stable"; exit 1; } ;; esac
+case "$VER" in *-beta*) ;; *) ../ops/t0-check.sh "$VER" || {
+  echo "FATAL: T0 blocker on the beta line of $VER (or the check could not run); not shipping stable"
+  exit 1
+} ;; esac
 # A stable release is announced in Discord #releases once live: its patch notes must exist and fit the owner's
 # format now, before anything is pushed (docs/release-notes/<x.y.z>.md, docs/release-notes/STYLE.md).
-case "$VER" in *-beta*) ;; *) python3 ../ops/release_notes.py check "$VER" || { echo "FATAL: no good release notes for $VER (docs/release-notes/$VER.md); not shipping stable"; exit 1; } ;; esac
+case "$VER" in *-beta*) ;; *) python3 ../ops/release_notes.py check "$VER" || {
+  echo "FATAL: no good release notes for $VER (docs/release-notes/$VER.md); not shipping stable"
+  exit 1
+} ;; esac
 # ...committed exactly as they will be announced (the release commit carries them)...
-case "$VER" in *-beta*) ;; *) { (cd .. && git ls-files --error-unmatch "docs/release-notes/$VER.md" >/dev/null 2>&1 && git diff --quiet HEAD -- "docs/release-notes/$VER.md"); } || { echo "FATAL: commit docs/release-notes/$VER.md first (the release carries the notes it announces)"; exit 1; } ;; esac
+case "$VER" in *-beta*) ;; *) { (cd .. && git ls-files --error-unmatch "docs/release-notes/$VER.md" > /dev/null 2>&1 && git diff --quiet HEAD -- "docs/release-notes/$VER.md"); } || {
+  echo "FATAL: commit docs/release-notes/$VER.md first (the release carries the notes it announces)"
+  exit 1
+} ;; esac
 # ...and accepted by shazam's own feedback bot, so it is deployed with these rules (else: ./ops/deploy-web.sh bot).
-case "$VER" in *-beta*) ;; *) ../ops/announce.sh check "desktop-v$VER" || { echo "FATAL: shazam's feedback bot can't announce $VER; not shipping stable"; exit 1; } ;; esac
+case "$VER" in *-beta*) ;; *) ../ops/announce.sh check "desktop-v$VER" || {
+  echo "FATAL: shazam's feedback bot can't announce $VER; not shipping stable"
+  exit 1
+} ;; esac
 
 # The commit this release is cut from. main goes up first (CI checks this sha out, and the workflow
 # file itself is read from main); the TAG IS NOT PUSHED — GitHub's releases.atom lists bare tags, so
@@ -81,8 +102,10 @@ if node scripts/release-assets.mjs has "$TAG" "$WIN_YML"; then
 else
   NEED_CI=1
   # `gh workflow run` prints the new run's URL; its id is the last path segment.
-  RID=$(gh workflow run release-desktop-win.yml --repo "$REPO" --ref main -f tag="$TAG" -f sha="$SHA" \
-        | grep -oE 'actions/runs/[0-9]+' | grep -oE '[0-9]+$' | tail -1 || true)
+  DISPATCH_OUT=$(gh workflow run release-desktop-win.yml --repo "$REPO" --ref main -f tag="$TAG" -f sha="$SHA")
+  if [[ "$DISPATCH_OUT" =~ actions/runs/([0-9]+) ]]; then
+    RID="${BASH_REMATCH[1]}"
+  fi
 fi
 
 if [ "${1:-}" != "--no-build" ]; then
@@ -97,13 +120,26 @@ fi
 # electron-builder always names the Mac update manifest latest-mac.yml regardless of the version's
 # prerelease tag. For a -beta version, rename it to the beta channel file the beta updater fetches —
 # so a beta build emits ONLY beta-mac.yml and never disturbs stable's latest-mac.yml.
-case "$VER" in *-beta*) [ -f release/latest-mac.yml ] && mv -f release/latest-mac.yml release/beta-mac.yml ;; esac
+case "$VER" in
+  *-beta*)
+    if [ -f release/latest-mac.yml ]; then
+      mv -f release/latest-mac.yml release/beta-mac.yml
+    fi
+    ;;
+  *) ;;
+esac
 
 # Preflight: never publish a seedless build. Confirm the seed the app will bundle exists and
 # is a valid gzip, with its version sidecar (the backend reads the sidecar to decide re-seeding).
 SEED="market-seed/market-seed.sqlite.gz"
-[ -f "$SEED" ] && gzip -t "$SEED" 2>/dev/null || { echo "FATAL: $SEED missing or corrupt — run ./fetch-seed.sh"; exit 1; }
-[ -f "$SEED.version" ] || { echo "FATAL: $SEED.version sidecar missing — re-run ./fetch-seed.sh"; exit 1; }
+if ! { [ -f "$SEED" ] && gzip -t "$SEED" 2> /dev/null; }; then
+  echo "FATAL: $SEED missing or corrupt — run ./fetch-seed.sh"
+  exit 1
+fi
+[ -f "$SEED.version" ] || {
+  echo "FATAL: $SEED.version sidecar missing — re-run ./fetch-seed.sh"
+  exit 1
+}
 echo "seed OK: v$(cat "$SEED.version") ($(du -h "$SEED" | cut -f1))"
 
 # Mac artifacts electron-builder wrote to release/. The channel manifest the Mac updater reads is
@@ -117,7 +153,10 @@ FILES=(
   "release/${MAC_YML}"
 )
 for f in "${FILES[@]}"; do
-  [ -f "$f" ] || { echo "missing $f — run 'npm run dist:mac' first (or drop --no-build)"; exit 1; }
+  [ -f "$f" ] || {
+    echo "missing $f — run 'npm run dist:mac' first (or drop --no-build)"
+    exit 1
+  }
 done
 
 if [ "$NEED_CI" = 1 ]; then
@@ -126,12 +165,18 @@ if [ "$NEED_CI" = 1 ]; then
   [ -n "$RID" ] || echo "locating Windows CI run for $TAG ..."
   for _ in $(seq 1 30); do
     [ -n "$RID" ] && break
-    RID=$(gh run list --repo "$REPO" --workflow=release-desktop-win.yml --event workflow_dispatch --limit 20 \
-          --json databaseId,displayTitle,status \
-          -q "map(select(.displayTitle==\"Windows build $TAG\" and .status!=\"completed\")) | .[0].databaseId // empty" 2>/dev/null || true)
+    if ! RID=$(gh run list --repo "$REPO" --workflow=release-desktop-win.yml --event workflow_dispatch --limit 20 \
+      --json databaseId,displayTitle,status \
+      -q "map(select(.displayTitle==\"Windows build $TAG\" and .status!=\"completed\")) | .[0].databaseId // empty"); then
+      echo "gh run list failed while locating Windows CI run; retrying..." >&2
+      RID=""
+    fi
     [ -n "$RID" ] || sleep 4
   done
-  [ -n "$RID" ] || { echo "no Windows CI run found for $TAG — did the dispatch fail?"; exit 1; }
+  [ -n "$RID" ] || {
+    echo "no Windows CI run found for $TAG — did the dispatch fail?"
+    exit 1
+  }
 
   # Event-driven wait: streams status, blocks until the run finishes, exits nonzero if it failed.
   echo "watching Windows CI run $RID (blocks until it finishes) ..."
@@ -142,13 +187,19 @@ fi
 # must show fetch-seed.sh's check. On a re-run that reused those files, find that run by its title. The log
 # is saved before it is searched: piping it straight into grep -q fails under pipefail on the match itself.
 [ -n "$RID" ] || RID=$(gh run list --repo "$REPO" --workflow=release-desktop-win.yml --limit 20 \
-      --json databaseId,displayTitle,conclusion \
-      -q "map(select(.displayTitle==\"Windows build $TAG\" and .conclusion==\"success\")) | .[0].databaseId // empty")
-[ -n "$RID" ] || { echo "FATAL: no successful Windows CI run found for $TAG to check its market snapshot"; exit 1; }
+  --json databaseId,displayTitle,conclusion \
+  -q "map(select(.displayTitle==\"Windows build $TAG\" and .conclusion==\"success\")) | .[0].databaseId // empty")
+[ -n "$RID" ] || {
+  echo "FATAL: no successful Windows CI run found for $TAG to check its market snapshot"
+  exit 1
+}
 CILOG=$(mktemp)
 gh run view "$RID" --repo "$REPO" --log > "$CILOG"
 grep -q 'seed ready (' "$CILOG" \
-  || { echo "FATAL: Windows CI run $RID bundled no checked market snapshot (no 'seed ready' in its log)"; exit 1; }
+  || {
+    echo "FATAL: Windows CI run $RID bundled no checked market snapshot (no 'seed ready' in its log)"
+    exit 1
+  }
 echo "Windows CI run $RID bundled a checked market snapshot"
 
 # CI has put the Windows assets in the draft; add the Mac assets (manifest last, retried, each
@@ -157,7 +208,10 @@ node scripts/release-assets.mjs upload "$TAG" "${FILES[@]}"
 node scripts/release-assets.mjs publish "$TAG"
 # Publishing created the tag on GitHub; bring it home and confirm it points at what we built.
 git fetch -q origin "refs/tags/$TAG:refs/tags/$TAG"
-[ "$(git rev-parse "$TAG^{commit}")" = "$SHA" ] || { echo "WARNING: tag $TAG is not at $SHA"; exit 1; }
+[ "$(git rev-parse "$TAG^{commit}")" = "$SHA" ] || {
+  echo "WARNING: tag $TAG is not at $SHA"
+  exit 1
+}
 echo "release $TAG is live on both platforms"
 
 # A STABLE release resolves the bug reports its commits fix ("Fixes-Report: <id>"): the bot replies in

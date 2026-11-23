@@ -16,6 +16,7 @@ ship in the same change. Nothing has been altered in production code since `0.3.
 
 **Shipped in `0.3.3` (stable 2026-09-21; beta `0.3.3-beta.1`, telemetry clean on win32), all test-first with
 production-DB tests:**
+
 - **Window + band (item 1, done).** `_predict` reads start days N±`PRED_WINDOW` (5) in each past league;
   early-league 3d IC **+0.263 → +0.317**. The band pools every start-day read, so it widens instead of
   shrinking (typical band **0.150 → 0.282** over 1,942 real forecasts). The league-arc keeps `window=0`.
@@ -52,6 +53,7 @@ setting. Confirmed empirically: the forecast's IC is gap-insensitive. Score numb
 numbers do not. Do not "correct" forecast measurements with a gap — it only mismatches the windows.
 
 **Settled, do not re-litigate:**
+
 - `ret × depth` was *not* a bug — it is a posterior mean with a zero prior. Only `stab`/`liq` were sign-broken.
 - The equity "short-horizon reversal" literature does **not** transfer here; on our data the signal is positive.
 - `CAUTION_K` saturates at 3 (top-10 drawdown flat at −14.0% from k=3 up). Higher k costs return for nothing.
@@ -247,6 +249,7 @@ loop: *"the estimate moves slowly with the sampling start date"* is the stable c
 single-day estimate was never trustworthy.
 
 Two cautions recorded but not acted on:
+
 - The gain is smaller than the observation count suggests — 22 start days bought them a 15% SE reduction, not √22.
 - Their validated regime is not ours: *"we use only relatively long samples in which the overlap remains a small
   fraction of the sample size."* Ours would be a large fraction of a 3–4 month cycle seen 2–4 times.
@@ -291,6 +294,7 @@ On the live board today the n-league mix is `{none: 38, n=2: 11, n=3: 38, n=4: 2
 the 22× worst case applies to 11 rows.
 
 **Decision needed, and the literature is genuinely split:**
+
 - **Show it honestly** (Gneiting): a wide band is a fact about the market, not a display defect.
 - **Suppress it** (NCHS/MCHB presentation standards): relative CI width > 1.2× the estimate is flagged
   unreliable. **58–64% of our column** would be flagged or suppressed under that standard. Note that widening
@@ -326,6 +330,7 @@ trusted. Score, forecast and day-blind average all fail together.
 After that date the shipped board is ranking on a signal that no longer predicts anything.
 
 **Options, cheapest first:**
+
 - Surface league phase as context (the `arc-chip` already computes day + phase — reuse it, don't build a page).
 - Degrade gracefully: past day ~30, fall back to ranking on drawdown/steadiness alone, which is at least an
   honest "what has held value" rather than a forecast-shaped nothing.

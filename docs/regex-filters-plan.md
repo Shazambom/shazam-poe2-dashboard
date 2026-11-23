@@ -54,7 +54,7 @@ in `MANIFEST.json`, never hand-edited. Inputs, all hand-maintained and reviewabl
 
 A row carries everything the runtime needs, derived once:
 
-```
+```text
 { "mods": [ { "id": "<fnv1a of text>", "text": "Monsters deal #% of Damage as Extra Chaos",
               "regex": "a chaos$",
               "trade": ["explicit.stat_2200661314"],         // every id GGG lists for the text

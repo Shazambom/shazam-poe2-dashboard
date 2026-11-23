@@ -21,6 +21,7 @@ Measured (probe, 5 runs on the real app): a Network-only debugger caused no Clou
 ## 1. Detection
 
 **Inputs (all passive, from the tap, §2):**
+
 - **S**, the page's last `POST /api/trade2/search/poe2/<league>`: body `{query, sort}` (`requestWillBeSent.postData`),
   response `{id, result[≤100], total}`. Rank = index in `result`.
 - **F**, each `GET /api/trade2/fetch/<ids>?query=<S.id>`; rows `{id, amount, currency}` placed by rank, not by arrival;
@@ -57,6 +58,7 @@ P empty · `H ∉ P` · fewer than two currencies in the evidence · O never see
 
 **The owner's example at today's rates** (vaal 0.012812, chaos 0.091509 div): 105 vaal = 1.345, 120 vaal = 1.537,
 17 chaos = 1.556.
+
 - *Default sort, vaal on top:* `C* = vaal = H` → **no chip.** The page is already right; "buy the 105 vaal" is the
   answer the owner worked out by hand.
 - *Chaos-filtered page after the default run:* `H = chaos`, sibling `m_vaal = 105`, gap 15.7% → **"Reprice in Vaal Orb"**.
@@ -68,6 +70,7 @@ the button"). The page loads only ranks 0–9 of up to 100 ids, and the cheap cu
 Wombgift search ranks 0–25 were vaal 139–150 and chaos started at rank 26 (15, 16, 17…). So after a search on the row's
 own saved search, the app fetches **ids the search already returned** — never a new search — through the user's session
 under the rate budget (`trade:listings` → `desktop/src/trade/listings.js`, policy `trade-fetch`):
+
 1. `samplePlan`: one fetch of every 10th rank past the first page and the last (≤10 ids). A currency first seen at a
    sampled rank has its true minimum within the ≤9 unloaded ids just before it; the sampled row is an upper bound.
 2. `gapPlan`: only when that bound cannot decide the offer, one fetch of those ids for the most promising currency.
@@ -77,6 +80,7 @@ cost none. This replaces "zero app requests" (§ owner decision 3), which could 
 ## 2. Architecture
 
 **Main — `desktop/src/trade/tap.js`** (pure core + thin Electron adapter, dependencies injected):
+
 - Called from `app.on('web-contents-created')` (`main.js:684`) for webview guests, next to the nav forwarding;
   attaching before the first load means the first search is seen. Attaches to every poe webview (main can't tell
   them apart); consumers filter by `wcId`, as `shouldAcceptNav` already does.
@@ -111,6 +115,7 @@ row. A run search's slug **is** its query, gzipped and base64url'd (byte-equal, 
 (`reprice.encodeSlug`) and the store saves `{slug, live:false}` at once (plus the new `q` on a row that already had
 one, so the two agree), bumps `rerunTick` and returns the previous fields. The window remounts on the slug and the
 site runs the one search because the user clicked; the ordinary capture may then write the site's own slug.
+
 - Armed rows stay armed and are live-searchable on the new slug at once.
 - `ensureInstantBuyout` runs for slug mounts, but the query already carries `securable`.
 - **Verification (beta telemetry):** the next `search` event for this row must filter on the chosen currency with
@@ -154,6 +159,7 @@ with no page open), Sales (Merchant History), the live engine's WebSocket and te
 `data/static`. Slug capture from `did-navigate` stays: the URL is already the exact truth.
 
 **Harness.**
+
 - **Recorder** (`ARBITER_TAP_RECORD=<dir>`, refused when packaged, like `dev:ee2-item`): writes the raw CDP stream and,
   at the same moment, the **old code's live outputs** (`readSearchName` result, IB verdict, TradeBuilder `found`, nav
   URLs) while the owner's real searches are driven over CDP.

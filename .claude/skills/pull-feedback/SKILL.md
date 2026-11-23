@@ -7,6 +7,7 @@ description: Pull the new posts from the Discord #feedback forum and sort them f
 
 Users post general feedback in the Discord forum **#feedback**. The feedback bot on shazam keeps each post as
 words only in `feedback-inbox/feedback/<threadId>/`:
+
 - `discord.json`: the post's title and the thread's messages, each from `reporter` (the poster) or `other`;
 - `status.json`: new → triaged (= seen).
 

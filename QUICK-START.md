@@ -12,7 +12,7 @@ how to keep building on it.
 
 ## 1. Quick start
 
-```
+```bash
 cp .env.example .env          # set LEAGUE and USER_AGENT; no credentials go in here
 docker compose up -d --build
 ```
@@ -26,7 +26,7 @@ in Capital, and the Routes tab starts ranking loops.
 
 Development without Docker:
 
-```
+```bash
 cd backend  && pip install -r requirements.txt && DATA_DIR=./data uvicorn app.main:app --reload
 cd frontend && npm install && npm run dev      # Vite on :5173, proxies /api and /callback to :8000
 ```
@@ -35,7 +35,7 @@ cd frontend && npm install && npm run dev      # Vite on :5173, proxies /api and
 
 ## 2. Project map
 
-```
+```text
 poe2-arb/
 ├── docker-compose.yml        backend (:8000) + frontend/nginx (:8080), ./data mounted at /data
 ├── .env.example              LEAGUE, USER_AGENT, poll intervals, OAuth client id (no secrets)
@@ -98,7 +98,7 @@ poe2-arb/
 
 ## 3. Architecture and data flow
 
-```
+```text
 GGG hourly digest ──(digest.py, policy "digest")──▶ digest_markets ─┐
 trade2 exchange  ──(orderbook.py queue, policy "trade")──▶ orderbook ┼─▶ arbitrage.Graph
 recipes.json     ──(recipes.py)────────────────────────────────────┘        │

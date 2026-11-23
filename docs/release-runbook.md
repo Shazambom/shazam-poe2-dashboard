@@ -30,8 +30,8 @@ There are **two update channels**, so we can iterate on the packaged app WITHOUT
 | **beta (dev)** | `x.y.z-beta.N` | **pre-release** (never Latest) | `beta.yml`, `beta-mac.yml` | only clients opted into beta | **on** |
 
 - **Opt in (client side):** Settings → Diagnostics → **"Beta updates (dev channel + diagnostics telemetry)"**.
-  That persists `betaChannel` in `desktop-settings.json`; `main.js` then sets `autoUpdater.channel='beta'`
-  + `allowPrerelease=true`. A build that is *itself* a `-beta` version forces the beta channel on
+  That persists `betaChannel` in `desktop-settings.json`; `main.js` then sets `autoUpdater.channel='beta'` +
+  `allowPrerelease=true`. A build that is *itself* a `-beta` version forces the beta channel on
   (`locked`). Diagnostics telemetry (`p=backend`, `p=sidecar`, the `/api/diag.analytics` probe) fires
   **only** on the beta channel or an unpackaged dev run — gated by `diagTelemetryOn()` in `main.js`
   (which passes `ARBITER_TELEMETRY=1` to the backend→sidecar). Stable builds are silent.
@@ -39,8 +39,10 @@ There are **two update channels**, so we can iterate on the packaged app WITHOUT
   stable clients (`allowPrerelease=false`, `channel='latest'`) never pull them. Safe to push freely.
 
 ### "deploy dev" — publish a beta build
+
 When the owner says **"deploy dev"** (or "deploy to the dev/beta channel"), cut a **pre-release** with a
 `-beta.N` version — same mechanics as a stable release, three differences:
+
 1. **Version:** set `desktop/package.json` to `x.y.z-beta.N` (bump `N` per dev push).
    ⚠️ electron-builder does **not** auto-name the channel from the prerelease tag — it always writes
    `latest.yml`/`latest-mac.yml`. Both build paths therefore **rename** it to `beta.yml`/`beta-mac.yml`
@@ -58,10 +60,12 @@ When the owner says **"deploy dev"** (or "deploy to the dev/beta channel"), cut 
    to the tester (you). Ask first.
 
 Verify a dev release resolves on the beta channel:
-```
+
+```bash
 gh release view desktop-v<x.y.z-beta.N> --json isPrerelease,assets \
   -q '{prerelease:.isPrerelease, files:[.assets[].name]}'   # isPrerelease:true, beta.yml + beta-mac.yml present
 ```
+
 Then read `p=sidecar` / `p=backend` telemetry once the tester's app updates.
 
 **Promote beta → stable:** when a dev build is good, cut the SAME code as a plain `x.y.z` stable release
@@ -87,6 +91,7 @@ Then read `p=sidecar` / `p=backend` telemetry once the tester's app updates.
 `publish-github.sh` runs `ops/regression-diff.py` right after the test gate, before anything remote. It
 runs the last stable version (the newest `desktop-v*` tag) and the release's code on one snapshot of the
 owner's desktop data, and diffs what users see:
+
 - every currency's value, busiest market and price card;
 - the Economy -> Market table;
 - Hold at 1d / 3d / 7d;
@@ -95,11 +100,13 @@ owner's desktop data, and diffs what users see:
 - a fixed set of Convert pairs.
 
 The script stops the release on any difference that `ops/regression-accept.txt` doesn't accept.
+
 - The acceptance is valid only for the exact `version:` it names.
 - Every line in it must still match a reported difference, so a stale line blocks too.
 - It fails closed when the data is missing or too thin to compare.
 
 For each release, write the accept file for its version:
+
 1. Run `python3 ops/regression-diff.py` to see the differences.
 2. Accept only the ones the change intends, with a comment saying why.
 3. Tell the owner what was accepted.
@@ -135,6 +142,7 @@ matched pair) — otherwise clients ship with wrong/old market data until (if ev
 crawl heals it.
 
 **Rebuild the snapshot before shipping when the change touches:**
+
 - currency mapping / how digest markets are keyed (e.g. the `meta_bridge`),
 - digest/market ingestion or parsing,
 - any market-side schema, or a new **operational kv** the client should have at boot,
@@ -157,6 +165,7 @@ exporter's mid-sync guard enforces this): the publisher (`ops/publish-market-sna
 
 Check these every time; each one has cost a deploy before. (The general rules every deploy playbook follows are in
 [`dev-notes.md`](./dev-notes.md) → "Deploy rules — every playbook".)
+
 - **Node 22+ on PATH.** The test gate globs `"frontend/test/*.test.mjs"`, which only Node ≥ 22 expands; an nvm
   Node 18 first on PATH fails the gate with "Could not find …" before a single test runs. Run the script as
   `PATH=/opt/homebrew/bin:$PATH ./publish-github.sh`.
@@ -210,18 +219,20 @@ Check these every time; each one has cost a deploy before. (The general rules ev
    > and the frontend `app.asar` — the single double-clickable artifact users run. Use it for a
    > from-scratch build; use the individual `build:*` scripts when iterating. (`dist:mac` alone
    > packages whatever binaries already exist in `backend-bin/`/`sidecar-bin/`.)
-
+   >
    > Workspace fields like `activeId` / `armed` are stored inside the `trading_workspace`
    > JSON blob, which the backend persists opaquely — new fields need **no backend change
    > and no migration**. Adding/altering an actual DB **table/column** does (user → numbered
    > migration; market → new snapshot). See the Database section in CLAUDE.md.
 
 5. **Publish (one command, test-gated, event-driven, atomic go-live):**
+
    ```bash
    cd desktop && ./publish-github.sh   # tests → push main → DRAFT release → dispatch Windows CI →
                                        # dist:mac → waits on CI → uploads Mac assets →
                                        # verifies both platforms → publishes → re-checks → (rollback)
    ```
+
    `publish-github.sh` first runs `ops/run-tests.sh` (a red test aborts here, before anything
    remote), pushes `main`, creates the release as a **draft** targeting that commit, and starts
    `.github/workflows/release-desktop-win.yml` with `gh workflow run -f tag=… -f sha=…`. **No tag is
@@ -254,10 +265,12 @@ Check these every time; each one has cost a deploy before. (The general rules ev
 6. *(folded into step 5.)*
 
 7. **Verify the release went live** (step 5 already did this; to re-check any release by hand):
+
    ```bash
    node desktop/scripts/release-assets.mjs verify desktop-v<version> --live   # or <version>-beta.N
    gh api repos/Shazambom/shazam-poe2-dashboard/releases/latest -q .tag_name  # == desktop-v<version> (stable)
    ```
+
    The release must be GitHub's "Latest" and carry both `latest-mac.yml` + `latest.yml` plus
    the installers — that is what the `github` updater provider resolves against. A `404` in the
    live check means the installer name and the yml url disagree.
@@ -338,4 +351,3 @@ Condensed and general, newest first; each came from a post-deploy audit (step 8)
   `watching Windows CI run`.
 - **2026-10-03 (0.3.11-beta.1):** wait on the script's own anchored lines. A loose match ("missing") hit a test name
   in the gate's output and started the next step before the Mac build was done.
-

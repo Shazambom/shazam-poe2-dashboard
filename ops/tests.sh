@@ -9,16 +9,19 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
 if [ -x ".venv-test/bin/python" ]; then PY="$ROOT/.venv-test/bin/python"; else PY="${PY:-python3}"; fi
-"$PY" -c "import pytest" 2>/dev/null || { echo "FATAL: pytest not installed for $PY (see docs/dev-notes.md → Testing)"; exit 1; }
+"$PY" -c "import pytest" 2> /dev/null || {
+  echo "FATAL: pytest not installed for $PY (see docs/dev-notes.md → Testing)"
+  exit 1
+}
 
 echo "== backend: pytest"
-( cd backend && DATA_DIR="$(mktemp -d)" MARKET_SEED= "$PY" -m pytest tests -q -p no:cacheprovider )
+(cd backend && DATA_DIR="$(mktemp -d)" MARKET_SEED='' "$PY" -m pytest tests -q -p no:cacheprovider)
 
 echo "== feedback bot + opener: pytest"
-( cd ops/feedback-bot && "$PY" -m pytest tests -q -p no:cacheprovider )
+(cd ops/feedback-bot && "$PY" -m pytest tests -q -p no:cacheprovider)
 
 echo "== frontend: node tests"
-node --test "frontend/test/*.test.mjs"   # a glob, not the folder: Node 22 rejects a bare directory
+node --test "frontend/test/*.test.mjs" # a glob, not the folder: Node 22 rejects a bare directory
 node frontend/test/workspace-store.fuzzy.mjs
 
 echo "== frontend: react lifecycle tests (vitest)"

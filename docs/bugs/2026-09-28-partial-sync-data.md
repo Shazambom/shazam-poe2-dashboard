@@ -155,6 +155,7 @@ Ten findings; nine fixed test-first (each mutation-checked), one is a design que
 
 Two stricter per-item rules were built and measured on the live listing (2026-09-29, 09-28 stalled at
 ~19% posted), then rejected:
+
 - *Every item that traded every day this week must show D+1*: 15 (Forbidden Rites) / 76 (Runes) such
   items had no 09-28 row. They trade ~10 units a day against ~1,000 for the rest, and their 09-27
   volume was 1.1–1.4× their usual, so their 09-27 rows were complete. It would have held the seed at

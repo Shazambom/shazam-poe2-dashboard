@@ -50,6 +50,7 @@ Augmentation) sit higher than the rare-item orbs (Regal, Exalted, Chaos), and th
 their own value. The Gnawed cap is not a pool edge; it is a rule on which items the bone can be
 used on, and it matters for the phase 2 Desecrated section (an item above 64 cannot take a
 Gnawed bone at all).
+
 - **The unit of lookup is a pool, not a base.** The pool is decided by the base's tags, so every
   ring shares one pool while gloves split by attribute. Collapsing bases by their spawn-tag set
   reproduces poe2db's index (Rings 1, Amulets 1, Belts 1, Gloves and Boots and Body Armour and
@@ -61,7 +62,7 @@ Gnawed bone at all).
 
 Trading → Mods, the last sub-tab. One sticky bar, two tables. No modal, no simulator.
 
-```
+```text
  Workspace   Live   Sales   Regex   Mods
  ┌ bar (sticky) ──────────────────────────────────────────────────────────────────────────┐
  │ [Rings                    ▾]   Item level [ 82 ]   Min level [ any ]  Orb [Any              ▾]   [Filter modifiers   ] │
@@ -80,7 +81,7 @@ Trading → Mods, the last sub-tab. One sticky bar, two tables. No modal, no sim
 
 The same pool with Greater Exalted chosen (floor 35), item level 50, Life expanded:
 
-```
+```text
  │ [Rings                    ▾]   Item level [ 50 ]   Min level [ 35 ]  Orb [Greater Exalted  ▾]   [life               ] │
 
  ┌ PREFIX ────────────────────────────── Tiers  Chance ┐
@@ -307,7 +308,7 @@ weights and the total, repeat.
 
 ## Component plan
 
-```
+```text
 frontend/src/components/
   ModsView.jsx      the tab: settings load/autosave, lazy data, bar, two ModTable
   ModsBar.jsx       pool picker, two Num boxes, the orb picker, filter, tag chips
@@ -331,7 +332,7 @@ frontend/test/            mods-pool, mods-settings;  backend/tests/test_modpool.
 
 Pure shapes (`pool.js`, no React):
 
-```
+```text
 pool   = { id, name, tags, prefix: Family[], suffix: Family[] }
 Family = { id, affix, text, tags, tiers: Tier[] }          // best first
 Tier   = { id, tier, name, ilvl, text }                     // range substituted

@@ -97,3 +97,10 @@ def test_a_report_id_that_is_not_one_never_reaches_the_remote_shell(tmp_path):
         r = subprocess.run(["bash", str(SH), "close", bad], env=env, capture_output=True, text=True, cwd=tmp_path)
         assert r.returncode != 0, bad
     assert not (tmp_path / "PWNED").exists() and not (remote / "feedback-inbox" / "actions").exists()
+
+
+def test_no_args_prints_usage_and_exits_two(tmp_path):
+    env, _ = env_for(tmp_path)
+    r = subprocess.run(["/bin/bash", str(SH)], env=env, capture_output=True, text=True, cwd=tmp_path, check=False)
+    assert r.returncode == 2
+    assert "ops/bugs.sh" in r.stdout

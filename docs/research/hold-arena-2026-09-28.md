@@ -30,18 +30,21 @@ Also scope the cache by past-league data extent, not league names.
 
 ### Grafts and rejections
 
-**C1**
+#### C1
+
 - *Graft:* the neutral-rank shrinkage for a record that is structurally missing, with ≥2 leagues required (above). This is the only mechanism in the arena that fixed Emergent and Flux.
 - *Graft (second choice):* `haven`. C1, C3 and C4 each derived it independently and each measured a positive IC in every league. Add it as one family.
 - *Consider:* `steady` (Sharpe-style mean/sd) as a replacement for `trend`. Its IC is similar to `kept` and it cut crashes when combined.
 - *Reject:* nothing major. Its holdout churn and owner losses come from dropping `kept`, so keep production's `kept`.
 
-**C3**
+#### C3
+
 - *Graft:* the worst-third-of-days haven definition. It is the best-documented version (V-primary source, IC positive in all 3–5 leagues through day 60), and C3 measured that the "board-negative days" variant fails on smoothed medians.
 - *Graft:* its per-league new-item measurement, as the evidence for how to treat a missing record.
 - *Reject:* ranking a missing record at the bottom. Rise of the Abyssal's crash ratio got worse at every horizon because about 60% of that league's board was new. Also reject the hard-coded 98-day no-lookahead assumption; use a calendar cut.
 
-**C4**
+#### C4
+
 - *Graft:* the Kaufman efficiency-ratio `steady` (net move ÷ Σ|moves|) as an alternative to C1's Sharpe version. It needs one fewer statistic and its IC has the same sign in 19 of 19 league-phases.
 - *Reject:* `depth` (negative IC in every phase by its own measurement; it pulls owner items up by label-like effect while costing return) and the `_predict` forecast. C1 and C2 each measured that `_predict`'s top 10 crashes 1.2–2× the basket or turns Fate 14d negative, and C3 notes it would double-count the cross-league evidence.
 
@@ -128,6 +131,7 @@ The score has five signals. Each is ranked against the day's eligible board, and
 **Better (16 past cells):** vs_board in 10 (4 worse: Dawn 3d/7d/14d, Rise 14d). Crash ratio in 10 (4 worse, same cells). Fate 14d goes from +3.0 to +12.4 points, with crash ratio 1.22 → 0.80. Three past cells meet every threshold, against production's one.
 
 **Worse:**
+
 - Churn is higher in 12 of 16 past cells, peaking at 13% (limit 30%).
 - Chase is up 1–4 points, peaking at 11% (limit 20%).
 - Owner coverage drops in Runes of Aldur, from 84% to 77%.
@@ -142,6 +146,7 @@ The score has five signals. Each is ranked against the day's eligible board, and
 1 Aldur's Legacy · 2 Uhtred's Exodus · 3 Raven-Touched Shard · 4 Uul-Netol's Embrace · 5 Her Declaration · 6 Garukhan's Resolve · 7 Hinekora's Lock · 8 Seraph's Heart · 9 Uncut Spirit Gem (L15) · 10 Uncut Spirit Gem (L8) · 11 Omen of Light · 12 Emergent Possibility · 13 Omen of Dextral Annulment · 14 Rigwald's Ferocity · 15 Faded Crisis Fragment · 16 Vaal Armourer's Infuser · 17 Preserved Cranium · 18 Vaal Cultivation Orb · 19 Mirror of Kalandra · 20 Omen of Bartering
 
 Compared with production:
+
 - Perfect Flux (+73%/wk) leaves the top 20.
 - Emergent Possibility drops from #4 to #12.
 - Lock moves from #7 to #7, Omen of Light from #20 to #11, Dextral Annulment from #18 to #13.
@@ -153,6 +158,7 @@ Compared with production:
 ### Sources: candidate 1
 
 Status legend:
+
 - **V-primary**: I fetched the primary text myself (curl + grep of the page or PDF) and matched the quote verbatim.
 - **V-abstract**: the publisher or repository abstract, relayed by WebFetch's summariser or by search. Not checked character by character.
 - **secondary**: another site's description of the source.
@@ -196,12 +202,14 @@ Status legend:
 ### Candidate 2: Hold ranked by each item's crash record in earlier leagues
 
 #### Design
+
 `scorer.py` keeps production's frame: signals are ranked on the day's eligible board, averaged with equal weights, and settled over 3 days. It changes two things.
 
 1. **A new signal, `survival`.** It is the share of 14-day holds in earlier leagues, started from league-day 7 on, in which the item lost no more than 20% of its Divine value. Prices are smoothed with production's `_smooth`, and the signal needs at least 20 windows. It does not depend on the league day, because it describes the item, not the league phase. Neither parameter was fitted: 14 days is the longest hold the app offers, and −20% is the smoke test's own `CRASH` line. Results were robust to the line: at 7d, days 1–14, the IC was +.49/+.31 at −20%, +.43/+.32 at −10% and +.39/+.27 at 0%.
 2. **This league's momentum counts once, not twice.** `kept` and `trend` both measure this league's climb. Production gives each a full weight, so half its score is recent momentum, and that is the owner's complaint. Here they get ½ each, making one "upswing" signal next to `dip` (Caution dial unchanged), `price` and `survival`.
 
 #### Why this signal: PoE2's economy
+
 - **Divine is the unit of account; Exalted deflates.** "Exalted Orbs are the base currency and the most common map drop, so their supply balloons first" (timesaver.gg). Everything here is priced in Divine.
 - **What holds value is scarce and consumed; what bleeds is farmable with limited demand.** Dads of Exile's 0.5 report (36 days, priced in Divine): "Consumable supply outruns finite demand, so they only bleed." Scarce, supply-constrained crafting materials and top orbs gained value. In Old School RuneScape, "the item sink contributed to the inflation of luxury good prices" (Hogan-Hennessy et al. 2022). Omens are destroyed on use, and Mirror and Hinekora's Lock are the rarest drops.
 - **An item's economic role is a game-design constant that repeats every league.** Drop source, rarity and how crafting consumes it carry over. No live feed measures sinks or supply, but an item's crash record in earlier leagues is the revealed outcome of that structure. It is the PoE2 equivalent of judging a hedge by its history over many periods. Erb & Harvey (2013) find gold "an unreliable inflation hedge" over practical horizons, so a store of value has to be judged over many periods, not by last week. Baur & Lucey (2010) split hedge from safe haven. `survival` measures a safe-haven-like property: how rarely the item crashed.
@@ -209,6 +217,7 @@ Status legend:
 - **Equal weights, because four past leagues can't tune weights** (DeMiguel, Garlappi & Uppal 2009; Dawes 1979).
 
 #### Measurements (walk-forward, entry t+2, production universe, daily Spearman IC; [leagues positive/leagues])
+
 | survival | days 1–7 | 8–14 | 15–30 | 31–60 |
 |---|---|---|---|---|
 | 7d return | +.49 [4/4] | +.31 [4/4] | +.18 [3/4] | −.02 [1/2] |
@@ -218,6 +227,7 @@ Status legend:
 For comparison at 7d: `price` +.22/+.14/−.09/−.11, `kept` +.10/+.21/+.21/+.09, `trend` +.20/+.16/+.22/+.14. Like everything else, survival fades after day 30.
 
 #### Rejected alternatives (all graded on all 5 leagues; 9 variants, so read margins with forking paths in mind)
+
 - **Scarcity by units traded** (fewest units per day among assets that clear the value floor). IC was +.31/+.21 in days 1–14, but it puts omens at the bottom: crafting consumes them, so they turn over many units. Owner hedges on the list: Runes of Aldur .68 and the current league .67, against production's .84/.81.
 - **Same-phase cross-league 28d forecast** (`_predict`, delta 28). IC +.55 early, but it needs 2 past leagues and put Uncut Spirit Gems at the top. With production's signals, Fate of the Vaal 14d vs_board went from +3.0 to −3.0.
 - **Laplace-shrunk survival** ((ok/14+1)/(n/14+2), counting overlapping windows as n/14). It was marginally better on the holdout (Fate of the Vaal 7d +8.3 vs +6.6) but failed the current league's 14d `beat` (2 of 5 graded days). I chose the unshrunk form, so I used the current league to decide between two near-equal forms. That is disclosed here.
@@ -227,6 +237,7 @@ For comparison at 7d: `price` +.22/+.14/−.09/−.11, `kept` +.10/+.21/+.21/+.0
 - **Low volatility:** runs backwards in PoE2, per the repo's own measurements. **Liquidity weight:** it doesn't predict safety before day 30, and Mirror and Lock are illiquid by nature. **Hand-listed omen/category priors:** they break the rule that game data comes from the market pipeline, and `survival` derives the same result from prices.
 
 #### Smoke test, current league (Forbidden Rites): PASS at every horizon (exit 0)
+
 | hz | vs_board | beat | kept | crash_ratio | dd | churn | owner | chase |
 |---|---|---|---|---|---|---|---|---|
 | 24h | +1.7 | 72% | 100% | 0.00 | 0.0 | 12% | 100% | 2% |
@@ -235,6 +246,7 @@ For comparison at 7d: `price` +.22/+.14/−.09/−.11, `kept` +.10/+.21/+.21/+.0
 | 14d | +27.4 | 100% | 100% | 0.00 | −0.1 | 12% | 100% | 1% |
 
 #### Holdout vs `--scorer production` (production → candidate 2)
+
 | League | hz | vs_board | crash_ratio | churn | owner | chase |
 |---|---|---|---|---|---|---|
 | Dawn of the Hunt | 24h | +3.3 → +3.5 | 0.94 → 0.94 | 0.26 → 0.26 | 0.75 → 0.75 | 0.06 → 0.06 |
@@ -256,6 +268,7 @@ For comparison at 7d: `price` +.22/+.14/−.09/−.11, `kept` +.10/+.21/+.21/+.0
 | Forbidden Rites (current) | 24h/3d/7d/14d | +1.6/+5.5/+12.0/+11.8 → +1.7/+6.1/+11.3/+27.4 | .00/.00/.10/.35 → .00/.00/.00/.00 | 0.17 → 0.12 | 0.81 → 1.00 | .03/.03/.01/.01 → .02/.02/.01/.01 |
 
 Across the 16 holdout cells, candidate 2 does better / the same / worse than production:
+
 - vs_board: 11 / 0 / 5
 - crash_ratio: 11 / 4 / 1
 - owner: 4 / 12 / 0
@@ -263,6 +276,7 @@ Across the 16 holdout cells, candidate 2 does better / the same / worse than pro
 - chase: 1 / 3 / 12 (each loss ≤ +0.02)
 
 **Where it is worse:**
+
 - Rise of the Abyssal loses 0.3–1.7 points of vs_board at 3d/7d/14d.
 - Fate of the Vaal 24h crash ratio rises from 0.63 to 0.72.
 - Runes of Aldur 14d loses 1.1 points of vs_board.
@@ -273,6 +287,7 @@ Across the 16 holdout cells, candidate 2 does better / the same / worse than pro
 **Caveat:** the current-league replay has a small lookahead. Runes of Aldur still runs, so its days after each Forbidden Rites replay day enter `survival`. The holdout leagues don't overlap.
 
 #### Day 24, 7d board, top 20
+
 1. Raven-Touched Shard
 2. Emergent Possibility
 3. Hinekora's Lock
@@ -303,6 +318,7 @@ Production has Mirror at #15, Dextral Annulment at #18 and Omen of Light at #20.
 ### Sources: candidate 2
 
 Status key:
+
 - **V-fetch-abstract**: I fetched the publisher or index page and the fetcher returned the abstract verbatim. I did not read the full PDF.
 - **V-repo**: verified in the repo's `docs/hold-research.md` with the status shown there. I did not re-verify it.
 - **secondary**: a web page or a search-engine summary, not the primary text.
@@ -337,7 +353,9 @@ Researched 2026-09-28. Reading only; nothing was posted.
 | 16 | poe2scout / poe.ninja / Out of Games omen pages | https://poe2scout.com · https://poe.ninja/poe2/economy/vaal/omens · https://outof.games/realms/poe2/economy/omens/ | Omens come from Ritual and are consumed on use, so crafting is their sink | secondary (search summary) |
 
 #### Measurements behind every choice (mine, reproducible)
+
 Everything is in this directory:
+
 - `ic.py` + `signals.py`: the IC study (`python3 ic.py 7 ret|dd`, `python3 ic.py 14 ret`).
 - `scorer_experiments.py`: every variant graded (switched by the `C2_VARIANT` env var).
 - `v_*.json` / `v_*.txt`: the variant backtests. `v_shrunk` is the Laplace variant. The run of the first variant ("final0": scarcity + 28d record) was overwritten; its numbers are quoted in RATIONALE from the run log.

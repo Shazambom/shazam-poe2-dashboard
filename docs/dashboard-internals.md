@@ -6,7 +6,7 @@ the currency you hold, and ranks them by margin, value, gold cost and gold effic
 
 ## Run
 
-```
+```bash
 cp .env.example .env      # set LEAGUE and USER_AGENT (no credentials go here)
 docker compose up -d --build
 ```
@@ -26,10 +26,12 @@ The exchange endpoint is not part of GGG's OAuth API — it only accepts the web
 session cookie, and that cookie is HttpOnly, so page script can't read it. Two ways in:
 
 1. On the PC where your browser is logged in to pathofexile.com:
-   ```
+
+   ```bash
    pip install browser-cookie3
    python tools/connect.py --server http://<server>:8080 session
    ```
+
    It reads `POESESSID` from Chrome/Firefox/Edge/Brave/Opera, sends it to the dashboard,
    which verifies it with one exchange query and stores it encrypted.
 2. Or paste it in Settings → Trade session (devtools → Application/Storage → Cookies).

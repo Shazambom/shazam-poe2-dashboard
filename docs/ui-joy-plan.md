@@ -11,6 +11,7 @@
 > remove), C6 (⌘1–5), C7 (glyphs).
 >
 > **Two things the plan below no longer describes correctly:**
+>
 > - **B1 was reverted by the owner.** The plan calls "stop counting up from zero on every mount" the
 >   single highest joy-per-line change; it was built, the owner disagreed, and `cbf3793` put the
 >   count-up back and pinned it with a test. Do not re-apply B1.
@@ -76,6 +77,7 @@ scrollbar → a `--line-hover` token. Mechanical, greppable, one commit. The `rg
 orb) stay literal — alert red is not themed (§1.4).
 
 **Linter (`frontend/scripts/lint-style.mjs`) — required, ~50 lines total:**
+
 1. Today it parses the **first** `:root {` to the **first** `}` (lines 65–66) as the token table and
    errors on any hex elsewhere in `styles.css` that equals a token — so a preset block redeclaring
    `--loss: #e07a68` would trip check 2. Change the parse step to collect **every** selector block

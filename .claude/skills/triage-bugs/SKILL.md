@@ -7,6 +7,7 @@ description: Pull every new (not yet looked at) bug report from the Discord feed
 
 Reports arrive as Discord posts in #bug-reports. The feedback bot on shazam opens each one into
 `feedback-inbox/<report>/`, which holds:
+
 - `report.json`: the app's state;
 - `logs/`: main, backend, renderer and updater logs;
 - `screens/NN-<screen>.jpg`: a picture of every screen;
@@ -48,7 +49,7 @@ the inbox's only writer: an action asks the bot, and the bot applies it within a
 
 ### The agent prompt
 
-```
+```text
 Reproduce Arbiter bug report <report> in a small, isolated, FAILING test. Do not fix it.
 
 The report: <dir> (read all of it). Start with discord.json (the reporter's words: the bug), then

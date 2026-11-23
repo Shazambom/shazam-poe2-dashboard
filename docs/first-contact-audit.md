@@ -121,6 +121,7 @@ Already fixed, uncommitted: Connect confirms the login; a preset pick always re-
 ## QA pass (2026-10-08, dev build on a throwaway profile; 30 screenshots; one Stash-open sales fetch, nothing else)
 
 Verdict "ship with fixes"; every item 1–11 confirmed working. Defects, all fixed and re-driven:
+
 1. Convert kept the last result on screen under new icons when the pair changed → the result clears on a pair change.
 2. ⌘K Enter on a currency not on the board did nothing (it only opened board cards) → off-board rows open the app-wide
    card by name; rows carry `onBoard`.
@@ -135,6 +136,7 @@ order is the score, the badge is yield — by design); All markets' "Source" col
 ## Code review (2026-10-08, high: eight independent finders, one fresh verifier per mechanism)
 
 39 raw candidates → 21 mechanisms; 17 held (3 refuted, 1 settled by an owner ruling). All fixed test-first:
+
 - Convert's minimum ignored the phantom-gain cap and only doubled (could name an amount with no route, or
   overshoot) → one `_accepted` predicate for the ranking and the minimum; bisect to the smallest passing lot;
   liquidity-starved paths skipped at once; computed only for Convert (`with_min_amount`), never for the Capital

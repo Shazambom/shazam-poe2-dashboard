@@ -45,3 +45,10 @@ def test_ids_and_kinds_are_checked_and_there_is_no_resolve_or_close(tmp_path):
                  ("list", "ideas", "resolved"), ("close", "ideas/20"), ("resolve", "ideas/20")):
         assert sh(env, *args, check=False).returncode != 0, args
     assert actions(remote) == []
+
+
+def test_no_args_prints_usage_and_exits_two(tmp_path):
+    env, _ = ideas_env(tmp_path)
+    r = sh(env, check=False)
+    assert r.returncode == 2
+    assert "ops/ideas.sh" in r.stdout

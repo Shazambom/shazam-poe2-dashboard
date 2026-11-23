@@ -11,5 +11,5 @@ COPY bot/ ./bot/
 COPY opener/dests.py ./opener/dests.py
 COPY opener/__init__.py ./opener/__init__.py
 ENV PYTHONPATH=/app:/app/bot PYTHONUNBUFFERED=1
-USER bot
+USER 10001
 CMD ["python", "-m", "bot.bot"]

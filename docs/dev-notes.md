@@ -33,6 +33,7 @@ owner checks new UI on an old backend (2026-10-08: two fixes "didn't take" for e
 ### Deploy rules — every playbook (owner, 2026-10-03)
 
 Every deploy follows these, whatever it ships (desktop release, web test env, feedback bot, market seed):
+
 1. **Before:** read that playbook's **"Before you run"** traps and check each one. They are the things that have
    already cost a deploy.
 2. **Run it in the background and wait on the script's own lines**, matched from the start of the line (a
@@ -55,6 +56,7 @@ market seed → [`db-maintenance.md`](./db-maintenance.md) → "Building / refre
 ./ops/deploy-web.sh backend      # ... rebuild only the backend container (or `frontend`)
 ./ops/deploy-web.sh ops          # sync the seed publisher/exporter/uploader to shazam:~/bin
 ```
+
 The script runs `ops/run-tests.sh` first and aborts on a red test. Under the hood it is the
 rsync + `sshshazambom sudo bash -c 'docker compose up -d --build …'` sequence (shazam is not
 in the docker group, so compound commands need `sudo bash -c`).
@@ -71,6 +73,7 @@ in the docker group, so compound commands need `sudo bash -c`).
   2026-10-04). Without them it holds the post and logs why.
 
 **Before you run** (the deploy rules above apply):
+
 - Node 22+ first on PATH: the script's test gate globs `"frontend/test/*.test.mjs"`, which Node 18 cannot expand
   (`PATH=/opt/homebrew/bin:$PATH ./ops/deploy-web.sh …`).
 - The web env is the **test** surface; deploying it is not shipping, but it is shared with whoever else is
@@ -80,6 +83,7 @@ in the docker group, so compound commands need `sudo bash -c`).
 **After:** audit it (deploy rule 4).
 
 **Lessons (web test env and feedback bot)** — condensed, newest first:
+
 - *(none recorded yet)*
 
 ---
@@ -88,9 +92,11 @@ in the docker group, so compound commands need `sudo bash -c`).
 
 1. **Desktop dev runs the COMPILED backend binary, not your `.py`.** After editing anything under
    `backend/app`, you MUST rebuild it or the running app serves stale code:
+
    ```bash
    cd desktop && ./build-backend.sh    # PyInstaller → backend-bin/poe2arb-backend (~1–2 min)
    ```
+
    Symptom of forgetting: a new setting/endpoint "does nothing" in the desktop app while the
    web env (which runs the `.py` directly in Docker) works fine. `npm run build:frontend` only
    rebuilds the UI — it does NOT rebuild the backend.
@@ -182,11 +188,13 @@ Threading a new user setting all the way through (as `hub_count` did):
   automated tests + your own CDP drive-validation pass, build the app the owner actually runs and let
   them check the changes in the real production binary — don't declare a UI change reviewable off the
   web/dev drive alone:
+
   ```bash
   cd desktop && npm run dist:mac:all          # from-scratch: backend + sidecar + frontend + electron
   #   (use `npm run dist:mac` if backend-bin/ + sidecar-bin/ are already current — faster)
   open desktop/release/mac-arm64/Arbiter.app  # launch in place on this Mac for the owner to explore
   ```
+
   To also CDP-screenshot the production binary yourself, launch it with a debug port instead of `open`:
   `desktop/release/mac-arm64/Arbiter.app/Contents/MacOS/Arbiter --remote-debugging-port=9222 &`, then
   `node scripts/cdp.mjs`/`scripts/shot.mjs` against `:9222` (backend on `:8210`). Heavy sidecar jobs

@@ -3,7 +3,7 @@
 The visual contract for the Arbiter frontend (`frontend/`). It documents the design
 system **as actually built** — every rule here is drawn from `src/styles.css` and the
 components, not aspiration. New UI must fit this system; `npm run lint:style` enforces
-the parts that can be checked automatically (see [Enforcement](#enforcement)).
+the parts that can be checked automatically (see [Enforcement](#9-enforcement)).
 
 The look is a **dark, tactile "vault" theme**: deep slate surfaces, a single gold accent,
 IBM Plex Sans with tabular figures, hairline borders, soft shadows, and restrained gold
@@ -297,8 +297,8 @@ Reuse these before writing new CSS. Each is a small, composable block already in
   via shared `layoutId`), `.capcard`, `.chart-box`, `.infl-stats .stat`. All share the
   165deg gradient + `--radius-lg` + `--shadow-1`.
 - **Forms — `.field`** (grid label+control, `--muted` label). Inputs sit on `--bg` with a
-  `--line-strong` border and get the **gold focus ring** (`box-shadow: 0 0 0 3px rgba(212,172,82,.12)`
-  + `--gold-dim` border). Keep that ring on any new input/select/textarea.
+  `--line-strong` border and get the **gold focus ring** (`box-shadow: 0 0 0 3px rgba(212,172,82,.12)` +
+  `--gold-dim` border). Keep that ring on any new input/select/textarea.
 - **Tabs — `.tabs` / `.subtabs`** with an animated `.tab-underline` (gold gradient, driven
   by `motion`), `aria-selected="true"` = `--ink`. Sub-navigation uses `.subtabs`, not new pages.
 - **Tables:** `<th>` muted 12.5px; `.num` cells right-aligned; `th.sortable`/`th.sorted`;
@@ -368,12 +368,14 @@ It runs in CI on any `frontend/src/**` change (`.github/workflows/lint-style.yml
 **no install step** (stdlib only).
 
 **Errors (fail the build):**
+
 - a raw hex in `.jsx` (colors belong in `theme.js`);
 - a hex in `styles.css` outside `:root` that **exactly equals** a token (use `var(--x)`);
 - a hex in `theme.js` that isn't a `:root` token value or a registered `CHART_EXTRAS` entry
   (catches `theme.js` ↔ `:root` drift).
 
 **Warnings (guidance, don't fail):**
+
 - a hex that is a **near-duplicate** of a token (RGB distance < 12) — e.g. a second slightly
   different "muted" grey. Fix by unifying to the token.
 - a redundant `var(--x, #samevalue)` fallback — drop the fallback.

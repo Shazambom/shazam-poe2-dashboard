@@ -7,6 +7,7 @@ description: Pull the new posts from the Discord #feature-ideas forum and give t
 
 Users post ideas in the Discord forum **#feature-ideas**. The feedback bot on shazam keeps each post as
 words only in `feedback-inbox/ideas/<threadId>/`:
+
 - `discord.json`: the post's title and the thread's messages, each from `reporter` (the poster) or `other`;
 - `status.json`: new → triaged (= seen).
 

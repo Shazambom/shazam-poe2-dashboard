@@ -114,10 +114,10 @@ Session `15b714b2` = `~/.claude/projects/-Users-ianmoreno/15b714b2-6a76-417b-b05
 "(queued)" = typed while the agent was busy, stored as a `queued_command` attachment.
 
 - **15b714b2 2026-09-13 19:01** — "You have to make sure the currencies are compared to Mirrors and Hinekora's Locks because those are the more high tier assets in PoE and more accurately track inflation. It would be interesting to create a historical view using older leagues and tracking the age of the current league against the inflation of previous leagues at the same time period. Investigate open source financial analysis tools to apply to these metrics."
-- **15b714b2 2026-09-13 21:27** (the goal that created Hold) — "The Primary objective to the inflation data is to yes show us inflation data, but its primary purpose is to show what assets are good to hold over the short, medium, and long term against other assets. Do research on what open source projects could help us determine this and have a leaderboard of different assets in POE that retain or increase in value over the course of a league with a predictive aspect based on the historical data from previous leagues. Make sure to include obscure currencies like a lot of what poe2scout exposes. Omens tend to be particularly attractive a lot of the time for example. Investiage and do deep research on this topic and feature, then come up with a plan of how to display this information, then run a /simplify pass on the plan, then build it."
+- **15b714b2 2026-09-13 21:27** (the goal that created Hold) — "The Primary objective to the inflation data is to yes show us inflation data, but its primary purpose is to show what assets are good to hold over the short, medium, and long term against other assets. Do research on what open source projects could help us determine this and have a leaderboard of different assets in POE that retain or increase in value over the course of a league with a predictive aspect based on the historical data from previous leagues. Make sure to include obscure currencies like a lot of what poe2scout exposes. Omens tend to be particularly attractive a lot of the time for example. Investigate and do deep research on this topic and feature, then come up with a plan of how to display this information, then run a /simplify pass on the plan, then build it."
 - **15b714b2 2026-09-13 21:58** — "I do want the leaderboared on the desktop app, I just think iteration should be methodical on the web version"
 - **15b714b2 2026-09-14 07:04** — "I think the time horizons of the defaults are too high, leagues in poe move fast so we need to make the default time horizons like 1h, 6h, 12h, 1d, 3d, 7d." *(this led to `f366684`: Hold went from 7d/30d/whole-league to 1d/3d/7d)*
-- **15b714b2 2026-09-14 07:21** — "The hold page is also just showing like disingenuious values. Like I know for a fact essences are actually going down in value not up so they are a bad investment. We need to dig into why. I think there is some sort of bug. Because I would expect things like omens of whittling to be at the top, things tat have accrued in value."
+- **15b714b2 2026-09-14 07:21** — "The hold page is also just showing like disingenuous values. Like I know for a fact essences are actually going down in value not up so they are a bad investment. We need to dig into why. I think there is some sort of bug. Because I would expect things like omens of whittling to be at the top, things tat have accrued in value."
 - **15b714b2 2026-09-14 07:29 (queued)** — "The idea is to have items rated to beat inflation over time. An asset that is good to park your currency in. Typical examples are Hinekora's Locks, Mirrors, Omens of Whittling, Omens of Dextral Annulment"
 - **15b714b2 2026-09-14 23:40** — "I want to improve the 'at a glance' view by adding the top 3 investments from the hold leaderboard from left to right."
 - **15b714b2 2026-09-15 00:03** — "The values in the hold view aren't nesseciarly the biggest movers, the biggest movers are the items that have the most % change over the time period specified in the view."
@@ -128,11 +128,11 @@ Session `15b714b2` = `~/.claude/projects/-Users-ianmoreno/15b714b2-6a76-417b-b05
 - **bc10d31b 2026-09-19 15:07 (queued)** — "The hold calculations also seem to be just wrong, their projected prices are saying they will fall in some cases."
 - **bc10d31b 2026-09-20 19:43** — "…I want you to investigate the HOLD page. Its displaying some currencies that we're actually predicting will go down in value. I want to understand WHY. Don't make changes, this is an investigation … your best guide is the production data … if you do deploy sub agents to investigate you must validate all of their claims … when we do start making changes you must follow /tdd for ALL changes."
 - **bc10d31b 2026-09-20 19:52** — "…look at how we're doing all these calculations and research them online … I want to know the internet's consensus on how to fix this, and I want different ideas and different opinions so fan out research agents … always validate their claims against their sources."
-- **bc10d31b 2026-09-20 19:55 / 19:56 / 20:00** — "There are libraries we sourced this code from, its just not directly referenced." / "Look at the design docs from the initial implementations." / "I know the inspiration for hold came from online reasearch of opensource finance libraries"
-- **bc10d31b 2026-09-20 20:47** — "I mean in some cases it makes sense and predicts things that should go up over time. But in other cases it suggests rediculous things. I think what you need to do is run a bunch of test experiments on how we should be filtering and what the data looks like if you alter things (without altering production code) to see whats going on"
-- **bc10d31b 2026-09-20 20:59** — "Figure out where to write the volume floor but the thing is, mirrors and locks are almost always safe places to park money even if they're not as liquid as other currencies. They're relatively stable assets akin to a house or gold. They just can't be traded too much because they're extreamly rare."
+- **bc10d31b 2026-09-20 19:55 / 19:56 / 20:00** — "There are libraries we sourced this code from, its just not directly referenced." / "Look at the design docs from the initial implementations." / "I know the inspiration for hold came from online research of opensource finance libraries"
+- **bc10d31b 2026-09-20 20:47** — "I mean in some cases it makes sense and predicts things that should go up over time. But in other cases it suggests ridiculous things. I think what you need to do is run a bunch of test experiments on how we should be filtering and what the data looks like if you alter things (without altering production code) to see whats going on"
+- **bc10d31b 2026-09-20 20:59** — "Figure out where to write the volume floor but the thing is, mirrors and locks are almost always safe places to park money even if they're not as liquid as other currencies. They're relatively stable assets akin to a house or gold. They just can't be traded too much because they're extremely rare."
 - **bc10d31b 2026-09-20 21:04 / 21:07 / 21:24** — "What does k=3 give us?" / "yes, test where the drawdown cap should sit" / "Okay we need to give K a name in the UI that is descriptive in what it does in one word and label the slider as that" *(became "Caution")*
-- **bc10d31b 2026-09-20 23:52** — "Hold definitly looks better ship it" *(0.3.2)*
+- **bc10d31b 2026-09-20 23:52** — "Hold definitely looks better ship it" *(0.3.2)*
 - **bc10d31b 2026-09-21 00:57** — "Double check your work, validate your assumptions, and never guess. I want you to adversarilly challenge your assumptions. The doc was made with a lot of effort and trial and errors including tests."
 - **bc10d31b 2026-09-21 01:05** — "The way we're doing the new predicionts is the industry standard way of evaluating and cutting out noise. If we actually just did the naive average that would undo what all the previous commits were intended to do"
 - **bc10d31b 2026-09-21 01:14** — "So what should we change about hold. Be brief, 1 sentence max" / "What about the time range picker? Shouldn't that be widening the prediction read?"
@@ -162,6 +162,7 @@ Session `15b714b2` = `~/.claude/projects/-Users-ianmoreno/15b714b2-6a76-417b-b05
 | 2026-09-21 | `c9ca0a0` / 0.3.3 | Forecast reads start days N±5 (`PRED_WINDOW`), band pooled; shown only as 1–3 arrows (3d/7d), dashes on 1d, hidden after league-day 14 | §4 |
 
 **Considered and rejected (with the reason recorded at the time):**
+
 - *Weighted-z composite* — rejected by /simplify as unexplainable and untunable. It was the sign-safe form.
 - *Calmar/Sortino/Sharpe columns* — deferred at v1. Lane A (2026-09-15) re-proposed Sortino/Calmar/VaR-CVaR as "Hold risk columns". The owner steer that day recast risk as liquidity and decay, not solvency ("no shorting, no leverage, no ruin").
 - *EWMA momentum blend `β·analog + (1−β)·EWMA·Δ`* — deferred: "a second free parameter you can't validate yet".
@@ -221,6 +222,7 @@ leagues). Everything below is the daily-close variant; production also uses hour
 ## 5. What the 2026-09-13 domain research said about stores of value in PoE2
 
 (Report a14d, live poe2scout pull 2026-09-13; the playbook report a1481, 2026-09-15.)
+
 - Divine is the reserve currency and rises all league in Ex terms (the API shows 28 → 67 → 104 → 127 ex over
   the first days; ≈100–130 early → ≈390–430 late per timesaver.gg). Mirror (763k ex) and Hinekora's Lock (181k
   ex) are "the ceiling holds" and numeraire anchors.
@@ -239,6 +241,7 @@ leagues). Everything below is the daily-close variant; production also uses hour
 ## 6. Sources
 
 Status labels are the ones the original research used:
+
 - **VERIFIED** — the agent extracted the text from the primary PDF/HTML or the pinned source file and quoted it verbatim.
 - **VIA FETCH** — returned by a summarizing fetcher; the agent did not see the surrounding text. Verify before citing.
 - **UNVERIFIED** — paywalled, 403, secondary summary only, or the agent's own arithmetic/analysis.
@@ -252,6 +255,7 @@ source); **R6** = a0a7f (event windows/overlap); **R7** = a6188 (Heston–Sadka/
 the two repo docs. The full reports are verbatim in Appendices A–I.
 
 ### 6.1 Momentum vs short-term reversal: what horizon a trailing return predicts
+
 Supports: Defect 2 of the bug doc (1–7d is the reversal horizon in equities). Our own data overruled it
 (§4, gap-corrected IC ≥ 0). Most relevant to "Hold over-weights recent risers".
 
@@ -273,6 +277,7 @@ Supports: Defect 2 of the bug doc (1–7d is the reversal horizon in equities). 
 | **Our own measurement** (supersedes the above for this market) | BUG §Experiments, HO "Read this before…" | gap-corrected IC(ret,3d) +0.009 to +0.026; score IC +0.28 in days 4–7 | Measured 2026-09-20 |
 
 ### 6.2 Return seasonality: the basis of Hold's forecast (`_predict`)
+
 Supports: the league-phase analog forecast. Also the finding that widening the start window is licensed
 only when adjacent periods share the same expected return, which our lag curve shows is true early and
 false late.
@@ -287,6 +292,7 @@ false late.
 | Hirshleifer, Jiang & DiGiovanni, "Mood betas and seasonalities in stock returns", NBER w24676 | — | — | Candidate only, not read (R7) |
 
 ### 6.3 Widening the forecast's start day: event windows and overlapping data
+
 Supports: `PRED_WINDOW = 5` and pooling the band so it widens instead of shrinking (0.3.3).
 
 | Source | Link | Quote (verbatim) | Status |
@@ -305,6 +311,7 @@ Supports: `PRED_WINDOW = 5` and pooling the band so it widens instead of shrinki
 | "Bias from including a different regime" in a shifted-start average | — | — | **No source exists (R6, HO).** Our lag curve stands in for it. |
 
 ### 6.4 Few seasons: small-sample estimation, pooling, analog forecasting
+
 Supports: why the ± band was dropped, why blend weights can't be tuned on 3–4 leagues, and why recency
 weighting is fine.
 
@@ -326,6 +333,7 @@ weighting is fine.
 | "Two cycles is the minimum" rule of thumb | — | — | Folklore; no derivation found (R3) |
 
 ### 6.5 Risk-adjusted scoring, the negative-return pathology, composites
+
 Supports: the 0.3.2 fix (sign-safe log-space score), drawdown as the "safe" dimension, and the options for
 a steadiness/inflation-resistance term.
 
@@ -353,6 +361,7 @@ a steadiness/inflation-resistance term.
 | Sortino & van der Meer (1991); Young (1991) Calmar; James–Stein (1961) | — | — | DOMAIN KNOWLEDGE (Q13) |
 
 ### 6.6 Shrinkage, confidence, and ranking under uncertainty
+
 Supports: `ret × depth` is a valid posterior mean (not a bug); a zero target is a choice; ranking by point
 estimates has no optimality guarantee.
 
@@ -369,6 +378,7 @@ estimates has no optimality guarantee.
 | Shen & Louis (1998); Gelman & Price (1999); Louis (1984); Ghosh (1992) | — | — | UNVERIFIED (403; cited via Lin et al./Ginestet) |
 
 ### 6.7 Combining a trailing score with the forecast
+
 Supports: integrate before ranking; weight the forecast by measured skill; keep weights fixed.
 
 | Source | Link | Quote (verbatim) | Status |
@@ -399,7 +409,7 @@ Supports: integrate before ranking; weight the forecast by measured skill; keep 
 |---|---|---|---|
 | FINRA Rule 2210(d)(1)(F) | https://www.finra.org/rules-guidance/rulebooks/finra-rules/2210 | "Communications may not predict or project performance, imply that past performance will recur…" | VERIFIED (R2) |
 | FCA COBS 4.6.2 R | https://www.handbook.fca.org.uk/handbook/COBS/4/6.html | "that indication is not the most prominent feature of the communication" | VERIFIED (R2) |
-| SEC investor publication; investor.gov | https://www.sec.gov/about/reports-publications/investorpubsmfperformhtm · https://www.investor.gov/introduction-investing/investing-basics/investment-products/mutual-funds-and-exchange-traded-funds-etfs/mutual-funds | "While past performance does not necessarily predict future returns, it _can_ tell you how volatile a fund has been." | VERIFIED (R2) |
+| SEC investor publication; investor.gov | https://www.sec.gov/about/reports-publications/investorpubsmfperformhtm · https://www.investor.gov/introduction-investing/investing-basics/investment-products/mutual-funds-and-exchange-traded-funds-etfs/mutual-funds | "While past performance does not necessarily predict future returns, it *can* tell you how volatile a fund has been." | VERIFIED (R2) |
 | Morningstar Medalist Ratings explainer | https://advhypo.morningstar.com/Enterprise/VTC/MorningstarMedalistRatingsExplainer.pdf | "Morningstar Rating 'Star Rating'…Backward-looking, quantitative…"; "…Forward-looking…" | VERIFIED (R2) |
 | BETTER FINANCE on PRIIPs; ESAs advice | https://betterfinance.eu/priips/ · https://www.esma.europa.eu/sites/default/files/library/jc_2022_20_esa_advice_on_priips_regulation.pdf | — | UNVERIFIED (advocacy) |
 
@@ -424,6 +434,7 @@ Supports: integrate before ranking; weight the forecast by measured skill; keep 
 | (2026-09-15, LA) PyPortfolioOpt, Riskfolio-Lib, ruptures, statsmodels (coint/adfuller/STL), sklearn LedoitWolf, hmmlearn, Structural Theta (M4) | https://github.com/PyPortfolio/PyPortfolioOpt · https://github.com/PyPortfolio/PyPortfolioOpt/blob/main/pypfopt/hierarchical_portfolio.py · https://github.com/cottrell/hrp · https://riskfolio-lib.readthedocs.io/ · https://github.com/deepcharles/ruptures · https://centre-borelli.github.io/ruptures-docs/ · https://www.statsmodels.org/stable/install.html · https://www.statsmodels.org/stable/generated/statsmodels.tsa.stattools.coint.html · https://www.statsmodels.org/stable/generated/statsmodels.tsa.stattools.adfuller.html · https://www.statsmodels.org/stable/generated/statsmodels.tsa.seasonal.STL.html · https://scikit-learn.org/stable/modules/generated/sklearn.covariance.LedoitWolf.html · https://github.com/hmmlearn/hmmlearn · https://www.sciencedirect.com/science/article/pii/S0169207024000906 | links only | not Hold scoring |
 
 ### 6.11 Inflation-index methodology (2026-09-13 19:02, feeds the numeraire choice)
+
 The "Inflation index methodology + OSS tools" agent (a977710dd727ae9c1,
 `…/15b714b2…/subagents/agent-a977710dd727ae9c1.jsonl`) proposed rebasing a hard-numeraire price to
 day-0 = 100, using a volume-weighted base over the first 24h, and a Törnqvist-style basket. This is the
@@ -431,6 +442,7 @@ origin of the "inflation index" that Hold's "resists inflation" framing sits on.
 Appendix J. It cites no URLs (unverified).
 
 ### 6.12 PoE2 domain sources (community; UNVERIFIED as economics, used for asset-class priors)
+
 From A13 (2026-09-13): Switchblade Gaming currency tier list https://www.switchbladegaming.com/path-of-exile-2/currency-tier-list/ ·
 Switchblade currency guide https://www.switchbladegaming.com/path-of-exile-2/currency-guide/ · Elyxir ritual farming
 https://www.elyxir.gg/guide/path-of-exile-2/path-of-exile-2-ritual-farming-guide-best-patch-05-setup-for-omen-profit ·
@@ -451,6 +463,7 @@ https://medium.com/@produde/path-of-exile-economy-a-time-series-analysis-b7af193
 https://poetrades.net/poe-ninja-economy-guide/.
 
 ### 6.13 Disagreements between the old records (resolve before committing to docs)
+
 - **Heston & Sadka verbatim:** R2 (2026-09-20) could not extract a quote, and BUG lists it as unverified.
   R7 (2026-09-21) verified it from the Oct 2006 NYU Stern manuscript, and HO lists it as verified. Only the
   published JFE 2008 text is unverified.
@@ -462,4 +475,3 @@ https://poetrades.net/poe-ninja-economy-guide/.
   from these libraries.
 
 ---
-

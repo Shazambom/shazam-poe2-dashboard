@@ -7,7 +7,7 @@ no paste.
 
 ## How it fits together
 
-```
+```text
 Electron main process
 ├── local UI server (random port): serves app-dist/ and proxies /api + /callback
 │   → the web frontend runs byte-identical, no CORS, SSE streams through
@@ -27,7 +27,7 @@ points at a dev backend (`ARBITER_DEV_BACKEND_URL`, default the shazam test env)
 
 ## Build & run (dev)
 
-```
+```bash
 cd desktop
 npm install
 ./build-backend.sh        # PyInstaller binary for THIS OS (needs python3.12)
@@ -40,7 +40,7 @@ packaged build always requires the bundled binary.
 
 ## Release & auto-update
 
-```
+```bash
 npm run dist:mac          # release/: dmg + zip + latest-mac.yml
 ./publish-github.sh       # test gate → push main → draft release → dispatch Windows CI (same
                           #   build-*.sh scripts) → build Mac → wait on CI → upload both platforms

@@ -10,7 +10,15 @@ PY="${PY:-$(command -v python3.12 || command -v python3 || command -v python)}"
 # Windows (Git Bash on the CI runner): PyInstaller's --add-data separator is ';' and the venv
 # activates from Scripts/. Everything else about the build is identical, which is the point —
 # CI runs THIS script rather than a second copy of the pyinstaller invocation.
-case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*|Windows_NT) SEP=';'; EXE=.exe ;; *) SEP=':'; EXE= ;; esac
+case "$(uname -s)" in MINGW* | MSYS* | CYGWIN* | Windows_NT)
+  SEP=';'
+  EXE=.exe
+  ;;
+*)
+  SEP=':'
+  EXE=
+  ;;
+esac
 VENV=.venv-build
 if [ ! -d "$VENV" ]; then "$PY" -m venv "$VENV"; fi
 if [ -f "$VENV/Scripts/activate" ]; then source "$VENV/Scripts/activate"; else source "$VENV/bin/activate"; fi
@@ -74,7 +82,7 @@ cp "dist/poe2arb-backend$EXE" backend-bin/
 rm -rf "$WORK" dist poe2arb-backend.spec
 # Smoke-run the frozen sidecar dispatch path, clean idle exit, and full HTTP boot.
 "backend-bin/poe2arb-backend$EXE" --sidecar --selftest
-python - "backend-bin/poe2arb-backend$EXE" <<'PY'
+python - "backend-bin/poe2arb-backend$EXE" << 'PY'
 import os, shutil, socket, subprocess, sys, tempfile, time, urllib.request
 
 exe = os.path.abspath(sys.argv[1])

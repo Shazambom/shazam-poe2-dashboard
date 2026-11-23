@@ -23,20 +23,22 @@ on:
         description: 'Commit to build (the draft release targets the same commit)'
         required: true
 
-permissions:
-  contents: write
+permissions: {}
 
 jobs:
   build-win:
     runs-on: windows-latest
+    permissions:
+      contents: write
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
         with:
           ref: ${{ inputs.sha }}
-      - uses: actions/setup-node@v7
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v7
         with:
           node-version: '22'
-      - uses: actions/setup-python@v7
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7
         with:
           python-version: '3.12'
       - name: Build bundled backend + sidecar (PyInstaller, Windows x64)
@@ -77,6 +79,7 @@ jobs:
         env:
           CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+          RELEASE_TAG: ${{ inputs.tag }}
         run: |
           cd desktop
           npm run build:frontend
@@ -84,7 +87,7 @@ jobs:
           # electron-builder names the manifest latest.yml regardless of the -beta version tag. For a
           # beta (dev) release, rename to beta.yml so beta clients fetch it and stable's latest.yml is
           # never touched (a beta build must emit ONLY beta.yml).
-          if [[ "${{ inputs.tag }}" == *-beta* ]]; then mv -f release/latest.yml release/beta.yml; fi
+          if [[ "$RELEASE_TAG" == *-beta* ]]; then mv -f release/latest.yml release/beta.yml; fi
       - name: Upload installer into the DRAFT release
         # The release stays a draft (invisible to electron-updater, never "Latest") until
         # desktop/publish-github.sh has added the Mac files, verified both platforms and flipped it
@@ -95,9 +98,11 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
+          RELEASE_SHA: ${{ inputs.sha }}
         run: |
-          TAG="${{ inputs.tag }}"
-          node desktop/scripts/release-assets.mjs ensure-draft "$TAG" "${{ inputs.sha }}"
+          TAG="$RELEASE_TAG"
+          node desktop/scripts/release-assets.mjs ensure-draft "$TAG" "$RELEASE_SHA"
           # Only the files this build produced (a beta emits beta.yml, a stable latest.yml).
           FILES=()
           for f in desktop/release/*.exe desktop/release/*.exe.blockmap desktop/release/*.zip \
@@ -106,7 +111,7 @@ jobs:
           done
           node desktop/scripts/release-assets.mjs upload "$TAG" "${FILES[@]}"
       - name: Also upload as workflow artifact
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7
         with:
           name: windows-installer
           path: |

@@ -37,6 +37,7 @@ in-game exchange. Pricing it with whisper listings from the other venue was the 
 
 `GET https://web.poecdn.com/api/currency-exchange[/<realm>][/<id>]` (realm `poe2`; `id` = unix hour).
 Per GGG's [developer docs](https://www.pathofexile.com/developer/docs/reference):
+
 - Public, no OAuth scope. Responses are **"purely historical"** — the **current hour is never
   available** — and there is a **5-minute delay**. Old history may be removed later.
 - Per market (a currency pair) that traded in the hour: `volume_traded`, `lowest_stock` /
@@ -78,6 +79,7 @@ market really traded at, it can never leave the range they span — `tests/test_
 that over every market in the owner's DB.
 
 The remaining guards, all in the route search:
+
 - **Sellers must exist** (`digest.directed_rates`) — no standing stock on the receiving side, no edge.
 - **Turnover relative to the trade** (`max_step_minutes`, default 45) — no step may need more than
   45 minutes of its own market's turnover.

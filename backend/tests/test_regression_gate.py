@@ -5,6 +5,9 @@ by the publish script against the owner's data.
     DATA_DIR=$(mktemp -d) MARKET_SEED= python -m pytest backend/tests/test_regression_gate.py -q
 """
 import importlib.util
+import os
+import stat
+import subprocess
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -88,9 +91,126 @@ def test_a_card_difference_names_only_the_fields_that_changed():
     ]
 
 
-def test_the_publish_script_runs_the_gate_before_anything_remote():
+def _write_exec(path: Path, content: str) -> None:
+    path.write_text(content)
+    path.chmod(path.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+
+
+def _run_publish_stubbed(
+    tmp_path: Path,
+    script_text: str,
+    *,
+    fail_on_test_call: int | None = None,
+    sync_changes: bool = False,
+    regression_fails: bool = True,
+) -> tuple[subprocess.CompletedProcess[str], list[str]]:
+    repo = tmp_path / "repo"
+    (repo / "desktop").mkdir(parents=True)
+    (repo / "ops").mkdir(parents=True)
+    (repo / "desktop" / "package.json").write_text('{"version": "0.3.99-beta.1"}\n')
+    pub = repo / "desktop" / "publish-github.sh"
+    _write_exec(pub, script_text)
+
+    log_file = tmp_path / "calls.log"
+    count_file = tmp_path / "test-count"
+    fail_expr = str(fail_on_test_call or 0)
+    _write_exec(
+        repo / "ops" / "run-tests.sh",
+        f"""#!/bin/sh
+n=$(cat {count_file} 2>/dev/null || echo 0)
+n=$((n + 1))
+echo "$n" > {count_file}
+echo "run-tests $n" >> {log_file}
+if [ "$n" = "{fail_expr}" ]; then
+  exit 1
+fi
+exit 0
+""",
+    )
+    (repo / "ops" / "regression-diff.py").write_text("# stub\n")
+
+    diff_exit = 1 if sync_changes else 0
+    stub_bin = tmp_path / "bin"
+    stub_bin.mkdir()
+    _write_exec(
+        stub_bin / "git",
+        f"""#!/bin/sh
+echo "git $*" >> {log_file}
+case "$1" in
+  branch) echo main ;;
+  diff) exit {diff_exit} ;;
+  rev-parse) echo deadbeef ;;
+  *) exit 0 ;;
+esac
+""",
+    )
+    _write_exec(
+        stub_bin / "node",
+        f"""#!/bin/sh
+echo "node $*" >> {log_file}
+if [ "$1" = "-p" ]; then
+  echo "0.3.99-beta.1"
+fi
+exit 0
+""",
+    )
+    reg_exit = 1 if regression_fails else 0
+    _write_exec(
+        stub_bin / "python3",
+        f"""#!/bin/sh
+echo "python3 $*" >> {log_file}
+exit {reg_exit}
+""",
+    )
+
+    env = {**os.environ, "PATH": f"{stub_bin}:{os.environ['PATH']}"}
+    proc = subprocess.run(["/bin/bash", str(pub)], cwd=repo / "desktop", env=env, capture_output=True, text=True, check=False)
+    calls = log_file.read_text().splitlines() if log_file.exists() else []
+    return proc, calls
+
+
+def test_the_publish_script_runs_the_gate_before_anything_remote(tmp_path):
     script = (ROOT / "desktop" / "publish-github.sh").read_text()
     gate = script.index("../ops/regression-diff.py --version \"$VER\" --accept ../ops/regression-accept.txt")
     assert script.index("../ops/run-tests.sh") < gate < script.index("git push origin main")
     assert gate < script.index("release-assets.mjs ensure-draft")
-    assert "|| { echo \"FATAL: regression diff" in script[gate:gate + 400], "a failed gate stops the release"
+    proc, calls = _run_publish_stubbed(tmp_path, script, regression_fails=True)
+    assert proc.returncode != 0, "a failed gate stops the release"
+    assert "FATAL: regression diff" in proc.stdout, "a failed gate explains why it stopped"
+    assert not any(c.startswith("git push") for c in calls), "a failed gate never pushes"
+    assert not any("release-assets.mjs" in c for c in calls), "a failed gate never touches GitHub releases"
+
+
+def test_red_test_gate_stops_before_ee2_sync(tmp_path):
+    script = (ROOT / "desktop" / "publish-github.sh").read_text()
+    proc, calls = _run_publish_stubbed(tmp_path, script, fail_on_test_call=1, sync_changes=True)
+    assert proc.returncode != 0
+    assert calls.index("run-tests 1") >= 0
+    assert not any("sync-ee2.mjs" in c for c in calls), "a red test stops before EE2 sync"
+    assert not any(c.startswith("git commit") for c in calls), "a red test never commits"
+
+
+def test_ee2_sync_with_no_changes_runs_tests_once_and_makes_no_commit(tmp_path):
+    script = (ROOT / "desktop" / "publish-github.sh").read_text()
+    proc, calls = _run_publish_stubbed(tmp_path, script, sync_changes=False, regression_fails=True)
+    assert proc.returncode != 0
+    test_calls = [i for i, c in enumerate(calls) if c.startswith("run-tests ")]
+    sync_idx = next(i for i, c in enumerate(calls) if "sync-ee2.mjs" in c)
+    assert len(test_calls) == 1 and test_calls[0] < sync_idx
+    assert not any(c.startswith("git commit") for c in calls)
+
+
+def test_ee2_sync_with_changes_reruns_tests_before_committing(tmp_path):
+    script = (ROOT / "desktop" / "publish-github.sh").read_text()
+    proc, calls = _run_publish_stubbed(tmp_path / "pass", script, sync_changes=True, regression_fails=True)
+    assert proc.returncode != 0
+    sync_idx = next(i for i, c in enumerate(calls) if "sync-ee2.mjs" in c)
+    commit_idx = next(i for i, c in enumerate(calls) if c.startswith("git commit"))
+    assert calls.index("run-tests 1") < sync_idx < calls.index("run-tests 2") < commit_idx
+
+    proc2, calls2 = _run_publish_stubbed(tmp_path / "fail2", script, fail_on_test_call=2, sync_changes=True)
+    assert proc2.returncode != 0
+    assert "run-tests 2" in calls2
+    assert not any(c.startswith("git commit") for c in calls2), "a failing post-sync test stops before commit"
+    assert not any(c.startswith("git push") for c in calls2), "a failing post-sync test never pushes"
+

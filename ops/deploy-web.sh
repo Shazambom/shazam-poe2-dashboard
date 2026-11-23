@@ -20,14 +20,18 @@ WHAT="${1:-all}"
 ./ops/run-tests.sh
 
 case "$WHAT" in
-  all|backend)
+  all | backend)
     rsync -az --delete --exclude='__pycache__' backend/app/ "$HOST:$REMOTE/backend/app/"
-    rsync -az --delete --exclude='__pycache__' backend/sidecar/ "$HOST:$REMOTE/backend/sidecar/" ;;
+    rsync -az --delete --exclude='__pycache__' backend/sidecar/ "$HOST:$REMOTE/backend/sidecar/"
+    ;;
+  *) ;;
 esac
 case "$WHAT" in
-  all|frontend)
+  all | frontend)
     rsync -az --delete --exclude='node_modules' --exclude='dist' frontend/src/ "$HOST:$REMOTE/frontend/src/"
-    rsync -az frontend/nginx.conf "$HOST:$REMOTE/frontend/nginx.conf" ;;
+    rsync -az frontend/nginx.conf "$HOST:$REMOTE/frontend/nginx.conf"
+    ;;
+  *) ;;
 esac
 rsync -az docker-compose.yml "$HOST:$REMOTE/docker-compose.yml"
 case "$WHAT" in
@@ -40,10 +44,15 @@ case "$WHAT" in
     SERVICES="feedback-opener"
     ssh "$HOST" test -s /etc/arbiter/discord-token && SERVICES="feedback-opener feedback-bot"
     sshshazambom sudo bash -c "'cd $REMOTE && docker compose build $SERVICES && docker compose up -d $SERVICES'"
-    echo "deployed: $SERVICES"; exit 0 ;;
+    echo "deployed: $SERVICES"
+    exit 0
+    ;;
   ops)
     rsync -az ops/publish-market-snapshot.sh ops/export-market-snapshot.py ops/upload-seed-github.sh "$HOST:bin/"
-    echo "ops scripts synced to $HOST:~/bin"; exit 0 ;;
+    echo "ops scripts synced to $HOST:~/bin"
+    exit 0
+    ;;
+  *) ;;
 esac
 
 SERVICES="backend frontend"

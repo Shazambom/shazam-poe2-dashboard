@@ -10,23 +10,41 @@
 set -euo pipefail
 REMOTE=${REMOTE:-/home/shazam/shazam-poe2-dashboard}
 CLI="python3 $REMOTE/ops/feedback-bot/bugs.py --inbox $REMOTE/feedback-inbox"
-ID_RE='^(ideas|feedback)/[0-9]+$'   # a post folder, never anything a shell would read
+ID_RE='^(ideas|feedback)/[0-9]+$' # a post folder, never anything a shell would read
 
-check_id() { [[ "$1" =~ $ID_RE ]] || { echo "not an idea or feedback post: $1" >&2; exit 2; }; }
+check_id() { [[ "$1" =~ $ID_RE ]] || {
+  echo "not an idea or feedback post: $1" >&2
+  exit 2
+}; }
 
-cmd=${1:-}; shift || true
+cmd=${1:-}
+if [ "$#" -gt 0 ]; then shift; fi
 case "$cmd" in
   list)
-    kind=${1:-ideas}; state=${2:-new}
-    [[ "$kind" =~ ^(ideas|feedback)$ ]] || { echo "unknown forum: $kind" >&2; exit 2; }
-    [[ "$state" =~ ^(new|triaged|all)$ ]] || { echo "unknown state: $state" >&2; exit 2; }
-    sshshazambom sudo "$CLI list --kind $kind --state $state" ;;
+    kind=${1:-ideas}
+    state=${2:-new}
+    [[ "$kind" =~ ^(ideas|feedback)$ ]] || {
+      echo "unknown forum: $kind" >&2
+      exit 2
+    }
+    [[ "$state" =~ ^(new|triaged|all)$ ]] || {
+      echo "unknown state: $state" >&2
+      exit 2
+    }
+    sshshazambom sudo "$CLI list --kind $kind --state $state"
+    ;;
   pull)
-    check_id "$1"; mkdir -p "$2"
+    check_id "$1"
+    mkdir -p "$2"
     sshshazambom sudo "tar czf - -C $REMOTE/feedback-inbox $1" | tar xzf - -C "$2"
-    echo "$2/$1" ;;
+    echo "$2/$1"
+    ;;
   seen)
     check_id "$1"
-    sshshazambom sudo "$CLI act $1 triage" ;;
-  *) sed -n '2,10p' "$0"; exit 2 ;;
+    sshshazambom sudo "$CLI act $1 triage"
+    ;;
+  *)
+    sed -n '2,10p' "$0"
+    exit 2
+    ;;
 esac

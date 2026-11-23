@@ -63,7 +63,7 @@ the no-drop-point shape below and deleted on 2026-09-20; its threat framing surv
 
 ## Wire format
 
-```
+```text
 .arb  = "ARB1"(4) | keyId(1) | ephPub(32) | nonce(12) | ciphertext | tag(16)   (65 B overhead)
 key   = HKDF-SHA256(ikm = X25519(eph, ownerPub), salt = ephPub‖ownerPub, info = "arbiter-feedback-v1", 32)
 AAD   = the 5 header bytes — a header edit fails the tag
@@ -86,6 +86,7 @@ pubkey imports via the SPKI prefix `302a300506032b656e032100`; `hkdfSync` return
 ## File-by-file plan (build order; each step lands green under `ops/run-tests.sh`)
 
 ### 1. Sealing — `desktop/src/feedback/seal.js` (~60) + `ops/feedback-bot/arbseal.py` (~60, incl. keygen)
+
 - `seal.js` exports `MAGIC`, `KEY_ID`, `OWNER_PUB_B64`, `seal(plain, ownerPubB64 = OWNER_PUB_B64,
   keyId = KEY_ID) → Buffer`, and `open(sealed, privateKeyPem) → Buffer` **for tests only** (the
   real opener is Python).
@@ -102,6 +103,7 @@ pubkey imports via the SPKI prefix `302a300506032b656e032100`; `hkdfSync` return
   `arbseal.py`. If either side drifts, both gates go red.
 
 ### 2. Redaction — `desktop/src/feedback/redact.js` (~60)
+
 - `SETTINGS_KEYS` (allow-list for `/api/settings` and `desktop-settings.json`), `pickAllowed(obj,
   keys)` (unknown keys dropped, fail-closed), `SECRET_PATTERNS`, `scrubText(s)`, `redactDeep(value)`
   (walks the tree, scrubs every string, drops keys matching `/sess|cookie|token|secret|password|authorization/i`).
@@ -113,6 +115,7 @@ pubkey imports via the SPKI prefix `302a300506032b656e032100`; `hkdfSync` return
   output contains **none** of the seeds; `pickAllowed` drops an unknown harmless key; plain text unchanged.
 
 ### 3. Log rings — `desktop/src/feedback/ring.js` (~25), `frontend/src/lib/errorRing.js` (~25), `main.js` (~20 changed)
+
 - `makeRing(n) → { push, lines, clear }`; lines clamped to 500 chars, `HH:MM:SS` prefix.
 - `main.js`: hoist `bkBuf` to module scope, `slice(-6000)` → `slice(-65536)` (crash telemetry keeps
   `.slice(-3000)`); `mainRing = makeRing(200)` fed by a `logLine()` helper at the existing
@@ -122,6 +125,7 @@ pubkey imports via the SPKI prefix `302a300506032b656e032100`; `hkdfSync` return
 - **Test `desktop/test/feedback-ring.test.mjs`:** keeps last N; clamps; never throws on non-strings.
 
 ### 4. Bundler — `desktop/src/feedback/bundle.js` (~110) + `installid.js` (~15)
+
 - `buildBundle({ meta, sources, get, readJson, screens }) → Promise<Buffer>` — everything
   injected; no Electron, no network in tests.
 - `get(path)` reads **only** `/api/diag`, `/api/status`, `/api/backfill`, `/api/settings` (4 s
@@ -136,6 +140,7 @@ pubkey imports via the SPKI prefix `302a300506032b656e032100`; `hkdfSync` return
   `screensPartial`; `get` was never called with `/api/session`.
 
 ### 5. Destinations + snap mode — `frontend/src/lib/dests.js` (~25), `App.jsx` (~30 changed)
+
 - `dests.js` exports `DESTS`: the **9 distinct screens** — `board`, the 7 existing `SUB_DESTS`
   entries, `settings` — as `{ id, section, sub, label }`. `App.jsx` derives `SUB_DESTS` from it.
 - `SNAP = new URLSearchParams(location.search).get('snap') === '1'`. Under `SNAP`: skip
@@ -149,6 +154,7 @@ pubkey imports via the SPKI prefix `302a300506032b656e032100`; `hkdfSync` return
   opener's screen allow-list equals `DESTS` ids + `current` — drift here is the path-traversal hole).
 
 ### 6. The invisible sweep — `desktop/src/feedback/snap.js` (~100) + `preload-snap.js` (~10)
+
 - `preload-snap.js` exposes only `getVersion`, `getChannel`, `hotkey.get`, `ee2.status`. No
   `trade`, `ws`, `clipboard`, `setCookie`, `feedback`: no IPC writer is reachable from the snap window.
 - `sweepScreens({ uiUrl, bounds, dests, BrowserWindow, session, visibleWin, perScreenMs = 2500,
@@ -170,6 +176,7 @@ pubkey imports via the SPKI prefix `302a300506032b656e032100`; `hkdfSync` return
   window destroyed on every path incl. a thrown `loadURL`.
 
 ### 7. Package + hand-off — `desktop/src/feedback/index.js` (~70), preload (3 lines), renderer (~90)
+
 - `registerFeedback({ ipcMain, BrowserWindow, session, win, uiUrl, backendUrl, userData, version,
   channel, sources, DISCORD_INVITE })` registers three handlers, all rejecting senders other than `win`:
   - `feedback:package` → throttle 60 s → `sweepScreens` → `buildBundle` → `seal` → write
@@ -198,9 +205,10 @@ pubkey imports via the SPKI prefix `302a300506032b656e032100`; `hkdfSync` return
   exactly once; `frontend/test/feedback.test.mjs` (`shortId` 6-char Crockford, no vowels).
 
 ### 8. The listener bot + the opener cell — `ops/feedback-bot/` (Python)
+
 Two compose services on shazam sharing one spool volume; no Docker socket, no ports.
 
-```
+```text
  Discord ──► bot   (trusted: token + private key, network)
                │   AES-GCM decrypt only — pure math, no parsing; a bad tag stops here
                │   writes  spool/in/<threadId>.gz          (plaintext, still untrusted)
@@ -289,11 +297,12 @@ mounted read-only; `feedback-opener`: `network_mode: none`, `read_only: true`, `
   `discord.py`, `Pillow`, `hypothesis` (`docs/dev-notes.md` → Testing).
 
 ### 9. Docs (no code)
+
 - `docs/dev-notes.md`: "Feedback reports" — keygen on shazam, where the PEM and bot token live
   (`/etc/arbiter/`, root-owned, mounted read-only), owner-key rotation (bump `KEY_ID`, keep the old
   PEM in `KEY_DIR`), the Discord setup (forum channel, invite targeting it, bot permissions + the
-  Message Content intent), deploying the bot (`./ops/deploy-web.sh bot` → rsync `ops/feedback-bot/`
-  + `docker compose up -d --build feedback-bot`), reading the inbox, the `?snap=1` mode.
+  Message Content intent), deploying the bot (`./ops/deploy-web.sh bot` → rsync `ops/feedback-bot/` +
+  `docker compose up -d --build feedback-bot`), reading the inbox, the `?snap=1` mode.
 - **CLAUDE.md: no change.** The app makes no new outbound call; opening the invite is the OS browser.
 
 ## Threat model
