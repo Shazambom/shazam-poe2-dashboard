@@ -117,7 +117,7 @@ export function useReprice({ wv, node, navUrl, inHistory, remountKey, league, vi
       const ids = gapPlan(target, prices.P)
       if (ids.length) run(ids, 'gap'); else d.gap = 'done'
     }
-  }, [tick, shown, own, rowQuery])
+  }, [tick, shown, own, rowQuery, wcId])
 
   useEffect(() => {
     const id = page?.search?.id
@@ -125,7 +125,7 @@ export function useReprice({ wv, node, navUrl, inHistory, remountKey, league, vi
       offered.current = id
       diag('ws', `reprice-offer lead=${offer.lead} best=${offer.currency} gap=${Math.round(offer.gap * 100)}%`)
     }
-  }, [offer])
+  }, [offer, page?.search?.id])
 
   const apply = useCallback(async () => {
     const p = page
