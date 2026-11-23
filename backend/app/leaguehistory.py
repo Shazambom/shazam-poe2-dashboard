@@ -494,6 +494,21 @@ class CrawlResult(TypedDict, total=False):
     errors: int
 
 
+def _record_current_leagues(leagues: list[dict]) -> set[str]:
+    was_current = set(
+        db.kv_get("lh_current", []) or []
+    )  # the previous crawl's: a league that just ended
+    db.kv_set(
+        "lh_current",
+        [
+            league_row["Value"]
+            for league_row in leagues
+            if league_row.get("IsCurrent") and league_row.get("Value")
+        ],
+    )
+    return was_current
+
+
 async def backfill(force: bool = False, full: bool = True) -> CrawlResult:
     """Pull daily history for the target leagues × items into league_daily. Past
     leagues are fetched once; current leagues refresh on a 12h cadence.
@@ -533,17 +548,7 @@ async def backfill(force: bool = False, full: bool = True) -> CrawlResult:
             log.warning("poe2scout leagues fetch failed: %s", exc)
             return {"error": str(exc)}
         progress["leagues_total"] = len(leagues)
-        was_current = set(
-            db.kv_get("lh_current", []) or []
-        )  # the previous crawl's: a league that just ended
-        db.kv_set(
-            "lh_current",
-            [
-                league_row["Value"]
-                for league_row in leagues
-                if league_row.get("IsCurrent") and league_row.get("Value")
-            ],
-        )
+        was_current = await _finish_crawl_write(_record_current_leagues, leagues)
         stored = _stored_counts()
         for li, lg in enumerate(leagues):
             name, current = lg.get("Value"), bool(lg.get("IsCurrent"))
