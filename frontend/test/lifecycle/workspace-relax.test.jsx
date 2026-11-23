@@ -76,16 +76,18 @@ describe('WorkspaceView Close-enough fuzzy rare finder lifecycle', () => {
   // useReprice registers its onTap listener once per module load; keep the captured callback across tests.
   let tapHandler = null
   let navHandler = null
+  let apiCalls
 
   beforeEach(() => {
     navHandler = null
-    installApiMock({
+    const apiMock = installApiMock({
       '/api/strategy/calc': {
         calc: null,
         prices: { divine: 1, chaos: 0.09, vaal: 0.012, exalted: 0.0015 },
         uses: [],
       },
     })
+    apiCalls = apiMock.calls
     if (!tapHandler) {
       window.poe2desktop.trade.onTap = vi.fn((cb) => { tapHandler = cb; return () => {} })
     }
@@ -101,6 +103,63 @@ describe('WorkspaceView Close-enough fuzzy rare finder lifecycle', () => {
         { id: 'r1', amount: 100, currency: 'vaal' },
       ],
     }))
+  })
+
+  const savedMods = ['explicit.stat_armour', 'explicit.stat_spirit', 'explicit.stat_accuracy']
+
+  // The outgoing guest can still report its address or listings while the next
+  // saved link is being decoded locally. Only a user click should broaden it.
+  async function switchToCompressedSearch(afterExact) {
+    const body = structuredClone(EE2_RARE_QUERY)
+    body.query.stats[0].filters = savedMods.map(id => ({ id, value: { min: 10 } }))
+    const next = { id: 'next', kind: 'search', name: 'Saved armour search', slug: await encodeSlug(body.query) }
+    const first = { id: 'first', kind: 'search', name: 'Saved life search', slug: await encodeSlug(EE2_RARE_QUERY.query) }
+    seedTree(afterExact ? first.id : 's1', [first, next])
+    const request = window.poe2desktop.trade.relax
+    const guest = () => document.querySelector('webview')
+    const contents = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'getWebContentsId')
+    Object.defineProperty(HTMLElement.prototype, 'getWebContentsId', { configurable: true, value: () => 79 })
+    try {
+      const { rerender, unmount } = render(<WorkspaceView league="Test League" visible />)
+      fireEvent.click(await screen.findByRole('button', { name: 'Close enough' }))
+      await screen.findByText('Relaxed')
+      const url = guest().getAttribute('src')
+      const previous = JSON.parse(new URL(url).searchParams.get('q'))
+      expect(previous.query.status.option).toBe('securable')
+      act(() => tapHandler({ kind: 'search', wcId: 79, id: 'previous', league: 'Test League', body: previous, ids: [] }))
+      if (afterExact) fireEvent.click(screen.getByRole('button', { name: 'Exact' }))
+      else await act(async () => navHandler({ wcId: 79, phase: 'stop', url }))
+      act(() => useWorkspace.getState().setActive(next.id))
+      const selected = guest()
+      const address = selected.getAttribute('src')
+      expect(address).toContain(next.slug)
+      rerender(<WorkspaceView league="Test League" visible />)
+      act(() => tapHandler({ kind: 'fetch', wcId: 79, searchId: 'previous', rows: [] }))
+      const broaden = await screen.findByRole('button', { name: 'Close enough' })
+      expect(guest()).toBe(selected)
+      expect(selected.getAttribute('src')).toBe(address)
+      expect(request).toHaveBeenCalledTimes(1)
+      fireEvent.click(broaden)
+      await screen.findByText('Relaxed')
+      expect(request).toHaveBeenCalledTimes(2)
+      const queries = request.mock.calls.map(([payload]) => payload.query)
+      expect(queries.map(query => query.status.option)).toEqual(['securable', 'securable'])
+      expect(JSON.parse(new URL(guest().getAttribute('src')).searchParams.get('q')).query.status.option).toBe('securable')
+      expect(apiCalls.every(call => call.url.startsWith('/api/'))).toBe(true)
+      unmount()
+      return queries[1].stats[0].filters.map(filter => filter.id)
+    } finally {
+      if (contents) Object.defineProperty(HTMLElement.prototype, 'getWebContentsId', contents)
+      else Reflect.deleteProperty(HTMLElement.prototype, 'getWebContentsId')
+    }
+  }
+
+  it('broadens the newly selected saved link after the outgoing relaxed webview reports its address', async () => {
+    expect(await switchToCompressedSearch(false)).toEqual(savedMods)
+  })
+
+  it('broadens the newly selected saved link after Exact on another compressed search', async () => {
+    expect(await switchToCompressedSearch(true)).toEqual(savedMods)
   })
 
   it('shows Close enough on EE2 History rare, highlights on empty exact, shows Relaxing…, applies real-rate currency selection, relaxes further, snaps back to Exact, and never mutates node.q', async () => {
