@@ -18,7 +18,7 @@ import {
 
 const newId = (kind) => `${kind}_${uid()}`
 
-let pendingEvents = []   // Client.txt events received before the strat doc hydrated
+const pendingEvents = []   // Client.txt events received before the strat doc hydrated
 let loadPromise = null
 
 function makeAutosave(setState) {

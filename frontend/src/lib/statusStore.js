@@ -9,8 +9,8 @@ import { restoreFailedEdits } from './stash.js'
 // so the cached copy never goes stale. `refresh()` is what a view calls after it changed something.
 let settingsQueue = Promise.resolve()   // settings writes, serialised (saveSettings)
 let capitalQueue = Promise.resolve()    // holdings writes, serialised across mounts (saveCapital)
-let failedCounted = new Set()           // recount currencies from a rejected PUT, carried into the next queued PUT
-let failedEdits = new Map()             // unsaved edits from a rejected PUT superseded by another queued PUT
+const failedCounted = new Set()           // recount currencies from a rejected PUT, carried into the next queued PUT
+const failedEdits = new Map()             // unsaved edits from a rejected PUT superseded by another queued PUT
 // Unsaved Stash edits shared across mounts so an unmount mid-fetch or a failed unmount PUT is never lost.
 export const capitalDirty = new Map()
 

@@ -199,7 +199,7 @@ test('a page that arrived before the prices still leaves sibling evidence', () =
 // sampled row, where its true minimum sits. No new searches.
 const ranks = (n) => Array.from({ length: n }, (_, i) => `r${i}`)
 function searched(n, { body = BODY, prices = P } = {}) {
-  let s = R.observe(R.EMPTY, OPTIONS)
+  const s = R.observe(R.EMPTY, OPTIONS)
   return R.observe(s, { kind: 'search', wcId: 1, league: 'Forbidden Rites', id: 'S1', body, ids: ranks(n), total: n }, prices)
 }
 const load = (s, rows) => R.observe(s, { kind: 'fetch', wcId: 1, searchId: 'S1', rows: rows.map(([i, currency, amount]) => ({ id: `r${i}`, amount, currency })) })
