@@ -1,5 +1,5 @@
 import { ignoredError } from '../lib/ignoredError.js'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useEffectEvent, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { api, fmt, surface, toast } from '../lib/api.js'
 import { wealthDigits, stashUnit, STASH_UNITS } from '../lib/wealth.js'
 import { useAutosave } from '../lib/hooks.js'
@@ -44,7 +44,7 @@ export default function StashView({ league }) {
   const data = useStatus(s => s.capital)
   const [qty, setQty] = useState(null)          // { currency: "qty as typed" }
   const qtyRef = useRef(null)
-  qtyRef.current = qty
+  useLayoutEffect(() => { qtyRef.current = qty }, [qty])
   // Unsaved edits live in the store-shared `capitalDirty` Map so edits held during a fetch or restored
   // after a failed unmount PUT survive across Stash mounts; `statusStore.saveCapital` carries failed recount
   // cutoffs and edits forward into any newer queued PUT and restores into `capitalDirty` only if the queue tail rejects.
@@ -71,10 +71,14 @@ export default function StashView({ league }) {
 
   // ---- the "count toward liquid net worth" switches (settings `stash_counted`; only choices are stored)
   const stored = useStatus(s => s.settings?.stash_counted)
-  const [choices, setChoices] = useState(null)
+  const [lastStored, setLastStored] = useState(stored)
+  const [choices, setChoices] = useState(() => stored ? { ...stored } : null)
   useEffect(() => { ensureSettings().catch(() => ignoredError('load stash settings')) }, [])
   // Stored choices load under any made before the settings arrived (those are newer).
-  useEffect(() => { if (stored) setChoices(c => ({ ...stored, ...(c || {}) })) }, [stored])
+  if (stored !== lastStored) {
+    setLastStored(stored)
+    if (stored) setChoices(c => ({ ...stored, ...(c || {}) }))
+  }
   const choose = (patch) => {
     setChoices(c => ({ ...(c || {}), ...patch }))
     // A switched-off holding also stops being arbitrage capital: re-read the holdings once saved.
@@ -107,7 +111,7 @@ export default function StashView({ league }) {
   // The add bar (pinned at the top): pick a currency, say how many, Add.
   const [pick, setPick] = useState('')
   const pickRef = useRef('')            // the pick as of now: a second press in the same instant finds none
-  pickRef.current = pick
+  useLayoutEffect(() => { pickRef.current = pick }, [pick])
   const [amount, setAmount] = useState('1')
   const addPicked = () => {
     const id = pickRef.current, n = parseAmount(amount)
@@ -121,6 +125,7 @@ export default function StashView({ league }) {
     })
     unfold(id); setPick('')
   }
+  const awaitingHoldings = qty == null
   // The sales column pins below the pinned header: its real height, measured (it wraps on narrow windows).
   const viewRef = useRef(null), headRef = useRef(null)
   useEffect(() => {
@@ -129,7 +134,7 @@ export default function StashView({ league }) {
     const ro = new ResizeObserver(() => view.style.setProperty('--stash-head-h', `${head.offsetHeight}px`))
     ro.observe(head)
     return () => ro.disconnect()
-  }, [qty == null])
+  }, [awaitingHoldings])
   const [folds, setFolds] = useState(readFolds)
   const [q, setQ] = useState('')
   const searchRef = useRef(null)
@@ -158,7 +163,7 @@ export default function StashView({ league }) {
   const [lastFetch, setLastFetch] = useState(null)
   const mountedRef = useRef(true)
   const selRef = useRef(sel)
-  selRef.current = sel
+  useLayoutEffect(() => { selRef.current = sel }, [sel])
   const activeRefresh = useRef(null)
   useEffect(() => {
     mountedRef.current = true
@@ -179,7 +184,7 @@ export default function StashView({ league }) {
     if (needsSave) save(next)
     else discard()
     if (selRef.current) loadSales(selRef.current)
-  }, [creditRev, data])
+  }, [creditRev, data, save, discard])
   // If any mount's post-credit capital reload fails, drop stale quantities on the active editor too so it
   // cannot save a pre-credit balance before refreshHeader() delivers the credited holdings.
   useEffect(() => {
@@ -187,22 +192,22 @@ export default function StashView({ league }) {
     discard()
     capitalDirty.clear()
     setQty(null)
-  }, [capitalStale])
+  }, [capitalStale, discard])
   // Hold autosave across ALL Stash mounts while any sales fetch is in flight or holdings are stale, so a
   // remounted editor cannot send a pre-credit full-balance PUT over an in-flight credit before reconciliation.
   useEffect(() => {
     if (salesFetching || capitalStale) hold()
     else release()
-  }, [salesFetching, capitalStale])
+  }, [salesFetching, capitalStale, hold, release])
   // Seeded once from whichever copy arrives first, rebased with any shared unsaved edits (e.g. a failed unmount PUT)
   // and scheduled for retry (held automatically if salesFetching/capitalStale is active).
-  const seed = (cap) => {
+  const seed = useCallback((cap) => {
     const { qty: next, needsSave } = reconcileCapital(cap, capitalDirty)
     setQty(next)
     arm()
     if (needsSave) save(next)
-  }
-  useEffect(() => { if (!qty && data && !capitalSaving && !capitalStale) seed(data) }, [data, qty, capitalSaving, capitalStale])
+  }, [arm, save])
+  useEffect(() => { if (!qty && data && !capitalSaving && !capitalStale) seed(data) }, [data, qty, capitalSaving, capitalStale, seed])
   const commitDetachedEdits = async () => {
     if (!capitalDirty.size) return
     discard()
@@ -325,11 +330,14 @@ export default function StashView({ league }) {
       if (acquiredFetch && !activeRefresh.current && !useStatus.getState().capitalStale) release()
     }
   }
+  const currentRefresh = useEffectEvent(() => refresh)
+  const refreshFromTick = useEffectEvent(() => refresh(false))
   // A 10-minute timer while mounted (= while the Stash tab is visible). Desktop only.
   useEffect(() => {
     if (!isDesktop || !sel) return
-    refresh(true)
-    const t = setInterval(() => { if (document.visibilityState !== 'hidden') refresh(true) }, POLL_MS)
+    const run = currentRefresh()
+    run(true)
+    const t = setInterval(() => { if (document.visibilityState !== 'hidden') run(true) }, POLL_MS)
     return () => {
       clearInterval(t)
       activeRefresh.current = null
@@ -337,7 +345,7 @@ export default function StashView({ league }) {
     }
   }, [sel])
   // Topbar ⟳ = this tab's own refresh (a manual one).
-  useEffect(() => { if (tick !== tick0.current) { tick0.current = tick; refresh(false) } }, [tick])
+  useEffect(() => { if (tick !== tick0.current) { tick0.current = tick; refreshFromTick() } }, [tick])
   const prices = sales.prices ?? status?.wealth_prices
   const stats = useMemo(() => salesStats(sales.rows, ref, prices), [sales.rows, ref, prices])
   const byName = useMemo(() => {

@@ -56,7 +56,7 @@ describe('Stash, Arbitrage SSE, Convert, and StratCalc lifecycles', () => {
 
   it('StashView edits holdings and flushes pending PUT /api/capital on unmount', async () => {
     const { calls } = installApiMock()
-    const { unmount } = render(<StashView />)
+    const { rerender, unmount } = render(<StashView />)
 
     await waitFor(() => {
       expect(document.querySelectorAll('input[type="number"], input[inputmode="decimal"], input').length).toBeGreaterThan(0)
@@ -66,15 +66,51 @@ describe('Stash, Arbitrage SSE, Convert, and StratCalc lifecycles', () => {
     expect(numInput).toBeTruthy()
 
     fireEvent.change(numInput, { target: { value: '25' } })
+    rerender(<StashView />)
+    expect(numInput.value).toBe('25')
+    expect(calls.filter(c => c.method === 'PUT' && c.path === '/api/capital')).toHaveLength(0)
     // Unmount immediately before the autosave debounce fires → unmount flush must persist the edit
     unmount()
 
     await waitFor(() => {
       const puts = calls.filter(c => c.method === 'PUT' && c.path === '/api/capital')
-      expect(puts.length).toBeGreaterThanOrEqual(1)
+      expect(puts).toHaveLength(1)
       const lastEntries = puts[puts.length - 1].body.entries
       expect(Object.values(lastEntries)).toContain(25)
     })
+  })
+
+  it('discards a held pre-credit balance and seeds the replacement without saving stale quantities', async () => {
+    const { calls } = installApiMock()
+    const capital = useStatus.getState().capital
+    const { unmount } = render(<StashView />)
+    const quantity = await screen.findByDisplayValue('10')
+    act(() => useStatus.setState({ salesFetching: true }))
+    fireEvent.change(quantity, { target: { value: '25' } })
+    expect(quantity.value).toBe('25')
+    act(() => useStatus.setState({ capitalStale: true, salesFetching: false }))
+    expect(screen.getByText('Loading your stash…')).toBeTruthy()
+    expect(screen.queryByDisplayValue('25')).toBeNull()
+    const rows = capital.rows.map(row => row.currency === 'divine' ? { ...row, qty: 12 } : row)
+    act(() => useStatus.setState({ capital: { ...capital, rows }, capitalStale: false }))
+    expect(await screen.findByDisplayValue('12')).toBeTruthy()
+    unmount()
+    expect(calls.filter(call => call.method === 'PUT' && call.path === '/api/capital')).toHaveLength(0)
+  })
+
+  it('keeps a local counting choice when saved choices for other currencies arrive', async () => {
+    const { calls } = installApiMock()
+    const { unmount } = render(<StashView />)
+    const divine = await screen.findByRole('switch', { name: 'Count Divine Orb toward liquid net worth' })
+    const exalted = screen.getByRole('switch', { name: 'Count Exalted Orb toward liquid net worth' })
+    expect(divine.getAttribute('aria-checked')).toBe('true')
+    fireEvent.click(divine)
+    await waitFor(() => expect(calls.filter(c => c.method === 'PUT' && c.path === '/api/settings')).toHaveLength(1))
+    act(() => useStatus.setState(s => ({ settings: { ...s.settings, stash_counted: { divine: true, exalted: false } } })))
+    expect(divine.getAttribute('aria-checked')).toBe('false')
+    expect(exalted.getAttribute('aria-checked')).toBe('false')
+    unmount()
+    expect(calls.filter(c => c.method === 'PUT' && c.path === '/api/settings')).toHaveLength(1)
   })
 
   it('leaves the route loading state when the stream reports a failure', async () => {
