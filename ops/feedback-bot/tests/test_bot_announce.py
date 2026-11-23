@@ -80,7 +80,10 @@ def drop(h, p, name=None):
     return f
 
 
-def target(channel, role=Role()):
+_DEFAULT_ROLE = Role()
+
+
+def target(channel, role=_DEFAULT_ROLE):
     async def get():
         return channel, role
 

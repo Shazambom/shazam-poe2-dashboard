@@ -131,8 +131,8 @@ async def _token_request(form: dict) -> dict:
             )
         except ValueError:
             raise
-        except Exception:
-            raise ValueError(f"token endpoint returned {r.status_code}")
+        except Exception as exc:
+            raise ValueError(f"token endpoint returned {r.status_code}") from exc
     return r.json()
 
 

@@ -121,7 +121,7 @@ def announce(inbox: Path, b64: str, check: bool = False) -> Path | None:
     try:
         p = json.loads(base64.b64decode(b64, validate=True))
     except (binascii.Error, ValueError) as e:
-        raise ValueError(f"not a base64 JSON payload: {e}")
+        raise ValueError(f"not a base64 JSON payload: {e}") from e
     sys.path.insert(0, str(Path(__file__).resolve().parent / "bot"))
     import announce as rules  # the bot's own rules for a release post (only `announce` needs them)
 

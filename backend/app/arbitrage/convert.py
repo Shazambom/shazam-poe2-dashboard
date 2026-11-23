@@ -235,9 +235,10 @@ def _min_amount(
         if rate <= 0:
             continue
 
-        def ok(a):
+        def ok(a, candidate=path):
             return _accepted(
-                _convert_path(g, path, float(a), ref_value, have, want), max_gain_pct
+                _convert_path(g, candidate, float(a), ref_value, have, want),
+                max_gain_pct,
             )
 
         amt = min(ceiling, unit * math.ceil(1.0 / (rate * unit)))

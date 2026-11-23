@@ -37,7 +37,7 @@ try:
 except ImportError as exc:  # misuse, not a code path
     raise SystemExit(
         f"run this from the backend directory / container (cwd=/app): {exc}"
-    )
+    ) from exc
 
 MARKET_META_DDL = (
     "CREATE TABLE IF NOT EXISTS market_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)"

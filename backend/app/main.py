@@ -207,12 +207,12 @@ async def _analytics_loop():
             if league:
                 # Both heavy jobs target the on-screen league. enqueue coalesces per kind, so this
                 # never piles up; the sidecar claims oldest-first and computes each.
-                def _enqueue():
+                def _enqueue(active_league: str):
                     with db.tx() as c:
-                        analytics.enqueue(c, "discords", {"league": league})
-                        analytics.enqueue(c, "arc", {"league": league})
+                        analytics.enqueue(c, "discords", {"league": active_league})
+                        analytics.enqueue(c, "arc", {"league": active_league})
 
-                await run_in_threadpool(_enqueue)
+                await run_in_threadpool(_enqueue, league)
                 sidecar_supervisor.wake()
         except Exception as exc:
             log.warning("analytics enqueue error: %s", exc)
@@ -489,7 +489,7 @@ async def session_connect(body: SessionBody):
     try:
         result = await session.connect(body.cookie, body.label)
     except ValueError as exc:
-        raise HTTPException(400, str(exc))
+        raise HTTPException(400, str(exc)) from exc
     orderbook.request_refresh()
     return result
 
@@ -519,7 +519,7 @@ def oauth_start(body: OAuthStart | None = None):
     try:
         return oauth.start(body.redirect_uri if body else None)
     except RuntimeError as exc:
-        raise HTTPException(400, str(exc))
+        raise HTTPException(400, str(exc)) from exc
 
 
 @app.post("/api/oauth/complete")
@@ -527,7 +527,7 @@ async def oauth_complete(body: OAuthComplete):
     try:
         return await oauth.complete(body.code, body.state)
     except ValueError as exc:
-        raise HTTPException(400, str(exc))
+        raise HTTPException(400, str(exc)) from exc
 
 
 @app.get("/callback")
@@ -902,7 +902,7 @@ async def leagues(force: bool = False):
     try:
         return await orderbook.leagues(force)
     except Exception as exc:
-        raise HTTPException(502, f"could not load league list: {exc}")
+        raise HTTPException(502, f"could not load league list: {exc}") from exc
 
 
 @app.get("/api/ratelimits")

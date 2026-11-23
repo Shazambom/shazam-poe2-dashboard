@@ -88,7 +88,7 @@ def parse_json(text: bytes):
     try:
         doc = json.loads(text, object_pairs_hook=pairs)
     except (ValueError, RecursionError) as e:
-        raise Refused(f"bad json: {e.__class__.__name__}")
+        raise Refused(f"bad json: {e.__class__.__name__}") from e
     if not isinstance(doc, dict):
         raise Refused("not an object")
     return doc
