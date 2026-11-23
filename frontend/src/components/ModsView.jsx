@@ -127,7 +127,7 @@ export default function ModsView() {
   // Paste item: main reads the clipboard and hands over the parse; the pool follows the base.
   const onPaste = async (via = 'button') => {
     pastedVia.current = via
-    let r = null
+    let r
     try { r = await modItem() } catch { r = { item: null, reason: 'worker' } }
     if (!r?.item) { toast(PASTE_FAIL[r?.reason] || PASTE_FAIL['not-item'], false); return }
     const target = poolFor(pools, r.item)

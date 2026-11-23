@@ -592,7 +592,7 @@ export function matchRecentSale(row, salesRows) {
     const it = s.item || {}
     const sName = String(it.name || '').trim().toLowerCase()
     const sType = String(it.typeLine || it.baseType || '').trim().toLowerCase()
-    let hit = false
+    let hit
     if (rarity === 'unique') {
       hit = !!name && sName === name
     } else if (name) {
