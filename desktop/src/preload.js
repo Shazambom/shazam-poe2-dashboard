@@ -1,3 +1,4 @@
+'use strict'
 const { contextBridge, ipcRenderer } = require('electron')
 
 // One subscribe helper: returns (cb) => unsubscribe for a main→renderer channel.

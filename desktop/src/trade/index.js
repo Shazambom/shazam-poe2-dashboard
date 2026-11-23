@@ -1,6 +1,7 @@
 // Wires the live-search engine to the renderer over IPC. Call registerTrade(getWin)
 // once from app.whenReady. All trade traffic stays in main (Cloudflare/session); the
 // renderer only sends intents and receives pings/state.
+'use strict'
 const { ignored } = require('../ignored.js')
 const { ipcMain } = require('electron')
 const { installCloudflareCookieFix } = require('./proxy.js')

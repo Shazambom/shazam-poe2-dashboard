@@ -2,6 +2,7 @@
 // background straight onto Trading → Live and focuses the newest ping's button, so the
 // user can act the instant they hear the ping. Re-bindable; fails gracefully if the combo
 // is already taken by another app.
+'use strict'
 const { ignored } = require('../ignored.js')
 const { globalShortcut } = require('electron')
 

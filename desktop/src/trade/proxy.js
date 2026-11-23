@@ -4,6 +4,7 @@
 // matching User-Agent. The backend (bare POESESSID) would be 403'd. Pattern from
 // Exiled-Exchange-2's main/src/proxy.ts. Contract-clean: it's the user's own session
 // hitting pathofexile.com, never our server.
+'use strict'
 const { app, net, session } = require('electron')
 
 const POE = 'https://www.pathofexile.com'

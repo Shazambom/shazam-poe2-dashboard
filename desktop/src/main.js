@@ -7,6 +7,7 @@
 //     dir); only an unpackaged dev launch without a binary points at a dev server;
 //   * being Chromium, we ARE the browser: the PoE login happens in our own window and
 //     the HttpOnly POESESSID is read from our session and handed to the backend.
+'use strict'
 const { ignored } = require('./ignored.js')
 const { app, BrowserWindow, Menu, Notification, clipboard, dialog, ipcMain, session, shell, nativeTheme } = require('electron')
 const { spawn } = require('node:child_process')

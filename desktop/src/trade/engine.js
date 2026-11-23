@@ -2,6 +2,7 @@
 // WebSocket, and on each ping fetch the listing details and emit an enriched ping to the
 // renderer. Read-only discovery + the manual teleport POST — strictly human-triggered, no
 // auto-buy. See docs/trading-rework-research.md for the locked design decisions.
+'use strict'
 const { ignored } = require('../ignored.js')
 const WebSocket = require('ws')
 const { POE, poeRequest, poeJson, cookieHeader, userAgent } = require('./proxy.js')
