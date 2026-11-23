@@ -1,5 +1,5 @@
 import { ignoredError } from '../lib/ignoredError.js'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'motion/react'
 import { api } from '../lib/api.js'
 import { useWorkspace } from '../lib/workspaceStore.js'
@@ -21,10 +21,11 @@ export default function CommandPalette({ open, onClose, tabs, onGoTab, subDests 
   const inputRef = useRef(null)
   const listRef = useRef(null)
 
+  const availableCommands = useEffectEvent(() => usableHere(screenCommands[screen] || []))
   useEffect(() => {
     if (!open) return
     setQ(''); setSel(0)
-    setHere(usableHere(screenCommands[screen] || []))
+    setHere(availableCommands())
     api.board().then(d => setRows(d?.rows || [])).catch(() => ignoredError('load board commands'))
     const t = setTimeout(() => inputRef.current?.focus(), 10)
     return () => clearTimeout(t)
@@ -33,7 +34,7 @@ export default function CommandPalette({ open, onClose, tabs, onGoTab, subDests 
   const items = useMemo(() => buildPaletteItems({ tabs, subDests, rows, currencies, leagues, commands, tree, screen,
     screenCommands: { ...screenCommands, [screen]: here }, q }), [tabs, subDests, rows, currencies, leagues, commands, tree, screen, screenCommands, here, q])
 
-  useEffect(() => { if (sel > items.length - 1) setSel(0) }, [items.length, sel])
+  if (sel > 0 && sel >= items.length) setSel(0)
   // keep the selected row in view as you arrow through
   useEffect(() => {
     const el = listRef.current?.querySelector('.cmdk-item.sel')
