@@ -1,10 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
+import { render, renderHook, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import { installApiMock } from './setup.js'
 import WorkspaceView from '../../src/components/WorkspaceView.jsx'
 import { bus } from '../../src/lib/api.js'
 import { useWorkspace, HISTORY_SYS } from '../../src/lib/workspaceStore.js'
 import { encodeSlug } from '../../src/lib/reprice.js'
+import { useRelax } from '../../src/lib/useRelax.js'
+import * as session from '../../src/lib/session.js'
 
 const EE2_RARE_QUERY = {
   query: {
@@ -306,7 +308,7 @@ describe('WorkspaceView Close-enough fuzzy rare finder lifecycle', () => {
   it('shows No matches when relaxed search returns 0, preserves exact TAP page on Exact (C4), and resets/cancels when leaving Workspace', async () => {
     window.poe2desktop.trade.relax = vi.fn(async () => ({ ok: true, searchId: 'RX0', total: 0, rows: [] }))
     seedTree('h1')
-    const { rerender } = render(<WorkspaceView league="Test League" visible={true} />)
+    const { rerender, unmount } = render(<WorkspaceView league="Test League" visible={true} />)
     const wv = document.querySelector('webview')
     wv.getWebContentsId = () => 91
 
@@ -341,6 +343,10 @@ describe('WorkspaceView Close-enough fuzzy rare finder lifecycle', () => {
       expect(screen.getByRole('button', { name: 'Close enough' })).toBeTruthy()
       expect(screen.queryByText('No matches')).toBeNull()
     })
+    expect(window.poe2desktop.trade.relax).toHaveBeenCalledTimes(2)
+    const beforeUnmount = window.poe2desktop.trade.relaxCancel.mock.calls.length
+    unmount()
+    expect(window.poe2desktop.trade.relaxCancel).toHaveBeenCalledTimes(beforeUnmount + 1)
   })
 
   it('remounts latest captured slug on Exact (C5) and uses live webview TAP search over stale disabled node.q', async () => {
@@ -639,3 +645,34 @@ describe('WorkspaceView Close-enough fuzzy rare finder lifecycle', () => {
   })
 })
 
+
+it('discards pending local slug decodes after leaving and revisiting the same saved row', async () => {
+  const reads = []
+  const decode = vi.spyOn(session, 'searchOfLink').mockImplementation(() => {
+    const read = Promise.withResolvers()
+    reads.push(read)
+    return read.promise
+  })
+  const broaden = vi.spyOn(window.poe2desktop.trade, 'relax')
+  const first = { id: 'A', kind: 'search', slug: 'saved-one' }
+  const second = { id: 'B', kind: 'search', slug: 'saved-two' }
+  const { result, rerender, unmount } = renderHook(node => useRelax({
+    node, league: 'Test League', remountKey: node.id,
+  }), { initialProps: first })
+  rerender({ ...first })
+  expect(decode).toHaveBeenCalledTimes(1)
+  rerender(second)
+  rerender(first)
+  expect(decode.mock.calls.map(([url]) => new URL(url).pathname.split('/').at(-1))).toEqual(['saved-one', 'saved-two', 'saved-one'])
+  await act(async () => {
+    reads[1].resolve(EE2_RARE_QUERY)
+    reads[0].resolve(EE2_RARE_QUERY)
+    await Promise.all([reads[0].promise, reads[1].promise])
+  })
+  expect(result.current.preview).toBeNull()
+  await act(async () => { reads[2].resolve(EE2_RARE_QUERY); await reads[2].promise })
+  expect(result.current.preview?.total).toBe(5)
+  expect(result.current.relaxUrl).toBeNull()
+  expect(broaden).not.toHaveBeenCalled()
+  unmount()
+})
