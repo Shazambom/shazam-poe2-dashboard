@@ -93,6 +93,26 @@ def _wait_until(pred, timeout: float = 15.0, interval: float = 0.05) -> bool:
     return False
 
 
+def test_optimized_sidecar_selftest_rejects_an_invalid_result(tmp_path):
+    code = """
+from sidecar.analytics import arc
+from sidecar.run_sidecar import main
+
+arc.compute_weights = lambda *args, **kwargs: {}
+raise SystemExit(main(["--selftest"]))
+"""
+    result = subprocess.run(
+        [sys.executable, "-O", "-c", code],
+        cwd=BACKEND_DIR,
+        env={**os.environ, "DATA_DIR": str(tmp_path), "MARKET_SEED": ""},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode != 0
+    assert "AssertionError" in result.stderr
+
+
 def test_real_sidecar_completes_jobs_and_exits_cleanly_at_idle(tmp_path):
     db_path = _seed_market_db(tmp_path)
     c = sqlite3.connect(str(db_path))

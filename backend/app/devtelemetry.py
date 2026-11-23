@@ -46,7 +46,8 @@ T0_KINDS = frozenset(
 
 def t0(kind: str, msg: str) -> None:
     """Report a full-sync fallback. Always logged locally; posted on the beta channel."""
-    assert kind in T0_KINDS, kind
+    if kind not in T0_KINDS:
+        raise AssertionError(kind)
 
     logging.getLogger("poe2arb.t0").error("T0 %s: %s", kind, msg)
     tlog("T0", f"{kind}: {msg}")

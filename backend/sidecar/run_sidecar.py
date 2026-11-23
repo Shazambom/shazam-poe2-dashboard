@@ -36,8 +36,10 @@ def _selftest() -> int:
         [1, 1.3, 1.6, 1.9, 1.7],
         {"A": [10, 13, 16, 19, 17], "B": [1, 0.8, 0.6, 0.4, 0.3]},
     )
-    assert len(signals) == 1 and signals[0]["item_id"] == 1, signals
-    assert weights and abs(sum(weights.values()) - 1.0) < 1e-9, weights
+    if not (len(signals) == 1 and signals[0]["item_id"] == 1):
+        raise AssertionError(signals)
+    if not (weights and abs(sum(weights.values()) - 1.0) < 1e-9):
+        raise AssertionError(weights)
     print(f"sidecar selftest OK: discords={signals} arc={weights}")
     return 0
 
