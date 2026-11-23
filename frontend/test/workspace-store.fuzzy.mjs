@@ -45,7 +45,8 @@ const randSlug = () => 'H4sIAAAAAAAA' + Array.from({ length: 40 + Math.floor(rnd
 function uniqueSearch() {
   const name = ITEMS[itemCursor % ITEMS.length] + ' #' + itemCursor
   itemCursor++
-  const n = searchNode({ type: chance(0.2) ? 'search' : 'search', slug: randSlug(), live: chance(0.3) }, name)
+  rnd()  // Preserve the seeded sequence used by existing fuzz runs.
+  const n = searchNode({ type: 'search', slug: randSlug(), live: chance(0.3) }, name)
   n.armed = chance(0.4); n.done = chance(0.3)
   return n
 }
