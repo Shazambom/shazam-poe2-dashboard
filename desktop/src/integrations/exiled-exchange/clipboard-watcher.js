@@ -231,7 +231,7 @@ module.exports = { ClipboardWatcher, parseItem, looksLikeItem, captureItemBurst,
 // --- tiny self-test: `node clipboard-watcher.js` (pure parser, no Electron) ---
 // Guards against parser regressions for the common PoE2 item shapes.
 if (require.main === module) {
-  const strip = (o) => { const { raw, ts, ...rest } = o; return rest }
+  const strip = (o) => Object.fromEntries(Object.entries(o).filter(([k]) => k !== 'raw' && k !== 'ts'))
   const eq = (a, b, msg) => {
     if (JSON.stringify(a) !== JSON.stringify(b)) {
       console.error('FAIL', msg, '\n  got   ', JSON.stringify(a), '\n  expect', JSON.stringify(b))

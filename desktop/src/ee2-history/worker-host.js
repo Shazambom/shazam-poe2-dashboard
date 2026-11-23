@@ -28,7 +28,7 @@ function spawnWorker({ onExit } = {}) {
     if (m.t === 'error' && m.id == null) { readyReject?.(new Error(`init: ${m.message || 'failed'}`)); return }
     const p = pending.get(m.id); if (!p) return
     pending.delete(m.id); clearTimeout(p.timer)
-    if (m.t === 'built') { const { t, id, ...rest } = m; p.resolve(rest) }
+    if (m.t === 'built') p.resolve(Object.fromEntries(Object.entries(m).filter(([k]) => k !== 't' && k !== 'id')))
     else if (m.t === 'parsed') p.resolve(m.item)
     else p.resolve({ error: { stage: m.stage, message: m.message } })
   })

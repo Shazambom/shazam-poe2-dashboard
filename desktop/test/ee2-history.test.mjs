@@ -16,7 +16,7 @@ function harness({ build, enabled = true, hasWindow = true, now } = {}) {
   let t = 1_000_000
   const clock = now || (() => t)
   const worker = {
-    spawn() { spawns.push(clock()); return { build: build || (async (raw, prefs) => ({ q: '{"query":{}}', name: 'Headhunter', item: { name: 'Headhunter', baseType: 'Heavy Belt', rarity: 'Unique', itemClass: 'Belts' }, host: 'www.pathofexile.com', buildMs: 5 })), kill() {} } },
+    spawn() { spawns.push(clock()); return { build: build || (async () => ({ q: '{"query":{}}', name: 'Headhunter', item: { name: 'Headhunter', baseType: 'Heavy Belt', rarity: 'Unique', itemClass: 'Belts' }, host: 'www.pathofexile.com', buildMs: 5 })), kill() {} } },
   }
   const c = createHistoryConsumer({
     manager: pkg, worker, prefs: () => ({ prefs: { leagueId: 'Forbidden Rites', language: 'en' }, source: 'ee2' }),
@@ -69,8 +69,7 @@ test('no window: intents are held (≤ 20) and flushed when a window appears; ov
 })
 
 test('worker failure: in-flight item skipped, restart at most once per 5 minutes', async () => {
-  let calls = 0
-  const h = harness({ build: async () => { calls++; throw new Error('worker died') } })
+  const h = harness({ build: async () => { throw new Error('worker died') } })
   h.pkg.emit('item-checked', item()); await new Promise(r => setTimeout(r, 10))
   assert.ok(h.lines.some(l => l.startsWith('history-skip reason=worker origin=ee2 err="worker died"')))
   assert.equal(h.spawns.length, 1)
