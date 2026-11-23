@@ -86,7 +86,7 @@ function backendBinary() {
 async function waitFor(url, tries = 240) {
   for (let i = 0; i < tries; i++) {
     try { const r = await fetch(url, { signal: AbortSignal.timeout(1500) }); if (r.ok) return true } catch (e) { ignored('backend:wait', e) }
-    await new Promise(r => setTimeout(r, i < 10 ? 100 : i < 25 ? 250 : 500))
+    await new Promise(r => { setTimeout(r, i < 10 ? 100 : i < 25 ? 250 : 500) })
   }
   return false
 }

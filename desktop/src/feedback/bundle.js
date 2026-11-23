@@ -12,7 +12,7 @@ const MAX_BUNDLE = 4 * 1024 * 1024 - 65        // the sealed file stays under Di
 const LIMITS = { main: 200, backend: 65536, renderer: 100, updater: 40 }
 const GZIP = { level: constants.Z_BEST_COMPRESSION }
 
-const withTimeout = (p, ms) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), ms))])
+const withTimeout = (p, ms) => Promise.race([p, new Promise((_, rej) => { setTimeout(() => rej(new Error('timeout')), ms) })])
 
 async function fetchState(get, timeoutMs) {
   const out = {}

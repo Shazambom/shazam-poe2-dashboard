@@ -118,7 +118,7 @@ function run(cmd, args, { timeout = 120000 } = {}) {
   })
 }
 const gh = (args, opts) => run('gh', args, opts)
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+const sleep = (ms) => new Promise((r) => { setTimeout(r, ms) })
 
 // The release for a tag, drafts included (the /releases/tags/<tag> endpoint can't see drafts).
 async function findRelease(tag) {

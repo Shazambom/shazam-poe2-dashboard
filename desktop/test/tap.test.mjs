@@ -42,7 +42,7 @@ function fakeContents({ id = 7, bodies = {}, attachThrows = false, bodyFails = n
   Object.assign(contents, { id, debugger: dbg, isDevToolsOpened: () => false })
   return { contents, dbg, commands }
 }
-const tick = () => new Promise(r => setImmediate(r))
+const tick = () => new Promise(r => { setImmediate(r) })
 const req = (dbg, requestId, url, method = 'GET', postData) => dbg.emit('message', {}, 'Network.requestWillBeSent', { requestId, request: { url, method, postData }, type: 'XHR' })
 const done = (dbg, requestId) => dbg.emit('message', {}, 'Network.loadingFinished', { requestId })
 

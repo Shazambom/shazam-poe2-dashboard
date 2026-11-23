@@ -151,7 +151,7 @@ async function snapshotTradeData() {
     const canon = (e) => JSON.stringify(e, Object.keys(e).sort())
     for (const g of j.result) if (Array.isArray(g.entries)) g.entries.sort((a, b) => { const x = canon(a), y = canon(b); return x < y ? -1 : x > y ? 1 : 0 })
     fs.writeFileSync(f, JSON.stringify(j))
-    await new Promise(r => setTimeout(r, 1500))
+    await new Promise(r => { setTimeout(r, 1500) })
   }
 }
 

@@ -9,13 +9,13 @@ import { join } from 'node:path'
 const W = await import('../src/integrations/exiled-exchange/clipboard-watcher.js')
 
 const ITEM = (name) => `Item Class: Stackable Currency\nRarity: Currency\n${name}\n--------\nStack Size: 1/20`
-const sleep = (ms) => new Promise(r => setTimeout(r, ms))
+const sleep = (ms) => new Promise(r => { setTimeout(r, ms) })
 
 // A clipboard shaped like Electron 44's: readText resolves after `lag` ms; counts overlapping reads.
 function asyncClip(initial, lag = 2) {
   const c = { text: initial, inFlight: 0, maxInFlight: 0, reads: 0 }
   c.readText = () => { c.reads++; c.inFlight++; c.maxInFlight = Math.max(c.maxInFlight, c.inFlight)
-    return new Promise(r => setTimeout(() => { c.inFlight--; r(c.text) }, lag)) }
+    return new Promise(r => { setTimeout(() => { c.inFlight--; r(c.text) }, lag) }) }
   return c
 }
 

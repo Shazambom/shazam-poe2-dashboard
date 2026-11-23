@@ -31,7 +31,7 @@ function parseArgs(argv) {
   return out
 }
 
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+const sleep = (ms) => new Promise((r) => { setTimeout(r, ms) })
 
 function freePort() {
   return new Promise((resolve, reject) => {

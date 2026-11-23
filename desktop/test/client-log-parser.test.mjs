@@ -89,7 +89,7 @@ test('LogWatcher tails appended lines, buffers split lines across ticks, recover
     // Partial line written across two poll ticks (C10) must be reassembled, never emitted split or dropped
     const splitFull = P + 'Generating level 81 area "MapBurialBog" with seed 777888'
     appendFileSync(file, splitFull.slice(0, 35), 'utf8')
-    await new Promise(r => setTimeout(r, 140))
+    await new Promise(r => { setTimeout(r, 140) })
     assert.ok(!seen.some(l => l.includes('MapBurialBog')), 'incomplete line waits for newline')
     appendFileSync(file, splitFull.slice(35) + '\n', 'utf8')
     await new Promise((res, rej) => {

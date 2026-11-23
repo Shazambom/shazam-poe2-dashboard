@@ -35,7 +35,7 @@ test('acquire fails open when the backend is unreachable', async () => {
 test('observe reports status + rate-limit headers, fire-and-forget, never throws', async () => {
   const calls = stub(() => jsonRes({ ok: true }))
   budget.observe('trade-fetch', 429, { 'x-rate-limit-ip': ['12:6:60'], 'retry-after': '20', 'content-type': 'json' })
-  await new Promise(r => setTimeout(r, 0))
+  await new Promise(r => { setTimeout(r, 0) })
   const body = JSON.parse(calls[0].opts.body)
   assert.equal(calls[0].url, 'http://127.0.0.1:8210/api/ratelimits/observe')
   assert.equal(body.policy, 'trade-fetch')

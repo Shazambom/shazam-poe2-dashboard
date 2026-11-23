@@ -31,7 +31,7 @@ test('any origin is accepted; the intent carries no raw text; telemetry lines ar
   const h = harness()
   h.pkg.emit('item-checked', item('clipboard'))
   h.pkg.emit('item-checked', item('ee2'))
-  await new Promise(r => setTimeout(r, 10))
+  await new Promise(r => { setTimeout(r, 10) })
   assert.equal(h.sent.length, 2)
   const [ch, intent] = h.sent[0]
   assert.equal(ch, 'trade:ingest'); assert.equal(intent.source, 'ee2'); assert.equal(intent.origin, 'clipboard'); assert.equal(intent.folder, 'ee2-history')
@@ -43,25 +43,25 @@ test('any origin is accepted; the intent carries no raw text; telemetry lines ar
 
 test('currency is skipped without an intent; other errors produce a degraded intent', async () => {
   const h = harness({ build: async () => ({ error: { stage: 'currency', message: 'bulk' } }) })
-  h.pkg.emit('item-checked', item()); await new Promise(r => setTimeout(r, 10))
+  h.pkg.emit('item-checked', item()); await new Promise(r => { setTimeout(r, 10) })
   assert.equal(h.sent.length, 0); assert.ok(h.lines.some(l => l === 'history-skip reason=currency origin=ee2'))
   const h2 = harness({ build: async () => ({ error: { stage: 'parse', message: 'item.unknown' } }) })
-  h2.pkg.emit('item-checked', item()); await new Promise(r => setTimeout(r, 10))
+  h2.pkg.emit('item-checked', item()); await new Promise(r => { setTimeout(r, 10) })
   assert.equal(h2.sent.length, 1); assert.equal(h2.sent[0][1].degraded, true); assert.equal(h2.sent[0][1].stage, 'parse'); assert.equal(h2.sent[0][1].q, null)
   assert.ok(h2.lines.some(l => l.startsWith('history-degraded stage=parse')))
 })
 
 test('disabled: never spawns the worker, logs a skip', async () => {
   const h = harness({ enabled: false })
-  h.pkg.emit('item-checked', item()); await new Promise(r => setTimeout(r, 10))
+  h.pkg.emit('item-checked', item()); await new Promise(r => { setTimeout(r, 10) })
   assert.equal(h.spawns.length, 0); assert.equal(h.sent.length, 0)
   assert.ok(h.lines.some(l => l === 'history-skip reason=disabled origin=ee2'))
 })
 
 test('no window: intents are held (≤ 20) and flushed when a window appears; overflow is dropped', async () => {
   const h = harness({ hasWindow: false })
-  for (let i = 0; i < NO_WINDOW_BUFFER + 3; i++) { h.pkg.emit('item-checked', item()); await new Promise(r => setTimeout(r, 1)) }
-  await new Promise(r => setTimeout(r, 10))
+  for (let i = 0; i < NO_WINDOW_BUFFER + 3; i++) { h.pkg.emit('item-checked', item()); await new Promise(r => { setTimeout(r, 1) }) }
+  await new Promise(r => { setTimeout(r, 10) })
   assert.equal(h.lines.filter(l => l === 'ingest-drop reason=no-window').length, 3)
   const sent = []
   h.c.setSender((ch, p) => sent.push([ch, p]))
@@ -70,13 +70,13 @@ test('no window: intents are held (≤ 20) and flushed when a window appears; ov
 
 test('worker failure: in-flight item skipped, restart at most once per 5 minutes', async () => {
   const h = harness({ build: async () => { throw new Error('worker died') } })
-  h.pkg.emit('item-checked', item()); await new Promise(r => setTimeout(r, 10))
+  h.pkg.emit('item-checked', item()); await new Promise(r => { setTimeout(r, 10) })
   assert.ok(h.lines.some(l => l.startsWith('history-skip reason=worker origin=ee2 err="worker died"')))
   assert.equal(h.spawns.length, 1)
-  h.pkg.emit('item-checked', item()); await new Promise(r => setTimeout(r, 10))
+  h.pkg.emit('item-checked', item()); await new Promise(r => { setTimeout(r, 10) })
   assert.equal(h.spawns.length, 1, 'no restart within 5 min')
   h.tick(RESTART_MIN_MS + 1)
-  h.pkg.emit('item-checked', item()); await new Promise(r => setTimeout(r, 10))
+  h.pkg.emit('item-checked', item()); await new Promise(r => { setTimeout(r, 10) })
   assert.equal(h.spawns.length, 2, 'restarted after the window')
 })
 
@@ -102,7 +102,7 @@ test('rate-budget hint: an EE2-originated price check spends one trade-search an
   const pkg = new EventEmitter()
   const c = createHistoryConsumer({ manager: pkg, worker: { spawn: () => ({ build: async () => ({ q: '{}', name: 'x', item: {} }) }) }, prefs: () => ({ prefs: {}, source: 'default' }), send: () => {}, log: () => {}, hint: (p) => hints.push(p) })
   pkg.emit('item-checked', item('ee2')); pkg.emit('item-checked', item('clipboard'))
-  await new Promise(r => setTimeout(r, 10))
+  await new Promise(r => { setTimeout(r, 10) })
   assert.deepEqual(hints, ['trade-search', 'trade-fetch'], 'a price check is a search then a fetch on the same account')
   c.stop()
 })
@@ -142,7 +142,7 @@ test('onBuilt sees every built intent, from the automatic stream and from the cl
   const worker = { spawn() { return { build: async () => (fail ? { error: { stage: 'parse', message: 'x' } } : { q: '{"query":{}}', name: 'Headhunter', item: { name: 'Headhunter', baseType: 'Heavy Belt', rarity: 'Unique', itemClass: 'Belts' }, host: 'www.pathofexile.com', buildMs: 5 }), kill() {} } } }
   const c = createHistoryConsumer({ manager: pkg, worker, prefs: () => ({ prefs: { leagueId: 'L', language: 'en' }, source: 'ee2' }), send: () => {}, onBuilt: (i) => built.push(i) })
   pkg.emit('item-checked', item('ee2'))
-  await new Promise(r => setTimeout(r, 10))
+  await new Promise(r => { setTimeout(r, 10) })
   await c.buildIntent(RAW, 'clipboard')
   fail = true
   await c.buildIntent(RAW, 'clipboard')

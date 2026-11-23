@@ -17,7 +17,7 @@ const SNAP_URL_SUFFIX = '/?snap=1'
 const WIDTH = 1200
 const QUALITY = 60
 
-const withTimeout = (p, ms) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), ms))])
+const withTimeout = (p, ms) => Promise.race([p, new Promise((_, rej) => { setTimeout(() => rej(new Error('timeout')), ms) })])
 const jpeg = (img) => img.resize({ width: WIDTH }).toJPEG(QUALITY)
 const whyNot = (e) => (e && e.message === 'timeout' ? 'timeout' : `error: ${String(e && e.message || e).slice(0, 80)}`)
 

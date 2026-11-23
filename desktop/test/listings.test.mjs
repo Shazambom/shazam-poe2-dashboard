@@ -125,7 +125,7 @@ test('cancel() drops a fetch that is still waiting on the budget — nothing is 
     wait: (ms, signal) => new Promise(res => { release = res; signal?.addEventListener('abort', () => res(), { once: true }) }),
   })
   const pending = f({ league: 'L', searchId: 'Q1', ids: [ID(1)] })
-  await new Promise(r => setImmediate(r))
+  await new Promise(r => { setImmediate(r) })
   f.cancel()
   assert.deepEqual(await pending, { ok: false, error: 'cancelled' })
   assert.equal(requests.length, 0, 'the dropped fetch never reached the site')
@@ -202,7 +202,7 @@ test('recheck: a budget "not yet" is waited out once; cancel drops it before any
     wait: (ms, signal) => new Promise(res => { release = res; signal?.addEventListener('abort', () => res(), { once: true }) }),
   })
   const pending = f({ league: 'L', query: Q })
-  await new Promise(r => setImmediate(r))
+  await new Promise(r => { setImmediate(r) })
   f.cancel()
   assert.deepEqual(await pending, { ok: false, error: 'cancelled' })
   void release

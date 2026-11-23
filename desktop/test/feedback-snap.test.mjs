@@ -70,7 +70,7 @@ test('the filter cancels a POST from the snap window and nothing else', async ()
   let cb
   const sessionDouble = { webRequest: { onBeforeRequest: (f, c) => { if (c) { cb = c; assert.deepEqual(f.urls, ['http://127.0.0.1:1234/api/*']) } } } }
   await h.run({ session: sessionDouble })
-  const verdict = (d) => new Promise(res => cb(d, res))
+  const verdict = (d) => new Promise(res => { cb(d, res) })
   assert.deepEqual(await verdict({ webContentsId: 77, method: 'POST' }), { cancel: true })
   assert.deepEqual(await verdict({ webContentsId: 77, method: 'GET' }), { cancel: false })
   assert.deepEqual(await verdict({ webContentsId: 1, method: 'PUT' }), { cancel: false })

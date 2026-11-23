@@ -110,7 +110,7 @@ export function parseArgs(argv) {
   return opts
 }
 
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+const sleep = (ms) => new Promise((r) => { setTimeout(r, ms) })
 const now = () => performance.now()
 
 function gitMeta() {

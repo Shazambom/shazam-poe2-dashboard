@@ -367,7 +367,7 @@ test('cancel() aborts an in-flight shop fetch and stops remaining batches', asyn
     wait: async () => {},
   })
   const p = fetchShop({ league: 'Standard', account: 'Player#1234' })
-  await new Promise(r => setTimeout(r, 10))
+  await new Promise(r => { setTimeout(r, 10) })
   fetchShop.cancel()
   releaseFirstBatch()
   const r = await p
