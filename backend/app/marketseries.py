@@ -84,7 +84,7 @@ def pick_league(rows: list, preferred: str, current_leagues=()) -> str | None:
     return preferred if any(r[0] == preferred for r in rows) else None
 
 
-def build_series(rows: list, league: str) -> dict:
+def build_series(rows: list, league: str | None) -> dict:
     """{item_id: [(t_epoch, close, value_ex)] oldest→newest} for one league. value = close*volume,
     the traded-value measure movers/holdscore already use so thin days can be floored."""
     series: dict = {}

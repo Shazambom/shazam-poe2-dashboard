@@ -26,6 +26,7 @@ import asyncio
 import json
 import logging
 import time
+from collections.abc import Iterable
 from itertools import permutations
 
 from . import db, digest, gateway, pairscore, session
@@ -260,7 +261,7 @@ async def _fetch_batch(
 
 # ------------------------------------------------------------------ queue
 def request_pairs(
-    pairs: list[tuple[str, str]],
+    pairs: Iterable[tuple[str, ...]],
     priority: int = 1,
     force: bool = False,
     max_age_s: int | None = None,

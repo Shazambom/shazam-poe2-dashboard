@@ -651,7 +651,7 @@ def _keys_on(family: dict, keys: list) -> bool:
 
 
 def _row_tags(
-    family: dict, section: dict, rolled: set, all_keys: set = frozenset()
+    family: dict, section: dict, rolled: set, all_keys: set | frozenset = frozenset()
 ) -> list:
     """The row's tags. A section's keys are never tags in it (one key is the section's title); in a
     section of several keys (the bones) the keys the family rolls on lead, so the two tags a row

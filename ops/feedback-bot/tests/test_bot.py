@@ -33,6 +33,9 @@ class Author:
 
 
 class Message:
+    id: int
+    channel: "Thread"
+
     def __init__(
         self, attachments, content="", author=None, at="2026-10-02T23:54:10+00:00"
     ):

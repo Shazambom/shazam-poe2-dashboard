@@ -460,10 +460,10 @@ def window_history(league: str, hours: int = 168):
     return history
 
 
-_volume_cache: dict[tuple[str, int], tuple[float, dict]] = {}
+_volume_cache: dict[tuple[str, float], tuple[float, dict]] = {}
 
 
-def pair_volume(league: str, hours: int = 24) -> dict[tuple[str, str], float]:
+def pair_volume(league: str, hours: float = 24) -> dict[tuple[str, str], float]:
     """Executed volume per hour of the *source* currency for each directed pair,
     averaged over the whole window (quiet hours count as zero — that's the point)."""
     # Versioned on the digest hour, like window_rates: a catch-up after a day closed must not leave the empty

@@ -18,6 +18,7 @@ from __future__ import annotations
 import json
 import logging
 import sqlite3
+from collections.abc import Callable
 
 from .config import DB_PATH
 from .datapolicy import is_user_kv as _is_user_kv
@@ -91,7 +92,7 @@ def _m2_watches_to_workspace(conn: sqlite3.Connection) -> None:
     )
 
 
-def _m1_split_from_legacy(conn: sqlite3.Connection) -> None:
+def _m1_split_from_legacy(conn: sqlite3.Connection) -> Callable[[], None] | None:
     """One-time split: lift the user's rows out of the pre-split poe2arb.sqlite into
     user.sqlite. Market rows are intentionally NOT copied — market.sqlite comes from
     the bundled seed (fresh full history) or a live crawl. Idempotent: guarded by
@@ -339,7 +340,9 @@ def _m8_arbitrage_balanced(conn: sqlite3.Connection) -> None:
     log.info("m8: arbitrage values replaced with the Balanced preset")
 
 
-USER_MIGRATIONS: list[tuple[int, str, object]] = [
+USER_MIGRATIONS: list[
+    tuple[int, str, Callable[[sqlite3.Connection], Callable[[], None] | None]]
+] = [
     (1, "initial split from legacy poe2arb.sqlite", _m1_split_from_legacy),
     (2, "derive trading_workspace tree from flat watches", _m2_watches_to_workspace),
     (3, "bake liquidity/volume filter floors into pre-floor settings", _m3_liq_floor),

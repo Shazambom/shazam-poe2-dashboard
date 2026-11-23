@@ -720,7 +720,7 @@ def arrows(preds) -> list:
     third = 3), and the weakest ARROW_DASH_SHARE of the day shows a dash. Rank, not size, because
     the forecast's ordering is measured and its magnitude isn't — so this is scale-free."""
     live = [i for i, p in enumerate(preds) if p is not None]
-    out = [None] * len(preds)
+    out: list[int | None] = [None] * len(preds)
     weakest = sorted(live, key=lambda i: abs(preds[i]))[
         : int(ARROW_DASH_SHARE * len(live))
     ]

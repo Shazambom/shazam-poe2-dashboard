@@ -14,6 +14,7 @@ from .. import cache, digest, gamedata, leaguehistory, orderbook, recipes
 from ..currencies import registry
 from ..settings import get_settings
 from dataclasses import dataclass, field
+from typing import Any
 
 INF = float("inf")
 # How far a market may sit from poe2scout's independent close and still price a currency.
@@ -129,7 +130,7 @@ class Edge:
 
 
 class Graph:
-    def __init__(self, settings: dict):
+    def __init__(self, settings: dict[str, Any]):
         self.s = settings
         self.edges: dict[tuple[str, str], Edge] = {}
         self.adj: dict[str, list[Edge]] = {}

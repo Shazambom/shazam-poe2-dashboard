@@ -24,7 +24,9 @@ import os
 import re
 import shutil
 import time
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 from cryptography.hazmat.primitives import serialization
 
@@ -106,7 +108,7 @@ class Handler:
         self.text_forums: dict[
             int, str
         ] = {}  # forum id → inbox folder (TEXT_FORUMS, resolved at login)
-        self.allow_role = lambda role: (
+        self.allow_role: Callable[[Any], Any] = lambda role: (
             None
         )  # production: discord.AllowedMentions for that role only
 

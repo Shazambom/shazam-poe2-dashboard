@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import math
+from typing import TypeGuard
+
 from .. import centrality, db
 from .. import settings as settings_mod
 from ..currencies import registry
@@ -190,7 +192,7 @@ def _best_conversions(
     }
 
 
-def _accepted(r: dict | None, max_gain_pct: float) -> bool:
+def _accepted(r: dict | None, max_gain_pct: float) -> TypeGuard[dict]:
     """The one rule for "this path is a conversion": it delivers a whole unit and is no phantom-gain mirage.
     The ranking and the minimum-amount search share it, so a named minimum always has a route."""
     return r is not None and r["out"] > 0 and r["gain_cross_pct"] <= max_gain_pct
