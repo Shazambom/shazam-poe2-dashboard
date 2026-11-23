@@ -3,7 +3,7 @@
 // no imports) so the builder, the exporter and the node tests share ONE reading of the CSS.
 
 // Tokens a preset never touches: the one list, which scripts/lint-style.mjs imports.
-export const NEVER_THEMED = new Set([
+const NEVER_THEMED = new Set([
   '--update-error', '--webview-bg', '--vaal-alert',
   '--ink-on-alert', '--teleport-hot', '--teleport-stale',
   '--ink-on-teleport-stale', '--ink-on-teleport-pending', '--teleport-rate',

@@ -34,7 +34,7 @@ export const color = {
 }
 
 // Item rarity (item cards / sale rows) — the --rarity-* tokens; game semantics, never themed.
-export const rarity = { normal: v('rarity-normal'), magic: v('rarity-magic'), rare: v('rarity-rare'), unique: v('rarity-unique'), gem: v('rarity-gem'), currency: v('rarity-currency') }
+const rarity = { normal: v('rarity-normal'), magic: v('rarity-magic'), rare: v('rarity-rare'), unique: v('rarity-unique'), gem: v('rarity-gem'), currency: v('rarity-currency') }
 
 // Player-presence tri-state, used by both PingButton (JS) and the `.pb-dot` CSS rules.
 // online reuses --gain; afk/offline are their own status tokens (the alert family, never themed).

@@ -54,7 +54,7 @@ export function initialOpenState(tree) {
 }
 export const HISTORY_NAME = 'ExiledExchange2 History'
 export const HISTORY_CAP = 200       // default rows kept in the history folder (newest first); Settings can change it
-export const HISTORY_RETENTION_DAYS = 14
+const HISTORY_RETENTION_DAYS = 14
 export const HISTORY_PREFS = Object.freeze({ enabled: true, max: HISTORY_CAP, retentionDays: HISTORY_RETENTION_DAYS, waystoneStats: true })
 export const HISTORY_MAX_LIMIT = 1000  // the backend's 5000-node guard leaves room; Settings clamps 20…1000
 export const MAX_Q_BYTES = 16 * 1024 // a q larger than this is dropped (degraded row), never PUT

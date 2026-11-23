@@ -24,7 +24,7 @@ const CUSTOM_KEY = 'arbiter.theme.custom.v1'   // { id, colors } of the ACTIVE c
 const isPreset = (id) => THEMES.some(t => t.id === id)
 
 // The custom themes as the settings blob carries them: [{ id, name, base, colors }]. Malformed rows are dropped.
-export const cleanCustoms = (list) => (Array.isArray(list) ? list : [])
+const cleanCustoms = (list) => (Array.isArray(list) ? list : [])
   .filter(t => t && isCustomId(t.id) && validTable(t.colors))
   .map(t => ({ id: t.id, name: String(t.name || 'Custom'), base: t.base || null, colors: sanitizeTable(t.colors) }))
 

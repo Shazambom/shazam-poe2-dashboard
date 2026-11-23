@@ -34,7 +34,7 @@ export function relativeTime(iso, now = Date.now()) {
 }
 
 // GGG frameType → rarity key (the trade item JSON carries both; frameType is authoritative).
-export const FRAME = { 0: 'normal', 1: 'magic', 2: 'rare', 3: 'unique', 4: 'gem', 5: 'currency', 6: 'divination', 8: 'prophecy', 9: 'relic' }
+const FRAME = { 0: 'normal', 1: 'magic', 2: 'rare', 3: 'unique', 4: 'gem', 5: 'currency', 6: 'divination', 8: 'prophecy', 9: 'relic' }
 export function rarityOf(item) {
   const f = item?.frameType
   if (f != null && FRAME[f]) return FRAME[f]
@@ -43,7 +43,7 @@ export function rarityOf(item) {
 }
 
 // One property line: "Energy Shield: 512" with the augmented flag when GGG marks the value mode 1.
-export function propertyLine(p) {
+function propertyLine(p) {
   const name = cleanText(p?.name || '')
   const vals = Array.isArray(p?.values) ? p.values : []
   const text = vals.map(v => cleanText(Array.isArray(v) ? v[0] : v)).join(', ')
@@ -53,7 +53,7 @@ export function propertyLine(p) {
 }
 
 // GGG marks keyword links as "[Evasion|Evasion Rating]" (page|display) — show the display half.
-export const cleanText = (t) => String(t ?? '').replace(/\[([^\]|]*)\|([^\]]*)\]/g, '$2').replace(/\[([^\]]*)\]/g, '$1')
+const cleanText = (t) => String(t ?? '').replace(/\[([^\]|]*)\|([^\]]*)\]/g, '$2').replace(/\[([^\]]*)\]/g, '$1')
 const modText = (m) => cleanText(typeof m === 'string' ? m : (m?.description ?? m?.text ?? ''))
 
 // The card's blocks in display order, from the trade item JSON (missing blocks are omitted).

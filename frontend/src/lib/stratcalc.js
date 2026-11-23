@@ -286,7 +286,7 @@ export function addUnique(rows, { name, type }) {
 const valued = (listings, prices) => (listings || []).filter(l => l.amount > 0)
   .map(l => ({ div: saleValueRef(l, 'divine', prices), currency: l.currency })).filter(v => v.div != null).sort((a, b) => a.div - b.div)
 const listingDivs = (listings, prices) => valued(listings, prices).map(v => v.div)
-export const AVG_OF = 10
+const AVG_OF = 10
 export const cheapestListings = (listings, prices) => valued(listings, prices).slice(0, AVG_OF)
 
 export const floorDiv = (listings, prices) => listingDivs(listings, prices)[0] ?? null
