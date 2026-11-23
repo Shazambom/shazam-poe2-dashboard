@@ -19,7 +19,7 @@ import subprocess
 import sys
 import threading
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
@@ -55,20 +55,14 @@ def _seed_market_db(data_dir: Path) -> Path:
         vol = 30_000
         if i == 27:
             close, vol = 30.0, 300_000
-        day = datetime.fromtimestamp(1_700_000_000 + i * DAY, timezone.utc).strftime(
-            "%Y-%m-%d"
-        )
+        day = datetime.fromtimestamp(1_700_000_000 + i * DAY, UTC).strftime("%Y-%m-%d")
         rows.append(("Std", 1, day, close, close, vol))
     # Two leagues for item 291 so arc DTW produces weights
     for i in range(20):
-        day = datetime.fromtimestamp(1_600_000_000 + i * DAY, timezone.utc).strftime(
-            "%Y-%m-%d"
-        )
+        day = datetime.fromtimestamp(1_600_000_000 + i * DAY, UTC).strftime("%Y-%m-%d")
         rows.append(("Old", 291, day, 8.0 + 0.5 * i, 8.0 + 0.5 * i, 100))
     for i in range(12):
-        day = datetime.fromtimestamp(1_700_000_000 + i * DAY, timezone.utc).strftime(
-            "%Y-%m-%d"
-        )
+        day = datetime.fromtimestamp(1_700_000_000 + i * DAY, UTC).strftime("%Y-%m-%d")
         rows.append(("Std", 291, day, 10.0 + 0.4 * i, 10.0 + 0.4 * i, 100))
     c.executemany("INSERT INTO league_daily VALUES(?,?,?,?,?,?)", rows)
     c.commit()

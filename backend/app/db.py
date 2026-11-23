@@ -6,7 +6,7 @@ import shutil
 import sqlite3
 import threading
 from contextlib import contextmanager
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, UTC
 from typing import Any, Callable, Iterator
 
 from . import devtelemetry
@@ -759,7 +759,7 @@ COUNTED_AT = "capital_counted_at"  # {currency: when the user last set it, "*": 
 
 
 def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def set_capital(entries: dict[str, float], counted: list[str] | tuple = ()) -> None:

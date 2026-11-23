@@ -10,7 +10,7 @@ the currencies whose total the user typed) and the fetch's hand-off (POST /api/s
 """
 
 import sys
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, UTC
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # backend/
@@ -30,7 +30,7 @@ def _iso(dt: datetime) -> str:
 
 
 def _ago(**kw) -> str:
-    return _iso(datetime.now(timezone.utc) - timedelta(**kw))
+    return _iso(datetime.now(UTC) - timedelta(**kw))
 
 
 def _sale(item_id: str, amount: float, currency: str, when: str) -> dict:
@@ -62,7 +62,7 @@ def _fetch(rows: list[dict], **extra) -> dict:
 
 def _stamps(**ago) -> None:
     """Counting state set directly: {currency: minutes ago}."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     db.kv_set(
         STAMPS, {k: (now - timedelta(minutes=m)).isoformat() for k, m in ago.items()}
     )
@@ -175,7 +175,7 @@ def test_a_slow_pc_clock_does_not_credit_a_sale_the_count_includes():
     # trade site's clock) is in the count, though its time reads after the PC's stamp. The fetch passes the
     # trade site's own clock time, which shows the skew.
     _save({"divine": 300})
-    pc_now = datetime.now(timezone.utc)
+    pc_now = datetime.now(UTC)
     site_now = pc_now + timedelta(minutes=5)
     sold = _iso(site_now - timedelta(minutes=2))
     _fetch([_sale("slow-pc", 30, "divine", sold)], server_time=site_now.isoformat())
@@ -185,7 +185,7 @@ def test_a_slow_pc_clock_does_not_credit_a_sale_the_count_includes():
 def test_a_fast_pc_clock_still_credits_a_sale_made_after_the_count():
     # The PC runs 5 minutes fast: a sale made 2 minutes AFTER the user typed reads before the PC's stamp.
     _save({"divine": 300})
-    site_now = datetime.now(timezone.utc) - timedelta(minutes=5)
+    site_now = datetime.now(UTC) - timedelta(minutes=5)
     sold = _iso(site_now + timedelta(seconds=5))
     _fetch([_sale("fast-pc", 30, "divine", sold)], server_time=site_now.isoformat())
     assert db.get_capital() == {"divine": 330}
@@ -214,7 +214,7 @@ def test_small_http_date_network_delay_does_not_push_pre_recount_sale_past_cutof
     # The user recounts their divines right after a sale (sale was 1s before recount).
     # The trade site's HTTP Date header arrives 3s behind the local clock (1s header resolution + 2s network delay).
     # Transport delay must not shift an already-counted sale past the recount stamp and double-credit it.
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     _save({"divine": 300})
     sold = _iso(now - timedelta(seconds=1))
     delayed_date = (now - timedelta(seconds=3)).isoformat()
@@ -227,7 +227,7 @@ def test_same_sale_with_different_utc_timestamp_formatting_is_not_double_credite
     # Equivalent UTC timestamps ("...Z" vs "...+00:00") for the same item_id must deduplicate to one ledger row
     # and credit at most once.
     _stamps(**{"*": 60, "divine": 60})
-    sale_dt = (datetime.now(timezone.utc) - timedelta(minutes=5)).replace(microsecond=0)
+    sale_dt = (datetime.now(UTC) - timedelta(minutes=5)).replace(microsecond=0)
     first = _fetch(
         [_sale("fmt-dedup", 25, "divine", sale_dt.strftime("%Y-%m-%dT%H:%M:%SZ"))]
     )
@@ -243,7 +243,7 @@ def test_same_sale_with_different_utc_timestamp_formatting_is_not_double_credite
 def test_small_slow_pc_clock_skew_is_still_corrected_and_does_not_double_credit():
     # PC clock runs 5s slow (server_time is +4.5s ahead of PC): a sale made 2s BEFORE the recount reads
     # +2.5s ahead of the PC's stamp. Positive skew must NOT be zeroed by the transport-delay deadband.
-    pc_now = datetime.now(timezone.utc)
+    pc_now = datetime.now(UTC)
     _save({"divine": 300})
     site_now = pc_now + timedelta(seconds=4.5)
     sold = _iso(site_now - timedelta(seconds=2))

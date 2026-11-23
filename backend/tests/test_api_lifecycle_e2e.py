@@ -19,7 +19,7 @@ import json
 import sys
 import threading
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 import pytest
@@ -178,12 +178,12 @@ def _seed_fixture(tmp_path: Path, monkeypatch) -> TestClient:
             294: 50000.0,
         }
         for i in range(35):
-            day_cur = datetime.fromtimestamp(
-                base_day + i * 86400, timezone.utc
-            ).strftime("%Y-%m-%d")
-            day_past = datetime.fromtimestamp(
-                1_600_000_000 + i * 86400, timezone.utc
-            ).strftime("%Y-%m-%d")
+            day_cur = datetime.fromtimestamp(base_day + i * 86400, UTC).strftime(
+                "%Y-%m-%d"
+            )
+            day_past = datetime.fromtimestamp(1_600_000_000 + i * 86400, UTC).strftime(
+                "%Y-%m-%d"
+            )
             for iid, bp in base_prices.items():
                 mult = 1.0 + 0.01 * i
                 daily_rows.append((LEAGUE, iid, day_cur, bp * mult, bp * mult, 50_000))
@@ -352,7 +352,7 @@ def test_stash_capital_sales_credit_and_settings_lifecycle(seeded_client):
     assert by_id["divine"] == 10 and by_id["exalted"] == 500
 
     # Ingest a new sale that landed AFTER the recount -> credits capital once; re-ingest is idempotent
-    sale_ts = datetime.fromtimestamp(time.time() + 10, timezone.utc).strftime(
+    sale_ts = datetime.fromtimestamp(time.time() + 10, UTC).strftime(
         "%Y-%m-%dT%H:%M:%SZ"
     )
     sale = {

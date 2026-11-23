@@ -47,9 +47,7 @@ def read_rows(conn: sqlite3.Connection, league: str | None = None) -> list:
 def day_to_epoch(day: str) -> int:
     """UTC epoch seconds for a YYYY-MM-DD day string (the league_daily day key)."""
     return int(
-        _dt.datetime.strptime(day, "%Y-%m-%d")
-        .replace(tzinfo=_dt.timezone.utc)
-        .timestamp()
+        _dt.datetime.strptime(day, "%Y-%m-%d").replace(tzinfo=_dt.UTC).timestamp()
     )
 
 

@@ -7,7 +7,7 @@ import threading
 import time
 from urllib.parse import urlsplit
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 
 from fastapi import Depends, FastAPI, HTTPException, Request
 from starlette.concurrency import run_in_threadpool
@@ -1021,7 +1021,7 @@ def _clock_skew(server_time: str | None) -> float:
     site = db._parse_iso_utc(server_time)
     if site is None:
         return 0.0
-    skew = (site - datetime.now(timezone.utc)).total_seconds()
+    skew = (site - datetime.now(UTC)).total_seconds()
     return 0.0 if -CLOCK_SKEW_DEADBAND_S <= skew < 0 else skew
 
 

@@ -17,6 +17,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # backend/
 from app import analytics
 from sidecar import runner
+from datetime import UTC
 
 DAY = 86400
 
@@ -45,9 +46,7 @@ def _market_db():
         vol = 30_000
         if i == 27:
             close, vol = 30.0, 300_000
-        day = datetime.fromtimestamp(1_700_000_000 + i * DAY, timezone.utc).strftime(
-            "%Y-%m-%d"
-        )
+        day = datetime.fromtimestamp(1_700_000_000 + i * DAY, UTC).strftime("%Y-%m-%d")
         rows.append(("Std", 1, day, close, close, vol))
     c.executemany("INSERT INTO league_daily VALUES(?,?,?,?,?,?)", rows)
     c.commit()
@@ -81,16 +80,12 @@ def test_run_once_computes_arc_weights_into_cache():
     rows = []
     for i in range(20):
         close = 8.0 + 0.5 * i  # a steadily-rising league
-        day = datetime.fromtimestamp(1_600_000_000 + i * DAY, timezone.utc).strftime(
-            "%Y-%m-%d"
-        )
+        day = datetime.fromtimestamp(1_600_000_000 + i * DAY, UTC).strftime("%Y-%m-%d")
         rows.append(("Old", 291, day, close, close, 100))
     # the current league ("Std") needs its own Divine (item 291) arc to compare.
     for i in range(12):
         close = 10.0 + 0.4 * i
-        day = datetime.fromtimestamp(1_700_000_000 + i * DAY, timezone.utc).strftime(
-            "%Y-%m-%d"
-        )
+        day = datetime.fromtimestamp(1_700_000_000 + i * DAY, UTC).strftime("%Y-%m-%d")
         rows.append(("Std", 291, day, close, close, 100))
     c.executemany("INSERT INTO league_daily VALUES(?,?,?,?,?,?)", rows)
     c.commit()
