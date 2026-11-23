@@ -414,7 +414,7 @@ export default function MerchantView({ league }) {
     fetchMarketIfStale(sel).then(next => {
       if (!alive || !next) return
       setMarket({ prices: next.prices, inflation: next.inflation, sales: next.sales || [] })
-    })
+    }).catch(() => ignoredError('refresh merchant prices'))
     return () => { alive = false }
   }, [desktop, sel])
 

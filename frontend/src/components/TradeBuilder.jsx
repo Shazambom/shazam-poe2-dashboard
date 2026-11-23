@@ -1,3 +1,4 @@
+import { ignoredError } from '../lib/ignoredError.js'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { motion } from 'motion/react'
 import { searchOfLink } from '../lib/session.js'
@@ -32,13 +33,13 @@ export default function TradeBuilder({ title, url, league, onUse, onClose, onUnl
     const el = wv.current
     if (!el || !trade?.onWebviewNav) return
     const move = (e) => setFound(f => windowSearch(f, e))   // lib/stratPricing.js (tested with a fake trade site)
-    searchOfLink(url).then(search => move({ kind: 'open', search }))   // the search it opens on
+    searchOfLink(url).then(search => move({ kind: 'open', search })).catch(() => ignoredError('read initial trade search'))   // the search it opens on
     let id = null
     const ready = () => { id = el.getWebContentsId() }
     el.addEventListener('dom-ready', ready, { once: true })
     const off = trade.onWebviewNav(p => {
       if (id == null || p.phase !== 'nav' || !shouldAcceptNav(p, id)) return
-      searchOfLink(p.url).then(search => move({ kind: 'nav', search }))
+      searchOfLink(p.url).then(search => move({ kind: 'nav', search })).catch(() => ignoredError('read navigated trade search'))
     })
     // The page's own search (the trade tap): a run search can land on a short id its address doesn't carry.
     const offTap = trade.onTap?.(e => { if (id != null && e?.kind === 'search' && e.wcId === id) move({ kind: 'tap', body: e.body }) })
@@ -68,7 +69,7 @@ export default function TradeBuilder({ title, url, league, onUse, onClose, onUnl
           {saved.length > 0 && (
             <span className="tb-saved">
               <CurrencyPicker value="" placeholder="Your searches…" options={saved} renderIcon={null}
-                onChange={id => { const o = saved.find(x => x.id === id); if (o) searchOfNode(o.node, league).then(take) }} />
+                onChange={id => { const o = saved.find(x => x.id === id); if (o) return searchOfNode(o.node, league).then(take, () => take(null)) }} />
             </span>
           )}
           {onOpenTrading && <button type="button" className="btn" onClick={onOpenTrading}>Open in Trading</button>}

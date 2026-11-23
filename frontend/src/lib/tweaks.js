@@ -3,6 +3,7 @@
 // beta-or-dev gate it already keeps for diagnostics (diagTelemetryOn); the web test env has no bridge and is the
 // staging surface, so it shows them. Not a setting: the existing channel gate. The Beta toggle hands its answer to
 // `refreshTweaks`, so the knobs follow it at once.
+import { ignoredError } from './ignoredError.js'
 import { useEffect, useState } from 'react'
 import { isDesktop } from './session.js'
 
@@ -33,7 +34,7 @@ export function useTweaks() {
     let live = true
     const fn = (v) => { if (live) setOn(v) }
     subs.add(fn)
-    ask().then(fn)
+    ask().then(fn).catch(() => ignoredError('read tuning availability'))
     return () => { live = false; subs.delete(fn) }
   }, [])
   return on

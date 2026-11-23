@@ -1,3 +1,4 @@
+import { ignoredError } from './ignoredError.js'
 // Pure debounced autosave controller shared by useAutosave (lib/hooks.js).
 // Coalesces superseded edits while a write is in flight, lets flush() report whether pending/in-flight
 // saves succeeded, flushes unheld pending edits synchronously on unmount so shared queues keep FIFO order,
@@ -141,7 +142,7 @@ export function createAutosave(saver, delay = 700, { onState, onError } = {}) {
         p = Promise.resolve(false)
       }
       unmountRun = p
-      p.finally(() => { if (unmountRun === p) unmountRun = null })
+      p.finally(() => { if (unmountRun === p) unmountRun = null }).catch(() => ignoredError('finish unmount save'))
     }
   }
 

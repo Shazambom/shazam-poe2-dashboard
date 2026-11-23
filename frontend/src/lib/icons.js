@@ -45,7 +45,7 @@ function retrySoon() {
   setTimeout(() => {
     const keep = _index
     _index = null; _promise = null
-    loadIcons().then(i => { if (!i.list.length && keep?.list.length) _index = keep })
+    return loadIcons().then(i => { if (!i.list.length && keep?.list.length) _index = keep })
   }, _indexDelay)
   _indexDelay = Math.min(_indexDelay * 2, 60000)
 }

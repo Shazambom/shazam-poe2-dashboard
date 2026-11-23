@@ -392,7 +392,7 @@ export default function WorkspaceView({ league, visible = true }) {
       if (n.slug !== parsed.slug || n.live !== parsed.live || n.type !== parsed.type) {
         setField(id, { type: parsed.type, slug: parsed.slug, live: parsed.live })
       }
-      if (n.auto !== false && wv.current) readSearchName(wv.current).then(name => { if (name) autoName(id, name) })
+      if (n.auto !== false && wv.current) readSearchName(wv.current).then(name => { if (name) autoName(id, name) }).catch(() => ignoredError('read search name'))
     })
   }, [nodeById, setField, autoName, inHistory])
 
