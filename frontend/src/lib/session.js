@@ -1,3 +1,4 @@
+/// <reference path="./desktop-bridge.d.ts" />
 // One place that knows how to connect the PoE trade session, whichever shell
 // we're running in. Both the top-bar button and the Settings panel use it.
 //

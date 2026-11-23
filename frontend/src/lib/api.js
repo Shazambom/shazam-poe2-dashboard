@@ -28,9 +28,7 @@ const j = async (r) => {
       const d = JSON.parse(raw)
       text = typeof d.detail === 'string' ? d.detail : JSON.stringify(d.detail ?? d)
     } catch { text = raw }
-    const err = new Error(text || `HTTP ${r.status}`)
-    err.status = r.status
-    throw err
+    throw Object.assign(new Error(text || `HTTP ${r.status}`), { status: r.status })
   }
   return r.json()
 }
