@@ -1,6 +1,6 @@
 import { ignoredError } from '../lib/ignoredError.js'
 import { refreshTweaks, useTweaks } from '../lib/tweaks.js'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { api, surface, toast } from '../lib/api.js'
 import { useAutosave } from '../lib/hooks.js'
 import { useStatus } from '../lib/statusStore.js'
@@ -22,7 +22,6 @@ export default function SettingsView({ currencies, onSaved, onReportProblem }) {
   const [mapTo, setMapTo] = useState({})
   const [fees, setFees] = useState(null)
   const [busy, setBusy] = useState(false)
-  const [diagOpen, setDiagOpen] = useState(false)
   const tweaks = useTweaks()                     // knobs show on beta and dev clients only
 
   // The PUT payload: the editable subset, numbers coerced (blank → the default).
@@ -137,11 +136,7 @@ export default function SettingsView({ currencies, onSaved, onReportProblem }) {
             </details>
           )}
 
-          <details className="adv" onToggle={e => setDiagOpen(e.currentTarget.open)}>
-            <summary>Diagnostics</summary>
-            <BetaChannelToggle />
-            <DiagPanel open={diagOpen} />
-          </details>
+          <DiagPanel />
         </div>
       </div>
     </div>
@@ -177,7 +172,8 @@ function BetaChannelToggle() {
 // Local self-diagnostics (no data leaves the machine): backend health, DB row counts,
 // backfill/digest state, and a live connectivity probe — to see why prices are/aren't
 // flowing on the self-contained desktop build.
-function DiagPanel({ open }) {
+function DiagPanel() {
+  const wasOpen = useRef(false)
   const [d, setD] = useState(null)
   const [err, setErr] = useState(null)
   const [busy, setBusy] = useState(false)
@@ -187,22 +183,31 @@ function DiagPanel({ open }) {
     setBusy(false)
   }
   // The probe counts the market tables and checks outbound connectivity: only when asked to look.
-  useEffect(() => { if (open && !d) run() }, [open])
+  const onToggle = e => {
+    const open = e.currentTarget.open
+    if (open === wasOpen.current) return
+    wasOpen.current = open
+    if (open && !d) run()
+  }
   const text = d ? JSON.stringify(d, null, 2) : ''
   return (
-    <div>
-      <div className="row" style={{ gap: 8, marginBottom: 8 }}>
-        <RefreshButton className="small" busy={busy} onClick={run} title="Refresh diagnostics" />
-        <button type="button" className="btn small" disabled={!text} onClick={() => { navigator.clipboard?.writeText(text); toast('Diagnostics copied') }}>Copy</button>
+    <details className="adv" onToggle={onToggle}>
+      <summary>Diagnostics</summary>
+      <BetaChannelToggle />
+      <div>
+        <div className="row" style={{ gap: 8, marginBottom: 8 }}>
+          <RefreshButton className="small" busy={busy} onClick={run} title="Refresh diagnostics" />
+          <button type="button" className="btn small" disabled={!text} onClick={() => { navigator.clipboard?.writeText(text); toast('Diagnostics copied') }}>Copy</button>
+        </div>
+        {err && <div className="notice error">{err}</div>}
+        {d && (
+          <>
+            <p className="hint">{Object.entries(d.connectivity || {}).map(([k, v]) => <span key={k} className="feed" style={{ marginRight: 12 }}><span className={`dot ${String(v).startsWith('ERR') ? 'off' : 'ok'}`} />{k}</span>)}</p>
+            <details className="adv"><summary>Raw report</summary><pre className="diag-pre">{text}</pre></details>
+          </>
+        )}
       </div>
-      {err && <div className="notice error">{err}</div>}
-      {d && (
-        <>
-          <p className="hint">{Object.entries(d.connectivity || {}).map(([k, v]) => <span key={k} className="feed" style={{ marginRight: 12 }}><span className={`dot ${String(v).startsWith('ERR') ? 'off' : 'ok'}`} />{k}</span>)}</p>
-          <details className="adv"><summary>Raw report</summary><pre className="diag-pre">{text}</pre></details>
-        </>
-      )}
-    </div>
+    </details>
   )
 }
 

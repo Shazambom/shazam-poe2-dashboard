@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { describe, it, test, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import { installApiMock, DEFAULT_CURRENCIES } from './setup.js'
 import ModsView from '../../src/components/ModsView.jsx'
@@ -118,6 +118,22 @@ describe('Mods, Regex, Settings, ThemeBuilder, Trading, and App shell lifecycles
     rerender(<SettingsView currencies={DEFAULT_CURRENCIES} />)
     unmount()
     expect(getChannel).toHaveBeenCalledTimes(reads)
+  })
+
+  test('it probes once the Diagnostics section is opened', async () => {
+    const { calls } = installApiMock()
+    const { unmount } = render(<SettingsView />)
+    const details = (await screen.findByText('Diagnostics')).closest('details')
+    expect(calls.filter(c => c.path === '/api/diag')).toHaveLength(0)
+    details.open = true
+    fireEvent(details, new Event('toggle'))
+    await waitFor(() => expect(calls.filter(c => c.path === '/api/diag')).toHaveLength(1))
+    details.open = false
+    fireEvent(details, new Event('toggle'))
+    details.open = true
+    fireEvent(details, new Event('toggle'))
+    unmount()
+    expect(calls.filter(c => c.path === '/api/diag')).toHaveLength(1)
   })
 
   it('TradingView switches across Workspace, Regex, Mods, and Live while keeping Workspace mounted', async () => {
