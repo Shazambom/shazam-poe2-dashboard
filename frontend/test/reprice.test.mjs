@@ -272,15 +272,6 @@ test('encodeSlug: the slug the app builds decodes, through the app\'s own link r
   assert.equal(JSON.stringify(back.query), JSON.stringify(q))
 })
 
-// QA (2026-10-03): ↻ right after a fresh search reloaded the trade home, not the row's search: the window's address
-// was computed once per row and never again. Reloading recomputes it from the saved row.
-test('the trade window\'s address is recomputed on a reload (↻), from the saved row', async () => {
-  const { readFileSync } = await import('node:fs')
-  const src = readFileSync(new URL('../src/components/WorkspaceView.jsx', import.meta.url), 'utf8')
-  const memo = src.slice(src.indexOf('const mountUrl = useMemo('), src.indexOf('const mountUrl = useMemo(') + 400)
-  assert.match(memo, /\}, \[activeId, league, rerunTick, wvNonce, relax\.relaxTick\]\)/)
-})
-
 // Aggressive caching (owner, 2026-10-03: "5min ttl"): a search whose deeper listings were fetched in the last 5
 // minutes is not fetched again — reopening the row, ↻, or running it again reuse what is known.
 test('sampledRecently: the same search within 5 minutes needs no new fetch', () => {

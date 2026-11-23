@@ -1,5 +1,5 @@
 import { ignoredError } from '../lib/ignoredError.js'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useWorkspace, loadWorkspace, HISTORY_SYS } from '../lib/workspaceStore.js'
 import { tradeUrl, tradeHome, queryUrl, parseTradeUrl, isAuthBounceUrl, openTrade, isDesktop } from '../lib/session.js'
 import { shouldAcceptNav, homeCapture } from '../lib/webview.js'
@@ -166,10 +166,13 @@ export default function WorkspaceView({ league, visible = true }) {
     page: reprice.own, rowQuery: reprice.rowQuery, prices: reprice.prices, options: reprice.options, emptyExact: reprice.emptyExact,
   })
   const relaxActiveRef = useRef(false)
-  relaxActiveRef.current = relax.active
-  useEffect(() => {
+  useLayoutEffect(() => { relaxActiveRef.current = relax.active }, [relax.active])
+  const windowKey = `${remountKey}:${relax.relaxTick}`
+  const [navKey, setNavKey] = useState(windowKey)
+  if (navKey !== windowKey) {
+    setNavKey(windowKey)
     setNavState({ url: '', loading: false, hint: '' })
-  }, [remountKey, relax.relaxTick])
+  }
   useEffect(() => {
     if (relax.relaxUrl) window.poe2desktop?.trade?.listingsCancel?.()
   }, [relax.relaxUrl])
@@ -326,10 +329,16 @@ export default function WorkspaceView({ league, visible = true }) {
   // node must not re-navigate the webview it came from (that would reload mid-build). The
   // <webview key={activeId}> remounts on switch, so this doubles as restore-on-launch and
   // restore-on-remount with no imperative navigation.
-  const mountUrl = useMemo(() => {
+  const readAddress = () => {
     const n = activeId ? useWorkspace.getState().nodeById(activeId) : null
-    return n?.slug ? tradeUrl(n, league, n.live) : (n?.q && !n.degraded) ? queryUrl(n, league) : tradeHome(league)
-  }, [activeId, league, rerunTick, wvNonce, relax.relaxTick])   // ↻ or Exact reloads the row's latest saved search, not a stale initial mount URL
+    const url = n?.slug ? tradeUrl(n, league, n.live) : (n?.q && !n.degraded) ? queryUrl(n, league) : tradeHome(league)
+    return { windowKey, league, activeId, url }
+  }
+  const [address, setAddress] = useState(readAddress)
+  if (address.windowKey !== windowKey || address.league !== league || address.activeId !== activeId) {
+    setAddress(readAddress())
+  }
+  const mountUrl = address.url
   const viewUrl = relax.relaxUrl || mountUrl
 
   // A tab mounted on the Instant Buyout home: the site's own landing slug for it is not the user's search.

@@ -418,6 +418,22 @@ describe('WorkspaceView Close-enough fuzzy rare finder lifecycle', () => {
     })
   })
 
+  it('the trade window\'s address is recomputed on a reload (↻), from the saved row', () => {
+    seedTree('s1')
+    const { unmount } = render(<WorkspaceView league="Test League" visible />)
+    const first = document.querySelector('webview')
+    expect(first.getAttribute('src')).toContain('orig-slug')
+    act(() => useWorkspace.getState().setField('s1', { slug: 'replacement' }))
+    expect(document.querySelector('webview')).toBe(first)
+    expect(first.getAttribute('src')).toContain('orig-slug')
+    fireEvent.click(screen.getByRole('button', { name: 'Reload' }))
+    const second = document.querySelector('webview')
+    expect(second).not.toBe(first)
+    expect(second.getAttribute('src')).toContain('replacement')
+    unmount()
+    expect(document.querySelector('webview')).toBeNull()
+  })
+
   it('surfaces rate/auth relax errors via toast and stays silent on cancelled', async () => {
     const events = []
     const off = bus.on((t) => events.push(t))
@@ -457,11 +473,13 @@ describe('WorkspaceView Close-enough fuzzy rare finder lifecycle', () => {
       q: rareQ,
       auto: false,
     }])
-    render(<WorkspaceView league="Test League" visible={true} />)
+    const { rerender, unmount } = render(<WorkspaceView league="Test League" visible={true} />)
     const wv = document.querySelector('webview')
     wv.getWebContentsId = () => 101
     const origSrc = wv.getAttribute('src')
     expect(origSrc).toContain('?q=')
+    rerender(<WorkspaceView league="Test League" visible={true} />)
+    expect(document.querySelector('webview')).toBe(wv)
 
     // Simulate GGG sign-in redirect stripping ?q= and landing on an empty-search slug.
     act(() => {
@@ -484,6 +502,8 @@ describe('WorkspaceView Close-enough fuzzy rare finder lifecycle', () => {
       navHandler?.({ wcId: 102, phase: 'nav', url: 'https://www.pathofexile.com/trade2/search/poe2/Test%20League/REAL_QUERY_SLUG' })
     })
     expect(useWorkspace.getState().nodeById('q_node').slug).toBe('REAL_QUERY_SLUG')
+    unmount()
+    expect(document.querySelector('webview')).toBeNull()
   })
 
   it('never leaks an idle rare row baseQueryRef when switching to an ineligible Unique or a different Rare before TAP fires', async () => {
@@ -532,6 +552,43 @@ describe('WorkspaceView Close-enough fuzzy rare finder lifecycle', () => {
     await waitFor(() => expect(window.poe2desktop.trade.relax).toHaveBeenCalledTimes(1))
     const sentIds = window.poe2desktop.trade.relax.mock.calls[0][0].query.stats[0].filters.map(f => f.id)
     expect(sentIds).toEqual(['explicit.stat_es', 'explicit.stat_int', 'explicit.stat_spirit'])
+  })
+
+  it('keeps the new saved row and webview address when a late fetch belongs to the old relaxed page', async () => {
+    const newMods = ['explicit.stat_armour', 'explicit.stat_spirit', 'explicit.stat_accuracy']
+    const body = structuredClone(EE2_RARE_QUERY)
+    body.query.stats[0].filters = newMods.map(id => ({ id, value: { min: 10 } }))
+    seedTree('s1', [{ id: 's2', kind: 'search', name: 'New rare', q: JSON.stringify(body) }])
+    const descriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'getWebContentsId')
+    Object.defineProperty(HTMLElement.prototype, 'getWebContentsId', { configurable: true, value: () => 71 })
+    try {
+      const { rerender, unmount } = render(<WorkspaceView league="Test League" visible />)
+      fireEvent.click(await screen.findByRole('button', { name: 'Close enough' }))
+      await screen.findByText('Relaxed')
+      const guest = () => document.querySelector('webview')
+      const previous = JSON.parse(new URL(guest().getAttribute('src')).searchParams.get('q'))
+      expect(previous.query.status.option).toBe('securable')
+      act(() => tapHandler({ kind: 'search', wcId: 71, id: 'late', league: 'Test League', body: previous, ids: [] }))
+      fireEvent.click(screen.getByRole('button', { name: 'Exact' }))
+      act(() => useWorkspace.getState().setActive('s2'))
+      const selected = guest()
+      const address = selected.getAttribute('src')
+      expect(JSON.parse(new URL(address).searchParams.get('q')).query).toEqual(body.query)
+      rerender(<WorkspaceView league="Test League" visible />)
+      act(() => tapHandler({ kind: 'fetch', wcId: 71, searchId: 'late', rows: [] }))
+      expect(guest()).toBe(selected)
+      expect(selected.getAttribute('src')).toBe(address)
+      expect(window.poe2desktop.trade.relax).toHaveBeenCalledTimes(1)
+      fireEvent.click(await screen.findByRole('button', { name: 'Close enough' }))
+      await waitFor(() => expect(window.poe2desktop.trade.relax).toHaveBeenCalledTimes(2))
+      const sent = window.poe2desktop.trade.relax.mock.calls[1][0].query
+      expect(sent.stats[0].filters.map(f => f.id)).toEqual(newMods)
+      expect(sent.status.option).toBe('securable')
+      unmount()
+    } finally {
+      if (descriptor) Object.defineProperty(HTMLElement.prototype, 'getWebContentsId', descriptor)
+      else Reflect.deleteProperty(HTMLElement.prototype, 'getWebContentsId')
+    }
   })
 
   it('shows a clickable Connect PoE account button when trade.relax fails with auth on an already-connected session and immediately re-runs relax after reconnecting', async () => {
