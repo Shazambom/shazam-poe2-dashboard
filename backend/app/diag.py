@@ -12,6 +12,8 @@ import asyncio
 import logging
 import time
 
+from starlette.concurrency import run_in_threadpool
+
 from . import (
     analytics,
     config,
@@ -164,7 +166,7 @@ async def collect() -> dict:
         "unknown_traded": _unknown_traded(s["league"]),
         "digest": dict(digest.state),
         "orderbook": orderbook.state,
-        "leaguehistory_current": db.kv_get("lh_current", []),
+        "leaguehistory_current": await run_in_threadpool(db.kv_get, "lh_current", []),
         "session_connected": session.status().get("connected", False),
         "connectivity": await _connectivity(),
         "analytics": _analytics(s["league"]),
