@@ -27,6 +27,8 @@ import re
 import time
 from dataclasses import dataclass, field
 
+from starlette.concurrency import run_in_threadpool
+
 from . import db, devtelemetry, gateway, marketseries
 from .config import SEED_DIR, TRADE_STATIC_URL
 
@@ -122,7 +124,8 @@ class Registry:
             return False
         self._apply_static(data)
         self.loaded_at = time.time()
-        db.kv_set(
+        await run_in_threadpool(
+            db.kv_set,
             STATIC_CACHE_KEY,
             {
                 "result": [
