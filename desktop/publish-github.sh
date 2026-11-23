@@ -25,18 +25,21 @@ REPO="Shazambom/shazam-poe2-dashboard"
 }
 VER=$(node -p "require('./package.json').version")
 
+# TEST GATE — runs before anything remote or generated (EE2 sync, commit, push, CI trigger, upload).
+# A red test aborts the release here; GitHub Actions never sees it (owner directive: tests gate the
+# deploy scripts, not CI).
+../ops/run-tests.sh
+
 # EE2 QUERY PORT SYNC — refresh desktop/src/vendor/ee2-query from EE2's latest release tag, snapshot
 # GGG's trade data, regenerate the goldens with EE2's own code (docs/trading-workspace-roadmap.md §8).
-# Network is required to release anyway; a failing step aborts. The refreshed vendor/data/goldens are
-# part of the release commit (review the golden diff `git diff --stat test/goldens/ee2-query`).
+# Network is required to release anyway; a failing step aborts. If the sync changes files, re-run the
+# test gate before committing so a broken vendor update never gets committed or pushed.
 node scripts/sync-ee2.mjs ${EE2_TAG:+--tag "$EE2_TAG"}
 git add -A src/vendor/ee2-query test/goldens/ee2-query
-git diff --cached --quiet || git commit -q -m "chore(ee2-query): sync vendored EE2 port for $VER" -m "Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
-
-# TEST GATE — runs before anything remote (tag push, CI trigger, upload). A red test aborts
-# the release here; GitHub Actions never sees it (owner directive: tests gate the deploy
-# scripts, not CI).
-../ops/run-tests.sh
+if ! git diff --cached --quiet; then
+  ../ops/run-tests.sh
+  git commit -q -m "chore(ee2-query): sync vendored EE2 port for $VER" -m "Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
+fi
 
 # REGRESSION GATE (owner, 2026-09-30) — also before anything remote. The last stable version and this
 # code run on the same snapshot of the owner's data; every difference in what users see (prices, busiest
