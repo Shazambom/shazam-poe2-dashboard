@@ -63,7 +63,7 @@ the no-drop-point shape below and deleted on 2026-09-20; its threat framing surv
 
 ## Wire format
 
-```
+```text
 .arb  = "ARB1"(4) | keyId(1) | ephPub(32) | nonce(12) | ciphertext | tag(16)   (65 B overhead)
 key   = HKDF-SHA256(ikm = X25519(eph, ownerPub), salt = ephPub‖ownerPub, info = "arbiter-feedback-v1", 32)
 AAD   = the 5 header bytes — a header edit fails the tag
@@ -208,7 +208,7 @@ pubkey imports via the SPKI prefix `302a300506032b656e032100`; `hkdfSync` return
 
 Two compose services on shazam sharing one spool volume; no Docker socket, no ports.
 
-```
+```text
  Discord ──► bot   (trusted: token + private key, network)
                │   AES-GCM decrypt only — pure math, no parsing; a bad tag stops here
                │   writes  spool/in/<threadId>.gz          (plaintext, still untrusted)
@@ -301,8 +301,8 @@ mounted read-only; `feedback-opener`: `network_mode: none`, `read_only: true`, `
 - `docs/dev-notes.md`: "Feedback reports" — keygen on shazam, where the PEM and bot token live
   (`/etc/arbiter/`, root-owned, mounted read-only), owner-key rotation (bump `KEY_ID`, keep the old
   PEM in `KEY_DIR`), the Discord setup (forum channel, invite targeting it, bot permissions + the
-  Message Content intent), deploying the bot (`./ops/deploy-web.sh bot` → rsync `ops/feedback-bot/`
-  + `docker compose up -d --build feedback-bot`), reading the inbox, the `?snap=1` mode.
+  Message Content intent), deploying the bot (`./ops/deploy-web.sh bot` → rsync `ops/feedback-bot/` +
+  `docker compose up -d --build feedback-bot`), reading the inbox, the `?snap=1` mode.
 - **CLAUDE.md: no change.** The app makes no new outbound call; opening the invite is the OS browser.
 
 ## Threat model

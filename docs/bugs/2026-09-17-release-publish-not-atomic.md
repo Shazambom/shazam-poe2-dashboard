@@ -37,6 +37,7 @@ restored `latest-mac.yml` believing the DMG was "fresh installs only"; the Mac u
 | 0.2.61-beta.1 | Draft-first flow end to end, zero exposure while two of three big uploads stalled. Exposed the two follow-ups (tag visibility, wall-clock timeout). |
 | 0.2.61-beta.2 | No-tag flow: no tag / no feed entry during the build, **no client errors in telemetry** (beta.1 had one every 30 min), tag created on the built sha; client updated in 12 s. |
 | stable 0.2.61 | "Latest" moved 0.2.60 → 0.2.61 in one verified step. Speed-cut fired for real: zip at 281 KB/s cut after ~30 s, retry landed at 9.4 MB/s (the same failure cost 20–40 min earlier in the day). |
+
 Plus 16 unit tests (`desktop/test/release-assets.test.mjs`, incl. both incident states and a replay of
 the 47 KB/s collapse) and two throwaway-draft runs that hit — and healed — real GitHub 500s.
 
@@ -55,7 +56,7 @@ Earlier the same day five releases (0.2.58-beta.1 … 0.2.59) uploaded in 1–2 
 same steps. Then GitHub's release-asset uploads (`uploads.github.com`) started stalling/failing on the
 large files (~178 MB). githubstatus.com reported "All Systems Operational" throughout.
 
-**0.2.60-beta.1**
+### 0.2.60-beta.1
 
 - 16:58 tag pushed → Windows CI run 35249820587. Build, sidecar crash-gate, packaging: all green.
 - 17:02 step "Upload installer to a Release" (`softprops/action-gh-release@v2`) uploaded `beta.yml` +
@@ -67,7 +68,7 @@ large files (~178 MB). githubstatus.com reported "All Systems Operational" throu
 - **Exposure: ~17:02 → 17:53 (≈50 min) `beta.yml` was live with no installer behind it.** Any beta
   client checking in that window was told "update available" and then failed the download.
 
-**stable 0.2.60**
+### stable 0.2.60
 
 - Windows CI uploaded cleanly this time. `publish-github.sh` then ran
   `gh release upload … --clobber` for the five Mac files and died:

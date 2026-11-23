@@ -78,7 +78,7 @@ are rebuildable/derivable and therefore disposable: `gamedata/` (cached game dat
 One connection per thread (as today), opened on `user.sqlite` and with `market.sqlite`
 **ATTACHed** as schema `market`:
 
-```
+```sql
 ATTACH DATABASE '<DATA_DIR>/market.sqlite' AS market;
 ```
 
@@ -101,7 +101,7 @@ ATTACH DATABASE '<DATA_DIR>/market.sqlite' AS market;
 
 ### Seeding logic (backend startup, before ATTACH)
 
-```
+```text
 seed_v   = read snapshot_version from MARKET_SEED           (bundled)
 local_v  = read snapshot_version from DATA_DIR/market.sqlite (or -1 if missing/corrupt)
 if local missing OR seed_v > local_v:
@@ -135,7 +135,7 @@ So the invariant the implementer MUST preserve: **all market ingestion is waterm
 gap-filling** (it already is today). Seeding sets the watermarks to the snapshot's cutoff; the
 normal ongoing ingestion loop then advances them to now. Net effect for the user:
 
-```
+```text
 install/update ──► seed (full history up to snapshot cutoff, instantly)
              └───► background: digest cursor + poe2scout markers resume → fill snapshot→now
 ```
@@ -156,7 +156,7 @@ Consequences / requirements:
 The crawl is **not** run per-build from scratch. **shazam already crawls continuously** and
 holds the full financial history, so the snapshot is an **export of shazam's market tables**:
 
-```
+```text
 shazam root cron (hourly) ──►  ops/export-market-snapshot.py  ──►  market-seed.sqlite.gz (+ .version)
                                                                 └─►  GitHub release `market-seed-latest`
                                                                        ├─► Windows CI pulls it

@@ -17,7 +17,7 @@ Rites*, 609 scored assets). Probe scripts in the session scratchpad; nothing wri
 
 The owner's report, confirmed. Top-25 rows that the board ranks highly while predicting a fall:
 
-```
+```text
 3d board:  #2  Perfect Orb of Augmentation   ret +51.4%   hold 0.2656   pred -11.1%
            #10 Perfect Exalted Orb           ret +18.0%   hold 0.1120   pred -31.5%
            #14 Perfect Jeweller's Orb        ret +49.4%   hold 0.0792   pred -30.5%
@@ -40,7 +40,7 @@ draft of this analysis overstated the independence claim.)
 Separately, among the 239 assets with a **negative** return, ordering is close to arbitrary — **61% of pairs
 (17,261 / 28,441) are inverted**, i.e. the worse loss ranks higher:
 
-```
+```text
 board#  asset                      ret%   conf   hold
    222  Lesser Glacial Rune       -75.1   0.00  -0.0000
    605  Mirror of Kalandra         -9.4   0.65  -0.0500
@@ -273,7 +273,7 @@ level — correct, it deflates against Divine by design.
 
 ## The fix (decided 2026-09-20)
 
-```
+```text
 floor:  top 50% of the day's traded value, AND n >= 4 days      (replaces VALUE_FLOOR + the liq multiplier)
 cap:    exclude max-drawdown worse than -40%                    (holdscore.MDD_CAP)
 score:  log(1 + ret) + CAUTION_K * log(1 + mdd)                 (sign-safe; default 2.0 matches today)

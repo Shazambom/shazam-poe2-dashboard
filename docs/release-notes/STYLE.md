@@ -7,7 +7,7 @@ installers (`ops/announce.sh`).
 
 ## The file
 
-```
+```markdown
 # 0.3.12
 
 One or two short sentences that sum up every bullet.

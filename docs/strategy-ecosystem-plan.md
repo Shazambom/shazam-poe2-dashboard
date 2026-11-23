@@ -248,7 +248,7 @@ graceful-degrades (sidecar off), board/capital unregressed. **NOT shipped** — 
 
 ### Phase 6 plumbing reference — entry points, endpoints, contracts (Phase 3/4 build ON this)
 
-**Processes / entry points**
+#### Processes / entry points
 
 - **Sidecar binary** `backend/sidecar/run_sidecar.py` → `runner.main()`. PyInstaller onefile
   `poe2arb-sidecar[.exe]` (numpy/stumpy, ~73 MB). Opens `market.sqlite` (RO reads + writes to the

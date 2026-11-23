@@ -49,7 +49,7 @@ the inbox's only writer: an action asks the bot, and the bot applies it within a
 
 ### The agent prompt
 
-```
+```text
 Reproduce Arbiter bug report <report> in a small, isolated, FAILING test. Do not fix it.
 
 The report: <dir> (read all of it). Start with discord.json (the reporter's words: the bug), then

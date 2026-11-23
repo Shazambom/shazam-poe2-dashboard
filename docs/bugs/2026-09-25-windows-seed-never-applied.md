@@ -5,7 +5,7 @@ full market sync on every launch.
 
 **What telemetry showed** (beta.2 added a `[seed]` line to the seed step):
 
-```
+```text
 [seed]: replacing local v0 with seed v1790363310 (88 MB gz)
 [seed]: FAILED (OSError: [Errno 9] Bad file descriptor); crawling live
 [mods]: snapshot v0 pools=0 currencies=0

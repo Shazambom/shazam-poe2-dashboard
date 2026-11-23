@@ -30,20 +30,20 @@ Also scope the cache by past-league data extent, not league names.
 
 ### Grafts and rejections
 
-**C1**
+#### C1
 
 - *Graft:* the neutral-rank shrinkage for a record that is structurally missing, with ≥2 leagues required (above). This is the only mechanism in the arena that fixed Emergent and Flux.
 - *Graft (second choice):* `haven`. C1, C3 and C4 each derived it independently and each measured a positive IC in every league. Add it as one family.
 - *Consider:* `steady` (Sharpe-style mean/sd) as a replacement for `trend`. Its IC is similar to `kept` and it cut crashes when combined.
 - *Reject:* nothing major. Its holdout churn and owner losses come from dropping `kept`, so keep production's `kept`.
 
-**C3**
+#### C3
 
 - *Graft:* the worst-third-of-days haven definition. It is the best-documented version (V-primary source, IC positive in all 3–5 leagues through day 60), and C3 measured that the "board-negative days" variant fails on smoothed medians.
 - *Graft:* its per-league new-item measurement, as the evidence for how to treat a missing record.
 - *Reject:* ranking a missing record at the bottom. Rise of the Abyssal's crash ratio got worse at every horizon because about 60% of that league's board was new. Also reject the hard-coded 98-day no-lookahead assumption; use a calendar cut.
 
-**C4**
+#### C4
 
 - *Graft:* the Kaufman efficiency-ratio `steady` (net move ÷ Σ|moves|) as an alternative to C1's Sharpe version. It needs one fewer statistic and its IC has the same sign in 19 of 19 league-phases.
 - *Reject:* `depth` (negative IC in every phase by its own measurement; it pulls owner items up by label-like effect while costing return) and the `_predict` forecast. C1 and C2 each measured that `_predict`'s top 10 crashes 1.2–2× the basket or turns Fate 14d negative, and C3 notes it would double-count the cross-league evidence.

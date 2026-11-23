@@ -8,7 +8,7 @@
 
 ## Decision tree: where does my new data go?
 
-```
+```text
 Is it something the USER created/owns and would be upset to lose on update?
   (settings, capital, saved searches, login, personal overrides)
       → USER data → user.sqlite → REQUIRES A MIGRATION (see below)

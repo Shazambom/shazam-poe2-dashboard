@@ -11,7 +11,7 @@
 > not addresses. Test-first (`/tdd`) per batch; every batch is gated by `ops/run-tests.sh` (which the deploy
 > scripts run first) and driven over CDP per `docs/desktop-debugging.md`. Release mechanics are in
 > `docs/release-runbook.md`, not here.
-
+>
 > **Status (2026-09-17, branch `dev`):** implemented end to end — Batch 0 (`11c7ce8`, `3375204`, `fce515a`),
 > Batch 1 (`1273580`), zoom fix (`5b134a7`), Batch 2 (`14e5023`), Batch 3 (`b57f295`), Batch 4 (`97748b1`),
 > Batch 5 (`d9cd789`), Batch 6 (`819a02f`). Every batch was driven on the local desktop app over CDP before
@@ -43,7 +43,7 @@ and the trade site does the POST. No page refresh, no API call, ever, to build h
 
 ## 2. Decisions (final)
 
-**History folder**
+### History folder
 
 - The folder is named **"ExiledExchange2 History"** — that name, nothing appended, no explanatory note. It is
   identified by `sys:'ee2-history'`, not by name; created at the top of the root on the first captured item,
@@ -69,7 +69,7 @@ and the trade site does the POST. No page refresh, no API call, ever, to build h
 - **Clear history** is one action reachable from the folder row, its context menu, ⌘K and Settings; undoable.
 - Export excludes history.
 
-**The EE2 port**
+### The EE2 port
 
 - EE2's parser + filter builders + search-request builder (MIT) are vendored as a Node library and run in a
   separate process — never in the renderer, never synchronously in main. Only the *search* path is vendored;
@@ -84,7 +84,7 @@ and the trade site does the POST. No page refresh, no API call, ever, to build h
 - **Warm-up:** at startup, if EE2 is detected *running*, the builder process is warmed 15 s after launch and
   kept warm; otherwise it starts on the first copied item.
 
-**Everything else**
+### Everything else
 
 - Clipboard-add accepts trade **search** links (id form and `?q=` form) and item text. **Exchange links are
   rejected** with a toast.
@@ -301,12 +301,12 @@ Not read: `rememberCurrency`/`rememberListingType` (cold start passes `undefined
 
 | channel | dir | batch | payload |
 |---|---|---|---|
-| `diag:log` | R→M invoke | 1 | `{ marker, line }` → `true|false` (dropped) |
+| `diag:log` | R→M invoke | 1 | `{ marker, line }` → `true\|false` (dropped) |
 | `clipboard:classify` | R→M invoke | 1 | `{}` → classification above |
 | `ws:flush` | M→R | 1 | sent on `before-quit`; the renderer flushes the pending autosave |
-| `trade:webview-nav` | M→R | 1 | **changed** to `{ url, wcId, phase:'nav'|'start'|'stop' }` (was a bare url) |
+| `trade:webview-nav` | M→R | 1 | **changed** to `{ url, wcId, phase:'nav'\|'start'\|'stop' }` (was a bare url) |
 | `trade:ingest` | M→R | 3 | `IngestIntent` |
-| `trade:ingest-ack` | R→M | 3 | `{ id, result:'added'|'bumped'|'degraded'|'dropped', reason? }` |
+| `trade:ingest-ack` | R→M | 3 | `{ id, result:'added'\|'bumped'\|'degraded'\|'dropped', reason? }` |
 | `ee2:set-enabled` | R→M | 3 | `{ enabled }` — lets main skip builds when off |
 | `ee2:status` | R→M invoke | 3 | `{ present, running, configRead, leagueId, warm }` for the Settings status line |
 
@@ -315,7 +315,7 @@ user migration 5 + `POST /api/sales/ingest`, `GET /api/sales?league=` (batch 6).
 
 **Telemetry lines** (auto-prefixed `v<version> <platform>`):
 
-```
+```text
 # marker ee2
 warm ms=1842 items=13407 stats=4991                # builder process ready
 history-attached cfg=ok|default league="…"        # consumer attached; whether EE2's config was readable
@@ -429,7 +429,7 @@ rail-head button ⎘ "Add from clipboard" (`aria-label`), ⌘⇧V, `Ctrl/⌘+V` 
 focus, a folder context-menu item "Add from clipboard here", and the ⌘K command. Target = the selected folder,
 else the selected node's parent, else root — never the history folder. Ladder:
 
-```
+```text
 empty      → toast "Clipboard is empty"                                   clipboard-add result=empty
 trade-url  → ingest({source:'clipboard', slug, name:'Search '+slug.slice(0,6)})   result=ok src=url   (auto-named on open, as today)
 query-url  → ingest({source:'clipboard', q, name from q.query.name / q.query.type})   result=ok src=query-url
@@ -465,7 +465,7 @@ automatically on every release. No user-visible change; batches 0 and 1 ship reg
 
 **Layout.**
 
-```
+```text
 desktop/src/vendor/ee2-query/
   LICENSE.EE2  NOTICE  PROVENANCE.md     # MIT attribution (EE2 + Awakened PoE Trade upstream), what was changed and why
   vendor/                                # esbuild output of EE2's own TS — committed, never hand-edited
@@ -499,7 +499,7 @@ rule is untouched.
 4. `apiToSatisfySearch(item, preset.stats, preset.filters)` → `'bulk'` → `{error:{stage:'currency'}}`
    (currency and stackables are never history material; `pathofexile-bulk.ts` is not vendored).
 5. `q = JSON.stringify(createTradeRequest(preset.filters, preset.stats, item))`.
-6. `name` = `item.name` for uniques, else `item.name ? `${item.name} ${item.baseType}` : item.baseType`, ≤ 60 chars.
+6. `name` = `item.name` for uniques, else ``item.name ? `${item.name} ${item.baseType}` : item.baseType``, ≤ 60 chars.
 Returns `{ q, name, item:{name, baseType, rarity, itemClass}, host }` or `{ error:{ stage, message } }`,
 `stage ∈ parse | lang | currency | presets | request`. The ≈40 lines reimplemented from
 `CheckedItem.vue:160-205` are the only hand-written logic on the parity path; the goldens pin them.
@@ -552,7 +552,7 @@ no second writer; verified on Windows through beta telemetry.
 
 **Flow.**
 
-```
+```text
 item copied in game ─▸ EE2 package 'item-checked' {raw, name, rarity, itemClass, origin, ts}
         ▼
 desktop/src/ee2-history/index.js   (the "actions layer"; the package is untouched)
@@ -832,7 +832,7 @@ enforced for teleport).
 | P2 | `shot.mjs` flashes device emulation | `scripts/shot.mjs:26` `scale:2` | §10 | separate |
 | P3 | Rail controls hover-only, unlabeled, unreachable by keyboard | `styles.css:187-188`; `WorkspaceView.jsx:173-183` | labels, `:focus-within`, context menu, keys, drag handle | 0 |
 | P4 | Two different empty states | `WorkspaceView.jsx:177` vs `:203-207` | one card | 0 |
-| P5 | "Loading…" never appears | `WorkspaceView.jsx:100,144` | `phase:'start'|'stop'` → hairline | 1 |
+| P5 | "Loading…" never appears | `WorkspaceView.jsx:100,144` | `phase:'start'\|'stop'` → hairline | 1 |
 | P6 | Header bar repeats the selection + a gzip slug | `WorkspaceView.jsx:198-201` | chips + actions | 0 |
 | P7 | Trade site's own header eats ~340 px | `workspace.png` | the page stays untouched; flex-fill the pane, auto-collapse the rail below ~1100 px, scroll the guest to the search bar on load | 0 |
 | P8 | Live tab has no container | `LiveView.jsx:78-110`; `styles.css:229` | reuse `.trade-ws` | 0 |
@@ -847,7 +847,7 @@ enforced for teleport).
 
 ## 17. Sequencing
 
-```
+```text
 B0  workspace safety + QOL core            no desktop cut
  ├─ B1  webview + diag bridge + clipboard-add     desktop cut 1  (proves the telemetry channel first)
  │    └─ B3  history folder end to end             desktop cut 2  (needs B2)

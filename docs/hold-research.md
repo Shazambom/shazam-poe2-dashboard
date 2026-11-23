@@ -276,7 +276,7 @@ each is testable with `ops/hold-backtest.py --scorer`. None implemented yet.
 | 4 | downside beta in place of the efficiency ratio (late) | −2 cells, Runes clearly worse |
 | 5 | record shrunk toward its category mean (prior = RECORD_MIN_WINDOWS) | −1 cell; Fate, Rise and Forbidden Rites clearly worse |
 
-#2 is the nearest miss: it buys return mid-league at one crash cell. #3 (costs) and #6 (a stricter
+\#2 is the nearest miss: it buys return mid-league at one crash cell. #3 (costs) and #6 (a stricter
 acceptance test) change how Hold is graded, not what it ranks, and were not run.
 
 Game economies: an item sink raised luxury prices 7–14% with no volume effect (OSRS; Hogan-Hennessy,

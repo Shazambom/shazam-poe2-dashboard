@@ -30,8 +30,8 @@ There are **two update channels**, so we can iterate on the packaged app WITHOUT
 | **beta (dev)** | `x.y.z-beta.N` | **pre-release** (never Latest) | `beta.yml`, `beta-mac.yml` | only clients opted into beta | **on** |
 
 - **Opt in (client side):** Settings → Diagnostics → **"Beta updates (dev channel + diagnostics telemetry)"**.
-  That persists `betaChannel` in `desktop-settings.json`; `main.js` then sets `autoUpdater.channel='beta'`
-  + `allowPrerelease=true`. A build that is *itself* a `-beta` version forces the beta channel on
+  That persists `betaChannel` in `desktop-settings.json`; `main.js` then sets `autoUpdater.channel='beta'` +
+  `allowPrerelease=true`. A build that is *itself* a `-beta` version forces the beta channel on
   (`locked`). Diagnostics telemetry (`p=backend`, `p=sidecar`, the `/api/diag.analytics` probe) fires
   **only** on the beta channel or an unpackaged dev run — gated by `diagTelemetryOn()` in `main.js`
   (which passes `ARBITER_TELEMETRY=1` to the backend→sidecar). Stable builds are silent.
@@ -61,7 +61,7 @@ When the owner says **"deploy dev"** (or "deploy to the dev/beta channel"), cut 
 
 Verify a dev release resolves on the beta channel:
 
-```
+```bash
 gh release view desktop-v<x.y.z-beta.N> --json isPrerelease,assets \
   -q '{prerelease:.isPrerelease, files:[.assets[].name]}'   # isPrerelease:true, beta.yml + beta-mac.yml present
 ```
@@ -219,7 +219,7 @@ Check these every time; each one has cost a deploy before. (The general rules ev
    > and the frontend `app.asar` — the single double-clickable artifact users run. Use it for a
    > from-scratch build; use the individual `build:*` scripts when iterating. (`dist:mac` alone
    > packages whatever binaries already exist in `backend-bin/`/`sidecar-bin/`.)
-
+   >
    > Workspace fields like `activeId` / `armed` are stored inside the `trading_workspace`
    > JSON blob, which the backend persists opaquely — new fields need **no backend change
    > and no migration**. Adding/altering an actual DB **table/column** does (user → numbered

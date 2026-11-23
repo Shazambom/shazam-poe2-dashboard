@@ -6,7 +6,7 @@ the currency you hold, and ranks them by margin, value, gold cost and gold effic
 
 ## Run
 
-```
+```bash
 cp .env.example .env      # set LEAGUE and USER_AGENT (no credentials go here)
 docker compose up -d --build
 ```
@@ -27,7 +27,7 @@ session cookie, and that cookie is HttpOnly, so page script can't read it. Two w
 
 1. On the PC where your browser is logged in to pathofexile.com:
 
-   ```
+   ```bash
    pip install browser-cookie3
    python tools/connect.py --server http://<server>:8080 session
    ```

@@ -11,7 +11,7 @@ platforms (the logic is in `desktop/src/ee2-history/`, not platform code).
 
 Marker `ee2`, 0.2.61-beta.2 win32, 2026-09-17 UTC (server clock):
 
-```
+```text
 23:39:19  item-checked … "Hypnotic Visage"   → history-build … ms=1 qb=1106 → history-add total=33
           (12 quiet minutes: two Backslash hotkeys at 23:39–23:40, nothing else)
 23:51:33  item-checked rarity=Currency name="Sacred Bloom"        → history-skip reason=worker origin=ee2
