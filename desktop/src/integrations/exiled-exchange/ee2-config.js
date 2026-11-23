@@ -50,8 +50,9 @@ function defaultShortcuts() {
   ]
 }
 
-function loadConfig() {
-  try { return JSON.parse(fs.readFileSync(configPath(), 'utf8')) } catch { return null }
+// The parsed config, or null when it is missing or not JSON.
+async function loadConfig() {
+  try { return JSON.parse(await fs.promises.readFile(configPath(), 'utf8')) } catch { return null }
 }
 
 // Walk the config JSON and pull out every hotkey binding as our own normalized
@@ -107,8 +108,8 @@ function extractShortcuts(cfg) {
 }
 
 // Load + extract in one call, falling back to defaults if unreadable.
-function readShortcuts() {
-  const cfg = loadConfig()
+async function readShortcuts() {
+  const cfg = await loadConfig()
   const list = extractShortcuts(cfg)
   return list.length ? list : defaultShortcuts()
 }
