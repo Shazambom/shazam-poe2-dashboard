@@ -6,6 +6,7 @@ fetch candidates only: a seeded client that skips a whole league shows nothing t
 """
 
 import sys
+from typing import Any
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # backend/
@@ -15,7 +16,7 @@ NOW = 1_790_000_000.0
 
 
 def _plan(**kw):
-    args = dict(
+    args: dict[str, Any] = dict(
         item_ids=[1, 2, 3, 4],
         current=False,
         force=False,

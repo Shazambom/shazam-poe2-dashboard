@@ -16,6 +16,7 @@ can only be marked seen ("triage"), since resolve / close reply in the thread wi
 from __future__ import annotations
 
 import argparse
+from typing import cast
 import base64
 import binascii
 import json
@@ -147,7 +148,7 @@ def act(inbox: Path, report: str, action: str) -> Path:
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    ap = argparse.ArgumentParser(description=cast(str, __doc__).splitlines()[0])
     ap.add_argument("--inbox", type=Path, default=INBOX)
     sub = ap.add_subparsers(dest="cmd", required=True)
     ls = sub.add_parser("list")

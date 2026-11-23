@@ -26,7 +26,7 @@ import shutil
 import time
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from cryptography.hazmat.primitives import serialization
 
@@ -103,6 +103,7 @@ class Handler:
         )
         self.process = process  # tests: run the cell inline; production: None → the opener container
         self.wait_s = wait_s
+        self.retry_delays: tuple[int, ...]
         self.retry_delays, self.sleep = RETRY_DELAYS, asyncio.sleep
         self._busy: set[int] = set()
         self.text_forums: dict[
@@ -349,7 +350,8 @@ class Handler:
 
     async def _handle(self, thread) -> str:
         _log(f"thread {thread.id}: {str(getattr(thread, 'name', ''))[:80]!r}")
-        kind = self.text_forums.get(getattr(thread, "parent_id", None))
+        parent_id = getattr(thread, "parent_id", None)
+        kind = self.text_forums.get(parent_id) if parent_id is not None else None
         msg = await self._starter(thread)  # the forum post's starter message
         if msg is None:
             self._record(thread.id, pending=True, mark=kind is None)
@@ -530,7 +532,10 @@ def main():
         return {forum_id, *handler.text_forums}
 
     async def catch_up_all():
-        bug = client.get_channel(forum_id) or await client.fetch_channel(forum_id)
+        bug = cast(
+            discord.ForumChannel,
+            client.get_channel(forum_id) or await client.fetch_channel(forum_id),
+        )
         handler.text_forums = {
             c.id: TEXT_FORUMS[c.name] for c in bug.guild.forums if c.name in TEXT_FORUMS
         }
@@ -543,7 +548,10 @@ def main():
                 _log(f"catch-up of forum {fid} failed: {e!r}")
 
     async def releases_target():
-        bug = client.get_channel(forum_id) or await client.fetch_channel(forum_id)
+        bug = cast(
+            discord.ForumChannel,
+            client.get_channel(forum_id) or await client.fetch_channel(forum_id),
+        )
         guild = bug.guild
         channel = next(
             (c for c in guild.text_channels if c.name == RELEASES_CHANNEL), None

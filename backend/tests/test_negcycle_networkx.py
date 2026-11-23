@@ -67,6 +67,7 @@ def test_fuzz_distances_and_verdict_match_networkx(impl, kind):
         if want is None:
             assert_negative_cycle(edges, got[1])
         else:
+            assert got[0] == "ok"
             assert got[1].tolist() == [want.get(v, INF) for v in range(n)], (kind, seed)
 
         # source=None == "a negative cycle anywhere" == networkx's whole-graph verdict

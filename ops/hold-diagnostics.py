@@ -16,6 +16,9 @@ production backtest first (or read its --json via --report).
 from __future__ import annotations
 
 import argparse
+from importlib.abc import Loader
+from importlib.machinery import ModuleSpec
+from typing import cast
 import importlib.util
 import json
 import math
@@ -27,8 +30,8 @@ from pathlib import Path
 _spec = importlib.util.spec_from_file_location(
     "hold_backtest", Path(__file__).with_name("hold-backtest.py")
 )
-bt = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(bt)
+bt = importlib.util.module_from_spec(cast(ModuleSpec, _spec))
+cast(Loader, cast(ModuleSpec, _spec).loader).exec_module(bt)
 H = bt.H
 
 

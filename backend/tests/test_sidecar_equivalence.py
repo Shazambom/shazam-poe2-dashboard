@@ -214,8 +214,8 @@ def test_compute_weights_ranking_identical_to_dtaidistance():
         want = dtai_weights(cur, past)
         assert set(got) == set(want), f"seed={seed} keys differ"
         if got:
-            order_got = sorted(got, key=got.get, reverse=True)
-            order_want = sorted(want, key=want.get, reverse=True)
+            order_got = sorted(got, key=got.__getitem__, reverse=True)
+            order_want = sorted(want, key=want.__getitem__, reverse=True)
             assert order_got == order_want, (
                 f"seed={seed} ranking differs\n{got}\n{want}"
             )

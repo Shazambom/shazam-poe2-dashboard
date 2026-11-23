@@ -91,7 +91,7 @@ class FakeScout:
         scout = self
 
         class H(BaseHTTPRequestHandler):
-            def log_message(self, *a):
+            def log_message(self, *args: object, **kwargs: object) -> None:
                 pass
 
             def do_GET(self):

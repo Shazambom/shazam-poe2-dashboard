@@ -33,8 +33,8 @@ def forum(fid, *threads):
 
         def archived_threads(self, limit=None):
             async def gen():
-                return
-                yield
+                for thread in ():
+                    yield thread
 
             return gen()
 
@@ -114,19 +114,20 @@ def test_a_thread_that_has_not_moved_is_not_read_again(h):
     )
 
 
-def test_a_failed_history_read_keeps_what_is_there_and_retries_next_time(h):
+def test_a_failed_history_read_keeps_what_is_there_and_retries_next_time(
+    h, monkeypatch
+):
     t = Thread(7005, [], content="no file")
     run(h.handle(t))
     t.say("missed", OTHER)
-    real = t.history
 
     def broken(**kw):
         raise RuntimeError("discord hiccup")
 
-    t.history = broken
-    run(h.catch_up(forum(999, t)))
-    assert words(h, "posts/7005") == [("reporter", "no file")]
-    t.history = real
+    with monkeypatch.context() as patch:
+        patch.setattr(t, "history", broken)
+        run(h.catch_up(forum(999, t)))
+        assert words(h, "posts/7005") == [("reporter", "no file")]
     run(h.catch_up(forum(999, t)))
     assert words(h, "posts/7005")[-1] == ("other", "missed")
 

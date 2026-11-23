@@ -36,6 +36,7 @@ line (a stale acceptance fails too). Exit 0 only when both hold, or when nothing
 from __future__ import annotations
 
 import argparse
+from typing import cast
 import json
 import os
 import shutil
@@ -264,7 +265,7 @@ def check_accept(lines: list[str], path: str | None, version: str | None) -> lis
 
 
 def main() -> None:
-    ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    ap = argparse.ArgumentParser(description=cast(str, __doc__).split("\n\n")[0])
     ap.add_argument(
         "--base",
         help="git ref of the version users have (default: the newest desktop-v* tag)",

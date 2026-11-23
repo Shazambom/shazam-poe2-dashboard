@@ -14,6 +14,7 @@
 """
 
 import json
+from typing import cast
 import sqlite3
 import sys
 import threading
@@ -176,7 +177,7 @@ def test_m1_leaves_legacy_in_place_when_commit_fails(tmp_path, monkeypatch):
     raw = _user_conn(tmp_path)
     conn = _FailOnceCommit(raw)
     with pytest.raises(sqlite3.OperationalError):
-        db._run_user_migrations(conn)
+        db._run_user_migrations(cast(sqlite3.Connection, conn))
     assert legacy.exists(), "legacy DB must not be renamed before the lift is committed"
     assert not (tmp_path / "poe2arb.sqlite.premigration").exists()
     assert raw.execute("SELECT COUNT(*) FROM capital").fetchone()[0] == 0

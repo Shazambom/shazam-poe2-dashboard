@@ -10,6 +10,7 @@ Owner, 2026-10-04: "should only fire after confirmed released". The payload trav
 from the notes reaches a remote shell raw."""
 
 import base64
+from typing import TypedDict
 import json
 import os
 import shutil
@@ -121,8 +122,20 @@ def test_it_fails_when_the_bot_never_posts_so_the_release_warns(tmp_path):
 
 
 def test_nothing_is_announced_unless_the_release_is_confirmed_live(tmp_path):
-    for i, kw in enumerate(({"latest": ("desktop-v1.2.2",) * 5}, {"verify_ok": False})):
-        env, inbox, root = setup(tmp_path / str(i), **kw)
+    class ReleaseState(TypedDict, total=False):
+        latest: tuple[str, ...]
+        verify_ok: bool
+
+    cases: tuple[ReleaseState, ...] = (
+        {"latest": ("desktop-v1.2.2",) * 5},
+        {"verify_ok": False},
+    )
+    for i, kw in enumerate(cases):
+        env, inbox, root = setup(
+            tmp_path / str(i),
+            latest=kw.get("latest", ("desktop-v1.2.3",)),
+            verify_ok=kw.get("verify_ok", True),
+        )
         r = run(env, root, "desktop-v1.2.3")
         assert r.returncode != 0 and not (inbox / "announce").exists(), kw
 

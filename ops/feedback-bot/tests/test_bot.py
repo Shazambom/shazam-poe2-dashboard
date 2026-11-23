@@ -98,12 +98,16 @@ def sealed_report(pub, doc=None):
     return arbseal.seal(gzip.compress(json.dumps(doc or valid_doc()).encode()), pub)
 
 
+class _HandlerWithPublicKey(Handler):
+    pub: bytes
+
+
 @pytest.fixture
 def h(tmp_path):
     priv, pub = keys()
     spool, inbox = tmp_path / "spool", tmp_path / "inbox"
     # `process` stands in for the opener container: the real cell, run synchronously.
-    handler = Handler(
+    handler = _HandlerWithPublicKey(
         spool=spool,
         inbox=inbox,
         private_key=priv,
@@ -340,8 +344,8 @@ def test_an_exception_in_one_thread_does_not_stop_the_next(h):
 
         def archived_threads(self, limit=None):
             async def gen():
-                return
-                yield
+                for thread in ():
+                    yield thread
 
             return gen()
 

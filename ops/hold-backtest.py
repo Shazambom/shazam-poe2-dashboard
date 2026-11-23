@@ -54,6 +54,9 @@ on day t; `series` = {age: (price_div, value_ex)} cut at age <= t. `ctx` = {"t",
 from __future__ import annotations
 
 import argparse
+from importlib.abc import Loader
+from importlib.machinery import ModuleSpec
+from typing import cast
 import importlib.util
 import json
 import math
@@ -164,9 +167,11 @@ def load_scorer(spec: str):
     if spec in BUILTIN:
         return BUILTIN[spec]
     path, fn = spec.rsplit(":", 1)
-    mod_spec = importlib.util.spec_from_file_location("hold_scorer", path)
+    mod_spec = cast(
+        ModuleSpec, importlib.util.spec_from_file_location("hold_scorer", path)
+    )
     mod = importlib.util.module_from_spec(mod_spec)
-    mod_spec.loader.exec_module(mod)
+    cast(Loader, mod_spec.loader).exec_module(mod)
     return getattr(mod, fn)
 
 
@@ -322,8 +327,8 @@ def grade_day(board, per, t, days, top, prev_top, hz=None):
         "blue": sum(e[4][t][0] >= q80 for e in board[:top]) / top,
         "owner": float(any(n in names for n in OWNER_PICKS)),
         "chase": sum(
-            (jumps[e[0]] if jumps[e[0]] is not None else -math.inf) >= hot
-            for e in board[:top]
+            (jump if jump is not None else -math.inf) >= hot
+            for jump in (jumps[e[0]] for e in board[:top])
         )
         / top,
         "top": [e[1] for e in board[:top]],
@@ -331,9 +336,9 @@ def grade_day(board, per, t, days, top, prev_top, hz=None):
         "dd": None,
         "board_crash": None,
     }
-    paths = {e[0]: path(per[e[0]], t, days) for e in board}
-    live = [e for e in board if paths[e[0]]]
-    picks = [e for e in board[:top] if paths[e[0]]]
+    paths = {e[0]: prices for e in board if (prices := path(per[e[0]], t, days))}
+    live = [e for e in board if e[0] in paths]
+    picks = [e for e in board[:top] if e[0] in paths]
     if len(live) < 2 * top or len(picks) < top // 2:
         return g
     ret, dd = portfolio([paths[e[0]] for e in picks])
@@ -361,16 +366,15 @@ def grade_day(board, per, t, days, top, prev_top, hz=None):
 
 def summarize(days):
     graded = [d for d in days if d["graded"]]
-    out = {"days": len(days), "graded": len(graded)}
+    out: dict[str, float | int | None] = {"days": len(days), "graded": len(graded)}
     for k in BOARD_KEYS + OUTCOME_KEYS:
         v = [d[k] for d in (days if k in BOARD_KEYS else graded) if d[k] is not None]
         out[k] = statistics.fmean(v) if v else None
     out["dd"] = statistics.median(d["dd"] for d in graded) if graded else None
     base = statistics.fmean(d["board_crash"] for d in graded) if graded else 0
+    crash = cast(float, out["crash"])  # graded boards have a crash rate
     out["crash_ratio"] = (
-        (out["crash"] / base if base else 0.0 if out["crash"] == 0 else None)
-        if graded
-        else None
+        (crash / base if base else 0.0 if crash == 0 else None) if graded else None
     )
     return out
 
@@ -535,8 +539,11 @@ def grade_leagues(
                 if ids:
                     boards.setdefault(label, {})[t] = (ids, scores)
                 if g:
+                    top_ids = cast(list[str], ids)  # a graded board has ranked ids
                     g["churn"] = (
-                        None if prev is None else len(set(ids) - prev) / len(ids)
+                        None
+                        if prev is None
+                        else len(set(top_ids) - prev) / len(top_ids)
                     )
                     days.append(g)
                 prev = set(ids) if ids else None
@@ -571,13 +578,15 @@ def build(db, numeraire="divine"):
 
 
 def current_league(day0):
-    return max(day0, key=day0.get)
+    return max(day0, key=day0.__getitem__)
 
 
 def _row(label, s, miss=None):
-    f = lambda v, p=True: (
-        "–" if v is None else (f"{v * 100:+.1f}" if p == "s" else f"{v * 100:.0f}%")
-    )
+    def f(v: float | None, p: bool | str = True) -> str:
+        return (
+            "–" if v is None else (f"{v * 100:+.1f}" if p == "s" else f"{v * 100:.0f}%")
+        )
+
     tail = (
         "" if miss is None else ("  PASS" if not miss else "  FAIL: " + "; ".join(miss))
     )
@@ -656,7 +665,7 @@ def main():
         return 0
 
     leagues = (
-        sorted(day0, key=day0.get)
+        sorted(day0, key=day0.__getitem__)
         if a.league == "all"
         else [a.league or current_league(day0)]
     )

@@ -22,6 +22,7 @@ construction and a MARKET_SCHEMA change in db.py needs no edit here. Only the ex
 """
 
 import argparse
+from typing import BinaryIO, cast
 import calendar
 import gzip
 import json
@@ -329,7 +330,7 @@ def main():
         # the backend compare snapshot_version WITHOUT decompressing on every launch.
         out_path = args.out if args.out.endswith(".gz") else args.out + ".gz"
         with open(tmp, "rb") as fi, gzip.open(out_path, "wb", compresslevel=9) as fo:
-            shutil.copyfileobj(fi, fo)
+            shutil.copyfileobj(fi, cast(BinaryIO, fo))
         os.remove(tmp)
         with open(out_path + ".version", "w") as vf:
             vf.write(str(version))

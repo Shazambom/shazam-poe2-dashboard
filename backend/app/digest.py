@@ -477,7 +477,7 @@ def pair_volume(league: str, hours: float = 24) -> dict[tuple[str, str], float]:
     )
 
 
-def _pair_volume(league: str, hours: int) -> dict[tuple[str, str], float]:
+def _pair_volume(league: str, hours: float) -> dict[tuple[str, str], float]:
     since = _hour(time.time()) - hours * 3600
     with db.q() as c:
         rows = c.execute(

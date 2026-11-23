@@ -107,7 +107,7 @@ def do_oauth(server: str) -> None:
     result: dict = {}
 
     class Handler(http.server.BaseHTTPRequestHandler):
-        def log_message(self, *_):
+        def log_message(self, *args: object, **kwargs: object) -> None:
             pass
 
         def do_GET(self):

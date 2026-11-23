@@ -279,10 +279,14 @@ def _seed_fixture(tmp_path: Path, monkeypatch) -> TestClient:
 
     # Clear in-memory caches so endpoints read strictly from our isolated fixture
     arbitrage.invalidate_caches()
-    holdscore.clear_cache() if hasattr(holdscore, "clear_cache") else None
-    leaguearc.clear_cache() if hasattr(leaguearc, "clear_cache") else None
-    movers.clear_cache() if hasattr(movers, "clear_cache") else None
-    modpool._clear_cache() if hasattr(modpool, "_clear_cache") else None
+    for module, helper in (
+        (holdscore, "clear_cache"),
+        (leaguearc, "clear_cache"),
+        (movers, "clear_cache"),
+        (modpool, "_clear_cache"),
+    ):
+        if hasattr(module, helper):
+            getattr(module, helper)()
     db._tx_gen += 1
 
     return TestClient(main.app)

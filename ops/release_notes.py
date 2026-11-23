@@ -18,6 +18,7 @@ The message itself and the payload rules are defined once, in ops/feedback-bot/b
 from __future__ import annotations
 
 import argparse
+from typing import cast
 import json
 import sys
 from pathlib import Path
@@ -75,7 +76,7 @@ def check(version: str, root: Path = ROOT) -> dict:
 
 
 def main(argv=None) -> int:
-    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    ap = argparse.ArgumentParser(description=cast(str, __doc__).splitlines()[0])
     ap.add_argument("cmd", choices=("check", "payload"))
     ap.add_argument("version")
     ap.add_argument("--root", type=Path, default=ROOT)

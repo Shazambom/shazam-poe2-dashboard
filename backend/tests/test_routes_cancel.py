@@ -2,12 +2,15 @@
 search and closes the previous stream; the backend used to keep working on the closed one to the end."""
 
 import asyncio
+from typing import cast
+
+from starlette.requests import Request
 import sys
 import threading
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # backend/
-from app.arbitrage import routes
+from app.arbitrage import Graph, routes
 
 
 def _fake_search(monkeypatch, produced):
@@ -94,7 +97,7 @@ def test_the_endpoint_stops_the_search_when_the_page_disconnects(monkeypatch):
             self.n += 1
             return self.n > 1
 
-    resp = main.routes_stream(Gone(), main.RouteQuery())
+    resp = main.routes_stream(cast(Request, Gone()), main.RouteQuery())
 
     async def drain():
         return [chunk async for chunk in resp.body_iterator]
@@ -128,7 +131,7 @@ def test_a_cancelled_search_never_starts_the_deep_scan(monkeypatch):
     monkeypatch.setattr(routes, "search_cycles", lambda *a, **k: iter([]))
     list(
         routes._iter_candidates(
-            object(),
+            cast(Graph, object()),
             {"max_steps": 3, "max_start_fraction": 1},
             {},
             {},

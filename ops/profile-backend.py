@@ -14,6 +14,8 @@ Modes:
 from __future__ import annotations
 
 import argparse
+from collections.abc import Callable
+from typing import cast
 import gzip
 import importlib
 import json
@@ -265,19 +267,21 @@ def run_benchmarks(db_arg: str | None, runs: int) -> dict:
                     ):
                         v.clear()
                     if hasattr(v, "cache_clear"):
-                        v.cache_clear()
+                        cast(Callable[[], None], getattr(v, "cache_clear", None))()
             holdscore.invalidate()
 
-        def bench(fn, n: int = runs, flush: bool = False):
+        def bench[T](
+            fn: Callable[[], T], n: int = runs, flush: bool = False
+        ) -> tuple[T, dict]:
             times = []
-            res = None
+            res: T | None = None
             for _ in range(n):
                 if flush:
                     flush_all()
                 t0 = time.perf_counter()
                 res = fn()
                 times.append((time.perf_counter() - t0) * 1000)
-            return res, {
+            return cast(T, res), {
                 "firstMs": round(times[0], 1),
                 "medMs": round(statistics.median(times), 1),
                 "minMs": round(min(times), 1),

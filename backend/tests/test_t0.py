@@ -279,7 +279,9 @@ def test_a_past_item_with_no_history_is_final_and_not_refetched(monkeypatch, lin
     _crawl(monkeypatch, league, [1, 2], rows)
     assert db.kv_get("lh_complete:Old:2") is True
     lines.clear()
-    fetched = _crawl(monkeypatch, league, [1, 2], rows)["fetched"]
+    result = _crawl(monkeypatch, league, [1, 2], rows)
+    assert "fetched" in result
+    fetched = result["fetched"]
     assert fetched == {}, "nothing left to fetch"
     assert not [m for t, m in lines if t == "T0"], lines
 

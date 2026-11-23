@@ -41,7 +41,7 @@ def league(days=90, discovery=20, late_from=60, items=40, seed=7):
 
 def label(per, t):
     w = LR.regime(per, t)
-    return max(w, key=w.get)
+    return max(w, key=w.__getitem__)
 
 
 def test_memberships_are_weights():

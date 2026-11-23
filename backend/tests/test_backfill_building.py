@@ -71,4 +71,5 @@ def test_the_crawl_reports_attempted_and_failed_fetches(scout, keeps_lh_current)
     scout.fail["/Items/"] = [500] * 200
     res = run(lh.backfill(force=True))
     scout.fail.clear()
+    assert "attempted" in res and "errors" in res
     assert res["attempted"] > 0 and res["errors"] == res["attempted"]

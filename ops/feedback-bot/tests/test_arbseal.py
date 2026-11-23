@@ -80,6 +80,7 @@ def test_opens_a_file_sealed_by_seal_js():
     priv = serialization.load_pem_private_key(
         (FIX / "test-key.pem").read_bytes(), password=None
     )
+    assert isinstance(priv, X25519PrivateKey)
     got = arbseal.open_sealed((FIX / "sealed-by-node.arb").read_bytes(), priv)
     assert got == (FIX / "plain.txt").read_bytes()
 
@@ -103,6 +104,7 @@ def test_keygen_writes_a_0600_pem_and_prints_the_raw_public_key(tmp_path):
     assert (tmp_path / "feedback-key-7.pub").read_text().strip() == pub_b64
     # The printed key seals to the written PEM.
     priv = serialization.load_pem_private_key(pem.read_bytes(), password=None)
+    assert isinstance(priv, X25519PrivateKey)
     assert (
         arbseal.open_sealed(arbseal.seal(b"x", base64.b64decode(pub_b64)), priv) == b"x"
     )

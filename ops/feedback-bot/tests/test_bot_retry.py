@@ -47,8 +47,8 @@ def forum(*threads):
 
         def archived_threads(self, limit=None):
             async def gen():
-                return
-                yield
+                for thread in ():
+                    yield thread
 
             return gen()
 

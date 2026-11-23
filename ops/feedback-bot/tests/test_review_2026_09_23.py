@@ -6,10 +6,9 @@ import json
 import threading
 import time
 
-from bot import Handler
 from conftest import valid_doc
 from opener import opener
-from test_bot import Attachment, Thread, keys, sealed_report
+from test_bot import Attachment, Thread, _HandlerWithPublicKey, keys, sealed_report
 
 
 def run(coro):
@@ -18,7 +17,7 @@ def run(coro):
 
 def _handler(tmp_path, process, wait_s=5):
     priv, pub = keys()
-    h = Handler(
+    h = _HandlerWithPublicKey(
         spool=tmp_path / "spool",
         inbox=tmp_path / "inbox",
         private_key=priv,

@@ -242,7 +242,9 @@ def test_convert_endpoint_registered_and_delegates(monkeypatch):
 
     from app import arbitrage, main
 
-    assert "/api/convert" in {r.path for r in main.app.routes}
+    from starlette.routing import Route
+
+    assert "/api/convert" in {r.path for r in main.app.routes if isinstance(r, Route)}
 
     called = {}
 
@@ -455,7 +457,7 @@ def test_the_minimum_respects_the_gain_cap_and_is_the_smallest_amount():
     assert res2["min_amount"] == 8
 
 
-def test_a_liquidity_starved_path_is_not_sized_up():
+def test_a_liquidity_starved_path_is_not_sized_up(monkeypatch):
     """Code review: doubling cannot rescue a path whose market holds less than one whole `want`; such paths are
     skipped at once instead of simulated 24 times."""
     g = Graph(
@@ -484,8 +486,8 @@ def test_a_liquidity_starved_path_is_not_sized_up():
         calls.append(1)
         return real(*a, **k)
 
-    cv._convert_path, saved = counting, cv._convert_path
-    try:
+    with monkeypatch.context() as patch:
+        patch.setattr(cv, "_convert_path", counting)
         res = arbitrage._best_conversions(
             g,
             ref,
@@ -496,8 +498,6 @@ def test_a_liquidity_starved_path_is_not_sized_up():
             max_gain_pct=1e9,
             with_min_amount=True,
         )
-    finally:
-        cv._convert_path = saved
     assert res["best"] is None and res["min_amount"] is None
     assert len(calls) <= 4, f"a dead path was simulated {len(calls)} times"
 

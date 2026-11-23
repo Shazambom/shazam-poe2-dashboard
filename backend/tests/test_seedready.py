@@ -21,7 +21,7 @@ D1, D2, D3, D4, D5 = (
 )
 
 
-def _row(avg, vol):
+def _row(avg: float, vol: int) -> tuple[float, int]:
     return (avg, vol)
 
 

@@ -7,6 +7,7 @@ crawl stamps were older, and the crawl restarted at 2/527.
 """
 
 import gzip
+from typing import BinaryIO, cast
 import json
 import sqlite3
 import sys
@@ -22,7 +23,7 @@ LG = "Forbidden Rites"
 
 def _market(
     path: Path, version: int, daily=(), stamps=(), complete=(), wal=False
-) -> None:
+) -> sqlite3.Connection:
     c = sqlite3.connect(str(path))
     if wal:
         c.execute("PRAGMA journal_mode=WAL")
@@ -47,7 +48,7 @@ def _seed(d: Path, version: int, **kw) -> None:
     raw = d / "seed.sqlite"
     _market(raw, version, **kw)
     with open(raw, "rb") as fi, gzip.open(d / "market-seed.sqlite.gz", "wb") as fo:
-        fo.write(fi.read())
+        cast(BinaryIO, fo).write(fi.read())
     (d / "market-seed.sqlite.gz.version").write_text(str(version))
     raw.unlink()
 
@@ -177,7 +178,7 @@ def test_the_replaced_file_holds_the_carried_rows_without_a_sidecar(env):
     c = _market(raw, 20, wal=True)
     c.close()
     with open(raw, "rb") as fi, gzip.open(d / "market-seed.sqlite.gz", "wb") as fo:
-        fo.write(fi.read())
+        cast(BinaryIO, fo).write(fi.read())
     (d / "market-seed.sqlite.gz.version").write_text("20")
     raw.unlink()
     _market(
