@@ -136,7 +136,6 @@ html[data-theme="vaal"] { --grp-mix: 78%; }
    same problem. Divinity only. */
 :root[data-theme="divinity"] .cur-img { filter: url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27%3E%3Cfilter id=%27c%27%3E%3CfeComponentTransfer%3E%3CfeFuncA type=%27linear%27 slope=%273%27 intercept=%27-0.6%27/%3E%3C/feComponentTransfer%3E%3C/filter%3E%3C/svg%3E#c"); }
 
-* { box-sizing: border-box; }
 html, body, #root { height: 100%; margin: 0; }
 body {
   background:
@@ -161,12 +160,11 @@ a { color: var(--live); }
 
 /* craft touches: selection, themed scrollbars, crisper icons */
 ::selection { background: rgba(var(--accent-rgb),.28); color: var(--ink); }
-* { scrollbar-width: thin; scrollbar-color: var(--line-strong) transparent; }
+* { box-sizing: border-box; scrollbar-width: thin; scrollbar-color: var(--line-strong) transparent; }
 ::-webkit-scrollbar { width: 11px; height: 11px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--line-strong); border-radius: 10px; border: 3px solid transparent; background-clip: content-box; }
 ::-webkit-scrollbar-thumb:hover { background: var(--line-hover); background-clip: content-box; }
-.cur-img { filter: drop-shadow(0 1px 2px rgba(0,0,0,.5)); }
 /* gold focus ring on inputs/selects for a cohesive, tactile feel */
 .field input, .field select, .field textarea, .league-select { transition: border-color .12s var(--ease), box-shadow .12s var(--ease); }
 .app { display: grid; grid-template-rows: auto 1fr; height: 100%; overflow-x: hidden; }
@@ -204,7 +202,7 @@ a { color: var(--live); }
 }
 .brand-logo { width: 24px; height: 24px; object-fit: contain; vertical-align: middle; }
 .cur { display: inline-flex; align-items: center; gap: 4px; vertical-align: middle; }
-.cur-img { object-fit: contain; vertical-align: middle; }
+.cur-img { filter: drop-shadow(0 1px 2px rgba(0,0,0,.5)); object-fit: contain; vertical-align: middle; }
 .cur-name { white-space: nowrap; }
 .ver-chip { font-size: 11px; color: var(--muted); background: transparent; border: 1px solid var(--line-strong); border-radius: 999px; padding: 1px 7px; cursor: pointer; margin-left: 2px; }
 .ver-chip:hover { color: var(--ink-2); border-color: var(--muted); }
@@ -280,7 +278,6 @@ a { color: var(--live); }
 .ws-divider:not(.collapsed) { cursor: col-resize; }
 .ws-divider span { font-size: 11px; opacity: .6; }
 .ws-divider:hover span { opacity: 1; }
-.ws-rail-head { flex-wrap: nowrap; }
 .ws-rail-head > * { flex-shrink: 0; }
 .trade-ws.resizing { user-select: none; cursor: col-resize; }
 .trade-ws.resizing .ws-webview { pointer-events: none; }   /* the guest page would swallow mousemove mid-drag */
@@ -426,7 +423,7 @@ a { color: var(--live); }
 .ws-mini.on { opacity: 1; color: var(--ink-2); }
 .ws-undo { display: flex; align-items: center; gap: 12px; padding: 10px 14px; }
 .ws-undo-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ws-rail-head { display: flex; align-items: center; gap: 6px; padding: 9px 10px; border-bottom: 1px solid var(--line); font-size: 13px; }
+.ws-rail-head { flex-wrap: nowrap; display: flex; align-items: center; gap: 6px; padding: 9px 10px; border-bottom: 1px solid var(--line); font-size: 13px; }
 .ws-icon-btn { background: var(--line); border: 0; color: var(--ink-2); width: 26px; height: 24px; border-radius: 6px;
   cursor: pointer; font-size: 14px; line-height: 1; display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; }
 .ws-icon-btn:hover { background: var(--line-strong); color: var(--ink); }
