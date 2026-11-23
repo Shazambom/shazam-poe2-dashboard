@@ -60,9 +60,9 @@ def test_pick_league_serves_the_selected_league_or_nothing():
     answering about a different economy than the Board (owner directive 2026-09-19)."""
     c = _db()
     rows = marketseries.read_rows(c)  # all leagues, ORDER BY league, day
-    assert marketseries.pick_league(rows, "Std", []) == "Std"
-    assert marketseries.pick_league(rows, "Nope", current_leagues=["Std"]) is None
-    assert marketseries.pick_league(rows, "Nope", current_leagues=[]) is None
+    assert marketseries.pick_league(rows, "Std") == "Std"
+    assert marketseries.pick_league(rows, "Nope") is None
+    assert marketseries.pick_league([], "Std") is None
 
 
 if __name__ == "__main__":

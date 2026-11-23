@@ -47,13 +47,11 @@ def _current_series():
 
 def _build_current_series(league: str):
     # Read + shaping live in the stdlib `marketseries` module (shared with the analytics sidecar);
-    # here we only pick which league to view (needs settings + the lh_current kv).
+    # here we only pick which league to view from settings.
     with db.q() as c:
         meta = marketseries.read_meta(c)
         rows = marketseries.read_rows(c)  # all leagues, ORDER BY league, day
-    cur_name = marketseries.pick_league(
-        rows, league, db.kv_get(marketseries.CURRENT_LEAGUES_KEY, [])
-    )
+    cur_name = marketseries.pick_league(rows, league)
     series = marketseries.build_series(rows, cur_name)
     return cur_name, series, meta
 

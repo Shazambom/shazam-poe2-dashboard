@@ -74,13 +74,13 @@ def change_over(pts: list, window_s: float, t=lambda p: p["t"], v=lambda p: p["v
     return base, (v(pts[-1]) - v(base)) / v(base) * 100
 
 
-def pick_league(rows: list, preferred: str, current_leagues=()) -> str | None:
+def pick_league(rows: list, preferred: str) -> str | None:
     """Which league's series to serve: the league the user selected, or NOTHING.
 
     There is no fallback on purpose (owner directive 2026-09-19). Quietly serving another
     league's prices is worse than showing nothing: Hold, Movers and the league arc would answer
     about a different economy than the Board, with no way to tell from the screen. `rows` must be
-    ORDER BY league, day; `current_leagues` is unused and kept for callers."""
+    ORDER BY league, day."""
     return preferred if any(r[0] == preferred for r in rows) else None
 
 

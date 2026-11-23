@@ -781,8 +781,7 @@ def build_context(num_id: int):
 
 def _build_context(preferred: str, num_id: int):
     meta, by_league = _raw_daily()
-    current = movers_current_leagues()
-    cur_name = marketseries.pick_league([(lg,) for lg in by_league], preferred, current)
+    cur_name = marketseries.pick_league([(lg,) for lg in by_league], preferred)
     built, day0s = {}, {}
     for lg, rws in by_league.items():
         built[lg], day0s[lg] = _build_league(rws, num_id)
@@ -809,11 +808,6 @@ def regime_of(league: str | None):
         return lambda t: leagueregime.regime(per, t)
 
     return cache.memo(_ctx_cache, ("regime", league), _CTX_TTL, build, max_entries=8)
-
-
-def movers_current_leagues() -> list:
-    """The game's currently-live leagues as poe2scout reports them (operational kv)."""
-    return db.kv_get(marketseries.CURRENT_LEAGUES_KEY, []) or []
 
 
 def _arc_weights(cur_name: str) -> dict | None:
