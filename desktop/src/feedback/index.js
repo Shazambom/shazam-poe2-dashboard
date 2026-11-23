@@ -9,6 +9,7 @@
 //   feedback:reveal  → show the file in Finder/Explorer;  feedback:discord → open the invite
 'use strict'
 const { ignored } = require('../ignored.js')
+const { backendFetch } = require('../local-backend.js')
 const fs = require('node:fs')
 const path = require('node:path')
 const { randomBytes, randomUUID } = require('node:crypto')
@@ -39,7 +40,7 @@ function registerFeedback({ ipcMain, BrowserWindow, session, win, uiUrl, backend
   const fileOf = (p) => { const id = String(p && p.shortId || ''); return ID_RE.test(id) ? produced.get(id) : undefined }
 
   const fetchJson = get || (async (p) => {
-    const r = await fetch(`${backendUrl}${p}`, { signal: AbortSignal.timeout(4000) })
+    const r = await backendFetch(`${backendUrl}${p}`, { signal: AbortSignal.timeout(4000) })
     return r.json()
   })
   const readDesktopSettings = () => { try { return JSON.parse(fs.readFileSync(path.join(userData, 'desktop-settings.json'), 'utf8')) } catch { return {} } }

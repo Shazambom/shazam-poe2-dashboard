@@ -1,5 +1,6 @@
 'use strict'
 const { ignored } = require('./ignored.js')
+const { backendFetch } = require('./local-backend.js')
 // TEMPORARY DEV DIAGNOSTIC (beta/dev only; installed behind diagTelemetryOn() in main.js).
 // Reports, at 20s, 2m and 10m after launch, what the bundled backend holds for the Mods tab
 // (pool and currency counts, the seed's snapshot version), where the league-history crawl is
@@ -8,7 +9,7 @@ const { ignored } = require('./ignored.js')
 // data. Loopback + the one telemetry sender; nothing else.
 function install({ win, backendUrl, log }) {
   const j = async (path) => {
-    try { return await (await fetch(`${backendUrl()}${path}`, { signal: AbortSignal.timeout(8000) })).json() } catch (e) { return { err: String(e).slice(0, 80) } }
+    try { return await (await backendFetch(`${backendUrl()}${path}`, { signal: AbortSignal.timeout(8000) })).json() } catch (e) { return { err: String(e).slice(0, 80) } }
   }
   const dom = async () => {
     try {

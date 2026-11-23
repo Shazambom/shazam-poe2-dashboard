@@ -3,6 +3,7 @@
 // to the bundled backend's ledger (POST /api/sales/ingest on loopback). Nothing is written to the
 // trade site. Dependencies are injectable for tests.
 'use strict'
+const { backendFetch } = require('../local-backend.js')
 const { budgeted } = require('./budget.js')
 
 const POLICY = 'trade-history'
@@ -32,7 +33,7 @@ function makeSalesFetcher({ request, budget, backendUrl, log = () => {} }) {
     const body = { league: lg, result, ...(siteTime && !isNaN(/** @type {any} isNaN coerces the Date to its time value */ (siteTime)) ? { server_time: siteTime.toISOString() } : {}) }
     let ingest
     try {
-      const r = await fetch(`${backendUrl()}/api/sales/ingest`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(5000) })
+      const r = await backendFetch(`${backendUrl()}/api/sales/ingest`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(5000) })
       ingest = await r.json()
     } catch (e) { return { ok: false, error: 'backend: ' + String(e && e.message || e), fetched: result.length } }
     const { new: n, total, credited = 0, added = {} } = ingest

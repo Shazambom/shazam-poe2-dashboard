@@ -8,6 +8,7 @@
 // fail OPEN (same as having no budget) — the app never blocks the user on its own diagnostics.
 'use strict'
 const { ignored } = require('../ignored.js')
+const { backendFetch } = require('../local-backend.js')
 
 class RateLimitError extends Error {
   constructor(retryAfter) { super(`rate-limited, retry in ${retryAfter}s`); this.retryAfter = retryAfter; this.code = 'RATE_LIMITED' }
@@ -20,7 +21,7 @@ function configure({ backendUrl }) { if (backendUrl) _backendUrl = backendUrl }
 async function acquire(policy, opts = {}) {
   let r
   try {
-    const resp = await fetch(`${_backendUrl()}/api/ratelimits/acquire`, {
+    const resp = await backendFetch(`${_backendUrl()}/api/ratelimits/acquire`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(opts.spare ? { policy, spare: opts.spare } : { policy }),
       signal: AbortSignal.timeout(3000),
     })
@@ -37,7 +38,7 @@ function observe(policy, status, headers) {
     if (key.startsWith('x-rate-limit') || key === 'retry-after') h[key] = Array.isArray(v) ? v[0] : String(v)
   }
   try {
-    fetch(`${_backendUrl()}/api/ratelimits/observe`, {
+    backendFetch(`${_backendUrl()}/api/ratelimits/observe`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ policy, status, headers: h }), signal: AbortSignal.timeout(3000),
     }).catch((e) => ignored('budget:observe', e))
@@ -48,7 +49,7 @@ function observe(policy, status, headers) {
 // account/IP — batch 4-B). Fire-and-forget; the backend folds it in without penalising.
 function hint(policy) {
   try {
-    fetch(`${_backendUrl()}/api/ratelimits/hint`, {
+    backendFetch(`${_backendUrl()}/api/ratelimits/hint`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ policy }), signal: AbortSignal.timeout(3000),
     }).catch((e) => ignored('budget:hint', e))
   } catch (e) { ignored('budget:hint', e) }

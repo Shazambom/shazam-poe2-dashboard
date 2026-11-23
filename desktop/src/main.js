@@ -9,6 +9,7 @@
 //     the HttpOnly POESESSID is read from our session and handed to the backend.
 'use strict'
 const { ignored } = require('./ignored.js')
+const { backendFetch, allowDevBackend } = require('./local-backend.js')
 const { app, BrowserWindow, Menu, Notification, clipboard, dialog, ipcMain, session, shell, nativeTheme } = require('electron')
 const { spawn } = require('node:child_process')
 const fs = require('node:fs')
@@ -86,7 +87,7 @@ function backendBinary() {
 
 async function waitFor(url, tries = 240) {
   for (let i = 0; i < tries; i++) {
-    try { const r = await fetch(url, { signal: AbortSignal.timeout(1500) }); if (r.ok) return true } catch (e) { ignored('backend:wait', e) }
+    try { const r = await backendFetch(url, { signal: AbortSignal.timeout(1500) }); if (r.ok) return true } catch (e) { ignored('backend:wait', e) }
     await new Promise(r => { setTimeout(r, i < 10 ? 100 : i < 25 ? 250 : 500) })
   }
   return false
@@ -184,7 +185,7 @@ async function startBackend() {
         for (const delay of [60000, 150000, 300000]) {
           const t = setTimeout(async () => {
             try {
-              const r = await fetch(`${localUrl}/api/diag`, { signal: AbortSignal.timeout(8000) })
+              const r = await backendFetch(`${localUrl}/api/diag`, { signal: AbortSignal.timeout(8000) })
               const d = await r.json()
               bkLog(`analytics@${Math.round(delay / 1000)}s ${JSON.stringify(d.analytics || {})}`)
             } catch (e) { bkLog(`analytics-probe-failed ${String(e && e.message || e)}`) }
@@ -205,6 +206,7 @@ async function startBackend() {
     // dev server for convenience. Packaged apps must never reach here.
     backendUrl = DEV_BACKEND_URL
     backendKind = 'dev'
+    allowDevBackend(DEV_BACKEND_URL)
     return
   }
   // Shipped app stays local even if the backend is down — we never fall back to the
@@ -282,7 +284,7 @@ async function getPoeCookie() {
 
 async function postSession(cookie) {
   try {
-    const r = await fetch(`${backendUrl}/api/session`, {
+    const r = await backendFetch(`${backendUrl}/api/session`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ cookie, label: `desktop app (${backendKind})` }),
     })
