@@ -9,7 +9,7 @@
 //   * ids stay unique; activeId always resolves to a real search node.
 //
 // Run:  node frontend/test/workspace-store.fuzzy.mjs
-import assert from 'node:assert'
+import assert from 'node:assert/strict'
 
 // The store's debounced persist() calls api.putWorkspace -> fetch. Stub fetch so it no-ops
 // (and so we can capture the exact payload that WOULD hit the DB — the "saved" doc).
