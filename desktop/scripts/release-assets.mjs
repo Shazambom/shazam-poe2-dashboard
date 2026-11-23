@@ -315,22 +315,23 @@ async function publish(tag) {
 
 /** @param {string[]} argv */
 async function main([cmd, tag, ...rest]) {
-  if (!cmd || !tag) { console.error('usage: release-assets.mjs ensure-draft <tag> <sha> | has <tag> <asset> | upload <tag> <files...> | verify <tag> [--live] | publish <tag>'); process.exit(2) }
+  if (!cmd || !tag) { console.error('usage: release-assets.mjs ensure-draft <tag> <sha> | has <tag> <asset> | upload <tag> <files...> | verify <tag> [--live] | publish <tag>'); process.exitCode = 2; return }
   if (cmd === 'ensure-draft') await ensureDraft(tag, rest[0])
   else if (cmd === 'has') {
     const rel = await findRelease(tag)
     const a = rel && (await assetsOf(rel.id)).find((x) => x.name === rest[0])
-    process.exit(a && a.state === 'uploaded' ? 0 : 1)
+    process.exitCode = a && a.state === 'uploaded' ? 0 : 1
+    return
   }
   else if (cmd === 'upload') await upload(tag, rest)
   else if (cmd === 'verify') {
     const bad = await verify(tag, { live: rest.includes('--live') })
-    if (bad.length) { console.error(`release ${tag} NOT complete:\n  ${bad.join('\n  ')}`); process.exit(1) }
+    if (bad.length) { console.error(`release ${tag} NOT complete:\n  ${bad.join('\n  ')}`); process.exitCode = 1; return }
     console.log(`release ${tag} complete`)
   } else if (cmd === 'publish') await publish(tag)
-  else { console.error(`unknown command ${cmd}`); process.exit(2) }
+  else { console.error(`unknown command ${cmd}`); process.exitCode = 2 }
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
-  main(process.argv.slice(2)).catch((e) => { console.error(`FATAL: ${e.message}`); process.exit(1) })
+  main(process.argv.slice(2)).catch((e) => { console.error(`FATAL: ${e.message}`); process.exitCode = 1 })
 }

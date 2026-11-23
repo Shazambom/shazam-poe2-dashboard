@@ -966,7 +966,7 @@ async function main() {
   }
 
   if (opts.check && budgetFailures.length > 0) {
-    process.exit(1)
+    process.exitCode = 1
   }
 }
 

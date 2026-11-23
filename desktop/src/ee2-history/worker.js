@@ -49,7 +49,7 @@ if (process.argv.includes('--stdin')) {
     await port.init()
     const r = port.buildQuery(raw, { leagueId: process.argv.includes('--league') ? league : 'Standard' })
     process.stdout.write(JSON.stringify(r) + '\n')
-    process.exit(r.error ? 2 : 0)
+    process.exitCode = r.error ? 2 : 0
   })
 } else if (process.parentPort) {
   // Electron utilityProcess
