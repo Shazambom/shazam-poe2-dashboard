@@ -248,6 +248,12 @@ const config = [
     languageOptions: { sourceType: 'module' },
   },
   {
+    // per-path: desktop-settings.json is written synchronously so a change made just before quit is on
+    // disk when the process exits; this module is the one place that sync file I/O lives (lint plan section 5).
+    files: ['desktop/src/settings-store.js'],
+    rules: { 'n/no-sync': 'off' },
+  },
+  {
     // per-path: the unpackaged dev branch CLAUDE.md sanctions (ARBITER_DEV_BACKEND_URL, falling back to telemetry.SHAZAM).
     files: ['desktop/src/main.js'],
     rules: {

@@ -10,6 +10,7 @@
 'use strict'
 const { ignored } = require('./ignored.js')
 const { backendFetch, allowDevBackend } = require('./local-backend.js')
+const { loadSettings, writeSettings } = require('./settings-store.js')
 const { app, BrowserWindow, Menu, Notification, clipboard, dialog, ipcMain, session, shell, nativeTheme } = require('electron')
 const { spawn } = require('node:child_process')
 const fs = require('node:fs')
@@ -58,9 +59,8 @@ const BACKDROP = { get window() { return windowBackdrop(settings) }, trade: '#0c
 
 const settingsPath = () => path.join(app.getPath('userData'), 'desktop-settings.json')
 /** @type {{ betaChannel: boolean, theme: string, customBackdrop?: string, focusHotkey?: string }} */
-let settings = { ...DEFAULTS }
-try { settings = { ...DEFAULTS, ...JSON.parse(fs.readFileSync(settingsPath(), 'utf8')) } } catch (e) { ignored('settings:read', e) }
-const saveSettings = () => { try { fs.writeFileSync(settingsPath(), JSON.stringify(settings, null, 2)) } catch (e) { ignored('settings:write', e) } }
+const settings = loadSettings(settingsPath, DEFAULTS)
+const saveSettings = () => writeSettings(settingsPath, settings)   // synchronous: a change made just before quit is kept
 
 let win = null
 let backendProc = null

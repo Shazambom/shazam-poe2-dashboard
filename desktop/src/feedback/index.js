@@ -10,6 +10,7 @@
 'use strict'
 const { ignored } = require('../ignored.js')
 const { backendFetch } = require('../local-backend.js')
+const { readSettingsFile } = require('../settings-store.js')
 const fs = require('node:fs')
 const path = require('node:path')
 const { randomBytes, randomUUID } = require('node:crypto')
@@ -43,7 +44,7 @@ function registerFeedback({ ipcMain, BrowserWindow, session, win, uiUrl, backend
     const r = await backendFetch(`${backendUrl}${p}`, { signal: AbortSignal.timeout(4000) })
     return r.json()
   })
-  const readDesktopSettings = () => { try { return JSON.parse(fs.readFileSync(path.join(userData, 'desktop-settings.json'), 'utf8')) } catch { return {} } }
+  const readDesktopSettings = () => { try { return readSettingsFile(path.join(userData, 'desktop-settings.json')) } catch { return {} } }
   const rendererErrors = async () => { try { return await win.webContents.executeJavaScript('window.__arbiterErrors ? window.__arbiterErrors() : []') } catch { return [] } }
   const prune = () => {
     try {
