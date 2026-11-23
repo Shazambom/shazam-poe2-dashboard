@@ -28,6 +28,7 @@ export default function BrandOrb({ onDone }) {
   const [label, setLabel] = useState('')
   const [idx, setIdx] = useState(() => rand(ORBS.length))
   const wasRunning = useRef(false)
+  const [notifyDone] = useState(() => onDone)
 
   useEffect(() => {
     let timer, alive = true
@@ -40,13 +41,13 @@ export default function BrandOrb({ onDone }) {
       if (on) {
         setLabel(backfillLabel(d))
       }
-      if (wasRunning.current && !on) { try { onDone && onDone() } catch { ignoredError('refresh after backfill') } }   // finished → refresh views
+      if (wasRunning.current && !on) { try { notifyDone?.() } catch { ignoredError('refresh after backfill') } }   // finished → refresh views
       wasRunning.current = on
       timer = setTimeout(tick, on ? 1500 : 8000)   // poll fast while building
     }
     tick()
     return () => { alive = false; clearTimeout(timer) }
-  }, [])
+  }, [notifyDone])
 
   // Each completed rotation swaps to a different random orb (never repeat back-to-back).
   const onIter = () => setIdx(i => {
