@@ -22,6 +22,7 @@ const { postItemText, postQuery } = require('./dev-ee2-telemetry.js')   // beta/
 const { makeRing } = require('./feedback/ring.js')
 const { applyChannel } = require('./updater-channel.js')
 const { createRespawner, onceGone } = require('./respawn.js')
+const { boot } = require('./startup.js')
 
 // Log rings for "Report a problem" (local only — a report is a file the user drags into Discord):
 // every console.log line of this process, the updater's lines, and the backend's output tail.
@@ -69,20 +70,12 @@ let backendKind = 'local'      // 'local' | 'dev' (unpackaged launch against a d
 let uiUrl = null
 
 // ---------------------------------------------------------------- backend
-// Resolve a bundled per-platform binary: the packed location (extraResources) preferred, then the
-// dev location. Returns {found, expected} — `found` is the existing path or null; `expected` is the
-// packed path to report when nothing is found (a packaging regression). Shared by the backend and
-// the analytics sidecar so the resolution rule lives in one place.
-function findBundledBin(dir, name) {
-  const packed = path.join(process.resourcesPath || '', dir, name)
-  const dev = path.join(__dirname, '..', dir, name)
-  const found = fs.existsSync(packed) ? packed : (fs.existsSync(dev) ? dev : null)
-  return { found, expected: packed }
-}
-
-function backendBinary() {
-  const name = process.platform === 'win32' ? 'poe2arb-backend.exe' : 'poe2arb-backend'
-  return findBundledBin('backend-bin', name).found
+// What startup reads from disk (the backend binary, its data dir, the market seed, the sidecar, the UI
+// bundle) and the order it needs, in startup.js. Resources are packed under process.resourcesPath
+// (extraResources) or, in dev, beside src/.
+const startupEnv = {
+  fs, resourcesPath: process.resourcesPath, appRoot: path.join(__dirname, '..'), platform: process.platform,
+  dataDir: () => path.join(app.getPath('userData'), 'data'), log: (...a) => console.log(...a),
 }
 
 async function waitFor(url, tries = 240) {
@@ -109,22 +102,8 @@ const bkLog = (m) => telemetry.installLog('backend', m)
 // The desktop app is FULLY SELF-CONTAINED: it runs its own bundled backend + local
 // DB and NEVER calls the server for data. The ONLY permitted outbound calls are the
 // auto-updater (electron-updater → GitHub Releases) and update telemetry (installlog).
-// Bundled market snapshot (extraResources). The backend seeds market.sqlite from it
-// on first run / when newer, so users skip the cold backfill. Build-time only — the
-// desktop contract (server only for updates) is unaffected. Missing in dev = crawl live.
-// Seed ships gzipped (~8x smaller); the backend decompresses it once. Fall back to a
-// plain .sqlite if present (dev convenience). '' when there is none.
-function findMarketSeed() {
-  const seedDirs = [path.join(process.resourcesPath || '', 'market-seed'),
-                    path.join(__dirname, '..', 'market-seed')]
-  const seedNames = ['market-seed.sqlite.gz', 'market-seed.sqlite']
-  for (const d of seedDirs) {
-    for (const n of seedNames) {
-      const p = path.join(d, n); if (fs.existsSync(p)) return p
-    }
-  }
-  return ''
-}
+// The bundled market snapshot it seeds from (startup.js findMarketSeed) is build-time only — the
+// desktop contract (server only for updates) is unaffected.
 
 // DEV DIAGNOSTIC (beta/dev only): probe the heavy-analytics pipeline REPEATEDLY so we see
 // job progression on Windows — whether 'done' appears or jobs stay wedged at 'running'.
@@ -142,61 +121,56 @@ function probeAnalytics(localUrl) {
 }
 
 // See DESKTOP_CONTRACT in the docs.
-async function startBackend() {
+// Spawn the bundled backend from the plan startup.js found (binary, data dir, seed, sidecar).
+function launchBackend({ bin, dataDir, marketSeed, sidecarBin }) {
+  // Restarted when it dies on its own (respawn.js); never after stopBackend().
+  const respawner = backendRespawner = createRespawner({ start: () => startOnce() })
+  const gone = (why) => {
+    backendProc = null
+    const wait = respawner.exited({ requested: backendStopping })
+    if (wait != null) bkLog(`restarting in ${wait / 1000}s (${why})`)
+  }
+  // A spawn that throws (a bad path, EACCES) is a failed start: retried like a crash, never an
+  // uncaught exception in the main process.
+  const startOnce = () => {
+    respawner.started()
+    try { launch() } catch (e) { bkLog(`spawn-threw ${String(e && e.message || e)}`); gone('spawn threw') }
+  }
+  const launch = () => {
+    backendProc = spawn(bin, [], {
+      // ARBITER_PARENT_PID lets the backend die with us if Electron hard-crashes (parent-pid
+      // watchdog); the web/server env never sets it, so servers are unaffected.
+      env: { ...process.env, DATA_DIR: dataDir, PORT: String(LOCAL_BACKEND_PORT), MARKET_SEED: marketSeed,
+             SIDECAR_BIN: sidecarBin, ARBITER_PARENT_PID: String(process.pid),
+             ARBITER_VERSION: app.getVersion(),
+             // Diagnostics telemetry (backend + sidecar) fires only on the beta/dev channel.
+             ARBITER_TELEMETRY: diagTelemetryOn() ? '1' : '' },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    })
+    // DEV DIAGNOSTIC: keep a rolling tail of backend output so a crash/hang on Windows is visible.
+    const capture = (d) => { bkBuf = (bkBuf + String(d)).slice(-65536); console.log('[backend]', String(d).trimEnd()) }
+    backendProc.stdout.on('data', capture)
+    backendProc.stderr.on('data', capture)
+    backendProc.on('error', e => bkLog(`proc-error ${String(e && e.message || e)}`))
+    // Gone = exited, or never started (a spawn error emits no 'exit').
+    onceGone(backendProc, ({ code, signal, error }) => {
+      console.log('[backend] exited', code, signal, error || '')
+      // The output tail is for crashes. On an exit we asked for (quit / update install) it is only
+      // access-log noise — it was half of every telemetry window — so post the one line without it.
+      if (backendStopping) bkLog(`EXITED code=${code} signal=${signal} (requested)`)
+      else bkLog(`EXITED code=${code} signal=${signal}${error ? ` error=${error}` : ''}\n--- output tail ---\n${bkBuf.slice(-3000)}`)
+      gone(error ? `spawn failed: ${error}` : 'exited')
+    })
+  }
+  startOnce()
+}
+
+// Wait for the spawned backend and settle backendUrl; with no plan (no bundled binary), a dev
+// launch points at the dev server and a packaged one stays local.
+async function backendReady(plan) {
   const localUrl = `http://127.0.0.1:${LOCAL_BACKEND_PORT}`
-  const bin = backendBinary()
-  if (bin) {
-    const dataDir = path.join(app.getPath('userData'), 'data')
-    fs.mkdirSync(dataDir, { recursive: true })
-    const marketSeed = findMarketSeed()
-    if (marketSeed) console.log('[backend] market seed:', marketSeed)
-    // Sidecar (heavy analytics): unified into poe2arb-backend (--sidecar), reusing the same
-    // frozen Python + NumPy runtime. If a separate legacy sidecar-bin exists, honour it;
-    // otherwise leave SIDECAR_BIN empty so sidecar_supervisor launches `[sys.executable, "--sidecar"]`.
-    const sidecarName = process.platform === 'win32' ? 'poe2arb-sidecar.exe' : 'poe2arb-sidecar'
-    const sc = findBundledBin('sidecar-bin', sidecarName)
-    const sidecarBin = sc.found || ''
-    console.log('[backend] sidecar:', sidecarBin || `${bin} --sidecar`)
-    // Restarted when it dies on its own (respawn.js); never after stopBackend().
-    const respawner = backendRespawner = createRespawner({ start: () => startOnce() })
-    const gone = (why) => {
-      backendProc = null
-      const wait = respawner.exited({ requested: backendStopping })
-      if (wait != null) bkLog(`restarting in ${wait / 1000}s (${why})`)
-    }
-    // A spawn that throws (a bad path, EACCES) is a failed start: retried like a crash, never an
-    // uncaught exception in the main process.
-    const startOnce = () => {
-      respawner.started()
-      try { launch() } catch (e) { bkLog(`spawn-threw ${String(e && e.message || e)}`); gone('spawn threw') }
-    }
-    const launch = () => {
-      backendProc = spawn(bin, [], {
-        // ARBITER_PARENT_PID lets the backend die with us if Electron hard-crashes (parent-pid
-        // watchdog); the web/server env never sets it, so servers are unaffected.
-        env: { ...process.env, DATA_DIR: dataDir, PORT: String(LOCAL_BACKEND_PORT), MARKET_SEED: marketSeed,
-               SIDECAR_BIN: sidecarBin, ARBITER_PARENT_PID: String(process.pid),
-               ARBITER_VERSION: app.getVersion(),
-               // Diagnostics telemetry (backend + sidecar) fires only on the beta/dev channel.
-               ARBITER_TELEMETRY: diagTelemetryOn() ? '1' : '' },
-        stdio: ['ignore', 'pipe', 'pipe'],
-      })
-      // DEV DIAGNOSTIC: keep a rolling tail of backend output so a crash/hang on Windows is visible.
-      const capture = (d) => { bkBuf = (bkBuf + String(d)).slice(-65536); console.log('[backend]', String(d).trimEnd()) }
-      backendProc.stdout.on('data', capture)
-      backendProc.stderr.on('data', capture)
-      backendProc.on('error', e => bkLog(`proc-error ${String(e && e.message || e)}`))
-      // Gone = exited, or never started (a spawn error emits no 'exit').
-      onceGone(backendProc, ({ code, signal, error }) => {
-        console.log('[backend] exited', code, signal, error || '')
-        // The output tail is for crashes. On an exit we asked for (quit / update install) it is only
-        // access-log noise — it was half of every telemetry window — so post the one line without it.
-        if (backendStopping) bkLog(`EXITED code=${code} signal=${signal} (requested)`)
-        else bkLog(`EXITED code=${code} signal=${signal}${error ? ` error=${error}` : ''}\n--- output tail ---\n${bkBuf.slice(-3000)}`)
-        gone(error ? `spawn failed: ${error}` : 'exited')
-      })
-    }
-    startOnce()
+  if (plan) {
+    const { bin } = plan
     const t0 = Date.now()
     if (await waitFor(`${localUrl}/api/health`, 240)) {   // ~2min: cover a slow first-boot re-seed before declaring failure
       bkLog(`bound after ${Math.round((Date.now() - t0) / 1000)}s`)
@@ -244,10 +218,7 @@ function stopBackend() {
 }
 
 // ------------------------------------------------------- local UI server
-function startUiServer() {
-  const dist = fs.existsSync(path.join(__dirname, '..', 'app-dist'))
-    ? path.join(__dirname, '..', 'app-dist')
-    : path.join(__dirname, '..', '..', 'frontend', 'dist')
+function startUiServer(dist) {
   const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml',
                  '.png': 'image/png', '.ico': 'image/x-icon', '.woff2': 'font/woff2', '.map': 'application/json',
                  '.m4a': 'audio/mp4' }
@@ -721,8 +692,7 @@ if (!app.requestSingleInstanceLock()) {
 
 app.whenReady().then(async () => {
   nativeTheme.themeSource = 'dark'
-  await startBackend()
-  await startUiServer()
+  await boot(startupEnv, { launch: launchBackend, ready: backendReady, serve: startUiServer })
   buildMenu()
   win = new BrowserWindow({
     width: 1500, height: 950, minWidth: 900, minHeight: 600,
