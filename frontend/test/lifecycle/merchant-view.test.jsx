@@ -712,6 +712,24 @@ describe('Stash → Merchant (MerchantView) lifecycle', () => {
     expect(window.poe2desktop.merchant.fetch).toHaveBeenCalledTimes(2)
   })
 
+  it('expires a cached cursor at its exact deadline on rerender without fetching a page', async () => {
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(NOW)
+    const fetchShop = window.poe2desktop.merchant.fetch
+    const shop = await fetchShop.getMockImplementation()()
+    fetchShop.mockResolvedValue({ ...shop, remainingIds: 50, truncated: true, cursorExpiresAt: NOW + 10 })
+    const view = () => <MerchantView league="Test League" />
+    const { rerender } = render(view())
+    const more = await screen.findByRole('button', { name: /load next 50/i })
+    clock.mockReturnValue(NOW + 9)
+    rerender(view())
+    expect(more.isConnected).toBe(true)
+    clock.mockReturnValue(NOW + 10)
+    expect(more.isConnected).toBe(true)
+    rerender(view())
+    expect(screen.queryByRole('button', { name: /load next 50/i })).toBeNull()
+    expect(fetchShop).toHaveBeenCalledTimes(1)
+  })
+
   it('checks the pagination deadline on a render and keeps a published floor price until a market input changes', async () => {
     const clock = vi.spyOn(Date, 'now').mockReturnValue(NOW)
     const fetchShop = window.poe2desktop.merchant.fetch
