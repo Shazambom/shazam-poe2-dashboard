@@ -32,6 +32,7 @@ case "$a" in
   both) base64 -d < "${dir}/gz.b64" > "$d/market-seed.sqlite.gz"; echo 1791073354 > "$d/market-seed.sqlite.gz.version" ;;
   version-only) echo 1791073354 > "$d/market-seed.sqlite.gz.version" ;;
   corrupt) echo "not gzip" > "$d/market-seed.sqlite.gz"; echo 1791073354 > "$d/market-seed.sqlite.gz.version" ;;
+  fail) echo "no assets match" >&2; exit 1 ;;
 esac
 exit 0
 `)
@@ -55,12 +56,28 @@ test('a corrupt snapshot is fetched again', () => {
   assert.equal(s.calls(), 2)
 })
 
+test('a transient gh download failure retries and succeeds once the snapshot arrives', () => {
+  const s = sandbox(['fail', 'both'])
+  const r = s.run()
+  assert.equal(r.status, 0, r.stderr + r.stdout)
+  assert.equal(s.calls(), 2)
+  assert.match(r.stdout, /^seed ready \(/m)
+})
+
 test('a snapshot that never arrives fails the build instead of shipping seedless', () => {
   const s = sandbox(['version-only'])
   const r = s.run()
   assert.notEqual(r.status, 0)
   assert.doesNotMatch(r.stdout, /^seed ready \(/m)
   assert.ok(s.calls() > 1, 'it retried before giving up')
+})
+
+test('persistent gh download failure fails the build after retrying', () => {
+  const s = sandbox(['fail'])
+  const r = s.run()
+  assert.notEqual(r.status, 0)
+  assert.doesNotMatch(r.stdout, /^seed ready \(/m)
+  assert.equal(s.calls(), 10)
 })
 
 test('Windows CI fetches the seed through the same script as the Mac build', () => {

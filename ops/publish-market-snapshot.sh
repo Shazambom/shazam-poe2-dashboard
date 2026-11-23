@@ -37,14 +37,15 @@ fi
 # Export inside the backend container: it has the live DB at /data, python, and the app
 # package (cwd=/app) the exporter imports its data policy from. Piping the script over stdin
 # keeps it decoupled from the image. Exit 3 = nothing newer than today's published seed.
-set +e
-{
+if {
   sudo docker exec -i "$CONTAINER" python - \
     --src /data/market.sqlite --out /data/market-seed.sqlite.gz \
     --only-if-newer /data/market-seed.published-cut
-} < "$EXPORT_PY"
-rc=$?
-set -e
+} < "$EXPORT_PY"; then
+  rc=0
+else
+  rc=$?
+fi
 [ "$rc" -eq 3 ] && {
   echo "no newer verified day; nothing to publish"
   exit 0

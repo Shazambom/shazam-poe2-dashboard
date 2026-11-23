@@ -22,8 +22,10 @@ mkdir -p market-seed
 for attempt in $(seq 1 10); do
   echo "fetching seed from GitHub release market-seed-latest ($REPO), attempt $attempt"
   rm -f "$SEED" "$SEED.version"
-  gh release download market-seed-latest --repo "$REPO" \
-    --pattern 'market-seed.sqlite.gz*' --dir market-seed --clobber || true
+  if ! gh release download market-seed-latest --repo "$REPO" \
+    --pattern 'market-seed.sqlite.gz*' --dir market-seed --clobber; then
+    echo "gh release download failed on attempt $attempt"
+  fi
   if [ -s "$SEED" ] && [ -s "$SEED.version" ] && gzip -t "$SEED" 2> /dev/null; then
     echo "seed ready ($(du -h "$SEED" | cut -f1), v$(cat "$SEED.version")):"
     ls -la market-seed

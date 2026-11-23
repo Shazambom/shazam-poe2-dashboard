@@ -23,7 +23,7 @@ check_id() { [[ "$1" =~ $ID_RE ]] || {
 }; }
 
 cmd=${1:-}
-shift || true
+if [ "$#" -gt 0 ]; then shift; fi
 case "$cmd" in
   list)
     state=${1:-new}

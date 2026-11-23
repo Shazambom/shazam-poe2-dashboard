@@ -99,8 +99,10 @@ if node scripts/release-assets.mjs has "$TAG" "$WIN_YML"; then
 else
   NEED_CI=1
   # `gh workflow run` prints the new run's URL; its id is the last path segment.
-  RID=$(gh workflow run release-desktop-win.yml --repo "$REPO" --ref main -f tag="$TAG" -f sha="$SHA" \
-    | grep -oE 'actions/runs/[0-9]+' | grep -oE '[0-9]+$' | tail -1 || true)
+  DISPATCH_OUT=$(gh workflow run release-desktop-win.yml --repo "$REPO" --ref main -f tag="$TAG" -f sha="$SHA")
+  if [[ "$DISPATCH_OUT" =~ actions/runs/([0-9]+) ]]; then
+    RID="${BASH_REMATCH[1]}"
+  fi
 fi
 
 if [ "${1:-}" != "--no-build" ]; then
@@ -160,9 +162,12 @@ if [ "$NEED_CI" = 1 ]; then
   [ -n "$RID" ] || echo "locating Windows CI run for $TAG ..."
   for _ in $(seq 1 30); do
     [ -n "$RID" ] && break
-    RID=$(gh run list --repo "$REPO" --workflow=release-desktop-win.yml --event workflow_dispatch --limit 20 \
+    if ! RID=$(gh run list --repo "$REPO" --workflow=release-desktop-win.yml --event workflow_dispatch --limit 20 \
       --json databaseId,displayTitle,status \
-      -q "map(select(.displayTitle==\"Windows build $TAG\" and .status!=\"completed\")) | .[0].databaseId // empty" 2> /dev/null || true)
+      -q "map(select(.displayTitle==\"Windows build $TAG\" and .status!=\"completed\")) | .[0].databaseId // empty"); then
+      echo "gh run list failed while locating Windows CI run; retrying..." >&2
+      RID=""
+    fi
     [ -n "$RID" ] || sleep 4
   done
   [ -n "$RID" ] || {

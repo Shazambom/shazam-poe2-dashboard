@@ -123,3 +123,19 @@ def test_an_unverified_league_fails_loudly(tmp_path):
     c.close()
     r = run(s)
     assert r.returncode != 0 and "upload" not in calls(s)
+
+
+def test_exporter_exit_code_other_than_three_is_propagated(tmp_path):
+    s = _setup(tmp_path, "2026-09-27")
+    _exe(
+        tmp_path / "bin" / "sudo",
+        '''shift 4
+shift
+[ "$1" = "-m" ] && exit 0
+exit 2
+''',
+    )
+    r = run(s)
+    assert r.returncode == 2
+    assert "FATAL: exporter failed (exit 2)" in r.stdout
+    assert "upload" not in calls(s)
