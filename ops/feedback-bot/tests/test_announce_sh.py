@@ -179,7 +179,7 @@ def test_check_fails_when_shazams_bot_is_not_deployed(tmp_path):
 
 
 def test_bugs_py_refuses_a_bad_payload_and_writes_the_drop_whole(tmp_path):
-    env, inbox, root = setup(tmp_path)
+    _env, inbox, _root = setup(tmp_path)
     cli = [
         "python3",
         str(inbox.parent / "ops" / "feedback-bot" / "bugs.py"),

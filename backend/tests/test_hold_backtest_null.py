@@ -27,7 +27,7 @@ def test_the_best_ten_sit_at_the_top_of_the_null():
     rets = [i / 100 for i in range(40)]  # item i returns i%
     crashed = [False] * 40
     top = list(range(30, 40))
-    ret_pct, crash_pct = bt.random_null(rets, crashed, top, n=500, seed=1)
+    ret_pct, _crash_pct = bt.random_null(rets, crashed, top, n=500, seed=1)
     assert ret_pct > 99
 
 

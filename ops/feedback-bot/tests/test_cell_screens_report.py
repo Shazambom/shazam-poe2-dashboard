@@ -35,7 +35,7 @@ def test_every_dropped_screen_is_named_with_its_reason(tmp_path):
 
 
 def test_nothing_dropped_is_an_empty_map(tmp_path):
-    code, out = run(tmp_path, valid_doc())
+    _code, out = run(tmp_path, valid_doc())
     assert report_json(out)["screensDropped"] == {}
 
 
@@ -47,7 +47,7 @@ def test_the_apps_missing_screens_are_carried_bounded(tmp_path):
         "<script>": "x",
         "settings": 5,
     }
-    code, out = run(tmp_path, d)
+    _code, out = run(tmp_path, d)
     assert report_json(out)["manifest"]["screensMissing"] == {
         "board": "timeout",
         "economy-hold": "error: boom",
@@ -56,17 +56,17 @@ def test_the_apps_missing_screens_are_carried_bounded(tmp_path):
         "s-" + "abcdefghij"[i // 10] + "abcdefghij"[i % 10]: "timeout"
         for i in range(100)
     }
-    code, out = run(tmp_path, d)
+    _code, out = run(tmp_path, d)
     assert len(report_json(out)["manifest"]["screensMissing"]) <= 30
 
 
 def test_an_older_app_without_the_field_reads_as_nothing_missing(tmp_path):
-    code, out = run(tmp_path, valid_doc())
+    _code, out = run(tmp_path, valid_doc())
     assert report_json(out)["manifest"]["screensMissing"] == {}
 
 
 def test_logs_keep_2000_lines(tmp_path):
     d = valid_doc()
     d["logs"]["backend"] = "".join(f"line {i}\n" for i in range(1500))
-    code, out = run(tmp_path, d)
+    _code, out = run(tmp_path, d)
     assert len((out / "logs" / "backend.txt").read_text().splitlines()) == 1500

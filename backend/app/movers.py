@@ -278,7 +278,7 @@ def _daily_row(q: str, window_h: int = 24, num: str | None = None) -> dict | Non
     exchange rate into the headline while the % stayed in Exalted printed +29% on assets that
     were flat in Divine.)"""
     wd = _win_days(window_h)
-    cur_name, series, meta = _current_series()
+    _cur_name, series, meta = _current_series()
     ql = q.strip().lower()
     iid = next(
         (

@@ -152,7 +152,7 @@ def _league_seed(
 
 
 def test_a_seed_ending_on_its_verified_day_reports_it_and_raises_no_t0(env, lines):
-    d, market = env
+    d, _market = env
     _league_seed(d, 5, {"Cur": "2026-09-27"})
     db.seed_market()
     assert not [m for t, m in lines if t == "T0"], lines
@@ -160,7 +160,7 @@ def test_a_seed_ending_on_its_verified_day_reports_it_and_raises_no_t0(env, line
 
 
 def test_a_seed_with_days_past_its_verified_day_is_a_t0(env, lines):
-    d, market = env
+    d, _market = env
     _league_seed(d, 5, {"Cur": "2026-09-26"})
     db.seed_market()
     assert any(
@@ -169,7 +169,7 @@ def test_a_seed_with_days_past_its_verified_day_is_a_t0(env, lines):
 
 
 def test_a_seed_whose_current_league_was_never_verified_is_a_t0(env, lines):
-    d, market = env
+    d, _market = env
     _league_seed(d, 5, {})
     db.seed_market()
     assert any(t == "T0" and m.startswith("seed-partial:") for t, m in lines), lines
@@ -177,7 +177,7 @@ def test_a_seed_whose_current_league_was_never_verified_is_a_t0(env, lines):
 
 def test_a_league_that_just_ended_is_not_mistaken_for_a_partial_seed(env, lines):
     """The crawl's lh_current can still list a league the seed poll already saw end."""
-    d, market = env
+    d, _market = env
     _league_seed(d, 5, {"Cur": "2026-09-27"}, current=("Cur", "Ended"))
     db.seed_market()
     assert not [m for t, m in lines if t == "T0"], lines

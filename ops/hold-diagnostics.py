@@ -151,7 +151,7 @@ def cmd_signals(a, only_top=None):
 def _report(a):
     if a.report:
         return json.load(open(a.report))["leagues"]
-    meta, built, day0, _num = bt.build(a.db)
+    _meta, _built, day0, _num = bt.build(a.db)
     return bt.grade_leagues(a.db, sorted(day0, key=day0.get), workers=a.workers)
 
 

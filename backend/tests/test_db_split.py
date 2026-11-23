@@ -143,7 +143,7 @@ def test_seed_market_keeps_newer_or_equal_local(seed_env):
 
 
 def test_seed_market_noop_without_seed(seed_env):
-    d, market = seed_env
+    _d, market = seed_env
     db.seed_market()
     assert not market.exists()
 

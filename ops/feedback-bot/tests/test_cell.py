@@ -166,7 +166,7 @@ def test_a_valid_screen_comes_out_re_encoded(tmp_path):
     src = jpeg_bytes(120, 90, (10, 200, 10))
     d = valid_doc()
     d["screens"]["board"] = base64.b64encode(src).decode()
-    code, out = run(tmp_path, d)
+    _code, out = run(tmp_path, d)
     got = (out / "screens" / "01-board.jpg").read_bytes()
     assert got != src and got[:3] == b"\xff\xd8\xff"
     from PIL import Image
@@ -183,7 +183,7 @@ def test_index_html_escapes_everything_and_forbids_scripts(tmp_path):
         "<img src=x onerror=alert(2)>",
     ]
     d["state"]["status"]["league"] = "<b>bold</b>"
-    code, out = run(tmp_path, d)
+    _code, out = run(tmp_path, d)
     html = (out / "index.html").read_text()
     assert "<script" not in html and "<img src=x" not in html and "<b>bold" not in html
     assert "&lt;script&gt;" in html
@@ -199,7 +199,7 @@ def test_logs_are_capped_per_line_and_per_file(tmp_path):
     d = valid_doc()
     d["logs"]["main"] = ["x" * 5000] * (cell.MAX_LOG_LINES + 500)
     d["logs"]["backend"] = "y" * 500_000
-    code, out = run(tmp_path, d)
+    _code, out = run(tmp_path, d)
     main = (out / "logs" / "main.txt").read_text().splitlines()
     assert len(main) == cell.MAX_LOG_LINES and all(
         len(line) <= cell.MAX_LOG_LINE for line in main
@@ -215,7 +215,7 @@ def test_state_is_rebuilt_bounded(tmp_path):
         "s": "z" * 10_000,
         "nested": {"a": {"b": {"c": {"d": {"e": {"f": {"g": {"h": {"i": 1}}}}}}}}},
     }
-    code, out = run(tmp_path, d)
+    _code, out = run(tmp_path, d)
     rep = json.loads((out / "report.json").read_text())
     assert len(rep["state"]["diag"]["s"]) == cell.MAX_STR
     assert "i" not in json.dumps(

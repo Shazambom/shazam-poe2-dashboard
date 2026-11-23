@@ -114,7 +114,7 @@ def test_items_the_client_crawled_after_the_seed_keep_their_rows_and_stamps(env)
 
 
 def test_an_item_the_seed_never_crawled_comes_over_with_its_complete_mark(env):
-    d, market, lines = env
+    d, market, _lines = env
     _seed(d, 20)
     _market(
         market,
