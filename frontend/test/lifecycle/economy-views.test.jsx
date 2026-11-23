@@ -53,12 +53,18 @@ describe('Economy views lifecycles (Hold, Market, Inflation, Movers)', () => {
 
   it('InflationView loads inflation, cross-league, and marketcap endpoints cleanly', async () => {
     const { calls } = installApiMock()
-    render(<InflationView />)
+    const { rerender, unmount } = render(<InflationView league="A" />)
 
     await waitFor(() => {
       expect(calls.some(c => c.path === '/api/inflation')).toBe(true)
       expect(calls.some(c => c.path === '/api/inflation/marketcap')).toBe(true)
     })
+    rerender(<InflationView league="A" />)
+    expect(calls.filter(c => c.path === '/api/inflation')).toHaveLength(1)
+    rerender(<InflationView league="B" />)
+    await waitFor(() => expect(calls.filter(c => c.path === '/api/inflation')).toHaveLength(2))
+    unmount()
+    expect(calls.filter(c => c.path === '/api/inflation/marketcap')).toHaveLength(1)
   })
 
   it('InflationView labels the actual window honestly and defaults extra watchlist items off until toggled', async () => {

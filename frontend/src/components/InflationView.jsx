@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react'
+import React, { useMemo, useState } from 'react'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine, Legend, CartesianGrid } from 'recharts'
 import { api, fmt } from '../lib/api.js'
 import { useApi } from '../lib/hooks.js'
@@ -87,13 +87,15 @@ export default function InflationView({ league }) {
   const [overrides, setOverrides] = useState(() => ({}))   // explicit per-currency graph toggle overrides
   const isOn = (c) => overrides[c.id] ?? (c.default_on !== false)
   const toggleCur = (c) => setOverrides(prev => ({ ...prev, [c.id]: !(prev[c.id] ?? (c.default_on !== false)) }))
-  const { data, err, busy } = useApi(() => api.inflation(anchor), [anchor, league])
-
-  // Never show the previous anchor/league's stats or flash empty state on the synchronous switch commit.
-  const reqKey = `${league || ''}|${anchor}`
-  const prevKey = useRef(reqKey)
-  useEffect(() => { prevKey.current = reqKey }, [reqKey])
-  const switching = prevKey.current !== reqKey
+  // A league switch reloads the same anchor. Mark the view as switching immediately,
+  // including the render before useApi starts the next request.
+  const request = useMemo(() => ({ anchor, key: `${league || ''}|${anchor}` }), [league, anchor])
+  const [startedKey, setStartedKey] = useState(request.key)
+  const { data, err, busy } = useApi(() => {
+    setStartedKey(request.key)
+    return api.inflation(request.anchor)
+  }, [request])
+  const switching = startedKey !== request.key
   const curData = (data && (!data.anchor || data.anchor === anchor) && (!league || !data.league || data.league === league)) ? data : null
   const loading = busy || switching
 
