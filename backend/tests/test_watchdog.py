@@ -8,6 +8,7 @@ are covered. Stdlib-only so the lean sidecar imports it without the backend.
 Run:  python -m pytest backend/tests/test_watchdog.py -q
 """
 
+import logging
 import os
 import sys
 import time
@@ -138,7 +139,9 @@ def test_watch_stdin_eof_clean_exit_with_open_pipe_does_not_sigabrt():
             try:
                 proc.stdin.close()
             except Exception:
-                pass
+                logging.getLogger(__name__).debug(
+                    "could not close the test child's stdin", exc_info=True
+                )
     assert rc == 0, (
         f"expected clean rc=0 with open stdin pipe, got rc={rc} stderr={err!r}"
     )

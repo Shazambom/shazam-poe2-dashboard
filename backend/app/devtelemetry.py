@@ -12,6 +12,7 @@ web/server env never post. This module is stdlib-only and importable by the lean
 from __future__ import annotations
 
 import atexit
+import logging
 import os
 import queue
 import sys
@@ -46,7 +47,6 @@ T0_KINDS = frozenset(
 def t0(kind: str, msg: str) -> None:
     """Report a full-sync fallback. Always logged locally; posted on the beta channel."""
     assert kind in T0_KINDS, kind
-    import logging
 
     logging.getLogger("poe2arb.t0").error("T0 %s: %s", kind, msg)
     tlog("T0", f"{kind}: {msg}")
@@ -80,7 +80,7 @@ def _post(body: bytes) -> None:
         )
         urllib.request.urlopen(req, timeout=4).close()
     except Exception:
-        pass
+        logging.getLogger(__name__).debug("telemetry post failed", exc_info=True)
 
 
 def _run() -> None:

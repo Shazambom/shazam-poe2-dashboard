@@ -25,6 +25,8 @@ Phase-4 consideration.
 
 from __future__ import annotations
 
+import logging
+
 import numpy as np
 
 # Median daily traded VALUE (Exalted) floor — mirrors movers.MIN_VALUE_EX. The sidecar stays
@@ -144,6 +146,9 @@ def compute(
                 }
             )
         except Exception:
+            logging.getLogger(__name__).debug(
+                "discord profile failed for an item", exc_info=True
+            )
             continue
 
     out.sort(key=lambda s: s["vol_z"], reverse=True)

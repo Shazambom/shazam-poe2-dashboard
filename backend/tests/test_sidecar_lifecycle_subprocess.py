@@ -13,6 +13,7 @@ Run:  DATA_DIR=$(mktemp -d) MARKET_SEED= .venv-test/bin/python -m pytest backend
 
 from __future__ import annotations
 
+import logging
 import os
 import sqlite3
 import subprocess
@@ -126,7 +127,9 @@ def test_real_sidecar_completes_jobs_and_exits_cleanly_at_idle(tmp_path):
             try:
                 proc.stdin.close()
             except Exception:
-                pass
+                logging.getLogger(__name__).debug(
+                    "could not read the discord result", exc_info=True
+                )
 
     assert rc == 0, f"sidecar did not exit cleanly at idle: rc={rc} stderr={stderr!r}"
 
@@ -181,7 +184,9 @@ def test_real_sidecar_heals_orphaned_running_job_at_startup(tmp_path):
             try:
                 proc.stdin.close()
             except Exception:
-                pass
+                logging.getLogger(__name__).debug(
+                    "could not read the recovered job", exc_info=True
+                )
 
     assert rc == 0, (
         f"expected clean rc=0 after orphan recovery, got rc={rc} stderr={stderr!r}"

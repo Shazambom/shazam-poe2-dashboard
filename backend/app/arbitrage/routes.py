@@ -13,6 +13,7 @@ Results are served either whole (find_routes) or streamed (stream_routes) throug
 from __future__ import annotations
 
 import json
+import logging
 import math
 import time
 
@@ -477,7 +478,7 @@ def _diag(
         )
         devtelemetry.tlog("routes", msg)  # queues; never waits on the network
     except Exception:
-        pass
+        logging.getLogger(__name__).debug("route diagnostics failed", exc_info=True)
 
 
 CANCEL_CHECK_EVERY = (

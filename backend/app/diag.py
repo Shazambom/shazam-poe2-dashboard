@@ -9,6 +9,7 @@ Settings → Diagnostics. No data leaves the machine.
 from __future__ import annotations
 
 import asyncio
+import logging
 import time
 
 from . import (
@@ -58,7 +59,9 @@ def _db_counts(league: str) -> dict:
                 "SELECT COUNT(*) FROM league_daily WHERE league=?", (league,)
             ).fetchone()[0]
         except Exception:
-            pass
+            logging.getLogger(__name__).debug(
+                "could not count daily rows for the selected league", exc_info=True
+            )
     return counts
 
 

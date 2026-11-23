@@ -139,7 +139,7 @@ async def refresh(force: bool = False) -> dict:
             v = await gateway.request("GET", f"{GGPK}/version?poe=2", policy="static")
             version = v.text.strip()[:40] if v.status_code == 200 else None
         except Exception:
-            pass
+            log.debug("could not read the game data version", exc_info=True)
         if version and version != state.get("version"):
             max_age = 0
         schema = json.loads(await _get(SCHEMA_URL, "schema.min.json", 7 * 86400))

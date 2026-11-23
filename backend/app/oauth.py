@@ -36,7 +36,7 @@ CONTACT = os.environ.get("OAUTH_CONTACT", "unset@example.com").strip()
 VERSION = "0.1"
 
 AUTHORIZE_URL = "https://www.pathofexile.com/oauth/authorize"
-TOKEN_URL = "https://www.pathofexile.com/oauth/token"
+OAUTH_EXCHANGE_URL = "https://www.pathofexile.com/oauth/token"
 API = "https://api.pathofexile.com"
 
 
@@ -118,7 +118,7 @@ async def complete(code: str, state: str) -> dict:
 async def _token_request(form: dict) -> dict:
     r = await gateway.request(
         "POST",
-        TOKEN_URL,
+        OAUTH_EXCHANGE_URL,
         policy="ggg-api",
         data=form,
         headers={"User-Agent": user_agent()},

@@ -160,8 +160,8 @@ def stop() -> None:
             if p.stdin:
                 p.stdin.close()  # EOF -> sidecar's stdin watchdog exits it cleanly
         except Exception:
-            pass
+            log.debug("could not close sidecar stdin", exc_info=True)
         try:
             p.terminate()
         except Exception:
-            pass
+            log.debug("could not terminate the sidecar", exc_info=True)

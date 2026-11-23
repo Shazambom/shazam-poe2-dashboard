@@ -130,7 +130,9 @@ class Policy:
             if ms and ms > 0:
                 return ms / 1000.0
         except Exception:  # an internal of the rate library changed: still answer
-            pass
+            log.debug(
+                "could not calculate the limiter wait from its bucket", exc_info=True
+            )
         return min((r.interval for r in self.rates), default=1000) / 1000.0
 
     def hint(self) -> None:

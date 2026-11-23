@@ -13,6 +13,7 @@ wastes CPU/RAM). Two mechanisms, used together:
 
 from __future__ import annotations
 
+import logging
 import os
 import sys
 import threading
@@ -142,7 +143,9 @@ def watch_stdin_eof(on_dead: Callable | None = None) -> threading.Thread | None:
                 while cast(BinaryIO, buf).read(1):
                     pass
         except Exception:
-            pass
+            logging.getLogger(__name__).debug(
+                "stdin read failed before watchdog shutdown", exc_info=True
+            )
         dead("stdin-eof")
 
     t = threading.Thread(target=_loop, daemon=True, name="stdin-eof-watchdog")
