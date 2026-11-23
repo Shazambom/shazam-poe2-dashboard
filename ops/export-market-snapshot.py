@@ -150,7 +150,7 @@ def _is_newer(cut_days: dict, published: str, today: str) -> bool:
     return any((day or "") > (old.get(lg) or "") for lg, day in cut_days.items())
 
 
-def main():
+def _parse_args() -> argparse.Namespace:
     ap = argparse.ArgumentParser()
     ap.add_argument("--src", required=True, help="live market.sqlite")
     ap.add_argument("--out", required=True, help="output market-seed.sqlite[.gz]")
@@ -199,6 +199,37 @@ def main():
     )
     args = ap.parse_args()
 
+    return args
+
+
+def _require_digest_freshness(
+    src: sqlite3.Connection, max_lag_h: float, force: bool
+) -> None:
+    # Guard: never publish while the digest is mid-catch-up. digest_cursor is the next hour
+    # to fetch; when caught up it sits at ~the current (unpublished) hour.
+    cursor = _digest_cursor(src)
+    now_hour = int(time.time()) - int(time.time()) % 3600
+    if cursor is not None:
+        lag_h = (now_hour - cursor) / 3600.0
+        print(
+            f"  digest_cursor lag: {lag_h:.1f}h (cursor={cursor}, now_hour={now_hour})"
+        )
+        if lag_h > max_lag_h and not force:
+            raise SystemExit(
+                f"ABORT: digest is {lag_h:.1f}h behind (> {max_lag_h}h) — a sync is "
+                f"still catching up. Refusing to publish a half-synced snapshot. Re-run when "
+                f"caught up, or pass --force."
+            )
+    elif not force:
+        raise SystemExit(
+            "ABORT: no digest_cursor found — can't confirm the sync is complete. "
+            "Pass --force to override."
+        )
+
+
+def main():
+    args = _parse_args()
+
     # Digest is dominated by hundreds of tiny dead private leagues "(PLxxxxx)"; drop them from
     # the SEED unless asked otherwise (the client itself keeps whatever league it is configured
     # for — a private-league user is not filtered at ingest).
@@ -223,26 +254,7 @@ def main():
                 f"market.sqlite only (the legacy single-file DB is gone post-split)"
             )
 
-        # Guard: never publish while the digest is mid-catch-up. digest_cursor is the next hour
-        # to fetch; when caught up it sits at ~the current (unpublished) hour.
-        cursor = _digest_cursor(src)
-        now_hour = int(time.time()) - int(time.time()) % 3600
-        if cursor is not None:
-            lag_h = (now_hour - cursor) / 3600.0
-            print(
-                f"  digest_cursor lag: {lag_h:.1f}h (cursor={cursor}, now_hour={now_hour})"
-            )
-            if lag_h > args.max_digest_lag_h and not args.force:
-                raise SystemExit(
-                    f"ABORT: digest is {lag_h:.1f}h behind (> {args.max_digest_lag_h}h) — a sync is "
-                    f"still catching up. Refusing to publish a half-synced snapshot. Re-run when "
-                    f"caught up, or pass --force."
-                )
-        elif not args.force:
-            raise SystemExit(
-                "ABORT: no digest_cursor found — can't confirm the sync is complete. "
-                "Pass --force to override."
-            )
+        _require_digest_freshness(src, args.max_digest_lag_h, args.force)
 
         # Empty mod_pools is a T0 blocker (docs/release-runbook.md); --force only skips digest freshness.
         n_pools = (

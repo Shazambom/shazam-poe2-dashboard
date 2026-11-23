@@ -151,19 +151,32 @@ def run_side(tree: Path, snap: Path, work: Path, label: str) -> dict:
     return json.loads(line[4:])
 
 
-def diff(a: dict, b: dict) -> list[str]:
-    out = []
-    va, vb = a["values"], b["values"]
-    for c in sorted(set(va) | set(vb)):
-        x, y = va.get(c), vb.get(c)
-        if x is None or y is None:
-            out.append(f"values   {c}: {x} -> {y}")
-        elif abs(y / x - 1) > REL_TOL if x else y != x:
-            out.append(
-                f"values   {c}: {x:.6g} -> {y:.6g} ({(y / x - 1) * 100:+.2f}%)"
-                if x
-                else f"values   {c}: {x} -> {y}"
-            )
+def _diff_route_pool(ra: dict, rb: dict, out: list[str]) -> None:
+    pa = {r[0]: (i, r) for i, r in enumerate(ra["pool"])}
+    pb = {r[0]: (i, r) for i, r in enumerate(rb["pool"])}
+    for rid in sorted(set(pa) - set(pb)):
+        out.append(f"pool     left: #{pa[rid][0]} {rid}")
+    for rid in sorted(set(pb) - set(pa)):
+        out.append(
+            f"pool     joined{' (recipe)' if pb[rid][1][3] else ''}: #{pb[rid][0]} {rid}"
+        )
+    shifts, ds, dr = 0, 0.0, 0
+    for rid in sorted(set(pa) & set(pb)):
+        (ia, x), (ib, y) = pa[rid], pb[rid]
+        if x[1] != y[1]:
+            out.append(f"pool     margin changed: {rid}: {x[1]} -> {y[1]}")
+        elif (ia, x[2]) != (ib, y[2]):
+            shifts += 1
+            ds = max(ds, abs((y[2] or 0) - (x[2] or 0)))
+            dr = max(dr, abs(ib - ia))
+    if shifts:
+        out.append(
+            f"pool     score/rank shifts only (margins unchanged): {shifts} loops, largest score "
+            f"shift {ds:.4f}, largest rank shift {dr}"
+        )
+
+
+def _diff_busiest_and_cards(a: dict, b: dict, out: list[str]) -> None:
     for sec in ("busiest", "cards"):
         for c in sorted(set(a[sec]) | set(b[sec])):
             x, y = a[sec].get(c), b[sec].get(c)
@@ -182,6 +195,22 @@ def diff(a: dict, b: dict) -> list[str]:
                 )
             else:
                 out.append(f"{sec:8} {c}: {x} -> {y}")
+
+
+def diff(a: dict, b: dict) -> list[str]:
+    out = []
+    va, vb = a["values"], b["values"]
+    for c in sorted(set(va) | set(vb)):
+        x, y = va.get(c), vb.get(c)
+        if x is None or y is None:
+            out.append(f"values   {c}: {x} -> {y}")
+        elif abs(y / x - 1) > REL_TOL if x else y != x:
+            out.append(
+                f"values   {c}: {x:.6g} -> {y:.6g} ({(y / x - 1) * 100:+.2f}%)"
+                if x
+                else f"values   {c}: {x} -> {y}"
+            )
+    _diff_busiest_and_cards(a, b, out)
     ma = {tuple(r[:3]): r for r in a["market_table"]}
     mb = {tuple(r[:3]): r for r in b["market_table"]}
     for k in sorted(set(ma) | set(mb)):
@@ -206,28 +235,7 @@ def diff(a: dict, b: dict) -> list[str]:
     for rid in sorted(set(a["recipe_loops"]) - set(b["recipe_loops"])):
         out.append(f"loops    recipe loop gone: {rid}")
     ra, rb = a["routes"], b["routes"]
-    pa = {r[0]: (i, r) for i, r in enumerate(ra["pool"])}
-    pb = {r[0]: (i, r) for i, r in enumerate(rb["pool"])}
-    for rid in sorted(set(pa) - set(pb)):
-        out.append(f"pool     left: #{pa[rid][0]} {rid}")
-    for rid in sorted(set(pb) - set(pa)):
-        out.append(
-            f"pool     joined{' (recipe)' if pb[rid][1][3] else ''}: #{pb[rid][0]} {rid}"
-        )
-    shifts, ds, dr = 0, 0.0, 0
-    for rid in sorted(set(pa) & set(pb)):
-        (ia, x), (ib, y) = pa[rid], pb[rid]
-        if x[1] != y[1]:
-            out.append(f"pool     margin changed: {rid}: {x[1]} -> {y[1]}")
-        elif (ia, x[2]) != (ib, y[2]):
-            shifts += 1
-            ds = max(ds, abs((y[2] or 0) - (x[2] or 0)))
-            dr = max(dr, abs(ib - ia))
-    if shifts:
-        out.append(
-            f"pool     score/rank shifts only (margins unchanged): {shifts} loops, largest score "
-            f"shift {ds:.4f}, largest rank shift {dr}"
-        )
+    _diff_route_pool(ra, rb, out)
     for k in sorted(set(a["convert"]) | set(b["convert"])):
         if a["convert"].get(k) != b["convert"].get(k):
             out.append(f"convert  {k}: {a['convert'].get(k)} -> {b['convert'].get(k)}")

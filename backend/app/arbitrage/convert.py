@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+from collections.abc import Callable
 from typing import TypeGuard
 
 from .. import centrality, db
@@ -204,6 +205,23 @@ MIN_AMOUNT_WALK = (
 )
 
 
+def _min_passing_lot(ok: Callable[[int], bool], amt: int, lo: int, unit: int) -> int:
+    while amt - lo > unit:  # bisect, in lot units, down to the smallest passing amount
+        mid = lo + ((amt - lo) // (2 * unit)) * unit
+        if mid <= lo:
+            break
+        if ok(mid):
+            amt = mid
+        else:
+            lo = mid
+    # whole-unit rounding makes acceptance bumpy, so bisection can stop a lot or two high: walk the last steps
+    for _ in range(MIN_AMOUNT_WALK):
+        if amt - unit < unit or not ok(amt - unit):
+            break
+        amt -= unit
+    return amt
+
+
 def _min_amount(
     g: Graph,
     paths: list[list[Edge]],
@@ -251,21 +269,7 @@ def _min_amount(
             continue
         if not ok(amt):
             continue
-        while (
-            amt - lo > unit
-        ):  # bisect, in lot units, down to the smallest passing amount
-            mid = lo + ((amt - lo) // (2 * unit)) * unit
-            if mid <= lo:
-                break
-            if ok(mid):
-                amt = mid
-            else:
-                lo = mid
-        # whole-unit rounding makes acceptance bumpy, so bisection can stop a lot or two high: walk the last steps
-        for _ in range(MIN_AMOUNT_WALK):
-            if amt - unit < unit or not ok(amt - unit):
-                break
-            amt -= unit
+        amt = _min_passing_lot(ok, amt, lo, unit)
         if best is None or amt < best:
             best = amt
     return best

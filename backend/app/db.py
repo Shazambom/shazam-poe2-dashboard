@@ -8,6 +8,7 @@ import threading
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from string import Template
 from typing import Any
 
@@ -319,6 +320,17 @@ def _seed_cuts(path) -> tuple[list[str], list[str]]:
         c.close()
 
 
+def _report_seed_cuts(tmp: Path, seed_v: int) -> None:
+    try:  # the seed as shipped, before the client's own crawl is carried into it
+        summary, problems = _seed_cuts(tmp)
+        if summary:
+            devtelemetry.tlog("seed", "current leagues: " + "; ".join(summary))
+        if problems:
+            devtelemetry.t0("seed-partial", f"seed v{seed_v}: " + "; ".join(problems))
+    except (sqlite3.Error, ValueError) as exc:
+        log.warning("market seed: could not read its verified days (%s)", exc)
+
+
 def seed_market() -> None:
     """Replace the local market.sqlite with the bundled snapshot when the snapshot is
     newer (or when there's no local market DB yet). Atomic: write .tmp, fsync, rename.
@@ -377,16 +389,7 @@ def seed_market() -> None:
                     shutil.copyfileobj(fi, fo, length=1 << 20)
             fo.flush()
             os.fsync(fo.fileno())
-        try:  # the seed as shipped, before the client's own crawl is carried into it
-            summary, problems = _seed_cuts(tmp)
-            if summary:
-                devtelemetry.tlog("seed", "current leagues: " + "; ".join(summary))
-            if problems:
-                devtelemetry.t0(
-                    "seed-partial", f"seed v{seed_v}: " + "; ".join(problems)
-                )
-        except (sqlite3.Error, ValueError) as exc:
-            log.warning("market seed: could not read its verified days (%s)", exc)
+        _report_seed_cuts(tmp, seed_v)
         if MARKET_DB_PATH.exists() and local_v < 0:
             # Corrupt (often why it is being replaced): no crawl anyone could read, nothing lost.
             devtelemetry.tlog(

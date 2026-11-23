@@ -69,19 +69,7 @@ CONTAMINANT_TOP_LEVEL = {
 }
 
 
-def inspect_pyinstaller(bin_path: Path) -> dict:
-    """Break down a PyInstaller --onefile binary by subsystem and flag venv contaminants."""
-    try:
-        from PyInstaller.archive.readers import CArchiveReader
-    except ImportError as exc:
-        return {"available": False, "error": f"PyInstaller not importable: {exc}"}
-
-    if not bin_path.exists():
-        return {"available": False, "error": f"Binary not found: {bin_path}"}
-
-    arch = CArchiveReader(str(bin_path))
-    groups: dict[str, int] = {}
-    contam_native_bytes = 0
+def _archive_entry_group(name: str) -> tuple[str, bool]:
     pil_markers = (
         "libjpeg",
         "libtiff",
@@ -95,48 +83,57 @@ def inspect_pyinstaller(bin_path: Path) -> dict:
         "libfreetype",
         "libpng",
     )
+    if name.startswith("PIL") or any(m in name for m in pil_markers):
+        return "PIL/Pillow (contaminant)", True
+    elif name.startswith(("aiohttp", "multidict", "yarl", "frozenlist", "propcache")):
+        return "aiohttp stack (contaminant)", True
+    elif name.startswith(("discord", "nacl")):
+        return "discord/nacl (contaminant)", True
+    elif name.startswith(
+        ("charset_normalizer", "opentelemetry", "attrs-", "rich", "pygments")
+    ):
+        return "other contaminants", True
+    elif (
+        name.startswith("cryptography")
+        or "libcrypto" in name
+        or "libssl" in name
+        or "_rust.abi3" in name
+    ):
+        return "cryptography/ssl", False
+    elif (
+        name.startswith("numpy")
+        or "openblas" in name
+        or "libgfortran" in name
+        or "libquadmath" in name
+    ):
+        return "numpy", False
+    elif name.startswith("pydantic"):
+        return "pydantic_core", False
+    elif name == "PYZ.pyz":
+        return "PYZ.pyz", False
+    elif name.startswith(("Python.framework", "libpython", "python", "lib-dynload")):
+        return "python-runtime", False
+    else:
+        return "other", False
 
+
+def inspect_pyinstaller(bin_path: Path) -> dict:
+    """Break down a PyInstaller --onefile binary by subsystem and flag venv contaminants."""
+    try:
+        from PyInstaller.archive.readers import CArchiveReader
+    except ImportError as exc:
+        return {"available": False, "error": f"PyInstaller not importable: {exc}"}
+
+    if not bin_path.exists():
+        return {"available": False, "error": f"Binary not found: {bin_path}"}
+
+    arch = CArchiveReader(str(bin_path))
+    groups: dict[str, int] = {}
+    contam_native_bytes = 0
     for name, (_pos, dlen, _ulen, _flag, _typcd) in arch.toc.items():
-        if name.startswith("PIL") or any(m in name for m in pil_markers):
-            key = "PIL/Pillow (contaminant)"
+        key, contaminant = _archive_entry_group(name)
+        if contaminant:
             contam_native_bytes += dlen
-        elif name.startswith(
-            ("aiohttp", "multidict", "yarl", "frozenlist", "propcache")
-        ):
-            key = "aiohttp stack (contaminant)"
-            contam_native_bytes += dlen
-        elif name.startswith(("discord", "nacl")):
-            key = "discord/nacl (contaminant)"
-            contam_native_bytes += dlen
-        elif name.startswith(
-            ("charset_normalizer", "opentelemetry", "attrs-", "rich", "pygments")
-        ):
-            key = "other contaminants"
-            contam_native_bytes += dlen
-        elif (
-            name.startswith("cryptography")
-            or "libcrypto" in name
-            or "libssl" in name
-            or "_rust.abi3" in name
-        ):
-            key = "cryptography/ssl"
-        elif (
-            name.startswith("numpy")
-            or "openblas" in name
-            or "libgfortran" in name
-            or "libquadmath" in name
-        ):
-            key = "numpy"
-        elif name.startswith("pydantic"):
-            key = "pydantic_core"
-        elif name == "PYZ.pyz":
-            key = "PYZ.pyz"
-        elif name.startswith(
-            ("Python.framework", "libpython", "python", "lib-dynload")
-        ):
-            key = "python-runtime"
-        else:
-            key = "other"
         groups[key] = groups.get(key, 0) + dlen
 
     pyz_groups: dict[str, int] = {}
@@ -210,6 +207,17 @@ def resolve_market_db(explicit_db: str | None, tmp_dir: Path) -> tuple[Path, str
     )
 
 
+def _clear_profile_caches(mod) -> None:
+    for attr in dir(mod):
+        v = getattr(mod, attr)
+        if isinstance(v, dict) and (
+            "cache" in attr.lower() or attr.startswith("_c") or attr == "_CACHE"
+        ):
+            v.clear()
+        if hasattr(v, "cache_clear"):
+            cast(Callable[[], None], getattr(v, "cache_clear", None))()
+
+
 def run_benchmarks(db_arg: str | None, runs: int) -> dict:
     tmp_dir = Path(tempfile.mkdtemp(prefix="arbiter-prof-py-"))
     try:
@@ -256,16 +264,7 @@ def run_benchmarks(db_arg: str | None, runs: int) -> dict:
                 graph_mod,
                 routes_mod,
             ):
-                for attr in dir(mod):
-                    v = getattr(mod, attr)
-                    if isinstance(v, dict) and (
-                        "cache" in attr.lower()
-                        or attr.startswith("_c")
-                        or attr == "_CACHE"
-                    ):
-                        v.clear()
-                    if hasattr(v, "cache_clear"):
-                        cast(Callable[[], None], getattr(v, "cache_clear", None))()
+                _clear_profile_caches(mod)
             holdscore.invalidate()
 
         def bench[T](

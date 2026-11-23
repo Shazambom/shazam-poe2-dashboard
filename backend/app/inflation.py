@@ -225,6 +225,31 @@ def compute(anchor_key: str, hours: int = 336) -> dict:
     )
 
 
+def _basket_index(basket_src: dict, all_hours: list[int]) -> list[tuple[int, float]]:
+    basket: list[tuple[int, float]] = []
+    for h in all_hours:
+        num = den = 0.0
+        fb_num = 0.0
+        fb_cnt = 0
+        for idx in basket_src.values():
+            pt = idx.get(h)
+            if not pt or pt[0] <= 0:
+                continue
+            v, w = pt
+            lv = math.log(v)
+            if w > 0:
+                num += w * lv
+                den += w
+            fb_num += lv
+            fb_cnt += 1
+        if den > 0:
+            basket.append((h, math.exp(num / den)))
+        elif fb_cnt > 0:
+            basket.append((h, math.exp(fb_num / fb_cnt)))
+
+    return basket
+
+
 def _compute(anchor_key: str, hours: int, s: dict, league: str) -> dict:
     name, hard_meta = ANCHORS[anchor_key]
     pivot_is_hard = hard_meta == PIVOT_META
@@ -298,26 +323,7 @@ def _compute(anchor_key: str, hours: int, s: dict, league: str) -> dict:
     # Basket: Divine-volume-weighted geometric mean of the core liquid currencies each hour.
     basket_src = core_percur or all_percur
     all_hours = sorted({h for idx in basket_src.values() for h in idx})
-    basket: list[tuple[int, float]] = []
-    for h in all_hours:
-        num = den = 0.0
-        fb_num = 0.0
-        fb_cnt = 0
-        for idx in basket_src.values():
-            pt = idx.get(h)
-            if not pt or pt[0] <= 0:
-                continue
-            v, w = pt
-            lv = math.log(v)
-            if w > 0:
-                num += w * lv
-                den += w
-            fb_num += lv
-            fb_cnt += 1
-        if den > 0:
-            basket.append((h, math.exp(num / den)))
-        elif fb_cnt > 0:
-            basket.append((h, math.exp(fb_num / fb_cnt)))
+    basket = _basket_index(basket_src, all_hours)
 
     velocity = _ols_daily_pct(basket, VELOCITY_WINDOW_H * HOUR)
     _, chg_24h = marketseries.change_over(

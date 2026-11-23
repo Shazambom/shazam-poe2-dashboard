@@ -26,13 +26,16 @@ import shutil
 import time
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from cryptography.hazmat.primitives import serialization
 
 import announce
 import arbseal
 from opener.dests import SCREENS
+
+if TYPE_CHECKING:
+    import discord
 
 ATTACHMENT_RE = re.compile(r"^arbiter-report-[0-9A-HJ-NP-Z]{6}\.arb$")
 MAX_ATTACHMENT = 4 * 1024 * 1024 + arbseal.OVERHEAD
@@ -500,6 +503,68 @@ class Handler:
 
 
 # ---------------------------------------------------------------- discord.py binding
+async def _catch_up_channels(client, handler: Handler, forum_id: int, forums) -> None:
+    bug = cast(
+        "discord.ForumChannel",
+        client.get_channel(forum_id) or await client.fetch_channel(forum_id),
+    )
+    handler.text_forums = {
+        c.id: TEXT_FORUMS[c.name] for c in bug.guild.forums if c.name in TEXT_FORUMS
+    }
+    for fid in sorted(forums()):
+        try:
+            await handler.catch_up(
+                client.get_channel(fid) or await client.fetch_channel(fid)
+            )
+        except Exception as e:  # one forum never stops the others
+            _log(f"catch-up of forum {fid} failed: {e!r}")
+
+
+async def _releases_channel(client, forum_id: int):
+    bug = cast(
+        "discord.ForumChannel",
+        client.get_channel(forum_id) or await client.fetch_channel(forum_id),
+    )
+    guild = bug.guild
+    channel = next((c for c in guild.text_channels if c.name == RELEASES_CHANNEL), None)
+    role = next((r for r in guild.roles if r.name == NOTIFY_ROLE), None)
+    if not channel or not role:
+        _log(
+            f"announcement waiting: no #{RELEASES_CHANNEL} channel or @{NOTIFY_ROLE} role"
+        )
+        return None
+    perms = channel.permissions_for(guild.me)
+    why = announce.target_problem(
+        role.mentionable, perms.send_messages, perms.mention_everyone
+    )
+    if why:
+        _log(f"announcement waiting: {why} (#{RELEASES_CHANNEL}, @{NOTIFY_ROLE})")
+        return None
+    return channel, role
+
+
+async def _run_periodic(
+    client, handler: Handler, releases_target, catch_up_all
+) -> None:
+    tick = 0
+    while True:
+        await asyncio.sleep(ACTIONS_EVERY_S)
+        tick += 1
+        try:
+            await handler.process_actions(client.fetch_channel)
+        except Exception as e:
+            _log(f"actions failed: {e!r}")
+        try:
+            await handler.process_announcements(releases_target)
+        except Exception as e:
+            _log(f"announcements failed: {e!r}")
+        if tick * ACTIONS_EVERY_S % CATCH_UP_EVERY_S == 0:
+            try:
+                await catch_up_all()
+            except Exception as e:
+                _log(f"catch-up failed: {e!r}")
+
+
 def main():
     import discord
 
@@ -533,63 +598,10 @@ def main():
         return {forum_id, *handler.text_forums}
 
     async def catch_up_all():
-        bug = cast(
-            discord.ForumChannel,
-            client.get_channel(forum_id) or await client.fetch_channel(forum_id),
-        )
-        handler.text_forums = {
-            c.id: TEXT_FORUMS[c.name] for c in bug.guild.forums if c.name in TEXT_FORUMS
-        }
-        for fid in sorted(forums()):
-            try:
-                await handler.catch_up(
-                    client.get_channel(fid) or await client.fetch_channel(fid)
-                )
-            except Exception as e:  # one forum never stops the others
-                _log(f"catch-up of forum {fid} failed: {e!r}")
+        await _catch_up_channels(client, handler, forum_id, forums)
 
     async def releases_target():
-        bug = cast(
-            discord.ForumChannel,
-            client.get_channel(forum_id) or await client.fetch_channel(forum_id),
-        )
-        guild = bug.guild
-        channel = next(
-            (c for c in guild.text_channels if c.name == RELEASES_CHANNEL), None
-        )
-        role = next((r for r in guild.roles if r.name == NOTIFY_ROLE), None)
-        if not channel or not role:
-            _log(
-                f"announcement waiting: no #{RELEASES_CHANNEL} channel or @{NOTIFY_ROLE} role"
-            )
-            return None
-        perms = channel.permissions_for(guild.me)
-        why = announce.target_problem(
-            role.mentionable, perms.send_messages, perms.mention_everyone
-        )
-        if why:
-            _log(f"announcement waiting: {why} (#{RELEASES_CHANNEL}, @{NOTIFY_ROLE})")
-            return None
-        return channel, role
-
-    async def every():
-        tick = 0
-        while True:
-            await asyncio.sleep(ACTIONS_EVERY_S)
-            tick += 1
-            try:
-                await handler.process_actions(client.fetch_channel)
-            except Exception as e:
-                _log(f"actions failed: {e!r}")
-            try:
-                await handler.process_announcements(releases_target)
-            except Exception as e:
-                _log(f"announcements failed: {e!r}")
-            if tick * ACTIONS_EVERY_S % CATCH_UP_EVERY_S == 0:
-                try:
-                    await catch_up_all()
-                except Exception as e:
-                    _log(f"catch-up failed: {e!r}")
+        return await _releases_channel(client, forum_id)
 
     @client.event
     async def on_ready():
@@ -598,7 +610,9 @@ def main():
         await catch_up_all()
         _log(f"word-only forums: {handler.text_forums}")
         if timer is None:
-            timer = asyncio.create_task(every())
+            timer = asyncio.create_task(
+                _run_periodic(client, handler, releases_target, catch_up_all)
+            )
 
     @client.event
     async def on_message(message):

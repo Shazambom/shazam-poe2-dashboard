@@ -269,8 +269,7 @@ def _domain_of(class_tags: set, mods: dict) -> str | None:
     return counts.most_common(1)[0][0] if counts else None
 
 
-def pools_from(export: Export, families: list | None = None) -> list:
-    spawn_tags = _spawn_tags_by_domain(export.mods)
+def _released_classes(export: Export) -> dict:
     # Classes are grouped by display name: two class ids with one name are one thing to the user.
     by_name: dict = {}
     for b in export.bases.values():
@@ -298,6 +297,12 @@ def pools_from(export: Export, families: list | None = None) -> list:
             by_bases[key] = keep
         else:
             by_bases[key] = name
+    return by_name
+
+
+def pools_from(export: Export, families: list | None = None) -> list:
+    spawn_tags = _spawn_tags_by_domain(export.mods)
+    by_name = _released_classes(export)
     pools = []
     for class_name, entry in by_name.items():
         cid, bases = entry["cid"], entry["bases"]
@@ -504,9 +509,7 @@ def families_from(export: Export) -> list:
 _CAN_ROLL = re.compile(r"Can roll (\w+) modifiers", re.I)
 
 
-def sections_from(export: Export, families: list, pools: list | None = None) -> list:
-    carried = _base_tags(export)
-    plural = plural_index(export.classes)
+def _socketable_carriers(export: Export, plural: dict) -> dict:
     # Carriers: a socketable whose text names the pool it opens.
     carriers = {}
     for mid, a in export.augments.items():
@@ -518,6 +521,13 @@ def sections_from(export: Export, families: list, pools: list | None = None) -> 
                         export.bases.get(mid, {}).get("name") or mid.split("/")[-1],
                         classes_of(c.get("target"), plural, export),
                     )
+    return carriers
+
+
+def sections_from(export: Export, families: list, pools: list | None = None) -> list:
+    carried = _base_tags(export)
+    plural = plural_index(export.classes)
+    carriers = _socketable_carriers(export, plural)
     keyed: dict = defaultdict(list)  # key tag → the (family, tier) pairs keyed on it
     for f in families:
         if f["affix"] not in ("prefix", "suffix"):
@@ -669,6 +679,34 @@ def _row_tags(
     return lead + own
 
 
+def _section_tiers(f, s, pool, domain, tags, corruption, corrupted_groups, all_keys):
+    if s["id"] == "enchant" and pool["domain"] != "item":
+        # Off gear, the upgrades are the ones weighted on no class, of a corruption the pool has
+        # (poe2db Ruby: 7; a relic's one corruption has no upgrade).
+        tiers = [
+            t
+            for t in f["tiers"]
+            if f["group"] in corrupted_groups and _rolled([t]) == {"default"}
+        ]
+    elif s.get("socketed"):
+        # A socketable's pool is all of it on any item the socketable fits, whatever the base
+        # (owner 2026-10-12; poe2db lists it so): the export's per-base zeros are not applied.
+        tiers = [t for t in f["tiers"] if _rolled([t]) & set(s["keys"])]
+    else:
+        tiers = [t for t in f["tiers"] if rolls_on(t["weights"], tags)]
+    if domain != "item" and s["id"] != "base" and not corruption:
+        # A desecration pool shows the tiers its own currency adds: a lord's tier under the
+        # lords, an otherworldly tier under the Altered Collarbone, a tier keyed on no one
+        # under the jewel and waystone bones. One family can hold tiers of two of them.
+        tiers = [
+            t
+            for t in tiers
+            if (_rolled([t]) & set(s["keys"]))
+            or (s.get("unkeyed") and not _rolled([t]) & all_keys)
+        ]
+    return tiers
+
+
 def build_pool(pool: dict, families: list, sections: list) -> dict:
     """One item type's pools, precomputed for the client: no spawn weights leave here."""
     out = []
@@ -709,30 +747,9 @@ def build_pool(pool: dict, families: list, sections: list) -> dict:
                 s.get("unkeyed") and not _rolled(f["tiers"]) & all_keys
             ):
                 continue
-            if s["id"] == "enchant" and pool["domain"] != "item":
-                # Off gear, the upgrades are the ones weighted on no class, of a corruption the pool has
-                # (poe2db Ruby: 7; a relic's one corruption has no upgrade).
-                tiers = [
-                    t
-                    for t in f["tiers"]
-                    if f["group"] in corrupted_groups and _rolled([t]) == {"default"}
-                ]
-            elif s.get("socketed"):
-                # A socketable's pool is all of it on any item the socketable fits, whatever the base
-                # (owner 2026-10-12; poe2db lists it so): the export's per-base zeros are not applied.
-                tiers = [t for t in f["tiers"] if _rolled([t]) & set(s["keys"])]
-            else:
-                tiers = [t for t in f["tiers"] if rolls_on(t["weights"], tags)]
-            if domain != "item" and s["id"] != "base" and not corruption:
-                # A desecration pool shows the tiers its own currency adds: a lord's tier under the
-                # lords, an otherworldly tier under the Altered Collarbone, a tier keyed on no one
-                # under the jewel and waystone bones. One family can hold tiers of two of them.
-                tiers = [
-                    t
-                    for t in tiers
-                    if (_rolled([t]) & set(s["keys"]))
-                    or (s.get("unkeyed") and not _rolled([t]) & all_keys)
-                ]
+            tiers = _section_tiers(
+                f, s, pool, domain, tags, corruption, corrupted_groups, all_keys
+            )
             if not tiers:
                 continue
             if s["id"] == "corrupted":

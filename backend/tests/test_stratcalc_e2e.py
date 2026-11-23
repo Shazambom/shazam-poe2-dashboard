@@ -610,12 +610,7 @@ def test_fuzz_a_running_clock_never_goes_backwards_and_waits_a_minute_for_a_rate
         assert (o["perHour"] is None) == (ms < MIN)
 
 
-def test_fuzz_sidebar_actions_always_save_and_keep_one_timer(monkeypatch):
-    """Random sequences of what the sidebar does. Every document the view would save is accepted by
-    the backend and survives a reload; never two clocks running; time only moves forward."""
-    rng = random.Random(23)
-    div, ex_per_div = _market(rng)
-    prices = _prices_through_the_app(monkeypatch, div, ex_per_div)["prices"]
+def _sidebar_action_scripts(rng: random.Random, div: dict, prices: dict) -> list:
     scripts = []
     for k in range(40):
         ids, n, now, steps = [], 0, 1_700_000_000_000, []
@@ -775,6 +770,16 @@ def test_fuzz_sidebar_actions_always_save_and_keep_one_timer(monkeypatch):
                 )
             steps.append(st)
         scripts.append({"steps": steps, "prices": prices})
+    return scripts
+
+
+def test_fuzz_sidebar_actions_always_save_and_keep_one_timer(monkeypatch):
+    """Random sequences of what the sidebar does. Every document the view would save is accepted by
+    the backend and survives a reload; never two clocks running; time only moves forward."""
+    rng = random.Random(23)
+    div, ex_per_div = _market(rng)
+    prices = _prices_through_the_app(monkeypatch, div, ex_per_div)["prices"]
+    scripts = _sidebar_action_scripts(rng, div, prices)
     runs = _js("actions", scripts)
     for script, docs in zip(scripts, runs, strict=False):
         for step, d in zip(script["steps"], docs, strict=False):

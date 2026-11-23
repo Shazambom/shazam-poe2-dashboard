@@ -333,51 +333,55 @@ class Graph:
             self._values = self._widest_values()
         return self._values
 
-    def _widest_values(self) -> dict[str, float]:
-        ref = self.s["reference"]
-        nbrs: dict[str, set[str]] = {}
-        for (a, b), e in self.market_edges():
-            if e.rate > 0:
-                nbrs.setdefault(a, set()).add(b)
-                nbrs.setdefault(b, set()).add(a)
+    def _pricing_edge(self, a: str, b: str) -> Edge | None:
+        """The a->b EXCHANGE edge (never a vendor recipe: a recipe is a fixed rate nobody
+        trades at, and pricing a shard off one read it at half its market price)."""
+        e = self.market_edge(a, b)
+        return e if (e and e.rate > 0) else None
 
-        def market(a: str, b: str):
-            """The a->b EXCHANGE edge (never a vendor recipe: a recipe is a fixed rate nobody
-            trades at, and pricing a shard off one read it at half its market price)."""
-            e = self.market_edge(a, b)
-            return e if (e and e.rate > 0) else None
+    def _pricing_rate(self, a: str, b: str) -> float:
+        """b per a from the a<->b market itself, either direction, recipes ignored."""
+        e = self._pricing_edge(a, b)
+        if e:
+            return e.rate
+        e = self._pricing_edge(b, a)
+        return (1.0 / e.rate) if e else 0.0
 
-        def market_rate(a: str, b: str) -> float:
-            """b per a from the a<->b market itself, either direction, recipes ignored."""
-            e = market(a, b)
-            if e:
-                return e.rate
-            e = market(b, a)
-            return (1.0 / e.rate) if e else 0.0
+    def _market_inactive(self, u: str, v: str) -> bool:
+        """Whether the u<->v market is one nobody quotes (digest.directed_rates flagged its
+        traded hours as disagreeing). Such a market is priced at its ask/bid, which is honest
+        for TRADING it, but it must not set what anything is WORTH while a real market exists:
+        Tecrod's Gaze read 88 exalted off a market that trades a couple a day, against the
+        12 divine its own steady market pays."""
+        e = self._pricing_edge(u, v) or self._pricing_edge(v, u)
+        return bool(e and e.meta.get("inactive"))
 
-        def dead(u: str, v: str) -> bool:
-            """Whether the u<->v market is one nobody quotes (digest.directed_rates flagged its
-            traded hours as disagreeing). Such a market is priced at its ask/bid, which is honest
-            for TRADING it, but it must not set what anything is WORTH while a real market exists:
-            Tecrod's Gaze read 88 exalted off a market that trades a couple a day, against the
-            12 divine its own steady market pays."""
-            e = market(u, v) or market(v, u)
-            return bool(e and e.meta.get("inactive"))
+    def _market_units(self, u: str, v: str) -> tuple[float, float]:
+        """(units of u, units of v) traded per hour in the u<->v market, each direction
+        converted at the market's own rate."""
+        uv, vu = self._pricing_edge(u, v), self._pricing_edge(v, u)
+        vol_uv = (uv.vol_in_per_h or 0.0) if uv else 0.0  # u sold per hour
+        vol_vu = (vu.vol_in_per_h or 0.0) if vu else 0.0  # v sold per hour
+        v_per_u = self._pricing_rate(u, v)
+        u_per_v = (1.0 / v_per_u) if v_per_u else 0.0
+        return vol_uv + vol_vu * u_per_v, vol_vu + vol_uv * v_per_u
 
-        def has_live_market(c: str) -> bool:
-            return any(not dead(c, n) for n in nbrs.get(c, ()))
-
-        def units(u: str, v: str) -> tuple[float, float]:
-            """(units of u, units of v) traded per hour in the u<->v market, each direction
-            converted at the market's own rate."""
-            uv, vu = market(u, v), market(v, u)
-            vol_uv = (uv.vol_in_per_h or 0.0) if uv else 0.0  # u sold per hour
-            vol_vu = (vu.vol_in_per_h or 0.0) if vu else 0.0  # v sold per hour
-            v_per_u = market_rate(u, v)
-            u_per_v = (1.0 / v_per_u) if v_per_u else 0.0
-            return vol_uv + vol_vu * u_per_v, vol_vu + vol_uv * v_per_u
-
-        scout_px = self._scout_values()
+    def _relax_market_values(
+        self,
+        nbrs: dict[str, set[str]],
+        vals: dict[str, float],
+        width: dict[str, float],
+        priced_by: dict[str, str],
+        scout_px: dict[str, float],
+        *,
+        through_dead: bool,
+    ) -> None:
+        """The widest-path walk from everything priced so far. The first pass refuses a dead
+        market for any currency that has a live one; the second prices only what the first
+        could not, through its dead market, at the bid the walk always gives a dead market —
+        the same price it would get with no other market at all. Without it such a currency
+        fell through `ref_values`, which reads the same dead market at its ASK, so an
+        unrelated market hanging off it moved a gaze from 87.5 ex to 3,114."""
 
         def believable(c: str, px: float) -> bool:
             """Whether a market's claim about `c` survives evidence from OUTSIDE the exchange.
@@ -390,47 +394,60 @@ class Graph:
                 outside, px
             )
 
+        heap = [(-width[c], c) for c in vals]
+        heapq.heapify(heap)
+        done: set[str] = set()
+        while heap:
+            w, u = heapq.heappop(heap)
+            if u in done:
+                continue
+            done.add(u)
+            for v in nbrs.get(u, ()):
+                if v in done or (through_dead and v in vals):
+                    continue
+                px = self._pricing_rate(v, u)  # u per v
+                if (
+                    not px
+                    or (
+                        not through_dead
+                        and self._market_inactive(u, v)
+                        and any(
+                            not self._market_inactive(v, n) for n in nbrs.get(v, ())
+                        )
+                    )
+                    or not believable(v, px * vals[u])
+                ):
+                    continue
+                cand = min(
+                    -w, self._market_units(u, v)[0] * vals[u]
+                )  # as deep as its thinnest market
+                if cand > width.get(v, 0.0):
+                    width[v] = cand
+                    vals[v] = vals[u] * px
+                    priced_by[v] = u  # the market this price came from
+                    heapq.heappush(heap, (-cand, v))
+
+    def _widest_values(self) -> dict[str, float]:
+        ref = self.s["reference"]
+        nbrs: dict[str, set[str]] = {}
+        for (a, b), e in self.market_edges():
+            if e.rate > 0:
+                nbrs.setdefault(a, set()).add(b)
+                nbrs.setdefault(b, set()).add(a)
+
+        scout_px = self._scout_values()
+
         vals: dict[str, float] = {ref: 1.0}
         priced_by: dict[str, str] = {}
         width: dict[str, float] = {ref: INF}
 
-        def relax(through_dead: bool) -> None:
-            """The widest-path walk from everything priced so far. The first pass refuses a dead
-            market for any currency that has a live one; the second prices only what the first
-            could not, through its dead market, at the bid the walk always gives a dead market —
-            the same price it would get with no other market at all. Without it such a currency
-            fell through `ref_values`, which reads the same dead market at its ASK, so an
-            unrelated market hanging off it moved a gaze from 87.5 ex to 3,114."""
-            heap = [(-width[c], c) for c in vals]
-            heapq.heapify(heap)
-            done: set[str] = set()
-            while heap:
-                w, u = heapq.heappop(heap)
-                if u in done:
-                    continue
-                done.add(u)
-                for v in nbrs.get(u, ()):
-                    if v in done or (through_dead and v in vals):
-                        continue
-                    px = market_rate(v, u)  # u per v
-                    if (
-                        not px
-                        or (not through_dead and dead(u, v) and has_live_market(v))
-                        or not believable(v, px * vals[u])
-                    ):
-                        continue
-                    cand = min(
-                        -w, units(u, v)[0] * vals[u]
-                    )  # as deep as its thinnest market
-                    if cand > width.get(v, 0.0):
-                        width[v] = cand
-                        vals[v] = vals[u] * px
-                        priced_by[v] = u  # the market this price came from
-                        heapq.heappush(heap, (-cand, v))
-
-        relax(through_dead=False)
+        self._relax_market_values(
+            nbrs, vals, width, priced_by, scout_px, through_dead=False
+        )
         if any(c not in vals for c in nbrs):
-            relax(through_dead=True)
+            self._relax_market_values(
+                nbrs, vals, width, priced_by, scout_px, through_dead=True
+            )
         # The volume rule, last word: a currency is worth what its BUSIEST market says, priced
         # off that counterpart's value — not the widest chain (by value the flux's divine market
         # at ~500 ex out-widens its exalted market at ~25, which moves five times the flux), and
@@ -443,11 +460,11 @@ class Graph:
                 continue
             if self.busiest.get(b) == c and c in vals:
                 continue  # each other's busiest market: the walk stands
-            px = market_rate(c, b)  # b per c, from the busiest market itself
+            px = self._pricing_rate(c, b)  # b per c, from the busiest market itself
             if px > 0:
                 vals[c] = vals[b] * px
                 priced_by[c] = b
-                width[c] = min(width[b], units(b, c)[0] * vals[b])
+                width[c] = min(width[b], self._market_units(b, c)[0] * vals[b])
         self.priced_by = priced_by
         # Whatever no market priced: poe2scout's close first (an independent source), then
         # ref_values. A currency whose every market failed the side test must NOT come back at the
