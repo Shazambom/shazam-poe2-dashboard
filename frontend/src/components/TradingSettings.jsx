@@ -30,7 +30,7 @@ function WorkspaceTransfer() {
       let doc; try { doc = JSON.parse(t) } catch { toast('Not a JSON file', false); return }
       const r = useWorkspace.getState().importWorkspace(doc, mode)
       if (r.error) toast(r.error, false); else toast(`Imported ${r.added} item${r.added === 1 ? '' : 's'} (${mode})`)
-    })
+    }).catch(() => ignoredError('read workspace import'))
   }
   return (
     <>
@@ -102,7 +102,7 @@ export default function TradingSettings() {
     window.poe2desktop.hotkey.set(combo).then(r => {
       if (r?.ok) { setHotkey(combo); toast(`Hotkey set to ${combo}`) }
       else toast(`${combo} is taken by another app — pick another`, false)
-    })
+    }).catch(() => ignoredError('register focus hotkey'))
   }
 
   return (

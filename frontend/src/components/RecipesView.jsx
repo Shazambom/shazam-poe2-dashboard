@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api } from '../lib/api.js'
+import { ignoredError } from '../lib/ignoredError.js'
 import { useAutosave } from '../lib/hooks.js'
 import Cur from './Cur.jsx'
 import Toggle from './Toggle.jsx'
@@ -11,7 +12,9 @@ const one = (obj) => { const [k, v] = Object.entries(obj)[0] ?? ['', 1]; return 
 export default function RecipesView({ currencies, embedded = false }) {
   const [list, setList] = useState(null)
   const { state, save, arm } = useAutosave(async (next) => setList(await api.putRecipes(next)), 800)
-  useEffect(() => { api.recipes().then(l => { setList(l); arm() }) }, [arm])
+  useEffect(() => {
+    api.recipes().then(l => { setList(l); arm() }).catch(() => ignoredError('load recipes'))
+  }, [arm])
   const opts = currencies?.currencies ?? []
 
   const change = (fn) => setList(l => { const n = fn(l); save(n); return n })
