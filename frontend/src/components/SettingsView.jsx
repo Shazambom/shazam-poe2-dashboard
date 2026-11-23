@@ -3,6 +3,7 @@ import { refreshTweaks, useTweaks } from '../lib/tweaks.js'
 import { useEffect, useRef, useState } from 'react'
 import { api, surface, toast } from '../lib/api.js'
 import { useAutosave } from '../lib/hooks.js'
+import { withRetry } from '../lib/retry.js'
 import { useStatus } from '../lib/statusStore.js'
 import { isDesktop } from '../lib/session.js'
 import AccountsPanel from './AccountsPanel.jsx'
@@ -43,8 +44,12 @@ export default function SettingsView({ currencies, onSaved, onReportProblem }) {
   }, 800)
 
   useEffect(() => {
-    useStatus.getState().loadSettings().then(x => { setS(x); arm() }).catch(() => ignoredError('load settings editor'))
+    let live = true
+    withRetry(() => useStatus.getState().loadSettings(), { onFail: () => ignoredError('load settings editor'), stop: () => !live })
+      .then(x => { if (live) { setS(x); arm() } })
+      .catch(() => ignoredError('load settings editor'))
     api.goldFees().then(setFees).catch(() => ignoredError('load gold fees'))
+    return () => { live = false }
   }, [arm])
   if (!s) return <div className="single hint">Loading settings…</div>
 

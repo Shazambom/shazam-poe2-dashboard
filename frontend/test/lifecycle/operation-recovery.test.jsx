@@ -4,6 +4,7 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { act, fireEvent, render, screen } from '@testing-library/react'
 import RecipesView from '../../src/components/RecipesView.jsx'
+import SettingsView from '../../src/components/SettingsView.jsx'
 import { api, bus } from '../../src/lib/api.js'
 import { installApiMock } from './setup.js'
 
@@ -64,5 +65,22 @@ it('recipes: retries are bounded, and stop when the view goes away', async () =>
   again.unmount()
   await advance(60000)
   expect(load).toHaveBeenCalledTimes(1)
+  expect(toasts).not.toHaveBeenCalled()
+})
+
+it('settings: a failed load stays on its loading view and fills the editor when a retry succeeds', async () => {
+  installApiMock()
+  let down = true
+  const real = api.settings
+  vi.spyOn(api, 'settings').mockImplementation(() => (down ? fail() : real()))
+  const view = render(<SettingsView />)
+  await settle()
+  expect(view.container.textContent).toBe('Loading settings…')
+  await advance(1000)
+  expect(view.container.textContent).toBe('Loading settings…')
+  down = false
+  await advance(4000)
+  expect(screen.getByLabelText('Reference currency for values')).toBeTruthy()
+  expect(screen.queryByText('Loading settings…')).toBeNull()
   expect(toasts).not.toHaveBeenCalled()
 })
