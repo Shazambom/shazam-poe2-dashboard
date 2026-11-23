@@ -3,7 +3,7 @@ import { act, render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { installApiMock } from './setup.js'
 import StashTab from '../../src/components/StashTab.jsx'
 import MerchantView from '../../src/components/MerchantView.jsx'
-import { _resetMerchantCache } from '../../src/lib/merchantCache.js'
+import { _resetMerchantCache, shopCache } from '../../src/lib/merchantCache.js'
 import { useStatus } from '../../src/lib/statusStore.js'
 import { useSync } from '../../src/lib/syncStore.js'
 import { useWorkspace } from '../../src/lib/workspaceStore.js'
@@ -746,6 +746,40 @@ describe('Stash → Merchant (MerchantView) lifecycle', () => {
     act(() => useStatus.setState(({ status }) => ({ status: { ...status, wealth_prices: { ...status.wealth_prices, divine: 105 } } })))
     expect(screen.queryByTitle(/cheapest instant buyout/i)).toBeNull()
     expect(check).toHaveBeenCalledTimes(1)
+  })
+
+  it('switches shop and ledger together, cancels before fetching, and rejects superseded completions', async () => {
+    const history = { rows: [{ time: isoAgoDays(2), item_id: 'sale', price: { amount: 240, currency: 'exalted' },
+      item: { name: 'Headhunter', typeLine: 'Heavy Belt', rarity: 'Unique' } }] }
+    const lateSales = Promise.withResolvers()
+    const nextSales = Promise.withResolvers()
+    installApiMock({ '/api/sales': url => {
+      const league = new URL(url, 'http://localhost').searchParams.get('league')
+      return league === 'Old' ? history : (league === 'Pending' ? lateSales.promise : nextSales.promise)
+    } })
+    const { fetch: fetchShop, cancel } = window.poe2desktop.merchant
+    const lateShop = Promise.withResolvers()
+    const example = await fetchShop.getMockImplementation()()
+    fetchShop.mockResolvedValueOnce(example).mockReturnValueOnce(lateShop.promise)
+    const { rerender } = render(<MerchantView league="Old" />)
+    const details = () => fireEvent.click(screen.getByText('Headhunter').closest('button'))
+    await screen.findByText('Headhunter')
+    details()
+    expect(screen.getByText('Your sales history')).toBeTruthy()
+    shopCache.set('Cached|oauthshop#1234|price_desc', shopCache.get('Old|oauthshop#1234|price_desc'))
+    rerender(<MerchantView league="Pending" />)
+    expect(screen.queryByText('Headhunter')).toBeNull()
+    expect(cancel.mock.calls.map(([opts]) => opts.scope)).toEqual(['all', 'fetch'])
+    expect(cancel.mock.invocationCallOrder.at(-1)).toBeLessThan(fetchShop.mock.invocationCallOrder[1])
+    rerender(<MerchantView league="Cached" />)
+    details()
+    expect(screen.queryByText('Your sales history')).toBeNull()
+    await act(async () => { lateSales.resolve(history); lateShop.resolve({ ...example, rows: [] }) })
+    expect(screen.getByText('Headhunter', { selector: '.merchant-item-name' })).toBeTruthy()
+    expect(screen.queryByText('Your sales history')).toBeNull()
+    await act(async () => nextSales.resolve(history))
+    expect(screen.getByText('Your sales history')).toBeTruthy()
+    expect(fetchShop).toHaveBeenCalledTimes(2)
   })
 
   it('checks the pagination deadline on a render and keeps a published floor price until a market input changes', async () => {
