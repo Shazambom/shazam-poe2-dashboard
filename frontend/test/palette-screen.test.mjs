@@ -165,5 +165,13 @@ test('this screen lists only the actions whose control is drawn and enabled', ()
 
 test('the palette filters the current screen\'s actions when it opens', () => {
   const src = readFileSync(new URL('../src/components/CommandPalette.jsx', import.meta.url), 'utf8')
-  assert.match(src, /usableHere\(screenCommands\[screen\] \|\| \[\]\)/)
+  assert.match(src, /useEffectEvent\(\(\) => screenCommands\[screen\] \|\| \[\]\)/)
+  assert.match(src, /if \(!open\) return\s+setHere\(usableHere\(currentCommands\(\), inputRef\.current\?\.ownerDocument\)\)/)
+  const control = { disabled: false }
+  const doc = { querySelector: () => control }
+  const commands = [{ id: 'copy', target: 'copy' }]
+  const opened = usableHere(commands, doc)
+  control.disabled = true
+  assert.deepEqual(opened, commands)
+  assert.deepEqual(usableHere(commands, doc), [])
 })

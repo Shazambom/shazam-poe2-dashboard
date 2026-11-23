@@ -21,11 +21,15 @@ export default function CommandPalette({ open, onClose, tabs, onGoTab, subDests 
   const inputRef = useRef(null)
   const listRef = useRef(null)
 
-  const availableCommands = useEffectEvent(() => usableHere(screenCommands[screen] || []))
+  const [wasOpen, setWasOpen] = useState(open)
+  if (open !== wasOpen) {
+    setWasOpen(open)
+    if (open) { setQ(''); setSel(0) }
+  }
+  const currentCommands = useEffectEvent(() => screenCommands[screen] || [])
   useEffect(() => {
     if (!open) return
-    setQ(''); setSel(0)
-    setHere(availableCommands())
+    setHere(usableHere(currentCommands(), inputRef.current?.ownerDocument))
     api.board().then(d => setRows(d?.rows || [])).catch(() => ignoredError('load board commands'))
     const t = setTimeout(() => inputRef.current?.focus(), 10)
     return () => clearTimeout(t)
