@@ -1,4 +1,4 @@
-import 'react'
+import { useClockValue } from '../lib/clock.js'
 import { fmt } from '../lib/api.js'
 import { useSync } from '../lib/syncStore.js'
 import RefreshButton from './RefreshButton.jsx'
@@ -20,6 +20,7 @@ export function RefreshControls() {
 }
 
 export function SyncMetrics({ status, bridge, connecting, onConnect }) {
+  const age = useClockValue(now => status?.digest?.last_fetch ? fmt.age(now / 1000 - status.digest.last_fetch) : null)
   const connected = !!status?.session?.connected
   const backfilling = status?.digest?.backfilling
   // Feed freshness comes from the backend as a state string (it owns the thresholds).
@@ -31,7 +32,7 @@ export function SyncMetrics({ status, bridge, connecting, onConnect }) {
       <span className="feed" title={status?.digest?.last_error || (status?.digest?.last_hour ? `Last market update ${fmt.hourLabel(status.digest.last_hour)}` : undefined)}>
         <i className={`dot ${backfilling ? 'stale' : digestOk}`} />
         {backfilling ? `syncing · ${fmt.n(status.digest.behind_h, 0)}h behind`
-          : status?.digest?.last_fetch ? `market ${fmt.age(Date.now() / 1000 - status.digest.last_fetch)} ago`
+          : age ? `market ${age} ago`
           : 'waiting for data'}
       </span>
 
