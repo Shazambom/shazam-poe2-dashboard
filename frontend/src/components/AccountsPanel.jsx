@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { api, fmt } from '../lib/api.js'
 import { ignoredError } from '../lib/ignoredError.js'
 import { connectBridge, connectSession } from '../lib/session.js'
@@ -13,15 +13,14 @@ export default function AccountsPanel({ onChange }) {
   const oa = useStatus(s => s.status?.oauth ?? null)
   const load = useStatus(s => s.refresh)
   const [cookie, setCookie] = useState('')
-  const [msg, setMsg] = useState(null)
+  const [msg, setMsg] = useState(() => {
+    const q = new URLSearchParams(window.location.search)
+    if (q.get('oauth') === 'ok') return { ok: true, text: 'Logged in with Path of Exile.' }
+    if (q.get('oauth') === 'error') return { ok: false, text: `Login failed: ${q.get('msg')}` }
+    return null
+  })
   const [busy, setBusy] = useState(false)
   const host = window.location.origin
-
-  useEffect(() => {
-    const q = new URLSearchParams(window.location.search)
-    if (q.get('oauth') === 'ok') setMsg({ ok: true, text: 'Logged in with Path of Exile.' })
-    if (q.get('oauth') === 'error') setMsg({ ok: false, text: `Login failed: ${q.get('msg')}` })
-  }, [])
 
   const desktop = connectBridge() === 'desktop'   // live order book is a desktop-app feature
   const bridgeConnect = async () => {
