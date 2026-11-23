@@ -438,7 +438,10 @@ def _rand_tablets(rng, prices, cur) -> dict:
 def _rand_strat(rng, prices, sid) -> dict:
     minutes = rng.uniform(*ENV["minutes"])
     maps = max(0, round(minutes / 60 * rng.uniform(*ENV["maps_per_hour"])))
-    cur = lambda: rng.choice(["chaos", "chaos", "exalted", "divine"])
+
+    def cur():
+        return rng.choice(["chaos", "chaos", "exalted", "divine"])
+
     mcur, tcur, ocur = cur(), cur(), cur()
     pool = sorted(prices)
     loot = [

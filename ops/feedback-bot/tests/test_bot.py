@@ -307,9 +307,11 @@ def test_catch_up_walks_newest_first_and_stops_at_the_last_seen_thread(h):
     h.handle = spy
     (h.inbox).mkdir(parents=True, exist_ok=True)
     (h.inbox / "state.json").write_text(json.dumps({"last_thread_id": 2002}))
-    mk = lambda i: Thread(
-        i, [Attachment("arbiter-report-7F3K2Q.arb", sealed_report(h.pub))]
-    )
+
+    def mk(i):
+        return Thread(
+            i, [Attachment("arbiter-report-7F3K2Q.arb", sealed_report(h.pub))]
+        )
 
     class Forum:
         threads = [mk(2004), mk(2001)]  # active, any order

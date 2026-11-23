@@ -59,12 +59,15 @@ def test_a_cancelled_search_stops_within_a_few_candidates_and_caches_nothing(
 def test_an_uncancelled_search_still_finishes(monkeypatch):
     produced = []
     _fake_search(monkeypatch, produced)
-    finite = lambda *a, **k: iter(
-        [
-            {"id": "a", "margin_pct": 1, "score": 1},
-            {"id": "b", "margin_pct": 1, "score": 0.5},
-        ]
-    )
+
+    def finite(*a, **k):
+        return iter(
+            [
+                {"id": "a", "margin_pct": 1, "score": 1},
+                {"id": "b", "margin_pct": 1, "score": 0.5},
+            ]
+        )
+
     monkeypatch.setattr(routes, "_iter_candidates", finite)
     monkeypatch.setattr(routes, "_finish", lambda rs, f, s: (rs, 100))
     monkeypatch.setattr(routes, "_result", lambda *a, **k: {})

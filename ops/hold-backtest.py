@@ -346,9 +346,10 @@ def grade_day(board, per, t, days, top, prev_top, hz=None):
         return g
     ret, dd = portfolio([paths[e[0]] for e in picks])
     base, _ = portfolio([paths[e[0]] for e in live])
-    crash = lambda es: (
-        sum(paths[e[0]][-1] / paths[e[0]][0] - 1 < CRASH for e in es) / len(es)
-    )
+
+    def crash(es):
+        return sum(paths[e[0]][-1] / paths[e[0]][0] - 1 < CRASH for e in es) / len(es)
+
     g.update(
         graded=True,
         ret=ret,
@@ -694,7 +695,10 @@ def main():
         if win:
             miss = window_verdict(win)
             failed |= bool(miss)
-            f2 = lambda v: "–" if v is None else f"{v:.2f}"
+
+            def f2(v):
+                return "–" if v is None else f"{v:.2f}"
+
             print(
                 f"── windows: 24h vs 14d top {a.top}, same name at the same rank {f2(win['window_overlap'])} · "
                 f"identical scores {f2(win['window_same'])} of window pairs"

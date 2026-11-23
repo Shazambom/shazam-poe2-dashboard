@@ -176,9 +176,17 @@ def test_this_leagues_climb_counts_once():
 # ------------------------------------------------------ 1c. each league regime ranks its own way
 # docs/hold-research.md "Regimes": price is safety early and a drag mid-league; late, momentum reverses.
 
-EARLY = lambda t: {"early": 1.0, "mid": 0.0, "late": 0.0}
-MID = lambda t: {"early": 0.0, "mid": 1.0, "late": 0.0}
-LATE = lambda t: {"early": 0.0, "mid": 0.0, "late": 1.0}
+
+def EARLY(t):
+    return {"early": 1.0, "mid": 0.0, "late": 0.0}
+
+
+def MID(t):
+    return {"early": 0.0, "mid": 1.0, "late": 0.0}
+
+
+def LATE(t):
+    return {"early": 0.0, "mid": 0.0, "late": 1.0}
 
 
 def test_without_a_regime_the_ranking_is_the_early_set():
@@ -272,7 +280,10 @@ def test_a_settled_market_vetoes_a_sliding_top_pick_and_discovery_does_not():
     raw = holdscore._hold_scores(ents, 24, None, (), MID)
     mid = holdscore.hold_rank(ents, 24, regime=MID)
     early = holdscore.hold_rank(ents, 24, regime=EARLY)
-    top = lambda sc: sorted(sc, key=lambda i: -sc[i])[: holdscore.VETO_TOP]
+
+    def top(sc):
+        return sorted(sc, key=lambda i: -sc[i])[: holdscore.VETO_TOP]
+
     vetoed_before = [i for i in top(raw) if flags.get(i)][: holdscore.VETO_MAX]
     assert vetoed_before, (
         "the fixture must put a flagged item in the top 10, or this test checks nothing"

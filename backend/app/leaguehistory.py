@@ -26,7 +26,11 @@ from . import cache, db, devtelemetry, gateway, marketseries
 
 log = logging.getLogger(__name__)
 
-_slug = lambda s: re.sub(r"[^a-z0-9]+", "-", str(s).lower()).strip("-")
+
+def _slug(s):
+    return re.sub(r"[^a-z0-9]+", "-", str(s).lower()).strip("-")
+
+
 _scout_cache: dict[str, tuple[float, dict]] = {}
 
 

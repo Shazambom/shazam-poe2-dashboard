@@ -234,9 +234,9 @@ def test_a_finished_day_poe2scout_changes_afterwards_is_counted():
     day. Our own old partial rows (fetched before the day was finished) do not count."""
     import calendar
 
-    at = lambda day, h: (
-        calendar.timegm(__import__("time").strptime(day, "%Y-%m-%d")) + h * 3600
-    )
+    def at(day, h):
+        return calendar.timegm(__import__("time").strptime(day, "%Y-%m-%d")) + h * 3600
+
     listing = {
         1: {D1: _row(1, 1), D2: _row(1, 1), D3: _row(1, 1)},
         2: {D1: _row(5, 9), D2: _row(1, 1), D3: _row(1, 1)},

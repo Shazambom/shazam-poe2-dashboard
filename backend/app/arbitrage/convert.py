@@ -234,9 +234,12 @@ def _min_amount(
             rate *= e.rate
         if rate <= 0:
             continue
-        ok = lambda a: _accepted(
-            _convert_path(g, path, float(a), ref_value, have, want), max_gain_pct
-        )
+
+        def ok(a):
+            return _accepted(
+                _convert_path(g, path, float(a), ref_value, have, want), max_gain_pct
+            )
+
         amt = min(ceiling, unit * math.ceil(1.0 / (rate * unit)))
         lo = 0  # the largest amount known to fail
         for _ in range(MIN_AMOUNT_DOUBLINGS):

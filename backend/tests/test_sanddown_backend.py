@@ -42,7 +42,10 @@ APP = Path(__file__).resolve().parents[1] / "app"
 def test_memo_caches_by_key_ttl_and_version(monkeypatch):
     store: dict = {}
     calls = []
-    build = lambda: calls.append(1) or len(calls)
+
+    def build():
+        return calls.append(1) or len(calls)
+
     now = [1000.0]
     monkeypatch.setattr(time, "time", lambda: now[0])
     assert cache.memo(store, "k", 10, build) == 1

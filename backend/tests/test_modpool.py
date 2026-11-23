@@ -314,13 +314,16 @@ def test_build_pool_gives_each_item_type_only_the_sections_with_something_in_the
     )
     # In the merged section each family says which lord (key) rolls it, and the lords are chips.
     des = next(s for s in ring["sections"] if s["id"] == "desecrated")
+
     # One family can hold a lord's tier and an otherworldly tier (same group and text): each section
     # shows only its own currency's tiers.
-    tiers_of = lambda sec: {
-        (f["id"], t["name"], t["ilvl"])
-        for f in sec["prefix"] + sec["suffix"]
-        for t in f["tiers"]
-    }
+    def tiers_of(sec):
+        return {
+            (f["id"], t["name"], t["ilvl"])
+            for f in sec["prefix"] + sec["suffix"]
+            for t in f["tiers"]
+        }
+
     assert not (tiers_of(des) & tiers_of(breach)), "no tier is in both pools"
     exp = next(
         f for f in breach["suffix"] if f["id"] == "suffix:ExposureEffect@desecrated"
@@ -781,15 +784,18 @@ def test_a_socketables_whole_pool_applies_to_every_item_it_can_be_set_into(deriv
     """Owner, 2026-10-12: a socketable that opens a mod pool opens all of it on any item it fits,
     whatever the base (poe2db: every body armour lists the 21 soul tiers, every weapon the 9 of Thrud's Might)."""
     pools = {p["id"]: p for p in derived.pools}
-    count = lambda pid, sid: sum(
-        len(f["tiers"])
-        for s in modpool.build_pool(pools[pid], derived.families, derived.sections)[
-            "sections"
-        ]
-        if s["id"] == sid
-        for a in ("prefix", "suffix")
-        for f in s[a]
-    )
+
+    def count(pid, sid):
+        return sum(
+            len(f["tiers"])
+            for s in modpool.build_pool(pools[pid], derived.families, derived.sections)[
+                "sections"
+            ]
+            if s["id"] == sid
+            for a in ("prefix", "suffix")
+            for f in s[a]
+        )
+
     assert {count(p, "soul") for p in pools if p.startswith("body_armour")} == {21}
     str_soul = next(
         s
@@ -815,12 +821,15 @@ def test_jewels_and_relics_show_their_corruption_modifiers(derived):
     """Owner, 2026-10-12, measured against poe2db: a jewel lists its 11 corruption modifiers and the 7
     upgrades of them; a relic its one. A pool with no corruption of its own (tablets, waystones) shows neither."""
     pools = {p["id"]: p for p in derived.pools}
-    built = lambda pid: {
-        s["id"]: s
-        for s in modpool.build_pool(pools[pid], derived.families, derived.sections)[
-            "sections"
-        ]
-    }
+
+    def built(pid):
+        return {
+            s["id"]: s
+            for s in modpool.build_pool(pools[pid], derived.families, derived.sections)[
+                "sections"
+            ]
+        }
+
     for pid in (
         "jewel_ruby",
         "jewel_emerald",

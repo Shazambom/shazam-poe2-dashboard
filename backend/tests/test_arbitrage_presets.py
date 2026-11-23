@@ -321,12 +321,16 @@ def test_a_divine_reference_user_gets_the_same_loops_as_an_exalted_one():
         "velocity_inf": True,
         "uses_recipe": False,
     }
-    keep = lambda floor: routes._keep(
-        r,
-        routes.thresholds_in_reference(
-            {"min_liquidity_ref": floor, "min_volume_ref_per_h": 100}, ex_in_ref=0.01
-        ),
-    )
+
+    def keep(floor):
+        return routes._keep(
+            r,
+            routes.thresholds_in_reference(
+                {"min_liquidity_ref": floor, "min_volume_ref_per_h": 100},
+                ex_in_ref=0.01,
+            ),
+        )
+
     assert keep(1000) is True
     assert keep(2000) is False
 

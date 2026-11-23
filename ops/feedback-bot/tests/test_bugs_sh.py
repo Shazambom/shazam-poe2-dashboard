@@ -157,11 +157,12 @@ def test_publishing_a_stable_release_resolves_its_reports_and_a_beta_does_not():
 
 def test_list_pull_and_act(tmp_path):
     env, remote = env_for(tmp_path)
-    run = lambda *a: (
-        subprocess.run(
+
+    def run(*a):
+        return subprocess.run(
             ["bash", str(SH), *a], env=env, capture_output=True, text=True, check=True
         ).stdout
-    )
+
     assert [r["report"] for r in json.loads(run("list"))] == ["BBBBBB"], (
         "new reports by default"
     )
