@@ -1,4 +1,5 @@
-import os, sys
+import os
+import sys
 
 pid = os.fork()
 if pid == 0:
