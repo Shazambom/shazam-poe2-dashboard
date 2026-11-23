@@ -12,7 +12,6 @@ export function normHex(hex) {
   if (/^#[0-9a-f]{3}$/.test(h)) h = '#' + [...h.slice(1)].map(c => c + c).join('')
   return /^#[0-9a-f]{6}$/.test(h) ? h : null
 }
-const isHex = (hex) => normHex(hex) !== null
 
 export function hexToRgb(hex) {
   const h = normHex(hex)
@@ -92,7 +91,6 @@ export function adjustL(hex, dL) {
   return oklchToHex([L + dL, C, h])
 }
 export function withL(hex, L) { const [, C, h] = hexToOklch(hex); return oklchToHex([L, C, h]) }
-function withChroma(hex, C) { const [L, , h] = hexToOklch(hex); return oklchToHex([L, C, h]) }
 export const lightness = (hex) => hexToOklch(hex)[0]
 export const isLight = (hex) => luminance(hex) > 0.4
 

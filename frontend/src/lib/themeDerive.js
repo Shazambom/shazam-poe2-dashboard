@@ -129,14 +129,6 @@ export function rederive(colors, nextPrimaries) {
   return out
 }
 
-// A whole table from primaries + optional derived-token overrides.
-function buildTable(primaries, overrides = {}) {
-  const t = derive(primaries)
-  for (const [k, v] of Object.entries(overrides)) if (DERIVED_KEYS.includes(k) && tokenHex(k, v)) t[k] = isTriplet(k) ? v : normHex(v)
-  for (const [trip, col] of Object.entries(TRIPLET_OF)) t[trip] = hexToTriplet(t[col])
-  return t
-}
-
 // Every contrast rule the table fails: [{ fg, bg, ratio, min, alpha? }].
 export function contrastIssues(colors) {
   const out = []

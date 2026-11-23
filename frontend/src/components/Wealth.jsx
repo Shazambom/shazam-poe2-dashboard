@@ -36,9 +36,3 @@ export function Native({ v, cur, vRef = null, size = 14, suffix = null, classNam
     </span>
   )
 }
-
-// For code that needs the text form with the app's live prices (titles, tooltips).
-function useWealthText() {
-  const status = useStatus(s => s.status)
-  return (v, ref) => wealthText(v, ref || status?.reference || 'exalted', status?.wealth_prices)
-}
