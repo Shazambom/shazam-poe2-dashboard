@@ -17,6 +17,7 @@ import time
 from string import Template
 
 import httpx
+from starlette.concurrency import run_in_threadpool
 
 from . import cache, db, devtelemetry, gateway, settings
 from .config import DIGEST_BACKFILL_HOURS, DIGEST_POLL_SECONDS, GGG_DIGEST_URL
@@ -93,7 +94,7 @@ def cold_start_reason(cursor, seed_bundled: bool) -> str | None:
 
 
 async def sync_once() -> None:
-    cursor = db.kv_get("digest_cursor")
+    cursor = await run_in_threadpool(db.kv_get, "digest_cursor")
     if cursor is None:
         reason = cold_start_reason(cursor, bool(db.MARKET_SEED_PATH))
         if reason:
@@ -125,8 +126,8 @@ async def sync_once() -> None:
         if nxt is None or nxt == cursor:
             break
         cursor = nxt
-        db.kv_set("digest_cursor", cursor)
-    db.kv_set("digest_cursor", cursor)
+        await run_in_threadpool(db.kv_set, "digest_cursor", cursor)
+    await run_in_threadpool(db.kv_set, "digest_cursor", cursor)
 
 
 def prune_old() -> int:
