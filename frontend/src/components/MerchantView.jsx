@@ -823,7 +823,7 @@ export default function MerchantView({ league }) {
                   <span className="muted merchant-batch-label">{batchContext.label} Ange regex:</span>
                   {batchContext.chunks.map((c, idx) => (
                     <button
-                      key={idx}
+                      key={c.names[0]}
                       type="button"
                       className="btn small"
                       title={c.regex}

@@ -1,7 +1,7 @@
 import 'react'
 import Cur from './Cur.jsx'
 import Rate from './Rate.jsx'
-import { lines } from '../lib/mods/format.jsx'
+import { keyedLines, lines } from '../lib/mods/format.jsx'
 import { priceOf } from '../lib/mods/prices.js'
 
 // A grant's cost in the market that trades it (the volume rule), or a dash when nothing prices it.
@@ -33,7 +33,7 @@ export function GrantList({ title, heading, rows, ilvl, prices }) {
       {rows.map(r => (
         <div key={r.key} className={`mods-grant ${r.level > ilvl ? 'out' : ''}`}>
           <span className="mods-grant-name"><Cur name={r.name} size={16} /> {r.name} {r.badge && <span className="mods-fam-tags">{r.badge}</span>}</span>
-          <span className="mods-text">{r.lines.map((l, i) => <div key={i} className={l.cls || ''}>{lines(l.text)}</div>)}</span>
+          <span className="mods-text">{keyedLines(r.lines, l => JSON.stringify([l.cls, l.text])).map(({ value: l, key }) => <div key={key} className={l.cls || ''}>{lines(l.text)}</div>)}</span>
           <Price value={priceOf(r.name, prices)} />
           <span className="mods-num">{r.level || '–'}</span>
         </div>

@@ -484,14 +484,14 @@ export default function StratCalcView({ league, currencies }) {
   const menuItems = !menu ? [] : menu.kind === 'folder' ? [
     { label: 'Rename', run: () => menu.node.edit() },
     ...(window.poe2desktop?.ws ? [{ label: 'Export…', run: () => exportNode(menu.id) }] : []),
-    { sep: true },
+    { id: 'delete-actions', sep: true },
     { label: 'Delete folder, keep strats', run: () => deleteFolder(menu.id) },
     { label: 'Delete folder and its strats', run: () => deleteFolderDeep(menu.id) },
   ] : [
     { label: 'Duplicate', run: () => change(d => sc.duplicate(d, menu.id, { id: newId('s'), now: Date.now() })) },
     { label: 'Rename', run: () => { change(d => sc.select(d, menu.id)); setTimeout(() => nameBox.current?.focus(), 0) } },
     ...(window.poe2desktop?.ws ? [{ label: 'Export…', run: () => exportNode(menu.id) }] : []),
-    { sep: true },
+    { id: 'delete-actions', sep: true },
     { label: 'Delete', run: () => deleteStrat(menu.id) },
   ]
   const treeCtx = (now) => ({

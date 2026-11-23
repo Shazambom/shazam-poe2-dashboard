@@ -1,3 +1,4 @@
+import LoadingRows from './LoadingRows.jsx'
 import { ignoredError } from '../lib/ignoredError.js'
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
@@ -224,7 +225,7 @@ export default function RoutesView({ capital, status, currencies }) {
         )}
 
         {streaming && routes.length === 0 ? (
-          <table><tbody>{Array.from({ length: 6 }).map((_, i) => <tr key={i}><td colSpan={NCOLS} aria-label="Loading routes"><div className="sk sk-row" /></td></tr>)}</tbody></table>
+          <table><LoadingRows columns={NCOLS} label="Loading routes" /></table>
         ) : !streaming && counts && routes.length === 0 ? (
           <div className="empty">
             <b>{(counts?.total_candidates ?? 0) === 0 ? 'No loops yet.' : 'No loop clears your thresholds.'}</b><br />

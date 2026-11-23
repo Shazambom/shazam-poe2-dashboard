@@ -46,9 +46,9 @@ export default function ContextMenu({ at, items, onClose }) {
   return (
     <div className="ctx-menu" role="menu" tabIndex={-1} ref={ref} style={{ left: pos.x, top: pos.y }} onKeyDown={onKey} onContextMenu={e => e.preventDefault()}>
       {items.map((it, i) => it.sep
-        ? <div key={i} className="ctx-sep" role="separator" aria-hidden="true" />
+        ? <div key={it.id} className="ctx-sep" role="separator" aria-hidden="true" />
         : (
-          <div key={i} role="menuitem" aria-disabled={it.disabled || undefined} aria-haspopup={it.children ? 'menu' : undefined}
+          <div key={it.id || it.label} role="menuitem" aria-disabled={it.disabled || undefined} aria-haspopup={it.children ? 'menu' : undefined}
             className={`ctx-item ${live.indexOf(it) === sel ? 'sel' : ''} ${it.disabled ? 'disabled' : ''} ${it.danger ? 'danger' : ''}`}
             onMouseEnter={() => { setSel(live.indexOf(it)); setSub(it.children ? i : null) }}
             onClick={e => { e.stopPropagation(); run(it) }}>
@@ -59,7 +59,7 @@ export default function ContextMenu({ at, items, onClose }) {
               <div className="ctx-menu ctx-sub" role="menu">
                 {it.children.length === 0 && <div className="ctx-item disabled">No groups yet</div>}
                 {it.children.map((c, j) => (
-                  <div key={j} role="menuitem" className={`ctx-item ${j === subSel ? 'sel' : ''} ${c.disabled ? 'disabled' : ''}`}
+                  <div key={c.id || c.label} role="menuitem" className={`ctx-item ${j === subSel ? 'sel' : ''} ${c.disabled ? 'disabled' : ''}`}
                     onMouseEnter={() => setSubSel(j)} onClick={e => { e.stopPropagation(); if (!c.disabled) { c.run?.(); onClose() } }}>
                     <span className="ctx-label">{c.label}</span>
                   </div>))}

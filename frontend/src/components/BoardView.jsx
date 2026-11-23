@@ -258,8 +258,8 @@ export default function BoardView() {
       {err && <div className="notice error">{err}</div>}
       {data === null && !err && (
         <div className="price-grid">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <div key={i} className="price-tile skeleton" style={{ animationDelay: `${i * 0.08}s` }}>
+          {[0, 0.08, 0.16, 0.24, 0.32, 0.4].map(delay => (
+            <div key={delay} className="price-tile skeleton" style={{ animationDelay: `${delay}s` }}>
               <div className="sk sk-name" /><div className="sk sk-num" /><div className="sk sk-spark" /><div className="sk sk-foot" />
             </div>
           ))}

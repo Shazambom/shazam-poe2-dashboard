@@ -276,7 +276,7 @@ export default function WorkspaceView({ league, visible = true }) {
       { label: 'Open', key: '↵', disabled: !isSearch, run: () => selectNode(d.id) },
       { label: isDesktop ? 'Open in window' : 'Open in browser', disabled: !url, run: () => openTrade(url) },
       { label: 'Copy link', disabled: !url, run: () => copyText(url) },
-      { sep: true },
+      { id: 'search-actions', sep: true },
       ...(isDesktop && d.kind === 'folder' && d.sys !== HISTORY_SYS ? [{ label: 'Add from clipboard here', key: '⌘V', run: () => clipboardAdd(d.id) }] : []),
       ...(d.kind === 'folder' && d.sys === HISTORY_SYS ? [{ label: 'Clear history', danger: true, run: () => clearHistoryWithUndo() }] : []),
       { label: 'Rename', key: 'F2', disabled: d.kind === 'folder' && !!d.sys, run: () => setTimeout(() => node.edit(), 0) },
@@ -284,9 +284,9 @@ export default function WorkspaceView({ league, visible = true }) {
       ...(isSearch && d.q && d.slug && !inHistory(d.id) ? [{ label: 'Re-run from item', run: () => rerunFromItem(d.id) }] : []),
       ...(d.kind === 'folder' ? [{ label: 'Sort A–Z', run: () => sortChildren(d.id) }] : []),
       ...(isDesktop && d.kind === 'folder' && d.sys !== HISTORY_SYS ? [{ label: 'Go live: all searches', run: () => goLiveAll(d.id) }, { label: 'Stop all live searches', run: () => { const n = disarmFolder(d.id); toast(n ? `Stopped ${n}` : 'None were live', !!n) } }] : []),
-      { label: d.done ? 'Mark not done' : 'Mark done', disabled: !isSearch, run: () => setField(d.id, { done: !d.done }) },
-      { label: 'Move to', children: [{ label: 'Top level', run: () => move(d.id, null, 0) }, ...folders.map(f => ({ label: f.name, run: () => move(d.id, f.id, 0) }))] },
-      { sep: true },
+      { id: 'mark-done', label: d.done ? 'Mark not done' : 'Mark done', disabled: !isSearch, run: () => setField(d.id, { done: !d.done }) },
+      { label: 'Move to', children: [{ id: 'root', label: 'Top level', run: () => move(d.id, null, 0) }, ...folders.map(f => ({ id: `folder:${f.id}`, label: f.name, run: () => move(d.id, f.id, 0) }))] },
+      { id: 'delete-actions', sep: true },
       { label: 'Delete', key: '⌫', danger: true, run: () => requestDelete(d) },
     ]
   }, [menu, league, selectNode, duplicate, setField, move, requestDelete, clipboardAdd, rerunFromItem, sortChildren, goLiveAll, disarmFolder, inHistory])
