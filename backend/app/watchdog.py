@@ -19,7 +19,7 @@ import threading
 from typing import Callable, Optional
 
 
-def parent_alive(pid: Optional[int]) -> bool:
+def parent_alive(pid: int | None) -> bool:
     """True if `pid` names a live process. A falsy pid means 'no parent tracked' → alive, so a
     standalone/dev run never self-terminates."""
     if not pid:
@@ -75,17 +75,17 @@ def _win_alive(pid: int) -> bool:
         return True  # can't tell → assume alive (never self-kill on uncertainty)
 
 
-def _hard_exit(reason: Optional[str] = None) -> None:
+def _hard_exit(reason: str | None = None) -> None:
     os._exit(0)
 
 
 def watch_parent(
-    pid: Optional[int],
+    pid: int | None,
     *,
     interval: float = 2.0,
     misses: int = 2,
-    on_dead: Optional[Callable] = None,
-) -> Optional[threading.Thread]:
+    on_dead: Callable | None = None,
+) -> threading.Thread | None:
     """Poll `pid`; call on_dead when it stays gone for `misses` CONSECUTIVE polls. No-op (returns
     None) when pid is falsy. The debounce (default 2) means a single spurious probe — e.g. a
     transient OpenProcess failure on Windows — can't kill a healthy child mid-job; a real parent
@@ -111,14 +111,14 @@ def watch_parent(
     return t
 
 
-def watch_stdin_eof(on_dead: Optional[Callable] = None) -> Optional[threading.Thread]:
+def watch_stdin_eof(on_dead: Callable | None = None) -> threading.Thread | None:
     """Block on stdin in a daemon thread; call on_dead at EOF. This is how a child learns its
     parent closed the pipe (i.e. died), portably. No-op if stdin is unavailable.
 
     Uses raw os.read(fd, 1) when stdin has a real OS descriptor so the daemon thread never holds
     CPython's BufferedReader lock on sys.stdin during clean interpreter shutdown (which otherwise
     triggers SIGABRT in _enter_buffered_busy on idle exit)."""
-    fd: Optional[int] = None
+    fd: int | None = None
     buf = None
     try:
         fd = sys.stdin.fileno()
@@ -152,10 +152,10 @@ def watch_stdin_eof(on_dead: Optional[Callable] = None) -> Optional[threading.Th
 
 def guard(
     *,
-    parent_pid: Optional[int] = None,
+    parent_pid: int | None = None,
     stdin_eof: bool = True,
     interval: float = 2.0,
-    on_dead: Optional[Callable] = None,
+    on_dead: Callable | None = None,
 ) -> None:
     """Install the available death signals. Call once at startup from any tree child. `on_dead`
     may accept an optional reason string ('stdin-eof' | 'parent-pid-gone')."""

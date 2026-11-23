@@ -37,7 +37,7 @@ def _now() -> int:
 def enqueue(
     conn: sqlite3.Connection,
     kind: str,
-    params: Optional[dict] = None,
+    params: dict | None = None,
     *,
     coalesce: bool = True,
 ) -> int:
@@ -76,7 +76,7 @@ def requeue_stale(conn: sqlite3.Connection, *, older_than_s: int = 120) -> int:
     return n
 
 
-def claim(conn: sqlite3.Connection) -> Optional[dict]:
+def claim(conn: sqlite3.Connection) -> dict | None:
     """Atomically take the oldest queued job of ANY kind (queued→running) and return
     {id, kind, params}, or None if the queue is empty. The single consumer (sidecar) dispatches by
     kind itself, so there's no kind filter here. A lock-free WAL read pre-checks for a queued row
@@ -115,7 +115,7 @@ def claim(conn: sqlite3.Connection) -> Optional[dict]:
 
 
 def complete(
-    conn: sqlite3.Connection, job_id: Optional[int], kind: str, key: str, value: Any
+    conn: sqlite3.Connection, job_id: int | None, kind: str, key: str, value: Any
 ) -> None:
     """Write one result to the cache (upsert on (kind,key)) and mark the job done. job_id may be
     None when a producer writes cache without a tracked job (e.g. a self-scheduled refresh)."""

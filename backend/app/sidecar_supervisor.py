@@ -23,7 +23,7 @@ from . import devtelemetry
 
 log = logging.getLogger("poe2arb.sidecar")
 
-_proc: Optional[subprocess.Popen] = None
+_proc: subprocess.Popen | None = None
 _stop = False
 _wake = threading.Event()
 
@@ -34,7 +34,7 @@ def _tlog(msg: str) -> None:
     devtelemetry.tlog("supervisor", msg)
 
 
-def _sidecar_cmd() -> Optional[list[str]]:
+def _sidecar_cmd() -> list[str] | None:
     """How to launch the sidecar:
       * the bundled per-platform binary — SIDECAR_BIN, set by Electron (desktop); or
       * when frozen (single unified PyInstaller binary), re-exec ourselves with `--sidecar`; or
