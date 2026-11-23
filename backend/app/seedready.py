@@ -22,6 +22,7 @@ from dataclasses import dataclass, field
 from datetime import date, timedelta
 
 import httpx
+from starlette.concurrency import run_in_threadpool
 
 from . import db
 from . import leaguehistory as lh
@@ -214,7 +215,7 @@ def _fingerprints(name: str) -> dict:
 
 async def poll_league(name: str) -> dict:
     """Read the league's listing, fetch only the items holding its seed back, record the cut."""
-    prev = db.kv_get(f"seed_cut:{name}")
+    prev = await run_in_threadpool(db.kv_get, f"seed_cut:{name}")
     try:
         listing = await _listing(name)
         if prev and prev.get("day") and final_through(listing) is None:
@@ -264,7 +265,8 @@ async def poll_league(name: str) -> dict:
         if a.through:
             # An empty answer for an item poe2scout lists is not proof of anything: remember what was
             # asked (so it is not asked again unchanged) without vouching for the stored rows.
-            db.kv_set(
+            await lh._finish_crawl_write(
+                db.kv_set,
                 f"seed_fp:{name}:{item}",
                 {
                     "fp": fingerprint(listing.get(item, {}), a.through),
@@ -277,7 +279,8 @@ async def poll_league(name: str) -> dict:
     cut = a.cut
     if failed and prev and prev.get("day") and (cut is None or cut < prev["day"]):
         cut = prev["day"]  # a failed request never costs every item its days
-    db.kv_set(
+    await lh._finish_crawl_write(
+        db.kv_set,
         f"seed_cut:{name}",
         {
             "day": cut,
