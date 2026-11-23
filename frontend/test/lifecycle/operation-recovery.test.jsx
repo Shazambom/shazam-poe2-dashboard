@@ -8,6 +8,8 @@ import SettingsView from '../../src/components/SettingsView.jsx'
 import CautionSlider from '../../src/components/CautionSlider.jsx'
 import NotificationsPanel from '../../src/components/NotificationsPanel.jsx'
 import { useStatus } from '../../src/lib/statusStore.js'
+import { saveHistoryPrefs } from '../../src/lib/ee2History.js'
+import { useWorkspace } from '../../src/lib/workspaceStore.js'
 import { api, bus } from '../../src/lib/api.js'
 import { installApiMock, jsonResponse } from './setup.js'
 
@@ -184,5 +186,26 @@ it('notifications: a failed save keeps the switch where the user put it and is r
   expect(sent).toHaveLength(3)
   expect(banner().getAttribute('aria-checked')).toBe(String(!was))
   expect(view.container.textContent).toBe(before)
+  expect(toasts).not.toHaveBeenCalled()
+})
+
+it('EE2 history: a failed save keeps the preference in effect and is retried until it lands', async () => {
+  const down = { on: true }
+  const sent = settingsBackend(down)
+  const saved = saveHistoryPrefs({ waystoneStats: false })
+  await settle()
+  expect(sent).toHaveLength(1)
+  expect(sent[0].ee2History.waystoneStats).toBe(false)
+  expect(useWorkspace.getState().historyPrefs.waystoneStats).toBe(false)
+  await advance(1000)
+  expect(sent).toHaveLength(2)
+  down.on = false
+  await advance(4000)
+  expect(sent).toHaveLength(3)
+  expect(sent[2].ee2History.waystoneStats).toBe(false)
+  expect((await saved).waystoneStats).toBe(false)
+  await advance(60000)
+  expect(sent).toHaveLength(3)
+  expect(useWorkspace.getState().historyPrefs.waystoneStats).toBe(false)
   expect(toasts).not.toHaveBeenCalled()
 })

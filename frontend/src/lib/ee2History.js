@@ -1,7 +1,7 @@
 import { ignoredError } from './ignoredError.js'
 import React, { useEffect } from 'react'
 import { useWorkspace, HISTORY_PREFS, HISTORY_MAX_LIMIT } from './workspaceStore.js'
-import { useStatus, ensureSettings } from './statusStore.js'
+import { ensureSettings, persistSettings } from './statusStore.js'
 import { diag } from './diag.js'
 import { hasTradeEngine as isDesktop } from './session.js'
 import { bus, toast } from './api.js'
@@ -32,7 +32,7 @@ export async function saveHistoryPrefs(patch) {
   ws.setHistoryPrefs(next)
   window.poe2desktop?.ee2?.setEnabled?.(next.enabled)
   window.poe2desktop?.ee2?.setSearchPrefs?.({ waystoneStats: next.waystoneStats })
-  try { await useStatus.getState().saveSettings({ ee2History: next }) } catch { ignoredError('save history preferences') }
+  try { await persistSettings({ ee2History: next }) } catch { ignoredError('save history preferences') }   // kept and retried on failure
   return next
 }
 
