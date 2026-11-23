@@ -23,7 +23,7 @@ const { makeRing } = require('./feedback/ring.js')
 const { applyChannel } = require('./updater-channel.js')
 const { createRespawner, onceGone } = require('./respawn.js')
 const { boot } = require('./startup.js')
-const { staticFile } = require('./ui-files.js')
+const { serveStatic } = require('./ui-files.js')
 const { makeExporter } = require('./export-file.js')
 
 // Log rings for "Report a problem" (local only — a report is a file the user drags into Discord):
@@ -223,9 +223,6 @@ function stopBackend() {
 
 // ------------------------------------------------------- local UI server
 function startUiServer(dist) {
-  const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml',
-                 '.png': 'image/png', '.ico': 'image/x-icon', '.woff2': 'font/woff2', '.map': 'application/json',
-                 '.m4a': 'audio/mp4' }
   const server = http.createServer((req, res) => {
     const u = new URL(req.url, 'http://x')
     if (u.pathname.startsWith('/api/') || u.pathname === '/callback') {
@@ -244,12 +241,8 @@ function startUiServer(dist) {
       return
     }
     // A file of the bundle: looked up without blocking main; the /api proxy above never waits on it.
-    staticFile(fs.promises, dist, u.pathname).then((f) => {
-      const headers = { 'Content-Type': MIME[path.extname(f)] || 'application/octet-stream' }
-      if (u.pathname.startsWith('/assets/')) headers['Cache-Control'] = 'public, max-age=31536000, immutable'
-      res.writeHead(200, headers)
-      fs.createReadStream(f).pipe(res)
-    }).catch((e) => { ignored('ui:serve-file', e); res.destroy() })
+    // A file that cannot be sent is answered (404/500) and logged, never thrown (ui-files.js).
+    void serveStatic(fs, dist, u.pathname, res, (e) => ignored('ui:serve-file', e))
   })
   return new Promise(resolve => {
     server.listen(0, '127.0.0.1', () => {
