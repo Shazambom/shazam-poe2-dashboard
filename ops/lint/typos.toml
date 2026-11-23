@@ -37,3 +37,34 @@ saphire = "saphire"
 [default.extend-identifiers]
 # Pluralized SQL SELECT in prose and comments.
 SELECTs = "SELECTs"
+# Past-tense SQL ATTACH DATABASE in docs and comments.
+ATTACHed = "ATTACHed"
+# Past-tense boolean AND in regex filter docs and tests.
+ANDed = "ANDed"
+# Author surname (Martin & McCann 1989, Ulcer Index) in hold research docs.
+McCann = "McCann"
+# Pluralized PNG image format acronym in CSS comment.
+PNGs = "PNGs"
+# American Economic Review citation abbreviation in hold research doc.
+AER = "AER"
+# "Past Nd (Div)" column-header placeholder (N days) in hold docs and tests.
+Nd = "Nd"
+# Windows tasklist /FO CSV format flag in EE2 server watcher.
+FO = "FO"
+# Recorded research subagent hex IDs in hold-research-recovered.md.
+a10ba = "a10ba"
+a10ba31604e2e3925 = "a10ba31604e2e3925"
+# Output file-handle local variable paired with `fi` in Python db/seed scripts and tests.
+fo = "fo"
+# Highest-stock-A local variable paired with `hsb` in test_api_lifecycle_e2e.py.
+hsa = "hsa"
+# Other-currency local variable paired with `mcur`/`tcur` in test_stratcalc_e2e.py.
+ocur = "ocur"
+# Alphabet string local variable in test_workspace_fuzzy.py.
+alph = "alph"
+# Anchor-currency loop variable in ops/profile-backend.py.
+anc = "anc"
+# PoE2 regex-generator test fragments ("Ailment Threshold", "^adds an ot", "Shrines" -> "ines$").
+Thr = "Thr"
+ot = "ot"
+ines = "ines"
