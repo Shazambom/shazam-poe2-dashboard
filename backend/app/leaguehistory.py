@@ -20,8 +20,11 @@ import logging
 import re
 import time
 import urllib.parse
+from collections.abc import Callable
 from string import Template
 from typing import TypedDict
+
+from starlette.concurrency import run_in_threadpool
 
 from . import cache, db, devtelemetry, gateway, marketseries
 
@@ -282,6 +285,31 @@ async def category_items(league: str, cat: str) -> list[dict]:
         page += 1
 
 
+async def _finish_crawl_write[T, **P](
+    operation: Callable[P, T], /, *args: P.args, **kwargs: P.kwargs
+) -> T:
+    """Let an in-flight write settle before cancellation can release the crawl lock."""
+    task = asyncio.create_task(run_in_threadpool(operation, *args, **kwargs))
+    cancelled = False
+    while not task.done():
+        try:
+            await asyncio.shield(task)
+        except asyncio.CancelledError:
+            cancelled = True
+    result = task.result()
+    if cancelled:
+        raise asyncio.CancelledError
+    return result
+
+
+def _store_item_metadata(meta: list[tuple[int, str, str]]) -> None:
+    with db.tx() as c:
+        c.executemany(
+            "INSERT OR REPLACE INTO item_meta(item_id, name, category) VALUES (?,?,?)",
+            meta,
+        )
+
+
 async def _universe(league: str) -> set[int]:
     """Item ids to track for a league: the named anchors plus everything in EVERY
     currency category above the price floor. Also upserts item_meta (name, category)
@@ -308,11 +336,7 @@ async def _universe(league: str) -> set[int]:
             if iid in ITEMS or (x.get("CurrentPrice") or 0) >= PRICE_FLOOR_EX:
                 ids.add(iid)
     if meta:
-        with db.tx() as c:
-            c.executemany(
-                "INSERT OR REPLACE INTO item_meta(item_id, name, category) VALUES (?,?,?)",
-                meta,
-            )
+        await _finish_crawl_write(_store_item_metadata, meta)
     if bridge_new:
         _merge_meta_bridge(bridge_new)
     return ids
