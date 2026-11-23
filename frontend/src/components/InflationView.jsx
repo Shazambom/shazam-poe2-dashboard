@@ -80,6 +80,7 @@ const arrowPct = (v) => (v == null ? '–' : `${v >= 0 ? '▲' : '▼'} ${Math.a
 
 // Fixed color slots for core currencies so lines never swap colors across anchor switches (theme.js).
 const CORE_COLOR_SLOT = { annul: 0, chaos: 1, divine: 2, vaal: 3, exalted: 4 }
+const EMPTY_LEAGUES = []
 const CORE_SLOTS = Object.keys(CORE_COLOR_SLOT).length
 
 export default function InflationView({ league }) {
@@ -278,7 +279,7 @@ const CrossLeague = React.memo(function CrossLeague({ league }) {
   const { data, err, busy } = useApi(() => api.inflationCross(item), [item])
   const items = data?.items ?? []
 
-  const leagues = data?.leagues ?? []
+  const leagues = data?.leagues ?? EMPTY_LEAGUES
   const cur = useMemo(() => pickLeague(leagues, league), [leagues, league])
   const { rows, keys } = useMemo(() =>   // bold the selected league (else freshest active), not an arbitrary current
     mergeSeries(leagues, { x: 'age', val: 'index', meta: lg => ({ id: lg.league, current: lg.league === cur?.league }) }), [leagues, cur])

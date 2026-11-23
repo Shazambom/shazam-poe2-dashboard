@@ -23,6 +23,16 @@ describe('Economy views lifecycles (Hold, Market, Inflation, Movers)', () => {
     })
   })
 
+  it('keeps one cross-league request across unrelated inflation view rerenders', async () => {
+    const { calls } = installApiMock()
+    const { rerender, unmount } = render(<InflationView league="A" />)
+    const reads = () => calls.filter(c => c.path === '/api/inflation/cross')
+    await waitFor(() => expect(reads()).toHaveLength(1))
+    rerender(<InflationView league="B" />)
+    unmount()
+    expect(reads()).toHaveLength(1)
+  })
+
   it('MarketView loads top markets + edges and queries pair history on click', async () => {
     const { calls } = installApiMock({
       '/api/market/top': [{ a: 'chaos', b: 'exalted', volume_a: 10, volume_b: 100, rate: 10 }],
