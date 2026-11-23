@@ -12,7 +12,7 @@ export default function FeedbackDialog({ onClose }) {
   const [st, setSt] = useState({ phase: 'packaging' })   // packaging | ready | error
   useEffect(() => {
     let live = true
-    fb?.package().then(r => {
+    window.poe2desktop?.feedback?.package().then(r => {
       if (!live) return
       if (!r || r.error) setSt({ phase: 'error', message: r?.error || 'could not package a report' })
       else setSt({ phase: 'ready', shortId: r.shortId })
