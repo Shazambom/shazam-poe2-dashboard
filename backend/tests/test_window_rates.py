@@ -111,7 +111,7 @@ def test_a_market_that_repeats_one_price_keeps_that_price_exactly():
     the same weights, and powers of two scale exactly in binary floating point, so any drift here
     would be an algorithmic one rather than rounding."""
     _wipe(LEAGUE)
-    _put(LEAGUE, [(ago, "m", "A", "B", 8, 2) for ago in range(0, 40)])
+    _put(LEAGUE, [(ago, "m", "A", "B", 8, 2) for ago in range(40)])
     assert digest.window_rates(LEAGUE)[("A", "B")] == 4.0
 
 

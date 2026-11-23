@@ -542,7 +542,7 @@ def test_latest_rates_feeds_the_rule_the_pairs_day_of_volume():
     # chaos also trades steadily and far more against divine, so the thin exalted market is not
     # the one that trades it (a currency's busiest market is always a market — section 11)
     busy = [
-        (ago, ch, dv, 5_000, 100, 20_000, 400) for ago in range(0, 24)
+        (ago, ch, dv, 5_000, 100, 20_000, 400) for ago in range(24)
     ]  # 50 chaos/div, 250k ex/h
     _put(league, steady + wide_hour + thin + busy)
     digest._rate_cache.clear()
@@ -1003,14 +1003,14 @@ def test_built_from_the_digest_the_busiest_dead_market_prices_the_currency(monke
     dv, ex, ch = (registry.metas(c)[0] for c in ("divine", "exalted", "chaos"))
     g_id = registry.metas("vaal")[0]
     league = "ReviewBusiestBuild"
-    hubs = [(ago, dv, ex, 100, 50_000, 1000, 500_000) for ago in range(0, 24)] + [
-        (ago, ch, ex, 1000, 60_000, 5000, 300_000) for ago in range(0, 24)
+    hubs = [(ago, dv, ex, 100, 50_000, 1000, 500_000) for ago in range(24)] + [
+        (ago, ch, ex, 1000, 60_000, 5000, 300_000) for ago in range(24)
     ]
     ex_mkt = [
-        (ago, g_id, ex, 3, 300 if ago % 2 else 60, 20, 0) for ago in range(0, 24)
+        (ago, g_id, ex, 3, 300 if ago % 2 else 60, 20, 0) for ago in range(24)
     ]  # 5x wide, 3 vaal/h
     ch_mkt = [
-        (ago, g_id, ch, 10, 20 if ago % 2 else 4, 50, 0) for ago in range(0, 24)
+        (ago, g_id, ch, 10, 20 if ago % 2 else 4, 50, 0) for ago in range(24)
     ]  # 5x wide, 10 vaal/h
     _put(league, hubs + ex_mkt + ch_mkt)
     g = _built(league, monkeypatch)
@@ -1195,7 +1195,7 @@ def test_the_graph_never_reads_the_bulk_exchange_books(monkeypatch):
 
     monkeypatch.setattr(orderbook, "latest_books", boom)
     dv, ex = registry.metas("divine")[0], registry.metas("exalted")[0]
-    _put("ReviewNoBooks", [(h, dv, ex, 100, 50_000) for h in range(0, 6)])
+    _put("ReviewNoBooks", [(h, dv, ex, 100, 50_000) for h in range(6)])
     g = _built("ReviewNoBooks", monkeypatch)
     assert g.edges[("divine", "exalted")].kind == "digest"
     assert not hasattr(G_, "credible_offers") and not hasattr(G_, "BAIT_FACTOR")

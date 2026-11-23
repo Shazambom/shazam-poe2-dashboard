@@ -54,7 +54,7 @@ def test_memberships_are_weights():
 
 def test_a_league_opens_in_price_discovery():
     per = league()
-    for t in range(0, 12):
+    for t in range(12):
         assert label(per, t) == "early", t
 
 

@@ -274,10 +274,10 @@ def test_a_dead_secondary_market_never_sets_the_number_or_the_line(monkeypatch):
     rows = [(ago, f"ch{ago}", CH, EX, 1_000, 55_000) for ago in range(1, 60)]
     rows += [(0, "ch0", CH, EX, 2, 20)]  # 10 vs ~55 — a 5.5x swing, over the 2x gate
     rows += [
-        (ago, f"cd{ago}", CH, DV, 50_000, 1_000) for ago in range(0, 60)
+        (ago, f"cd{ago}", CH, DV, 50_000, 1_000) for ago in range(60)
     ]  # 50 chaos/div — chaos's busiest market
     rows += [
-        (ago, f"dv{ago}", DV, EX, 1_000, 500_000) for ago in range(0, 60)
+        (ago, f"dv{ago}", DV, EX, 1_000, 500_000) for ago in range(60)
     ]  # 500 ex/div — exalted's busiest market
     _seed(rows)
     db.kv_set("settings", {**BOARD_SETTINGS, "watchlist": ["chaos"]})

@@ -43,7 +43,7 @@ PUBLISH = (
 N_CATCHUP, N_FROZEN = 25, 5
 QUIET_MINUTES = {
     range(45, 60),
-    range(0, 2),
+    range(2),
 }  # the test cron (:47) and hourly poll drift (~:50)
 
 
