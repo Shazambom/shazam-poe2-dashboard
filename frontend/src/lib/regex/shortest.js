@@ -44,7 +44,7 @@ function* plain(line) {
   const n = disp.length
   for (let len = 1; len <= n; len++) for (let a = 0; a + len <= n; a++) {
     const b = a + len
-    if (clean(mask, a, b)) yield* anchored(escapeRe(disp.slice(a, b)), a === 0, b === n)
+    if (clean(mask, a, b)) yield* anchored(escapeRe(disp.slice(a, b)), a === 0)
   }
 }
 
@@ -66,7 +66,7 @@ function* bridged(line) {
       if (rl < 1 || rl > PIECE) continue
       for (const [ra, rb] of rights) {
         if (rb - ra !== rl) continue
-        yield* anchored(`${escapeRe(disp.slice(la, lb))}.*${escapeRe(disp.slice(ra, rb))}`, la === 0, rb === n)
+        yield* anchored(`${escapeRe(disp.slice(la, lb))}.*${escapeRe(disp.slice(ra, rb))}`, la === 0)
       }
     }
   }
