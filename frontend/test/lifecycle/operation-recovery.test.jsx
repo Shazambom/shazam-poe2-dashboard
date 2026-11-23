@@ -399,6 +399,49 @@ it('theme export: a refused clipboard write leaves the exported text on screen t
   }
 })
 
+// A copy that succeeds shows the same text in the export box, whether or not the theme was open in the
+// builder; opening a different theme afterwards clears the box.
+it('theme export: a copied export stays in the export box until another theme is opened', async () => {
+  installApiMock()
+  const primaries = Object.fromEntries(PRIMARY_KEYS.map((k, i) => [k, `#${String(i + 1).repeat(6)}`]))
+  const colors = { ...derive(primaries), ...primaries }
+  useTheme.setState({ customs: [
+    { id: 'custom-a', name: 'Alpha', base: 'vault', colors },
+    { id: 'custom-b', name: 'Beta', base: 'vault', colors },
+  ] })
+  const had = Object.getOwnPropertyDescriptor(navigator, 'clipboard')
+  const writeText = vi.fn().mockResolvedValue(undefined)
+  Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
+  const box = (view) => view.container.querySelector('pre.diag-pre')
+  try {
+    const view = render(<ThemeBuilder />)
+    await settle()
+    fireEvent.click(screen.getByRole('button', { name: 'Alpha' }))   // Alpha is open; Beta is exported
+    await settle()
+    expect(box(view)).toBeNull()
+    fireEvent.click(screen.getByLabelText('Actions for Beta').querySelector('button:nth-child(3)'))
+    await settle()
+    expect(writeText).toHaveBeenCalledTimes(1)
+    expect(writeText.mock.calls[0][0]).toContain('Beta')
+    expect(box(view)?.textContent).toBe(writeText.mock.calls[0][0])
+    expect(screen.getByLabelText('Name').value).toBe('Beta')
+    fireEvent.click(screen.getByLabelText('Actions for Beta').querySelector('button:nth-child(3)'))   // already open
+    await settle()
+    expect(writeText).toHaveBeenCalledTimes(2)
+    expect(view.container.querySelectorAll('pre.diag-pre')).toHaveLength(1)
+    expect(box(view).textContent).toBe(writeText.mock.calls[1][0])
+    fireEvent.click(screen.getByRole('button', { name: 'Alpha' }))
+    await settle()
+    expect(screen.getByLabelText('Name').value).toBe('Alpha')
+    expect(box(view)).toBeNull()
+    expect(toasts).toHaveBeenCalledTimes(2)
+  } finally {
+    if (had) Object.defineProperty(navigator, 'clipboard', had)
+    else delete navigator.clipboard
+    useTheme.setState({ customs: [] })
+  }
+})
+
 // Today's behaviour already is the recovery: the picker is cleared before the file is read, and nothing is
 // imported until the text parses, so an unreadable file leaves the workspace as it was and the next pick works.
 it('workspace import: an unreadable file leaves the workspace untouched and the picker ready for another file', async () => {
