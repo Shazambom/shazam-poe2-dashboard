@@ -1,6 +1,6 @@
 import { shopCache, marketCache, marketInFlight, priceCache, clearMerchantShopCache } from '../lib/merchantCache.js'
 import { ignoredError } from '../lib/ignoredError.js'
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/shallow'
 import { api, bus, copyText, fmt, toast, undoToast } from '../lib/api.js'
 import { useStatus, ensureSettings } from '../lib/statusStore.js'
@@ -186,6 +186,7 @@ export default function MerchantView({ league }) {
   const sel = league || statusLeague
   const isLoggedIn = Boolean(oauthAccount || sessionConnected)
   const [sessionAccount, setSessionAccount] = useState('')
+  if (!sessionConnected && sessionAccount) setSessionAccount('')
   const [connecting, setConnecting] = useState(false)
   const searchInputRef = useRef(null)
 
@@ -218,7 +219,7 @@ export default function MerchantView({ league }) {
 
   const mountedRef = useRef(true)
   const selRef = useRef(sel)
-  selRef.current = sel
+  useLayoutEffect(() => { selRef.current = sel }, [sel])
   const activeReqRef = useRef(null)
   const busyRef = useRef(null)
   const tick = useSync(s => s.tick)
@@ -239,7 +240,6 @@ export default function MerchantView({ league }) {
 
   useEffect(() => {
     if (!sessionConnected) {
-      setSessionAccount('')
       for (const k of [...shopCache.keys()]) {
         if (k.includes('|__session__:')) shopCache.delete(k)
       }
@@ -338,7 +338,7 @@ export default function MerchantView({ league }) {
   }, [desktop, sel, isLoggedIn, oauthAccount, sessionAccount, accountSlot, fetchOrder, setBusy])
 
   const runShopFetchRef = useRef(runShopFetch)
-  runShopFetchRef.current = runShopFetch
+  useLayoutEffect(() => { runShopFetchRef.current = runShopFetch }, [runShopFetch])
 
   // Cancel all merchant calls (shop fetch + inline floor checks) on unmount or league/login change.
   useEffect(() => {
@@ -366,11 +366,15 @@ export default function MerchantView({ league }) {
     }
   }, [desktop, cacheKey, sel, accountSlot, fetchOrder, oauthAccount, setBusy])
 
-  // Reload session done-state when league or logged-in account changes.
-  useEffect(() => {
+  // Done marks and their Undo belong to the selected league and account.
+  const [doneScope, setDoneScope] = useState(doneKey)
+  if (doneKey !== doneScope) {
+    setDoneScope(doneKey)
     setDoneMap(readDoneMap(doneKey))
     setPrevDoneMap(null)
     setShowDone(false)
+  }
+  useEffect(() => {
     bus.emit({ id: 'merchant-done', dismiss: true })
     return () => bus.emit({ id: 'merchant-done', dismiss: true })
   }, [doneKey])
@@ -438,7 +442,7 @@ export default function MerchantView({ league }) {
 
   // Top-bar ⟳ refreshes the shop on demand.
   const refreshRef = useRef(refresh)
-  refreshRef.current = refresh
+  useLayoutEffect(() => { refreshRef.current = refresh }, [refresh])
   useEffect(() => {
     if (tick !== tick0.current) {
       tick0.current = tick
