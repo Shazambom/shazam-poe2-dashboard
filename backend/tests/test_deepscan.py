@@ -14,12 +14,11 @@ Built on SYNTHETIC graphs (no DB), mirroring test_centrality.py / test_convert.p
 import sys
 from pathlib import Path
 
+import numpy as np
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # backend/
 from app.arbitrage import Edge, Graph, deepscan, routes
-
-pytest.importorskip("numpy")
 
 SETTINGS = {
     "reference": "a",
@@ -108,7 +107,7 @@ def test_max_loops_caps_the_scan():
 
 
 def test_degrades_to_nothing_without_numpy(monkeypatch):
-    monkeypatch.setattr(deepscan, "_load", lambda: None)
+    monkeypatch.setitem(sys.modules, np.__name__, None)
     assert deepscan.deep_loops(_graph(_ring(list("abcde"), 1.05)), {}) == []
 
 

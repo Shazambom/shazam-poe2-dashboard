@@ -9,10 +9,9 @@ natively.
 This is the gate that lets us cut the deps: it LOADS THE REAL heavy libraries (`stumpy`,
 `dtaidistance`) alongside the new numpy code and asserts they agree **1:1** on a **fuzz** of
 randomized inputs — not a handful of fixtures. If a single seed disagrees beyond a tight
-numerical tolerance, the swap is not faithful and the deps stay. Because it needs the real
-libraries, it runs in the sidecar venv:
+numerical tolerance, the swap is not faithful and the deps stay. Run it with the pinned reference libraries in the test venv:
 
-    desktop/.venv-sidecar/bin/python -m pytest backend/tests/test_sidecar_equivalence.py -q
+    .venv-test/bin/python -m pytest backend/tests/test_sidecar_equivalence.py -q
 
 Once Phase 7a ships and this stays green, it is the permanent proof that the numpy sidecar
 computes exactly what the heavy libraries did.
@@ -23,19 +22,11 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+import stumpy
+from dtaidistance import dtw as _dtw_lib
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # backend/
 from sidecar.analytics import arc, discords
-
-# The real heavy libraries. If they're missing we're not in the sidecar venv — skip loudly
-# rather than silently pass (a green run must mean the comparison actually happened).
-stumpy = pytest.importorskip(
-    "stumpy", reason="run in desktop/.venv-sidecar (needs real stumpy)"
-)
-_dtai = pytest.importorskip(
-    "dtaidistance", reason="run in desktop/.venv-sidecar (needs real dtaidistance)"
-)
-from dtaidistance import dtw as _dtw_lib
 
 # Tight but not zero: STUMPY computes the profile via running dot-products (STOMP), the numpy
 # impl sums squared diffs directly, so the two accumulate FP error differently. 1e-6 relative

@@ -11,15 +11,16 @@ cycle, and it only searches for a cycle THROUGH that vertex) and returning cycle
 sum below zero (a zero-weight self-loop) on ~0.1%. `test_networkx_recovery_gap_is_covered`
 pins that ours answers exactly there. That is why this module is not a networkx port.
 
-networkx is never bundled; it lives in the sidecar venv with the other reference libraries:
+networkx is a test dependency and lives in the test venv:
 
-    desktop/.venv-sidecar/bin/python -m pytest backend/tests/test_negcycle_networkx.py -q
+    .venv-test/bin/python -m pytest backend/tests/test_negcycle_networkx.py -q
 """
 
 import random
 import sys
 from pathlib import Path
 
+import networkx as nx
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # backend/
@@ -32,12 +33,6 @@ from test_negcycle import (
     best_weight,
     random_graph,
     run,
-)
-
-# Missing → not the sidecar venv: skip loudly rather than silently pass (a green run must mean
-# the comparison actually happened).
-nx = pytest.importorskip(
-    "networkx", reason="run in desktop/.venv-sidecar (needs real networkx)"
 )
 
 
