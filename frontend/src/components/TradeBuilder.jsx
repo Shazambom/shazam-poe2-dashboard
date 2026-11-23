@@ -18,7 +18,7 @@ import CurrencyPicker from './CurrencyPicker.jsx'
 // `onOpenTrading`, when given, shows the linked search on the Trading tab. The page itself is never scripted or
 // navigated by the app.
 export default function TradeBuilder({ title, url, league, onUse, onClose, onUnlink = null, onOpenTrading = null }) {
-  const trade = window.poe2desktop?.trade
+  const [initialUrl] = useState(url)  // later addresses arrive as navigation events
   const wv = useRef(null)
   const [found, setFound] = useState(null)    // the search the window's address holds
   const tree = useWorkspace(s => s.tree)
@@ -31,9 +31,10 @@ export default function TradeBuilder({ title, url, league, onUse, onClose, onUnl
 
   useEffect(() => {
     const el = wv.current
+    const trade = window.poe2desktop?.trade
     if (!el || !trade?.onWebviewNav) return
     const move = (e) => setFound(f => windowSearch(f, e))   // lib/stratPricing.js (tested with a fake trade site)
-    searchOfLink(url).then(search => move({ kind: 'open', search })).catch(() => ignoredError('read initial trade search'))   // the search it opens on
+    searchOfLink(initialUrl).then(search => move({ kind: 'open', search })).catch(() => ignoredError('read initial trade search'))   // the search it opens on
     let id = null
     const ready = () => { id = el.getWebContentsId() }
     el.addEventListener('dom-ready', ready, { once: true })
@@ -44,7 +45,7 @@ export default function TradeBuilder({ title, url, league, onUse, onClose, onUnl
     // The page's own search (the trade tap): a run search can land on a short id its address doesn't carry.
     const offTap = trade.onTap?.(e => { if (id != null && e?.kind === 'search' && e.wcId === id) move({ kind: 'tap', body: e.body }) })
     return () => { el.removeEventListener('dom-ready', ready); off?.(); offTap?.() }
-  }, [])
+  }, [initialUrl])
 
   useEffect(() => {
     const h = (e) => { if (e.key === 'Escape' && !e.defaultPrevented) onClose() }   // an open list handles its own Esc
