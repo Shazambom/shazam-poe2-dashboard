@@ -170,7 +170,7 @@ class Policy:
             limits = _triples(h.get(f"x-rate-limit-{rule}", ""))
             states = _triples(h.get(f"x-rate-limit-{rule}-state", ""))
             advertised += limits
-            for (lim, win, pen), st in zip(
+            for (lim, win, _pen), st in zip(
                 limits, states + [(0, 0, 0)] * len(limits), strict=False
             ):
                 hits, _, pen_active = st

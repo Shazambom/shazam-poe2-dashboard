@@ -220,7 +220,7 @@ def _fold_series(series: list[dict], until: int | None = None) -> list[dict]:
         p for p in series if p.get("volume_a") and p.get("volume_b")
     ]  # `pair_history` never emits an empty side
     out, na, nb, prev, start = [], 0.0, 0.0, None, 0
-    for i, p in enumerate(pts):
+    for _i, p in enumerate(pts):
         if prev is not None:
             decay = 2.0 ** (-((p["hour"] - prev) / 3600.0) / digest.RATE_HALF_LIFE_H)
             na *= decay

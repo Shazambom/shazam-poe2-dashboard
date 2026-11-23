@@ -422,7 +422,7 @@ def families_from(export: Export) -> list:
     Collarbone, the jewel and waystone bones)."""
     domains = set(DOMAIN_OVERRIDES.values())
     class_tags = _class_tags(export)
-    for cid, tags in class_tags.items():
+    for _cid, tags in class_tags.items():
         d = _domain_of(tags, export.mods)
         if d:
             domains.add(d)

@@ -195,7 +195,7 @@ def test_workspace_fuzzy_roundtrip():
     rng = random.Random(1337)  # fixed seed -> reproducible failures
     total_nodes = 0
     trees = 25
-    for t in range(trees):
+    for _t in range(trees):
         doc = _gen_doc(rng)
         total_nodes += _roundtrip_10x(doc)
     # Sanity: we actually exercised a meaningful amount of structure.

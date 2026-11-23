@@ -186,7 +186,7 @@ def _median3(pts):
     read +2,467% where the other read +4,935%) purely because only one of them smoothed."""
     by_day = {p[0]: p[1] for p in pts}
     out = []
-    for t, v, vol in pts:
+    for t, _v, vol in pts:
         win = [by_day[d] for d in (t - _DAY, t, t + _DAY) if d in by_day]
         out.append((t, statistics.median(win), vol))
     return out
