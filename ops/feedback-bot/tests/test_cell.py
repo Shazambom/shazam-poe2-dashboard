@@ -202,7 +202,7 @@ def test_logs_are_capped_per_line_and_per_file(tmp_path):
     code, out = run(tmp_path, d)
     main = (out / "logs" / "main.txt").read_text().splitlines()
     assert len(main) == cell.MAX_LOG_LINES and all(
-        len(l) <= cell.MAX_LOG_LINE for l in main
+        len(line) <= cell.MAX_LOG_LINE for line in main
     )
     assert len((out / "logs" / "backend.txt").read_text()) <= cell.MAX_LOG_LINES * (
         cell.MAX_LOG_LINE + 1

@@ -169,7 +169,7 @@ def test_stream_endpoint_reports_query_filters():
         params={"min_margin_pct": 2.5, "sort": "margin_ref", "live_only": "true"},
     )
     assert r.status_code == 200
-    meta = next(l for l in r.text.splitlines() if l.startswith("data:"))
+    meta = next(line for line in r.text.splitlines() if line.startswith("data:"))
     assert (
         '"min_margin_pct": 2.5' in meta
         and '"sort": "margin_ref"' in meta

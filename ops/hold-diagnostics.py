@@ -140,7 +140,9 @@ def cmd_signals(a, only_top=None):
         print(
             f"  {k:16} "
             + "  ".join(
-                f"{l[:8]} {v:.2f}({c}/{n})" for l, v, c, n in cells if v is not None
+                f"{league[:8]} {v:.2f}({c}/{n})"
+                for league, v, c, n in cells
+                if v is not None
             )
             + f"   agree {agree}/{tot}"
         )

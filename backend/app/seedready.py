@@ -311,7 +311,9 @@ async def poll() -> dict:
     """One poll of every current league. Waits for a running crawl rather than racing it (they share
     poe2scout's rate budget and the same rows)."""
     leagues = [
-        l["Value"] for l in await lh._leagues() if l.get("IsCurrent") and l.get("Value")
+        league_row["Value"]
+        for league_row in await lh._leagues()
+        if league_row.get("IsCurrent") and league_row.get("Value")
     ]
     async with lh._backfill_lock:
         res = {name: await poll_league(name) for name in leagues}

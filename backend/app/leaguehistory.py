@@ -225,7 +225,11 @@ async def _leagues() -> list[dict]:
     rows = (
         data if isinstance(data, list) else data.get("items", data.get("Leagues", []))
     )
-    return [l for l in rows if not is_skipped_league(l.get("Value", ""))]
+    return [
+        league_row
+        for league_row in rows
+        if not is_skipped_league(league_row.get("Value", ""))
+    ]
 
 
 def _has_history() -> bool:
@@ -494,7 +498,11 @@ async def backfill(force: bool = False, full: bool = True) -> CrawlResult:
         )  # the previous crawl's: a league that just ended
         db.kv_set(
             "lh_current",
-            [l["Value"] for l in leagues if l.get("IsCurrent") and l.get("Value")],
+            [
+                league_row["Value"]
+                for league_row in leagues
+                if league_row.get("IsCurrent") and league_row.get("Value")
+            ],
         )
         stored = _stored_counts()
         for li, lg in enumerate(leagues):

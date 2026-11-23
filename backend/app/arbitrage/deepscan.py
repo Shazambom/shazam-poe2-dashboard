@@ -100,6 +100,6 @@ def deep_loops(
         alive[index[(worst.src, worst.dst)]] = False
     _report(
         f"numpy=ok nodes={len(ids)} edges={len(edges)} loops={len(loops)} "
-        f"hops={[len(l) for l in loops]} ms={(time.perf_counter() - t0) * 1000:.0f}"
+        f"hops={[len(loop) for loop in loops]} ms={(time.perf_counter() - t0) * 1000:.0f}"
     )
     return loops

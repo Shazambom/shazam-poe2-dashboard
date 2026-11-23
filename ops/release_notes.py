@@ -32,7 +32,7 @@ ROOT = Path(__file__).resolve().parents[1]
 def parse(text: str) -> dict:
     """{version, summary, bullets} from a notes file, or ValueError saying what breaks the format."""
     lines = [
-        l.rstrip() for l in text.lstrip("\ufeff").strip().splitlines()
+        line.rstrip() for line in text.lstrip("\ufeff").strip().splitlines()
     ]  # a BOM (Notepad) is not text
     if (
         not lines

@@ -121,10 +121,12 @@ def test_stream_scores_server_side(monkeypatch):
     monkeypatch.setattr(db, "get_capital", lambda: {"chaos": 100.0})
     r = client.get("/api/routes/stream")
     events = [
-        l.split(": ", 1)[1] for l in r.text.splitlines() if l.startswith("event:")
+        line.split(": ", 1)[1]
+        for line in r.text.splitlines()
+        if line.startswith("event:")
     ]
     assert "scores" in events and events.index("scores") < events.index("done")
-    meta = next(l for l in r.text.splitlines() if l.startswith("data:"))
+    meta = next(line for line in r.text.splitlines() if line.startswith("data:"))
     assert "rank_weights" not in meta
     db.kv_set("settings", {})
     arbitrage.invalidate_caches()

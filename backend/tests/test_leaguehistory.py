@@ -170,5 +170,5 @@ def test_permanent_hardcore_and_early_access_leagues_are_skipped(monkeypatch):
         ]
 
     monkeypatch.setattr(lh, "_get", fake_get)
-    kept = [l["Value"] for l in asyncio.run(lh._leagues())]
+    kept = [league_row["Value"] for league_row in asyncio.run(lh._leagues())]
     assert kept == ["Conquerors of Wraeclast"]

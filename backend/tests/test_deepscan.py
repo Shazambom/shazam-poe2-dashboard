@@ -84,7 +84,7 @@ def test_no_loop_in_a_fair_market():
 def test_returns_several_distinct_loops():
     g = _graph(_ring(list("abcde"), 1.05) + _ring(list("vwxyz"), 1.08))
     loops = deepscan.deep_loops(g, {})
-    assert sorted("".join(sorted(e.src for e in l)) for l in loops) == [
+    assert sorted("".join(sorted(e.src for e in loop)) for loop in loops) == [
         "abcde",
         "vwxyz",
     ]

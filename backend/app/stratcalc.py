@@ -104,21 +104,21 @@ def _tablets(tb) -> bool:
     if not isinstance(lines, list):
         return False
     ids, slots = set(), 0
-    for l in lines:
+    for line in lines:
         if not (
-            isinstance(l, dict)
-            and _str(l.get("id"))
-            and l["id"] not in ids
-            and _count(l.get("slots"))
-            and l["slots"] >= 1
-            and (l.get("price") is None or _num(l.get("price")))
-            and _str(l.get("cur"))
-            and all(l.get(k) is None or _str(l.get(k)) for k in ("base", "name"))
-            and ("link" not in l or _link(l["link"]))
+            isinstance(line, dict)
+            and _str(line.get("id"))
+            and line["id"] not in ids
+            and _count(line.get("slots"))
+            and line["slots"] >= 1
+            and (line.get("price") is None or _num(line.get("price")))
+            and _str(line.get("cur"))
+            and all(line.get(k) is None or _str(line.get(k)) for k in ("base", "name"))
+            and ("link" not in line or _link(line["link"]))
         ):
             return False
-        ids.add(l["id"])
-        slots += l["slots"]
+        ids.add(line["id"])
+        slots += line["slots"]
     return slots <= MAX_TABLETS
 
 

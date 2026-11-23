@@ -143,7 +143,9 @@ def run_side(tree: Path, snap: Path, work: Path, label: str) -> dict:
         text=True,
         check=False,
     )
-    line = next((l for l in p.stdout.splitlines() if l.startswith("DUMP")), None)
+    line = next(
+        (line for line in p.stdout.splitlines() if line.startswith("DUMP")), None
+    )
     if p.returncode or not line:
         sys.exit(f"{label}: dump failed (exit {p.returncode})\n{p.stderr[-3000:]}")
     return json.loads(line[4:])
@@ -256,11 +258,11 @@ def check_accept(lines: list[str], path: str | None, version: str | None) -> lis
         problems.append(
             f"accept file is for version {ver!r}, this release is {version!r}"
         )
-    for l in lines:
-        if not any(fnmatch.fnmatchcase(l, e) for e in entries):
-            problems.append(f"UNACCEPTED: {l}")
+    for line in lines:
+        if not any(fnmatch.fnmatchcase(line, e) for e in entries):
+            problems.append(f"UNACCEPTED: {line}")
     for e in entries:
-        if not any(fnmatch.fnmatchcase(l, e) for l in lines):
+        if not any(fnmatch.fnmatchcase(line, e) for line in lines):
             problems.append(f"STALE accept line (matches nothing): {e}")
     return problems
 
@@ -330,8 +332,8 @@ def main() -> None:
         print("  NO DIFFERENCES")
         return
     print(f"  {len(lines)} DIFFERENCE(S):")
-    for l in lines:
-        print("   ", l)
+    for line in lines:
+        print("   ", line)
     if args.accept or args.version:
         problems = check_accept(lines, args.accept, args.version)
         if not problems:

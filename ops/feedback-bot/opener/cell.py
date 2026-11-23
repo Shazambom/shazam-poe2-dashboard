@@ -201,8 +201,12 @@ def _missing(v) -> dict:
 def rebuild(doc: dict) -> dict:
     m = doc.get("manifest")
     s = doc.get("state")
-    l = doc.get("logs")
-    if not isinstance(m, dict) or not isinstance(s, dict) or not isinstance(l, dict):
+    raw_logs = doc.get("logs")
+    if (
+        not isinstance(m, dict)
+        or not isinstance(s, dict)
+        or not isinstance(raw_logs, dict)
+    ):
         raise Refused("missing section")
     short_id = _str(m.get("shortId"), 6, required=True)
     if not SHORT_ID.match(short_id or ""):
@@ -228,10 +232,10 @@ def rebuild(doc: dict) -> dict:
         for k in ("diag", "status", "backfill", "settings", "desktopSettings", "bounds")
     }
     logs = {
-        "main": _lines(l.get("main", [])),
-        "backend": _text(l.get("backend", "")),
-        "renderer": _lines(l.get("renderer", [])),
-        "updater": _lines(l.get("updater", [])),
+        "main": _lines(raw_logs.get("main", [])),
+        "backend": _text(raw_logs.get("backend", "")),
+        "renderer": _lines(raw_logs.get("renderer", [])),
+        "updater": _lines(raw_logs.get("updater", [])),
     }
     return {"manifest": manifest, "state": state, "logs": logs}
 

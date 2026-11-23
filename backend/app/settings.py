@@ -139,8 +139,10 @@ def _fresh_trade_league_ids() -> list[str]:
         return []
     return [
         lid
-        for l in leagues
-        if isinstance(l, dict) and isinstance((lid := l.get("id")), str) and lid.strip()
+        for league_row in leagues
+        if isinstance(league_row, dict)
+        and isinstance((lid := league_row.get("id")), str)
+        and lid.strip()
     ]
 
 

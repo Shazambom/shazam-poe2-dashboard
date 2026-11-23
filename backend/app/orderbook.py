@@ -497,9 +497,9 @@ async def leagues(force: bool = False) -> list[dict]:
     )
     r.raise_for_status()
     out = [
-        {"id": l.get("id"), "text": l.get("text", l.get("id"))}
-        for l in r.json().get("result", [])
-        if l.get("id")
+        {"id": league.get("id"), "text": league.get("text", league.get("id"))}
+        for league in r.json().get("result", [])
+        if league.get("id")
     ]
     db.kv_set("trade_leagues", {"at": time.time(), "leagues": out})
     from . import settings

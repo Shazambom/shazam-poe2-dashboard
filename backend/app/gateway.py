@@ -214,8 +214,8 @@ class Policy:
                 {"limit": r.limit, "window_s": r.interval // 1000} for r in self.rates
             ],
             "advertised": [
-                {"limit": l, "window_s": w, "penalty_s": p}
-                for l, w, p in self.advertised
+                {"limit": limit, "window_s": w, "penalty_s": p}
+                for limit, w, p in self.advertised
             ],
             "penalty_remaining_s": max(0.0, self.penalty_until - time.time()),
             "requests": self.requests,

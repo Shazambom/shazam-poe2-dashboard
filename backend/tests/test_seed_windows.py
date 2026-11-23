@@ -101,9 +101,9 @@ def test_a_fresh_install_seeds_under_windows_like_fsync_and_reports_it(env):
     )
     c.close()
     assert any(
-        l.startswith("[seed] replacing local v-1 with seed v5") for l in lines
+        line.startswith("[seed] replacing local v-1 with seed v5") for line in lines
     ), lines
-    assert any(l.startswith("[seed] replaced: now v5") for l in lines), lines
+    assert any(line.startswith("[seed] replaced: now v5") for line in lines), lines
     assert not (d / "market.sqlite.tmp").exists()
 
 
@@ -121,7 +121,9 @@ def test_an_unseeded_crawl_built_db_is_replaced_under_windows_like_fsync(env):
     c = sqlite3.connect(str(market))
     assert c.execute("SELECT count(*) FROM mod_pools").fetchone()[0] == 1
     c.close()
-    assert any("replacing local v0 with seed v1790363310" in l for l in lines), lines
+    assert any("replacing local v0 with seed v1790363310" in line for line in lines), (
+        lines
+    )
 
 
 def test_a_failed_seed_keeps_the_old_db_and_reports_the_failure(env, monkeypatch):
@@ -141,8 +143,8 @@ def test_a_failed_seed_keeps_the_old_db_and_reports_the_failure(env, monkeypatch
         "no half-written temp file is left behind"
     )
     assert any(
-        l.startswith("[T0] seed-failed: OSError:") and "crawling live" in l
-        for l in lines
+        line.startswith("[T0] seed-failed: OSError:") and "crawling live" in line
+        for line in lines
     ), "a failed seed is a T0 blocker: " + str(lines)
 
 
@@ -152,4 +154,4 @@ def test_a_newer_local_db_is_kept_and_says_so(env):
     _make_seed(d, 7)
     db.seed_market()
     assert db._read_snapshot_version(market) == 9
-    assert any(l == "[seed] kept local v9 (seed v7)" for l in lines), lines
+    assert any(line == "[seed] kept local v9 (seed v7)" for line in lines), lines

@@ -200,10 +200,10 @@ def test_an_unreadable_old_db_takes_the_seed_with_nothing_to_carry_and_no_t0(env
     market.write_bytes(b"not a database, but it has a snapshot version of 0")
     db.seed_market()
     assert db._read_snapshot_version(market) == 20, "the seed applies"
-    assert not any(l.startswith("[T0]") for l in lines), lines
+    assert not any(line.startswith("[T0]") for line in lines), lines
     assert any(
-        l.startswith("[seed] local DB unreadable (v-1); nothing to carry")
-        for l in lines
+        line.startswith("[seed] local DB unreadable (v-1); nothing to carry")
+        for line in lines
     ), lines
 
 
@@ -217,7 +217,7 @@ def test_an_old_layout_without_the_crawl_tables_has_nothing_to_carry(env):
     c.close()
     db.seed_market()
     assert db._read_snapshot_version(market) == 20
-    assert not any(l.startswith("[T0]") for l in lines), lines
+    assert not any(line.startswith("[T0]") for line in lines), lines
 
 
 def test_a_carry_that_fails_on_a_readable_db_is_still_a_t0(env, monkeypatch):
@@ -235,7 +235,8 @@ def test_a_carry_that_fails_on_a_readable_db_is_still_a_t0(env, monkeypatch):
     db.seed_market()
     assert db._read_snapshot_version(market) == 20
     assert any(
-        l.startswith("[T0] crawl-lost: OperationalError: disk I/O error") for l in lines
+        line.startswith("[T0] crawl-lost: OperationalError: disk I/O error")
+        for line in lines
     ), lines
 
 
@@ -244,4 +245,6 @@ def test_a_first_install_has_nothing_to_carry(env):
     _seed(d, 20, daily=[(LG, 1, "2026-09-26", 1.0, 1.0, 5)])
     db.seed_market()
     assert db._read_snapshot_version(market) == 20
-    assert not any("carried over" in l or "crawl-lost" in l for l in lines), lines
+    assert not any("carried over" in line or "crawl-lost" in line for line in lines), (
+        lines
+    )
