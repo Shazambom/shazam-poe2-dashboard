@@ -20,6 +20,8 @@ import struct
 import time
 from typing import cast
 
+from starlette.concurrency import run_in_threadpool
+
 from . import db, gateway
 from .config import DATA_DIR
 
@@ -214,7 +216,7 @@ async def refresh(force: bool = False) -> dict:
             "challenge": read(ce, r, *cols["EnabledInChallengeLeague"]),
         }
 
-    db.kv_set("gold_fees_meta", by_meta)
+    await run_in_threadpool(db.kv_set, "gold_fees_meta", by_meta)
     state.update(
         loaded_at=time.time(),
         version=version,
