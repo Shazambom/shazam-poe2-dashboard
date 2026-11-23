@@ -436,8 +436,12 @@ test('tests: every Python skip outside the pinned sites fails', () => {
 test('tests: the pinned skip sites pass only in their file and with their guarding line', () => {
   assert.equal(PINNED_SKIPS.length, 2)
   for (const pin of PINNED_SKIPS) {
-    const body = pin.lines.map(l => '    ' + l).join('\n') + '\n'
+    const rows = [...pin.lines, ...pin.after]
+    const body = rows.map(l => '    ' + l).join('\n') + '\n'
     assert.deepEqual(checkSkips(pin.path, body), [], pin.path)
+    // the lines after the skip call hold its condition or reason: loosening them breaks the pin
+    const loosened = [...pin.lines, ...pin.after.map((l, k) => (k === 0 ? 'True,' : l))].map(l => '    ' + l).join('\n') + '\n'
+    assert.equal(checkSkips(pin.path, loosened).length, 1, pin.path)
     assert.equal(checkSkips('backend/tests/test_other.py', body).length, 1, pin.path)
     const unguarded = '    ' + pin.lines.at(-1) + '\n'
     assert.equal(checkSkips(pin.path, unguarded).length, 1, pin.path)

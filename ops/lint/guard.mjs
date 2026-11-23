@@ -388,18 +388,20 @@ export function checkTestContent(path, baseText, nowText) {
   return found
 }
 
-// The only skips in the repo. A pin is its file plus consecutive lines (trimmed), the last being the skip
-// itself and the ones before it the condition that guards it. Adding one is the owner's decision.
+// The only skips in the repo. A pin is its file plus consecutive lines (trimmed): `lines` ends with the skip
+// call and starts with the condition that guards it; `after` is the rest of a call the formatter wrapped
+// (its condition and reason), so loosening either breaks the pin. Adding one is the owner's decision.
 export const PINNED_SKIPS = [
   {
     path: 'backend/tests/_proddb.py',
-    lines: ['_asked = os.environ.get("ARBITER_PROD_TESTS") == "1"', 'prod = pytest.mark.skipif(not (_asked and PROD_DB.exists()),'],
+    lines: ['_asked = os.environ.get("ARBITER_PROD_TESTS") == "1"', 'prod = pytest.mark.skipif('],
+    after: ['not (_asked and PROD_DB.exists()),'],
     why: "replays against the owner's own market DB are opt-in, so the deploy gate does not depend on this machine's app data",
   },
   {
     path: 'ops/feedback-bot/tests/test_sandbox.py',
-    lines: ['if cell == "alloc" and sys.platform == "darwin":',
-      'pytest.skip("macOS does not enforce RLIMIT_AS; the bot runs on Linux (shazam), where it does")'],
+    lines: ['if cell == "alloc" and sys.platform == "darwin":', 'pytest.skip('],
+    after: ['"macOS does not enforce RLIMIT_AS; the bot runs on Linux (shazam), where it does"'],
     why: 'macOS does not enforce RLIMIT_AS, so that one parametrized case cannot run on the Mac that runs the gate',
   },
 ]
@@ -440,7 +442,8 @@ export function checkSkips(path, text) {
     const src = kind === 'py' ? stripPyComment(row) : row
     if (!(kind === 'py' ? PY_SKIPS : JS_SKIPS).some(re => re.test(src))) return
     const pinned = PINNED_SKIPS.some(pin => pin.path === path
-      && pin.lines.every((want, k) => (rows[i - (pin.lines.length - 1) + k] ?? '').trim() === want))
+      && pin.lines.every((want, k) => (rows[i - (pin.lines.length - 1) + k] ?? '').trim() === want)
+      && pin.after.every((want, k) => (rows[i + 1 + k] ?? '').trim() === want))
     if (pinned) return
     found.push({ path, line: i + 1, what: `\`${row.trim().slice(0, 100)}\` skips, focuses or defers a test. Delete it and make the test run and pass here; install a missing library rather than skipping its tests. ${ASK}` })
   })
