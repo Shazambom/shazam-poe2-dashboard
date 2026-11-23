@@ -5,8 +5,10 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { act, fireEvent, render, screen } from '@testing-library/react'
 import RecipesView from '../../src/components/RecipesView.jsx'
 import SettingsView from '../../src/components/SettingsView.jsx'
+import CautionSlider from '../../src/components/CautionSlider.jsx'
+import { useStatus } from '../../src/lib/statusStore.js'
 import { api, bus } from '../../src/lib/api.js'
-import { installApiMock } from './setup.js'
+import { installApiMock, jsonResponse } from './setup.js'
 
 let toasts
 let offBus
@@ -82,5 +84,77 @@ it('settings: a failed load stays on its loading view and fills the editor when 
   await advance(4000)
   expect(screen.getByLabelText('Reference currency for values')).toBeTruthy()
   expect(screen.queryByText('Loading settings…')).toBeNull()
+  expect(toasts).not.toHaveBeenCalled()
+})
+
+// A settings PUT that fails while `down.on`; returns the patches it was sent, in order.
+function settingsBackend(down) {
+  const sent = []
+  installApiMock({
+    'PUT /api/settings': (_url, _init, body) => {
+      sent.push(body.patch)
+      return down.on ? jsonResponse({ detail: 'database is locked' }, 500) : jsonResponse({ ...body.patch })
+    },
+  })
+  return sent
+}
+
+it('caution: a failed save keeps the user\'s value and is retried until it lands', async () => {
+  const down = { on: true }
+  const sent = settingsBackend(down)
+  const view = render(<CautionSlider value={2} range={[0, 6]} />)
+  await settle()
+  const before = view.container.innerHTML.replace(/value="[^"]*"/, '').replace(/<b>[^<]*<\/b>/, '')
+  fireEvent.change(screen.getByRole('slider'), { target: { value: '3.5' } })
+  await advance(350)
+  expect(sent).toEqual([{ hold_caution: 3.5 }])
+  expect(screen.getByText('3.5')).toBeTruthy()
+  expect(useStatus.getState().settings.hold_caution).toBe(3.5)
+  await advance(1000)
+  expect(sent).toHaveLength(2)
+  down.on = false
+  await advance(4000)
+  expect(sent).toEqual([{ hold_caution: 3.5 }, { hold_caution: 3.5 }, { hold_caution: 3.5 }])
+  await advance(60000)
+  expect(sent).toHaveLength(3)
+  expect(screen.getByText('3.5')).toBeTruthy()
+  expect(useStatus.getState().settings.hold_caution).toBe(3.5)
+  // Nothing new on screen: the same markup, only the value moved.
+  expect(view.container.innerHTML.replace(/value="[^"]*"/, '').replace(/<b>[^<]*<\/b>/, '')).toBe(before)
+  expect(toasts).not.toHaveBeenCalled()
+})
+
+it('caution: a newer value cuts the wait short and the older one is never sent after it', async () => {
+  const down = { on: true }
+  const sent = settingsBackend(down)
+  render(<CautionSlider value={2} range={[0, 6]} />)
+  await settle()
+  fireEvent.change(screen.getByRole('slider'), { target: { value: '3' } })
+  await advance(350)
+  down.on = false
+  fireEvent.change(screen.getByRole('slider'), { target: { value: '4' } })
+  await advance(350)
+  expect(sent).toEqual([{ hold_caution: 3 }, { hold_caution: 4 }])
+  await advance(60000)
+  expect(sent).toHaveLength(2)
+  expect(useStatus.getState().settings.hold_caution).toBe(4)
+})
+
+it('caution: retries are bounded; the kept value goes out with the next change', async () => {
+  const down = { on: true }
+  const sent = settingsBackend(down)
+  render(<CautionSlider value={2} range={[0, 6]} />)
+  await settle()
+  fireEvent.change(screen.getByRole('slider'), { target: { value: '5' } })
+  await advance(350)
+  await advance(1000 + 4000 + 15000)
+  expect(sent).toHaveLength(4)
+  await advance(120000)
+  expect(sent).toHaveLength(4)
+  expect(screen.getByText('5.0')).toBeTruthy()
+  down.on = false
+  fireEvent.change(screen.getByRole('slider'), { target: { value: '5.5' } })
+  await advance(350)
+  expect(sent.at(-1)).toEqual({ hold_caution: 5.5 })
   expect(toasts).not.toHaveBeenCalled()
 })
