@@ -16,15 +16,15 @@ NOW = 1_790_000_000.0
 
 
 def _plan(**kw):
-    args: dict[str, Any] = dict(
-        item_ids=[1, 2, 3, 4],
-        current=False,
-        force=False,
-        stored=set(),
-        complete=set(),
-        fetched_at={},
-        now=NOW,
-    )
+    args: dict[str, Any] = {
+        "item_ids": [1, 2, 3, 4],
+        "current": False,
+        "force": False,
+        "stored": set(),
+        "complete": set(),
+        "fetched_at": {},
+        "now": NOW,
+    }
     args.update(kw)
     return lh.plan_league(**args)
 

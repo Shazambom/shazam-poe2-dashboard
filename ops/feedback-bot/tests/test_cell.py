@@ -21,9 +21,9 @@ def run(tmp_path, payload, name="in.gz"):
     p = tmp_path / name
     p.write_bytes(payload if isinstance(payload, (bytes, bytearray)) else gz(payload))
     out = tmp_path / "out"
-    before = {q for q in tmp_path.rglob("*")}
+    before = set(tmp_path.rglob("*"))
     code = cell.run(p, out)
-    after = {q for q in tmp_path.rglob("*")}
+    after = set(tmp_path.rglob("*"))
     new = {q for q in after - before if not str(q).startswith(str(out))}
     assert not new, f"wrote outside outdir: {new}"
     return code, out

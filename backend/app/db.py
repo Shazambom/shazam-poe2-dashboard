@@ -243,12 +243,11 @@ def _carry_crawl(new, old) -> tuple[int, int]:
         if not {"kv_ops", "league_daily"} <= have:
             devtelemetry.tlog("seed", "local DB has no crawl tables; nothing to carry")
             return 0, 0  # an older layout: no crawl bookkeeping to carry
-        seed_at = {
-            k: v
-            for k, v in c.execute(
+        seed_at = dict(
+            c.execute(
                 "SELECT key, CAST(value AS REAL) FROM main.kv_ops WHERE key LIKE 'lh_fetch:%'"
             )
-        }
+        )
         newer = []
         for key, at in c.execute(
             "SELECT key, CAST(value AS REAL) FROM loc.kv_ops WHERE key LIKE 'lh_fetch:%'"

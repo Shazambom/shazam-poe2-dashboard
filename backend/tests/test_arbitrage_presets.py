@@ -19,14 +19,14 @@ from app.arbitrage import routes
 OWNER = {
     "balanced": (
         "Balanced",
-        dict(
-            min_margin_pct=20,
-            max_gold=0,
-            min_margin_per_1k_gold=0,
-            min_liquidity_ref=1000,
-            min_volume_ref_per_h=100,
-            max_step_minutes=60,
-        ),
+        {
+            "min_margin_pct": 20,
+            "max_gold": 0,
+            "min_margin_per_1k_gold": 0,
+            "min_liquidity_ref": 1000,
+            "min_volume_ref_per_h": 100,
+            "max_step_minutes": 60,
+        },
         3,
         (0.6, 0.2, 0.35, 0.3),
         2,
@@ -37,14 +37,14 @@ OWNER = {
     # Owner, 2026-10-08, read from their running app: Balanced's filters, ranked by yield (velocity) alone.
     "high_yield": (
         "High Yield",
-        dict(
-            min_margin_pct=20,
-            max_gold=0,
-            min_margin_per_1k_gold=0,
-            min_liquidity_ref=1000,
-            min_volume_ref_per_h=100,
-            max_step_minutes=60,
-        ),
+        {
+            "min_margin_pct": 20,
+            "max_gold": 0,
+            "min_margin_per_1k_gold": 0,
+            "min_liquidity_ref": 1000,
+            "min_volume_ref_per_h": 100,
+            "max_step_minutes": 60,
+        },
         3,
         (1, 0, 0, 0),
         2,
@@ -54,14 +54,14 @@ OWNER = {
     ),
     "quick": (
         "Quick flips",
-        dict(
-            min_margin_pct=5,
-            max_gold=1000000,
-            min_margin_per_1k_gold=0.41,
-            min_liquidity_ref=200,
-            min_volume_ref_per_h=10000,
-            max_step_minutes=15,
-        ),
+        {
+            "min_margin_pct": 5,
+            "max_gold": 1000000,
+            "min_margin_per_1k_gold": 0.41,
+            "min_liquidity_ref": 200,
+            "min_volume_ref_per_h": 10000,
+            "max_step_minutes": 15,
+        },
         3,
         (0.8, 0.2, 0.4, 0.4),
         2,
@@ -71,14 +71,14 @@ OWNER = {
     ),
     "big": (
         "Big margins",
-        dict(
-            min_margin_pct=66,
-            max_gold=2000000,
-            min_margin_per_1k_gold=0,
-            min_liquidity_ref=2000,
-            min_volume_ref_per_h=2000,
-            max_step_minutes=45,
-        ),
+        {
+            "min_margin_pct": 66,
+            "max_gold": 2000000,
+            "min_margin_per_1k_gold": 0,
+            "min_liquidity_ref": 2000,
+            "min_volume_ref_per_h": 2000,
+            "max_step_minutes": 45,
+        },
         3,
         (0.2, 0.2, 1.0, 0.35),
         2,
@@ -88,14 +88,14 @@ OWNER = {
     ),
     "gold": (
         "Gold efficient",
-        dict(
-            min_margin_pct=0,
-            max_gold=1000000,
-            min_margin_per_1k_gold=0,
-            min_liquidity_ref=2000,
-            min_volume_ref_per_h=2000,
-            max_step_minutes=45,
-        ),
+        {
+            "min_margin_pct": 0,
+            "max_gold": 1000000,
+            "min_margin_per_1k_gold": 0,
+            "min_liquidity_ref": 2000,
+            "min_volume_ref_per_h": 2000,
+            "max_step_minutes": 45,
+        },
         3,
         (0.9, 1.0, 0.2, 0.4),
         2,
@@ -105,14 +105,14 @@ OWNER = {
     ),
     "safe": (
         "Safe",
-        dict(
-            min_margin_pct=8,
-            max_gold=1200000,
-            min_margin_per_1k_gold=0,
-            min_liquidity_ref=10000,
-            min_volume_ref_per_h=5000,
-            max_step_minutes=120,
-        ),
+        {
+            "min_margin_pct": 8,
+            "max_gold": 1200000,
+            "min_margin_per_1k_gold": 0,
+            "min_liquidity_ref": 10000,
+            "min_volume_ref_per_h": 5000,
+            "max_step_minutes": 120,
+        },
         3,
         (0.3, 0.2, 0.5, 1.0),
         2,
@@ -121,7 +121,12 @@ OWNER = {
         0.019905251005215174,
     ),
 }
-ZERO = dict(min_margin_ref=0, max_fill_hours=0, min_velocity=0, exclude_recipes=False)
+ZERO = {
+    "min_margin_ref": 0,
+    "max_fill_hours": 0,
+    "min_velocity": 0,
+    "exclude_recipes": False,
+}
 
 
 def _expected(pid):

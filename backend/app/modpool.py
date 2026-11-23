@@ -301,7 +301,7 @@ def pools_from(export: Export, families: list | None = None) -> list:
     pools = []
     for class_name, entry in by_name.items():
         cid, bases = entry["cid"], entry["bases"]
-        class_tags = set(t for b in bases for t in b.get("tags") or [])
+        class_tags = {t for b in bases for t in b.get("tags") or []}
         domain = DOMAIN_OVERRIDES.get(class_name) or _domain_of(class_tags, export.mods)
         if not domain:
             continue
@@ -317,13 +317,13 @@ def pools_from(export: Export, families: list | None = None) -> list:
             ):  # a logbook: every tag its domain's mods roll on
                 tags = tuple(
                     sorted(
-                        set(
+                        {
                             w["tag"]
                             for m in export.mods.values()
                             if m.get("domain") == domain
                             for w in m.get("spawn_weights") or []
                             if w["weight"] > 0
-                        )
+                        }
                         - {"default"}
                     )
                 )
@@ -408,12 +408,12 @@ def primary_tags(tags, universe: set, freq: Counter) -> list:
 
 
 def _base_tags(export: Export) -> set:
-    return set(
+    return {
         t
         for b in export.bases.values()
         if b.get("release_state") == "released"
         for t in b.get("tags") or []
-    )
+    }
 
 
 def families_from(export: Export) -> list:
@@ -1027,7 +1027,7 @@ def assemble(
                         "type": a["type"],
                         "level": a["level"],
                         "text": sorted(
-                            set(t for f in fits for t in f["text"]),
+                            {t for f in fits for t in f["text"]},
                             key=lambda t: [
                                 f["text"].index(t) if t in f["text"] else 0
                                 for f in fits

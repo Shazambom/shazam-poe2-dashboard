@@ -911,7 +911,7 @@ def test_the_volume_rule_counts_units_of_the_currency_both_ways():
     rv = {"exalted": 1.0, "divine": 500.0, "chaos": 60.0, "x": 25.0}
     ranked = G.counterparts_by_volume(g, rv)
     assert [o for _u, o in ranked["x"]] == ["exalted", "chaos", "divine"]
-    assert dict((o, round(u, 2)) for u, o in ranked["x"]) == {
+    assert {o: round(u, 2) for u, o in ranked["x"]} == {
         "exalted": 1.3,
         "chaos": 0.2,
         "divine": 0.1,
