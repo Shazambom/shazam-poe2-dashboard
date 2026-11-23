@@ -358,6 +358,17 @@ export default function MerchantView({ league }) {
     }
   }, [desktop, sel, isLoggedIn, oauthAccount, sessionAccount, accountSlot, fetchOrder, setBusy])
 
+  const [shopScope, setShopScope] = useState(null)
+  if (!shopScope || shopScope.key !== cacheKey || shopScope.desktop !== desktop || shopScope.oauth !== oauthAccount || shopScope.league !== sel) {
+    setShopScope({ key: cacheKey, desktop, oauth: oauthAccount, league: sel })
+    const cached = sel && accountSlot ? shopCache.get(cacheKey) || null : null
+    setShop(cached)
+    if (!oauthAccount) setSessionAccount(cached?.account || '')
+    setError(null)
+    setOpenId(null)
+    setBusyMode(null)
+  }
+
   const runShopFetchRef = useRef(runShopFetch)
   useLayoutEffect(() => { runShopFetchRef.current = runShopFetch }, [runShopFetch])
 
@@ -371,11 +382,8 @@ export default function MerchantView({ league }) {
   // on tab open, league switch, login, or fetchOrder change (zero extra Load button friction).
   useEffect(() => {
     const cached = sel && accountSlot ? shopCache.get(cacheKey) || null : null
-    setShop(cached)
-    if (!oauthAccount) setSessionAccount(cached?.account || '')
-    setError(null)
-    setOpenId(null)
-    setBusy(null)
+    busyRef.current = null
+    useSync.getState().setBusy(false)
     if (desktop && sel && accountSlot && !cached) {
       runShopFetchRef.current({ sort: fetchOrder, more: false })
     }
@@ -385,7 +393,7 @@ export default function MerchantView({ league }) {
       busyRef.current = null
       window.poe2desktop?.merchant?.cancel?.({ scope: 'fetch' })
     }
-  }, [desktop, cacheKey, sel, accountSlot, fetchOrder, oauthAccount, setBusy])
+  }, [desktop, cacheKey, sel, accountSlot, fetchOrder, oauthAccount])
 
   // Done marks and their Undo belong to the selected league and account.
   const [doneScope, setDoneScope] = useState(doneKey)
@@ -412,15 +420,17 @@ export default function MerchantView({ league }) {
     return () => window.removeEventListener('keydown', onKey)
   }, [shop])
 
+  const [marketScope, setMarketScope] = useState({ desktop, league: sel })
+  if (marketScope.desktop !== desktop || marketScope.league !== sel) {
+    setMarketScope({ desktop, league: sel })
+    if (desktop && sel) {
+      setMarket(cachedMarket ? { prices: cachedMarket.prices, inflation: cachedMarket.inflation, sales: cachedMarket.sales || [] } : { ...market, sales: [] })
+    }
+  }
+
   // Load local loopback pricing, inflation series, and Merchant History sales with a short module cache (no GGG traffic).
   useEffect(() => {
     if (!desktop || !sel) return undefined
-    const cached = marketCache.get(sel)
-    if (cached) {
-      setMarket({ prices: cached.prices, inflation: cached.inflation, sales: cached.sales || [] })
-    } else {
-      setMarket(prev => ({ ...prev, sales: [] }))
-    }
     let alive = true
     fetchMarketIfStale(sel).then(next => {
       if (!alive || !next) return
