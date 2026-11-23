@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 // Goldens for the number-to-regex module, produced by the reference implementation's OWN code (dev only). The
 // upstream sources are fetched into ~/.cache at a pinned commit, transpiled in memory and run
 // over the whole input space plus seeded fuzz inputs; only the output strings are written, to

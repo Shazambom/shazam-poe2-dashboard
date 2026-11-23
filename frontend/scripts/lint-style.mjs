@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 // Arbiter UI style linter — zero dependencies, one source of truth.
 //
 // WHY THIS EXISTS (and not stylelint): the worst color drift in this app lives in
