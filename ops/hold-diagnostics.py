@@ -98,7 +98,9 @@ def _boards(db, only_top=None, phase=None, hold=7):
         scorer = bt.production if only_top else (lambda e, c: {x[0]: 0 for x in e})
         for t in range(4, last - hold - 2):
             early = reg(t).get("early", 1.0)
-            if phase == "early" and early < 0.5 or phase == "settled" and early >= 0.5:
+            if (phase == "early" and early < 0.5) or (
+                phase == "settled" and early >= 0.5
+            ):
                 continue
             board = bt.board_for_day(per, meta, t, 7, scorer, past, 2.0, hold, lg, reg)
             if len(board) < 20:

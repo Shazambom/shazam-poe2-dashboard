@@ -66,8 +66,7 @@ def _spawn(coro) -> None:
         lambda tt: (
             _bg_tasks.discard(tt),
             tt.cancelled()
-            or tt.exception()
-            and log.error("bg task failed: %s", tt.exception()),
+            or (tt.exception() and log.error("bg task failed: %s", tt.exception())),
         )
     )
 
