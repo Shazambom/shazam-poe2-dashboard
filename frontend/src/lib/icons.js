@@ -3,7 +3,7 @@
 // GGG's own server) — nothing is bundled or re-hosted. Lets any view render a
 // currency as its icon with the name on hover, keyed by trade id OR by name.
 import { ignoredError } from './ignoredError.js'
-import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
+import { useMemo, useState, useSyncExternalStore } from 'react'
 import { api } from './api.js'
 
 export const CDN = 'https://web.poecdn.com'
@@ -117,14 +117,14 @@ export function lookup({ id, name } = {}) {
   return null
 }
 
-// Re-renders the caller once the index has loaded (returns the index or null).
+// A retry may be in flight with a previous successful index still displayed.
+function subscribeIndex(receive) {
+  subs.add(receive)
+  if (_index) receive(_index)
+  else loadIcons()
+  return () => subs.delete(receive)
+}
+
 export function useIcons() {
-  const [idx, setIdx] = useState(_index)
-  useEffect(() => {
-    const fn = (i) => setIdx(i)
-    subs.add(fn)                       // always: a later reload (retrySoon) must reach this caller too
-    if (_index) setIdx(_index); else loadIcons()
-    return () => subs.delete(fn)
-  }, [])
-  return idx
+  return useIconSubscription(_index, subscribeIndex)
 }
