@@ -306,6 +306,8 @@ Check these every time; each one has cost a deploy before. (The general rules ev
 
 Condensed and general, newest first; each came from a post-deploy audit (step 8).
 
+- **2026-11-23 (0.3.17):** detach `publish-github.sh` into its own session (`python3` `subprocess.Popen(..., start_new_session=True)`) rather than plain `nohup ... &` inside a PTY tool shell; closing the shell can still send `SIGHUP` (`EXIT 129`) to child `node` processes like `sync-ee2.mjs`.
+
 - **2026-11-22 (0.3.17-beta.4):** wipe `desktop/.venv-build` before `desktop/build-backend.sh` whenever audit/dev tools may have touched it (avoids bundling extra packages into the onefile Mac binary; verify `0 MB` bloat with `ops/profile.mjs --only artifacts`). Run `ops/regression-diff.py` / `publish-github.sh` with `TMPDIR=/tmp` (sandboxed `TMPDIR` paths break `sqlite3 -readonly .backup`) and avoid straddling a wall-clock `:00:00` hour boundary (which drops an hour between base and working-tree dumps and causes false diffs).
 
 - **2026-11-22 (0.3.17-beta.3):** when overwriting a signed Mach-O binary on Apple Silicon (`desktop/build-backend.sh`),
