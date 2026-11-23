@@ -5,6 +5,9 @@ by the publish script against the owner's data.
     DATA_DIR=$(mktemp -d) MARKET_SEED= python -m pytest backend/tests/test_regression_gate.py -q
 """
 import importlib.util
+import os
+import stat
+import subprocess
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -88,9 +91,69 @@ def test_a_card_difference_names_only_the_fields_that_changed():
     ]
 
 
-def test_the_publish_script_runs_the_gate_before_anything_remote():
+def _write_exec(path: Path, content: str) -> None:
+    path.write_text(content)
+    path.chmod(path.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+
+
+def _run_publish_with_failing_regression_gate(tmp_path: Path, script_text: str) -> tuple[subprocess.CompletedProcess[str], list[str]]:
+    repo = tmp_path / "repo"
+    (repo / "desktop").mkdir(parents=True)
+    (repo / "ops").mkdir(parents=True)
+    (repo / "desktop" / "package.json").write_text('{"version": "0.3.99-beta.1"}\n')
+    pub = repo / "desktop" / "publish-github.sh"
+    _write_exec(pub, script_text)
+
+    log_file = tmp_path / "calls.log"
+    _write_exec(repo / "ops" / "run-tests.sh", f"#!/bin/sh\necho 'run-tests' >> {log_file}\n")
+    (repo / "ops" / "regression-diff.py").write_text("# stub\n")
+
+    stub_bin = tmp_path / "bin"
+    stub_bin.mkdir()
+    _write_exec(
+        stub_bin / "git",
+        f"""#!/bin/sh
+echo "git $*" >> {log_file}
+case "$1" in
+  branch) echo main ;;
+  diff) exit 0 ;;
+  rev-parse) echo deadbeef ;;
+  *) exit 0 ;;
+esac
+""",
+    )
+    _write_exec(
+        stub_bin / "node",
+        f"""#!/bin/sh
+echo "node $*" >> {log_file}
+if [ "$1" = "-p" ]; then
+  echo "0.3.99-beta.1"
+fi
+exit 0
+""",
+    )
+    _write_exec(
+        stub_bin / "python3",
+        f"""#!/bin/sh
+echo "python3 $*" >> {log_file}
+exit 1
+""",
+    )
+
+    env = {**os.environ, "PATH": f"{stub_bin}:{os.environ['PATH']}"}
+    proc = subprocess.run(["/bin/bash", str(pub)], cwd=repo / "desktop", env=env, capture_output=True, text=True, check=False)
+    calls = log_file.read_text().splitlines() if log_file.exists() else []
+    return proc, calls
+
+
+def test_the_publish_script_runs_the_gate_before_anything_remote(tmp_path):
     script = (ROOT / "desktop" / "publish-github.sh").read_text()
     gate = script.index("../ops/regression-diff.py --version \"$VER\" --accept ../ops/regression-accept.txt")
     assert script.index("../ops/run-tests.sh") < gate < script.index("git push origin main")
     assert gate < script.index("release-assets.mjs ensure-draft")
-    assert "|| { echo \"FATAL: regression diff" in script[gate:gate + 400], "a failed gate stops the release"
+    proc, calls = _run_publish_with_failing_regression_gate(tmp_path, script)
+    assert proc.returncode != 0, "a failed gate stops the release"
+    assert "FATAL: regression diff" in proc.stdout, "a failed gate explains why it stopped"
+    assert not any(c.startswith("git push") for c in calls), "a failed gate never pushes"
+    assert not any("release-assets.mjs" in c for c in calls), "a failed gate never touches GitHub releases"
+
