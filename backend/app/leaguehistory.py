@@ -376,18 +376,9 @@ _DELETE_WITHDRAWN_DAYS = Template(
 )
 
 
-async def fetch_item(name: str, item_id: int, current: bool) -> int:
-    """Pull one item's daily history into league_daily and stamp it. Returns the rows stored; raises
-    on a failed request (nothing is stamped then). For a league still running, a stored day inside
-    the returned span that poe2scout no longer reports is removed, so a withdrawn row cannot ship."""
-    data = await _get(
-        f"/Leagues/{urllib.parse.quote(name)}/Items/{item_id}/DailyStatsHistory?dayCount=500"
-    )
-    rows = [
-        (name, item_id, s["Time"], s.get("Close"), s.get("Average"), s.get("Volume"))
-        for s in data.get("DailyStats", [])
-        if s.get("Time")
-    ]
+def _store_item_history(
+    name: str, item_id: int, current: bool, data: dict, rows: list
+) -> None:
     if rows:
         with db.tx() as c:
             if current:
@@ -404,6 +395,21 @@ async def fetch_item(name: str, item_id: int, current: bool) -> int:
     # poe2scout has no history for would otherwise be refetched every crawl).
     if not current and not data.get("HasMore"):
         db.kv_set(f"lh_complete:{name}:{item_id}", True)
+
+
+async def fetch_item(name: str, item_id: int, current: bool) -> int:
+    """Pull one item's daily history into league_daily and stamp it. Returns the rows stored; raises
+    on a failed request (nothing is stamped then). For a league still running, a stored day inside
+    the returned span that poe2scout no longer reports is removed, so a withdrawn row cannot ship."""
+    data = await _get(
+        f"/Leagues/{urllib.parse.quote(name)}/Items/{item_id}/DailyStatsHistory?dayCount=500"
+    )
+    rows = [
+        (name, item_id, s["Time"], s.get("Close"), s.get("Average"), s.get("Volume"))
+        for s in data.get("DailyStats", [])
+        if s.get("Time")
+    ]
+    await _finish_crawl_write(_store_item_history, name, item_id, current, data, rows)
     return len(rows)
 
 
