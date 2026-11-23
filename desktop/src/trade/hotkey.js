@@ -17,13 +17,17 @@ function fire(getWin) {
   try { w.webContents.send('hotkey:focus-live') } catch (e) { ignored('hotkey:send-focus', e) }
 }
 
-// Returns { ok, combo }. ok=false means the OS refused the combo (already in use).
+const register = (getWin, combo) => { try { return globalShortcut.register(combo, () => fire(getWin)) } catch { return false } }
+
+// Returns { ok, combo }. ok=false means the OS refused the combo (already in use); the previous combo,
+// which Settings keeps showing and main keeps saved, is registered again so the hotkey keeps working.
 function registerHotkey(getWin, combo) {
+  const previous = current
   if (current) { try { globalShortcut.unregister(current) } catch (e) { ignored('hotkey:unregister', e) } current = null }
   if (!combo) return { ok: false, combo }
-  let ok
-  try { ok = globalShortcut.register(combo, () => fire(getWin)) } catch { ok = false }
+  const ok = register(getWin, combo)
   if (ok) current = combo
+  else if (previous && register(getWin, previous)) current = previous
   return { ok, combo }
 }
 

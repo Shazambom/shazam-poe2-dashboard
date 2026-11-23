@@ -4,8 +4,24 @@ import { ignoredError } from '../lib/ignoredError.js'
 import { connectBridge, connectSession } from '../lib/session.js'
 import { useStatus } from '../lib/statusStore.js'
 import { clearMerchantShopCache } from '../lib/merchantCache.js'
+import { withRetry } from '../lib/retry.js'
 
 const ago = (t) => t ? fmt.age(Date.now() / 1000 - t) + ' ago' : '–'
+
+// A pasted cookie is mirrored into the app's own session (the embedded Trade site). A mirror that fails is
+// retried in the background, a few times, while that cookie is still the one in use: a newer paste, the
+// in-app login or a disconnect replaces it (`mirrorFor`) and ends the retries.
+let mirrorFor = ''
+const mirrorCookie = async (raw) => {
+  const r = await window.poe2desktop.setCookie(raw)
+  if (r?.ok === false) throw new Error(r.message || 'cookie not set')
+}
+const retryMirror = (raw) => {
+  setTimeout(() => {
+    withRetry(async () => { if (mirrorFor === raw) await mirrorCookie(raw) }, { delays: [4000, 15000], onFail: () => ignoredError('mirror login cookie') })
+      .catch(() => ignoredError('mirror login cookie'))
+  }, 1000)
+}
 
 export default function AccountsPanel({ onChange }) {
   // Session + OAuth state ride the app-level status poll (no second poller); `load` = refresh it.
@@ -25,6 +41,7 @@ export default function AccountsPanel({ onChange }) {
   const desktop = connectBridge() === 'desktop'   // live order book is a desktop-app feature
   const bridgeConnect = async () => {
     setBusy(true); setMsg(null)
+    mirrorFor = ''
     const r = await connectSession()
     setMsg({ ok: r.ok !== false, text: r.message })
     if (r.ok) { clearMerchantShopCache(); await load(); onChange?.() }
@@ -38,7 +55,10 @@ export default function AccountsPanel({ onChange }) {
       const r = await api.connectSession(raw)
       // Desktop: also mirror the cookie into the Electron session so the embedded
       // Trade site is logged in (paste otherwise only reaches the backend).
-      if (window.poe2desktop?.setCookie) { try { await window.poe2desktop.setCookie(raw) } catch { ignoredError('mirror login cookie') } }
+      if (window.poe2desktop?.setCookie) {
+        mirrorFor = raw
+        try { await mirrorCookie(raw) } catch { ignoredError('mirror login cookie'); retryMirror(raw) }
+      }
       clearMerchantShopCache()
       setMsg({ ok: true, text: r.message }); setCookie(''); await load(); onChange?.()
     }
@@ -56,7 +76,7 @@ export default function AccountsPanel({ onChange }) {
       <h2>Account</h2>
       {sess?.connected ? (
         <p className="notice">Connected{sess.label ? ` · ${sess.label}` : ''} · set {ago(sess.set_at)} · last successful fetch {ago(sess.last_ok)}.
-          {' '}{sess.source !== 'env' && <button type="button" className="btn small" onClick={async () => { await api.disconnectSession(); clearMerchantShopCache(); await load(); onChange?.() }}>Disconnect</button>}
+          {' '}{sess.source !== 'env' && <button type="button" className="btn small" onClick={async () => { mirrorFor = ''; await api.disconnectSession(); clearMerchantShopCache(); await load(); onChange?.() }}>Disconnect</button>}
         </p>
       ) : desktop ? (
         <>

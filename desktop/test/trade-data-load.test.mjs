@@ -52,19 +52,24 @@ test('uniqueprice: the unique list is read on first use and reused afterwards', 
   assert.equal(dataReads(reads), 1)
 })
 
-// Today's behaviour, pinned as it is (reported to the owner, not changed here): uniques() sets its cache
-// before reading, so after a failed read every later call answers an empty list until restart.
+// A failed read is not cached (it once was, as an empty list until restart): it throws to the callers that
+// shared it, and the next call reads again, so the Strat Calculator's unique list fills on its next ask.
+// (The test keeps its original name; its last assertions are what changed.)
 test('uniqueprice: a failed first load throws to the caller; later calls answer an empty list', async (t) => {
   let fail = true
   const real = READS.uniqueprice.target[READS.uniqueprice.name]
-  t.mock.method(READS.uniqueprice.target, READS.uniqueprice.name, function (...a) {
+  const reads = t.mock.method(READS.uniqueprice.target, READS.uniqueprice.name, function (...a) {
     if (fail && String(a[0]).includes('ee2-query')) { fail = false; throw Object.assign(new Error('ENOENT: items.json'), { code: 'ENOENT' }) }
     return real.apply(this, a)
   })
   const U = fresh(UNIQUEPRICE)
-  await assert.rejects(async () => U.uniques(), /ENOENT/)
-  assert.deepEqual(await U.uniques(), [])
-  assert.deepEqual(await U.uniques(), [])
+  await Promise.all([assert.rejects(U.uniques(), /ENOENT/), assert.rejects(U.uniques(), /ENOENT/)])   // both callers see it fail
+  assert.equal(dataReads(reads), 1, 'callers that overlap share the one failed read')
+  const list = await U.uniques()
+  assert.ok(list.length > 500, 'the next call reads again')
+  assert.equal(dataReads(reads), 2)
+  assert.equal(await U.uniques(), list, 'and that list is kept')
+  assert.equal(dataReads(reads), 2)
 })
 
 test('modsearch: overlapping first calls share one read of the catalogue', async (t) => {

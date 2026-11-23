@@ -15,22 +15,21 @@ const FETCH_POLICY = 'trade-fetch'
 const KEEP_MS = 5 * 60_000   // a search whose fetch was refused is kept this long, so its retry only fetches
 
 // Every unique the trade site knows, by name and base: its own item list (EE2's data, synced every
-// release), read once. Callers that overlap share the one read. As before, the list is kept from the
-// moment the read starts: a read that fails throws to its callers, and later calls get the list as it
-// stood (empty).
+// release), read once. Callers that overlap share the one read. A read that fails throws to its callers
+// and is forgotten, so the next call reads again.
 /** @type {Promise<Array<{ name: string, type: string }>> | null} */
 let _uniques = null
 function uniques() {
   if (_uniques) return _uniques
-  /** @type {Array<{ name: string, type: string }>} */
-  const list = []
-  _uniques = loadUniques(list)
-  _uniques.catch(() => { _uniques = Promise.resolve(list) })
-  return _uniques
+  const read = loadUniques()
+  _uniques = read
+  read.catch(() => { if (_uniques === read) _uniques = null })
+  return read
 }
 
-/** @param {Array<{ name: string, type: string }>} list filled in place */
-async function loadUniques(list) {
+async function loadUniques() {
+  /** @type {Array<{ name: string, type: string }>} */
+  const list = []
   const file = path.join(__dirname, '..', 'vendor', 'ee2-query', 'data', 'trade', 'items.json')
   const seen = new Set()
   for (const g of JSON.parse(await fsp.readFile(file, 'utf8')).result) {

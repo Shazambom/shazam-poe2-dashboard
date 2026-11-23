@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { ignoredError } from '../lib/ignoredError.js'
-import { useStatus, ensureSettings } from '../lib/statusStore.js'
+import { ensureSettings, persistSettings } from '../lib/statusStore.js'
 import { DEFAULT_NOTIFICATIONS, notify, osNotify } from '../lib/notifications.js'
 import { playPing, TONES } from '../lib/ping-sound.js'
 import { isDesktop } from '../lib/session.js'
@@ -22,7 +22,7 @@ export default function NotificationsPanel() {
   const [n, setN] = useState(null)
   useEffect(() => { ensureSettings().then(s => setN(merge(s?.notifications))).catch(() => setN(merge())) }, [])
   if (!n) return null
-  const save = (next) => { setN(next); useStatus.getState().saveSettings({ notifications: next }).catch(() => ignoredError('save notification settings')) }
+  const save = (next) => { setN(next); persistSettings({ notifications: next }).catch(() => ignoredError('save notification settings')) }
   const setFlag = (fam, ch, v) => {
     save({ ...n, [fam]: { ...n[fam], [ch]: v } })
     // Turning OS notifications on sends a sample immediately, so the system's allow prompt (and

@@ -1,6 +1,6 @@
 import { ignoredError } from '../lib/ignoredError.js'
 import { useEffect, useRef, useState } from 'react'
-import { useStatus, ensureSettings } from '../lib/statusStore.js'
+import { ensureSettings, persistSettings } from '../lib/statusStore.js'
 
 // CAUTION: how much a steady price is worth to you. The board ranks kept value, steadiness, a
 // steady climb and price (holdscore.hold_rank); this sets steadiness's weight (k / default). At 0
@@ -26,7 +26,7 @@ export default function CautionSlider({ value, range, onChange }) {
     timer.current = setTimeout(() => {
       dragging.current = false
       onChange?.(next)                                     // re-rank now
-      useStatus.getState().saveSettings({ hold_caution: next }).catch(() => ignoredError('save caution setting'))
+      persistSettings({ hold_caution: next }).catch(() => ignoredError('save caution setting'))   // kept and retried on failure
     }, 350)                                                // debounce the drag, then persist
   }
 

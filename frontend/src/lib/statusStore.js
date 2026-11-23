@@ -33,7 +33,7 @@ export const useStatus = create((set, get) => ({
     } catch (e) { console.error(e) }
   },
   loadSettings: async () => {
-    const s = await api.settings()
+    const s = withUnsaved(await api.settings())
     set({ settings: s })
     syncTheme?.(s.theme, s.custom_themes)
     return s
@@ -82,9 +82,53 @@ export const useStatus = create((set, get) => ({
   saveSettings: (patch) => {
     const run = settingsQueue.then(() => api.putSettings(patch))
     settingsQueue = run.catch(() => ignoredError('resume settings queue'))
-    return run.then(s => { set({ settings: s }); return s })
+    return run.then(s => { set({ settings: withUnsaved(s) }); return s })
   },
 }))
+
+// A user's setting change whose save failed is not lost: persistSettings keeps the latest value per key
+// here until a save lands. It is sent again after each wait in SETTINGS_RETRY_MS, and a newer change ends
+// a wait and goes out at once with everything still unsaved; once the retries are spent the values stay
+// here for the next change to carry. The cached settings show them meanwhile, so every view reads the
+// user's choice rather than the stale saved one.
+const SETTINGS_RETRY_MS = [1000, 4000, 15000]
+const unsaved = new Map()
+const withUnsaved = (s) => (unsaved.size && s ? { ...s, ...Object.fromEntries(unsaved) } : s)
+let savingUnsaved = null   // the save loop running; every persistSettings call made during it shares its outcome
+let changedSince = false   // a change arrived after the loop's last send
+let endWait = null         // cuts the loop's current wait short
+
+// Resolves once every unsaved change has saved; rejects when the retries are spent (the values are kept).
+export function persistSettings(patch) {
+  for (const [k, v] of Object.entries(patch)) unsaved.set(k, v)
+  changedSince = true
+  useStatus.setState(st => ({ settings: withUnsaved(st.settings) }))
+  endWait?.()
+  savingUnsaved ??= saveUnsaved().finally(() => { savingUnsaved = null })
+  return savingUnsaved
+}
+
+async function saveUnsaved() {
+  let failures = 0
+  while (unsaved.size) {
+    const sent = Object.fromEntries(unsaved)
+    changedSince = false
+    try {
+      await useStatus.getState().saveSettings(sent)
+      for (const [k, v] of Object.entries(sent)) if (Object.is(unsaved.get(k), v)) unsaved.delete(k)
+      failures = 0
+    } catch (e) {
+      if (changedSince) { failures = 0; continue }   // a newer change came in during the save: send it now
+      if (failures === SETTINGS_RETRY_MS.length) throw e
+      await new Promise(resolve => {
+        const t = setTimeout(resolve, SETTINGS_RETRY_MS[failures++])
+        endWait = () => { clearTimeout(t); resolve() }
+      })
+      endWait = null
+      if (changedSince) failures = 0
+    }
+  }
+}
 
 // themeStore registers this so a loaded settings blob paints its theme (no import cycle).
 let syncTheme = null
