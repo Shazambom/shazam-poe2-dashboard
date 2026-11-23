@@ -9,6 +9,10 @@ desktop/app-dist/
 desktop/backend-bin/
 desktop/sidecar-bin/
 desktop/.venv-build/
+# PyInstaller's scratch files, present only while build-backend.sh / build-sidecar.sh run
+desktop/.pyi-work*/
+desktop/dist/
+desktop/poe2arb-*.spec
 desktop/.venv-sidecar/
 desktop/market-seed/
 .venv-test/
