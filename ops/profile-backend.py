@@ -294,9 +294,7 @@ def run_benchmarks(db_arg: str | None, runs: int) -> dict:
         )
         ops["digest.latest_rates(24h)"]["edges"] = len(rates)
 
-        g, ops["Graph.build()"] = bench(
-            lambda: graph_mod.Graph.build(), n=runs, flush=True
-        )
+        g, ops["Graph.build()"] = bench(graph_mod.Graph.build, n=runs, flush=True)
         g = graph_mod.cached_graph()
         if len(g.adj) == 0:
             raise RuntimeError(

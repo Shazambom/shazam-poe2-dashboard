@@ -577,7 +577,7 @@ def main():
             await asyncio.sleep(ACTIONS_EVERY_S)
             tick += 1
             try:
-                await handler.process_actions(lambda tid: client.fetch_channel(tid))
+                await handler.process_actions(client.fetch_channel)
             except Exception as e:
                 _log(f"actions failed: {e!r}")
             try:

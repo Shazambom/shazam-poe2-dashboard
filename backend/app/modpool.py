@@ -814,8 +814,8 @@ def _text(fragment: str) -> str:
 def currencies_from(page: str) -> list:
     """Every currency on poe2db's stackable list with a Minimum Modifier Level or a Maximum Item Level."""
     out, seen = [], set()
-    for slug_, name, body in _ITEM.findall(page):
-        name = html_lib.unescape(name).strip()
+    for slug_, raw_name, body in _ITEM.findall(page):
+        name = html_lib.unescape(raw_name).strip()
         if not name or name in seen:
             continue
         levels = {k: int(v) for k, v in _LEVEL.findall(body)}
@@ -836,8 +836,8 @@ def currencies_from(page: str) -> list:
 def grant_slugs(page: str) -> list:
     """The currencies whose text says they add a guaranteed modifier: their pages carry the table."""
     out, seen = [], set()
-    for slug_, name, body in _ITEM.findall(page):
-        name = html_lib.unescape(name).strip()
+    for slug_, raw_name, body in _ITEM.findall(page):
+        name = html_lib.unescape(raw_name).strip()
         if name and name not in seen and "guaranteed modifier" in _text(body):
             seen.add(name)
             out.append((slug_, name))

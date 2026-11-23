@@ -786,9 +786,7 @@ def test_categories_are_the_games_own_exchange_categories(monkeypatch):
 def test_exchange_category_reads_the_game_table_through_the_registry(monkeypatch):
     from app import currencies, movers
 
-    monkeypatch.setattr(
-        movers, "_trade_id", lambda name: {"Seraph's Heart": "seraphs-heart"}.get(name)
-    )
+    monkeypatch.setattr(movers, "_trade_id", {"Seraph's Heart": "seraphs-heart"}.get)
     monkeypatch.setattr(
         currencies.registry, "groups", lambda categories=None: {"seraphs-heart": "Gems"}
     )
@@ -830,9 +828,7 @@ def test_rows_carry_a_price_by_the_volume_rule(monkeypatch):
 def test_native_prices_reads_the_exchange_graph_by_trade_id(monkeypatch):
     from app import arbitrage, movers
 
-    monkeypatch.setattr(
-        movers, "_trade_id", lambda name: {"Seraph's Heart": "seraphs-heart"}.get(name)
-    )
+    monkeypatch.setattr(movers, "_trade_id", {"Seraph's Heart": "seraphs-heart"}.get)
     g = object()
     monkeypatch.setattr(arbitrage.graph, "cached_graph", lambda *a, **k: g)
     monkeypatch.setattr(

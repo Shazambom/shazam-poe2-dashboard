@@ -27,5 +27,8 @@ else:
 if __name__ == "__main__":
     accesslog.install()  # successful polls stay out of the log a problem report carries
     uvicorn.run(
-        app, host="127.0.0.1", port=int(os.environ.get("PORT", 8210)), log_level="info"
+        app,
+        host="127.0.0.1",
+        port=int(os.environ.get("PORT", "8210")),
+        log_level="info",
     )

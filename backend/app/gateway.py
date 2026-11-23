@@ -97,7 +97,7 @@ class Policy:
             for hits, win, lim in self.last_states
             if lim and elapsed < win and 1 - hits / lim < spare
         ]
-        return max(1.0, min(min(waits), 30.0)) if waits else 0.0
+        return max(1.0, min(*waits, 30.0)) if waits else 0.0
 
     def try_acquire_now(self, spare: float = 0.0) -> float:
         """Non-blocking reservation for an out-of-process caller (the Electron live-search engine):

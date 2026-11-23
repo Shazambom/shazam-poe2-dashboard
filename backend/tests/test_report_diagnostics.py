@@ -120,7 +120,7 @@ def test_diag_lists_the_traded_items_the_app_cannot_name_by_volume(monkeypatch):
         "Metadata/Items/Currency/CurrencyRerollRare": "chaos",
         "Metadata/Items/Currency/CurrencyModValues": "divine",
     }
-    monkeypatch.setattr(registry, "resolve_meta", lambda m: known.get(m))
+    monkeypatch.setattr(registry, "resolve_meta", known.get)
     now = 1_790_000_000 // 3600 * 3600
     rows = [
         (
