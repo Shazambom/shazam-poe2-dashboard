@@ -350,7 +350,7 @@ def test_the_search_applies_the_conversion(monkeypatch):
         routes.graph, "cached_graph", lambda volume_window_h=None: StubGraph()
     )
     monkeypatch.setattr(routes, "loop_currencies", lambda g, v: set())
-    monkeypatch.setattr(routes.db, "get_capital", lambda: {})
+    monkeypatch.setattr(routes.db, "get_capital", dict)
     f = routes._search_setup({"min_liquidity_ref": 1000, "min_margin_pct": 20}, None)[2]
     assert f["min_liquidity_ref"] == pytest.approx(10.0)  # 1000 exalted, in divine
     assert f["min_margin_pct"] == 20  # a ratio: unchanged
@@ -437,7 +437,7 @@ def test_the_route_search_builds_over_the_presets_window(monkeypatch):
         routes, "get_settings", lambda: settings._merged({"volume_window_h": 72})
     )
     monkeypatch.setattr(routes, "loop_currencies", lambda g, v: set())
-    monkeypatch.setattr(routes.db, "get_capital", lambda: {})
+    monkeypatch.setattr(routes.db, "get_capital", dict)
     routes._search_setup({}, None)
     assert asked == [72]
 

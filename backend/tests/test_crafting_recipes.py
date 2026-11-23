@@ -561,7 +561,7 @@ def _build(monkeypatch, rates, vols, with_recipes):
     monkeypatch.setattr(digest, "pair_volume", lambda league, hours: dict(vols))
     monkeypatch.setattr(gamedata, "fees", lambda: {"by_trade": {}})
     real = recipes.edges
-    monkeypatch.setattr(G.recipes, "edges", real if with_recipes else (lambda: []))
+    monkeypatch.setattr(G.recipes, "edges", real if with_recipes else (list))
     arbitrage.invalidate_caches()
     g = G.Graph.build()
     monkeypatch.setattr(G.recipes, "edges", real)
