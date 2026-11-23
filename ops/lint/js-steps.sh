@@ -62,6 +62,13 @@ step_tsc() {
   # The strict pilot: its roots are the two files the config names; tsc follows their imports.
   "${BIN}/tsc" --project "${LINT}/tsconfig.frontend.json" --pretty false || status=1
   collect '^desktop/(src/.+\.js|scripts/.+\.mjs|test/.+\.mjs)$'
+  # The EE2 port's esbuild entry imports `@/…` paths that exist only in EE2's checkout during
+  # desktop/scripts/sync-ee2.mjs; like the goldens spec, it is not part of the desktop project.
+  local kept=() file
+  for file in "${FILES[@]}"; do
+    [[ "${file}" == desktop/src/vendor/ee2-query/entry.js ]] || kept+=("${file}")
+  done
+  FILES=("${kept[@]}")
   node -e '
     const [root, ...files] = process.argv.slice(1)
     process.stdout.write(JSON.stringify({

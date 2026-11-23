@@ -32,6 +32,9 @@ const DESKTOP = ['desktop/src/**/*.js']
 const SCRIPTS = ['desktop/scripts/**/*.mjs', 'frontend/scripts/**/*.mjs', 'ops/**/*.mjs', 'frontend/vite.config.js']
 const FIRST_PARTY = [...RENDERER, ...LIFECYCLE, ...NODE_TESTS, ...DESKTOP, ...SCRIPTS]
 const GOLDENS_SPEC = ['desktop/scripts/ee2-goldens.spec.ts']
+// The esbuild entry of the EE2 port: its `@/…` imports resolve only inside EE2's checkout during
+// desktop/scripts/sync-ee2.mjs, so like the goldens spec it gets the core and suppression rules only.
+const EE2_ENTRY = ['desktop/src/vendor/ee2-query/entry.js']
 
 /** A preset's rules with every enabled rule at error (a preset's `warn` would otherwise pass). */
 const atError = (rules) => Object.fromEntries(Object.entries(rules).map(([id, value]) => {
@@ -122,6 +125,7 @@ const config = [
   // Shared plugins: all first-party JavaScript.
   {
     files: FIRST_PARTY,
+    ignores: EE2_ENTRY,
     plugins: { 'import-x': importX, regexp, promise, sonarjs, unicorn },
     settings: {
       'import-x/resolver-next': [createNodeResolver({ extensions: ['.mjs', '.js', '.jsx', '.json', '.css'] })],
@@ -207,6 +211,7 @@ const config = [
   // Desktop runtime: Electron main, preloads, workers (CommonJS).
   {
     files: DESKTOP,
+    ignores: EE2_ENTRY,
     plugins: { n, security },
     languageOptions: { sourceType: 'commonjs', globals: globals.node },
     rules: {
@@ -239,7 +244,7 @@ const config = [
   },
   {
     // The esbuild entry of the EE2 port is an ES module; everything else in desktop/src is CommonJS.
-    files: ['desktop/src/vendor/ee2-query/entry.js'],
+    files: EE2_ENTRY,
     languageOptions: { sourceType: 'module' },
   },
   {
