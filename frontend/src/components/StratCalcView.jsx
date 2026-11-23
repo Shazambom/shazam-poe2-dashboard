@@ -394,7 +394,13 @@ export default function StratCalcView({ league, currencies }) {
     if (t < pauseUntil.current) return
     // The queue and what a found price does: lib/stratPricing.js (tested against a fake trade site).
     const job = SP.nextPricing(open, { now: t, retryAt: retryAt.current, uses })
-    if (!job) return
+    if (!job) {
+      // Nothing due now: wake when the next search falls due (an hourly re-price), so an idle view runs it.
+      const due = SP.nextDue(open, { retryAt: retryAt.current, uses })
+      clearTimeout(wakeTimer.current)
+      if (due != null) wakeTimer.current = setTimeout(() => setWake(w => w + 1), Math.max(due, pauseUntil.current) - t + 250)
+      return
+    }
     const key = job.key, stratId = open.id
     SP.started(retryAt.current, job, t)
     setPending(key)
