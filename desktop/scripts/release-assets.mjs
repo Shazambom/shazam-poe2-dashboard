@@ -55,10 +55,13 @@ export function manifestFiles(text) {
   const out = new Map()
   let cur = null
   for (const raw of text.split(/\r?\n/)) {
-    let m
-    if ((m = raw.match(/^\s*-\s*url:\s*(\S+)/))) { cur = { name: m[1], size: null }; out.set(cur.name, cur) }
-    else if (cur && (m = raw.match(/^\s+size:\s*(\d+)/))) cur.size = Number(m[1])
-    else if ((m = raw.match(/^path:\s*(\S+)/))) { if (!out.has(m[1])) out.set(m[1], { name: m[1], size: null }) }
+    // Tried in order; a later pattern is only matched when the earlier ones did not match.
+    const url = raw.match(/^\s*-\s*url:\s*(\S+)/)
+    const size = url || !cur ? null : raw.match(/^\s+size:\s*(\d+)/)
+    const file = url || size ? null : raw.match(/^path:\s*(\S+)/)
+    if (url) { cur = { name: url[1], size: null }; out.set(cur.name, cur) }
+    else if (size) cur.size = Number(size[1])
+    else if (file) { if (!out.has(file[1])) out.set(file[1], { name: file[1], size: null }) }
     if (/^\S/.test(raw) && !/^files:/.test(raw)) cur = null
   }
   return [...out.values()]

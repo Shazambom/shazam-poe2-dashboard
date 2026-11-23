@@ -12,7 +12,8 @@ function derive() {
   const statData = new Map(), statDataSet = new Set()
   for (const { id: modType, entries } of stats.result) for (const { id, text } of entries) {
     let m = statData.get(text); if (!m) { m = {}; statData.set(text, m) }
-    ;(m[modType] ||= []).push(id); statDataSet.add(id)
+    if (!m[modType]) m[modType] = []
+    m[modType].push(id); statDataSet.add(id)
   }
   return { itemData, statData, statDataSet }
 }

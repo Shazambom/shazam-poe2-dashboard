@@ -18,5 +18,5 @@ def(S, 'symmetricDifference', function (o) { const r = new Set(this); for (const
 def(S, 'isSubsetOf', function (o) { for (const v of this) { if (!o.has(v)) { return false } } return true })
 def(S, 'isSupersetOf', function (o) { for (const v of o) { if (!this.has(v)) { return false } } return true })
 def(S, 'isDisjointFrom', function (o) { for (const v of this) { if (o.has(v)) { return false } } return true })
-if (!Object.groupBy) Object.groupBy = (it, fn) => { const out = Object.create(null); let i = 0; for (const v of it) { (out[fn(v, i++)] ||= []).push(v) } return out }
+if (!Object.groupBy) Object.groupBy = (it, fn) => { const out = Object.create(null); let i = 0; for (const v of it) { const k = fn(v, i++); if (!out[k]) { out[k] = [] } out[k].push(v) } return out }
 if (!Map.groupBy) Map.groupBy = (it, fn) => { const out = new Map(); let i = 0; for (const v of it) { const k = fn(v, i++); if (!out.has(k)) { out.set(k, []) } out.get(k).push(v) } return out }
