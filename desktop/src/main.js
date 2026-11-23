@@ -42,16 +42,16 @@ const DEFAULTS = { betaChannel: false, theme: 'vault' }
 const DEV_BACKEND_URL = process.env.ARBITER_DEV_BACKEND_URL || telemetry.SHAZAM
 // The two near-black window backdrops (twins of --bg / the trade webview backdrop in styles.css).
 // The window backdrop is painted before any CSS loads, so it is keyed by the UI theme preset the
-// renderer last chose (mirrored into desktop-settings.json). Each value is the style-ok twin of that
+// renderer last chose (mirrored into desktop-settings.json). Each value is the twin of that
 // preset's --backdrop token in frontend/src/styles.css; `trade` (behind the embedded trade site) is shared.
-const BACKDROPS = {   // style-ok: painted before the CSS loads
+const BACKDROPS = {   // painted before the CSS loads
   vault: '#191b22', ash: '#331f24', divinity: '#e9d2ae', sekhemas: '#101012', vaal: '#160d0c', azmeri: '#2f3640',
 }
 const BACKDROP_HEX = /^#[0-9a-f]{6}$/i
 // A custom theme (built in Settings → Appearance) carries its own --backdrop; the renderer hands it over
 // with the 'custom' id and it is remembered next to the theme id.
 const windowBackdrop = (s) => (s.theme === 'custom' && BACKDROP_HEX.test(s.customBackdrop || '') ? s.customBackdrop : BACKDROPS[s.theme] || BACKDROPS.vault)
-const BACKDROP = { get window() { return windowBackdrop(settings) }, trade: '#0c0d10' }   // style-ok
+const BACKDROP = { get window() { return windowBackdrop(settings) }, trade: '#0c0d10' }
 
 const settingsPath = () => path.join(app.getPath('userData'), 'desktop-settings.json')
 let settings = { ...DEFAULTS }
