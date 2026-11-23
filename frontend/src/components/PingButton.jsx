@@ -75,7 +75,7 @@ export default function PingButton({ ping, compact = false }) {
           {ping.flags?.inDemand && <span className="live-badge">in demand</span>}
         </div>
       </div>
-      <button className={`btn teleport ${view.cls}`} disabled={!view.enabled} onClick={onClick}>{view.label}</button>
+      <button type="button" className={`btn teleport ${view.cls}`} disabled={!view.enabled} onClick={onClick}>{view.label}</button>
     </div>
   )
 }

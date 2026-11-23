@@ -62,7 +62,7 @@ function ConvertView({ currencies, capital }) {
         <label className="convert-field">Want<CurrencyPicker value={want} onChange={setWant} options={opts} placeholder="want…" /></label>
         <label className="convert-field amount">Amount<input type="number" min="1"
           value={amount} onChange={e => { setDirty(true); setTyped(e.target.value) }} /></label>
-        <button className="btn primary" disabled={busy} onClick={run}>{busy ? 'Finding…' : 'Find route'}</button>
+        <button type="button" className="btn primary" disabled={busy} onClick={run}>{busy ? 'Finding…' : 'Find route'}</button>
       </div>
 
       {res && !best && <p className="muted">{res.min_amount

@@ -368,9 +368,9 @@ export default function StashView({ league }) {
             <i style={{ flexGrow: counted }} />{total - counted > 0 && <i className="off" style={{ flexGrow: total - counted }} />}
           </div>)}
         <div className="seg stash-unit" role="group" aria-label="Value in">
-          <button className={`seg-btn ${unitChoice == null ? 'on' : ''}`} onClick={() => chooseUnit(null)}>Auto</button>
+          <button type="button" className={`seg-btn ${unitChoice == null ? 'on' : ''}`} onClick={() => chooseUnit(null)}>Auto</button>
           {STASH_UNITS.map(u => (
-            <button key={u} className={`seg-btn ${unitChoice === u ? 'on' : ''}`} data-unit={u} onClick={() => chooseUnit(u)}><Cur id={u} size={14} /></button>
+            <button type="button" key={u} className={`seg-btn ${unitChoice === u ? 'on' : ''}`} data-unit={u} onClick={() => chooseUnit(u)}><Cur id={u} size={14} /></button>
           ))}
         </div>
       </div>
@@ -382,7 +382,7 @@ export default function StashView({ league }) {
             return (
               <section key={g.name} className={`stash-group ${shut ? 'folded' : ''} ${g.counted === false ? 'dim' : ''}`} style={{ '--grp': groupAccent(g.name) }}>
                 <div className="stash-group-head">
-                  <button className="stash-fold" onClick={() => toggleFold(g)} aria-expanded={!shut}>
+                  <button type="button" className="stash-fold" onClick={() => toggleFold(g)} aria-expanded={!shut}>
                     <span className="stash-icon">{icons[g.name] && <Cur id={icons[g.name]} size={24} />}</span>
                     <svg className="stash-chev" viewBox="0 0 10 10" width="10" height="10" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true"><path d="M2 3.5 5 6.5 8 3.5" /></svg>
                     <span className="stash-name">{g.name}</span>
@@ -406,7 +406,7 @@ export default function StashView({ league }) {
                               : (syncing || r.value_ref == null) && Number(r.typed) > 0 ? <span className="muted">…</span> : null}
                           </span>
                           <Toggle size="sm" checked={on} onChange={v => choose({ [r.currency]: v })} ariaLabel={`Count ${r.name} toward liquid net worth`} title="Count toward liquid net worth" />
-                          {CASH.includes(r.currency) ? <span /> : <button className="cap-x" title="Remove" aria-label={`Remove ${r.name}`} onClick={() => remove(r.currency)}>×</button>}
+                          {CASH.includes(r.currency) ? <span /> : <button type="button" className="cap-x" title="Remove" aria-label={`Remove ${r.name}`} onClick={() => remove(r.currency)}>×</button>}
                         </div>)
                     })}
                   </div>)}
@@ -435,14 +435,14 @@ export default function StashView({ league }) {
               const isOpen = open === r
               return (
                 <div key={`${r.item_id}:${r.time}`} className={`sale-row ${rarityOf(it)} ${isOpen ? 'open' : ''}`}>
-                  <button className="sale-main" onClick={() => openRow(r)} aria-expanded={isOpen}>
+                  <button type="button" className="sale-main" onClick={() => openRow(r)} aria-expanded={isOpen}>
                     {it.icon ? <img className="sale-icon" src={it.icon} alt="" loading="lazy" /> : <span className="sale-icon" />}
                     <span className="sale-name"><span className={`sale-glyph ${rarityOf(it)}`} aria-hidden="true">◆</span>{name}{it.name && it.typeLine ? <span className="muted sale-base"> {it.typeLine}</span> : null}</span>
                     <span className="spacer" />
                     <span className="sale-price">{r.price ? <><b>{r.price.amount}</b> <Cur id={r.price.currency} size={14} /></> : <span className="muted">unpriced</span>}</span>
                     <span className="muted sale-time" title={r.time}>{relativeTime(r.time)}</span>
                   </button>
-                  {wsId && <button className="ws-mini on" title="Open this search in the workspace" aria-label="Open in workspace" onClick={() => { useWorkspace.getState().setActive(wsId); nav.openTrading('workspace') }}>🔎</button>}
+                  {wsId && <button type="button" className="ws-mini on" title="Open this search in the workspace" aria-label="Open in workspace" onClick={() => { useWorkspace.getState().setActive(wsId); nav.openTrading('workspace') }}>🔎</button>}
                   {isOpen && <div className="sale-card"><ItemCard item={it} /></div>}
                 </div>)
             })}

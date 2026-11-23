@@ -97,7 +97,7 @@ export default function CardDetail({ r, num, factor, numOptions, onNum, prices, 
       <motion.div className="card-detail" role="dialog" aria-modal="true"
         initial={{ opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.98 }}
         transition={{ duration: 0.18, ease: [0.22, 0.61, 0.36, 1] }} onClick={e => e.stopPropagation()}>
-        <button ref={closeRef} className="cd-close" onClick={onClose} title="Close (Esc)">×</button>
+        <button type="button" ref={closeRef} className="cd-close" onClick={onClose} title="Close (Esc)">×</button>
         <div className="cd-head">
           <span className="cd-title"><Cur id={r.id} name={r.name} text size={24} /></span>
         </div>

@@ -48,12 +48,12 @@ export default function NotificationsPanel() {
                         onChange={e => { setFlag(fam, 'tone', e.target.value); playPing(n.volume, e.target.value, { preview: true }) }}>
                         {Object.entries(TONES).map(([id, t]) => <option key={id} value={id}>{t.label}</option>)}
                       </select>
-                      <button className="btn small" title="Preview this tone" disabled={!n[fam].sound}
+                      <button type="button" className="btn small" title="Preview this tone" disabled={!n[fam].sound}
                         onClick={() => playPing(n.volume, n[fam].tone, { preview: true })}>▶</button>
                     </td>
                   )}
                 </React.Fragment>))}
-              <td><button className="btn small" title="Fires this row's enabled channels" data-cmd={fam === 'live' ? 'settings-test-sound' : undefined} onClick={() => test(fam)}>Test</button></td>
+              <td><button type="button" className="btn small" title="Fires this row's enabled channels" data-cmd={fam === 'live' ? 'settings-test-sound' : undefined} onClick={() => test(fam)}>Test</button></td>
             </tr>
           ))}
         </tbody>
@@ -61,10 +61,10 @@ export default function NotificationsPanel() {
       <div className="set-row">
         <span style={{ width: 120 }}>Ping volume</span>
         <input type="range" min="0" max="1" step="0.05" value={n.volume} onChange={e => save({ ...n, volume: Number(e.target.value) })} />
-        <button className="btn small" onClick={() => playPing(n.volume, n.live.tone, { preview: true })}>Play</button>
+        <button type="button" className="btn small" onClick={() => playPing(n.volume, n.live.tone, { preview: true })}>Play</button>
       </div>
       {!isDesktop && (n.live.os || n.signals.os) && typeof Notification !== 'undefined' && Notification.permission !== 'granted' && (
-        <p className="hint">Your browser has not granted notification permission — <button className="link-btn" onClick={() => Notification.requestPermission()}>allow</button>.</p>
+        <p className="hint">Your browser has not granted notification permission — <button type="button" className="link-btn" onClick={() => Notification.requestPermission()}>allow</button>.</p>
       )}
     </section>
   )

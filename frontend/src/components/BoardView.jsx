@@ -55,7 +55,7 @@ const Tile = React.forwardRef(function Tile({ r, num, factor, prices, numOptions
       <div className="pt-head">
         <span className={`pt-name${(r.name || '').length > 14 ? ' long' : ''}`}><Cur id={r.id} text /></span>
         {r.hub && <span className="pt-hub" title="Hub — a central market; a lot of value routes through it">⬢</span>}
-        {onRemove && <button className="pt-remove" title="Remove from board" onClick={e => { e.stopPropagation(); onRemove(r.id) }}>×</button>}
+        {onRemove && <button type="button" className="pt-remove" title="Remove from board" onClick={e => { e.stopPropagation(); onRemove(r.id) }}>×</button>}
       </div>
       <div className="pt-mid">
         {mid == null ? <span className="muted">no price</span>
@@ -212,7 +212,7 @@ export default function BoardView({ status }) {
                 const num = numFor(r)
                 const val = valueIn(r.id, r.mid, num, prices)
                 return (
-                  <button key={r.id} className="pulse-chip clickable" title={`${r.name || nameOf(r.id)} — central market · expand chart`}
+                  <button type="button" key={r.id} className="pulse-chip clickable" title={`${r.name || nameOf(r.id)} — central market · expand chart`}
                     onClick={() => setOpenId(r.id)}>
                     <Cur id={r.id} size={16} /><span className="pulse-v"><Rate value={val} num={num} size={12} bold={false} /></span>
                   </button>
@@ -224,7 +224,7 @@ export default function BoardView({ status }) {
             <div className="pulse-group holds">
               <span className="pulse-group-label" title="Top stores of value vs Divine (hold score). Click to expand its chart.">Hold</span>
               {pulse.holds.map((a, i) => (
-                <button key={a.id} className="pulse-chip clickable" title={`#${i + 1} to hold · ${a.name} — expand chart`}
+                <button type="button" key={a.id} className="pulse-chip clickable" title={`#${i + 1} to hold · ${a.name} — expand chart`}
                   onClick={() => openAsset(a.name, 'divine')}>
                   <span className="pulse-rank">{i + 1}</span><Cur name={a.name} size={16} />
                   <span className={`pulse-v ${a.ret_pct >= 0 ? 'gain' : 'loss'}`}>{fmt.pct(a.ret_pct)}</span></button>
@@ -235,7 +235,7 @@ export default function BoardView({ status }) {
             <div className="pulse-group movers">
               <span className="pulse-group-label" title="Biggest % moves across all currencies over the window. Click to expand its chart.">Movers</span>
               {pulse.movers.map((a, i) => (
-                <button key={a.id} className="pulse-chip clickable" title={`#${i + 1} biggest move across all currencies · ${a.name} — expand chart`}
+                <button type="button" key={a.id} className="pulse-chip clickable" title={`#${i + 1} biggest move across all currencies · ${a.name} — expand chart`}
                   onClick={() => openAsset(a.name, a.num)}>
                   <span className="pulse-rank">{i + 1}</span><Cur name={a.name} size={16} />
                   <span className={`pulse-v ${a.change_pct >= 0 ? 'gain' : 'loss'}`}>{fmt.pct(a.change_pct)}</span></button>

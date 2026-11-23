@@ -49,7 +49,7 @@ export default function RecipesView({ currencies, embedded = false }) {
                   <td><span className="row" style={{ gap: 6 }}>{inp.id && known(inp.id) && <Cur id={inp.id} size={18} />}<input className="btn" list="cur-ids" value={inp.id} placeholder="trade id" onChange={e => setSide(i, 'inputs', 'id', e.target.value)} style={{ width: 140, borderColor: inp.id && !known(inp.id) ? 'var(--loss)' : undefined }} /></span></td>
                   <td className="num"><input className="btn" type="number" min="1" value={out.qty} style={{ width: 64, textAlign: 'right' }} onChange={e => setSide(i, 'outputs', 'qty', e.target.value)} /></td>
                   <td><span className="row" style={{ gap: 6 }}>{out.id && known(out.id) && <Cur id={out.id} size={18} />}<input className="btn" list="cur-ids" value={out.id} placeholder="trade id" onChange={e => setSide(i, 'outputs', 'id', e.target.value)} style={{ width: 140, borderColor: out.id && !known(out.id) ? 'var(--loss)' : undefined }} /></span></td>
-                  <td><button className="btn small" onClick={() => change(l => l.filter((_, j) => j !== i))}>×</button></td>
+                  <td><button type="button" className="btn small" onClick={() => change(l => l.filter((_, j) => j !== i))}>×</button></td>
                 </tr>
               )
             })}
@@ -58,7 +58,7 @@ export default function RecipesView({ currencies, embedded = false }) {
       </div>
       <datalist id="cur-ids">{opts.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}</datalist>
       <div className="row" style={{ marginTop: 12 }}>
-        <button className="btn" onClick={() => change(l => [...l, blank()])}>Add recipe</button>
+        <button type="button" className="btn" onClick={() => change(l => [...l, blank()])}>Add recipe</button>
         <span className="hint">A red border means the trade id isn't in the currency list; the recipe is ignored until it matches.</span>
       </div>
     </>

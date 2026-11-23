@@ -57,7 +57,7 @@ export default function TradeBuilder({ title, url, league, onUse, onClose, onUnl
       <motion.div className="card-detail tb-dialog" role="dialog" aria-modal="true" aria-label={title}
         initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }}
         transition={{ duration: 0.18, ease: [0.22, 0.61, 0.36, 1] }} onClick={e => e.stopPropagation()}>
-        <button className="cd-close" onClick={onClose} title="Close (Esc)">×</button>
+        <button type="button" className="cd-close" onClick={onClose} title="Close (Esc)">×</button>
         <div className="cd-head"><span className="cd-title">{title}</span></div>
         <webview ref={wv} src={url} className="ws-webview tb-webview" allowpopups="true" />
         <div className="tb-foot">

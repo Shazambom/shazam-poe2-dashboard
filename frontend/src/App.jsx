@@ -119,7 +119,7 @@ export default function App() {
           <div className="pb-name">◆ {title}</div>
           <div className="pb-sub muted">{names.slice(0, 3).join(' · ')}{names.length > 3 ? ` +${names.length - 3}` : ''}</div>
         </div>
-        <button className="btn small primary pb-go" onClick={() => { bus.emit({ id: 'signals', dismiss: true }); openFirst() }}>Open</button>
+        <button type="button" className="btn small primary pb-go" onClick={() => { bus.emit({ id: 'signals', dismiss: true }); openFirst() }}>Open</button>
       </div>) })
   }, [lastNew])
   useEffect(() => {
@@ -250,12 +250,12 @@ export default function App() {
         <div className="topbar-row">
           <BrandOrb onDone={refreshHeader} />
           <h1>Arbiter</h1>
-          <button className="cmdk-chip" title="Command palette (⌘K)" onClick={() => setCmdOpen(true)}>
+          <button type="button" className="cmdk-chip" title="Command palette (⌘K)" onClick={() => setCmdOpen(true)}>
             <span className="cmdk-k">⌘K</span> Search
           </button>
           <nav className="tabs" role="tablist">
             {TABS.map(t => (
-              <button key={t} role="tab" aria-selected={tab === t} onClick={() => setTab(t)}>
+              <button type="button" key={t} role="tab" aria-selected={tab === t} onClick={() => setTab(t)}>
                 {t}
                 {t === 'Trading' && <VaalPingOrb onClick={goLive} />}
                 {tab === t && <motion.span className="tab-underline" layoutId="tab-underline"

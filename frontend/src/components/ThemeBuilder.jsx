@@ -89,7 +89,7 @@ export default function ThemeBuilder() {
         <select value={base} onChange={e => setBase(e.target.value)} style={{ width: 200 }}>
           {THEMES.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
         </select>
-        <button className="btn small" disabled={!presets} onClick={create}>Create</button>
+        <button type="button" className="btn small" disabled={!presets} onClick={create}>Create</button>
       </div>
 
       {customs.length > 0 && (
@@ -97,14 +97,14 @@ export default function ThemeBuilder() {
           <tbody>
             {customs.map(t => (
               <tr key={t.id}>
-                <td><button className="btn small" style={{ fontWeight: t.id === editId ? 700 : 400 }} onClick={() => setEditId(t.id)}>{t.name}</button></td>
+                <td><button type="button" className="btn small" style={{ fontWeight: t.id === editId ? 700 : 400 }} onClick={() => setEditId(t.id)}>{t.name}</button></td>
                 <td className="hint">{t.id === chosen ? 'in use' : NAMES[t.base] ? `from ${NAMES[t.base]}` : ''}</td>
                 <td>
                   <div className="row">
-                    <button className="btn small" disabled={t.id === chosen} onClick={() => use(t)}>Use</button>
-                    <button className="btn small" onClick={() => duplicate(t)}>Duplicate</button>
-                    <button className="btn small" onClick={() => doExport(t)}>Export</button>
-                    <button className="btn small" onClick={() => remove(t)}>Delete</button>
+                    <button type="button" className="btn small" disabled={t.id === chosen} onClick={() => use(t)}>Use</button>
+                    <button type="button" className="btn small" onClick={() => duplicate(t)}>Duplicate</button>
+                    <button type="button" className="btn small" onClick={() => doExport(t)}>Export</button>
+                    <button type="button" className="btn small" onClick={() => remove(t)}>Delete</button>
                   </div>
                 </td>
               </tr>
@@ -128,7 +128,7 @@ export default function ThemeBuilder() {
           {issues.length > 0 && (
             <p className="hint" style={{ marginTop: 0 }}>
               {issues.map(i => `${label(i.fg)} on ${label(i.bg)} is ${i.ratio.toFixed(1)}:1 (needs ${i.min}:1)`).join(' · ')}
-              {' '}<button className="btn small" onClick={() => update({ ...draft, colors: autoFixContrast(draft.colors) })}>Auto-fix</button>
+              {' '}<button type="button" className="btn small" onClick={() => update({ ...draft, colors: autoFixContrast(draft.colors) })}>Auto-fix</button>
             </p>
           )}
           <details className="adv">
@@ -138,7 +138,7 @@ export default function ThemeBuilder() {
                 <div className="field" key={k} style={{ marginBottom: 0, width: 84 }}><label>{label(k)}</label>
                   <div className="row" style={{ gap: 2 }}>
                     <input type="color" value={swatchHex(k, draft.colors[k])} onChange={e => setDerived(k, e.target.value)} title={k} style={{ height: 30, padding: 2, width: 44 }} />
-                    <button className="btn small" onClick={() => resetDerived(k)} title="Back to the derived value">↺</button>
+                    <button type="button" className="btn small" onClick={() => resetDerived(k)} title="Back to the derived value">↺</button>
                   </div>
                 </div>
               ))}

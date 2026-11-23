@@ -58,7 +58,7 @@ export default function SettingsView({ currencies, status, onSaved, onReportProb
       <div className="settings-top">
         <p className="hint save-state" style={{ minHeight: 18 }} aria-live="polite">{state === 'saving' ? 'saving…' : state === 'saved' ? 'saved ✓' : ''}</p>
         {window.poe2desktop?.feedback && onReportProblem && (
-          <button className="btn small bug-btn" onClick={onReportProblem}><span aria-hidden="true">🐞</span> Submit a bug</button>
+          <button type="button" className="btn small bug-btn" onClick={onReportProblem}><span aria-hidden="true">🐞</span> Submit a bug</button>
         )}
       </div>
       <div className="two-col">
@@ -127,7 +127,7 @@ export default function SettingsView({ currencies, status, onSaved, onReportProb
                     <tr key={m}>
                       <td><code>{m.split('/').pop()}</code></td>
                       <td><input className="btn" list="cur-ids-2" placeholder="trade id" value={mapTo[m] ?? ''} onChange={e => setMapTo(x => ({ ...x, [m]: e.target.value }))} /></td>
-                      <td><button className="btn small" disabled={!mapTo[m]} onClick={() => surface(api.mapCurrency(m, mapTo[m]), 'Linked').then(onSaved).catch(() => {})}>Link</button></td>
+                      <td><button type="button" className="btn small" disabled={!mapTo[m]} onClick={() => surface(api.mapCurrency(m, mapTo[m]), 'Linked').then(onSaved).catch(() => {})}>Link</button></td>
                     </tr>
                   ))}
                 </tbody>
@@ -192,7 +192,7 @@ function DiagPanel({ open }) {
     <div>
       <div className="row" style={{ gap: 8, marginBottom: 8 }}>
         <RefreshButton className="small" busy={busy} onClick={run} title="Refresh diagnostics" />
-        <button className="btn small" disabled={!text} onClick={() => { navigator.clipboard?.writeText(text); toast('Diagnostics copied') }}>Copy</button>
+        <button type="button" className="btn small" disabled={!text} onClick={() => { navigator.clipboard?.writeText(text); toast('Diagnostics copied') }}>Copy</button>
       </div>
       {err && <div className="notice error">{err}</div>}
       {d && (

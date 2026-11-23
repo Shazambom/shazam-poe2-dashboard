@@ -35,11 +35,11 @@ function WorkspaceTransfer() {
     <>
       <h4 className="settings-sub">Workspace</h4>
       <div className="set-row">
-        <button className="btn small" onClick={doExport}>Export searches…</button>
-        <button className="btn small" onClick={() => fileRef.current?.click()}>Import…</button>
+        <button type="button" className="btn small" onClick={doExport}>Export searches…</button>
+        <button type="button" className="btn small" onClick={() => fileRef.current?.click()}>Import…</button>
         <span className="seg">
-          <button className={`seg-btn ${mode === 'merge' ? 'on' : ''}`} onClick={() => setMode('merge')} title="Add the file's searches next to yours">Merge</button>
-          <button className={`seg-btn ${mode === 'replace' ? 'on' : ''}`} onClick={() => setMode('replace')} title="Replace your curated searches with the file's (the EE2 history folder is kept)">Replace</button>
+          <button type="button" className={`seg-btn ${mode === 'merge' ? 'on' : ''}`} onClick={() => setMode('merge')} title="Add the file's searches next to yours">Merge</button>
+          <button type="button" className={`seg-btn ${mode === 'replace' ? 'on' : ''}`} onClick={() => setMode('replace')} title="Replace your curated searches with the file's (the EE2 history folder is kept)">Replace</button>
         </span>
         <input ref={fileRef} type="file" accept="application/json,.json" hidden onChange={onFile} aria-label="Import searches file" />
         <span className="muted" style={{ fontSize: 12 }}>Exiled Exchange 2 history stays on this computer</span>
@@ -68,7 +68,7 @@ function Ee2HistorySettings() {
       <div className="set-row"><Toggle checked={prefs.enabled} onChange={v => saveHistoryPrefs({ enabled: v })} label="Record copied items" /></div>
       <div className="set-row"><span style={{ width: 120 }}>Keep last</span><input type="number" min={20} max={1000} step={10} defaultValue={prefs.max} key={`max${prefs.max}`} onBlur={num('max', 20, 1000)} style={{ width: 90 }} /><span className="muted" style={{ fontSize: 12 }}>entries (20–1000)</span></div>
       <div className="set-row"><span style={{ width: 120 }}>Keep for</span><input type="number" min={7} max={90} defaultValue={prefs.retentionDays} key={`ret${prefs.retentionDays}`} onBlur={num('retentionDays', 7, 90)} style={{ width: 90 }} /><span className="muted" style={{ fontSize: 12 }}>days (7–90)</span></div>
-      <div className="set-row"><span style={{ width: 120 }} /><button className="btn small" onClick={() => clearHistoryWithUndo()}>Clear history</button><span className="muted ee2-status" style={{ fontSize: 12 }}>{line}</span></div>
+      <div className="set-row"><span style={{ width: 120 }} /><button type="button" className="btn small" onClick={() => clearHistoryWithUndo()}>Clear history</button><span className="muted ee2-status" style={{ fontSize: 12 }}>{line}</span></div>
       <h4 className="settings-sub">ExiledExchange2 searches</h4>
       <div className="set-row"><Toggle checked={prefs.waystoneStats} onChange={v => saveHistoryPrefs({ waystoneStats: v })} label="Match waystone pack size, rarity and drop chance" /></div>
     </>
@@ -112,7 +112,7 @@ export default function TradingSettings() {
       {isDesktop ? (
         <div className="set-row">
           <span style={{ width: 120 }}>Focus hotkey</span>
-          <button className="btn small" tabIndex={0} onKeyDown={onKey} onClick={() => setCapturing(true)}>
+          <button type="button" className="btn small" tabIndex={0} onKeyDown={onKey} onClick={() => setCapturing(true)}>
             {capturing ? 'Press a combo…' : hotkey.replace('CommandOrControl', '⌘/Ctrl')}
           </button>
           <span className="muted" style={{ fontSize: 12 }}>raises Arbiter to Trading → Live</span>

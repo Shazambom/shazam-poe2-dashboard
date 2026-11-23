@@ -72,7 +72,7 @@ export default function LiveView({ league }) {
           <span className="ws-chip" title="Live searches running / engine cap">{engine.active}/{engine.budgetMax} live</span>
         </div>
         {loadError
-          ? <div className="notice error ws-load-error" role="alert"><b>Couldn't load your searches</b><span className="muted">{loadError}</span><button className="btn small" onClick={() => loadWorkspace()}>Retry</button></div>
+          ? <div className="notice error ws-load-error" role="alert"><b>Couldn't load your searches</b><span className="muted">{loadError}</span><button type="button" className="btn small" onClick={() => loadWorkspace()}>Retry</button></div>
           : searches.length === 0
           ? <div className="empty small">No saved searches yet.<br /><button type="button" className="btn small" onClick={() => nav.openTrading('workspace')}>Open Workspace</button></div>
           : (
@@ -85,7 +85,7 @@ export default function LiveView({ league }) {
                 if (!d.slug) return <span className="ws-hint-run" title="Open this search in the Workspace once so it has a search id, then it can go live">open once first</span>
                 const { text, title } = liveLabel(d, searchStates[d.id])
                 return (
-                  <button className={`btn small ${d.armed ? 'primary' : ''}`} title={title}
+                  <button type="button" className={`btn small ${d.armed ? 'primary' : ''}`} title={title}
                           onClick={e => { e.stopPropagation(); toggleLive(d) }}>
                     {text}
                   </button>
@@ -99,7 +99,7 @@ export default function LiveView({ league }) {
         <div className="live-head">
           <b>Live</b>
           <span className="spacer" />
-          {pings.length > 0 && <button className="btn small" onClick={() => usePings.getState().clear()}>Clear</button>}
+          {pings.length > 0 && <button type="button" className="btn small" onClick={() => usePings.getState().clear()}>Clear</button>}
         </div>
         <div className="live-newest" ref={headRef} data-cmd="live-ping">
           {newest

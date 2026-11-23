@@ -56,25 +56,25 @@ export default function AccountsPanel({ onChange }) {
       <h2>Account</h2>
       {sess?.connected ? (
         <p className="notice">Connected{sess.label ? ` · ${sess.label}` : ''} · set {ago(sess.set_at)} · last successful fetch {ago(sess.last_ok)}.
-          {' '}{sess.source !== 'env' && <button className="btn small" onClick={async () => { await api.disconnectSession(); clearMerchantShopCache(); await load(); onChange?.() }}>Disconnect</button>}
+          {' '}{sess.source !== 'env' && <button type="button" className="btn small" onClick={async () => { await api.disconnectSession(); clearMerchantShopCache(); await load(); onChange?.() }}>Disconnect</button>}
         </p>
       ) : desktop ? (
         <>
           {/* Owner, 2026-10-08: one Connect, the in-app login; the browser-and-paste steps are a fallback. */}
           <div className="row" style={{ margin: '10px 0' }}>
-            <button className="btn primary" disabled={busy} onClick={bridgeConnect}>{busy ? 'Connecting…' : 'Connect'}</button>
+            <button type="button" className="btn primary" disabled={busy} onClick={bridgeConnect}>{busy ? 'Connecting…' : 'Connect'}</button>
             <span className="hint">Signs you in to pathofexile.com in a window of this app.</span>
           </div>
           <details className="adv">
             <summary>Other ways to connect</summary>
             <ol className="hint" style={{ margin: '10px 0', lineHeight: 1.7 }}>
-              <li><button className="btn small" onClick={() => window.poe2desktop?.openLogin?.()}>Open pathofexile.com login in your browser ↗</button>
+              <li><button type="button" className="btn small" onClick={() => window.poe2desktop?.openLogin?.()}>Open pathofexile.com login in your browser ↗</button>
                 {' '}— if the in-app window gets stuck on Cloudflare or Steam.</li>
               <li>Press <b>F12 → Application → Cookies → <code>POESESSID</code></b> and copy its value.</li>
               <li>Paste it here:
                 <div className="row" style={{ marginTop: 6 }}>
                   <input className="btn" type="password" placeholder="POESESSID" value={cookie} onChange={e => setCookie(e.target.value)} style={{ width: 300 }} autoComplete="off" />
-                  <button className="btn" disabled={!cookie || busy} onClick={connect}>{busy ? 'Verifying…' : 'Use this cookie'}</button>
+                  <button type="button" className="btn" disabled={!cookie || busy} onClick={connect}>{busy ? 'Verifying…' : 'Use this cookie'}</button>
                 </div>
               </li>
             </ol>
@@ -97,8 +97,8 @@ export default function AccountsPanel({ onChange }) {
           <p className="hint">Client <code>{oa.client_id}</code> ({oa.client_type}), redirect <code>{oa.redirect_uri}</code>.</p>
         )}
         <div className="row">
-          {!oa.logged_in && <button className="btn primary" onClick={login}>Log in with Path of Exile</button>}
-          {oa.logged_in && <button className="btn" onClick={async () => { await api.oauthLogout(); clearMerchantShopCache(); await load(); onChange?.() }}>Log out</button>}
+          {!oa.logged_in && <button type="button" className="btn primary" onClick={login}>Log in with Path of Exile</button>}
+          {oa.logged_in && <button type="button" className="btn" onClick={async () => { await api.oauthLogout(); clearMerchantShopCache(); await load(); onChange?.() }}>Log out</button>}
         </div>
         {!oa.logged_in && (
           <p className="hint">The button works when the dashboard is open at <code>{oa.redirect_uri.replace(/\/callback$/, '')}</code> (same machine or SSH tunnel);

@@ -54,7 +54,7 @@ export default function HoldView() {
         <span className="spacer" />
         <div className="seg">
           {numeraires.map(({ id: k, name }) => (
-            <button key={k} className={`seg-btn ${numeraire === k ? 'on' : ''}`} title={name} onClick={() => setNumeraire(k)}>vs <Cur name={name} size={14} /></button>
+            <button type="button" key={k} className={`seg-btn ${numeraire === k ? 'on' : ''}`} title={name} onClick={() => setNumeraire(k)}>vs <Cur name={name} size={14} /></button>
           ))}
         </div>
         <CautionSlider value={data?.k} range={data?.k_range} onChange={setK} />

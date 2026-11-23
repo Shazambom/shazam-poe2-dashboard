@@ -38,7 +38,7 @@ export function SyncMetrics({ status, bridge, connecting, onConnect }) {
       {/* The trade-site session powers live searches and the sales ledger (prices come from the
           hourly Currency Exchange data only — see docs/market-data-sources.md). */}
       {!connected && bridge === 'desktop' && (
-        <button className="btn primary connect-live" disabled={connecting} onClick={onConnect}
+        <button type="button" className="btn primary connect-live" disabled={connecting} onClick={onConnect}
           title="Sign in to pathofexile.com for live searches and the sales ledger">
           {connecting ? 'Connecting…' : 'Connect'}
         </button>

@@ -30,7 +30,7 @@ export default function VaalPingOrb({ onClick }) {
   const intensity = computeIntensity(newest)
 
   return (
-    <button className={`vaal-orb ${intensity}`} onClick={onClick}
+    <button type="button" className={`vaal-orb ${intensity}`} onClick={onClick}
       title={newest ? `Live ping: ${newest.item?.name || 'item'} — click to view` : 'Live pings'}
       aria-label={`${unseen} live ping${unseen === 1 ? '' : 's'}`}>
       {vaal
