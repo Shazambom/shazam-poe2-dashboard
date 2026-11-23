@@ -129,7 +129,7 @@ export function search(string, tooltip) {
 function tabletTypeOf(text) {
   return /Ritual|Favour|Tribute/i.test(text) ? 'ritual' : /Breach|Xesht|Hiveb/i.test(text) ? 'breach'
     : /Delirium|Deliriousness|Simulacrum|Mirror/i.test(text) ? 'delirium' : /Abyss|Desecrated/i.test(text) ? 'abyss'
-    : /Vaal Beacon|Vaal Relic/i.test(text) ? 'temple' : /Map Boss|Map Bosses/i.test(text) ? 'overseer'
+    : /Vaal Beacon|Vaal Relic/i.test(text) ? 'temple' : /Map Boss/i.test(text) ? 'overseer'
     : /Expedition|Runic|Remnant|Logbook|Verisium/i.test(text) ? 'expedition' : 'any'
 }
 const WMODS = WTABLE.mods
