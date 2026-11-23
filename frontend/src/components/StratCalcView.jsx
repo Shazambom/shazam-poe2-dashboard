@@ -1,5 +1,5 @@
 import { ignoredError } from '../lib/ignoredError.js'
-import React, { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { Tree } from 'react-arborist'
 import { api, bus, fmt, toast, undoToast } from '../lib/api.js'
 import { usePoll } from '../lib/hooks.js'
@@ -94,15 +94,23 @@ function Flash({ value, bump, children }) {
 
 // The one place the clock ticks: re-renders its children (the clock, the hero, the sidebar's rates)
 // once a second while a strat runs; the lists and pickers around it never re-render for time.
+function createClock() {
+  let now = Date.now()
+  return {
+    read: () => now,
+    subscribe(running, notify) {
+      const sample = () => { now = Date.now(); notify() }
+      sample()
+      if (!running) return () => {}
+      const timer = setInterval(sample, 1000)
+      return () => clearInterval(timer)
+    },
+  }
+}
 function Live({ running, children }) {
-  const [now, setNow] = useState(() => Date.now())
-  useEffect(() => {
-    setNow(Date.now())
-    if (!running) return
-    const t = setInterval(() => setNow(Date.now()), 1000)
-    return () => clearInterval(t)
-  }, [running])
-  return children(now)
+  const [clock] = useState(createClock)
+  const subscribe = useCallback(notify => clock.subscribe(running, notify), [clock, running])
+  return children(useSyncExternalStore(subscribe, clock.read, clock.read))
 }
 
 // The session clock; click it to correct the time (a forgotten pause): 1:04:12, 1h 20m, 90m.

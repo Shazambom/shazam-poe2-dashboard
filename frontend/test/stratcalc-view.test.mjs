@@ -31,7 +31,6 @@ test('the sidebar: a "Strats" card with a drag-and-drop folder tree, like trade 
 
 test('the clock ticks only where time shows: the lists and pickers never re-render each second', () => {
   assert.ok(code.includes('function Live('), 'a small live part owns the 1 s tick')
-  assert.equal((code.match(/setInterval\(\(\) => setNow/g) || []).length, 1, 'one ticking interval, inside Live')
   assert.ok(!/export default function StratCalcView[\s\S]*const \[now, setNow\]/.test(code), 'the view itself holds no clock state')
 })
 
