@@ -31,5 +31,8 @@ function registerHotkey(getWin, combo) {
   return { ok, combo }
 }
 
+// The combo registered right now, or null (none started, or the OS refused it).
+const registeredHotkey = () => current
+
 function unregisterAll() { try { globalShortcut.unregisterAll() } catch (e) { ignored('hotkey:unregister-all', e) } current = null }
-module.exports = { registerHotkey, unregisterAll }
+module.exports = { registerHotkey, registeredHotkey, unregisterAll }

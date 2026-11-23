@@ -80,11 +80,11 @@ function Ee2HistorySettings() {
 // Trading settings: the global focus hotkey (desktop). Notifications live in NotificationsPanel.
 export default function TradingSettings() {
   const ee2Present = useWorkspace(s => s.ee2Present)
-  const [hotkey, setHotkey] = useState('CommandOrControl+G')
+  const [hotkey, setHotkey] = useState('')   // the combo main has registered; empty while none is
   const [capturing, setCapturing] = useState(false)
 
   useEffect(() => {
-    if (window.poe2desktop?.hotkey) window.poe2desktop.hotkey.get().then(r => setHotkey(r?.combo || 'CommandOrControl+G')).catch(() => ignoredError('load hotkey'))
+    if (window.poe2desktop?.hotkey) window.poe2desktop.hotkey.get().then(r => setHotkey(r?.combo || '')).catch(() => ignoredError('load hotkey'))
   }, [])
 
   // Capture a key combo for the hotkey (desktop).
