@@ -10,6 +10,7 @@ GGG header format (per rule in X-Rate-Limit-Rules, e.g. "Ip,Account"):
   X-Rate-Limit-Ip:        12:6:60,16:12:120     -> hits:window_s:penalty_s, ...
   X-Rate-Limit-Ip-State:  3:6:0,4:12:0          -> hits_so_far:window_s:penalty_active
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -25,8 +26,8 @@ from .config import USER_AGENT
 
 log = logging.getLogger(__name__)
 
-SAFETY = 0.5          # use at most half of any advertised window
-STATE_HOLD = 0.8      # if a window is >80% spent, hold until it rolls
+SAFETY = 0.5  # use at most half of any advertised window
+STATE_HOLD = 0.8  # if a window is >80% spent, hold until it rolls
 DEFAULT_TIMEOUT = 30
 
 
@@ -47,7 +48,9 @@ class Policy:
     requests: int = 0
     throttled: int = 0
     advertised: list[tuple[int, int, int]] = field(default_factory=list)
-    last_states: list[tuple[int, int, int]] = field(default_factory=list)   # (hits, window_s, limit) as the site last reported
+    last_states: list[tuple[int, int, int]] = field(
+        default_factory=list
+    )  # (hits, window_s, limit) as the site last reported
     last_states_at: float = 0.0
     lock: asyncio.Lock = field(default_factory=asyncio.Lock)
 
@@ -61,7 +64,9 @@ class Policy:
             if hold <= 0:
                 break
             await asyncio.sleep(min(hold, 5))
-        ok = await self.limiter.try_acquire_async(self.name, blocking=True, timeout=timeout)
+        ok = await self.limiter.try_acquire_async(
+            self.name, blocking=True, timeout=timeout
+        )
         if not ok:
             raise RateLimited(timeout, self.name)
         self.requests += 1
@@ -76,13 +81,21 @@ class Policy:
         request on the account/IP — the user's own browsing too, via the trade tap's /observe). A window
         that has rolled over since it was reported counts as free; nothing reported = 1.0."""
         now = time.time() if now is None else now
-        free = [1 - hits / lim for hits, win, lim in self.last_states if lim and now - self.last_states_at < win]
+        free = [
+            1 - hits / lim
+            for hits, win, lim in self.last_states
+            if lim and now - self.last_states_at < win
+        ]
         return max(0.0, min(free, default=1.0))
 
     def _spare_wait(self, spare: float, now: float) -> float:
         """Seconds until every window has `spare` of its share free again (0 when it has)."""
         elapsed = now - self.last_states_at
-        waits = [win - elapsed for hits, win, lim in self.last_states if lim and elapsed < win and 1 - hits / lim < spare]
+        waits = [
+            win - elapsed
+            for hits, win, lim in self.last_states
+            if lim and elapsed < win and 1 - hits / lim < spare
+        ]
         return max(1.0, min(min(waits), 30.0)) if waits else 0.0
 
     def try_acquire_now(self, spare: float = 0.0) -> float:
@@ -109,10 +122,12 @@ class Policy:
         a guess from the windows. Falls back to the shortest window if the library cannot say."""
         try:
             bucket = self.limiter.bucket_factory.get(RateItem(self.name, 0))
-            ms = bucket.waiting(RateItem(self.name, bucket.now()))   # the bucket's own (monotonic) clock
+            ms = bucket.waiting(
+                RateItem(self.name, bucket.now())
+            )  # the bucket's own (monotonic) clock
             if ms and ms > 0:
                 return ms / 1000.0
-        except Exception:      # an internal of the rate library changed: still answer
+        except Exception:  # an internal of the rate library changed: still answer
             pass
         return min((r.interval for r in self.rates), default=1000) / 1000.0
 
@@ -129,13 +144,21 @@ class Policy:
     def observe_headers(self, status_code: int, headers: dict) -> None:
         """Reconcile to the server's X-Rate-Limit-* view. Also the entry point for headers
         observed by another process against the same budget (Electron → /api/ratelimits/observe)."""
-        h = {k.lower(): v for k, v in headers.items() if k.lower().startswith("x-rate-limit") or k.lower() == "retry-after"}
+        h = {
+            k.lower(): v
+            for k, v in headers.items()
+            if k.lower().startswith("x-rate-limit") or k.lower() == "retry-after"
+        }
         if h:
             self.last_headers = h
         if status_code == 429:
             self.penalize(float(h.get("retry-after", 60)) + 1, "429")
             return
-        rules = [r.strip().lower() for r in h.get("x-rate-limit-rules", "").split(",") if r.strip()]
+        rules = [
+            r.strip().lower()
+            for r in h.get("x-rate-limit-rules", "").split(",")
+            if r.strip()
+        ]
         if not rules:
             return
         advertised: list[tuple[int, int, int]] = []
@@ -158,24 +181,43 @@ class Policy:
             self.penalize(hold, "window nearly spent")
         if advertised and advertised != self.advertised:
             self.advertised = advertised
-            rates = _rate_chain([(max(1, int(lim * SAFETY)), win) for lim, win, _ in advertised])
+            rates = _rate_chain(
+                [(max(1, int(lim * SAFETY)), win) for lim, win, _ in advertised]
+            )
             try:
                 limiter = Limiter(rates)
-            except ValueError as exc:      # never keep reporting rules the limiter does not enforce
-                log.warning("%s: kept the previous rates; %s rejected (%s)", self.name, [(r.limit, r.interval // 1000) for r in rates], exc)
+            except (
+                ValueError
+            ) as exc:  # never keep reporting rules the limiter does not enforce
+                log.warning(
+                    "%s: kept the previous rates; %s rejected (%s)",
+                    self.name,
+                    [(r.limit, r.interval // 1000) for r in rates],
+                    exc,
+                )
                 return
             self.rates, self.limiter = rates, limiter
-            log.info("%s: rates now %s", self.name, [(r.limit, r.interval // 1000) for r in self.rates])
+            log.info(
+                "%s: rates now %s",
+                self.name,
+                [(r.limit, r.interval // 1000) for r in self.rates],
+            )
 
     def to_json(self) -> dict:
         return {
             "name": self.name,
-            "rates": [{"limit": r.limit, "window_s": r.interval // 1000} for r in self.rates],
-            "advertised": [{"limit": l, "window_s": w, "penalty_s": p} for l, w, p in self.advertised],
+            "rates": [
+                {"limit": r.limit, "window_s": r.interval // 1000} for r in self.rates
+            ],
+            "advertised": [
+                {"limit": l, "window_s": w, "penalty_s": p}
+                for l, w, p in self.advertised
+            ],
             "penalty_remaining_s": max(0.0, self.penalty_until - time.time()),
             "requests": self.requests,
             "throttled": self.throttled,
-            "state": self.last_headers.get("x-rate-limit-ip-state") or self.last_headers.get("x-rate-limit-account-state"),
+            "state": self.last_headers.get("x-rate-limit-ip-state")
+            or self.last_headers.get("x-rate-limit-account-state"),
         }
 
 
@@ -192,14 +234,18 @@ def _rate_chain(rules: list[tuple[int, int]]) -> list[Rate]:
     kept: list[tuple[int, int]] = []
 
     def add(lim: int, win: int) -> None:
-        while kept and lim <= kept[-1][0]:      # the new, longer rule is stricter: the shorter one is redundant
+        while (
+            kept and lim <= kept[-1][0]
+        ):  # the new, longer rule is stricter: the shorter one is redundant
             kept.pop()
         if kept and lim / win > kept[-1][0] / kept[-1][1]:
             short_lim, short_win = kept[-1]
-            k = -(-win // short_win)            # how many shorter windows can touch one longer window
+            k = -(
+                -win // short_win
+            )  # how many shorter windows can touch one longer window
             if short_lim * k <= lim:
-                return                          # implied: the shorter rule already holds the longer one
-            kept.pop()                          # not implied: tighten the shorter rule until it is (never loosen)
+                return  # implied: the shorter rule already holds the longer one
+            kept.pop()  # not implied: tighten the shorter rule until it is (never loosen)
             add(max(1, lim // k), short_win)
             return
         kept.append((lim, win))
@@ -218,37 +264,80 @@ def _triples(s: str) -> list[tuple[int, int, int]]:
     return out
 
 
-POLICIES: dict[str, Policy] = {p.name: p for p in [
-    # Trade-site exchange: undocumented, the strictest. Start at 1 per 6 s / 8 per minute.
-    Policy("trade", [Rate(1, Duration.SECOND * 6), Rate(8, Duration.MINUTE)], ("www.pathofexile.com",)),
-    # Trade-site listing fetch + whisper, driven by the Electron live-search engine through
-    # /api/ratelimits (same host, separate GGG rules; reached by override only — host lookup
-    # resolves to "trade" above). Conservative starts; re-derived from headers like the rest.
-    Policy("trade-fetch", [Rate(1, Duration.SECOND), Rate(20, Duration.MINUTE)], ("www.pathofexile.com",)),
-    Policy("trade-whisper", [Rate(1, Duration.SECOND * 2), Rate(10, Duration.MINUTE)], ("www.pathofexile.com",)),
-    # Trade-site item search (POST /api/trade2/search) on the account: the unique price floor
-    # (desktop/src/trade/uniqueprice.js) spends it, and an ExiledExchange2 price check reports its search
-    # here too (ee2-history hint). A conservative start (one per 10 s, four a minute) until the site's
-    # headers re-derive it.
-    Policy("trade-search", [Rate(1, Duration.SECOND * 10), Rate(4, Duration.MINUTE)], ("www.pathofexile.com",)),
-    # Merchant History (/api/trade2/history) for the Sales tab. Observed 2026-09-17: a handful of GETs
-    # across two machines on one account → 429 with retry-after ≈ 1 h. The budget is per ACCOUNT, so start
-    # far below anything that could trip it (one per 5 min, six per hour); headers can only loosen it. The
-    # tab polls every 10 min while visible and never on a mere re-open (see SalesView).
-    Policy("trade-history", [Rate(1, Duration.MINUTE * 5), Rate(6, Duration.HOUR)], ("www.pathofexile.com",)),
-    # OAuth'd account API and token endpoint.
-    Policy("ggg-api", [Rate(1, Duration.SECOND * 2), Rate(20, Duration.MINUTE)], ("api.pathofexile.com",)),
-    # Public hourly digest CDN: no headers. Quick enough that a week's backfill
-    # lands in a few minutes, still far below anything a CDN would notice.
-    Policy("digest", [Rate(1, Duration.SECOND), Rate(30, Duration.MINUTE)], ("web.poecdn.com",)),
-    # Static/community mirrors.
-    Policy("static", [Rate(1, Duration.SECOND), Rate(30, Duration.MINUTE)], ("ggpk.exposed", "github.com", "objects.githubusercontent.com")),
-    # poe2scout economy history — no auth, Cloudflare-fronted; be polite.
-    Policy("poe2scout", [Rate(1, Duration.SECOND), Rate(20, Duration.MINUTE)], ("api.poe2scout.com",)),
-    # poe2db item pages, read by the mod-pool build on shazam only (app/modpool.py): a hundred
-    # pages once a day, spaced out.
-    Policy("poe2db", [Rate(1, Duration.SECOND * 2), Rate(20, Duration.MINUTE)], ("poe2db.tw",)),
-]}
+POLICIES: dict[str, Policy] = {
+    p.name: p
+    for p in [
+        # Trade-site exchange: undocumented, the strictest. Start at 1 per 6 s / 8 per minute.
+        Policy(
+            "trade",
+            [Rate(1, Duration.SECOND * 6), Rate(8, Duration.MINUTE)],
+            ("www.pathofexile.com",),
+        ),
+        # Trade-site listing fetch + whisper, driven by the Electron live-search engine through
+        # /api/ratelimits (same host, separate GGG rules; reached by override only — host lookup
+        # resolves to "trade" above). Conservative starts; re-derived from headers like the rest.
+        Policy(
+            "trade-fetch",
+            [Rate(1, Duration.SECOND), Rate(20, Duration.MINUTE)],
+            ("www.pathofexile.com",),
+        ),
+        Policy(
+            "trade-whisper",
+            [Rate(1, Duration.SECOND * 2), Rate(10, Duration.MINUTE)],
+            ("www.pathofexile.com",),
+        ),
+        # Trade-site item search (POST /api/trade2/search) on the account: the unique price floor
+        # (desktop/src/trade/uniqueprice.js) spends it, and an ExiledExchange2 price check reports its search
+        # here too (ee2-history hint). A conservative start (one per 10 s, four a minute) until the site's
+        # headers re-derive it.
+        Policy(
+            "trade-search",
+            [Rate(1, Duration.SECOND * 10), Rate(4, Duration.MINUTE)],
+            ("www.pathofexile.com",),
+        ),
+        # Merchant History (/api/trade2/history) for the Sales tab. Observed 2026-09-17: a handful of GETs
+        # across two machines on one account → 429 with retry-after ≈ 1 h. The budget is per ACCOUNT, so start
+        # far below anything that could trip it (one per 5 min, six per hour); headers can only loosen it. The
+        # tab polls every 10 min while visible and never on a mere re-open (see SalesView).
+        Policy(
+            "trade-history",
+            [Rate(1, Duration.MINUTE * 5), Rate(6, Duration.HOUR)],
+            ("www.pathofexile.com",),
+        ),
+        # OAuth'd account API and token endpoint.
+        Policy(
+            "ggg-api",
+            [Rate(1, Duration.SECOND * 2), Rate(20, Duration.MINUTE)],
+            ("api.pathofexile.com",),
+        ),
+        # Public hourly digest CDN: no headers. Quick enough that a week's backfill
+        # lands in a few minutes, still far below anything a CDN would notice.
+        Policy(
+            "digest",
+            [Rate(1, Duration.SECOND), Rate(30, Duration.MINUTE)],
+            ("web.poecdn.com",),
+        ),
+        # Static/community mirrors.
+        Policy(
+            "static",
+            [Rate(1, Duration.SECOND), Rate(30, Duration.MINUTE)],
+            ("ggpk.exposed", "github.com", "objects.githubusercontent.com"),
+        ),
+        # poe2scout economy history — no auth, Cloudflare-fronted; be polite.
+        Policy(
+            "poe2scout",
+            [Rate(1, Duration.SECOND), Rate(20, Duration.MINUTE)],
+            ("api.poe2scout.com",),
+        ),
+        # poe2db item pages, read by the mod-pool build on shazam only (app/modpool.py): a hundred
+        # pages once a day, spaced out.
+        Policy(
+            "poe2db",
+            [Rate(1, Duration.SECOND * 2), Rate(20, Duration.MINUTE)],
+            ("poe2db.tw",),
+        ),
+    ]
+}
 
 
 def policy_for(url: str, override: str | None = None) -> Policy:
@@ -267,11 +356,17 @@ _client: httpx.AsyncClient | None = None
 def client() -> httpx.AsyncClient:
     global _client
     if _client is None:
-        _client = httpx.AsyncClient(timeout=DEFAULT_TIMEOUT, headers={"User-Agent": USER_AGENT}, follow_redirects=True)
+        _client = httpx.AsyncClient(
+            timeout=DEFAULT_TIMEOUT,
+            headers={"User-Agent": USER_AGENT},
+            follow_redirects=True,
+        )
     return _client
 
 
-async def request(method: str, url: str, *, policy: str | None = None, retries: int = 2, **kw) -> httpx.Response:
+async def request(
+    method: str, url: str, *, policy: str | None = None, retries: int = 2, **kw
+) -> httpx.Response:
     """Rate-limited request. Waits for the policy's window, adapts to headers, and
     retries once after a 429 penalty. Raises RateLimited if it can't get a slot."""
     p = policy_for(url, policy)

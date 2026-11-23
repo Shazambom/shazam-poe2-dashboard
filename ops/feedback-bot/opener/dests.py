@@ -1,5 +1,6 @@
 """The screens a report may carry — the opener's allow-list. Output filenames derive from THIS
 tuple, never from the report; pinned to frontend/src/lib/dests.js by desktop/test/feedback-dests-sync.test.mjs."""
+
 SCREENS = (
     "current",
     "board",

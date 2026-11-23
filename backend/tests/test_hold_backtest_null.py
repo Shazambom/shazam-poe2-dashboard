@@ -5,6 +5,7 @@ A 10-item list rarely beats an average driven by a few big winners, even with no
 eligible board: its percentile on return (higher is better) and on crash share (lower is better).
 docs/hold-research.md "Academic review, round 3".
 """
+
 import importlib.util
 from pathlib import Path
 
@@ -12,7 +13,9 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 def _bt():
-    spec = importlib.util.spec_from_file_location("hold_backtest", ROOT / "ops" / "hold-backtest.py")
+    spec = importlib.util.spec_from_file_location(
+        "hold_backtest", ROOT / "ops" / "hold-backtest.py"
+    )
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
@@ -20,7 +23,7 @@ def _bt():
 
 def test_the_best_ten_sit_at_the_top_of_the_null():
     bt = _bt()
-    rets = [i / 100 for i in range(40)]            # item i returns i%
+    rets = [i / 100 for i in range(40)]  # item i returns i%
     crashed = [False] * 40
     top = list(range(30, 40))
     ret_pct, crash_pct = bt.random_null(rets, crashed, top, n=500, seed=1)
@@ -30,17 +33,19 @@ def test_the_best_ten_sit_at_the_top_of_the_null():
 def test_the_worst_ten_sit_at_the_bottom_and_crash_more_than_any_random_list():
     bt = _bt()
     rets = [i / 100 for i in range(40)]
-    crashed = [i < 10 for i in range(40)]          # the ten worst all crashed
+    crashed = [i < 10 for i in range(40)]  # the ten worst all crashed
     ret_pct, crash_pct = bt.random_null(rets, crashed, list(range(10)), n=500, seed=1)
     assert ret_pct < 1
-    assert crash_pct > 99                          # higher crash percentile = worse
+    assert crash_pct > 99  # higher crash percentile = worse
 
 
 def test_a_random_pick_lands_near_the_middle():
     bt = _bt()
     rets = [((i * 37) % 40) / 100 for i in range(40)]
     crashed = [(i * 7) % 5 == 0 for i in range(40)]
-    ret_pct, crash_pct = bt.random_null(rets, crashed, list(range(0, 40, 4)), n=2000, seed=3)
+    ret_pct, crash_pct = bt.random_null(
+        rets, crashed, list(range(0, 40, 4)), n=2000, seed=3
+    )
     assert 15 < ret_pct < 85 and 15 < crash_pct < 85
 
 

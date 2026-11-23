@@ -1,14 +1,26 @@
 """Batch 10 — dead code sweep + polish (audit F-26, F-27).
 
-    DATA_DIR=$(mktemp -d) MARKET_SEED= python -m pytest backend/tests/test_dead_sweep.py -q
+DATA_DIR=$(mktemp -d) MARKET_SEED= python -m pytest backend/tests/test_dead_sweep.py -q
 """
+
 import inspect
 import json
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # backend/
-from app import analytics, arbitrage, centrality, config, db, gamedata, holdscore, leaguearc, liquidity, watchdog
+from app import (
+    analytics,
+    arbitrage,
+    centrality,
+    config,
+    db,
+    gamedata,
+    holdscore,
+    leaguearc,
+    liquidity,
+    watchdog,
+)
 from starlette.testclient import TestClient
 from app.main import app
 
@@ -21,19 +33,37 @@ def test_zero_caller_routes_are_gone():
         assert client.get(path).status_code in (404, 405), path
     for path in ("/api/inflation/cross/refresh", "/api/market/refresh"):
         assert client.post(path).status_code in (404, 405), path
-    assert client.get("/api/oauth/callback").status_code == 400   # env-configurable redirect: kept
+    assert (
+        client.get("/api/oauth/callback").status_code == 400
+    )  # env-configurable redirect: kept
 
 
 def test_put_watches_is_gone_and_never_touches_the_workspace():
-    before = {"version": 2, "tree": [{"id": "n_1", "kind": "folder", "name": "keep", "open": True, "children": []}],
-              "layout": None, "openTabs": []}
+    before = {
+        "version": 2,
+        "tree": [
+            {
+                "id": "n_1",
+                "kind": "folder",
+                "name": "keep",
+                "open": True,
+                "children": [],
+            }
+        ],
+        "layout": None,
+        "openTabs": [],
+    }
     db.kv_set("trading_workspace", before)
     r = client.put("/api/watches", json={"folders": []})
     assert r.status_code == 410
     assert client.get("/api/trading/workspace").json()["workspace"] == before
-    assert client.get("/api/watches").status_code == 200        # read-only legacy view stays
-    assert "watches_to_workspace(legacy)" not in (APP / "main.py").read_text()   # no read-time coercion
-    db.kv_set("trading_workspace", {"version": 2, "tree": [], "layout": None, "openTabs": []})
+    assert client.get("/api/watches").status_code == 200  # read-only legacy view stays
+    assert (
+        "watches_to_workspace(legacy)" not in (APP / "main.py").read_text()
+    )  # no read-time coercion
+    db.kv_set(
+        "trading_workspace", {"version": 2, "tree": [], "layout": None, "openTabs": []}
+    )
 
 
 def test_dead_helpers_and_params_are_gone():
@@ -44,7 +74,10 @@ def test_dead_helpers_and_params_are_gone():
     assert "k" not in inspect.signature(arbitrage._best_conversions).parameters
     assert "max_steps" not in inspect.signature(liquidity.realizable).parameters
     assert "horizon" not in inspect.signature(leaguearc.arc_for).parameters
-    assert inspect.signature(holdscore._metrics).parameters["hz_days"].annotation in ("int", int)
+    assert inspect.signature(holdscore._metrics).parameters["hz_days"].annotation in (
+        "int",
+        int,
+    )
     assert "hz or 30" not in (APP / "holdscore.py").read_text()
     assert not hasattr(watchdog, "_call_dead")
     assert not hasattr(config, "ORDERBOOK_MIN_GAP_SECONDS")

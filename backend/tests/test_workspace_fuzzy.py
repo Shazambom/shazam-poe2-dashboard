@@ -11,6 +11,7 @@ Run against a throwaway DATA_DIR so it never touches the user's real DB:
     DATA_DIR=$(mktemp -d) MARKET_SEED= .venv-build/bin/python -m pytest backend/tests/test_workspace_fuzzy.py -q
     # or standalone:  DATA_DIR=$(mktemp -d) python backend/tests/test_workspace_fuzzy.py
 """
+
 import os
 import random
 import string
@@ -21,23 +22,52 @@ from pathlib import Path
 # `trading_workspace` -> user.sqlite, JSON-serialized). Requires DATA_DIR to be set to a
 # temp dir by the caller; guard against clobbering a real install.
 _dd = os.environ.get("DATA_DIR", "")
-assert _dd and "Application Support" not in _dd, \
+assert _dd and "Application Support" not in _dd, (
     "Set DATA_DIR to a temp dir (never the real install) before running this test"
+)
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # backend/
 from app import db
 
 # A pool of distinct PoE2 item/base names; the generator draws WITHOUT replacement per tree
 # so every search in a given tree is a genuinely unique item.
 ITEM_POOL = [
-    "Headhunter Heavy Belt", "Mageblood Heavy Belt", "Atziri's Acuity Moulded Mitts",
-    "The Pariah", "Original Sin", "Melding of the Flesh", "Sublime Vision",
-    "Progenesis Flask", "Ashes of the Stars", "Bottled Faith", "Squire Tower Shield",
-    "Nimis Topaz Ring", "Defiance of Destiny", "Dawnbreaker", "Astramentis Amulet",
-    "Ingenuity Belt", "Polcirkeln Sapphire Ring", "Grand Spectrum Diamond",
-    "Sapphire Ring", "Ruby Ring", "Topaz Ring", "Emerald Ring", "Stellar Amulet",
-    "Heavy Belt", "Sorcerer Boots", "Vaal Regalia", "Advanced Wand", "Expert Crossbow",
-    "Attuned Wand", "Omen of Whittling", "Divine Orb", "Chaos Orb", "Exalted Orb",
-    "Waystone Tier 15", "Tablet Precursor", "Simulacrum Splinter", "Breach Ring",
+    "Headhunter Heavy Belt",
+    "Mageblood Heavy Belt",
+    "Atziri's Acuity Moulded Mitts",
+    "The Pariah",
+    "Original Sin",
+    "Melding of the Flesh",
+    "Sublime Vision",
+    "Progenesis Flask",
+    "Ashes of the Stars",
+    "Bottled Faith",
+    "Squire Tower Shield",
+    "Nimis Topaz Ring",
+    "Defiance of Destiny",
+    "Dawnbreaker",
+    "Astramentis Amulet",
+    "Ingenuity Belt",
+    "Polcirkeln Sapphire Ring",
+    "Grand Spectrum Diamond",
+    "Sapphire Ring",
+    "Ruby Ring",
+    "Topaz Ring",
+    "Emerald Ring",
+    "Stellar Amulet",
+    "Heavy Belt",
+    "Sorcerer Boots",
+    "Vaal Regalia",
+    "Advanced Wand",
+    "Expert Crossbow",
+    "Attuned Wand",
+    "Omen of Whittling",
+    "Divine Orb",
+    "Chaos Orb",
+    "Exalted Orb",
+    "Waystone Tier 15",
+    "Tablet Precursor",
+    "Simulacrum Splinter",
+    "Breach Ring",
 ]
 TYPES = ["search"]  # 'live' variants are captured as live=True on a search node
 
@@ -51,26 +81,41 @@ def _rand_slug(rng):
 
 
 def _uid(rng):
-    return "n_" + "".join(rng.choice(string.ascii_lowercase + string.digits) for _ in range(7))
+    return "n_" + "".join(
+        rng.choice(string.ascii_lowercase + string.digits) for _ in range(7)
+    )
 
 
 def _make_search(rng, name):
     return {
-        "id": _uid(rng), "kind": "search", "name": name,
+        "id": _uid(rng),
+        "kind": "search",
+        "name": name,
         "auto": rng.choice([True, False]),
-        "type": rng.choice(TYPES), "slug": _rand_slug(rng),
-        "live": rng.choice([True, False]), "done": rng.choice([True, False]),
+        "type": rng.choice(TYPES),
+        "slug": _rand_slug(rng),
+        "live": rng.choice([True, False]),
+        "done": rng.choice([True, False]),
         "armed": rng.choice([True, False]),
-        "notify": {"sound": rng.choice([True, False]),
-                   "orb": rng.choice([True, False]),
-                   "os": rng.choice([True, False])},
+        "notify": {
+            "sound": rng.choice([True, False]),
+            "orb": rng.choice([True, False]),
+            "os": rng.choice([True, False]),
+        },
     }
 
 
 def _make_folder(rng, children):
-    return {"id": _uid(rng), "kind": "folder",
-            "name": "📁 " + "".join(rng.choice(string.ascii_letters + " ") for _ in range(rng.randint(3, 12))).strip(),
-            "open": rng.choice([True, False]), "children": children}
+    return {
+        "id": _uid(rng),
+        "kind": "folder",
+        "name": "📁 "
+        + "".join(
+            rng.choice(string.ascii_letters + " ") for _ in range(rng.randint(3, 12))
+        ).strip(),
+        "open": rng.choice([True, False]),
+        "children": children,
+    }
 
 
 def _gen_tree(rng, names, depth, max_breadth):
@@ -122,6 +167,7 @@ def _roundtrip_10x(doc):
     """Save -> load -> feed the load back in -> save ... 10 cycles. Compare to the ORIGINAL
     each cycle so any cumulative drift is caught, not just single-hop loss."""
     import copy
+
     original = copy.deepcopy(doc)
     cur = doc
     for cycle in range(1, 11):
@@ -130,8 +176,9 @@ def _roundtrip_10x(doc):
         assert got == original, f"cycle {cycle}: workspace drifted from original"
         # activeId must still resolve to a real search node after the round-trip.
         if original["activeId"] is not None:
-            assert original["activeId"] in _all_search_ids(got["tree"]), \
+            assert original["activeId"] in _all_search_ids(got["tree"]), (
                 f"cycle {cycle}: activeId lost from tree"
+            )
         cur = got  # the reloaded doc is the next thing we persist (rerender -> save)
     return _count(original["tree"])
 
@@ -144,8 +191,12 @@ def test_workspace_fuzzy_roundtrip():
         doc = _gen_doc(rng)
         total_nodes += _roundtrip_10x(doc)
     # Sanity: we actually exercised a meaningful amount of structure.
-    assert total_nodes > 100, f"generator produced too little structure ({total_nodes} nodes)"
-    print(f"OK: {trees} fuzzy trees x 10 round-trips each, {total_nodes} total nodes, zero data loss")
+    assert total_nodes > 100, (
+        f"generator produced too little structure ({total_nodes} nodes)"
+    )
+    print(
+        f"OK: {trees} fuzzy trees x 10 round-trips each, {total_nodes} total nodes, zero data loss"
+    )
 
 
 if __name__ == "__main__":

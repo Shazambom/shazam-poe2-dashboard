@@ -11,6 +11,7 @@ costs more Exalted — the canonical "how inflated is this league" curve. Each l
 rebased to its own day-0 = 100 and plotted by day-of-league, so you can read
 "Forbidden Rites at day 10 vs Dawn of the Hunt at day 10".
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -39,7 +40,10 @@ def scout_lookup(table: dict, trade_id: str):
     """Look a registry trade id up in a poe2scout name/slug-keyed table (scout_prices /
     scout_history): by the registry's display name first, then by the id itself."""
     from .currencies import registry
-    return table.get(str(registry.name(trade_id)).lower()) or table.get(str(trade_id).lower())
+
+    return table.get(str(registry.name(trade_id)).lower()) or table.get(
+        str(trade_id).lower()
+    )
 
 
 def _scout_prices(league: str) -> dict[str, float]:
@@ -102,14 +106,22 @@ def _scout_history(league: str, days: int) -> dict[str, list]:
         series[k] = series[k][-days:]
     return series
 
-_backfill_lock = asyncio.Lock()   # only one backfill crawl at a time (shared rate limit)
+
+_backfill_lock = asyncio.Lock()  # only one backfill crawl at a time (shared rate limit)
 
 # Live backfill progress, surfaced to the UI so a cold start streams in visibly
 # ("building your dashboard…") instead of showing a blank/stale board.
 progress: dict = {
-    "running": False, "phase": "idle", "league": None,
-    "league_done": 0, "league_total": 0, "leagues_done": 0, "leagues_total": 0,
-    "started": None, "updated": None, "last": None,
+    "running": False,
+    "phase": "idle",
+    "league": None,
+    "league_done": 0,
+    "league_total": 0,
+    "leagues_done": 0,
+    "leagues_total": 0,
+    "started": None,
+    "updated": None,
+    "last": None,
 }
 
 
@@ -119,20 +131,53 @@ BASE = "https://api.poe2scout.com/poe2"
 # the default. (Hinekora has no Dawn-of-the-Hunt data — it's a newer currency.)
 ITEMS = {a.item_id: a.name for a in marketseries.ANCHORS.values()}
 DEFAULT_ITEM = marketseries.ANCHORS["divine"].item_id
-MIRROR_ITEM = marketseries.ANCHORS["mirror"].item_id   # numeraire for the economy market cap
+MIRROR_ITEM = marketseries.ANCHORS[
+    "mirror"
+].item_id  # numeraire for the economy market cap
 
 # Hold leaderboard tracks EVERY currency category poe2scout exposes (discovered live
 # from /Items/Categories). Items below the price floor are dust and skipped so the
 # commodity tails (e.g. 140+ cheap runes) don't drown the board. This fallback list
 # is only used if the category-discovery call fails.
-CATEGORIES = ["currency", "ritual", "essences", "fragments", "delirium", "breach",
-              "uncutgems", "abyss", "ultimatum", "expedition", "verisium", "runes",
-              "lineagesupportgems", "idol", "vaultkeys", "incursion", "vaal"]
+CATEGORIES = [
+    "currency",
+    "ritual",
+    "essences",
+    "fragments",
+    "delirium",
+    "breach",
+    "uncutgems",
+    "abyss",
+    "ultimatum",
+    "expedition",
+    "verisium",
+    "runes",
+    "lineagesupportgems",
+    "idol",
+    "vaultkeys",
+    "incursion",
+    "vaal",
+]
 PRICE_FLOOR_EX = 5.0
 # Softcore challenge/event leagues worth comparing (skip HC variants and permanent realms: Standard, Hardcore, Early Access).
-_PERMANENT_EXACT = {"standard", "hardcore", "early access", "ssf standard", "ssf hardcore", "ssf early access"}
-_PERMANENT_PREFIXES = ("early access ", "hc early access", "hardcore early access", "standard (", "hardcore (")
-REFRESH_S = 12 * 3600   # re-pull current leagues at most twice a day; past leagues are final
+_PERMANENT_EXACT = {
+    "standard",
+    "hardcore",
+    "early access",
+    "ssf standard",
+    "ssf hardcore",
+    "ssf early access",
+}
+_PERMANENT_PREFIXES = (
+    "early access ",
+    "hc early access",
+    "hardcore early access",
+    "standard (",
+    "hardcore (",
+)
+REFRESH_S = (
+    12 * 3600
+)  # re-pull current leagues at most twice a day; past leagues are final
 
 
 def is_permanent_league(name: str) -> bool:
@@ -140,7 +185,11 @@ def is_permanent_league(name: str) -> bool:
     low = (name or "").strip().lower()
     if not low:
         return False
-    return low in _PERMANENT_EXACT or low.startswith(_PERMANENT_PREFIXES) or low.endswith(" (early access)")
+    return (
+        low in _PERMANENT_EXACT
+        or low.startswith(_PERMANENT_PREFIXES)
+        or low.endswith(" (early access)")
+    )
 
 
 def is_skipped_league(name: str) -> bool:
@@ -148,15 +197,23 @@ def is_skipped_league(name: str) -> bool:
     low = (name or "").strip().lower()
     if not low:
         return True
-    return is_permanent_league(low) or low.startswith(("hc ", "hardcore ")) or low.endswith(" hardcore")
+    return (
+        is_permanent_league(low)
+        or low.startswith(("hc ", "hardcore "))
+        or low.endswith(" hardcore")
+    )
 
 
 async def _get(path: str):
     # Every fetch is a heartbeat for the orb's stall rule: between leagues the crawl only fetches
     # item universes, and a league with nothing to do ticks no items.
     progress["updated"] = time.time()
-    r = await gateway.request("GET", f"{BASE}{path}", policy="poe2scout",
-                              headers={"Accept": "application/json"})
+    r = await gateway.request(
+        "GET",
+        f"{BASE}{path}",
+        policy="poe2scout",
+        headers={"Accept": "application/json"},
+    )
     progress["updated"] = time.time()
     r.raise_for_status()
     return r.json()
@@ -164,7 +221,9 @@ async def _get(path: str):
 
 async def _leagues() -> list[dict]:
     data = await _get("/Leagues")
-    rows = data if isinstance(data, list) else data.get("items", data.get("Leagues", []))
+    rows = (
+        data if isinstance(data, list) else data.get("items", data.get("Leagues", []))
+    )
     return [l for l in rows if not is_skipped_league(l.get("Value", ""))]
 
 
@@ -178,7 +237,9 @@ def _stored_counts() -> dict[tuple[str, int], int]:
     """One grouped read of stored day-counts per (league, item) — avoids a COUNT(*)
     probe per item during backfill."""
     with db.q() as c:
-        rows = c.execute("SELECT league, item_id, COUNT(*) n FROM league_daily GROUP BY league, item_id").fetchall()
+        rows = c.execute(
+            "SELECT league, item_id, COUNT(*) n FROM league_daily GROUP BY league, item_id"
+        ).fetchall()
     return {(r["league"], r["item_id"]): r["n"] for r in rows}
 
 
@@ -187,7 +248,9 @@ async def _category_apiids(league: str) -> list[str]:
     falls back to the static CATEGORIES list if the call fails."""
     try:
         data = await _get(f"/Leagues/{urllib.parse.quote(league)}/Items/Categories")
-        cats = [c.get("ApiId") for c in data.get("CurrencyCategories", []) if c.get("ApiId")]
+        cats = [
+            c.get("ApiId") for c in data.get("CurrencyCategories", []) if c.get("ApiId")
+        ]
         return cats or CATEGORIES
     except Exception as exc:
         log.warning("poe2scout categories %s failed: %s", league, exc)
@@ -200,7 +263,9 @@ async def category_items(league: str, cat: str) -> list[dict]:
     if any page fails, so a caller never mistakes a partial listing for the whole."""
     enc, items, page = urllib.parse.quote(league), [], 1
     while True:
-        data = await _get(f"/Leagues/{enc}/Currencies/ByCategory?category={cat}&perPage=250&page={page}")
+        data = await _get(
+            f"/Leagues/{enc}/Currencies/ByCategory?category={cat}&perPage=250&page={page}"
+        )
         items += data.get("Items", [])
         if page >= int(data.get("Pages") or 1):
             return items
@@ -213,7 +278,7 @@ async def _universe(league: str) -> set[int]:
     — global ids, so any league's crawl fills the map."""
     ids = set(ITEMS)
     meta = []
-    bridge_new: dict[str, str] = {}   # GGG BaseItemTypeId -> trade ApiId (authoritative)
+    bridge_new: dict[str, str] = {}  # GGG BaseItemTypeId -> trade ApiId (authoritative)
     for cat in await _category_apiids(league):
         try:
             listed = await category_items(league, cat)
@@ -234,7 +299,10 @@ async def _universe(league: str) -> set[int]:
                 ids.add(iid)
     if meta:
         with db.tx() as c:
-            c.executemany("INSERT OR REPLACE INTO item_meta(item_id, name, category) VALUES (?,?,?)", meta)
+            c.executemany(
+                "INSERT OR REPLACE INTO item_meta(item_id, name, category) VALUES (?,?,?)",
+                meta,
+            )
     if bridge_new:
         _merge_meta_bridge(bridge_new)
     return ids
@@ -252,29 +320,46 @@ def _merge_meta_bridge(new: dict[str, str]) -> None:
         changed = sum(1 for bt, api in new.items() if cur.get(bt) != api)
         cur.update(new)
         return cur
+
     cur = db.kv_update("meta_bridge", apply, {})
     if changed:
         from .currencies import registry
+
         registry.load_bridge()
-        from . import arbitrage   # lazy: arbitrage imports this module (the one genuine cycle)
+        from . import (
+            arbitrage,
+        )  # lazy: arbitrage imports this module (the one genuine cycle)
+
         arbitrage.invalidate_caches()
-    log.info("meta_bridge: %d total mappings (%d new/changed this pass)", len(cur), changed)
+    log.info(
+        "meta_bridge: %d total mappings (%d new/changed this pass)", len(cur), changed
+    )
 
 
 async def fetch_item(name: str, item_id: int, current: bool) -> int:
     """Pull one item's daily history into league_daily and stamp it. Returns the rows stored; raises
     on a failed request (nothing is stamped then). For a league still running, a stored day inside
     the returned span that poe2scout no longer reports is removed, so a withdrawn row cannot ship."""
-    data = await _get(f"/Leagues/{urllib.parse.quote(name)}/Items/{item_id}/DailyStatsHistory?dayCount=500")
-    rows = [(name, item_id, s["Time"], s.get("Close"), s.get("Average"), s.get("Volume"))
-            for s in data.get("DailyStats", []) if s.get("Time")]
+    data = await _get(
+        f"/Leagues/{urllib.parse.quote(name)}/Items/{item_id}/DailyStatsHistory?dayCount=500"
+    )
+    rows = [
+        (name, item_id, s["Time"], s.get("Close"), s.get("Average"), s.get("Volume"))
+        for s in data.get("DailyStats", [])
+        if s.get("Time")
+    ]
     if rows:
         with db.tx() as c:
             if current:
                 days = [r[2] for r in rows]
-                c.execute(f"DELETE FROM league_daily WHERE league=? AND item_id=? AND day BETWEEN ? AND ? "
-                          f"AND day NOT IN ({','.join('?' * len(days))})", (name, item_id, min(days), max(days), *days))
-            c.executemany("INSERT OR REPLACE INTO league_daily VALUES (?,?,?,?,?,?)", rows)
+                c.execute(
+                    f"DELETE FROM league_daily WHERE league=? AND item_id=? AND day BETWEEN ? AND ? "
+                    f"AND day NOT IN ({','.join('?' * len(days))})",
+                    (name, item_id, min(days), max(days), *days),
+                )
+            c.executemany(
+                "INSERT OR REPLACE INTO league_daily VALUES (?,?,?,?,?,?)", rows
+            )
     db.kv_set(f"lh_fetch:{name}:{item_id}", time.time())
     # A past league with no more pages is fully captured, rows or none: mark it final (an item
     # poe2scout has no history for would otherwise be refetched every crawl).
@@ -283,7 +368,9 @@ async def fetch_item(name: str, item_id: int, current: bool) -> int:
     return len(rows)
 
 
-def crawl_verdict(current: bool, items: int, fetched: int, stored_hits: int, was_current: bool = False) -> str | None:
+def crawl_verdict(
+    current: bool, items: int, fetched: int, stored_hits: int, was_current: bool = False
+) -> str | None:
     """Was this league's crawl a full-sync fallback? A past league is fetched once and then marked
     complete, so refetching a tenth of it means the marks were missing, unless the league was
     current on the previous crawl: it just ended, and its final pass over every item is by design
@@ -296,15 +383,21 @@ def crawl_verdict(current: bool, items: int, fetched: int, stored_hits: int, was
         return None
     if not current:
         return "league-full-crawl" if fetched >= 0.1 * items else None
-    return "league-full-crawl" if fetched >= 0.5 * items and stored_hits < 0.5 * items else None
+    return (
+        "league-full-crawl"
+        if fetched >= 0.5 * items and stored_hits < 0.5 * items
+        else None
+    )
 
 
 def _marks(name: str) -> tuple[set, dict]:
     """One read of a league's crawl bookkeeping: the items marked complete, and when each was
     last fetched (kv_ops; one query each instead of two per item)."""
     with db.q() as c:
-        rows = c.execute("SELECT key, value FROM kv_ops WHERE key LIKE ? OR key LIKE ?",
-                         (f"lh_complete:{name}:%", f"lh_fetch:{name}:%")).fetchall()
+        rows = c.execute(
+            "SELECT key, value FROM kv_ops WHERE key LIKE ? OR key LIKE ?",
+            (f"lh_complete:{name}:%", f"lh_fetch:{name}:%"),
+        ).fetchall()
     complete, fetched_at = set(), {}
     for r in rows:
         kind, _, item = r["key"].split(":", 2)
@@ -319,7 +412,15 @@ def _marks(name: str) -> tuple[set, dict]:
     return complete, fetched_at
 
 
-def plan_league(item_ids, current: bool, force: bool, stored: set, complete: set, fetched_at: dict, now: float) -> tuple[list, dict]:
+def plan_league(
+    item_ids,
+    current: bool,
+    force: bool,
+    stored: set,
+    complete: set,
+    fetched_at: dict,
+    now: float,
+) -> tuple[list, dict]:
     """Which of a league's items this crawl fetches, in order, and why the rest are skipped. A
     past league's item marked complete is final; a current league's stored item fetched within
     REFRESH_S is fresh. `force` fetches everything. The orb counts the fetch list only."""
@@ -327,7 +428,12 @@ def plan_league(item_ids, current: bool, force: bool, stored: set, complete: set
     for item_id in item_ids:
         if not force and not current and item_id in complete:
             tally["complete"] += 1
-        elif not force and current and item_id in stored and now - fetched_at.get(item_id, 0) < REFRESH_S:
+        elif (
+            not force
+            and current
+            and item_id in stored
+            and now - fetched_at.get(item_id, 0) < REFRESH_S
+        ):
             tally["fresh"] += 1
         else:
             todo.append(item_id)
@@ -349,18 +455,37 @@ async def backfill(force: bool = False, full: bool = True) -> dict:
         fetched, attempted, errors = {}, 0, 0
         # `building`: the install holds no history yet (a first build, not a refresh) — the header
         # says "Building your dashboard" only then.
-        progress.update({"running": True, "phase": "leagues", "building": not _has_history(), "started": time.time(),
-                         "updated": time.time(), "league": None, "last": None,
-                         "league_done": 0, "league_total": 0, "leagues_done": 0, "leagues_total": 0})
+        progress.update(
+            {
+                "running": True,
+                "phase": "leagues",
+                "building": not _has_history(),
+                "started": time.time(),
+                "updated": time.time(),
+                "league": None,
+                "last": None,
+                "league_done": 0,
+                "league_total": 0,
+                "leagues_done": 0,
+                "leagues_total": 0,
+            }
+        )
         try:
             leagues = await _leagues()
         except Exception as exc:
-            progress.update({"running": False, "phase": "error", "updated": time.time()})
+            progress.update(
+                {"running": False, "phase": "error", "updated": time.time()}
+            )
             log.warning("poe2scout leagues fetch failed: %s", exc)
             return {"error": str(exc)}
         progress["leagues_total"] = len(leagues)
-        was_current = set(db.kv_get("lh_current", []) or [])   # the previous crawl's: a league that just ended
-        db.kv_set("lh_current", [l["Value"] for l in leagues if l.get("IsCurrent") and l.get("Value")])
+        was_current = set(
+            db.kv_get("lh_current", []) or []
+        )  # the previous crawl's: a league that just ended
+        db.kv_set(
+            "lh_current",
+            [l["Value"] for l in leagues if l.get("IsCurrent") and l.get("Value")],
+        )
         stored = _stored_counts()
         for li, lg in enumerate(leagues):
             name, current = lg.get("Value"), bool(lg.get("IsCurrent"))
@@ -379,10 +504,20 @@ async def backfill(force: bool = False, full: bool = True) -> dict:
                 # spot price dips under the floor, so its series never silently stops. The floor only
                 # decides which new items join.
                 item_ids |= have
-            todo, tally = plan_league(item_ids, current, force, have, complete, fetched_at, time.time())
+            todo, tally = plan_league(
+                item_ids, current, force, have, complete, fetched_at, time.time()
+            )
             tally.update({"fetched": 0, "errors": 0, "empty": 0})
-            progress.update({"league": name, "league_total": len(todo), "league_done": 0,
-                             "leagues_done": li, "phase": "crawling", "updated": time.time()})
+            progress.update(
+                {
+                    "league": name,
+                    "league_total": len(todo),
+                    "league_done": 0,
+                    "leagues_done": li,
+                    "phase": "crawling",
+                    "updated": time.time(),
+                }
+            )
             t0 = time.time()
             for item_id in todo:
                 progress["league_done"] += 1
@@ -394,7 +529,9 @@ async def backfill(force: bool = False, full: bool = True) -> dict:
                 except Exception as exc:
                     tally["errors"] += 1
                     errors += 1
-                    log.warning("poe2scout history %s/%s failed: %s", name, item_id, exc)
+                    log.warning(
+                        "poe2scout history %s/%s failed: %s", name, item_id, exc
+                    )
                     continue
                 if n:
                     fetched[f"{name}/{item_id}"] = n
@@ -402,15 +539,38 @@ async def backfill(force: bool = False, full: bool = True) -> dict:
                     tally["empty"] += 1
             # Beta telemetry: why this league did or did not crawl (counts only), and whether that
             # was a full-sync fallback (a T0 blocker).
-            devtelemetry.tlog("lh", f"league={name!r} current={current} was_current={name in was_current} items={len(item_ids)} complete={tally['complete']} fresh={tally['fresh']} fetched={tally['fetched']} empty={tally['empty']} errors={tally['errors']} s={time.time() - t0:.0f}")
+            devtelemetry.tlog(
+                "lh",
+                f"league={name!r} current={current} was_current={name in was_current} items={len(item_ids)} complete={tally['complete']} fresh={tally['fresh']} fetched={tally['fetched']} empty={tally['empty']} errors={tally['errors']} s={time.time() - t0:.0f}",
+            )
             stored_hits = sum(1 for i in item_ids if stored.get((name, i)))
-            verdict = crawl_verdict(current, len(item_ids), tally["fetched"], stored_hits, was_current=name in was_current)
+            verdict = crawl_verdict(
+                current,
+                len(item_ids),
+                tally["fetched"],
+                stored_hits,
+                was_current=name in was_current,
+            )
             if verdict and not force:
-                devtelemetry.t0(verdict, f"league={name!r} current={current} items={len(item_ids)} fetched={tally['fetched']} stored={stored_hits} complete_marks={tally['complete']}")
-        _cache.clear()   # fresh data → drop cross()/marketcap() caches
-        progress.update({"running": False, "phase": "done", "updated": time.time(),
-                         "leagues_done": len(leagues)})
-        return {"fetched": fetched, "leagues": len(leagues), "attempted": attempted, "errors": errors}
+                devtelemetry.t0(
+                    verdict,
+                    f"league={name!r} current={current} items={len(item_ids)} fetched={tally['fetched']} stored={stored_hits} complete_marks={tally['complete']}",
+                )
+        _cache.clear()  # fresh data → drop cross()/marketcap() caches
+        progress.update(
+            {
+                "running": False,
+                "phase": "done",
+                "updated": time.time(),
+                "leagues_done": len(leagues),
+            }
+        )
+        return {
+            "fetched": fetched,
+            "leagues": len(leagues),
+            "attempted": attempted,
+            "errors": errors,
+        }
 
 
 # cross()/marketcap() only change on the 12h backfill; cache their aggregation
@@ -447,13 +607,29 @@ def cross(item_id: int = DEFAULT_ITEM) -> dict:
             day0, base = series[0][0], series[0][1]
             if not base:
                 continue
-            pts = [{"age": marketseries.league_age(d, day0), "day": d, "index": round(100.0 * cl / base, 2)} for d, cl in series]
-            leagues.append({
-                "league": name, "days": pts[-1]["age"] + 1, "points": pts,
-                "final_index": pts[-1]["index"], "current": name in current,
-            })
-        return {"item_id": item_id, "item_name": ITEMS[item_id],
-                "leagues": _finalize(leagues), "items": [{"id": k, "name": v} for k, v in ITEMS.items()]}
+            pts = [
+                {
+                    "age": marketseries.league_age(d, day0),
+                    "day": d,
+                    "index": round(100.0 * cl / base, 2),
+                }
+                for d, cl in series
+            ]
+            leagues.append(
+                {
+                    "league": name,
+                    "days": pts[-1]["age"] + 1,
+                    "points": pts,
+                    "final_index": pts[-1]["index"],
+                    "current": name in current,
+                }
+            )
+        return {
+            "item_id": item_id,
+            "item_name": ITEMS[item_id],
+            "leagues": _finalize(leagues),
+            "items": [{"id": k, "name": v} for k, v in ITEMS.items()],
+        }
 
     return _cached(f"cross:{item_id}", build)
 
@@ -463,9 +639,10 @@ def marketcap() -> dict:
     currencies (Σ volume × price, in Exalted) converted to Mirrors via that day's
     Mirror price. This is traded throughput (GDP-like), not a supply-based cap — total
     minted supply isn't observable. Age-aligned per league, plus a cumulative total."""
+
     def build():
         with db.q() as c:
-            rows = marketseries.read_rows(c)          # close>0, ORDER BY league, day
+            rows = marketseries.read_rows(c)  # close>0, ORDER BY league, day
         # per league: {day: total_exalted_traded}, and {day: mirror_price}
         traded: dict[str, dict[str, float]] = {}
         mirror: dict[str, dict[str, float]] = {}
@@ -483,20 +660,32 @@ def marketcap() -> dict:
             day0, mp, last_price = days[0], mirror.get(name, {}), None
             pts, cum = [], 0.0
             for d in days:
-                price = mp.get(d) or last_price          # carry the last Mirror price over gaps
+                price = mp.get(d) or last_price  # carry the last Mirror price over gaps
                 last_price = price or last_price
                 if not price:
-                    continue                              # no Mirror price yet → skip early days
-                val = by_day[d] / price                   # traded value that day, in Mirrors
+                    continue  # no Mirror price yet → skip early days
+                val = by_day[d] / price  # traded value that day, in Mirrors
                 cum += val
-                pts.append({"age": marketseries.league_age(d, day0), "day": d, "mirrors": round(val, 2), "cum": round(cum, 2)})
+                pts.append(
+                    {
+                        "age": marketseries.league_age(d, day0),
+                        "day": d,
+                        "mirrors": round(val, 2),
+                        "cum": round(cum, 2),
+                    }
+                )
             if not pts:
                 continue
-            leagues.append({
-                "league": name, "days": pts[-1]["age"] + 1, "points": pts,
-                "total_mirrors": round(cum, 2), "latest_mirrors": pts[-1]["mirrors"],
-                "current": name in current,
-            })
+            leagues.append(
+                {
+                    "league": name,
+                    "days": pts[-1]["age"] + 1,
+                    "points": pts,
+                    "total_mirrors": round(cum, 2),
+                    "latest_mirrors": pts[-1]["mirrors"],
+                    "current": name in current,
+                }
+            )
         return {"unit": "Mirror of Kalandra", "leagues": _finalize(leagues)}
 
     return _cached("marketcap", build)

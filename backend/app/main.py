@@ -15,15 +15,46 @@ from pydantic import BaseModel, Field, model_validator
 
 from fastapi.responses import RedirectResponse, PlainTextResponse
 
-from . import analytics, arbitrage, db, devtelemetry, diag, digest, gamedata, gateway, holdscore, inflation, leaguearc, leaguehistory, liquidity, migrations_user, modpool, movers, oauth, orderbook, recipes, seedready, session, sidecar_supervisor, signalsack, stratcalc, watchdog, workspace
+from . import (
+    analytics,
+    arbitrage,
+    db,
+    devtelemetry,
+    diag,
+    digest,
+    gamedata,
+    gateway,
+    holdscore,
+    inflation,
+    leaguearc,
+    leaguehistory,
+    liquidity,
+    migrations_user,
+    modpool,
+    movers,
+    oauth,
+    orderbook,
+    recipes,
+    seedready,
+    session,
+    sidecar_supervisor,
+    signalsack,
+    stratcalc,
+    watchdog,
+    workspace,
+)
 from .config import INSTALL_LOG_PATH
 from .currencies import registry
 from .settings import ARBITRAGE_PRESETS, get_settings, save_settings
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
+)
 log = logging.getLogger("poe2arb")
 
-_bg_tasks: set = set()   # keep strong refs so fire-and-forget tasks aren't GC'd mid-flight
+_bg_tasks: set = (
+    set()
+)  # keep strong refs so fire-and-forget tasks aren't GC'd mid-flight
 
 
 def _spawn(coro) -> None:
@@ -31,8 +62,14 @@ def _spawn(coro) -> None:
     (a bare create_task can be GC'd early and swallows exceptions)."""
     t = asyncio.create_task(coro)
     _bg_tasks.add(t)
-    t.add_done_callback(lambda tt: (_bg_tasks.discard(tt),
-                                    tt.cancelled() or tt.exception() and log.error("bg task failed: %s", tt.exception())))
+    t.add_done_callback(
+        lambda tt: (
+            _bg_tasks.discard(tt),
+            tt.cancelled()
+            or tt.exception()
+            and log.error("bg task failed: %s", tt.exception()),
+        )
+    )
 
 
 @asynccontextmanager
@@ -48,22 +85,41 @@ async def lifespan(app: FastAPI):
     if _parent and _parent.isdigit():
         watchdog.guard(parent_pid=int(_parent), stdin_eof=False)
     registry.load_static_cache()
-    sidecar_supervisor.start()          # spawn + supervise the heavy-analytics sidecar (no-op if absent)
-    tasks = [asyncio.create_task(registry.keep_static_fresh()), asyncio.create_task(digest.run_forever()),
-             asyncio.create_task(_gold_fee_loop()),
-             asyncio.create_task(_league_history_loop()), asyncio.create_task(_analytics_loop())]
+    sidecar_supervisor.start()  # spawn + supervise the heavy-analytics sidecar (no-op if absent)
+    tasks = [
+        asyncio.create_task(registry.keep_static_fresh()),
+        asyncio.create_task(digest.run_forever()),
+        asyncio.create_task(_gold_fee_loop()),
+        asyncio.create_task(_league_history_loop()),
+        asyncio.create_task(_analytics_loop()),
+    ]
     if orderbook.BULK_EXCHANGE_ENABLED:
-        tasks.extend([asyncio.create_task(orderbook.worker()), asyncio.create_task(orderbook.sweeper())])
+        tasks.extend(
+            [
+                asyncio.create_task(orderbook.worker()),
+                asyncio.create_task(orderbook.sweeper()),
+            ]
+        )
     if seed_poll_enabled():
         tasks.append(asyncio.create_task(_seed_poll_loop()))
     if not session.get_cookie():
-        log.info("no trade session yet: connect one in Settings to enable the live order book")
+        log.info(
+            "no trade session yet: connect one in Settings to enable the live order book"
+        )
     if devtelemetry.enabled():
-        try:   # beta telemetry: what the seed left us for the Mods tab
-            snap, n_pools = db._read_snapshot_version(db.MARKET_DB_PATH), len(modpool.pools())
-            devtelemetry.tlog("mods", f"snapshot v{snap} pools={n_pools} currencies={len(modpool.currencies())} meta={db.kv_get('mods_meta', {}).get('pools')}")
+        try:  # beta telemetry: what the seed left us for the Mods tab
+            snap, n_pools = (
+                db._read_snapshot_version(db.MARKET_DB_PATH),
+                len(modpool.pools()),
+            )
+            devtelemetry.tlog(
+                "mods",
+                f"snapshot v{snap} pools={n_pools} currencies={len(modpool.currencies())} meta={db.kv_get('mods_meta', {}).get('pools')}",
+            )
             if db.MARKET_SEED_PATH and n_pools == 0:
-                devtelemetry.t0("mods-empty", f"seed bundled, snapshot v{snap}, pools=0")
+                devtelemetry.t0(
+                    "mods-empty", f"seed bundled, snapshot v{snap}, pools=0"
+                )
         except Exception as exc:
             log.warning("mods telemetry failed: %s", exc)
     yield
@@ -83,8 +139,10 @@ async def _gold_fee_loop():
         await asyncio.sleep(86400)
 
 
-CRAWL_RETRY_S = 120   # the seed poll holds the crawl lock for minutes at most
-CRAWL_FAILED_RETRY_S = 30 * 60   # poe2scout unreachable: try again soon, never hammer it (owner)
+CRAWL_RETRY_S = 120  # the seed poll holds the crawl lock for minutes at most
+CRAWL_FAILED_RETRY_S = (
+    30 * 60
+)  # poe2scout unreachable: try again soon, never hammer it (owner)
 
 
 async def _league_history_loop():
@@ -99,12 +157,22 @@ async def _league_history_loop():
         # one that failed (offline at launch, poe2scout down: /Leagues or every item fetch) in half an
         # hour, instead of losing its turn for 12 hours.
         res = res or {}
-        failed = bool(res.get("error")) or (res.get("attempted", 0) > 0 and res.get("errors") == res.get("attempted"))
-        await asyncio.sleep(CRAWL_RETRY_S if res.get("skipped") else CRAWL_FAILED_RETRY_S if failed else 12 * 3600)
+        failed = bool(res.get("error")) or (
+            res.get("attempted", 0) > 0 and res.get("errors") == res.get("attempted")
+        )
+        await asyncio.sleep(
+            CRAWL_RETRY_S
+            if res.get("skipped")
+            else CRAWL_FAILED_RETRY_S
+            if failed
+            else 12 * 3600
+        )
 
 
-SEED_POLL_S = 3600   # hourly: slow on purpose, poe2scout is a free community site
-SEED_POLL_AT_S = 5 * 60   # :05, so the answer is fresh when the seed publisher runs at :17 (root's cron)
+SEED_POLL_S = 3600  # hourly: slow on purpose, poe2scout is a free community site
+SEED_POLL_AT_S = (
+    5 * 60
+)  # :05, so the answer is fresh when the seed publisher runs at :17 (root's cron)
 
 
 def seed_poll_enabled() -> bool:
@@ -134,7 +202,7 @@ async def _analytics_loop():
     resolved current league, so we never target one with no data). enqueue coalesces, so a busy
     or down sidecar just means the request waits — the endpoint degrades to empty meanwhile.
     league_daily only gains rows daily, so a low cadence is plenty."""
-    await asyncio.sleep(20)             # let the sidecar come up first
+    await asyncio.sleep(20)  # let the sidecar come up first
     while True:
         try:
             league = await run_in_threadpool(movers.current_league)
@@ -145,11 +213,12 @@ async def _analytics_loop():
                     with db.tx() as c:
                         analytics.enqueue(c, "discords", {"league": league})
                         analytics.enqueue(c, "arc", {"league": league})
+
                 await run_in_threadpool(_enqueue)
                 sidecar_supervisor.wake()
         except Exception as exc:
             log.warning("analytics enqueue error: %s", exc)
-        await asyncio.sleep(7200)       # every 2h (daily data — no need to churn)
+        await asyncio.sleep(7200)  # every 2h (daily data — no need to churn)
 
 
 app = FastAPI(title="PoE2 currency arbitrage", lifespan=lifespan)
@@ -172,7 +241,8 @@ async def loopback_only(request: Request, call_next):
     if os.environ.get("ARBITER_LOOPBACK_ONLY") == "1":
         origin = request.headers.get("origin")
         if _hostname(request.headers.get("host", "")) not in _LOOPBACK or (
-                origin is not None and _hostname(urlsplit(origin).netloc) not in _LOOPBACK):
+            origin is not None and _hostname(urlsplit(origin).netloc) not in _LOOPBACK
+        ):
             return PlainTextResponse("forbidden", status_code=403)
     return await call_next(request)
 
@@ -184,8 +254,10 @@ def health():
     return {"ok": True}
 
 
-DIGEST_STALE_S = 2 * 3600      # hourly digest older than this → "stale" (also the backfilling bar)
-ORDERBOOK_STALE_S = 3600       # no live book fetched for an hour → "stale"
+DIGEST_STALE_S = (
+    2 * 3600
+)  # hourly digest older than this → "stale" (also the backfilling bar)
+ORDERBOOK_STALE_S = 3600  # no live book fetched for an hour → "stale"
 
 
 @app.get("/api/status")
@@ -197,11 +269,21 @@ def status():
     d["behind_h"] = round(behind / 3600, 1) if behind is not None else None
     d["backfilling"] = behind is not None and behind > 2 * 3600
     # Feed freshness as a STATE the UI renders verbatim (one owner for the thresholds).
-    d["state"] = ("waiting" if not d.get("last_fetch")
-                  else "stale" if now - d["last_fetch"] > DIGEST_STALE_S else "ok")
+    d["state"] = (
+        "waiting"
+        if not d.get("last_fetch")
+        else "stale"
+        if now - d["last_fetch"] > DIGEST_STALE_S
+        else "ok"
+    )
     ob = dict(orderbook.state)
-    ob["feed"] = ("idle" if not ob.get("last_fetch")
-                  else "stale" if now - ob["last_fetch"] > ORDERBOOK_STALE_S else "ok")
+    ob["feed"] = (
+        "idle"
+        if not ob.get("last_fetch")
+        else "stale"
+        if now - ob["last_fetch"] > ORDERBOOK_STALE_S
+        else "ok"
+    )
     return {
         "time": now,
         "league": s["league"],
@@ -215,14 +297,14 @@ def status():
         "unmapped_metadata_ids": len(registry.unmapped_meta),
         "gold_fees": gamedata.state,
         "mod_pools": modpool.state,
-        "wealth_prices": _wealth_prices(),   # reference per unit of chaos/divine/lock/mirror (UI wealth rule)
+        "wealth_prices": _wealth_prices(),  # reference per unit of chaos/divine/lock/mirror (UI wealth rule)
     }
 
 
 def _wealth_prices() -> dict:
     try:
         return arbitrage.anchor_prices()
-    except Exception as exc:      # a cold/empty graph must never fail the status poll
+    except Exception as exc:  # a cold/empty graph must never fail the status poll
         log.warning("wealth prices unavailable: %s", exc)
         return {get_settings()["reference"]: 1.0}
 
@@ -261,7 +343,11 @@ def backfill_status():
     if p.get("running") and p.get("updated") and time.time() - p["updated"] > STALL_S:
         p["running"], p["phase"] = False, "stalled"
     tot = p.get("league_total") or 0
-    p["pct"] = round(100 * (p.get("league_done") or 0) / tot, 1) if tot else (100.0 if p.get("phase") == "done" else 0.0)
+    p["pct"] = (
+        round(100 * (p.get("league_done") or 0) / tot, 1)
+        if tot
+        else (100.0 if p.get("phase") == "done" else 0.0)
+    )
     return p
 
 
@@ -310,7 +396,10 @@ def _note_capital_sync(payload: dict) -> None:
             _capital_sync["since"] = time.time()
             devtelemetry.tlog("capital", f"syncing: no markets yet (rows={n})")
     elif _capital_sync["since"] is not None:
-        devtelemetry.tlog("capital", f"markets after {time.time() - _capital_sync['since']:.1f}s (rows={n})")
+        devtelemetry.tlog(
+            "capital",
+            f"markets after {time.time() - _capital_sync['since']:.1f}s (rows={n})",
+        )
         _capital_sync["since"] = None
 
 
@@ -327,13 +416,15 @@ def capital():
 
 class CapitalBody(BaseModel):
     entries: dict[str, float]
-    counted: list[str] = []   # the currencies whose total the user typed (a recount; db.set_capital)
+    counted: list[
+        str
+    ] = []  # the currencies whose total the user typed (a recount; db.set_capital)
 
 
 @app.put("/api/capital")
 def put_capital(body: CapitalBody):
     db.set_capital(body.entries, body.counted)
-    arbitrage.invalidate_caches()   # routes are sized from capital, so drop the route cache
+    arbitrage.invalidate_caches()  # routes are sized from capital, so drop the route cache
     return capital()
 
 
@@ -363,7 +454,7 @@ SETTINGS_OUTSIDE_THE_GRAPH = frozenset({"stash_counted", "stash_unit"})
 def put_settings(body: SettingsPatch):
     saved = save_settings(body.patch)
     if set(body.patch) - SETTINGS_OUTSIDE_THE_GRAPH:
-        arbitrage.invalidate_caches()   # league/reference/etc. change what the graph means
+        arbitrage.invalidate_caches()  # league/reference/etc. change what the graph means
     return saved
 
 
@@ -380,7 +471,7 @@ class RecipesBody(BaseModel):
 @app.put("/api/recipes")
 def put_recipes(body: RecipesBody):
     saved = recipes.save(body.recipes)
-    arbitrage.invalidate_caches()   # recipe edges are part of the graph
+    arbitrage.invalidate_caches()  # recipe edges are part of the graph
     return saved
 
 
@@ -443,8 +534,12 @@ async def oauth_complete(body: OAuthComplete):
 
 @app.get("/callback")
 @app.get("/api/oauth/callback")
-async def oauth_callback(code: str | None = None, state: str | None = None,
-                         error: str | None = None, error_description: str | None = None):
+async def oauth_callback(
+    code: str | None = None,
+    state: str | None = None,
+    error: str | None = None,
+    error_description: str | None = None,
+):
     if error:
         return RedirectResponse(f"/?oauth=error&msg={error_description or error}")
     if not code or not state:
@@ -501,8 +596,13 @@ async def mod_pools_refresh():
     `python -m app.modpool --force` (ops/publish-market-snapshot.sh). A backend with a seed bundled
     is a desktop install: it reads the tables its seed carries and never scrapes or rebuilds them."""
     if db.MARKET_SEED_PATH:
-        devtelemetry.tlog("mods", "refresh refused: this install reads its tables from the seed")
-        raise HTTPException(status_code=403, detail="desktop installs read their mod tables from the seed")
+        devtelemetry.tlog(
+            "mods", "refresh refused: this install reads its tables from the seed"
+        )
+        raise HTTPException(
+            status_code=403,
+            detail="desktop installs read their mod tables from the seed",
+        )
     return await modpool.refresh(force=True)
 
 
@@ -543,13 +643,19 @@ class WorkspaceBody(BaseModel):
 @app.get("/api/trading/workspace")
 def get_workspace():
     ws = db.kv_get("trading_workspace")
-    return {"workspace": ws if isinstance(ws, dict) and ws.get("version") == 2 else _empty_workspace()}
+    return {
+        "workspace": ws
+        if isinstance(ws, dict) and ws.get("version") == 2
+        else _empty_workspace()
+    }
 
 
 @app.put("/api/trading/workspace")
 def put_workspace(body: WorkspaceBody):
     ws = body.workspace
-    err = workspace.validate_workspace(ws)   # validates, never truncates (backend/app/workspace.py)
+    err = workspace.validate_workspace(
+        ws
+    )  # validates, never truncates (backend/app/workspace.py)
     if err:
         raise HTTPException(status_code=err.status, detail=err.detail)
     db.kv_set("trading_workspace", ws)
@@ -563,7 +669,7 @@ def _strat_prices() -> dict:
     try:
         g = arbitrage.cached_graph()
         return stratcalc.divine_prices(g.values(), g.s["reference"])
-    except Exception as exc:      # a cold graph must not hide the saved strats
+    except Exception as exc:  # a cold graph must not hide the saved strats
         log.warning("strat calc prices unavailable: %s", exc)
         return {}
 
@@ -578,7 +684,11 @@ def get_strat_calc(prices: int = 0):
     # `uses`: the tablets' full uses (kv_ops tablet_uses, from the pipeline via the seed)
     if prices:
         return {"prices": _strat_prices()}
-    return {"calc": db.kv_get(stratcalc.KEY), "prices": _strat_prices(), "uses": db.kv_get(modpool.TABLET_USES, []) or []}
+    return {
+        "calc": db.kv_get(stratcalc.KEY),
+        "prices": _strat_prices(),
+        "uses": db.kv_get(modpool.TABLET_USES, []) or [],
+    }
 
 
 @app.put("/api/strategy/calc")
@@ -599,14 +709,18 @@ def inflation_view(anchor: str = "hinekora", hours: int = 336):
 async def inflation_cross(item: int = leaguehistory.DEFAULT_ITEM):
     """Age-aligned cross-league inflation (Divine-in-Exalted). Backfills from
     poe2scout on first call / when current-league data is stale, then serves."""
-    res = await run_in_threadpool(leaguehistory.cross, item)   # sync DB scan off the event loop
-    if not res["leagues"]:                       # cold cache — quick anchors-only pull then serve
+    res = await run_in_threadpool(
+        leaguehistory.cross, item
+    )  # sync DB scan off the event loop
+    if not res["leagues"]:  # cold cache — quick anchors-only pull then serve
         await leaguehistory.backfill(full=False)
         res = await run_in_threadpool(leaguehistory.cross, item)
     return res
 
 
-_backfill_asked: dict[str, float] = {}      # league -> when we last kicked a full crawl for it
+_backfill_asked: dict[
+    str, float
+] = {}  # league -> when we last kicked a full crawl for it
 BACKFILL_RETRY_S = 1800
 
 
@@ -622,8 +736,13 @@ def _ask_backfill(league: str | None) -> bool:
 
 
 @app.get("/api/hold")
-async def hold(window_h: int | None = None, horizon: str | None = None, category: str = "all",
-               numeraire: str = "divine", k: float | None = None):
+async def hold(
+    window_h: int | None = None,
+    horizon: str | None = None,
+    category: str = "all",
+    numeraire: str = "divine",
+    k: float | None = None,
+):
     """Store-of-value leaderboard for the app-wide window (`window_h`), which on Hold is how long the
     player plans to hold: the ranking is for that holding period (`horizon=1d|3d|7d|14d` is the
     legacy spelling). Served from the
@@ -647,7 +766,9 @@ async def movers_ep(window_h: int = 24, n: int = 3, dir: str = "both"):
     """Biggest movers across the full poe2scout universe, by % change over the window, in the
     league base. dir='both' ranks by |change| (gainers AND crashers); 'up'/'down' keep only
     that direction. Distinct from /api/hold's store-of-value ranking."""
-    return await run_in_threadpool(movers.top_movers, window_h, n, movers.MIN_VALUE_EX, dir)
+    return await run_in_threadpool(
+        movers.top_movers, window_h, n, movers.MIN_VALUE_EX, dir
+    )
 
 
 @app.get("/api/asset")
@@ -671,15 +792,17 @@ async def signals_ep():
 
 
 class SignalAck(BaseModel):
-    keys: list[str] | None = None   # sig_keys ("item_id:t") to dismiss
-    all: bool = False               # dismiss every currently-fired signal
+    keys: list[str] | None = None  # sig_keys ("item_id:t") to dismiss
+    all: bool = False  # dismiss every currently-fired signal
 
 
 @app.post("/api/signals/ack")
 async def signals_ack_ep(body: SignalAck):
     """Dismiss signals (user data → signals_ack in user.sqlite). `keys` dismisses those signal ids;
     `all: true` dismisses everything currently fired. Returns the new unseen count."""
-    return await run_in_threadpool(signalsack.ack, body.keys, body.all, int(time.time()))
+    return await run_in_threadpool(
+        signalsack.ack, body.keys, body.all, int(time.time())
+    )
 
 
 @app.get("/api/leaguearc")
@@ -699,7 +822,9 @@ async def arc_ep(item: str, numeraire: str = "divine"):
 
 
 @app.get("/api/convert")
-async def convert_ep(have: str, want: str, amount: float | None = None, max_steps: int | None = None):
+async def convert_ep(
+    have: str, want: str, amount: float | None = None, max_steps: int | None = None
+):
     """Cheapest way to turn `have` into `want` across the live exchange graph (open path, not a
     profit loop). Returns the best route + the direct-market baseline + loss. Read-only."""
     return await run_in_threadpool(arbitrage.convert, have, want, amount, max_steps)
@@ -756,15 +881,18 @@ def market_top(hours: int = 24, limit: int = 40, by: str = "activity"):
     """Busiest markets. `by=activity` (default) ranks on how many hours the pair traded (raw turnover);
     `by=value` ranks on traded VALUE normalized to Exalted (volume × the exchange graph's ref-value),
     consistent with the rest of the app. Each row carries both raw volumes and the traded value."""
-    return digest.top_markets_valued(get_settings()["league"], hours, limit, by,
-                                     arbitrage.cached_graph().values())
+    return digest.top_markets_valued(
+        get_settings()["league"], hours, limit, by, arbitrage.cached_graph().values()
+    )
 
 
 @app.get("/api/market/history")
 def market_history(a: str, b: str, hours: int = 168):
     league = get_settings()["league"]
-    return {"digest": digest.pair_history(league, a, b, hours),
-            "live": orderbook.pair_history(league, a, b, min(hours, 72))}
+    return {
+        "digest": digest.pair_history(league, a, b, hours),
+        "live": orderbook.pair_history(league, a, b, min(hours, 72)),
+    }
 
 
 @app.get("/api/leagues")
@@ -778,12 +906,17 @@ async def leagues(force: bool = False):
 @app.get("/api/ratelimits")
 def rate_limits():
     from . import pairscore
-    return {"policies": gateway.status(), "queue": orderbook.state, "pair_scores": pairscore.top(12)}
+
+    return {
+        "policies": gateway.status(),
+        "queue": orderbook.state,
+        "pair_scores": pairscore.top(12),
+    }
 
 
 class RateAcquire(BaseModel):
     policy: str
-    spare: float = 0.0   # a low-priority request: only with this share of every window free (gateway.Policy.headroom)
+    spare: float = 0.0  # a low-priority request: only with this share of every window free (gateway.Policy.headroom)
 
 
 class RateObserve(BaseModel):
@@ -809,7 +942,9 @@ def rate_acquire(body: RateAcquire):
 
 
 _AUTH_TRADE_POLICIES = frozenset({"trade-history", "trade-whisper"})
-_TRADE_SESSION_POLICIES = frozenset({"trade", "trade-search", "trade-fetch", "trade-history", "trade-whisper"})
+_TRADE_SESSION_POLICIES = frozenset(
+    {"trade", "trade-search", "trade-fetch", "trade-history", "trade-whisper"}
+)
 
 
 def _proves_trade_session(policy: str, headers: dict[str, str]) -> bool:
@@ -848,7 +983,9 @@ def rate_hint(body: RateAcquire):
 class SalesIngest(BaseModel):
     league: str
     result: list[dict]
-    server_time: str | None = None   # the trade site's clock when it answered (its Date header)
+    server_time: str | None = (
+        None  # the trade site's clock when it answered (its Date header)
+    )
 
 
 @app.post("/api/sales/ingest")
@@ -859,10 +996,18 @@ def sales_ingest(body: SalesIngest):
     # A sale paid out: credit its price to the holdings — NEW rows only (a re-fetch never double-counts),
     # and only one the typed amount can't already count (db.sales_ingest). The trade site never reports
     # refunds, so nothing is ever debited here.
-    new_rows, credited, added = db.sales_ingest(league, body.result, skew_s=_clock_skew(body.server_time))
+    new_rows, credited, added = db.sales_ingest(
+        league, body.result, skew_s=_clock_skew(body.server_time)
+    )
     if added:
-        arbitrage.invalidate_caches()   # routes are sized from capital
-    return {"ok": True, "new": len(new_rows), "total": db.sales_count(league), "credited": len(credited), "added": added}
+        arbitrage.invalidate_caches()  # routes are sized from capital
+    return {
+        "ok": True,
+        "new": len(new_rows),
+        "total": db.sales_count(league),
+        "credited": len(credited),
+        "added": added,
+    }
 
 
 # HTTP Date headers have 1s resolution and arrive after network latency, which makes `site - now`
@@ -898,7 +1043,12 @@ def sales(league: str | None = None):
                     prices[cur] = px
     except Exception:
         log.exception("sales prices")
-    return {"league": league, "rows": rows, "leagues": db.sales_leagues(), "prices": prices}
+    return {
+        "league": league,
+        "rows": rows,
+        "leagues": db.sales_leagues(),
+        "prices": prices,
+    }
 
 
 @app.post("/api/digest/sync")
@@ -915,6 +1065,7 @@ class RouteQuery(BaseModel):
     """The route-search filters, declared ONCE: the GET query string (via Depends) and the
     `filters` of the refresh POST bodies both use it. Field names are the wire contract with
     frontend api.js (`qs(f)`). Unset fields fall back to the saved default filters."""
+
     min_margin_pct: float | None = None
     min_margin_ref: float | None = None
     max_gold: float | None = None
@@ -928,16 +1079,24 @@ class RouteQuery(BaseModel):
     min_velocity: float | None = None
     sort: str | None = Field(None, pattern=SORT_KEYS)
     limit: int | None = None
-    start: str | None = None      # comma-separated start currencies; omitted = all held
+    start: str | None = None  # comma-separated start currencies; omitted = all held
 
     @model_validator(mode="before")
     @classmethod
     def _blank_is_unset(cls, data):
         """An empty filter box arrives as '' — that is "unset", not an unparseable number."""
-        return {k: v for k, v in data.items() if v != ""} if isinstance(data, dict) else data
+        return (
+            {k: v for k, v in data.items() if v != ""}
+            if isinstance(data, dict)
+            else data
+        )
 
     def to_filters(self) -> dict:
-        return {k: v for k, v in self.model_dump(exclude={"start"}).items() if v not in (None, "")}
+        return {
+            k: v
+            for k, v in self.model_dump(exclude={"start"}).items()
+            if v not in (None, "")
+        }
 
     def starts(self) -> list[str] | None:
         return [x for x in self.start.split(",") if x] if self.start else None
@@ -981,8 +1140,11 @@ def routes_stream(request: Request, q: RouteQuery = Depends()):
             arbitrage._composite_score(scored, weights)
             out += f"event: scores\ndata: {_json.dumps({r['id']: r['score'] for r in scored})}\n\n"
             return out
+
         try:
-            for kind, payload in arbitrage.stream_routes(f, starts, cancelled=stop.is_set):
+            for kind, payload in arbitrage.stream_routes(
+                f, starts, cancelled=stop.is_set
+            ):
                 if kind == "route":
                     buf.append(payload)
                     if len(buf) >= 25 or time.time() - last > 0.15:
@@ -992,7 +1154,7 @@ def routes_stream(request: Request, q: RouteQuery = Depends()):
                     if out:
                         yield out
                     yield f"event: {kind}\ndata: {_json.dumps(payload)}\n\n"
-        except Exception as exc:   # surface instead of a dead stream
+        except Exception as exc:  # surface instead of a dead stream
             log.exception("route stream failed: %s", exc)
             yield f"event: error\ndata: {_json.dumps({'error': str(exc)})}\n\n"
 
@@ -1009,8 +1171,11 @@ def routes_stream(request: Request, q: RouteQuery = Depends()):
         finally:
             stop.set()
 
-    return StreamingResponse(until_gone(), media_type="text/event-stream",
-                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+    return StreamingResponse(
+        until_gone(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 class RefreshTopBody(BaseModel):
@@ -1037,17 +1202,31 @@ async def routes_refresh_top(body: RefreshTopBody):
     f, starts = q.to_filters(), q.starts()
     n = body.n if body.n is not None else s["live_top_n"]
     before = await run_in_threadpool(arbitrage.find_routes, f, starts)
-    pairs = [tuple(p) for r in before["routes"][:max(0, n)] for p in r["pairs"]]
+    pairs = [tuple(p) for r in before["routes"][: max(0, n)] for p in r["pairs"]]
     futs = orderbook.request_pairs(pairs, priority=1, max_age_s=s["live_min_age_s"])
     waited = await orderbook.wait_for(futs, body.wait_s)
-    after = await run_in_threadpool(arbitrage.find_routes, f, starts, False) if waited["done"] else before
-    return {**after, "refresh": {**waited, "pairs_considered": len(set(pairs)), "top_n": n,
-                                 "queue": orderbook.state["queue"], "in_flight": orderbook.state["in_flight"]}}
+    after = (
+        await run_in_threadpool(arbitrage.find_routes, f, starts, False)
+        if waited["done"]
+        else before
+    )
+    return {
+        **after,
+        "refresh": {
+            **waited,
+            "pairs_considered": len(set(pairs)),
+            "top_n": n,
+            "queue": orderbook.state["queue"],
+            "in_flight": orderbook.state["in_flight"],
+        },
+    }
 
 
 class RefreshRouteBody(BaseModel):
     id: str
-    pairs: list[list[str]] | None = None   # exchange pairs only (the UI sends route.pairs)
+    pairs: list[list[str]] | None = (
+        None  # exchange pairs only (the UI sends route.pairs)
+    )
     filters: RouteQuery = RouteQuery()
     start: str | None = None
     wait_s: float = 45
@@ -1061,17 +1240,29 @@ async def routes_refresh_one(body: RefreshRouteBody):
     """Force-refresh every exchange pair in one loop (top priority), then return it."""
     if not session.get_cookie():
         raise HTTPException(400, "no trade session connected")
-    pairs = [tuple(p) for p in body.pairs] if body.pairs else arbitrage.route_pairs(body.id)
+    pairs = (
+        [tuple(p) for p in body.pairs] if body.pairs else arbitrage.route_pairs(body.id)
+    )
     futs = orderbook.request_pairs(pairs, priority=0, force=True)
     waited = await orderbook.wait_for(futs, body.wait_s)
     q = body.query()
     f, starts = q.to_filters(), q.starts()
     res = await run_in_threadpool(arbitrage.find_routes, f, starts, False)
     route = next((r for r in res["routes"] if r["id"] == body.id), None)
-    if route is None:  # it may no longer pass the filters; recompute unfiltered so the user sees why
+    if (
+        route is None
+    ):  # it may no longer pass the filters; recompute unfiltered so the user sees why
         loose = await run_in_threadpool(
-            arbitrage.find_routes, {"min_margin_pct": -1e9, "min_margin_ref": -1e9, "limit": 100000}, starts, False
+            arbitrage.find_routes,
+            {"min_margin_pct": -1e9, "min_margin_ref": -1e9, "limit": 100000},
+            starts,
+            False,
         )
         route = next((r for r in loose["routes"] if r["id"] == body.id), None)
-    return {"route": route, "routes": res["routes"], "refresh": {**waited, "pairs": len(pairs),
-            "queue": orderbook.state["queue"]}, "still_passes": route is not None and any(r["id"] == body.id for r in res["routes"])}
+    return {
+        "route": route,
+        "routes": res["routes"],
+        "refresh": {**waited, "pairs": len(pairs), "queue": orderbook.state["queue"]},
+        "still_passes": route is not None
+        and any(r["id"] == body.id for r in res["routes"]),
+    }

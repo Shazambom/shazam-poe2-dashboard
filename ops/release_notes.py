@@ -14,6 +14,7 @@ The notes live in docs/release-notes/<x.y.z>.md, written to docs/release-notes/S
 
 The message itself and the payload rules are defined once, in ops/feedback-bot/bot/announce.py.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -28,11 +29,17 @@ import announce  # (the bot's own module: one definition of the message and its 
 
 def parse(text: str) -> dict:
     """{version, summary, bullets} from a notes file, or ValueError saying what breaks the format."""
-    lines = [l.rstrip() for l in text.lstrip("\ufeff").strip().splitlines()]   # a BOM (Notepad) is not text
-    if not lines or not lines[0].startswith("# ") or not announce.VERSION_RE.fullmatch(lines[0][2:].strip()):
+    lines = [
+        l.rstrip() for l in text.lstrip("\ufeff").strip().splitlines()
+    ]  # a BOM (Notepad) is not text
+    if (
+        not lines
+        or not lines[0].startswith("# ")
+        or not announce.VERSION_RE.fullmatch(lines[0][2:].strip())
+    ):
         raise ValueError("the first line must be the heading '# <x.y.z>'")
     version, summary, bullets = lines[0][2:].strip(), [], []
-    summary_done = False                       # the summary is the one paragraph under the heading
+    summary_done = False  # the summary is the one paragraph under the heading
     for line in lines[1:]:
         if not line.strip():
             summary_done = summary_done or bool(summary)
@@ -40,7 +47,9 @@ def parse(text: str) -> dict:
         if line.startswith("- "):
             bullets.append(line[2:].strip())
         elif bullets or summary_done:
-            raise ValueError(f"after the summary the notes are only bullets ('- …'): {line!r}")
+            raise ValueError(
+                f"after the summary the notes are only bullets ('- …'): {line!r}"
+            )
         else:
             summary.append(line.strip())
     summary_text = " ".join(summary)
@@ -51,10 +60,14 @@ def parse(text: str) -> dict:
 def check(version: str, root: Path = ROOT) -> dict:
     """The release's own notes, in the owner's format, fitting one Discord message, as a payload."""
     if not announce.VERSION_RE.fullmatch(version):
-        raise ValueError(f"only stable releases (x.y.z) get release notes, not {version!r}")
+        raise ValueError(
+            f"only stable releases (x.y.z) get release notes, not {version!r}"
+        )
     path = Path(root) / "docs" / "release-notes" / f"{version}.md"
     if not path.is_file():
-        raise ValueError(f"no release notes for {version}: write {path.relative_to(root)} (docs/release-notes/STYLE.md)")
+        raise ValueError(
+            f"no release notes for {version}: write {path.relative_to(root)} (docs/release-notes/STYLE.md)"
+        )
     notes = parse(path.read_text(encoding="utf-8"))
     if notes["version"] != version:
         raise ValueError(f"the heading names {notes['version']}, not {version}")
@@ -72,7 +85,11 @@ def main(argv=None) -> int:
     except ValueError as e:
         print(f"release notes: {e}", file=sys.stderr)
         return 1
-    print(json.dumps(p, ensure_ascii=False) if a.cmd == "payload" else f"release notes for {a.version}: OK")
+    print(
+        json.dumps(p, ensure_ascii=False)
+        if a.cmd == "payload"
+        else f"release notes for {a.version}: OK"
+    )
     return 0
 
 

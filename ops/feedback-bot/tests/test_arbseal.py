@@ -1,5 +1,6 @@
 """arbseal.py — the owner-side opener of Arbiter feedback reports; the same envelope as
 desktop/src/feedback/seal.js byte for byte (pinned by the cross-language fixtures)."""
+
 import os
 import subprocess
 import sys
@@ -19,7 +20,9 @@ FIX = ROOT / "desktop" / "test" / "fixtures" / "feedback"
 
 def keys():
     priv = X25519PrivateKey.generate()
-    pub = priv.public_key().public_bytes(serialization.Encoding.Raw, serialization.PublicFormat.Raw)
+    pub = priv.public_key().public_bytes(
+        serialization.Encoding.Raw, serialization.PublicFormat.Raw
+    )
     return priv, pub
 
 
@@ -42,7 +45,17 @@ def test_round_trip_overhead_and_uniqueness():
     assert arbseal.open_sealed(arbseal.seal(b"", pub), priv) == b""
 
 
-@pytest.mark.parametrize("name,i", [("magic", 0), ("keyId", 4), ("ephPub", 12), ("nonce", 40), ("ciphertext", 51), ("tag", -1)])
+@pytest.mark.parametrize(
+    "name,i",
+    [
+        ("magic", 0),
+        ("keyId", 4),
+        ("ephPub", 12),
+        ("nonce", 40),
+        ("ciphertext", 51),
+        ("tag", -1),
+    ],
+)
 def test_any_flipped_byte_fails(name, i):
     priv, pub = keys()
     sealed = bytearray(arbseal.seal(b"payload", pub))
@@ -64,26 +77,41 @@ def test_wrong_key_truncation_and_bad_magic():
 
 
 def test_opens_a_file_sealed_by_seal_js():
-    priv = serialization.load_pem_private_key((FIX / "test-key.pem").read_bytes(), password=None)
+    priv = serialization.load_pem_private_key(
+        (FIX / "test-key.pem").read_bytes(), password=None
+    )
     got = arbseal.open_sealed((FIX / "sealed-by-node.arb").read_bytes(), priv)
     assert got == (FIX / "plain.txt").read_bytes()
 
 
 def test_keygen_writes_a_0600_pem_and_prints_the_raw_public_key(tmp_path):
-    r = subprocess.run([sys.executable, "-m", "arbseal", "keygen", "7"], cwd=tmp_path, capture_output=True, text=True,
-                       env={**os.environ, "PYTHONPATH": str(HERE.parent / "bot")})
+    r = subprocess.run(
+        [sys.executable, "-m", "arbseal", "keygen", "7"],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        env={**os.environ, "PYTHONPATH": str(HERE.parent / "bot")},
+    )
     assert r.returncode == 0, r.stderr
     pem = tmp_path / "feedback-key-7.pem"
     assert pem.exists() and (pem.stat().st_mode & 0o777) == 0o600
     pub_b64 = r.stdout.strip().splitlines()[-1]
     import base64
+
     assert len(base64.b64decode(pub_b64)) == 32
     # The public half is written beside the PEM too (what the build step ships).
     assert (tmp_path / "feedback-key-7.pub").read_text().strip() == pub_b64
     # The printed key seals to the written PEM.
     priv = serialization.load_pem_private_key(pem.read_bytes(), password=None)
-    assert arbseal.open_sealed(arbseal.seal(b"x", base64.b64decode(pub_b64)), priv) == b"x"
+    assert (
+        arbseal.open_sealed(arbseal.seal(b"x", base64.b64decode(pub_b64)), priv) == b"x"
+    )
     # Refuses to overwrite.
-    r2 = subprocess.run([sys.executable, "-m", "arbseal", "keygen", "7"], cwd=tmp_path, capture_output=True, text=True,
-                        env={**os.environ, "PYTHONPATH": str(HERE.parent / "bot")})
+    r2 = subprocess.run(
+        [sys.executable, "-m", "arbseal", "keygen", "7"],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        env={**os.environ, "PYTHONPATH": str(HERE.parent / "bot")},
+    )
     assert r2.returncode != 0

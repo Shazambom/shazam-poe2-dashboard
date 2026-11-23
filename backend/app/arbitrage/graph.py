@@ -5,6 +5,7 @@
 Plus the fill model every feature shares: simulate() walks a list of edges with whole-unit
 rounding and the gold fee model; route_cap/cycle_unit size a path by its liquidity.
 """
+
 from __future__ import annotations
 
 import heapq
@@ -18,7 +19,11 @@ INF = float("inf")
 # How far a market may sit from poe2scout's independent close and still price a currency.
 # Thin-but-honest markets run 2-3x from it; the trades that are not prices run thousands.
 OUTSIDE_DISAGREEMENT = 10.0
-def counterparts_by_volume(g, rv: dict[str, float] | None = None) -> dict[str, list[tuple[float, str]]]:
+
+
+def counterparts_by_volume(
+    g, rv: dict[str, float] | None = None
+) -> dict[str, list[tuple[float, str]]]:
     """THE volume rule: per currency, its counterpart markets ranked by how many UNITS OF THAT
     CURRENCY the market moves an hour — what it sold there plus what the other side's sales
     bought (that side's units × the market's rate). Owner, 2026-09-23: the busiest market is the
@@ -31,15 +36,24 @@ def counterparts_by_volume(g, rv: dict[str, float] | None = None) -> dict[str, l
     the value table (`Graph.quote_busiest_markets`, `Graph._widest_values`) all walk this
     ranking; nothing else defines "the market that trades a currency"."""
     memo = getattr(g, "_counterparts_memo", None)
-    sig = (len(g.edges), g.sources.get("live", 0), g.sources.get("digest", 0), len(g.busiest))
+    sig = (
+        len(g.edges),
+        g.sources.get("live", 0),
+        g.sources.get("digest", 0),
+        len(g.busiest),
+    )
     if memo and memo[0] == sig:
         return memo[1]
-    units: dict[tuple[str, str], float] = {}          # (currency, counterpart) -> units of currency per hour
+    units: dict[
+        tuple[str, str], float
+    ] = {}  # (currency, counterpart) -> units of currency per hour
     for (a, b), e in g.market_edges():
         if not e.vol_in_per_h or e.rate <= 0:
             continue
-        units[(a, b)] = units.get((a, b), 0.0) + e.vol_in_per_h                 # a sold for b
-        units[(b, a)] = units.get((b, a), 0.0) + e.vol_in_per_h * e.rate        # b bought with that a
+        units[(a, b)] = units.get((a, b), 0.0) + e.vol_in_per_h  # a sold for b
+        units[(b, a)] = (
+            units.get((b, a), 0.0) + e.vol_in_per_h * e.rate
+        )  # b bought with that a
     ranked: dict[str, list[tuple[float, str]]] = {}
     for (c, other), u in units.items():
         if u > 0:
@@ -54,12 +68,14 @@ def counterparts_by_volume(g, rv: dict[str, float] | None = None) -> dict[str, l
 class Edge:
     src: str
     dst: str
-    kind: str                       # live | digest | recipe
-    rate: float                     # dst units per src unit (best)
-    ladder: list[dict]              # [{rate, stock(dst units), whisper?, account?}]
+    kind: str  # live | digest | recipe
+    rate: float  # dst units per src unit (best)
+    ladder: list[dict]  # [{rate, stock(dst units), whisper?, account?}]
     age_s: float = 0.0
-    lot: float = 1.0                # recipe input lot size
-    vol_in_per_h: float | None = None   # executed src units per hour (digest); None for recipes
+    lot: float = 1.0  # recipe input lot size
+    vol_in_per_h: float | None = (
+        None  # executed src units per hour (digest); None for recipes
+    )
     meta: dict = field(default_factory=dict)
     # A recipe that took a market's step keeps that market here (never in `meta`, which the screens
     # get as JSON), so `traded_rate` still prices the pair at what the market traded at.
@@ -81,9 +97,13 @@ class Edge:
         if self.kind == "recipe":
             lots = math.floor(amount / self.lot)
             used = lots * self.lot
-            return used, math.floor(lots * self.lot * self.rate), [
-                {"rate": self.rate, "in": used, "out": math.floor(used * self.rate)}
-            ] if used > 0 else []
+            return (
+                used,
+                math.floor(lots * self.lot * self.rate),
+                [{"rate": self.rate, "in": used, "out": math.floor(used * self.rate)}]
+                if used > 0
+                else [],
+            )
         remaining = amount
         out = 0.0
         fills = []
@@ -93,8 +113,15 @@ class Edge:
             cap = o["stock"] / o["rate"]
             take = min(remaining, cap)
             got = take * o["rate"]
-            fills.append({"rate": o["rate"], "in": take, "out": got,
-                          "whisper": o.get("whisper"), "account": o.get("account")})
+            fills.append(
+                {
+                    "rate": o["rate"],
+                    "in": take,
+                    "out": got,
+                    "whisper": o.get("whisper"),
+                    "account": o.get("account"),
+                }
+            )
             out += got
             remaining -= take
         used = amount - remaining
@@ -108,15 +135,19 @@ class Graph:
         self.adj: dict[str, list[Edge]] = {}
         self.sources = {"live": 0, "digest": 0, "recipe": 0}
         self.fee_table: dict[str, int] = {}
-        self._values: dict[str, float] | None = None     # Graph.values(), once per build
-        self.priced_by: dict[str, str] = {}              # currency -> the counterpart that prices it
-        self.busiest: dict[str, str] = {}                # currency -> its busiest counterpart (the volume rule)
+        self._values: dict[str, float] | None = None  # Graph.values(), once per build
+        self.priced_by: dict[
+            str, str
+        ] = {}  # currency -> the counterpart that prices it
+        self.busiest: dict[
+            str, str
+        ] = {}  # currency -> its busiest counterpart (the volume rule)
 
     def add(self, e: Edge) -> None:
         self.edges[(e.src, e.dst)] = e
         self.adj.setdefault(e.src, []).append(e)
         self._values = None
-        self.priced_by = {}          # the parent map belongs to the table it was built with
+        self.priced_by = {}  # the parent map belongs to the table it was built with
         self.sources[e.kind] += 1
 
     # Recipes never change market data (docs/bugs/2026-09-29-crafting-recipes-missing-from-routes.md):
@@ -151,10 +182,22 @@ class Graph:
             for (a, b), d in executed.items():
                 if (a, b) in g.edges:
                     continue
-                g.add(Edge(a, b, "digest", d["rate"], [{"rate": d["rate"], "stock": d["stock"]}],
-                           d["age_s"], meta={"hour": d["hour"], "volume": d["volume_to"],
-                                             "inactive": d.get("inactive", False),
-                                             "quoted_rate": d.get("quoted_rate")}))
+                g.add(
+                    Edge(
+                        a,
+                        b,
+                        "digest",
+                        d["rate"],
+                        [{"rate": d["rate"], "stock": d["stock"]}],
+                        d["age_s"],
+                        meta={
+                            "hour": d["hour"],
+                            "volume": d["volume_to"],
+                            "inactive": d.get("inactive", False),
+                            "quoted_rate": d.get("quoted_rate"),
+                        },
+                    )
+                )
         vols = digest.pair_volume(league, volume_window_h or MARKET_VOLUME_WINDOW_H)
         for (a, b), e in g.edges.items():
             if e.kind != "recipe":
@@ -165,6 +208,7 @@ class Graph:
         min_vol = float(s.get("min_edge_volume_ref_per_h") or 0)
         if min_depth or min_vol:
             rv = g.ref_values()
+
             # Recipes never spare a market: the cull shapes the value table, and a recipe must not
             # change market data (the orb disenchants make chaos and exalted recipe ends, which
             # once kept every thin market touching them).
@@ -174,6 +218,7 @@ class Graph:
                 if min_vol and (e.vol_in_per_h or 0.0) * rv.get(e.src, 0.0) < min_vol:
                     return True
                 return False
+
             dropped = [k for k, e in g.edges.items() if _thin(e)]
             for k in dropped:
                 g.sources[g.edges[k].kind] -= 1
@@ -198,7 +243,19 @@ class Graph:
         if market and market.rate >= r["rate"]:
             return  # exchange already beats the recipe
         meta = {"recipe_id": r["recipe_id"], "name": r["name"], "kind": r["kind"]}
-        self.add(Edge(r["from"], r["to"], "recipe", r["rate"], [], 0.0, lot=r["lot"], meta=meta, market=market))
+        self.add(
+            Edge(
+                r["from"],
+                r["to"],
+                "recipe",
+                r["rate"],
+                [],
+                0.0,
+                lot=r["lot"],
+                meta=meta,
+                market=market,
+            )
+        )
 
     # ------------------------------------------------------------ values
     def direct_rate(self, c: str, n: str) -> float | None:
@@ -217,7 +274,7 @@ class Graph:
         market's edge holds its worst-case side for the route search, so its `quoted_rate` (the window
         rate) stands in. For showing a price (native_price); routes keep `direct_rate`."""
         for key, inv in (((c, n), False), ((n, c), True)):
-            e = self.market_edge(*key)        # a recipe is a conversion, not a market price
+            e = self.market_edge(*key)  # a recipe is a conversion, not a market price
             if not e:
                 continue
             r = e.meta.get("quoted_rate") if e.meta.get("inactive") else None
@@ -312,8 +369,8 @@ class Graph:
             """(units of u, units of v) traded per hour in the u<->v market, each direction
             converted at the market's own rate."""
             uv, vu = market(u, v), market(v, u)
-            vol_uv = (uv.vol_in_per_h or 0.0) if uv else 0.0      # u sold per hour
-            vol_vu = (vu.vol_in_per_h or 0.0) if vu else 0.0      # v sold per hour
+            vol_uv = (uv.vol_in_per_h or 0.0) if uv else 0.0  # u sold per hour
+            vol_vu = (vu.vol_in_per_h or 0.0) if vu else 0.0  # v sold per hour
             v_per_u = market_rate(u, v)
             u_per_v = (1.0 / v_per_u) if v_per_u else 0.0
             return vol_uv + vol_vu * u_per_v, vol_vu + vol_uv * v_per_u
@@ -327,7 +384,9 @@ class Graph:
             2,900 Divine for 53 essences was its own proof, and a cranium worth ~6,900 ex was
             judged against 441). With no outside price, the deepest market wins."""
             outside = scout_px.get(c)
-            return not outside or max(outside, px) <= OUTSIDE_DISAGREEMENT * min(outside, px)
+            return not outside or max(outside, px) <= OUTSIDE_DISAGREEMENT * min(
+                outside, px
+            )
 
         vals: dict[str, float] = {ref: 1.0}
         priced_by: dict[str, str] = {}
@@ -351,15 +410,20 @@ class Graph:
                 for v in nbrs.get(u, ()):
                     if v in done or (through_dead and v in vals):
                         continue
-                    px = market_rate(v, u)                             # u per v
-                    if not px or (not through_dead and dead(u, v) and has_live_market(v)) \
-                            or not believable(v, px * vals[u]):
+                    px = market_rate(v, u)  # u per v
+                    if (
+                        not px
+                        or (not through_dead and dead(u, v) and has_live_market(v))
+                        or not believable(v, px * vals[u])
+                    ):
                         continue
-                    cand = min(-w, units(u, v)[0] * vals[u])           # as deep as its thinnest market
+                    cand = min(
+                        -w, units(u, v)[0] * vals[u]
+                    )  # as deep as its thinnest market
                     if cand > width.get(v, 0.0):
                         width[v] = cand
                         vals[v] = vals[u] * px
-                        priced_by[v] = u                               # the market this price came from
+                        priced_by[v] = u  # the market this price came from
                         heapq.heappush(heap, (-cand, v))
 
         relax(through_dead=False)
@@ -376,8 +440,8 @@ class Graph:
             if c == ref or b not in vals or width.get(b, 0.0) <= width.get(c, 0.0):
                 continue
             if self.busiest.get(b) == c and c in vals:
-                continue                                   # each other's busiest market: the walk stands
-            px = market_rate(c, b)                         # b per c, from the busiest market itself
+                continue  # each other's busiest market: the walk stands
+            px = market_rate(c, b)  # b per c, from the busiest market itself
             if px > 0:
                 vals[c] = vals[b] * px
                 priced_by[c] = b
@@ -395,10 +459,16 @@ class Graph:
     def _scout_values(self) -> dict[str, float]:
         """poe2scout's latest close per currency, in the reference — evidence from outside the
         exchange, used to size the far side of a market and to price what no market priced."""
-        scout = leaguehistory.scout_prices(self.s["league"])       # never raises (logs + {} on failure)
+        scout = leaguehistory.scout_prices(
+            self.s["league"]
+        )  # never raises (logs + {} on failure)
         if not scout:
             return {}
-        ex = self.direct_rate("exalted", self.s["reference"]) if self.s["reference"] != "exalted" else 1.0
+        ex = (
+            self.direct_rate("exalted", self.s["reference"])
+            if self.s["reference"] != "exalted"
+            else 1.0
+        )
         out: dict[str, float] = {}
         for cid in registry.by_id:
             px = leaguehistory.scout_lookup(scout, cid)
@@ -441,8 +511,10 @@ class Graph:
         # Fallback for currencies the exchange graph can't reach (e.g. Hinekora's Lock,
         # omens): value them from poe2scout (priced in Exalted). This threads a price
         # for EVERY traded currency through capital, routes, market and the board.
-        scout = leaguehistory.scout_prices(self.s["league"])   # never raises (logs + {} on failure)
-        ex = vals.get("exalted")                     # reference-per-exalted
+        scout = leaguehistory.scout_prices(
+            self.s["league"]
+        )  # never raises (logs + {} on failure)
+        ex = vals.get("exalted")  # reference-per-exalted
         if scout and ex:
             for cid in registry.by_id:
                 if cid in vals:
@@ -455,12 +527,14 @@ class Graph:
     # ------------------------------------------------------------ search
     def iter_cycles(self, start: str, max_steps: int):
         """Lazily yield simple cycles from `start`, so callers can stream results."""
+
         def dfs(node: str, path: list[Edge], visited: set[str]):
             for e in self.adj.get(node, []):
                 if e.dst == start and len(path) >= 1:
                     yield path + [e]
                 elif e.dst not in visited and len(path) < max_steps - 1:
                     yield from dfs(e.dst, path + [e], visited | {e.dst})
+
         yield from dfs(start, [], {start})
 
     def iter_paths(self, start: str, target: str, max_steps: int, allowed_mids=None):
@@ -468,18 +542,29 @@ class Graph:
         `iter_cycles`, which closes back to start). Each path is a list[Edge] ending at
         `target`, visiting no node twice, at most `max_steps` hops long. When `allowed_mids` is
         provided, only intermediate nodes in that set are expanded."""
+
         def dfs(node: str, path: list[Edge], visited: set[str]):
             for e in self.adj.get(node, []):
                 if e.dst == target:
                     yield path + [e]
-                elif (e.dst not in visited and len(path) < max_steps - 1
-                      and (allowed_mids is None or e.dst in allowed_mids)):
+                elif (
+                    e.dst not in visited
+                    and len(path) < max_steps - 1
+                    and (allowed_mids is None or e.dst in allowed_mids)
+                ):
                     yield from dfs(e.dst, path + [e], visited | {e.dst})
+
         yield from dfs(start, [], {start})
 
 
-def gold_fee(model: dict, edge: Edge, in_units: float, out_units: float,
-             ref_value: dict[str, float], table: dict[str, int]) -> float:
+def gold_fee(
+    model: dict,
+    edge: Edge,
+    in_units: float,
+    out_units: float,
+    ref_value: dict[str, float],
+    table: dict[str, int],
+) -> float:
     """Exchange fee for one step.
 
     Precedence: manual override in settings > GoldPurchaseFee from game data >
@@ -499,7 +584,9 @@ def gold_fee(model: dict, edge: Edge, in_units: float, out_units: float,
     return base + model.get("per_ref_unit", 0) * units * ref_value.get(cur, 0.0)
 
 
-def simulate(g: Graph, cycle: list[Edge], start_amount: float, ref_value: dict[str, float]) -> dict:
+def simulate(
+    g: Graph, cycle: list[Edge], start_amount: float, ref_value: dict[str, float]
+) -> dict:
     model = g.s["gold_model"]
     table = g.fee_table
     amt = start_amount
@@ -509,7 +596,9 @@ def simulate(g: Graph, cycle: list[Edge], start_amount: float, ref_value: dict[s
     liquidity_ref = INF
     volume_ref_per_h = INF
     fill_hours = 0.0
-    slowest_step_hours = 0.0     # the worst step's share of its market: units in ÷ units/h traded
+    slowest_step_hours = (
+        0.0  # the worst step's share of its market: units in ÷ units/h traded
+    )
     overhead_h = float(g.s.get("step_overhead_min", 0)) / 60
     max_age = 0.0
     all_live = True
@@ -527,20 +616,36 @@ def simulate(g: Graph, cycle: list[Edge], start_amount: float, ref_value: dict[s
         max_age = max(max_age, e.age_s)
         if e.kind == "digest":
             all_live = False
-        steps.append({
-            "from": e.src, "to": e.dst, "from_name": registry.name(e.src), "to_name": registry.name(e.dst),
-            "kind": e.kind, "rate": e.rate, "in": used, "out": out, "unconverted": amt - used,
-            "gold": fee, "age_s": e.age_s, "fills": fills[:5], "meta": e.meta,
-            "vol_in_per_h": e.vol_in_per_h,
-        })
+        steps.append(
+            {
+                "from": e.src,
+                "to": e.dst,
+                "from_name": registry.name(e.src),
+                "to_name": registry.name(e.dst),
+                "kind": e.kind,
+                "rate": e.rate,
+                "in": used,
+                "out": out,
+                "unconverted": amt - used,
+                "gold": fee,
+                "age_s": e.age_s,
+                "fills": fills[:5],
+                "meta": e.meta,
+                "vol_in_per_h": e.vol_in_per_h,
+            }
+        )
         amt = out
     return {
-        "steps": steps, "end_amount": amt, "gold": gold, "value_ref": value_ref,
+        "steps": steps,
+        "end_amount": amt,
+        "gold": gold,
+        "value_ref": value_ref,
         "liquidity_ref": None if liquidity_ref == INF else liquidity_ref,
         "volume_ref_per_h": None if volume_ref_per_h == INF else volume_ref_per_h,
         "fill_hours": None if fill_hours == INF else fill_hours,
         "slowest_step_hours": None if slowest_step_hours == INF else slowest_step_hours,
-        "max_age_s": max_age, "all_live": all_live,
+        "max_age_s": max_age,
+        "all_live": all_live,
     }
 
 
@@ -574,13 +679,17 @@ def cycle_unit(cycle: list[Edge], limit: int = 512) -> int:
         ok = True
         for e in cycle:
             used, out, _ = e.fill(amt)
-            if out <= 0 or used + 1e-9 < amt:   # a whole lot didn't fit → waste at this hop
+            if (
+                out <= 0 or used + 1e-9 < amt
+            ):  # a whole lot didn't fit → waste at this hop
                 ok = False
                 break
             amt = out
         if ok:
             return a
     return 1
+
+
 _graph_cache: dict = {}
 GRAPH_TTL_S = 60.0
 # The market every screen prices from (Board, Hold, Convert, Capital, wealth) averages volumes over this window. The
@@ -595,11 +704,26 @@ def cached_graph(volume_window_h: float | None = None) -> Graph:
     `volume_window_h`: the route search's own window; omitted, the market's."""
     s = get_settings()
     window = volume_window_h or MARKET_VOLUME_WINDOW_H
-    key = (s["league"], s["reference"], s["allow_digest_edges"], s["allow_recipe_edges"],
-           s["live_max_age_s"], s["digest_max_age_h"],
-           s.get("min_edge_volume_ref_per_h"), s.get("min_edge_depth"), window)
+    key = (
+        s["league"],
+        s["reference"],
+        s["allow_digest_edges"],
+        s["allow_recipe_edges"],
+        s["live_max_age_s"],
+        s["digest_max_age_h"],
+        s.get("min_edge_volume_ref_per_h"),
+        s.get("min_edge_depth"),
+        window,
+    )
     ver = (orderbook.state["version"], digest.state["last_hour"])
-    return cache.memo(_graph_cache, key, GRAPH_TTL_S, lambda: Graph.build(window), version=ver, max_entries=4)
+    return cache.memo(
+        _graph_cache,
+        key,
+        GRAPH_TTL_S,
+        lambda: Graph.build(window),
+        version=ver,
+        max_entries=4,
+    )
 
 
 def anchor_prices() -> dict[str, float]:

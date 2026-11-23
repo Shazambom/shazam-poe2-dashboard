@@ -21,6 +21,7 @@ Divine market is a one-hour fat-finger trade (real executed data).
 
     python -m pytest backend/tests/test_market_basket.py -q
 """
+
 import json
 import sys
 from pathlib import Path
@@ -31,23 +32,40 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # backend/
 from app import liquidity
 from app.arbitrage import Edge, Graph
 
-FX = json.loads((Path(__file__).parent / "fixtures" / "market_basket_2026-09-19.json").read_text())
+FX = json.loads(
+    (Path(__file__).parent / "fixtures" / "market_basket_2026-09-19.json").read_text()
+)
 REF = FX["reference"]
 HUBS = set(FX["hubs"])
 GOLD = FX["gold_value_per_1k"]
-TOL = 0.03      # the two hub markets of one asset disagree by a few % (VWAP hours, spreads)
+TOL = 0.03  # the two hub markets of one asset disagree by a few % (VWAP hours, spreads)
 # The owner's route filters on the day of the snapshot — the cash-out's illiquidity guard.
 FILTERS = {"min_volume_ref_per_h": 100.0, "max_fill_hours": 24}
 
 
 def _graph() -> Graph:
     s = dict(FX["settings"])
-    s.update({"allow_digest_edges": True, "allow_recipe_edges": False, "filters": dict(FILTERS)})
+    s.update(
+        {
+            "allow_digest_edges": True,
+            "allow_recipe_edges": False,
+            "filters": dict(FILTERS),
+        }
+    )
     g = Graph(s)
     g.fee_table = {c: f for c, f in FX["fees_by_trade"].items() if f is not None}
     for e in FX["edges"]:
-        g.add(Edge(e["src"], e["dst"], "digest", e["rate"], [{"rate": e["rate"], "stock": e["stock"]}],
-                   age_s=e["age_s"], vol_in_per_h=e["vol_in_per_h"]))
+        g.add(
+            Edge(
+                e["src"],
+                e["dst"],
+                "digest",
+                e["rate"],
+                [{"rate": e["rate"], "stock": e["stock"]}],
+                age_s=e["age_s"],
+                vol_in_per_h=e["vol_in_per_h"],
+            )
+        )
     return g
 
 
@@ -65,12 +83,17 @@ def rv(g):
 def _value_per_h(g, c, h, rv):
     """Executed value of the c↔h market per hour, counted on the HUB side at the hub's worth."""
     e_in, e_out = g.edges.get((h, c)), g.edges.get((c, h))
-    hub_units = (e_in.vol_in_per_h if e_in else 0.0) + (e_out.vol_in_per_h * e_out.rate if e_out else 0.0)
+    hub_units = (e_in.vol_in_per_h if e_in else 0.0) + (
+        e_out.vol_in_per_h * e_out.rate if e_out else 0.0
+    )
     return hub_units * rv[h]
 
 
 def _deepest_hub(g, c, rv):
-    return max((h for h in HUBS if h != c and g.direct_rate(c, h)), key=lambda h: _value_per_h(g, c, h, rv))
+    return max(
+        (h for h in HUBS if h != c and g.direct_rate(c, h)),
+        key=lambda h: _value_per_h(g, c, h, rv),
+    )
 
 
 # ------------------------------------------------------------------ the snapshot's premise
@@ -82,7 +105,9 @@ def test_the_direct_exalted_market_is_the_thin_one(g, rv):
         assert h != REF, c
         implied = g.direct_rate(c, h) * rv[h]
         naive = g.ref_values()[c]
-        assert implied / naive > 1.15, f"{c}: ref_values {naive:.0f} ex vs its {h} market {implied:.0f}"
+        assert implied / naive > 1.15, (
+            f"{c}: ref_values {naive:.0f} ex vs its {h} market {implied:.0f}"
+        )
 
 
 # ------------------------------------------------------------------ priced where it trades
@@ -103,18 +128,28 @@ def test_cranium_matches_the_in_game_price(g, rv):
 def test_volume_is_value_not_units(g, rv):
     """Chaos↔Exalted trades far more UNITS per hour than Chaos↔Divine, but a divine is worth ~9
     chaos: depth is value. Chaos is priced through Divine because that market moves more value."""
-    ex_units = g.edges[("chaos", REF)].vol_in_per_h + g.edges[(REF, "chaos")].vol_in_per_h / g.direct_rate("chaos", REF)
-    div_units = g.edges[("chaos", "divine")].vol_in_per_h + g.edges[("divine", "chaos")].vol_in_per_h * g.direct_rate("divine", "chaos")
+    ex_units = g.edges[("chaos", REF)].vol_in_per_h + g.edges[
+        (REF, "chaos")
+    ].vol_in_per_h / g.direct_rate("chaos", REF)
+    div_units = g.edges[("chaos", "divine")].vol_in_per_h + g.edges[
+        ("divine", "chaos")
+    ].vol_in_per_h * g.direct_rate("divine", "chaos")
     ex_value, div_value = ex_units * rv["chaos"], div_units * rv["chaos"]
     deeper = "divine" if div_value > ex_value else REF
-    assert abs(rv["chaos"] / rv[deeper] / g.direct_rate("chaos", deeper) - 1) < 1e-9, (ex_value, div_value)
+    assert abs(rv["chaos"] / rv[deeper] / g.direct_rate("chaos", deeper) - 1) < 1e-9, (
+        ex_value,
+        div_value,
+    )
 
 
 def test_cash_is_priced_by_the_same_table(g, rv):
     """Cash is priced like everything else (the one table) and realizes at paper."""
     out = liquidity.capital_rows({"divine": 4.0, "chaos": 108.0, REF: 136.0}, g, rv)
     for r in out["rows"]:
-        assert r["ref_value"] == rv[r["currency"]] and r["realizable_ref"] == r["value_ref"]
+        assert (
+            r["ref_value"] == rv[r["currency"]]
+            and r["realizable_ref"] == r["value_ref"]
+        )
 
 
 # ------------------------------------------------------------------ cash-out: most value, liquid only
@@ -123,15 +158,23 @@ def test_selling_one_cranium_loses_the_rounding_not_half(g, rv):
     owner's "worst case I price it at 15, lose a divine"), not half the value. Gold is a real
     cost on top (126 chaos × 160 gold ≈ 1 div at the owner's gold price) and may change which
     sale nets the most; it is never counted as slippage."""
-    free = liquidity.realizable(g, rv, "preserved-cranium", 1, cash=HUBS, gold_value_per_1k=0.0)
+    free = liquidity.realizable(
+        g, rv, "preserved-cranium", 1, cash=HUBS, gold_value_per_1k=0.0
+    )
     assert free["full_fill"] and free["source"] == "digest"
     assert free["path"][-1] in HUBS
     div = rv["divine"]
     assert free["ghost_ref"] < div, f"ghost {free['ghost_ref'] / div:.2f} div"
     assert 0 <= free["slippage_pct"] < 6, free["slippage_pct"]
-    paid = liquidity.realizable(g, rv, "preserved-cranium", 1, cash=HUBS, gold_value_per_1k=GOLD)
+    paid = liquidity.realizable(
+        g, rv, "preserved-cranium", 1, cash=HUBS, gold_value_per_1k=GOLD
+    )
     assert 0 <= paid["slippage_pct"] < 6, paid["slippage_pct"]
-    assert free["realizable_ref"] > paid["realizable_ref"] > free["realizable_ref"] - 2 * div
+    assert (
+        free["realizable_ref"]
+        > paid["realizable_ref"]
+        > free["realizable_ref"] - 2 * div
+    )
 
 
 def test_cash_out_takes_the_most_value_among_liquid_sales(g, rv):
@@ -145,11 +188,19 @@ def test_cash_out_takes_the_most_value_among_liquid_sales(g, rv):
         for h in HUBS:
             if (c, h) not in g.edges:
                 continue
-            out = int(g.edges[(c, h)].rate)                     # one-hop sale of one unit
-            if out < 1 or g.edges[(c, h)].vol_in_per_h * rv[c] < FILTERS["min_volume_ref_per_h"]:
+            out = int(g.edges[(c, h)].rate)  # one-hop sale of one unit
+            if (
+                out < 1
+                or g.edges[(c, h)].vol_in_per_h * rv[c]
+                < FILTERS["min_volume_ref_per_h"]
+            ):
                 continue
             worth = rv[h]
-            assert r["realizable_ref"] >= min(out * worth, r["paper_ref"]) - 1e-6, (c, h, r["path"])
+            assert r["realizable_ref"] >= min(out * worth, r["paper_ref"]) - 1e-6, (
+                c,
+                h,
+                r["path"],
+            )
 
 
 def test_an_illiquid_market_is_never_the_exit():
@@ -158,7 +209,17 @@ def test_an_illiquid_market_is_never_the_exit():
     g = _graph()
     rv = g.values()
     pc = "preserved-cranium"
-    g.add(Edge(pc, "mirror", "digest", 1.0, [{"rate": 1.0, "stock": 5}], age_s=0.0, vol_in_per_h=0.001))
+    g.add(
+        Edge(
+            pc,
+            "mirror",
+            "digest",
+            1.0,
+            [{"rate": 1.0, "stock": 5}],
+            age_s=0.0,
+            vol_in_per_h=0.001,
+        )
+    )
     r = liquidity.realizable(g, rv, pc, 1, cash=HUBS, gold_value_per_1k=0.0)
     assert r["path"][-1] != "mirror", r["path"]
     assert r["realizable_ref"] <= r["paper_ref"]
@@ -173,22 +234,35 @@ def test_the_basket_cashes_out_near_paper(g, rv, qty):
         r = liquidity.realizable(g, rv, c, qty, cash=HUBS, gold_value_per_1k=0.0)
         assert r["realizable_ref"] is not None, c
         unit = rv[r["path"][-1]]
-        assert r["ghost_ref"] < 0.10 * r["paper_ref"] + unit, f"{c} ×{qty}: ghost {r['ghost_ref'] / r['paper_ref']:.1%} via {r['path']}"
+        assert r["ghost_ref"] < 0.10 * r["paper_ref"] + unit, (
+            f"{c} ×{qty}: ghost {r['ghost_ref'] / r['paper_ref']:.1%} via {r['path']}"
+        )
         assert r["full_fill"], c
 
 
 def test_capital_totals_follow(g, rv, monkeypatch):
     """The /api/capital shape — the owner's actual holdings on this snapshot."""
     from app import settings as settings_mod
+
     monkeypatch.setattr(settings_mod, "gold_value_per_1k", lambda s: 0.0)
     monkeypatch.setattr(liquidity, "cash_set", lambda g_, rv_: HUBS)
-    caps = {"preserved-cranium": 1.0, "fracturing-orb": 11.0, "essence-of-delirium": 12.0,
-            "divine": 4.0, "chaos": 108.0, "exalted": 136.0}
+    caps = {
+        "preserved-cranium": 1.0,
+        "fracturing-orb": 11.0,
+        "essence-of-delirium": 12.0,
+        "divine": 4.0,
+        "chaos": 108.0,
+        "exalted": 136.0,
+    }
     out = liquidity.capital_rows(caps, g, rv)
-    assert out["ghost_ref"] / out["total_ref"] < 0.06, out["ghost_ref"] / out["total_ref"]
+    assert out["ghost_ref"] / out["total_ref"] < 0.06, (
+        out["ghost_ref"] / out["total_ref"]
+    )
     row = {r["currency"]: r for r in out["rows"]}
     assert abs(row["preserved-cranium"]["ref_value"] / rv["divine"] - 15.71) < 0.1
-    assert row["fracturing-orb"]["slippage_pct"] < 6 and row["fracturing-orb"]["full_fill"]
+    assert (
+        row["fracturing-orb"]["slippage_pct"] < 6 and row["fracturing-orb"]["full_fill"]
+    )
 
 
 # ------------------------------------------------------------------ ONE value table (Graph.values)
@@ -200,13 +274,22 @@ def test_values_price_each_asset_through_its_deepest_market(g):
     V = g.values()
     for c in FX["basket"]:
         h = _deepest_hub(g, c, V)
-        assert abs(V[c] / V[h] / g.direct_rate(c, h) - 1) < TOL, (c, h, V[c] / V[h], g.direct_rate(c, h))
+        assert abs(V[c] / V[h] / g.direct_rate(c, h) - 1) < TOL, (
+            c,
+            h,
+            V[c] / V[h],
+            g.direct_rate(c, h),
+        )
 
 
 def test_values_match_the_in_game_cranium(g):
     V = g.values()
     ig = FX["in_game_divine"]["preserved-cranium"]
-    assert ig["ask"] * (1 - TOL) <= V["preserved-cranium"] / V["divine"] <= ig["bid"] * (1 + TOL)
+    assert (
+        ig["ask"] * (1 - TOL)
+        <= V["preserved-cranium"] / V["divine"]
+        <= ig["bid"] * (1 + TOL)
+    )
 
 
 def test_values_ignore_a_one_sided_fat_finger(g, monkeypatch):
@@ -214,6 +297,7 @@ def test_values_ignore_a_one_sided_fat_finger(g, monkeypatch):
     couple of Exalted everywhere else. poe2scout prices these items too, and a market that
     disagrees with that by thousands of times does not get to say what they are worth."""
     import types
+
     scout = {c: px for c, px in (FX.get("scout_ex") or {}).items() if px}
     monkeypatch.setattr(type(g), "_scout_values", lambda self: scout, raising=False)
     g._values = None
@@ -221,7 +305,9 @@ def test_values_ignore_a_one_sided_fat_finger(g, monkeypatch):
         V = g.values()
         checked = 0
         for c in FX["garbage"]:
-            claim = (g.direct_rate(c, "divine") or 0) * V["divine"]      # what the fat-finger says
+            claim = (g.direct_rate(c, "divine") or 0) * V[
+                "divine"
+            ]  # what the fat-finger says
             if not claim or not scout.get(c):
                 # KNOWN LIMIT: with no poe2scout price AND no unstable-hours signal (this fixture
                 # predates it), two markets disagreeing 460x are separated only by depth, and
@@ -229,7 +315,7 @@ def test_values_ignore_a_one_sided_fat_finger(g, monkeypatch):
                 # other: a price from poe2scout, or hours that give the junk market away.
                 continue
             checked += 1
-            assert V[c] < claim / 10, (c, V[c], claim)                   # nowhere near it
+            assert V[c] < claim / 10, (c, V[c], claim)  # nowhere near it
         assert checked, "fixture no longer exercises the rule"
     finally:
         g._values = None
@@ -259,15 +345,34 @@ def test_a_fat_finger_in_the_only_market_is_not_a_price(g):
     and it priced at 54 Divine an essence."""
     import types
     from app import leaguehistory
+
     fx = _graph()
-    fx.add(Edge("divine", "bogus-shard", "digest", 1 / 54.0, [{"rate": 1 / 54.0, "stock": 60}],
-                age_s=0.0, vol_in_per_h=2_900))                 # 2,900 divine/h, no other market
+    fx.add(
+        Edge(
+            "divine",
+            "bogus-shard",
+            "digest",
+            1 / 54.0,
+            [{"rate": 1 / 54.0, "stock": 60}],
+            age_s=0.0,
+            vol_in_per_h=2_900,
+        )
+    )  # 2,900 divine/h, no other market
     V = fx.values()
-    assert V["bogus-shard"] / V["divine"] > 50                  # with no outside evidence, it stands
+    assert V["bogus-shard"] / V["divine"] > 50  # with no outside evidence, it stands
     # poe2scout says it is worth ~1 exalted: that is independent, and the market is rejected.
     fx2 = _graph()
-    fx2.add(Edge("divine", "bogus-shard", "digest", 1 / 54.0, [{"rate": 1 / 54.0, "stock": 60}],
-                 age_s=0.0, vol_in_per_h=2_900))
+    fx2.add(
+        Edge(
+            "divine",
+            "bogus-shard",
+            "digest",
+            1 / 54.0,
+            [{"rate": 1 / 54.0, "stock": 60}],
+            age_s=0.0,
+            vol_in_per_h=2_900,
+        )
+    )
     fx2._scout_values = types.MethodType(lambda self: {"bogus-shard": 1.0}, fx2)
     V2 = fx2.values()
     assert abs(V2["bogus-shard"] - 1.0) < 1e-9, V2["bogus-shard"]
@@ -277,9 +382,19 @@ def test_a_vendor_recipe_rate_never_prices_a_currency(g):
     """Recipes are a fixed vendor rate nobody trades at. One in the direction the rate lookup
     reads first priced a shard at half what its market said."""
     fx = _graph()
-    fx.add(Edge(REF, "shardy", "digest", 10.0, [{"rate": 10.0, "stock": 9_000}], age_s=0.0, vol_in_per_h=5_000))
+    fx.add(
+        Edge(
+            REF,
+            "shardy",
+            "digest",
+            10.0,
+            [{"rate": 10.0, "stock": 9_000}],
+            age_s=0.0,
+            vol_in_per_h=5_000,
+        )
+    )
     fx.add(Edge("shardy", REF, "recipe", 0.05, [], age_s=0.0, vol_in_per_h=0.0))
-    assert abs(fx.values()["shardy"] - 0.1) < 1e-9              # its market, not the vendor's 0.05
+    assert abs(fx.values()["shardy"] - 0.1) < 1e-9  # its market, not the vendor's 0.05
 
 
 def test_the_parent_map_never_outlives_its_table(g):
@@ -288,16 +403,29 @@ def test_the_parent_map_never_outlives_its_table(g):
     fx = _graph()
     fx.values()
     assert fx.priced_by
-    fx.add(Edge("divine", "whatever", "digest", 1.0, [{"rate": 1.0, "stock": 1}], age_s=0.0, vol_in_per_h=1.0))
+    fx.add(
+        Edge(
+            "divine",
+            "whatever",
+            "digest",
+            1.0,
+            [{"rate": 1.0, "stock": 1}],
+            age_s=0.0,
+            vol_in_per_h=1.0,
+        )
+    )
     assert fx.priced_by == {} and fx._values is None
 
 
 # ------------------------------------------------------------------ the volume rule (CLAUDE.md)
-def test_a_holding_is_worth_its_own_currency_or_its_market_rate_never_a_conversion(g, rv):
+def test_a_holding_is_worth_its_own_currency_or_its_market_rate_never_a_conversion(
+    g, rv
+):
     """A cash holding IS native money: its worth is its own raw amount. Anything else is worth its
     quantity at the rate of the market that trades it (arbitrage.native_price). A cash-out's
     result is what the path ends in: the amount of that cash currency received, not its ex value."""
     from app import arbitrage
+
     caps = {"preserved-cranium": 2.0, "divine": 4.0, "chaos": 108.0, REF: 136.0}
     out = liquidity.capital_rows(caps, g, rv)
     rows = {r["currency"]: r for r in out["rows"]}
@@ -305,13 +433,22 @@ def test_a_holding_is_worth_its_own_currency_or_its_market_rate_never_a_conversi
         assert rows[c]["native"] == {"amount": caps[c], "cur": c}, c
         assert rows[c]["realizable_native"] == {"amount": caps[c], "cur": c}, c
     cr = rows["preserved-cranium"]
-    rate, cur = arbitrage.native_price(g, "preserved-cranium", rv, arbitrage.counterparts_by_volume(g, rv), REF)
+    rate, cur = arbitrage.native_price(
+        g, "preserved-cranium", rv, arbitrage.counterparts_by_volume(g, rv), REF
+    )
     assert cr["native"] == {"amount": pytest.approx(2.0 * rate), "cur": cur}
-    assert cur == REF or g.direct_rate("preserved-cranium", cur) == pytest.approx(rate), "priced in a market it trades in"
+    assert cur == REF or g.direct_rate("preserved-cranium", cur) == pytest.approx(
+        rate
+    ), "priced in a market it trades in"
     end = cr["cashout_path"][-1]
     assert end in HUBS
     # What the sale hands over: the whole units of the cash it ends in (you receive 15 Divine, not
     # 15.71), never realizable_ref divided back through the value table.
-    liq = liquidity.realizable(g, rv, "preserved-cranium", 2.0, cash=HUBS, gold_value_per_1k=GOLD)
-    assert liq["out"] == {"amount": liq["out"]["amount"], "cur": end} and float(liq["out"]["amount"]).is_integer()
+    liq = liquidity.realizable(
+        g, rv, "preserved-cranium", 2.0, cash=HUBS, gold_value_per_1k=GOLD
+    )
+    assert (
+        liq["out"] == {"amount": liq["out"]["amount"], "cur": end}
+        and float(liq["out"]["amount"]).is_integer()
+    )
     assert cr["realizable_native"] == liq["out"]

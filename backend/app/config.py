@@ -32,7 +32,8 @@ LEAGUE = os.environ.get("LEAGUE", "Standard")
 # Legacy fallback only; connect the session from the dashboard instead.
 POESESSID = os.environ.get("POESESSID", "").strip()
 USER_AGENT = os.environ.get(
-    "USER_AGENT", "poe2-arb-dashboard/0.1 (self-hosted; contact: set USER_AGENT in .env)"
+    "USER_AGENT",
+    "poe2-arb-dashboard/0.1 (self-hosted; contact: set USER_AGENT in .env)",
 )
 
 # GGG hourly digest: how far back to backfill on first run, and poll cadence.
@@ -46,4 +47,4 @@ ORDERBOOK_SWEEP_SECONDS = _int("ORDERBOOK_SWEEP_SECONDS", 600)
 GGG_DIGEST_URL = "https://web.poecdn.com/api/currency-exchange/poe2"
 TRADE_STATIC_URL = "https://www.pathofexile.com/api/trade2/data/static"
 TRADE_EXCHANGE_URL = "https://www.pathofexile.com/api/trade2/exchange"
-TRADE_LEAGUES_TTL_S = 1800   # 30 min: picks up a newly launched league quickly without hammering trade2/data/leagues
+TRADE_LEAGUES_TTL_S = 1800  # 30 min: picks up a newly launched league quickly without hammering trade2/data/leagues

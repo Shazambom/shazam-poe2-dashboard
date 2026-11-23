@@ -4,6 +4,7 @@ docs/hold-research.md "Regimes".
 
     python -m pytest backend/tests/test_leagueregime.py -q
 """
+
 import random
 import sys
 from pathlib import Path
@@ -27,7 +28,9 @@ def league(days=90, discovery=20, late_from=60, items=40, seed=7):
             if a < discovery:
                 p *= 1 + drift + rnd.uniform(-0.005, 0.005)
             else:
-                step = -0.6 * prev + rnd.uniform(-0.03, 0.03)   # noise that partly reverses
+                step = -0.6 * prev + rnd.uniform(
+                    -0.03, 0.03
+                )  # noise that partly reverses
                 prev = step
                 p *= 1 + step
             vol = 500.0 if a < late_from else 100.0

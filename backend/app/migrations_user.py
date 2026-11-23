@@ -12,6 +12,7 @@ RULES:
 - Make fns idempotent where cheap (CREATE TABLE IF NOT EXISTS, guard ALTER with a
   PRAGMA table_info check) so a half-applied migration re-runs safely.
 """
+
 from __future__ import annotations
 
 import json
@@ -37,23 +38,27 @@ def watches_to_workspace(folders: list) -> dict:
         for s in f.get("searches", []) or []:
             if not isinstance(s, dict):
                 continue
-            children.append({
-                "id": "n_" + str(s.get("id", "")),
-                "kind": "search",
-                "name": s.get("title", "Search"),
-                "type": s.get("type", "search"),
-                "slug": s.get("slug", ""),
-                "live": bool(s.get("live", False)),
-                "done": bool(s.get("done", False)),
-                "notify": {"sound": True, "orb": True, "os": True},
-            })
-        tree.append({
-            "id": "n_" + str(f.get("id", "")),
-            "kind": "folder",
-            "name": f.get("title", "Folder"),
-            "open": f.get("open", True) is not False,
-            "children": children,
-        })
+            children.append(
+                {
+                    "id": "n_" + str(s.get("id", "")),
+                    "kind": "search",
+                    "name": s.get("title", "Search"),
+                    "type": s.get("type", "search"),
+                    "slug": s.get("slug", ""),
+                    "live": bool(s.get("live", False)),
+                    "done": bool(s.get("done", False)),
+                    "notify": {"sound": True, "orb": True, "os": True},
+                }
+            )
+        tree.append(
+            {
+                "id": "n_" + str(f.get("id", "")),
+                "kind": "folder",
+                "name": f.get("title", "Folder"),
+                "open": f.get("open", True) is not False,
+                "children": children,
+            }
+        )
     return {"version": 2, "tree": tree, "layout": None, "openTabs": []}
 
 
@@ -61,7 +66,9 @@ def _m2_watches_to_workspace(conn: sqlite3.Connection) -> None:
     """Forward-only, idempotent, data-preserving: derive `trading_workspace` (v2 nested
     tree) from the legacy flat `watches` kv blob. Leaves `watches` untouched as a backup
     (roll-forward posture: fix this transform and re-derive, never revert user data)."""
-    existing = conn.execute("SELECT value FROM kv WHERE key='trading_workspace'").fetchone()
+    existing = conn.execute(
+        "SELECT value FROM kv WHERE key='trading_workspace'"
+    ).fetchone()
     if existing:
         return  # idempotent
     row = conn.execute("SELECT value FROM kv WHERE key='watches'").fetchone()
@@ -70,11 +77,18 @@ def _m2_watches_to_workspace(conn: sqlite3.Connection) -> None:
         if not isinstance(folders, list):
             folders = []
     except (ValueError, TypeError):
-        log.warning("m2: watches blob unparseable; seeding empty workspace (legacy left intact)")
+        log.warning(
+            "m2: watches blob unparseable; seeding empty workspace (legacy left intact)"
+        )
         folders = []
     ws = watches_to_workspace(folders)
-    conn.execute("INSERT INTO kv(key, value) VALUES('trading_workspace', ?)", (json.dumps(ws),))
-    log.info("m2: derived trading_workspace with %d folders (watches kept as backup)", len(ws["tree"]))
+    conn.execute(
+        "INSERT INTO kv(key, value) VALUES('trading_workspace', ?)", (json.dumps(ws),)
+    )
+    log.info(
+        "m2: derived trading_workspace with %d folders (watches kept as backup)",
+        len(ws["tree"]),
+    )
 
 
 def _m1_split_from_legacy(conn: sqlite3.Connection) -> None:
@@ -86,9 +100,7 @@ def _m1_split_from_legacy(conn: sqlite3.Connection) -> None:
     secret.key stays in DATA_DIR untouched, so the copied secret:* blobs remain
     decryptable and the user's PoE session/oauth survive the split.
     """
-    done = conn.execute(
-        "SELECT value FROM user_meta WHERE key='split_done'"
-    ).fetchone()
+    done = conn.execute("SELECT value FROM user_meta WHERE key='split_done'").fetchone()
     if done and done[0] == "1":
         return
     backup = DB_PATH.with_suffix(DB_PATH.suffix + ".premigration")
@@ -99,7 +111,8 @@ def _m1_split_from_legacy(conn: sqlite3.Connection) -> None:
             # happened — restore the backup by hand (mv it back to poe2arb.sqlite) and re-run.
             raise RuntimeError(
                 f"legacy split: {backup.name} exists but the lift never committed; "
-                f"restore it to {DB_PATH.name} and restart")
+                f"restore it to {DB_PATH.name} and restart"
+            )
         # Fresh install, no legacy DB — nothing to lift. Mark done so we don't re-check.
         conn.execute(
             "INSERT OR REPLACE INTO user_meta(key, value) VALUES('split_done','1')"
@@ -279,6 +292,7 @@ def _m9_reset_hidden_knobs(conn: sqlite3.Connection) -> None:
     state with nothing on screen to change it back, so those values return to the defaults once, the way m8 did for
     the presets. Everything else stays. Idempotent on `_hidden_knobs_reset_v1`."""
     from .arbpresets import HIDDEN_KNOB_DEFAULTS as d
+
     row = conn.execute("SELECT value FROM kv WHERE key='settings'").fetchone()
     if not row:
         return
@@ -304,6 +318,7 @@ def _m8_arbitrage_balanced(conn: sqlite3.Connection) -> None:
     user's preferences." Start from, Show at most, the sort and the share of capital stay the user's (a preset
     never carries them). Idempotent on `_arb_balanced_v1`; afterwards the user's own edits stick."""
     from .arbpresets import ARBITRAGE_PRESETS
+
     row = conn.execute("SELECT value FROM kv WHERE key='settings'").fetchone()
     if not row:
         return
@@ -313,7 +328,9 @@ def _m8_arbitrage_balanced(conn: sqlite3.Connection) -> None:
         return
     if not isinstance(s, dict) or s.get("_arb_balanced_v1"):
         return
-    balanced = json.loads(json.dumps(ARBITRAGE_PRESETS[0]["values"]))   # a copy: never alias the constant
+    balanced = json.loads(
+        json.dumps(ARBITRAGE_PRESETS[0]["values"])
+    )  # a copy: never alias the constant
     saved_filters = s.get("filters") if isinstance(s.get("filters"), dict) else {}
     s.update({k: v for k, v in balanced.items() if k != "filters"})
     s["filters"] = {**saved_filters, **balanced["filters"]}
@@ -329,7 +346,15 @@ USER_MIGRATIONS: list[tuple[int, str, object]] = [
     (4, "fold ping_sound/ping_volume into settings.notifications", _m4_notifications),
     (5, "sales ledger table (Merchant History)", _m5_sales),
     (6, "raise the saved liquidity filter floor to 200", _m6_liq_floor_200),
-    (7, "free a saved Standard league so the youngest league is the default", _m7_league_default),
-    (8, "replace saved arbitrage values with the Balanced preset", _m8_arbitrage_balanced),
+    (
+        7,
+        "free a saved Standard league so the youngest league is the default",
+        _m7_league_default,
+    ),
+    (
+        8,
+        "replace saved arbitrage values with the Balanced preset",
+        _m8_arbitrage_balanced,
+    ),
     (9, "reset the values stable builds no longer show", _m9_reset_hidden_knobs),
 ]

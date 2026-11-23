@@ -17,6 +17,7 @@ Metadata ids are linked to trade ids in this precedence (low → high):
      above cover (e.g. league-mechanic items poe2scout doesn't list). Anything still
      unmatched is kept in `unmapped_meta` and logged so gaps are visible, never silent.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -31,7 +32,9 @@ from .config import SEED_DIR, TRADE_STATIC_URL
 
 log = logging.getLogger(__name__)
 
-STATIC_CACHE_KEY = "trade_static_cache"     # operational kv: the last good /data/static (names + icons)
+STATIC_CACHE_KEY = (
+    "trade_static_cache"  # operational kv: the last good /data/static (names + icons)
+)
 
 
 @dataclass
@@ -49,12 +52,16 @@ class Registry:
         self.meta_to_trade: dict[str, str] = {}
         self.unmapped_meta: set[str] = set()
         self.loaded_at: float | None = None
-        self._seed_overrides: dict[str, str] = {}   # currency_map.json (offline fallback)
-        self._bridge: dict[str, str] = {}           # kv meta_bridge (poe2scout, authoritative)
-        self._user_overrides: dict[str, str] = {}   # kv meta_overrides (human, highest)
-        self._catalog: dict[str, dict] = {}         # kv meta_catalog (the game's item table, pipeline-built)
+        self._seed_overrides: dict[
+            str, str
+        ] = {}  # currency_map.json (offline fallback)
+        self._bridge: dict[str, str] = {}  # kv meta_bridge (poe2scout, authoritative)
+        self._user_overrides: dict[str, str] = {}  # kv meta_overrides (human, highest)
+        self._catalog: dict[
+            str, dict
+        ] = {}  # kv meta_catalog (the game's item table, pipeline-built)
         self._load_seed()
-        self.load_bridge()                          # db is booted at import; safe to read kv
+        self.load_bridge()  # db is booted at import; safe to read kv
 
     # ---------------------------------------------------------------- seed
     def _load_seed(self) -> None:
@@ -102,18 +109,35 @@ class Registry:
             data = r.json()
             if not any(g.get("entries") for g in data.get("result", [])):
                 raise ValueError("empty static payload")
-        except Exception as exc:  # network is optional; the cached copy (or the seed) still works
+        except (
+            Exception
+        ) as exc:  # network is optional; the cached copy (or the seed) still works
             log.warning("could not load trade static data: %s", exc)
             applied = False if self.loaded_at else self.load_static_cache()
-            devtelemetry.tlog("static", f"fetch failed ({type(exc).__name__}: {str(exc)[:160]}); "
-                                        f"cache={'applied' if applied else 'none' if not self.loaded_at else 'n/a'}")
+            devtelemetry.tlog(
+                "static",
+                f"fetch failed ({type(exc).__name__}: {str(exc)[:160]}); "
+                f"cache={'applied' if applied else 'none' if not self.loaded_at else 'n/a'}",
+            )
             return False
         self._apply_static(data)
         self.loaded_at = time.time()
-        db.kv_set(STATIC_CACHE_KEY, {"result": [
-            {"id": g.get("id"), "label": g.get("label"),
-             "entries": [{k: e[k] for k in ("id", "text", "image") if e.get(k)} for e in g.get("entries", [])]}
-            for g in data.get("result", [])]})
+        db.kv_set(
+            STATIC_CACHE_KEY,
+            {
+                "result": [
+                    {
+                        "id": g.get("id"),
+                        "label": g.get("label"),
+                        "entries": [
+                            {k: e[k] for k in ("id", "text", "image") if e.get(k)}
+                            for e in g.get("entries", [])
+                        ],
+                    }
+                    for g in data.get("result", [])
+                ]
+            },
+        )
         log.info("registry loaded %d trade currencies", len(self.by_id))
         return True
 
@@ -124,7 +148,9 @@ class Registry:
                 tid = entry.get("id")
                 if not tid:
                     continue
-                cur = self.by_id.get(tid) or Currency(id=tid, name=entry.get("text", tid))
+                cur = self.by_id.get(tid) or Currency(
+                    id=tid, name=entry.get("text", tid)
+                )
                 cur.name = entry.get("text", cur.name)
                 cur.icon = entry.get("image") or cur.icon
                 cur.category = cur.category or cat
@@ -150,19 +176,42 @@ class Registry:
         negative cache so a freshly-loaded bridge re-evaluates previously-unmapped ids."""
         self.meta_to_trade.clear()
         self.unmapped_meta.clear()
-        self._stems_n = -1   # icon URLs may have updated on existing IDs; rebuild stem index on next lookup
+        self._stems_n = -1  # icon URLs may have updated on existing IDs; rebuild stem index on next lookup
         # The catalog names what the others don't: an id the bridge or a user maps is theirs.
-        catalog = {m: e for m, e in self._catalog.items()
-                   if isinstance(e, dict) and e.get("id") and m not in self._bridge and m not in self._user_overrides}
+        catalog = {
+            m: e
+            for m, e in self._catalog.items()
+            if isinstance(e, dict)
+            and e.get("id")
+            and m not in self._bridge
+            and m not in self._user_overrides
+        }
         for e in catalog.values():
-            if e.get("name") and e["id"] not in self.by_id:      # not on the trade site: the game's own name/icon
-                self.by_id[e["id"]] = Currency(id=e["id"], name=e["name"], icon=e.get("icon"), category=e.get("category"))
-        for source in (self._seed_overrides, {m: e["id"] for m, e in catalog.items()}, self._bridge, self._user_overrides):
+            if (
+                e.get("name") and e["id"] not in self.by_id
+            ):  # not on the trade site: the game's own name/icon
+                self.by_id[e["id"]] = Currency(
+                    id=e["id"],
+                    name=e["name"],
+                    icon=e.get("icon"),
+                    category=e.get("category"),
+                )
+        for source in (
+            self._seed_overrides,
+            {m: e["id"] for m, e in catalog.items()},
+            self._bridge,
+            self._user_overrides,
+        ):
             for meta, tid in source.items():
                 self._link(meta, tid)
-        log.info("registry links rebuilt: seed=%d catalog=%d bridge=%d user=%d → %d metadata ids mapped",
-                 len(self._seed_overrides), len(catalog), len(self._bridge), len(self._user_overrides),
-                 len(self.meta_to_trade))
+        log.info(
+            "registry links rebuilt: seed=%d catalog=%d bridge=%d user=%d → %d metadata ids mapped",
+            len(self._seed_overrides),
+            len(catalog),
+            len(self._bridge),
+            len(self._user_overrides),
+            len(self.meta_to_trade),
+        )
 
     def _link(self, meta: str, tid: str) -> None:
         self.meta_to_trade[meta] = tid
@@ -205,7 +254,7 @@ class Registry:
         """Return the trade id for a metadata id, learning heuristically if needed."""
         if meta in self.meta_to_trade:
             return self.meta_to_trade[meta]
-        if meta in self.unmapped_meta:      # negative cache: don't re-scan every call
+        if meta in self.unmapped_meta:  # negative cache: don't re-scan every call
             return None
         tid = self._stem_index().get(meta.rsplit("/", 1)[-1].lower())
         if tid:
@@ -217,19 +266,24 @@ class Registry:
         if meta[-1:] in ("2", "3") and not meta[-2:-1].isdigit():
             base_tid = self.resolve_meta(meta[:-1])
             if base_tid:
-                slug = re.sub(r"[^a-z0-9]+", "-", self.by_id[base_tid].name.lower()).strip("-")
+                slug = re.sub(
+                    r"[^a-z0-9]+", "-", self.by_id[base_tid].name.lower()
+                ).strip("-")
                 cand = ("greater-" if meta.endswith("2") else "perfect-") + slug
                 if cand in self.by_id:
                     self._link(meta, cand)
                     return cand
         self.unmapped_meta.add(meta)
-        log.info("currency: no trade mapping for metadata id %s "
-                 "(not in poe2scout bridge/seed/heuristic — its markets are excluded)", meta)
+        log.info(
+            "currency: no trade mapping for metadata id %s "
+            "(not in poe2scout bridge/seed/heuristic — its markets are excluded)",
+            meta,
+        )
         return None
 
     def set_override(self, meta: str, tid: str) -> None:
         db.kv_update("meta_overrides", lambda o: {**(o or {}), meta: tid}, {})
-        self._user_overrides[meta] = tid   # highest precedence
+        self._user_overrides[meta] = tid  # highest precedence
         self._link(meta, tid)
 
     def metas(self, tid: str) -> list[str]:
@@ -248,10 +302,13 @@ class Registry:
         `categories` ({metadata id: category}) is for tests."""
         if categories is None:
             from . import gamedata
+
             categories = gamedata.categories()
         out = {}
         for c in self.by_id.values():
-            game = next((categories[m] for m in c.metadata_ids if categories.get(m)), None)
+            game = next(
+                (categories[m] for m in c.metadata_ids if categories.get(m)), None
+            )
             out[c.id] = game or c.category
         return out
 
@@ -273,8 +330,15 @@ class Registry:
             "unmapped_metadata_ids": sorted(self.unmapped_meta),
             # The hard-asset anchor vocabulary (Hold numeraires, Inflation anchors, cross-league
             # items) — one table, served so the client never hardcodes it.
-            "anchors": [{"id": k, "item_id": a.item_id, "name": a.name, "metadata_id": a.metadata_id}
-                        for k, a in marketseries.ANCHORS.items()],
+            "anchors": [
+                {
+                    "id": k,
+                    "item_id": a.item_id,
+                    "name": a.name,
+                    "metadata_id": a.metadata_id,
+                }
+                for k, a in marketseries.ANCHORS.items()
+            ],
         }
 
 

@@ -1,6 +1,7 @@
 """Pins backend/app/workspace.py — the pure validate_workspace() guard behind PUT /api/trading/workspace.
 It validates and never truncates: a rejection names the limit; anything within limits round-trips
 byte-for-byte, including the additive fields batch 3 introduces (q, origin, ts, league, item…)."""
+
 import sys
 from pathlib import Path
 
@@ -19,24 +20,43 @@ def _doc(tree):
 
 
 def test_accepts_a_normal_document_and_the_new_fields():
-    doc = _doc([
-        _s(1, q='{"query":{}}', origin="ee2", ts=1758013456789, league="X", degraded=False,
-           item={"name": "Headhunter", "baseType": "Heavy Belt"}),
-        {"id": "n_h", "kind": "folder", "sys": "ee2-history", "name": "H", "open": True, "children": [_s(2)]},
-    ])
+    doc = _doc(
+        [
+            _s(
+                1,
+                q='{"query":{}}',
+                origin="ee2",
+                ts=1758013456789,
+                league="X",
+                degraded=False,
+                item={"name": "Headhunter", "baseType": "Heavy Belt"},
+            ),
+            {
+                "id": "n_h",
+                "kind": "folder",
+                "sys": "ee2-history",
+                "name": "H",
+                "open": True,
+                "children": [_s(2)],
+            },
+        ]
+    )
     assert W.validate_workspace(doc) is None
 
 
-@pytest.mark.parametrize("bad, msg", [
-    ({"version": 1, "tree": []}, "version"),
-    ({"version": 2, "tree": {}}, "tree"),
-    (_doc(["x"]), "node"),
-    (_doc([{"kind": "search", "name": "no id"}]), "id"),
-    (_doc([{"id": 1, "kind": "search"}]), "id"),
-    (_doc([{"id": "n_1", "kind": "thing"}]), "kind"),
-    (_doc([{"id": "n_1", "kind": "folder", "children": "nope"}]), "children"),
-    (_doc([_s(1), _s(1)]), "duplicate"),
-])
+@pytest.mark.parametrize(
+    "bad, msg",
+    [
+        ({"version": 1, "tree": []}, "version"),
+        ({"version": 2, "tree": {}}, "tree"),
+        (_doc(["x"]), "node"),
+        (_doc([{"kind": "search", "name": "no id"}]), "id"),
+        (_doc([{"id": 1, "kind": "search"}]), "id"),
+        (_doc([{"id": "n_1", "kind": "thing"}]), "kind"),
+        (_doc([{"id": "n_1", "kind": "folder", "children": "nope"}]), "children"),
+        (_doc([_s(1), _s(1)]), "duplicate"),
+    ],
+)
 def test_shape_errors_name_the_problem(bad, msg):
     err = W.validate_workspace(bad)
     assert err is not None and err.status == 400 and msg in err.detail

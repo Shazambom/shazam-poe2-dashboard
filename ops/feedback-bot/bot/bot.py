@@ -15,6 +15,7 @@ Stable releases are also announced in #releases, tagging @notifier (inbox/announ
 Discord; `main()` binds it to discord.py. Env: DISCORD_TOKEN_FILE, FORUM_CHANNEL_ID, KEY_DIR
 (feedback-key-<keyId>.pem), SPOOL, INBOX.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -36,12 +37,19 @@ MAX_ATTACHMENT = 4 * 1024 * 1024 + arbseal.OVERHEAD
 SHORT_ID = re.compile(r"^[0-9A-HJ-NP-Z]{6}$")
 STATUSES = {"OK", "REFUSE", "QUARANTINE"}
 # The only files that ever move from the spool to the inbox — the opener's schema, never a glob.
-FIXED_FILES = ["report.json", "index.html", "logs/main.txt", "logs/backend.txt", "logs/renderer.txt", "logs/updater.txt",
-               *(f"screens/{i:02d}-{name}.jpg" for i, name in enumerate(SCREENS))]
+FIXED_FILES = [
+    "report.json",
+    "index.html",
+    "logs/main.txt",
+    "logs/backend.txt",
+    "logs/renderer.txt",
+    "logs/updater.txt",
+    *(f"screens/{i:02d}-{name}.jpg" for i, name in enumerate(SCREENS)),
+]
 ACK_OK = "report {sid} received — thanks"
 ACK_BAD = "couldn't read that file — was it made by Arbiter's \"Report a problem\"?"
 POST_FILE = "discord.json"
-MAX_TEXT = 4000          # Discord caps a message at 2000 (4000 with Nitro)
+MAX_TEXT = 4000  # Discord caps a message at 2000 (4000 with Nitro)
 MAX_MESSAGES = 100
 # A post's starter message can 404 for a few seconds after its thread appears (Discord still taking
 # the uploads; report XWZGZ0 was missed after one fetch at +2 s). Retried with backoff; a thread that
@@ -54,8 +62,10 @@ ACTIONS_EVERY_S = 60
 # them. The thread replies are FIXED texts: nothing is ever posted in anyone's words.
 STATUS_FILE = "status.json"
 ACTIONS = {"triage": "triaged", "resolve": "resolved", "close": "closed"}
-REPLY = {"resolve": "Fixed — the fix ships in the next Arbiter update. Thanks for reporting it!",
-         "close": "Closed — thanks for the report."}
+REPLY = {
+    "resolve": "Fixed — the fix ships in the next Arbiter update. Thanks for reporting it!",
+    "close": "Closed — thanks for the report.",
+}
 # The word-only forums, by channel name in the bug forum's server → the inbox folder their posts go in
 # (owner 2026-10-03). Their posts are kept like a bug post without a report: title + messages + status;
 # the bot never fetches an attachment, reacts or replies there.
@@ -63,7 +73,10 @@ TEXT_FORUMS = {"feature-ideas": "ideas", "feedback": "feedback"}
 # Stable releases are announced in this channel, tagging this role (owner 2026-10-04), both found by name in
 # the bug forum's server. The publish script drops the payload in inbox/announce/ only once the release is
 # confirmed live (bugs.py announce); the message and the payload rules are bot/announce.py's.
-RELEASES_CHANNEL, NOTIFY_ROLE = "releases", "notifier"   # the real names on the server (checked 2026-10-04)
+RELEASES_CHANNEL, NOTIFY_ROLE = (
+    "releases",
+    "notifier",
+)  # the real names on the server (checked 2026-10-04)
 
 
 def _log(msg):
@@ -71,14 +84,31 @@ def _log(msg):
 
 
 class Handler:
-    def __init__(self, spool: Path, inbox: Path, private_key, forum_id: int, process=None, wait_s: float = 60.0):
-        self.spool, self.inbox, self.key, self.forum_id = Path(spool), Path(inbox), private_key, int(forum_id)
-        self.process = process          # tests: run the cell inline; production: None → the opener container
+    def __init__(
+        self,
+        spool: Path,
+        inbox: Path,
+        private_key,
+        forum_id: int,
+        process=None,
+        wait_s: float = 60.0,
+    ):
+        self.spool, self.inbox, self.key, self.forum_id = (
+            Path(spool),
+            Path(inbox),
+            private_key,
+            int(forum_id),
+        )
+        self.process = process  # tests: run the cell inline; production: None → the opener container
         self.wait_s = wait_s
         self.retry_delays, self.sleep = RETRY_DELAYS, asyncio.sleep
         self._busy: set[int] = set()
-        self.text_forums: dict[int, str] = {}       # forum id → inbox folder (TEXT_FORUMS, resolved at login)
-        self.allow_role = lambda role: None         # production: discord.AllowedMentions for that role only
+        self.text_forums: dict[
+            int, str
+        ] = {}  # forum id → inbox folder (TEXT_FORUMS, resolved at login)
+        self.allow_role = lambda role: (
+            None
+        )  # production: discord.AllowedMentions for that role only
 
     # ---- state
     def _state(self) -> dict:
@@ -96,8 +126,10 @@ class Handler:
 
     def _record(self, thread_id: int, pending: bool = False, mark: bool = True):
         st = self._state()
-        if mark:                                    # only the bug forum's threads move its catch-up mark
-            st["last_thread_id"] = max(int(st.get("last_thread_id") or 0), int(thread_id))
+        if mark:  # only the bug forum's threads move its catch-up mark
+            st["last_thread_id"] = max(
+                int(st.get("last_thread_id") or 0), int(thread_id)
+            )
         left = [t for t in st.get("pending", []) if t != int(thread_id)]
         st["pending"] = sorted(left + [int(thread_id)]) if pending else left
         self._save_state(st)
@@ -109,7 +141,9 @@ class Handler:
                 return await thread.fetch_message(thread.id)
             except Exception as e:
                 if delay is None:
-                    _log(f"thread {thread.id}: starter message unavailable ({e!r}); pending")
+                    _log(
+                        f"thread {thread.id}: starter message unavailable ({e!r}); pending"
+                    )
                     return None
                 await self.sleep(delay)
 
@@ -120,7 +154,10 @@ class Handler:
 
     def _start_post(self, thread, starter, rel: str):
         st = self._state()
-        st.setdefault("posts", {})[str(thread.id)] = {"dir": rel, "reporter": starter.author.id}   # ids stay in state
+        st.setdefault("posts", {})[str(thread.id)] = {
+            "dir": rel,
+            "reporter": starter.author.id,
+        }  # ids stay in state
         self.inbox.mkdir(parents=True, exist_ok=True)
         self._save_state(st)
         d = self.inbox / rel
@@ -131,7 +168,14 @@ class Handler:
 
     @staticmethod
     def _set_status(d: Path, state: str):
-        (d / STATUS_FILE).write_text(json.dumps({"state": state, "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}))
+        (d / STATUS_FILE).write_text(
+            json.dumps(
+                {
+                    "state": state,
+                    "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                }
+            )
+        )
 
     @staticmethod
     def _set_aside(f: Path, what: str, why):
@@ -145,7 +189,9 @@ class Handler:
         adir = self.inbox / "actions"
         if not adir.is_dir():
             return
-        posts = {v["dir"]: int(tid) for tid, v in (self._state().get("posts") or {}).items()}
+        posts = {
+            v["dir"]: int(tid) for tid, v in (self._state().get("posts") or {}).items()
+        }
         for f in sorted(adir.glob("*.json")):
             try:
                 a = json.loads(f.read_text())
@@ -153,14 +199,20 @@ class Handler:
                 if kind not in ACTIONS or rel not in posts:
                     raise ValueError(f"unknown action or report: {kind!r} {rel!r}")
                 d = self.inbox / rel
-                now = json.loads((d / STATUS_FILE).read_text())["state"] if (d / STATUS_FILE).is_file() else "new"
+                now = (
+                    json.loads((d / STATUS_FILE).read_text())["state"]
+                    if (d / STATUS_FILE).is_file()
+                    else "new"
+                )
                 if now != ACTIONS[kind]:
                     if kind in REPLY:
                         thread = await get_thread(posts[rel])
                         await self._say(thread, REPLY[kind])
                         try:
                             await thread.edit(archived=True)
-                        except Exception as e:                        # no Manage Threads: the reply still stands
+                        except (
+                            Exception
+                        ) as e:  # no Manage Threads: the reply still stands
                             _log(f"{rel}: could not archive the thread ({e!r})")
                     self._set_status(d, ACTIONS[kind])
                     _log(f"{rel}: {ACTIONS[kind]}")
@@ -184,36 +236,59 @@ class Handler:
             return
         target = await get_target()
         if not target:
-            return                                              # releases_target logged why
+            return  # releases_target logged why
         channel, role = target
-        for p, f in sorted(queued, key=lambda q: tuple(int(x) for x in q[0]["version"].split("."))):
+        for p, f in sorted(
+            queued, key=lambda q: tuple(int(x) for x in q[0]["version"].split("."))
+        ):
             done = set(self._state().get("announced", []))
             if p["version"] in done:
                 f.unlink()
                 continue
             try:
-                msg = await channel.send(announce.render(p, role.id), allowed_mentions=self.allow_role(role))
+                msg = await channel.send(
+                    announce.render(p, role.id), allowed_mentions=self.allow_role(role)
+                )
             except Exception as e:
-                if 400 <= (getattr(e, "status", 0) or 0) < 500 and getattr(e, "status", 0) != 429:
-                    self._set_aside(f, f"announcement {p['version']} (Discord refused it)", e)
+                if (
+                    400 <= (getattr(e, "status", 0) or 0) < 500
+                    and getattr(e, "status", 0) != 429
+                ):
+                    self._set_aside(
+                        f, f"announcement {p['version']} (Discord refused it)", e
+                    )
                 else:
-                    _log(f"announcement {p['version']} failed: {e!r}; retrying next minute")
+                    _log(
+                        f"announcement {p['version']} failed: {e!r}; retrying next minute"
+                    )
                 continue
-            f.unlink()                                          # off the queue first: a later failure never reposts
+            f.unlink()  # off the queue first: a later failure never reposts
             st = self._state()
             st["announced"] = sorted(set(st.get("announced", [])) | {p["version"]})
             self._save_state(st)
             _log(f"announced {p['version']} in #{RELEASES_CHANNEL}")
             if getattr(channel, "is_news", lambda: False)():
                 try:
-                    await msg.publish()                         # to the servers that follow the channel
+                    await msg.publish()  # to the servers that follow the channel
                 except Exception as e:
-                    _log(f"announcement {p['version']} posted but not published to followers: {e!r}")
+                    _log(
+                        f"announcement {p['version']} posted but not published to followers: {e!r}"
+                    )
 
     @staticmethod
     def _entry(msg, reporter_id) -> dict:
-        who = "bot" if msg.author.bot else "reporter" if msg.author.id == reporter_id else "other"
-        return {"at": msg.created_at.isoformat(), "from": who, "text": str(msg.content or "")[:MAX_TEXT]}
+        who = (
+            "bot"
+            if msg.author.bot
+            else "reporter"
+            if msg.author.id == reporter_id
+            else "other"
+        )
+        return {
+            "at": msg.created_at.isoformat(),
+            "from": who,
+            "text": str(msg.content or "")[:MAX_TEXT],
+        }
 
     def _append(self, d: Path, doc: dict, msg, reporter_id):
         if len(doc["messages"]) < MAX_MESSAGES:
@@ -262,7 +337,7 @@ class Handler:
 
     # ---- one thread
     async def handle(self, thread) -> str:
-        if thread.id in self._busy:                                   # the timer's catch-up met an on_thread_create
+        if thread.id in self._busy:  # the timer's catch-up met an on_thread_create
             return "BUSY"
         self._busy.add(thread.id)
         try:
@@ -273,17 +348,24 @@ class Handler:
     async def _handle(self, thread) -> str:
         _log(f"thread {thread.id}: {str(getattr(thread, 'name', ''))[:80]!r}")
         kind = self.text_forums.get(getattr(thread, "parent_id", None))
-        msg = await self._starter(thread)                             # the forum post's starter message
+        msg = await self._starter(thread)  # the forum post's starter message
         if msg is None:
             self._record(thread.id, pending=True, mark=kind is None)
             return "PENDING"
-        if kind:                                                      # an idea / feedback post: words only
+        if kind:  # an idea / feedback post: words only
             rel = f"{kind}/{thread.id}"
             self._start_post(thread, msg, rel)
             await self._sync(thread)
             self._record(thread.id, mark=False)
             return "TEXT"
-        att = next((a for a in msg.attachments if ATTACHMENT_RE.match(a.filename) and a.size <= MAX_ATTACHMENT), None)
+        att = next(
+            (
+                a
+                for a in msg.attachments
+                if ATTACHMENT_RE.match(a.filename) and a.size <= MAX_ATTACHMENT
+            ),
+            None,
+        )
         if att is None:
             self._start_post(thread, msg, f"posts/{thread.id}")
             await self._sync(thread)
@@ -306,7 +388,11 @@ class Handler:
         return verdict["status"]
 
     async def _process(self, thread_id: int, data: bytes) -> dict:
-        if len(data) < arbseal.OVERHEAD or data[:4] != arbseal.MAGIC or data[4] != arbseal.KEY_ID:
+        if (
+            len(data) < arbseal.OVERHEAD
+            or data[:4] != arbseal.MAGIC
+            or data[4] != arbseal.KEY_ID
+        ):
             return {"status": "REFUSE", "shortId": "", "reason": "magic/keyId"}
         try:
             plain = arbseal.open_sealed(data, self.key)
@@ -319,7 +405,7 @@ class Handler:
         fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
         with os.fdopen(fd, "wb") as f:
             f.write(plain)
-        os.replace(tmp, inp)                                          # atomic: the opener never sees a half file
+        os.replace(tmp, inp)  # atomic: the opener never sees a half file
         if self.process:
             self.process(inp, out)
         result = await self._wait_result(out)
@@ -337,13 +423,28 @@ class Handler:
                 try:
                     r = json.loads(p.read_text())
                 except (OSError, ValueError):
-                    await asyncio.sleep(0.1)          # a poll that landed mid-write: not a verdict yet
+                    await asyncio.sleep(
+                        0.1
+                    )  # a poll that landed mid-write: not a verdict yet
                     continue
-                if (isinstance(r, dict) and r.get("status") in STATUSES and isinstance(r.get("reason"), str)
-                        and len(r["reason"]) <= 200 and isinstance(r.get("shortId"), str)
-                        and (r["status"] != "OK" or SHORT_ID.match(r["shortId"]))):
-                    return {"status": r["status"], "shortId": r["shortId"], "reason": r["reason"]}
-                return {"status": "REFUSE", "shortId": "", "reason": "malformed result.json"}
+                if (
+                    isinstance(r, dict)
+                    and r.get("status") in STATUSES
+                    and isinstance(r.get("reason"), str)
+                    and len(r["reason"]) <= 200
+                    and isinstance(r.get("shortId"), str)
+                    and (r["status"] != "OK" or SHORT_ID.match(r["shortId"]))
+                ):
+                    return {
+                        "status": r["status"],
+                        "shortId": r["shortId"],
+                        "reason": r["reason"],
+                    }
+                return {
+                    "status": "REFUSE",
+                    "shortId": "",
+                    "reason": "malformed result.json",
+                }
             await asyncio.sleep(0.1)
         return {"status": "REFUSE", "shortId": "", "reason": "opener timeout"}
 
@@ -389,7 +490,7 @@ class Handler:
                 continue
             try:
                 await self.handle(threads[tid])
-            except Exception as e:                                    # one bad thread never stops the rest
+            except Exception as e:  # one bad thread never stops the rest
                 _log(f"thread {tid} failed: {e!r}")
 
 
@@ -399,15 +500,25 @@ def main():
 
     token = Path(os.environ["DISCORD_TOKEN_FILE"]).read_text().strip()
     forum_id = int(os.environ["FORUM_CHANNEL_ID"])
-    key_path = Path(os.environ.get("KEY_DIR", "/keys")) / f"feedback-key-{arbseal.KEY_ID}.pem"
+    key_path = (
+        Path(os.environ.get("KEY_DIR", "/keys")) / f"feedback-key-{arbseal.KEY_ID}.pem"
+    )
     key = serialization.load_pem_private_key(key_path.read_bytes(), password=None)
-    handler = Handler(spool=Path(os.environ.get("SPOOL", "/spool")), inbox=Path(os.environ.get("INBOX", "/inbox")),
-                      private_key=key, forum_id=forum_id)
-    handler.allow_role = lambda role: discord.AllowedMentions(everyone=False, users=False, roles=[role], replied_user=False)
+    handler = Handler(
+        spool=Path(os.environ.get("SPOOL", "/spool")),
+        inbox=Path(os.environ.get("INBOX", "/inbox")),
+        private_key=key,
+        forum_id=forum_id,
+    )
+    handler.allow_role = lambda role: discord.AllowedMentions(
+        everyone=False, users=False, roles=[role], replied_user=False
+    )
 
     intents = discord.Intents.none()
     intents.guilds = True
-    intents.guild_messages = True     # replies in the forums' threads (kept beside the report / post)
+    intents.guild_messages = (
+        True  # replies in the forums' threads (kept beside the report / post)
+    )
     intents.message_content = True
     client = discord.Client(intents=intents)
 
@@ -418,23 +529,33 @@ def main():
 
     async def catch_up_all():
         bug = client.get_channel(forum_id) or await client.fetch_channel(forum_id)
-        handler.text_forums = {c.id: TEXT_FORUMS[c.name] for c in bug.guild.forums if c.name in TEXT_FORUMS}
+        handler.text_forums = {
+            c.id: TEXT_FORUMS[c.name] for c in bug.guild.forums if c.name in TEXT_FORUMS
+        }
         for fid in sorted(forums()):
             try:
-                await handler.catch_up(client.get_channel(fid) or await client.fetch_channel(fid))
-            except Exception as e:                                    # one forum never stops the others
+                await handler.catch_up(
+                    client.get_channel(fid) or await client.fetch_channel(fid)
+                )
+            except Exception as e:  # one forum never stops the others
                 _log(f"catch-up of forum {fid} failed: {e!r}")
 
     async def releases_target():
         bug = client.get_channel(forum_id) or await client.fetch_channel(forum_id)
         guild = bug.guild
-        channel = next((c for c in guild.text_channels if c.name == RELEASES_CHANNEL), None)
+        channel = next(
+            (c for c in guild.text_channels if c.name == RELEASES_CHANNEL), None
+        )
         role = next((r for r in guild.roles if r.name == NOTIFY_ROLE), None)
         if not channel or not role:
-            _log(f"announcement waiting: no #{RELEASES_CHANNEL} channel or @{NOTIFY_ROLE} role")
+            _log(
+                f"announcement waiting: no #{RELEASES_CHANNEL} channel or @{NOTIFY_ROLE} role"
+            )
             return None
         perms = channel.permissions_for(guild.me)
-        why = announce.target_problem(role.mentionable, perms.send_messages, perms.mention_everyone)
+        why = announce.target_problem(
+            role.mentionable, perms.send_messages, perms.mention_everyone
+        )
         if why:
             _log(f"announcement waiting: {why} (#{RELEASES_CHANNEL}, @{NOTIFY_ROLE})")
             return None
@@ -470,8 +591,12 @@ def main():
 
     @client.event
     async def on_message(message):
-        if getattr(getattr(message, "channel", None), "parent_id", None) not in forums() or message.id == message.channel.id:
-            return                                                    # not a reply in the forum (the starter is handle()'s)
+        if (
+            getattr(getattr(message, "channel", None), "parent_id", None)
+            not in forums()
+            or message.id == message.channel.id
+        ):
+            return  # not a reply in the forum (the starter is handle()'s)
         try:
             await handler.on_reply(message)
         except Exception as e:

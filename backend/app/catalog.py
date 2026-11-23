@@ -12,6 +12,7 @@ base_items) and the trade site's item list (`trade_static_cache`):
   as data, so installs contact no new host;
 - an id that would collide with a different trade-site item is left out; the bridge's ids are the
   bridge's. Installs only read the result (`currencies.Registry`)."""
+
 from __future__ import annotations
 
 import base64
@@ -54,7 +55,12 @@ def icon_source(art: str) -> str:
 
 
 def build(bases: dict, static: dict, metas, bridged: set, categories: dict) -> dict:
-    entries = [e for g in (static or {}).get("result", []) for e in g.get("entries", []) if e.get("id")]
+    entries = [
+        e
+        for g in (static or {}).get("result", [])
+        for e in g.get("entries", [])
+        if e.get("id")
+    ]
     by_name: dict[str, list[dict]] = {}
     for e in entries:
         by_name.setdefault(e.get("text"), []).append(e)
@@ -73,25 +79,43 @@ def build(bases: dict, static: dict, metas, bridged: set, categories: dict) -> d
         elif not named:
             tid = _slug(b["name"])
             if tid and tid not in ids:
-                out[meta] = {"id": tid, "name": b["name"],
-                             "category": (categories.get(meta) or {}).get("category") or b.get("item_class"),
-                             "art": _art(b)}
+                out[meta] = {
+                    "id": tid,
+                    "name": b["name"],
+                    "category": (categories.get(meta) or {}).get("category")
+                    or b.get("item_class"),
+                    "art": _art(b),
+                }
     return out
 
 
 def _digest_metas() -> list[str]:
     with db.q() as c:
-        return [r[0] for r in c.execute("SELECT cur_a FROM digest_markets UNION SELECT cur_b FROM digest_markets")]
+        return [
+            r[0]
+            for r in c.execute(
+                "SELECT cur_a FROM digest_markets UNION SELECT cur_b FROM digest_markets"
+            )
+        ]
 
 
-async def refresh(bases: dict, metas=None, categories=None, max_age: int = 86400) -> str | None:
+async def refresh(
+    bases: dict, metas=None, categories=None, max_age: int = 86400
+) -> str | None:
     """Rebuild `meta_catalog`. Returns an error to report, or None. Without the trade list nothing
     changes; an icon that cannot be fetched keeps the item's last icon."""
     static = db.kv_get("trade_static_cache") or {}
     if not static.get("result"):
         return "catalog: no trade list stored; kept the last catalog"
-    cat = build(bases, static, metas if metas is not None else _digest_metas(), set(db.kv_get("meta_bridge", {}) or {}),
-                categories if categories is not None else (db.kv_get("gold_fees_meta", {}) or {}))
+    cat = build(
+        bases,
+        static,
+        metas if metas is not None else _digest_metas(),
+        set(db.kv_get("meta_bridge", {}) or {}),
+        categories
+        if categories is not None
+        else (db.kv_get("gold_fees_meta", {}) or {}),
+    )
     last = db.kv_get(KEY, {}) or {}
     missing = 0
     for meta, e in cat.items():
@@ -99,7 +123,11 @@ async def refresh(bases: dict, metas=None, categories=None, max_age: int = 86400
         if not art:
             continue
         try:
-            data = await gamedata._get(icon_source(art), "icon-" + re.sub(r"[^A-Za-z0-9]+", "_", art) + ".webp", max_age)
+            data = await gamedata._get(
+                icon_source(art),
+                "icon-" + re.sub(r"[^A-Za-z0-9]+", "_", art) + ".webp",
+                max_age,
+            )
             e["icon"] = "data:image/webp;base64," + base64.b64encode(data).decode()
         except Exception as exc:
             missing += 1
@@ -107,6 +135,10 @@ async def refresh(bases: dict, metas=None, categories=None, max_age: int = 86400
                 e["icon"] = last[meta]["icon"]
             log.warning("catalog: icon for %s unavailable (%s)", meta, exc)
     db.kv_set(KEY, cat)
-    log.info("catalog: %d exchange items named (%d not on the trade site), %d icons missing",
-             len(cat), sum(1 for e in cat.values() if "name" in e), missing)
+    log.info(
+        "catalog: %d exchange items named (%d not on the trade site), %d icons missing",
+        len(cat),
+        sum(1 for e in cat.values() if "name" in e),
+        missing,
+    )
     return None

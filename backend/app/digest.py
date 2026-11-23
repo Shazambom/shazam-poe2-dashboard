@@ -8,6 +8,7 @@ We store rows per (hour, league, market) and derive an executed-volume-weighted 
 i.e. how many B were exchanged per A over the hour. That is the most honest "what
 actually cleared" number available; lowest/highest_ratio are kept raw for reference.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -44,18 +45,41 @@ def _store(hour: int, markets: list[dict]) -> int:
         if len(pair) != 2:
             continue
         a, b = pair
-        vt, ls, hs, lr, hr = (m.get(k, {}) for k in
-                              ("volume_traded", "lowest_stock", "highest_stock", "lowest_ratio", "highest_ratio"))
+        vt, ls, hs, lr, hr = (
+            m.get(k, {})
+            for k in (
+                "volume_traded",
+                "lowest_stock",
+                "highest_stock",
+                "lowest_ratio",
+                "highest_ratio",
+            )
+        )
         registry.resolve_meta(a)
         registry.resolve_meta(b)
-        rows.append((
-            hour, m.get("league", ""), m.get("market_id", f"{a}|{b}"), a, b,
-            vt.get(a), vt.get(b), ls.get(a), ls.get(b), hs.get(a), hs.get(b),
-            lr.get(a), lr.get(b), hr.get(a), hr.get(b),
-        ))
+        rows.append(
+            (
+                hour,
+                m.get("league", ""),
+                m.get("market_id", f"{a}|{b}"),
+                a,
+                b,
+                vt.get(a),
+                vt.get(b),
+                ls.get(a),
+                ls.get(b),
+                hs.get(a),
+                hs.get(b),
+                lr.get(a),
+                lr.get(b),
+                hr.get(a),
+                hr.get(b),
+            )
+        )
     with db.tx() as c:
         c.executemany(
-            "INSERT OR REPLACE INTO digest_markets VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", rows
+            "INSERT OR REPLACE INTO digest_markets VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            rows,
         )
     return len(rows)
 
@@ -72,15 +96,21 @@ async def sync_once() -> None:
     if cursor is None:
         reason = cold_start_reason(cursor, bool(db.MARKET_SEED_PATH))
         if reason:
-            devtelemetry.t0(reason, f"digest cursor missing with a seed bundled; backfilling {DIGEST_BACKFILL_HOURS}h from scratch")
+            devtelemetry.t0(
+                reason,
+                f"digest cursor missing with a seed bundled; backfilling {DIGEST_BACKFILL_HOURS}h from scratch",
+            )
         cursor = _hour(time.time() - DIGEST_BACKFILL_HOURS * 3600)
     elif state["last_hour"] is None:
-        state["last_hour"] = cursor - 3600   # restart: reflect what's already stored
+        state["last_hour"] = cursor - 3600  # restart: reflect what's already stored
     for _ in range(500):  # safety cap per sync pass
         try:
             data = await _fetch(cursor)
         except (httpx.HTTPError, gateway.RateLimited) as exc:
-            if isinstance(exc, httpx.HTTPStatusError) and exc.response.status_code == 404:
+            if (
+                isinstance(exc, httpx.HTTPStatusError)
+                and exc.response.status_code == 404
+            ):
                 # the tip hour isn't published yet — caught up, not an error
                 state.update(last_fetch=time.time(), last_error=None)
                 return
@@ -103,7 +133,9 @@ def prune_old() -> int:
     nothing can miss them). Runs in the background sync loop, never on a request."""
     cutoff = _hour(time.time()) - MARKET_RETENTION_DAYS * 86400
     with db.tx() as c:
-        return c.execute("DELETE FROM digest_markets WHERE hour < ?", (cutoff,)).rowcount
+        return c.execute(
+            "DELETE FROM digest_markets WHERE hour < ?", (cutoff,)
+        ).rowcount
 
 
 ANALYZE_EVERY_S = 3600.0
@@ -129,7 +161,9 @@ async def run_forever() -> None:
             n = await asyncio.to_thread(prune_old)
             await asyncio.to_thread(maybe_analyze, state["last_hour"] != before)
             if n:
-                log.info("digest: pruned %d rows older than %dd", n, MARKET_RETENTION_DAYS)
+                log.info(
+                    "digest: pruned %d rows older than %dd", n, MARKET_RETENTION_DAYS
+                )
         except Exception as exc:  # never let the loop die
             log.exception("digest loop error: %s", exc)
         await asyncio.sleep(DIGEST_POLL_SECONDS)
@@ -148,16 +182,25 @@ def traded_bounds(rows) -> dict[tuple[str, str], tuple[float, float]]:
     for r in rows:
         if not r["vol_a"] or not r["vol_b"]:
             continue
-        px = r["vol_a"] / r["vol_b"]                        # a per b, what this hour traded at
+        px = r["vol_a"] / r["vol_b"]  # a per b, what this hour traded at
         prev = out.get((r["cur_a"], r["cur_b"]))
-        out[(r["cur_a"], r["cur_b"])] = (min(px, prev[0]), max(px, prev[1])) if prev else (px, px)
+        out[(r["cur_a"], r["cur_b"])] = (
+            (min(px, prev[0]), max(px, prev[1])) if prev else (px, px)
+        )
     return out
 
 
-def directed_rates(a: str, b: str, r, age: float, bounds: tuple[float, float] | None = None,
-                   wide_spread: float | None = None, rate: float | None = None,
-                   volume: tuple[float, float] | None = None,
-                   _settings: dict | None = None) -> dict[tuple[str, str], dict]:
+def directed_rates(
+    a: str,
+    b: str,
+    r,
+    age: float,
+    bounds: tuple[float, float] | None = None,
+    wide_spread: float | None = None,
+    rate: float | None = None,
+    volume: tuple[float, float] | None = None,
+    _settings: dict | None = None,
+) -> dict[tuple[str, str], dict]:
     """The directed edges one traded hour of the a<->b market supports. An edge a->b hands you b,
     so someone must have been STANDING there offering b: the receiving side's standing stock
     (`hi_stock_*`) must be > 0. No sellers → no edge in that direction — traded volume is never a
@@ -181,25 +224,47 @@ def directed_rates(a: str, b: str, r, age: float, bounds: tuple[float, float] | 
     s = settings.get_settings() if _settings is None else _settings
     wide = settings.wide_spread(s) if wide_spread is None else wide_spread
     inactive = bool(lo > 0 and hi > 0 and wide > 0 and hi / lo >= wide)
-    px = rate if rate else (r["vol_a"] / r["vol_b"])                 # a per b
-    if inactive and volume and _deep(r, px, volume, settings.depth_hours(s), settings.depth_balance(s)):
-        inactive = False                                             # wide, but a book stands on both sides
-    to_b = (1.0 / hi) if inactive else (1.0 / px)                    # b per a — you pay the dearest
-    to_a = lo if inactive else px                                    # a per b — you take the cheapest
+    px = rate if rate else (r["vol_a"] / r["vol_b"])  # a per b
+    if (
+        inactive
+        and volume
+        and _deep(r, px, volume, settings.depth_hours(s), settings.depth_balance(s))
+    ):
+        inactive = False  # wide, but a book stands on both sides
+    to_b = (1.0 / hi) if inactive else (1.0 / px)  # b per a — you pay the dearest
+    to_a = lo if inactive else px  # a per b — you take the cheapest
     # `quoted_rate` is what the market would be priced at if it were quoted (the window rate),
     # carried on every edge so the value table can quote a currency's busiest market whatever
     # its spread says (Graph.quote_busiest_markets — the volume rule, owner 2026-09-23).
     out: dict[tuple[str, str], dict] = {}
     if r["hi_stock_b"]:
-        out[(a, b)] = {"rate": to_b, "stock": r["hi_stock_b"], "inactive": inactive, "quoted_rate": 1.0 / px,
-                       "volume_from": r["vol_a"], "volume_to": r["vol_b"], "hour": r["hour"], "age_s": age}
+        out[(a, b)] = {
+            "rate": to_b,
+            "stock": r["hi_stock_b"],
+            "inactive": inactive,
+            "quoted_rate": 1.0 / px,
+            "volume_from": r["vol_a"],
+            "volume_to": r["vol_b"],
+            "hour": r["hour"],
+            "age_s": age,
+        }
     if r["hi_stock_a"]:
-        out[(b, a)] = {"rate": to_a, "stock": r["hi_stock_a"], "inactive": inactive, "quoted_rate": px,
-                       "volume_from": r["vol_b"], "volume_to": r["vol_a"], "hour": r["hour"], "age_s": age}
+        out[(b, a)] = {
+            "rate": to_a,
+            "stock": r["hi_stock_a"],
+            "inactive": inactive,
+            "quoted_rate": px,
+            "volume_from": r["vol_b"],
+            "volume_to": r["vol_a"],
+            "hour": r["hour"],
+            "age_s": age,
+        }
     return out
 
 
-def _deep(r, a_per_b: float, volume: tuple[float, float], min_hours: float, min_balance: float) -> bool:
+def _deep(
+    r, a_per_b: float, volume: tuple[float, float], min_hours: float, min_balance: float
+) -> bool:
     """Whether the standing stock on BOTH sides of a market is a book: each side covers
     `min_hours` of that side's executed volume, and the thin side (in the deep side's units)
     holds at least `min_balance` of the deep one. A wide spread with this behind it is a market
@@ -207,7 +272,7 @@ def _deep(r, a_per_b: float, volume: tuple[float, float], min_hours: float, min_
     va_h, vb_h = volume
     sa, sb = r["hi_stock_a"] or 0, r["hi_stock_b"] or 0
     hours = min(sa / va_h if va_h else 0.0, sb / vb_h if vb_h else 0.0)
-    ua, ub = sa, sb * a_per_b                                        # both in a's units
+    ua, ub = sa, sb * a_per_b  # both in a's units
     balance = min(ua, ub) / max(ua, ub) if max(ua, ub) else 0.0
     return hours >= min_hours and balance >= min_balance
 
@@ -222,11 +287,13 @@ def latest_rates(league: str, max_age_hours: int = 6) -> dict[tuple[str, str], d
                FROM digest_markets WHERE league=? AND hour>=? ORDER BY hour DESC""",
             (league, since),
         ).fetchall()
-    bounds = traded_bounds(rows)            # how far the executed hours ran, per market
+    bounds = traded_bounds(rows)  # how far the executed hours ran, per market
     # The pricing window is never narrower than the rows it prices: a setting past RATE_WINDOW_H
     # would otherwise leave the older markets to their newest hour alone.
     priced = window_rates(league, max(RATE_WINDOW_H, max_age_hours))
-    day = pair_volume(league, 24)           # each side's executed units per hour: the depth yardstick
+    day = pair_volume(
+        league, 24
+    )  # each side's executed units per hour: the depth yardstick
     s = settings.get_settings()
     wide = settings.wide_spread(s)
     out: dict[tuple[str, str], dict] = {}
@@ -237,11 +304,19 @@ def latest_rates(league: str, max_age_hours: int = 6) -> dict[tuple[str, str], d
             continue
         if (a, b) in out or (b, a) in out:  # newest hour already recorded
             continue
-        out.update(directed_rates(a, b, r, now - (r["hour"] + 3600),
-                                  bounds.get((r["cur_a"], r["cur_b"])), wide,
-                                  priced.get((r["cur_a"], r["cur_b"])),
-                                  volume=(day.get((a, b), 0.0), day.get((b, a), 0.0)),
-                                  _settings=s))
+        out.update(
+            directed_rates(
+                a,
+                b,
+                r,
+                now - (r["hour"] + 3600),
+                bounds.get((r["cur_a"], r["cur_b"])),
+                wide,
+                priced.get((r["cur_a"], r["cur_b"])),
+                volume=(day.get((a, b), 0.0), day.get((b, a), 0.0)),
+                _settings=s,
+            )
+        )
     return out
 
 
@@ -259,26 +334,35 @@ def latest_rates(league: str, max_age_hours: int = 6) -> dict[tuple[str, str], d
 # outside them — we cannot print a price nobody paid. `tests/test_window_rates.py` holds that, and
 # the exactness of the summation, over every market in the production DB.
 RATE_HALF_LIFE_H = 12.0
-RATE_WINDOW_H = 48                  # 4 half-lives; older hours are worth under 6% of the newest
+RATE_WINDOW_H = 48  # 4 half-lives; older hours are worth under 6% of the newest
 
 _rate_cache: dict[tuple[str, int], tuple[float, object, dict]] = {}
 
 
-def window_rates(league: str, hours: int = RATE_WINDOW_H) -> dict[tuple[str, str], float]:
+def window_rates(
+    league: str, hours: int = RATE_WINDOW_H
+) -> dict[tuple[str, str], float]:
     """`cur_a` per `cur_b` for every market that traded in the window, keyed on the raw metadata
     ids `traded_bounds` uses. Rebuilt only when a new digest hour lands — `latest_rates` runs on
     every graph build, and the graph is rebuilt every few seconds."""
-    return cache.memo(_rate_cache, (league, hours), 86_400.0,
-                      lambda: _window_rates(league, hours),
-                      version=state["last_hour"], max_entries=8)
+    return cache.memo(
+        _rate_cache,
+        (league, hours),
+        86_400.0,
+        lambda: _window_rates(league, hours),
+        version=state["last_hour"],
+        max_entries=8,
+    )
 
 
 def _window_rates(league: str, hours: int) -> dict[tuple[str, str], float]:
     now = _hour(time.time())
     with db.q() as c:
-        rows = c.execute("SELECT hour, cur_a, cur_b, vol_a, vol_b FROM digest_markets "
-                         "WHERE league=? AND hour>=?" + TRADED_ONLY,
-                         (league, now - hours * 3600)).fetchall()
+        rows = c.execute(
+            "SELECT hour, cur_a, cur_b, vol_a, vol_b FROM digest_markets "
+            "WHERE league=? AND hour>=?" + TRADED_ONLY,
+            (league, now - hours * 3600),
+        ).fetchall()
     return _fold_rates(rows, now)
 
 
@@ -288,7 +372,7 @@ def _fold_rates(rows, now: int) -> dict[tuple[str, str], float]:
     acc: dict[tuple[str, str], list[float]] = {}
     for r in rows:
         va, vb = r["vol_a"], r["vol_b"]
-        if not va or not vb:                # a side with no volume has no rate to contribute
+        if not va or not vb:  # a side with no volume has no rate to contribute
             continue
         w = 2.0 ** (-((now - r["hour"]) / 3600.0) / RATE_HALF_LIFE_H)
         e = acc.get((r["cur_a"], r["cur_b"]))
@@ -305,7 +389,9 @@ def _fold_rates(rows, now: int) -> dict[tuple[str, str], float]:
 # every market in `tests/test_query_plans.py`, and over the owner's DB (933,985 rows, 9,538
 # markets, 0 differences). The rows stay in the table; only these two readers skip them, and the
 # Python guard below stays as the thing that can never divide by zero.
-TRADED_ONLY = " AND vol_a IS NOT NULL AND vol_a <> 0 AND vol_b IS NOT NULL AND vol_b <> 0"
+TRADED_ONLY = (
+    " AND vol_a IS NOT NULL AND vol_a <> 0 AND vol_b IS NOT NULL AND vol_b <> 0"
+)
 
 
 def pair_history(league: str, a: str, b: str, hours: int = 168) -> list[dict]:
@@ -317,10 +403,12 @@ def pair_history(league: str, a: str, b: str, hours: int = 168) -> list[dict]:
     since = _hour(time.time()) - hours * 3600
     with db.q() as c:
         rows = c.execute(
-            ("""SELECT hour, cur_a, cur_b, vol_a, vol_b FROM digest_markets WHERE league=? AND hour>=?
+            (
+                """SELECT hour, cur_a, cur_b, vol_a, vol_b FROM digest_markets WHERE league=? AND hour>=?
                 AND ((cur_a IN ({a}) AND cur_b IN ({b})) OR (cur_a IN ({b}) AND cur_b IN ({a})))"""
-             + TRADED_ONLY + " ORDER BY hour").format(
-                a=",".join("?" * len(metas_a)), b=",".join("?" * len(metas_b))),
+                + TRADED_ONLY
+                + " ORDER BY hour"
+            ).format(a=",".join("?" * len(metas_a)), b=",".join("?" * len(metas_b))),
             (league, since, *metas_a, *metas_b, *metas_b, *metas_a),
         ).fetchall()
     series = []
@@ -329,7 +417,9 @@ def pair_history(league: str, a: str, b: str, hours: int = 168) -> list[dict]:
         va, vb = (r["vol_b"], r["vol_a"]) if flipped else (r["vol_a"], r["vol_b"])
         if not va or not vb:
             continue
-        series.append({"hour": r["hour"], "rate": vb / va, "volume_a": va, "volume_b": vb})
+        series.append(
+            {"hour": r["hour"], "rate": vb / va, "volume_a": va, "volume_b": vb}
+        )
     return series
 
 
@@ -341,8 +431,11 @@ def window_history(league: str, hours: int = 168):
     made carding hundreds of assets (Hold, Movers) take tens of seconds."""
     since = _hour(time.time()) - hours * 3600
     with db.q() as c:
-        rows = c.execute("SELECT hour, cur_a, cur_b, vol_a, vol_b FROM digest_markets "
-                         "WHERE league=? AND hour>=?" + TRADED_ONLY, (league, since)).fetchall()
+        rows = c.execute(
+            "SELECT hour, cur_a, cur_b, vol_a, vol_b FROM digest_markets "
+            "WHERE league=? AND hour>=?" + TRADED_ONLY,
+            (league, since),
+        ).fetchall()
     by_pair: dict[tuple[str, str], list] = {}
     for r in rows:
         by_pair.setdefault((r["cur_a"], r["cur_b"]), []).append(r)
@@ -359,8 +452,11 @@ def window_history(league: str, hours: int = 168):
             va, vb = (r["vol_b"], r["vol_a"]) if flipped else (r["vol_a"], r["vol_b"])
             if not va or not vb:
                 continue
-            series.append({"hour": r["hour"], "rate": vb / va, "volume_a": va, "volume_b": vb})
+            series.append(
+                {"hour": r["hour"], "rate": vb / va, "volume_a": va, "volume_b": vb}
+            )
         return series
+
     return history
 
 
@@ -372,15 +468,23 @@ def pair_volume(league: str, hours: int = 24) -> dict[tuple[str, str], float]:
     averaged over the whole window (quiet hours count as zero — that's the point)."""
     # Versioned on the digest hour, like window_rates: a catch-up after a day closed must not leave the empty
     # answer computed while the data was stale in place for ten minutes (no edge passes the depth yardstick).
-    return cache.memo(_volume_cache, (league, hours), 600, lambda: _pair_volume(league, hours),
-                      version=state["last_hour"])
+    return cache.memo(
+        _volume_cache,
+        (league, hours),
+        600,
+        lambda: _pair_volume(league, hours),
+        version=state["last_hour"],
+    )
 
 
 def _pair_volume(league: str, hours: int) -> dict[tuple[str, str], float]:
     since = _hour(time.time()) - hours * 3600
     with db.q() as c:
-        rows = c.execute("""SELECT cur_a, cur_b, SUM(vol_a) va, SUM(vol_b) vb FROM digest_markets
-                            WHERE league=? AND hour>=? GROUP BY cur_a, cur_b""", (league, since)).fetchall()
+        rows = c.execute(
+            """SELECT cur_a, cur_b, SUM(vol_a) va, SUM(vol_b) vb FROM digest_markets
+                            WHERE league=? AND hour>=? GROUP BY cur_a, cur_b""",
+            (league, since),
+        ).fetchall()
     out: dict[tuple[str, str], float] = {}
     for r in rows:
         a, b = registry.resolve_meta(r["cur_a"]), registry.resolve_meta(r["cur_b"])
@@ -397,8 +501,13 @@ _partners_cache: dict[tuple[str, str, int], tuple[float, list[tuple[str, float]]
 def partners(league: str, want: str, hours: int = 168) -> list[tuple[str, float]]:
     """Haves that actually trade into `want`, ranked by executed volume of `want` over
     the window. Drives batch padding: the pairs the market uses most get the free slots."""
-    return cache.memo(_partners_cache, (league, want, hours), 600, lambda: _partners(league, want, hours),
-                      version=state["last_hour"])
+    return cache.memo(
+        _partners_cache,
+        (league, want, hours),
+        600,
+        lambda: _partners(league, want, hours),
+        version=state["last_hour"],
+    )
 
 
 def _partners(league: str, want: str, hours: int) -> list[tuple[str, float]]:
@@ -411,7 +520,9 @@ def _partners(league: str, want: str, hours: int) -> list[tuple[str, float]]:
             rows = c.execute(
                 f"""SELECT cur_a, cur_b, SUM(vol_a) va, SUM(vol_b) vb FROM digest_markets
                     WHERE league=? AND hour>=? AND (cur_a IN ({ph}) OR cur_b IN ({ph}))
-                    GROUP BY cur_a, cur_b""", (league, since, *metas, *metas)).fetchall()
+                    GROUP BY cur_a, cur_b""",
+                (league, since, *metas, *metas),
+            ).fetchall()
         agg: dict[str, float] = {}
         for r in rows:
             if r["cur_a"] in metas:
@@ -435,13 +546,22 @@ def top_markets(league: str, hours: int = 24, limit: int = 40) -> list[dict]:
             (league, since, limit),
         ).fetchall()
     return [
-        {"a": registry.resolve_meta(r["cur_a"]) or r["cur_a"], "b": registry.resolve_meta(r["cur_b"]) or r["cur_b"],
-         "meta_a": r["cur_a"], "meta_b": r["cur_b"], "volume_a": r["va"], "volume_b": r["vb"], "hours_active": r["n"]}
+        {
+            "a": registry.resolve_meta(r["cur_a"]) or r["cur_a"],
+            "b": registry.resolve_meta(r["cur_b"]) or r["cur_b"],
+            "meta_a": r["cur_a"],
+            "meta_b": r["cur_b"],
+            "volume_a": r["va"],
+            "volume_b": r["vb"],
+            "hours_active": r["n"],
+        }
         for r in rows
     ]
 
 
-def top_markets_valued(league: str, hours: int, limit: int, by: str, ref_value: dict[str, float]) -> list[dict]:
+def top_markets_valued(
+    league: str, hours: int, limit: int, by: str, ref_value: dict[str, float]
+) -> list[dict]:
     """Busiest markets with `value_ex` (traded value in the reference, volume × ref value; the other
     side of the trade is the fallback). `by='activity'` keeps the raw turnover order; `by='value'`
     re-sorts on value_ex. Pulls the full field (not top-N) so a value sort is over every market."""
@@ -451,7 +571,9 @@ def top_markets_valued(league: str, hours: int, limit: int, by: str, ref_value: 
         vb = (r.get("volume_b") or 0) * (ref_value.get(r["b"]) or 0)
         r["value_ex"] = round(va or vb, 2) if (va or vb) else None
         # the market's own realised rate over the window: b per a (the number a trader reads beside the volume)
-        r["rate"] = ((r.get("volume_b") or 0) / r["volume_a"]) if r.get("volume_a") else None   # raw; the view rounds
+        r["rate"] = (
+            ((r.get("volume_b") or 0) / r["volume_a"]) if r.get("volume_a") else None
+        )  # raw; the view rounds
     if by == "value":
-        rows.sort(key=lambda r: (r.get("value_ex") or 0), reverse=True)
+        rows.sort(key=lambda r: r.get("value_ex") or 0, reverse=True)
     return rows[:limit]

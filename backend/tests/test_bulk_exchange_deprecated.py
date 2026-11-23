@@ -12,6 +12,7 @@ Deprecated, not deleted: the code stays behind `orderbook.BULK_EXCHANGE_ENABLED`
 
     python -m pytest backend/tests/test_bulk_exchange_deprecated.py -q
 """
+
 import asyncio
 import json
 import sys
@@ -31,20 +32,36 @@ def test_nothing_is_queued_or_fetched_when_deprecated(monkeypatch):
     monkeypatch.setattr(orderbook, "cached_at", lambda league, h, w: None)
 
     async def go():
-        futs = orderbook.request_pairs([("divine", "exalted"), ("chaos", "divine")], force=True)
+        futs = orderbook.request_pairs(
+            [("divine", "exalted"), ("chaos", "divine")], force=True
+        )
         return futs, await orderbook.wait_for(futs, timeout=1)
 
     futs, waited = asyncio.new_event_loop().run_until_complete(go())
     assert futs == [] and orderbook._queue.empty()
-    assert waited == {"waited": 0, "done": 0, "timed_out": False}      # refresh endpoints return at once
+    assert waited == {
+        "waited": 0,
+        "done": 0,
+        "timed_out": False,
+    }  # refresh endpoints return at once
 
 
 def test_stored_whisper_listings_never_reach_the_graph(monkeypatch):
     """Books fetched before the deprecation are still in market.sqlite; they must not leak back in."""
     with db.tx() as c:
-        c.execute("INSERT OR REPLACE INTO orderbook(league, have, want, fetched_at, offers) VALUES(?,?,?,?,?)",
-                  ("T", "exalted", "omen-of-light", int(time.time()), json.dumps([{"rate": 1.0, "stock": 4}])))
+        c.execute(
+            "INSERT OR REPLACE INTO orderbook(league, have, want, fetched_at, offers) VALUES(?,?,?,?,?)",
+            (
+                "T",
+                "exalted",
+                "omen-of-light",
+                int(time.time()),
+                json.dumps([{"rate": 1.0, "stock": 4}]),
+            ),
+        )
     monkeypatch.setattr(orderbook, "BULK_EXCHANGE_ENABLED", False)
     assert orderbook.latest_books("T", 3600) == {}
     monkeypatch.setattr(orderbook, "BULK_EXCHANGE_ENABLED", True)
-    assert ("exalted", "omen-of-light") in orderbook.latest_books("T", 3600)   # the code path still works
+    assert ("exalted", "omen-of-light") in orderbook.latest_books(
+        "T", 3600
+    )  # the code path still works

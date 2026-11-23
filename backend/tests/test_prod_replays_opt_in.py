@@ -7,6 +7,7 @@ They now run only with ARBITER_PROD_TESTS=1 (and the DB present), from one defin
 
     DATA_DIR=$(mktemp -d) MARKET_SEED= python -m pytest backend/tests/test_prod_replays_opt_in.py -q
 """
+
 import importlib
 import sys
 from pathlib import Path
@@ -16,8 +17,11 @@ TESTS = Path(__file__).resolve().parent
 
 
 def test_one_definition_of_the_owner_db():
-    copies = [p.name for p in TESTS.glob("test_*.py")
-              if p.name != Path(__file__).name and "PROD_DB = Path(" in p.read_text()]
+    copies = [
+        p.name
+        for p in TESTS.glob("test_*.py")
+        if p.name != Path(__file__).name and "PROD_DB = Path(" in p.read_text()
+    ]
     assert copies == [], f"own PROD_DB definitions: {copies}"
 
 
@@ -27,6 +31,7 @@ def test_replays_skip_unless_asked_for(monkeypatch, tmp_path):
     monkeypatch.setenv("ARBITER_PROD_MARKET_DB", str(db))
     monkeypatch.delenv("ARBITER_PROD_TESTS", raising=False)
     import _proddb
+
     m = importlib.reload(_proddb)
     assert m.prod.args[0] is True, "a present DB alone must not turn the replays on"
     monkeypatch.setenv("ARBITER_PROD_TESTS", "1")

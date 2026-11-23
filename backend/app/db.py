@@ -182,6 +182,7 @@ _is_user_kv = is_user_kv
 # Startup (single-threaded, before any per-thread connection ATTACHes market)
 # ---------------------------------------------------------------------------
 
+
 def _read_snapshot_version(path) -> int:
     """market_meta.snapshot_version for a market DB file, or -1 if missing/corrupt."""
     if not path or not os.path.exists(path):
@@ -234,30 +235,46 @@ def _carry_crawl(new, old) -> tuple[int, int]:
     try:
         c.execute("PRAGMA journal_mode=DELETE")
         c.execute("ATTACH DATABASE ? AS loc", (str(old),))
-        have = {r[0] for r in c.execute("SELECT name FROM loc.sqlite_master WHERE type='table'")}
+        have = {
+            r[0]
+            for r in c.execute("SELECT name FROM loc.sqlite_master WHERE type='table'")
+        }
         if not {"kv_ops", "league_daily"} <= have:
             devtelemetry.tlog("seed", "local DB has no crawl tables; nothing to carry")
-            return 0, 0                            # an older layout: no crawl bookkeeping to carry
-        seed_at = {k: v for k, v in c.execute("SELECT key, CAST(value AS REAL) FROM main.kv_ops WHERE key LIKE 'lh_fetch:%'")}
+            return 0, 0  # an older layout: no crawl bookkeeping to carry
+        seed_at = {
+            k: v
+            for k, v in c.execute(
+                "SELECT key, CAST(value AS REAL) FROM main.kv_ops WHERE key LIKE 'lh_fetch:%'"
+            )
+        }
         newer = []
-        for key, at in c.execute("SELECT key, CAST(value AS REAL) FROM loc.kv_ops WHERE key LIKE 'lh_fetch:%'").fetchall():
+        for key, at in c.execute(
+            "SELECT key, CAST(value AS REAL) FROM loc.kv_ops WHERE key LIKE 'lh_fetch:%'"
+        ).fetchall():
             if key in seed_at and seed_at[key] >= at:
                 continue
-            league, _, item = key[len("lh_fetch:"):].rpartition(":")
+            league, _, item = key[len("lh_fetch:") :].rpartition(":")
             try:
                 newer.append((key, league, int(item)))
             except ValueError:
                 continue
         if not newer:
             return 0, 0
-        c.execute("CREATE TEMP TABLE carry(key TEXT, league TEXT, item_id INTEGER, PRIMARY KEY (league, item_id))")
+        c.execute(
+            "CREATE TEMP TABLE carry(key TEXT, league TEXT, item_id INTEGER, PRIMARY KEY (league, item_id))"
+        )
         c.executemany("INSERT OR IGNORE INTO carry VALUES (?,?,?)", newer)
         with c:
-            rows = c.execute("INSERT OR REPLACE INTO main.league_daily(league, item_id, day, close, average, volume) "
-                             "SELECT l.league, l.item_id, l.day, l.close, l.average, l.volume FROM loc.league_daily l "
-                             "JOIN carry k ON k.league = l.league AND k.item_id = l.item_id").rowcount
-            c.execute("INSERT OR REPLACE INTO main.kv_ops(key, value) SELECT o.key, o.value FROM loc.kv_ops o "
-                      "JOIN carry k ON o.key = k.key OR o.key = 'lh_complete:' || k.league || ':' || k.item_id")
+            rows = c.execute(
+                "INSERT OR REPLACE INTO main.league_daily(league, item_id, day, close, average, volume) "
+                "SELECT l.league, l.item_id, l.day, l.close, l.average, l.volume FROM loc.league_daily l "
+                "JOIN carry k ON k.league = l.league AND k.item_id = l.item_id"
+            ).rowcount
+            c.execute(
+                "INSERT OR REPLACE INTO main.kv_ops(key, value) SELECT o.key, o.value FROM loc.kv_ops o "
+                "JOIN carry k ON o.key = k.key OR o.key = 'lh_complete:' || k.league || ':' || k.item_id"
+            )
         return len(newer), rows
     finally:
         c.close()
@@ -271,21 +288,31 @@ def _seed_cuts(path) -> tuple[list[str], list[str]]:
     try:
         # The leagues the server's seed poll found current (the crawl's lh_current can lag an ending).
         row = c.execute("SELECT value FROM kv_ops WHERE key='seed_poll'").fetchone()
-        current = (json.loads(row[0]) or {}).get("leagues") or [] if row and row[0] else []
+        current = (
+            (json.loads(row[0]) or {}).get("leagues") or [] if row and row[0] else []
+        )
         if not current:
-            row = c.execute("SELECT value FROM kv_ops WHERE key='lh_current'").fetchone()
+            row = c.execute(
+                "SELECT value FROM kv_ops WHERE key='lh_current'"
+            ).fetchone()
             current = json.loads(row[0]) if row and row[0] else []
         summary, problems = [], []
         for lg in current:
-            r = c.execute("SELECT value FROM kv_ops WHERE key=?", (f"seed_cut:{lg}",)).fetchone()
-            last = c.execute("SELECT MAX(day) FROM league_daily WHERE league=?", (lg,)).fetchone()[0]
+            r = c.execute(
+                "SELECT value FROM kv_ops WHERE key=?", (f"seed_cut:{lg}",)
+            ).fetchone()
+            last = c.execute(
+                "SELECT MAX(day) FROM league_daily WHERE league=?", (lg,)
+            ).fetchone()[0]
             if not r:
                 problems.append(f"{lg!r} has no verified day (last row {last})")
                 continue
             cut = json.loads(r[0]).get("day")
             summary.append(f"{lg} through {cut}")
             if last is not None and (cut is None or last > cut):
-                problems.append(f"{lg!r} has rows through {last}, verified only through {cut}")
+                problems.append(
+                    f"{lg!r} has rows through {last}, verified only through {cut}"
+                )
         return summary, problems
     finally:
         c.close()
@@ -309,18 +336,32 @@ def seed_market() -> None:
     seed_v = _seed_version()
     local_v = _read_snapshot_version(MARKET_DB_PATH)
     if seed_v < 0:
-        log.error("market seed: bundled seed unreadable (version %s); will crawl live", seed_v)
-        devtelemetry.t0("seed-unreadable", f"seed v{seed_v} at {MARKET_SEED_PATH}; local v{local_v}; crawling live")
+        log.error(
+            "market seed: bundled seed unreadable (version %s); will crawl live", seed_v
+        )
+        devtelemetry.t0(
+            "seed-unreadable",
+            f"seed v{seed_v} at {MARKET_SEED_PATH}; local v{local_v}; crawling live",
+        )
         return
     if MARKET_DB_PATH.exists() and seed_v <= local_v:
         log.info("market seed: local v%s >= seed v%s, keeping local", local_v, seed_v)
         devtelemetry.tlog("seed", f"kept local v{local_v} (seed v{seed_v})")
         if local_v <= 0:
-            devtelemetry.t0("unseeded", f"seed bundled (v{seed_v}) but the local DB has no snapshot (v{local_v}); crawling live")
+            devtelemetry.t0(
+                "unseeded",
+                f"seed bundled (v{seed_v}) but the local DB has no snapshot (v{local_v}); crawling live",
+            )
         return
-    log.info("market seed: seeding market.sqlite from snapshot (seed v%s > local v%s)",
-             seed_v, local_v)
-    devtelemetry.tlog("seed", f"replacing local v{local_v} with seed v{seed_v} ({MARKET_SEED_PATH.stat().st_size >> 20} MB gz)")
+    log.info(
+        "market seed: seeding market.sqlite from snapshot (seed v%s > local v%s)",
+        seed_v,
+        local_v,
+    )
+    devtelemetry.tlog(
+        "seed",
+        f"replacing local v{local_v} with seed v{seed_v} ({MARKET_SEED_PATH.stat().st_size >> 20} MB gz)",
+    )
     tmp = MARKET_DB_PATH.with_suffix(MARKET_DB_PATH.suffix + ".tmp")
     is_gz = str(MARKET_SEED_PATH).endswith(".gz")
     try:
@@ -335,25 +376,35 @@ def seed_market() -> None:
                     shutil.copyfileobj(fi, fo, length=1 << 20)
             fo.flush()
             os.fsync(fo.fileno())
-        try:   # the seed as shipped, before the client's own crawl is carried into it
+        try:  # the seed as shipped, before the client's own crawl is carried into it
             summary, problems = _seed_cuts(tmp)
             if summary:
                 devtelemetry.tlog("seed", "current leagues: " + "; ".join(summary))
             if problems:
-                devtelemetry.t0("seed-partial", f"seed v{seed_v}: " + "; ".join(problems))
+                devtelemetry.t0(
+                    "seed-partial", f"seed v{seed_v}: " + "; ".join(problems)
+                )
         except (sqlite3.Error, ValueError) as exc:
             log.warning("market seed: could not read its verified days (%s)", exc)
         if MARKET_DB_PATH.exists() and local_v < 0:
             # Corrupt (often why it is being replaced): no crawl anyone could read, nothing lost.
-            devtelemetry.tlog("seed", f"local DB unreadable (v{local_v}); nothing to carry")
+            devtelemetry.tlog(
+                "seed", f"local DB unreadable (v{local_v}); nothing to carry"
+            )
         elif MARKET_DB_PATH.exists():
             try:
                 items, rows = _carry_crawl(tmp, MARKET_DB_PATH)
                 if items:
-                    devtelemetry.tlog("seed", f"carried over {items} crawled item(s), {rows} row(s), newer than the seed")
+                    devtelemetry.tlog(
+                        "seed",
+                        f"carried over {items} crawled item(s), {rows} row(s), newer than the seed",
+                    )
             except (sqlite3.Error, OSError) as exc:
                 log.error("market seed: could not carry the local crawl over (%s)", exc)
-                devtelemetry.t0("crawl-lost", f"{type(exc).__name__}: {str(exc)[:160]}; local v{local_v} seed v{seed_v}; the crawl refetches what it had")
+                devtelemetry.t0(
+                    "crawl-lost",
+                    f"{type(exc).__name__}: {str(exc)[:160]}; local v{local_v} seed v{seed_v}; the crawl refetches what it had",
+                )
         # Drop any stale WAL/SHM from a previous market DB so the seeded file is
         # opened clean (the seed is exported VACUUMed, no sidecars).
         for suffix in ("-wal", "-shm"):
@@ -361,10 +412,16 @@ def seed_market() -> None:
             if side.exists():
                 side.unlink()
         os.replace(tmp, MARKET_DB_PATH)
-        devtelemetry.tlog("seed", f"replaced: now v{_read_snapshot_version(MARKET_DB_PATH)} ({MARKET_DB_PATH.stat().st_size >> 20} MB)")
+        devtelemetry.tlog(
+            "seed",
+            f"replaced: now v{_read_snapshot_version(MARKET_DB_PATH)} ({MARKET_DB_PATH.stat().st_size >> 20} MB)",
+        )
     except (OSError, EOFError) as exc:
         log.error("market seed: failed to seed (%s); will crawl live", exc)
-        devtelemetry.t0("seed-failed", f"{type(exc).__name__}: {str(exc)[:160]}; local v{local_v} seed v{seed_v}; crawling live")
+        devtelemetry.t0(
+            "seed-failed",
+            f"{type(exc).__name__}: {str(exc)[:160]}; local v{local_v} seed v{seed_v}; crawling live",
+        )
         if tmp.exists():
             tmp.unlink()
 
@@ -438,9 +495,15 @@ def _boot_databases() -> None:
         #    and the board asks two dozen). Measured once, when an index has none — a seeded
         #    install starts from zero, and step 3 may have just built one — so a warm start
         #    pays nothing and a cold one pays ~1s on a 500MB DB.
-        has = mconn.execute("SELECT 1 FROM sqlite_master WHERE name='sqlite_stat1'").fetchone()
-        measured = has and mconn.execute(
-            "SELECT 1 FROM sqlite_stat1 WHERE idx IN ('idx_digest_window','idx_digest_pair_hour')").fetchone()
+        has = mconn.execute(
+            "SELECT 1 FROM sqlite_master WHERE name='sqlite_stat1'"
+        ).fetchone()
+        measured = (
+            has
+            and mconn.execute(
+                "SELECT 1 FROM sqlite_stat1 WHERE idx IN ('idx_digest_window','idx_digest_pair_hour')"
+            ).fetchone()
+        )
         if not measured:
             mconn.execute("ANALYZE")
             mconn.commit()
@@ -479,7 +542,7 @@ def _connect() -> sqlite3.Connection:
     # WAL is persistent in the DB headers and already enabled by _boot_databases().
     conn.execute("PRAGMA busy_timeout=15000")
     conn.execute("PRAGMA temp_store=MEMORY")
-    conn.execute("PRAGMA cache_size=-4000")         # 4 MiB page cache per thread connection
+    conn.execute("PRAGMA cache_size=-4000")  # 4 MiB page cache per thread connection
     # user.sqlite must survive power loss ("never lose user data"); its writes are rare, debounced
     # single-row upserts, so FULL costs nothing a user can feel. Market data is disposable: NORMAL.
     conn.execute("PRAGMA main.synchronous=FULL")
@@ -539,14 +602,18 @@ def kv_set(key: str, value: Any) -> None:
 
 def _kv_read(c: sqlite3.Connection, key: str, default: Any = None) -> Any:
     """A kv value inside a transaction the caller holds (routed like kv_get)."""
-    row = c.execute(f"SELECT value FROM {_kv_table(key)} WHERE key=?", (key,)).fetchone()
+    row = c.execute(
+        f"SELECT value FROM {_kv_table(key)} WHERE key=?", (key,)
+    ).fetchone()
     return json.loads(row["value"]) if row else default
 
 
 def _kv_write(c: sqlite3.Connection, key: str, value: Any) -> None:
     """A kv write inside a transaction the caller holds (routed like kv_set)."""
-    c.execute(f"INSERT INTO {_kv_table(key)}(key, value) VALUES(?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
-              (key, json.dumps(value)))
+    c.execute(
+        f"INSERT INTO {_kv_table(key)}(key, value) VALUES(?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+        (key, json.dumps(value)),
+    )
 
 
 def kv_update(key: str, fn: Callable[[Any], Any], default: Any = None) -> Any:
@@ -585,12 +652,26 @@ def _sales_upsert(c: sqlite3.Connection, league: str, rows: list[dict]) -> list[
         price = r.get("price") or {}
         iid, ts = str(item_id), str(t)
         canonical_ts = ts
-        if c.execute("SELECT 1 FROM sales WHERE item_id=? AND time=?", (iid, ts)).fetchone():
+        if c.execute(
+            "SELECT 1 FROM sales WHERE item_id=? AND time=?", (iid, ts)
+        ).fetchone():
             is_new = False
         else:
-            existing_times = [row[0] for row in c.execute("SELECT time FROM sales WHERE item_id=?", (iid,)).fetchall()]
+            existing_times = [
+                row[0]
+                for row in c.execute(
+                    "SELECT time FROM sales WHERE item_id=?", (iid,)
+                ).fetchall()
+            ]
             parsed = _parse_iso_utc(ts)
-            matched = next((et for et in existing_times if parsed is not None and _parse_iso_utc(et) == parsed), None)
+            matched = next(
+                (
+                    et
+                    for et in existing_times
+                    if parsed is not None and _parse_iso_utc(et) == parsed
+                ),
+                None,
+            )
             if matched is not None:
                 is_new = False
                 canonical_ts = matched
@@ -601,7 +682,14 @@ def _sales_upsert(c: sqlite3.Connection, league: str, rows: list[dict]) -> list[
         c.execute(
             "INSERT INTO sales(item_id, time, league, price_amount, price_currency, item_json) VALUES(?,?,?,?,?,?) "
             "ON CONFLICT(item_id, time) DO UPDATE SET price_amount=excluded.price_amount, price_currency=excluded.price_currency, item_json=excluded.item_json",
-            (iid, canonical_ts, league, price.get("amount"), price.get("currency"), json.dumps(r.get("item") or {})),
+            (
+                iid,
+                canonical_ts,
+                league,
+                price.get("amount"),
+                price.get("currency"),
+                json.dumps(r.get("item") or {}),
+            ),
         )
     return new
 
@@ -615,14 +703,18 @@ def capital_add(currency: str, qty: float) -> None:
 
 
 def _capital_add(c: sqlite3.Connection, currency: str, qty: float) -> None:
-    c.execute("INSERT INTO capital(currency, qty) VALUES(?, ?) ON CONFLICT(currency) DO UPDATE SET qty = qty + excluded.qty",
-              (currency, float(qty)))
+    c.execute(
+        "INSERT INTO capital(currency, qty) VALUES(?, ?) ON CONFLICT(currency) DO UPDATE SET qty = qty + excluded.qty",
+        (currency, float(qty)),
+    )
 
 
 def sales_list(league: str | None = None) -> list[dict]:
     with q() as c:
         if league:
-            rows = c.execute("SELECT * FROM sales WHERE league=? ORDER BY time DESC", (league,)).fetchall()
+            rows = c.execute(
+                "SELECT * FROM sales WHERE league=? ORDER BY time DESC", (league,)
+            ).fetchall()
         else:
             rows = c.execute("SELECT * FROM sales ORDER BY time DESC").fetchall()
     out = []
@@ -631,22 +723,39 @@ def sales_list(league: str | None = None) -> list[dict]:
             item = json.loads(r["item_json"])
         except (TypeError, ValueError):
             item = {}
-        out.append({"item_id": r["item_id"], "time": r["time"], "league": r["league"],
-                    "price": {"amount": r["price_amount"], "currency": r["price_currency"]} if r["price_currency"] else None, "item": item})
+        out.append(
+            {
+                "item_id": r["item_id"],
+                "time": r["time"],
+                "league": r["league"],
+                "price": {"amount": r["price_amount"], "currency": r["price_currency"]}
+                if r["price_currency"]
+                else None,
+                "item": item,
+            }
+        )
     return out
 
 
 def sales_leagues() -> list[str]:
     with q() as c:
-        return [r[0] for r in c.execute("SELECT league FROM sales GROUP BY league ORDER BY MAX(time) DESC").fetchall()]
+        return [
+            r[0]
+            for r in c.execute(
+                "SELECT league FROM sales GROUP BY league ORDER BY MAX(time) DESC"
+            ).fetchall()
+        ]
 
 
 def sales_count(league: str | None = None) -> int:
     with q() as c:
-        return c.execute("SELECT COUNT(*) FROM sales" + (" WHERE league=?" if league else ""), (league,) if league else ()).fetchone()[0]
+        return c.execute(
+            "SELECT COUNT(*) FROM sales" + (" WHERE league=?" if league else ""),
+            (league,) if league else (),
+        ).fetchone()[0]
 
 
-COUNTED_AT = "capital_counted_at"   # {currency: when the user last set it, "*": when counting began}
+COUNTED_AT = "capital_counted_at"  # {currency: when the user last set it, "*": when counting began}
 
 
 def _now_iso() -> str:
@@ -659,8 +768,10 @@ def set_capital(entries: dict[str, float], counted: list[str] | tuple = ()) -> N
     bar and the Stash's own re-saves pass none."""
     with tx() as c:
         c.execute("DELETE FROM capital")
-        c.executemany("INSERT INTO capital(currency, qty) VALUES(?, ?)",
-                      [(k, float(v)) for k, v in entries.items() if float(v) > 0])
+        c.executemany(
+            "INSERT INTO capital(currency, qty) VALUES(?, ?)",
+            [(k, float(v)) for k, v in entries.items() if float(v) > 0],
+        )
         if counted:
             now = _now_iso()
             stamps = _kv_read(c, COUNTED_AT) or {}
@@ -676,7 +787,9 @@ def _sale_time(t: Any) -> datetime | None:
     return dt
 
 
-def sales_ingest(league: str, rows: list[dict], skew_s: float = 0.0) -> tuple[list[dict], list[dict], dict[str, float]]:
+def sales_ingest(
+    league: str, rows: list[dict], skew_s: float = 0.0
+) -> tuple[list[dict], list[dict], dict[str, float]]:
     """Record Merchant History rows and credit the new money, in ONE transaction (no save can land between
     the check and the credit; a crash leaves neither). Returns (the NEW rows, the ones credited,
     {currency: amount added}).
@@ -698,7 +811,9 @@ def sales_ingest(league: str, rows: list[dict], skew_s: float = 0.0) -> tuple[li
             if not cur or not amount or float(amount) <= 0:
                 continue
             sold = _sale_time(r.get("time"))
-            if sold is None or sold - timedelta(seconds=skew_s) <= datetime.fromisoformat(stamps.get(cur, stamps["*"])):
+            if sold is None or sold - timedelta(
+                seconds=skew_s
+            ) <= datetime.fromisoformat(stamps.get(cur, stamps["*"])):
                 continue
             _capital_add(c, str(cur), float(amount))
             added[str(cur)] = added.get(str(cur), 0.0) + float(amount)

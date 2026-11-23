@@ -9,6 +9,7 @@ in the job params, since only the backend knows the user's selected league).
 Column order below matches the SELECTs, so both a Row-factory connection (backend) and a plain
 connection (sidecar) index the same by position.
 """
+
 from __future__ import annotations
 
 import datetime as _dt
@@ -21,8 +22,10 @@ CURRENT_LEAGUES_KEY = "lh_current"
 
 def read_meta(conn: sqlite3.Connection) -> dict:
     """{item_id: (name, category)}."""
-    return {r[0]: (r[1], r[2]) for r in conn.execute(
-        "SELECT item_id, name, category FROM item_meta")}
+    return {
+        r[0]: (r[1], r[2])
+        for r in conn.execute("SELECT item_id, name, category FROM item_meta")
+    }
 
 
 def read_rows(conn: sqlite3.Connection, league: str | None = None) -> list:
@@ -32,16 +35,22 @@ def read_rows(conn: sqlite3.Connection, league: str | None = None) -> list:
     if league is None:
         return conn.execute(
             "SELECT league, item_id, day, close, volume FROM league_daily "
-            "WHERE close>0 ORDER BY league, day").fetchall()
+            "WHERE close>0 ORDER BY league, day"
+        ).fetchall()
     return conn.execute(
         "SELECT league, item_id, day, close, volume FROM league_daily "
-        "WHERE close>0 AND league=? ORDER BY league, day", (league,)).fetchall()
+        "WHERE close>0 AND league=? ORDER BY league, day",
+        (league,),
+    ).fetchall()
 
 
 def day_to_epoch(day: str) -> int:
     """UTC epoch seconds for a YYYY-MM-DD day string (the league_daily day key)."""
-    return int(_dt.datetime.strptime(day, "%Y-%m-%d")
-               .replace(tzinfo=_dt.timezone.utc).timestamp())
+    return int(
+        _dt.datetime.strptime(day, "%Y-%m-%d")
+        .replace(tzinfo=_dt.timezone.utc)
+        .timestamp()
+    )
 
 
 _epoch = day_to_epoch
@@ -111,11 +120,15 @@ class Anchor(NamedTuple):
 
 ANCHORS: dict[str, Anchor] = {
     "divine": Anchor(291, "Divine Orb", "Metadata/Items/Currency/CurrencyModValues"),
-    "mirror": Anchor(295, "Mirror of Kalandra", "Metadata/Items/Currency/CurrencyDuplicate"),
-    "lock": Anchor(4287, "Hinekora's Lock", "Metadata/Items/Currency/CurrencyHinekorasLock"),
+    "mirror": Anchor(
+        295, "Mirror of Kalandra", "Metadata/Items/Currency/CurrencyDuplicate"
+    ),
+    "lock": Anchor(
+        4287, "Hinekora's Lock", "Metadata/Items/Currency/CurrencyHinekorasLock"
+    ),
     "chaos": Anchor(287, "Chaos Orb", "Metadata/Items/Currency/CurrencyRerollRare"),
 }
-ANCHOR_ALIASES = {"hinekora": "lock"}   # older URL spelling, kept so links never break
+ANCHOR_ALIASES = {"hinekora": "lock"}  # older URL spelling, kept so links never break
 # Divine — the anchor whose Exalted price arc IS the league's inflation curve (see leaguearc).
 DIVINE_ID = ANCHORS["divine"].item_id
 
@@ -136,7 +149,8 @@ def item_rows(conn: sqlite3.Connection, item_id: int) -> list:
     (indexed on item_id — cheap even on the full history)."""
     return conn.execute(
         "SELECT league, day, close FROM league_daily WHERE item_id=? AND close>0 ORDER BY league, day",
-        (item_id,)).fetchall()
+        (item_id,),
+    ).fetchall()
 
 
 def league_signatures(conn: sqlite3.Connection, anchor_id: int = DIVINE_ID) -> dict:

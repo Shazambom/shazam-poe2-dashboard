@@ -16,6 +16,7 @@ degenerated into raw volume weighting instead of the cap it looked like.
 
     python -m pytest backend/tests/test_hold_score.py -q
 """
+
 import math
 import os
 import sqlite3
@@ -31,11 +32,18 @@ from app import holdscore
 
 def m(ret, mdd=-0.10, valvol=1_000_000.0, n=10):
     """A metrics row as `_metrics` builds one. `stab` is derived exactly as production does."""
-    return {"ret": ret, "mdd": mdd, "n": n, "valvol": valvol,
-            "stab": max(0.15, 1 + mdd), "depth": n / (n + 8.0)}
+    return {
+        "ret": ret,
+        "mdd": mdd,
+        "n": n,
+        "valvol": valvol,
+        "stab": max(0.15, 1 + mdd),
+        "depth": n / (n + 8.0),
+    }
 
 
 # --------------------------------------------------------------- 2. the relative floor + cap
+
 
 def test_the_floor_keeps_about_half_the_day():
     rows = [m(0.1, valvol=float(v)) for v in range(1, 101)]
@@ -48,8 +56,16 @@ def test_the_floor_is_scale_free():
     """The value scale shifts ~14x between leagues; the SAME assets must survive either way."""
     small = [m(0.1, valvol=float(v)) for v in range(1, 101)]
     large = [m(0.1, valvol=float(v) * 10_000) for v in range(1, 101)]
-    ks = {i for i, r in enumerate(small) if holdscore.eligible(r, holdscore.value_cut(small))}
-    kl = {i for i, r in enumerate(large) if holdscore.eligible(r, holdscore.value_cut(large))}
+    ks = {
+        i
+        for i, r in enumerate(small)
+        if holdscore.eligible(r, holdscore.value_cut(small))
+    }
+    kl = {
+        i
+        for i, r in enumerate(large)
+        if holdscore.eligible(r, holdscore.value_cut(large))
+    }
     assert ks == kl
 
 
@@ -70,7 +86,9 @@ def test_thin_data_is_excluded():
 def test_the_drawdown_cap_excludes_at_the_documented_line():
     cut = holdscore.value_cut([m(0.1, valvol=1e6)])
     assert holdscore.eligible(m(5.0, mdd=holdscore.MDD_CAP + 0.001, valvol=1e9), cut)
-    assert not holdscore.eligible(m(5.0, mdd=holdscore.MDD_CAP - 0.001, valvol=1e9), cut)
+    assert not holdscore.eligible(
+        m(5.0, mdd=holdscore.MDD_CAP - 0.001, valvol=1e9), cut
+    )
 
 
 def test_the_cap_spares_the_hard_anchors():
@@ -78,17 +96,19 @@ def test_the_cap_spares_the_hard_anchors():
     take real drawdowns (~-19%, ~-13% on Forbidden Rites d16) and MUST survive. At -35% they were
     excluded 25%/27% of early-league days; -40% keeps them."""
     cut = holdscore.value_cut([m(0.1, valvol=1e6)])
-    for name, mdd, valvol in (("Mirror", -0.189, 495_400_037.0),
-                              ("Hinekora's Lock", -0.132, 201_349_369.0),
-                              ("Divine Orb", 0.0, 1e9)):
+    for name, mdd, valvol in (
+        ("Mirror", -0.189, 495_400_037.0),
+        ("Hinekora's Lock", -0.132, 201_349_369.0),
+        ("Divine Orb", 0.0, 1e9),
+    ):
         assert holdscore.eligible(m(0.5, mdd=mdd, valvol=valvol, n=15), cut), name
 
 
 def test_rarity_is_not_punished():
     """The floor is on VALUE traded, not unit count — a rare, expensive, steady asset must clear
     it while a high-churn cheap one need not."""
-    rare = m(0.2, mdd=-0.10, valvol=200_000_000.0, n=15)   # few trades, enormous value
-    churn = m(0.2, mdd=-0.10, valvol=5_000.0, n=15)        # many trades, trivial value
+    rare = m(0.2, mdd=-0.10, valvol=200_000_000.0, n=15)  # few trades, enormous value
+    churn = m(0.2, mdd=-0.10, valvol=5_000.0, n=15)  # many trades, trivial value
     cut = holdscore.value_cut([rare, churn] + [m(0.1, valvol=1e6) for _ in range(20)])
     assert holdscore.eligible(rare, cut)
     assert not holdscore.eligible(churn, cut)
@@ -96,11 +116,16 @@ def test_rarity_is_not_punished():
 
 # ------------------------------------------------------------------- 3. tuning constants
 
+
 def test_the_constants_match_the_backtest():
     """These are not free parameters — each was measured. Changing one means re-running the
     backtest in docs/bugs/2026-09-20-hold-ranks-against-its-own-forecast.md."""
-    assert holdscore.MDD_CAP == -0.40      # tightest cap sparing Mirror/Hinekora (-35% cuts them 25%/27%)
-    assert holdscore.CAUTION_K == 2.0         # the Caution default: the dip weighs like every other signal
+    assert (
+        holdscore.MDD_CAP == -0.40
+    )  # tightest cap sparing Mirror/Hinekora (-35% cuts them 25%/27%)
+    assert (
+        holdscore.CAUTION_K == 2.0
+    )  # the Caution default: the dip weighs like every other signal
     assert holdscore.MIN_DAYS == 4
     assert holdscore.VALUE_PERCENTILE == 0.50
 
@@ -113,11 +138,18 @@ from _proddb import PROD_DB, prod as _prod  # (opt-in: ARBITER_PROD_TESTS=1)
 
 # ------------------------------------------------ 5. k as a user-facing dial (owner directive)
 
+
 def test_a_garbage_k_cannot_reach_the_score():
     """The slider is user input arriving over HTTP. Nonsense must clamp, never poison the sort."""
     lo, hi = holdscore.CAUTION_RANGE
-    for bad, want in ((-5.0, lo), (999.0, hi), (float("nan"), holdscore.CAUTION_K),
-                      (None, holdscore.CAUTION_K), ("2.0", 2.0), (float("inf"), hi)):
+    for bad, want in (
+        (-5.0, lo),
+        (999.0, hi),
+        (float("nan"), holdscore.CAUTION_K),
+        (None, holdscore.CAUTION_K),
+        ("2.0", 2.0),
+        (float("inf"), hi),
+    ):
         assert holdscore.clamp_k(bad) == want, f"clamp_k({bad!r})"
 
 
@@ -128,6 +160,7 @@ def test_the_default_k_is_inside_its_own_range():
 
 def test_the_setting_exists_with_the_backtested_default():
     from app import settings as st
+
     assert st.DEFAULTS["hold_caution"] == holdscore.CAUTION_K
     assert st.hold_caution({}) == holdscore.CAUTION_K
     assert st.hold_caution({"hold_caution": 4.0}) == 4.0
@@ -160,10 +193,12 @@ def test_k_is_part_of_the_leaderboard_cache_key():
 def test_the_leaderboard_reports_the_k_it_used():
     """The slider needs to render its own position from the response."""
     import inspect
+
     assert "k" in inspect.signature(holdscore.leaderboard).parameters
 
 
 # ------------------------------------------------------- 6. the board actually uses all this
+
 
 def _series(p0, rate, days=16):
     return {a: (p0 * (1 + rate) ** a, 1e8) for a in range(days)}
@@ -172,21 +207,51 @@ def _series(p0, rate, days=16):
 def _entries():
     """A day's universe: a blue chip, a steady mid, a spicy winner, a crashed thin rune."""
     return [
-        (1, "Mirror of Kalandra", "currency", m(0.53, mdd=-0.189, valvol=495_400_037.0, n=15), _series(4000.0, 0.01)),
-        (2, "Her Declaration",    "omen",     m(1.28, mdd=-0.060, valvol=34_559_264.0, n=16), _series(60.0, 0.03)),
-        (3, "Omen of the Hunt",   "omen",     m(4.47, mdd=-0.417, valvol=2_503_671.0, n=16), _series(3.0, 0.10)),
-        (4, "Lesser Glacial Rune", "rune",    m(-0.751, mdd=-0.85, valvol=144.0, n=6), _series(0.01, -0.10)),
-        (5, "Thin Newcomer",      "rune",     m(0.90, mdd=-0.02, valvol=90_000_000.0, n=2), _series(8.0, 0.05, 2)),
+        (
+            1,
+            "Mirror of Kalandra",
+            "currency",
+            m(0.53, mdd=-0.189, valvol=495_400_037.0, n=15),
+            _series(4000.0, 0.01),
+        ),
+        (
+            2,
+            "Her Declaration",
+            "omen",
+            m(1.28, mdd=-0.060, valvol=34_559_264.0, n=16),
+            _series(60.0, 0.03),
+        ),
+        (
+            3,
+            "Omen of the Hunt",
+            "omen",
+            m(4.47, mdd=-0.417, valvol=2_503_671.0, n=16),
+            _series(3.0, 0.10),
+        ),
+        (
+            4,
+            "Lesser Glacial Rune",
+            "rune",
+            m(-0.751, mdd=-0.85, valvol=144.0, n=6),
+            _series(0.01, -0.10),
+        ),
+        (
+            5,
+            "Thin Newcomer",
+            "rune",
+            m(0.90, mdd=-0.02, valvol=90_000_000.0, n=2),
+            _series(8.0, 0.05, 2),
+        ),
     ]
 
 
 def test_rank_drops_everything_the_contract_excludes():
     out, _score = holdscore._rank(_entries(), holdscore.CAUTION_K)
     names = [e[1] for e in out]
-    assert "Omen of the Hunt" not in names      # -41.7% is past the -40% cap
-    assert "Lesser Glacial Rune" not in names   # below the value floor AND past the cap
-    assert "Thin Newcomer" not in names         # only 2 days of data
-    assert "Mirror of Kalandra" in names        # rare but precious — must survive
+    assert "Omen of the Hunt" not in names  # -41.7% is past the -40% cap
+    assert "Lesser Glacial Rune" not in names  # below the value floor AND past the cap
+    assert "Thin Newcomer" not in names  # only 2 days of data
+    assert "Mirror of Kalandra" in names  # rare but precious — must survive
     assert "Her Declaration" in names
 
 
@@ -209,11 +274,13 @@ def test_rank_never_returns_an_ineligible_asset_whatever_k_is():
 
 # ---------------------------------------------------------------- 7. the endpoint carries k
 
+
 def test_the_hold_endpoint_accepts_and_clamps_k():
     """The slider's value arrives here. It must reach the scorer, and nonsense must not 500."""
     import inspect
 
     from app import main
+
     assert "k" in inspect.signature(main.hold).parameters
     seen = {}
 
@@ -225,6 +292,7 @@ def test_the_hold_endpoint_accepts_and_clamps_k():
     holdscore.leaderboard = fake
     try:
         from fastapi.testclient import TestClient
+
         c = TestClient(main.app)
         assert c.get("/api/hold?k=4.5").status_code == 200
         assert seen["k"] == 4.5
@@ -242,6 +310,7 @@ def test_the_hold_endpoint_accepts_and_clamps_k():
 # early league (3d): IC +0.263 at w=0 -> +0.317 at w=5, and the curve falls off again toward
 # day-blind, so the alignment itself still carries information.
 
+
 def _step_league(step_day, lo=10.0, hi=20.0, days=40):
     """A past league where the item is flat at `lo`, then steps permanently to `hi` on `step_day`."""
     return {1: {a: ((lo if a < step_day else hi), 1e9) for a in range(days)}}
@@ -254,8 +323,10 @@ def test_one_freak_start_day_no_longer_dictates_the_forecast():
     past = [("B", _step_league(13)), ("A", _step_league(13))]
     one_day = holdscore._predict(1, 10, 3, past, window=0)
     windowed = holdscore._predict(1, 10, 3, past, window=5)
-    assert one_day["pred"] == pytest.approx(1.0, abs=1e-9)      # the single day says "+100%"
-    assert 0.0 < windowed["pred"] < 0.5                          # the neighbourhood says "some"
+    assert one_day["pred"] == pytest.approx(
+        1.0, abs=1e-9
+    )  # the single day says "+100%"
+    assert 0.0 < windowed["pred"] < 0.5  # the neighbourhood says "some"
 
 
 def test_leaving_window_out_is_exactly_the_old_forecast():
@@ -263,17 +334,25 @@ def test_leaving_window_out_is_exactly_the_old_forecast():
     default must reproduce today's numbers bit for bit."""
     past = [("B", _step_league(13)), ("A", _step_league(12))]
     for N, d in ((5, 3), (10, 3), (11, 7), (20, 1)):
-        assert holdscore._predict(1, N, d, past) == holdscore._predict(1, N, d, past, window=0)
+        assert holdscore._predict(1, N, d, past) == holdscore._predict(
+            1, N, d, past, window=0
+        )
 
 
 def test_the_board_reads_the_window_and_nothing_else_does(monkeypatch):
     """Wiring: the leaderboard passes PRED_WINDOW. (The league-arc keeps the default, pinned above.)"""
     from app import currencies, movers
+
     liquid = {a: (10.0 + a, 1e9) for a in range(10)}
     cur = {7: dict(liquid), 8: dict(liquid)}
-    past = [("B", {7: dict(liquid), 8: dict(liquid)}), ("A", {7: dict(liquid), 8: dict(liquid)})]
+    past = [
+        ("B", {7: dict(liquid), 8: dict(liquid)}),
+        ("A", {7: dict(liquid), 8: dict(liquid)}),
+    ]
     meta = {7: ("Seven", "omen"), 8: ("Eight", "omen")}
-    monkeypatch.setattr(holdscore, "build_context", lambda num_id: ("Now", cur, past, meta))
+    monkeypatch.setattr(
+        holdscore, "build_context", lambda num_id: ("Now", cur, past, meta)
+    )
     monkeypatch.setattr(holdscore, "_arc_weights", lambda name: None)
     monkeypatch.setattr(movers, "exchange_cards", lambda names, hours, num=None: {})
     monkeypatch.setattr(currencies.registry, "resolve_meta", lambda meta_id: "divine")
@@ -284,7 +363,9 @@ def test_the_board_reads_the_window_and_nothing_else_does(monkeypatch):
         return real(*a, **kw)
 
     monkeypatch.setattr(holdscore, "_predict", spy)
-    holdscore._leaderboard("3d", "all", "divine", 291, "Divine Orb", holdscore.CAUTION_K)
+    holdscore._leaderboard(
+        "3d", "all", "divine", 291, "Divine Orb", holdscore.CAUTION_K
+    )
     assert seen, "the board never asked for a forecast — the test would be vacuous"
     assert set(seen) == {holdscore.PRED_WINDOW}
     assert holdscore.PRED_WINDOW > 0
@@ -297,6 +378,7 @@ def _early_league_forecasts(delta, windows, first_day=1, last_day=14):
     yield (series, N, {window: _predict(...)}) — only when every window produced a forecast, so all
     widths are compared on identical rows. Reads only data up to N for the current league."""
     from app import marketseries
+
     con = sqlite3.connect(f"file:{PROD_DB}?mode=ro", uri=True)
     try:
         rows = marketseries.read_rows(con)
@@ -318,7 +400,9 @@ def _early_league_forecasts(delta, windows, first_day=1, last_day=14):
             for iid, series in built[target].items():
                 if iid == marketseries.DIVINE_ID:
                     continue
-                mm = holdscore._metrics({a: v for a, v in series.items() if a <= N}, delta)
+                mm = holdscore._metrics(
+                    {a: v for a, v in series.items() if a <= N}, delta
+                )
                 if mm:
                     ranked.append((iid, mm, series))
             if len(ranked) < 8:
@@ -328,7 +412,10 @@ def _early_league_forecasts(delta, windows, first_day=1, last_day=14):
             for iid, mm, series in ranked:
                 if not holdscore.eligible(mm, cut):
                     continue
-                preds = {w: holdscore._predict(iid, N, delta, past, window=w) for w in windows}
+                preds = {
+                    w: holdscore._predict(iid, N, delta, past, window=w)
+                    for w in windows
+                }
                 if all(preds.values()):
                     day.append((series, preds))
             yield N, day
@@ -343,6 +430,7 @@ def test_the_shipped_window_beats_one_day_on_the_real_leagues():
     Spearman between the forecast and the return that actually followed; averaged over days. The
     forecast reads only PAST leagues, so no gap is needed (see the handoff's measurement-trap note).
     Measured 2026-09-20: +0.263 at one day, +0.317 at the shipped width."""
+
     def spearman(xs, ys):
         def ranks(v):
             o = sorted(range(len(v)), key=v.__getitem__)
@@ -350,6 +438,7 @@ def test_the_shipped_window_beats_one_day_on_the_real_leagues():
             for pos, i in enumerate(o):
                 r[i] = float(pos)
             return r
+
         rx, ry = ranks(xs), ranks(ys)
         mx, my = sum(rx) / len(rx), sum(ry) / len(ry)
         num = sum((a - mx) * (b - my) for a, b in zip(rx, ry))
@@ -360,9 +449,14 @@ def test_the_shipped_window_beats_one_day_on_the_real_leagues():
     for N, day in _early_league_forecasts(delta, ics):
         rows_ = []
         for series, preds in day:
-            if holdscore._nearest(series, N) is None or holdscore._nearest(series, N + delta) is None:
+            if (
+                holdscore._nearest(series, N) is None
+                or holdscore._nearest(series, N + delta) is None
+            ):
                 continue
-            realized = holdscore._smooth(series, N + delta) / holdscore._smooth(series, N) - 1
+            realized = (
+                holdscore._smooth(series, N + delta) / holdscore._smooth(series, N) - 1
+            )
             rows_.append((realized, preds))
         if len(rows_) < 8:
             continue
@@ -371,12 +465,17 @@ def test_the_shipped_window_beats_one_day_on_the_real_leagues():
             if ic is not None:
                 ics[w].append(ic)
 
-    assert len(ics[0]) >= 20, f"only {len(ics[0])} league-days measured — test would be vacuous"
+    assert len(ics[0]) >= 20, (
+        f"only {len(ics[0])} league-days measured — test would be vacuous"
+    )
     one_day = sum(ics[0]) / len(ics[0])
     windowed = sum(ics[holdscore.PRED_WINDOW]) / len(ics[holdscore.PRED_WINDOW])
-    assert one_day > 0.10, f"the forecast has lost its early-league skill entirely ({one_day:+.3f})"
+    assert one_day > 0.10, (
+        f"the forecast has lost its early-league skill entirely ({one_day:+.3f})"
+    )
     assert windowed > one_day + 0.02, (
-        f"the window no longer earns its keep: {windowed:+.3f} vs {one_day:+.3f} at one day")
+        f"the window no longer earns its keep: {windowed:+.3f} vs {one_day:+.3f} at one day"
+    )
 
 
 # ------------------------------------------------ 9. the band carries the start-day spread
@@ -386,6 +485,7 @@ def test_the_shipped_window_beats_one_day_on_the_real_leagues():
 # 15.4%. Overlapping-data inference (Hedegaard & Hodrick, NBER WP 19969) says the opposite should
 # happen — varying the start date reveals variation a single-day read hides, "resulting in a larger
 # standard error". So the band is the spread of every start-day read, pooled across leagues.
+
 
 def _zigzag_league(days=60):
     """Flat blocks of three days alternating 10 / 20 — survives the ±1-day median smoothing, so a
@@ -399,7 +499,9 @@ def test_the_band_sees_a_forecast_that_swings_with_the_start_day():
     -50%. The band must say so."""
     past = [("B", _zigzag_league()), ("A", _zigzag_league())]
     pr = holdscore._predict(1, 20, 3, past, window=5)
-    assert pr["band"] > 0.3, f"band {pr['band']:.3f} hides a forecast that swings by +/-70% per day"
+    assert pr["band"] > 0.3, (
+        f"band {pr['band']:.3f} hides a forecast that swings by +/-70% per day"
+    )
 
 
 @_prod
@@ -417,11 +519,14 @@ def test_widening_does_not_tighten_the_typical_band_on_the_real_leagues():
             for w in bands:
                 bands[w].append(preds[w]["band"])
 
-    assert len(bands[0]) >= 200, f"only {len(bands[0])} forecasts measured — test would be vacuous"
+    assert len(bands[0]) >= 200, (
+        f"only {len(bands[0])} forecasts measured — test would be vacuous"
+    )
     one_day = statistics.median(bands[0])
     windowed = statistics.median(bands[holdscore.PRED_WINDOW])
     assert windowed >= one_day, (
-        f"widening tightened the band: median {windowed:.3f} vs {one_day:.3f} at one day")
+        f"widening tightened the band: median {windowed:.3f} vs {one_day:.3f} at one day"
+    )
 
 
 # ------------------------------------------------- 10. the forecast shows as arrows, not a %
@@ -432,6 +537,7 @@ def test_widening_does_not_tighten_the_typical_band_on_the_real_leagues():
 # the forecast's sign + strength from its rank that day + a dash for the weakest quarter is the one
 # whose down arrows beat chance at 3d and 7d, with ordering tied for best at every horizon.
 
+
 def test_no_forecast_stays_no_forecast():
     out = holdscore.arrows([None, 0.1, None])
     assert out[0] is None and out[2] is None
@@ -441,12 +547,21 @@ def test_direction_comes_from_the_sign():
     preds = [0.30, 0.20, 0.10, 0.05, -0.05, -0.10, -0.20, -0.30]
     out = holdscore.arrows(preds)
     for p, a in zip(preds, out):
-        if a:                                   # dashes carry no direction
+        if a:  # dashes carry no direction
             assert (a > 0) == (p > 0), f"{p:+} got {a}"
 
 
 def test_the_weakest_quarter_is_a_dash():
-    preds = [0.40, 0.30, 0.20, 0.01, -0.02, -0.25, -0.35, -0.45]   # 8 → 2 weakest by |pred|
+    preds = [
+        0.40,
+        0.30,
+        0.20,
+        0.01,
+        -0.02,
+        -0.25,
+        -0.35,
+        -0.45,
+    ]  # 8 → 2 weakest by |pred|
     out = holdscore.arrows(preds)
     assert out[3] == 0 and out[4] == 0
     assert sum(a == 0 for a in out) == 2
@@ -454,26 +569,37 @@ def test_the_weakest_quarter_is_a_dash():
 
 def test_strength_is_rank_within_its_direction():
     ups = [0.9, 0.5, 0.4, 0.3, 0.2, 0.15]
-    out = holdscore.arrows(ups + [0.0001, 0.0002])       # the two tiny ones take the dash quarter
-    assert out[0] == 3                                     # strongest up -> three arrows
-    assert out[5] == 1                                     # weakest shown up -> one arrow
-    assert out[:6] == sorted(out[:6], reverse=True)        # never more arrows for a weaker forecast
+    out = holdscore.arrows(
+        ups + [0.0001, 0.0002]
+    )  # the two tiny ones take the dash quarter
+    assert out[0] == 3  # strongest up -> three arrows
+    assert out[5] == 1  # weakest shown up -> one arrow
+    assert out[:6] == sorted(
+        out[:6], reverse=True
+    )  # never more arrows for a weaker forecast
 
 
 def test_arrows_are_scale_free():
     """Strength comes from RANK, not size — the magnitude is the part we never validated."""
     preds = [0.3, 0.2, 0.1, 0.05, -0.05, -0.1, -0.2, -0.3, None]
-    assert holdscore.arrows(preds) == holdscore.arrows([p * 10 if p else p for p in preds])
+    assert holdscore.arrows(preds) == holdscore.arrows(
+        [p * 10 if p else p for p in preds]
+    )
 
 
 def _arrow_outcomes(delta, first_day, last_day):
     """Walk the real leagues; for every forecast the board would show, (arrow, realized return),
     plus the share of all forecasts that rose (the chance rate an arrow has to beat)."""
     shown, rose = [], []
-    for N, day in _early_league_forecasts(delta, (holdscore.PRED_WINDOW,), first_day, last_day):
+    for N, day in _early_league_forecasts(
+        delta, (holdscore.PRED_WINDOW,), first_day, last_day
+    ):
         rows = []
         for series, preds in day:
-            if holdscore._nearest(series, N) is None or holdscore._nearest(series, N + delta) is None:
+            if (
+                holdscore._nearest(series, N) is None
+                or holdscore._nearest(series, N + delta) is None
+            ):
                 continue
             r = holdscore._smooth(series, N + delta) / holdscore._smooth(series, N) - 1
             rows.append((preds[holdscore.PRED_WINDOW]["pred"], r))
@@ -495,8 +621,12 @@ def test_early_arrows_point_the_right_way_more_often_than_chance(delta):
     assert len(up) > 200 and len(dn) > 100, "too few arrows to judge"
     up_hit = sum(r > 0 for r in up) / len(up)
     dn_hit = sum(r < 0 for r in dn) / len(dn)
-    assert up_hit > base + 0.05, f"{delta}d: up arrows rose {up_hit:.0%}, chance {base:.0%}"
-    assert dn_hit > (1 - base) + 0.05, f"{delta}d: down arrows fell {dn_hit:.0%}, chance {1 - base:.0%}"
+    assert up_hit > base + 0.05, (
+        f"{delta}d: up arrows rose {up_hit:.0%}, chance {base:.0%}"
+    )
+    assert dn_hit > (1 - base) + 0.05, (
+        f"{delta}d: down arrows fell {dn_hit:.0%}, chance {1 - base:.0%}"
+    )
 
 
 @_prod
@@ -506,7 +636,9 @@ def test_after_the_cutoff_down_arrows_would_mislead():
     dn = [r for a, r in shown if a and a < 0]
     assert len(dn) > 30, "too few arrows to judge"
     dn_hit = sum(r < 0 for r in dn) / len(dn)
-    assert dn_hit < 1 - base, f"down arrows fell {dn_hit:.0%} vs chance {1 - base:.0%} — the cutoff may be wrong"
+    assert dn_hit < 1 - base, (
+        f"down arrows fell {dn_hit:.0%} vs chance {1 - base:.0%} — the cutoff may be wrong"
+    )
 
 
 def _arrow_board(monkeypatch, league_day, category="all", horizon="3d"):
@@ -514,18 +646,26 @@ def _arrow_board(monkeypatch, league_day, category="all", horizon="3d"):
     past leagues in which each asset trended at a different rate — so forecasts differ in sign
     and size and every arrow bucket gets used."""
     from app import currencies, movers
+
     growth = [-0.05, -0.03, -0.015, -0.005, 0.005, 0.015, 0.03, 0.05]
     cur = {i: {a: (10.0, 1e9) for a in range(league_day + 1)} for i in range(1, 9)}
-    trend = {i: {a: (10.0 * (1 + growth[i - 1]) ** a, 1e9) for a in range(60)} for i in range(1, 9)}
+    trend = {
+        i: {a: (10.0 * (1 + growth[i - 1]) ** a, 1e9) for a in range(60)}
+        for i in range(1, 9)
+    }
     past = [("B", trend), ("A", trend)]
     # categories INTERLEAVE across the forecast range, so a category viewed alone would rank its
     # forecasts differently from the whole board — which is what the category test must catch.
     meta = {i: (f"Asset{i}", "omen" if i % 2 else "rune") for i in range(1, 9)}
-    monkeypatch.setattr(holdscore, "build_context", lambda num_id: ("Now", cur, past, meta))
+    monkeypatch.setattr(
+        holdscore, "build_context", lambda num_id: ("Now", cur, past, meta)
+    )
     monkeypatch.setattr(holdscore, "_arc_weights", lambda name: None)
     monkeypatch.setattr(movers, "exchange_cards", lambda names, hours, num=None: {})
     monkeypatch.setattr(currencies.registry, "resolve_meta", lambda meta_id: "divine")
-    return holdscore._leaderboard(horizon, category, "divine", 291, "Divine Orb", holdscore.CAUTION_K)
+    return holdscore._leaderboard(
+        horizon, category, "divine", 291, "Divine Orb", holdscore.CAUTION_K
+    )
 
 
 def test_the_board_shows_arrows_not_percentages(monkeypatch):
@@ -534,13 +674,20 @@ def test_the_board_shows_arrows_not_percentages(monkeypatch):
     arrows = [a["pred_arrows"] for a in board["assets"]]
     assert any(x and x > 0 for x in arrows) and any(x and x < 0 for x in arrows)
     for a in board["assets"]:
-        assert not {"pred_pct", "pred_band_pct", "pred_leagues"} & set(a), "the % must not reach the view"
+        assert not {"pred_pct", "pred_band_pct", "pred_leagues"} & set(a), (
+            "the % must not reach the view"
+        )
 
 
 def test_an_assets_arrows_dont_depend_on_the_category_you_view(monkeypatch):
     """Arrows rank a forecast against the WHOLE day's board, so filtering can't restyle an asset."""
-    everything = {a["id"]: a["pred_arrows"] for a in _arrow_board(monkeypatch, 10)["assets"]}
-    omens = {a["id"]: a["pred_arrows"] for a in _arrow_board(monkeypatch, 10, "omen")["assets"]}
+    everything = {
+        a["id"]: a["pred_arrows"] for a in _arrow_board(monkeypatch, 10)["assets"]
+    }
+    omens = {
+        a["id"]: a["pred_arrows"]
+        for a in _arrow_board(monkeypatch, 10, "omen")["assets"]
+    }
     assert omens and all(everything[i] == v for i, v in omens.items())
 
 
@@ -551,7 +698,10 @@ def test_past_the_cutoff_the_board_drops_the_forecast(monkeypatch):
 
 
 def test_the_last_day_still_shows_it(monkeypatch):
-    assert _arrow_board(monkeypatch, league_day=holdscore.ARROW_LAST_DAY)["pred_shown"] is True
+    assert (
+        _arrow_board(monkeypatch, league_day=holdscore.ARROW_LAST_DAY)["pred_shown"]
+        is True
+    )
 
 
 def test_the_one_day_board_keeps_the_column_but_only_dashes(monkeypatch):
@@ -562,12 +712,20 @@ def test_the_one_day_board_keeps_the_column_but_only_dashes(monkeypatch):
     assert one_day["pred_shown"] is True
     assert all(a["pred_arrows"] is None for a in one_day["assets"])
     for hz in ("3d", "7d"):
-        assert any(a["pred_arrows"] for a in _arrow_board(monkeypatch, 10, horizon=hz)["assets"]), hz
+        assert any(
+            a["pred_arrows"]
+            for a in _arrow_board(monkeypatch, 10, horizon=hz)["assets"]
+        ), hz
 
 
 def test_past_the_cutoff_the_column_goes_at_every_horizon(monkeypatch):
     for hz in ("1d", "3d", "7d"):
-        assert _arrow_board(monkeypatch, holdscore.ARROW_LAST_DAY + 1, horizon=hz)["pred_shown"] is False, hz
+        assert (
+            _arrow_board(monkeypatch, holdscore.ARROW_LAST_DAY + 1, horizon=hz)[
+                "pred_shown"
+            ]
+            is False
+        ), hz
 
 
 @_prod
@@ -579,14 +737,17 @@ def test_one_day_down_arrows_are_a_coin_flip():
     assert len(dn) > 100, "too few arrows to judge"
     dn_hit = sum(r < 0 for r in dn) / len(dn)
     assert dn_hit <= (1 - base) + 0.05, (
-        f"1d down arrows now fall {dn_hit:.0%} vs chance {1 - base:.0%} — 1d may deserve the column back")
+        f"1d down arrows now fall {dn_hit:.0%} vs chance {1 - base:.0%} — 1d may deserve the column back"
+    )
 
 
 def test_a_fresh_board_reports_itself_to_beta_telemetry(monkeypatch):
     """Beta telemetry: one [hold] line per freshly built board — the league-day, horizon, Caution,
     board size and top 5 — so a beta build's Hold list can be checked without the owner's screen."""
     lines = []
-    monkeypatch.setattr(holdscore.devtelemetry, "tlog", lambda tag, msg: lines.append(f"[{tag}] {msg}"))
+    monkeypatch.setattr(
+        holdscore.devtelemetry, "tlog", lambda tag, msg: lines.append(f"[{tag}] {msg}")
+    )
     board = _arrow_board(monkeypatch, league_day=10)
     assert len(lines) == 1 and lines[0].startswith("[hold] day=10 hz=3d k=2 eligible=")
     assert board["assets"][0]["name"] in lines[0]
@@ -597,11 +758,19 @@ def test_categories_are_the_games_own_exchange_categories(monkeypatch):
     Currency Exchange lists shows that category (as the Stash groups do); anything else keeps its source name.
     The dropdown and the filter use the same names."""
     game = {"Asset1": "Ritual", "Asset2": "Runes", "Asset3": "Ritual"}
-    monkeypatch.setattr(holdscore, "exchange_category", lambda name, groups=None: game.get(name))
+    monkeypatch.setattr(
+        holdscore, "exchange_category", lambda name, groups=None: game.get(name)
+    )
     board = _arrow_board(monkeypatch, 10)
     cat = {a["name"]: a["category"] for a in board["assets"]}
-    assert (cat["Asset1"], cat["Asset2"], cat["Asset3"]) == ("Ritual", "Runes", "Ritual")
-    assert cat["Asset4"] == "rune", "not on the exchange: the source category, unchanged"
+    assert (cat["Asset1"], cat["Asset2"], cat["Asset3"]) == (
+        "Ritual",
+        "Runes",
+        "Ritual",
+    )
+    assert cat["Asset4"] == "rune", (
+        "not on the exchange: the source category, unchanged"
+    )
     assert {"Ritual", "Runes"} <= set(board["categories"])
     ritual = _arrow_board(monkeypatch, 10, "Ritual")
     assert {a["name"] for a in ritual["assets"]} == {"Asset1", "Asset3"}
@@ -609,8 +778,13 @@ def test_categories_are_the_games_own_exchange_categories(monkeypatch):
 
 def test_exchange_category_reads_the_game_table_through_the_registry(monkeypatch):
     from app import currencies, movers
-    monkeypatch.setattr(movers, "_trade_id", lambda name: {"Seraph's Heart": "seraphs-heart"}.get(name))
-    monkeypatch.setattr(currencies.registry, "groups", lambda categories=None: {"seraphs-heart": "Gems"})
+
+    monkeypatch.setattr(
+        movers, "_trade_id", lambda name: {"Seraph's Heart": "seraphs-heart"}.get(name)
+    )
+    monkeypatch.setattr(
+        currencies.registry, "groups", lambda categories=None: {"seraphs-heart": "Gems"}
+    )
     assert holdscore.exchange_category("Seraph's Heart") == "Gems"
     assert holdscore.exchange_category("Unknown Thing") is None
 
@@ -619,29 +793,53 @@ def test_rows_carry_a_price_by_the_volume_rule(monkeypatch):
     """First-contact audit (2026-10-08): the #1 pick cost 293 div, which a player learned only after a click. Each
     row carries its price in the market that trades it (the volume rule, `native_price`), raw; an asset nothing
     prices shows none. The ranking is untouched ("you can only change the UI")."""
-    monkeypatch.setattr(holdscore, "native_prices",
-                        lambda names: {"Asset1": (293.0, "divine"), "Asset2": (41.5, "exalted")})
+    monkeypatch.setattr(
+        holdscore,
+        "native_prices",
+        lambda names: {"Asset1": (293.0, "divine"), "Asset2": (41.5, "exalted")},
+    )
     ranked = _arrow_board(monkeypatch, 10)
-    assert not any("price" in a for a in ranked["assets"]), "the ranking's memo never holds a price (a cold graph at boot would be cached for 10 minutes)"
+    assert not any("price" in a for a in ranked["assets"]), (
+        "the ranking's memo never holds a price (a cold graph at boot would be cached for 10 minutes)"
+    )
     board = holdscore.attach_prices(ranked)
     by = {a["name"]: a for a in board["assets"]}
     assert (by["Asset1"]["price"], by["Asset1"]["price_cur"]) == (293.0, "divine")
     assert (by["Asset2"]["price"], by["Asset2"]["price_cur"]) == (41.5, "exalted")
     assert by["Asset3"]["price"] is None and by["Asset3"]["price_cur"] is None
-    assert [a["name"] for a in board["assets"]] == [a["name"] for a in ranked["assets"]], \
-        "the order is the ranking's, price or no price"
-    assert ranked["assets"][0] is not board["assets"][0], "attached to a copy: the memoized rows stay untouched"
+    assert [a["name"] for a in board["assets"]] == [
+        a["name"] for a in ranked["assets"]
+    ], "the order is the ranking's, price or no price"
+    assert ranked["assets"][0] is not board["assets"][0], (
+        "attached to a copy: the memoized rows stay untouched"
+    )
     src = open(holdscore.__file__).read()
-    body = src[src.index("def leaderboard("):src.index("def exchange_category(")]
-    assert "attach_prices(" in body, "leaderboard() attaches prices on every request, outside cache.memo"
+    body = src[src.index("def leaderboard(") : src.index("def exchange_category(")]
+    assert "attach_prices(" in body, (
+        "leaderboard() attaches prices on every request, outside cache.memo"
+    )
 
 
 def test_native_prices_reads_the_exchange_graph_by_trade_id(monkeypatch):
     from app import arbitrage, movers
-    monkeypatch.setattr(movers, "_trade_id", lambda name: {"Seraph's Heart": "seraphs-heart"}.get(name))
+
+    monkeypatch.setattr(
+        movers, "_trade_id", lambda name: {"Seraph's Heart": "seraphs-heart"}.get(name)
+    )
     g = object()
     monkeypatch.setattr(arbitrage.graph, "cached_graph", lambda *a, **k: g)
-    monkeypatch.setattr(holdscore, "_graph_values", lambda g_: ({"seraphs-heart": 3000.0}, {}, "exalted"))
-    monkeypatch.setattr(arbitrage, "native_price",
-                        lambda g_, tid, rv, ranked, R: (293.0, "divine") if tid == "seraphs-heart" else None)
-    assert holdscore.native_prices(["Seraph's Heart", "Unknown Thing"]) == {"Seraph's Heart": (293.0, "divine")}
+    monkeypatch.setattr(
+        holdscore,
+        "_graph_values",
+        lambda g_: ({"seraphs-heart": 3000.0}, {}, "exalted"),
+    )
+    monkeypatch.setattr(
+        arbitrage,
+        "native_price",
+        lambda g_, tid, rv, ranked, R: (
+            (293.0, "divine") if tid == "seraphs-heart" else None
+        ),
+    )
+    assert holdscore.native_prices(["Seraph's Heart", "Unknown Thing"]) == {
+        "Seraph's Heart": (293.0, "divine")
+    }

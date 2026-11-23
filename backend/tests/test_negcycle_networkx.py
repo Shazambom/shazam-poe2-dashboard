@@ -15,6 +15,7 @@ networkx is never bundled; it lives in the sidecar venv with the other reference
 
     desktop/.venv-sidecar/bin/python -m pytest backend/tests/test_negcycle_networkx.py -q
 """
+
 import random
 import sys
 from pathlib import Path
@@ -22,13 +23,22 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # backend/
-sys.path.insert(0, str(Path(__file__).resolve().parent))      # tests/ (shared fuzz helpers)
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # tests/ (shared fuzz helpers)
 from app import negcycle as nc
-from test_negcycle import IMPLS, INF, assert_negative_cycle, best_weight, random_graph, run
+from test_negcycle import (
+    IMPLS,
+    INF,
+    assert_negative_cycle,
+    best_weight,
+    random_graph,
+    run,
+)
 
 # Missing → not the sidecar venv: skip loudly rather than silently pass (a green run must mean
 # the comparison actually happened).
-nx = pytest.importorskip("networkx", reason="run in desktop/.venv-sidecar (needs real networkx)")
+nx = pytest.importorskip(
+    "networkx", reason="run in desktop/.venv-sidecar (needs real networkx)"
+)
 
 
 def _nx_graph(n, edges):
@@ -77,9 +87,9 @@ def test_networkx_recovery_gap_is_covered():
         G, W = _nx_graph(n, edges), best_weight(edges)
         for source in range(n):
             try:
-                theirs = nx.find_negative_cycle(G, source)          # closed list: first == last
+                theirs = nx.find_negative_cycle(G, source)  # closed list: first == last
                 if sum(W[(a, b)] for a, b in zip(theirs, theirs[1:])) < 0:
-                    continue                                        # networkx got it right
+                    continue  # networkx got it right
             except nx.NetworkXError as e:
                 if "No negative cycles" in str(e):
                     assert nc.find_negative_cycle(n, *_arr(edges), source) is None
@@ -88,7 +98,9 @@ def test_networkx_recovery_gap_is_covered():
             ours = nc.find_negative_cycle(n, *_arr(edges), source)
             assert ours is not None, (seed, source)
             assert_negative_cycle(edges, ours)
-    assert gaps > 0, "fuzz no longer reaches networkx's gap — widen it or drop this test"
+    assert gaps > 0, (
+        "fuzz no longer reaches networkx's gap — widen it or drop this test"
+    )
 
 
 def _arr(edges):

@@ -21,6 +21,7 @@ Every check runs the whole path the app runs:
 
     DATA_DIR=$(mktemp -d) MARKET_SEED= .venv-test/bin/python -m pytest backend/tests/test_stratcalc_e2e.py -q
 """
+
 import json
 import math
 import random
@@ -38,15 +39,17 @@ from app.arbitrage.graph import Edge, Graph
 from app.main import app
 
 ROOT = Path(__file__).resolve().parents[2]
-FIXTURES = json.loads((Path(__file__).parent / "fixtures" / "strat_profiles.json").read_text())
+FIXTURES = json.loads(
+    (Path(__file__).parent / "fixtures" / "strat_profiles.json").read_text()
+)
 PROFILES = FIXTURES["profiles"]
 ENV = FIXTURES["envelope"]
 LIB = (ROOT / "frontend" / "src" / "lib" / "stratcalc.js").as_uri()
 MIN = 60_000
 H = 3_600_000
-EX_PER_DIV = 537.0          # Forbidden Rites, 2026-09-28 (the research's market medians)
+EX_PER_DIV = 537.0  # Forbidden Rites, 2026-09-28 (the research's market medians)
 
-client = TestClient(app)   # no lifespan: no backfill/sidecar
+client = TestClient(app)  # no lifespan: no backfill/sidecar
 
 
 @pytest.fixture(autouse=True)
@@ -74,6 +77,7 @@ def _pipeline_tablet_uses(monkeypatch):
             raise OSError(slug)
         with gzip.open(MODS / f"poe2db-{slug}.html.gz", "rt", encoding="utf-8") as f:
             return f.read()
+
     monkeypatch.setattr(modpool, "_page", page)
     assert asyncio.run(modpool.refresh_tablet_uses(0)) is None
 
@@ -96,7 +100,9 @@ def _graph(div_prices: dict[str, float], ex_per_div: float) -> Graph:
 
 
 def _prices_through_the_app(monkeypatch, div_prices, ex_per_div=EX_PER_DIV) -> dict:
-    if div_prices.get("exalted"):       # a market that states exalted's price sets its own ratio
+    if div_prices.get(
+        "exalted"
+    ):  # a market that states exalted's price sets its own ratio
         ex_per_div = 1 / div_prices["exalted"]
     g = _graph(div_prices, ex_per_div)
     monkeypatch.setattr(arbitrage, "cached_graph", lambda *a, **k: g)
@@ -179,9 +185,22 @@ process.stdout.write(JSON.stringify(out))
 
 def _js(mode: str, cases: list, uses: list | None = None) -> list:
     node = shutil.which("node")
-    assert node, "node is required: the calculator's math is frontend/src/lib/stratcalc.js"
-    r = subprocess.run([node, "--input-type=module", "-e", _JS, LIB], input=json.dumps({"mode": mode, "cases": cases, "uses": _served_uses() if uses is None else uses}),
-                       capture_output=True, text=True, timeout=120)
+    assert node, (
+        "node is required: the calculator's math is frontend/src/lib/stratcalc.js"
+    )
+    r = subprocess.run(
+        [node, "--input-type=module", "-e", _JS, LIB],
+        input=json.dumps(
+            {
+                "mode": mode,
+                "cases": cases,
+                "uses": _served_uses() if uses is None else uses,
+            }
+        ),
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
     assert r.returncode == 0, r.stderr
     return json.loads(r.stdout)
 
@@ -194,7 +213,7 @@ def _served_uses() -> list:
 def _first_diff(a, b) -> str:
     x, y = json.dumps(a, separators=(",", ":")), json.dumps(b, separators=(",", ":"))
     i = next((i for i, (p, q) in enumerate(zip(x, y)) if p != q), min(len(x), len(y)))
-    return f"reloaded …{x[max(0, i - 160):i + 60]}… / saved …{y[max(0, i - 160):i + 60]}…"
+    return f"reloaded …{x[max(0, i - 160) : i + 60]}… / saved …{y[max(0, i - 160) : i + 60]}…"
 
 
 def _close(a, b, rel=1e-6):
@@ -205,12 +224,30 @@ def _close(a, b, rel=1e-6):
 def _strat_from_profile(p: dict, sid="s") -> dict:
     o = p.get("override")
     return {
-        "id": sid, "name": p["name"][:100], "updatedAt": 0,
+        "id": sid,
+        "name": p["name"][:100],
+        "updatedAt": 0,
         "timer": {"startedAt": None, "elapsedMs": round(p["minutes"] * MIN)},
-        "loot": [{"cur": r.get("cur"), "name": r.get("name"), "qty": r["qty"], "price": r.get("price")} for r in p["loot"]],
-        "maps": p["maps"], "tablets": _lines(p["tablets"]),
-        "override": {"on": bool(o), "amount": o["amount"] if o else 0, "cur": o["cur"] if o else p["maps"]["cur"]},
-        "fixed": [{"cur": r["cur"], "name": None, "qty": r["qty"], "price": None} for r in p.get("fixed", [])],
+        "loot": [
+            {
+                "cur": r.get("cur"),
+                "name": r.get("name"),
+                "qty": r["qty"],
+                "price": r.get("price"),
+            }
+            for r in p["loot"]
+        ],
+        "maps": p["maps"],
+        "tablets": _lines(p["tablets"]),
+        "override": {
+            "on": bool(o),
+            "amount": o["amount"] if o else 0,
+            "cur": o["cur"] if o else p["maps"]["cur"],
+        },
+        "fixed": [
+            {"cur": r["cur"], "name": None, "qty": r["qty"], "price": None}
+            for r in p.get("fixed", [])
+        ],
     }
 
 
@@ -218,11 +255,29 @@ def _lines(t: dict) -> dict:
     """A source's "n tablets a map at a price" is one line of any normal tablet."""
     if "lines" in t:
         return t
-    return {"lines": [{"id": "t", "base": None, "name": None, "slots": t["perMap"], "price": t["price"], "cur": t["cur"]}] if t["perMap"] else []}
+    return {
+        "lines": [
+            {
+                "id": "t",
+                "base": None,
+                "name": None,
+                "slots": t["perMap"],
+                "price": t["price"],
+                "cur": t["cur"],
+            }
+        ]
+        if t["perMap"]
+        else []
+    }
 
 
 def _doc(*strats) -> dict:
-    return {"v": 1, "active": strats[0]["id"] if strats else None, "lastCur": "chaos", "strats": list(strats)}
+    return {
+        "v": 1,
+        "active": strats[0]["id"] if strats else None,
+        "lastCur": "chaos",
+        "strats": list(strats),
+    }
 
 
 # The research's numbers (2026-10-01: trade listings + poe2db samples), written down independently of
@@ -236,8 +291,10 @@ def _full_uses(ln: dict) -> int:
 
 def _oracle(s: dict, div: dict) -> dict:
     """The profit worked out here, independently of the JS: Σ count × divines per unit."""
+
     def px(r):
         return r["price"] if r.get("price") is not None else div[r["cur"]]
+
     loot = sum(r["qty"] * px(r) for r in s["loot"])
     if s["override"]["on"]:
         mt = s["override"]["amount"] * div[s["override"]["cur"]]
@@ -245,26 +302,47 @@ def _oracle(s: dict, div: dict) -> dict:
         m = s["maps"]
         mt = m["count"] * m["price"] * div[m["cur"]]
         for ln in s["tablets"]["lines"]:
-            mt += m["count"] * ln["slots"] / _full_uses(ln) * ln["price"] * div[ln["cur"]]
+            mt += (
+                m["count"] * ln["slots"] / _full_uses(ln) * ln["price"] * div[ln["cur"]]
+            )
     costs = mt + sum(r["qty"] * px(r) for r in s["fixed"])
     hours = s["timer"]["elapsedMs"] / H
-    return {"loot": loot, "costs": costs, "net": loot - costs, "perHour": (loot - costs) / hours}
+    return {
+        "loot": loot,
+        "costs": costs,
+        "net": loot - costs,
+        "perHour": (loot - costs) / hours,
+    }
 
 
 # ------------------------------------------------------------------ the fixtures themselves
 def test_the_profiles_are_real_and_cover_the_range():
     assert len(PROFILES) >= 10
     for p in PROFILES:
-        assert p["source_urls"], f"{p['name']}: every profile names where its numbers came from"
+        assert p["source_urls"], (
+            f"{p['name']}: every profile names where its numbers came from"
+        )
     rates = [p["maps"]["count"] / (p["minutes"] / 60) for p in PROFILES]
-    assert min(rates) < 5 and max(rates) > 15, "slow juiced mappers and fast rushers both appear"
-    assert any(p["override"] for p in PROFILES) and any(not p["override"] for p in PROFILES)
-    assert any(p["tablets"]["perMap"] == 4 for p in PROFILES), "a city map's fourth tablet"
+    assert min(rates) < 5 and max(rates) > 15, (
+        "slow juiced mappers and fast rushers both appear"
+    )
+    assert any(p["override"] for p in PROFILES) and any(
+        not p["override"] for p in PROFILES
+    )
+    assert any(p["tablets"]["perMap"] == 4 for p in PROFILES), (
+        "a city map's fourth tablet"
+    )
     assert any(p["fixed"] for p in PROFILES), "one-off session costs"
-    assert any(r.get("name") for p in PROFILES for r in p["loot"]), "a custom-priced drop"
-    assert any(p["from_spreadsheet"] for p in PROFILES), "a public profit spreadsheet's session"
+    assert any(r.get("name") for p in PROFILES for r in p["loot"]), (
+        "a custom-priced drop"
+    )
+    assert any(p["from_spreadsheet"] for p in PROFILES), (
+        "a public profit spreadsheet's session"
+    )
     his = [p["expected_net_div_per_hour"][1] for p in PROFILES]
-    assert min(his) < 1 and max(his) > 100, "from a casual near-zero hour to a juiced 100+ div/h"
+    assert min(his) < 1 and max(his) > 100, (
+        "from a casual near-zero hour to a juiced 100+ div/h"
+    )
 
 
 # ------------------------------------------------------------------ real strategies
@@ -272,7 +350,9 @@ def test_the_profiles_are_real_and_cover_the_range():
 def test_a_real_strategy_reads_what_its_source_claims(p, monkeypatch):
     prices = _prices_through_the_app(monkeypatch, p["prices_div"])["prices"]
     for c, px in p["prices_div"].items():
-        assert _close(prices[c], px), f"{c}: the app prices it at {prices[c]}, the source at {px}"
+        assert _close(prices[c], px), (
+            f"{c}: the app prices it at {prices[c]}, the source at {px}"
+        )
     doc = _save_and_reload(_doc(_strat_from_profile(p)))
     [res] = _js("tally", [{"calc": doc, "prices": prices, "now": 0}])
     t, want = res["strats"][0], _oracle(doc["strats"][0], p["prices_div"])
@@ -280,16 +360,21 @@ def test_a_real_strategy_reads_what_its_source_claims(p, monkeypatch):
     for k in ("loot", "costs", "net", "perHour"):
         assert _close(t[k], want[k]), (k, t[k], want[k])
     lo, hi = p["expected_net_div_per_hour"]
-    assert lo <= t["perHour"] <= hi, f"{p['name']}: {t['perHour']:.2f} div/h, the source says {lo}–{hi}"
+    assert lo <= t["perHour"] <= hi, (
+        f"{p['name']}: {t['perHour']:.2f} div/h, the source says {lo}–{hi}"
+    )
 
 
 def test_every_real_strategy_side_by_side_in_one_document(monkeypatch):
     """All 19 as one history, priced at one market: each strat's rate is its own (the sidebar shows it)."""
-    merged = {}             # one market: every profile's items at one table
+    merged = {}  # one market: every profile's items at one table
     for p in PROFILES:
         merged.update(p["prices_div"])
     prices = _prices_through_the_app(monkeypatch, merged)["prices"]
-    strats = [_strat_from_profile(p, f"s{i}") | {"updatedAt": i} for i, p in enumerate(PROFILES)]
+    strats = [
+        _strat_from_profile(p, f"s{i}") | {"updatedAt": i}
+        for i, p in enumerate(PROFILES)
+    ]
     doc = _save_and_reload(_doc(*strats))
     [res] = _js("tally", [{"calc": doc, "prices": prices, "now": 0}])
     by_id = {s["id"]: s for s in strats}
@@ -307,12 +392,20 @@ def _market(rng):
     """A fuzzed market: forty items across the price range the sources span, plus the anchors."""
     ex_per_div = rng.uniform(*ENV["ex_per_div"])
     prices = {f"item-{i}": _logu(rng, *ENV["unit_price_div"]) for i in range(40)}
-    prices.update({"divine": 1.0, "exalted": 1 / ex_per_div, "chaos": rng.uniform(1 / 31, 1 / 8)})
+    prices.update(
+        {"divine": 1.0, "exalted": 1 / ex_per_div, "chaos": rng.uniform(1 / 31, 1 / 8)}
+    )
     return prices, ex_per_div
 
 
-TABLET_KINDS = [(None, None), (None, "Breach Tablet"), (None, "Ritual Tablet"), ("Freedom of Faith", "Ritual Tablet"),
-                ("Mastered Domain", "Irradiated Tablet"), ("Wraeclast Besieged", "Breach Tablet")]
+TABLET_KINDS = [
+    (None, None),
+    (None, "Breach Tablet"),
+    (None, "Ritual Tablet"),
+    ("Freedom of Faith", "Ritual Tablet"),
+    ("Mastered Domain", "Irradiated Tablet"),
+    ("Wraeclast Besieged", "Breach Tablet"),
+]
 
 
 def _rand_tablets(rng, prices, cur) -> dict:
@@ -322,8 +415,18 @@ def _rand_tablets(rng, prices, cur) -> dict:
         slots = rng.randint(1, left)
         left -= slots
         name, base = rng.choice(TABLET_KINDS)
-        lines.append({"id": f"t{len(lines)}", "base": base, "name": name, "slots": slots,
-                      "price": rng.uniform(*ENV["tablet_cost_div"]) * (_full_uses({"name": name}) / 10 if name else 1) / prices[cur], "cur": cur})
+        lines.append(
+            {
+                "id": f"t{len(lines)}",
+                "base": base,
+                "name": name,
+                "slots": slots,
+                "price": rng.uniform(*ENV["tablet_cost_div"])
+                * (_full_uses({"name": name}) / 10 if name else 1)
+                / prices[cur],
+                "cur": cur,
+            }
+        )
     return {"lines": lines}
 
 
@@ -333,21 +436,47 @@ def _rand_strat(rng, prices, sid) -> dict:
     cur = lambda: rng.choice(["chaos", "chaos", "exalted", "divine"])
     mcur, tcur, ocur = cur(), cur(), cur()
     pool = sorted(prices)
-    loot = [{"cur": c, "name": None, "qty": round(_logu(rng, ENV["loot_count"][0], ENV["loot_count"][1] / 10)), "price": None}
-            for c in rng.sample(pool, rng.randint(*ENV["loot_lines"]))]
-    if rng.random() < 0.3:      # a jackpot line with a typed price (a unique, a Saga)
-        loot.append({"cur": None, "name": f"Jackpot {sid}", "qty": 1, "price": _logu(rng, 1, 300)})
-    if rng.random() < 0.2 and loot:     # a typed price over a market one
+    loot = [
+        {
+            "cur": c,
+            "name": None,
+            "qty": round(_logu(rng, ENV["loot_count"][0], ENV["loot_count"][1] / 10)),
+            "price": None,
+        }
+        for c in rng.sample(pool, rng.randint(*ENV["loot_lines"]))
+    ]
+    if rng.random() < 0.3:  # a jackpot line with a typed price (a unique, a Saga)
+        loot.append(
+            {
+                "cur": None,
+                "name": f"Jackpot {sid}",
+                "qty": 1,
+                "price": _logu(rng, 1, 300),
+            }
+        )
+    if rng.random() < 0.2 and loot:  # a typed price over a market one
         loot[0]["price"] = _logu(rng, *ENV["unit_price_div"])
-    fixed = [{"cur": c, "name": None, "qty": rng.randint(*ENV["fixed_count"]), "price": None}
-             for c in rng.sample(pool, rng.randint(*ENV["fixed_lines"]))]
+    fixed = [
+        {"cur": c, "name": None, "qty": rng.randint(*ENV["fixed_count"]), "price": None}
+        for c in rng.sample(pool, rng.randint(*ENV["fixed_lines"]))
+    ]
     return {
-        "id": sid, "name": f"Fuzz {sid}", "updatedAt": rng.randint(0, 10**6),
+        "id": sid,
+        "name": f"Fuzz {sid}",
+        "updatedAt": rng.randint(0, 10**6),
         "timer": {"startedAt": None, "elapsedMs": round(minutes * MIN)},
         "loot": loot,
-        "maps": {"count": maps, "price": rng.uniform(*ENV["map_cost_div"]) / prices[mcur], "cur": mcur},
+        "maps": {
+            "count": maps,
+            "price": rng.uniform(*ENV["map_cost_div"]) / prices[mcur],
+            "cur": mcur,
+        },
         "tablets": _rand_tablets(rng, prices, tcur),
-        "override": {"on": rng.random() < 0.25, "amount": rng.uniform(0, 300) / prices[ocur], "cur": ocur},
+        "override": {
+            "on": rng.random() < 0.25,
+            "amount": rng.uniform(0, 300) / prices[ocur],
+            "cur": ocur,
+        },
         "fixed": fixed,
     }
 
@@ -359,8 +488,12 @@ def _variant(s, fn):
 
 
 N_FUZZ = 300
-UNIQUES = [{"name": "Mageblood", "type": "Utility Belt"}, {"name": "Headhunter", "type": "Heavy Belt"},
-           {"name": "Waistgate", "type": "Wide Belt"}, {"name": "Waistgate", "type": "Heavy Belt"}]
+UNIQUES = [
+    {"name": "Mageblood", "type": "Utility Belt"},
+    {"name": "Headhunter", "type": "Heavy Belt"},
+    {"name": "Waistgate", "type": "Wide Belt"},
+    {"name": "Waistgate", "type": "Heavy Belt"},
+]
 
 
 def test_fuzz_realistic_sessions_match_the_oracle_and_hold_the_invariants(monkeypatch):
@@ -368,20 +501,33 @@ def test_fuzz_realistic_sessions_match_the_oracle_and_hold_the_invariants(monkey
     div, ex_per_div = _market(rng)
     prices = _prices_through_the_app(monkeypatch, div, ex_per_div)["prices"]
     for c, px in div.items():
-        assert _close(prices[c], px), f"{c}: the app prices it at {prices[c]}, the market at {px}"
+        assert _close(prices[c], px), (
+            f"{c}: the app prices it at {prices[c]}, the market at {px}"
+        )
     strats = [_rand_strat(rng, div, f"f{i}") for i in range(N_FUZZ)]
-    for i in range(0, 50, 10):       # the save path, on samples of ten (each is a real PUT + GET)
-        _save_and_reload(_doc(*strats[i:i + 10]))
+    for i in range(
+        0, 50, 10
+    ):  # the save path, on samples of ten (each is a real PUT + GET)
+        _save_and_reload(_doc(*strats[i : i + 10]))
 
-    def more_loot(x): x["loot"][0]["qty"] += 1
-    def more_map(x): x["maps"]["count"] += 1
-    def flip(x): x["override"]["on"] = not x["override"]["on"]
-    cases = [{"calc": _doc(v), "prices": prices, "now": 0}
-             for s in strats for v in (s, _variant(s, more_loot), _variant(s, more_map), _variant(s, flip))]
+    def more_loot(x):
+        x["loot"][0]["qty"] += 1
+
+    def more_map(x):
+        x["maps"]["count"] += 1
+
+    def flip(x):
+        x["override"]["on"] = not x["override"]["on"]
+
+    cases = [
+        {"calc": _doc(v), "prices": prices, "now": 0}
+        for s in strats
+        for v in (s, _variant(s, more_loot), _variant(s, more_map), _variant(s, flip))
+    ]
     out = [r["strats"][0] for r in _js("tally", cases)]
 
     for i, s in enumerate(strats):
-        t, up, down, flipped = out[4 * i: 4 * i + 4]
+        t, up, down, flipped = out[4 * i : 4 * i + 4]
         want = _oracle(s, div)
         for k in ("loot", "costs", "net", "perHour"):
             assert math.isfinite(t[k]), (i, k, t[k])
@@ -390,9 +536,13 @@ def test_fuzz_realistic_sessions_match_the_oracle_and_hold_the_invariants(monkey
         assert up["net"] >= t["net"], (i, "more loot never lowers net")
         assert down["net"] <= t["net"] + 1e-9, (i, "one more map never raises net")
         if s["override"]["on"]:
-            assert _close(down["net"], t["net"]), (i, "with the override on, maps run doesn't move the cost")
-        assert _close(flipped["loot"], t["loot"]) and _close(flipped["fixed"], t["fixed"]), \
-            (i, "the override only replaces the maps + tablets cost")
+            assert _close(down["net"], t["net"]), (
+                i,
+                "with the override on, maps run doesn't move the cost",
+            )
+        assert _close(flipped["loot"], t["loot"]) and _close(
+            flipped["fixed"], t["fixed"]
+        ), (i, "the override only replaces the maps + tablets cost")
         assert t["unpriced"] == []
 
 
@@ -403,16 +553,34 @@ def test_fuzz_an_unpriced_item_is_left_out_and_named(monkeypatch):
     strats = []
     for i in range(60):
         s = _rand_strat(rng, div, f"u{i}")
-        s["loot"].append({"cur": "not-a-currency", "name": None, "qty": rng.randint(1, 50), "price": None})
+        s["loot"].append(
+            {
+                "cur": "not-a-currency",
+                "name": None,
+                "qty": rng.randint(1, 50),
+                "price": None,
+            }
+        )
         strats.append(s)
-    out = [r["strats"][0] for r in _js("tally", [{"calc": _doc(s), "prices": prices, "now": 0} for s in strats])]
+    out = [
+        r["strats"][0]
+        for r in _js(
+            "tally", [{"calc": _doc(s), "prices": prices, "now": 0} for s in strats]
+        )
+    ]
     for s, t in zip(strats, out):
-        want = _oracle({**s, "loot": [r for r in s["loot"] if r["cur"] != "not-a-currency"]}, div)
+        want = _oracle(
+            {**s, "loot": [r for r in s["loot"] if r["cur"] != "not-a-currency"]}, div
+        )
         assert t["unpriced"] == ["not-a-currency"]
-        assert _close(t["net"], want["net"]), "an unpriced row is left out, never priced at 0 or at a guess"
+        assert _close(t["net"], want["net"]), (
+            "an unpriced row is left out, never priced at 0 or at a guess"
+        )
 
 
-def test_fuzz_a_running_clock_never_goes_backwards_and_waits_a_minute_for_a_rate(monkeypatch):
+def test_fuzz_a_running_clock_never_goes_backwards_and_waits_a_minute_for_a_rate(
+    monkeypatch,
+):
     rng = random.Random(11)
     div, ex_per_div = _market(rng)
     prices = _prices_through_the_app(monkeypatch, div, ex_per_div)["prices"]
@@ -427,7 +595,7 @@ def test_fuzz_a_running_clock_never_goes_backwards_and_waits_a_minute_for_a_rate
             expect.append(banked + (now - t0))
     out = [r["strats"][0] for r in _js("tally", cases)]
     for i in range(0, len(out), 5):
-        hours = [o["hours"] for o in out[i: i + 5]]
+        hours = [o["hours"] for o in out[i : i + 5]]
         assert hours == sorted(hours), "the clock only moves forward"
     for o, ms in zip(out, expect):
         assert _close(o["hours"], ms / H)
@@ -445,9 +613,44 @@ def test_fuzz_sidebar_actions_always_save_and_keep_one_timer(monkeypatch):
         ids, n, now, steps = [], 0, 1_700_000_000_000, []
         for _ in range(rng.randint(10, 60)):
             now += rng.randint(1, 20 * MIN)
-            ops = ["new"] + (["dup", "toggle", "toggle", "select", "rename", "loot", "loot", "custom", "map", "map",
-                              "mapprice", "tablet", "tabletedit", "untablet", "link", "linkprice", "unlink", "mapslink", "mapsprice", "mapsunlink", "share", "cur", "override", "remove", "undo", "unique", "floor",
-                              "folder", "move", "move", "unfolder", "deepfolder"] if ids else [])
+            ops = ["new"] + (
+                [
+                    "dup",
+                    "toggle",
+                    "toggle",
+                    "select",
+                    "rename",
+                    "loot",
+                    "loot",
+                    "custom",
+                    "map",
+                    "map",
+                    "mapprice",
+                    "tablet",
+                    "tabletedit",
+                    "untablet",
+                    "link",
+                    "linkprice",
+                    "unlink",
+                    "mapslink",
+                    "mapsprice",
+                    "mapsunlink",
+                    "share",
+                    "cur",
+                    "override",
+                    "remove",
+                    "undo",
+                    "unique",
+                    "floor",
+                    "folder",
+                    "move",
+                    "move",
+                    "unfolder",
+                    "deepfolder",
+                ]
+                if ids
+                else []
+            )
             op = rng.choice(ops)
             st = {"op": op, "now": now, "id": rng.choice(ids) if ids else None}
             if op in ("new", "dup"):
@@ -456,62 +659,153 @@ def test_fuzz_sidebar_actions_always_save_and_keep_one_timer(monkeypatch):
                 st["name"] = f"Strat {n}"
                 ids.append(st["newId"])
             elif op == "rename":
-                st["name"] = rng.choice(["Ritual chains", "  Abyss  ", "", "Breach " * 3, "x" * 300, "y" * 119])   # long names: review #2
+                st["name"] = rng.choice(
+                    [
+                        "Ritual chains",
+                        "  Abyss  ",
+                        "",
+                        "Breach " * 3,
+                        "x" * 300,
+                        "y" * 119,
+                    ]
+                )  # long names: review #2
             elif op == "loot":
                 st["cur"], st["qty"] = rng.choice(sorted(div)), rng.randint(0, 5000)
             elif op == "custom":
-                st["name"], st["price"] = rng.choice(["Rakiata's Flow", "Heart of the Well", "A unique", "z" * 400]), _logu(rng, 0.01, 300)
+                st["name"], st["price"] = (
+                    rng.choice(
+                        ["Rakiata's Flow", "Heart of the Well", "A unique", "z" * 400]
+                    ),
+                    _logu(rng, 0.01, 300),
+                )
             elif op == "mapprice":
                 st["price"] = round(rng.uniform(0, 20), 3)
             elif op == "tablet":
                 n += 1
                 st["newId"] = f"k{k}-t{n}"
-            elif op in ("link", "linkprice", "unlink", "mapslink", "mapsprice", "mapsunlink", "share"):
+            elif op in (
+                "link",
+                "linkprice",
+                "unlink",
+                "mapslink",
+                "mapsprice",
+                "mapsunlink",
+                "share",
+            ):
                 st["pick"] = rng.randint(0, 9)
                 st["div"] = rng.choice([round(_logu(rng, 0.001, 50), 4), None, -1])
-                st["query"] = rng.choice([
-                    {"query": {"status": {"option": "securable"}, "type": "Breach Tablet", "stats": [{"type": "and", "filters": [{"id": "explicit.stat_1", "value": {"min": rng.randint(1, 40)}}]}]}, "sort": {"price": "asc"}},
-                    {"query": {"filters": {"type_filters": {"filters": {"category": {"option": "map.tablet"}}}}}},
-                    {"query": {"x": "y" * 25_000}},   # over the limit: never linked
-                ])
+                st["query"] = rng.choice(
+                    [
+                        {
+                            "query": {
+                                "status": {"option": "securable"},
+                                "type": "Breach Tablet",
+                                "stats": [
+                                    {
+                                        "type": "and",
+                                        "filters": [
+                                            {
+                                                "id": "explicit.stat_1",
+                                                "value": {"min": rng.randint(1, 40)},
+                                            }
+                                        ],
+                                    }
+                                ],
+                            },
+                            "sort": {"price": "asc"},
+                        },
+                        {
+                            "query": {
+                                "filters": {
+                                    "type_filters": {
+                                        "filters": {
+                                            "category": {"option": "map.tablet"}
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        {"query": {"x": "y" * 25_000}},  # over the limit: never linked
+                    ]
+                )
             elif op in ("tabletedit", "untablet"):
                 name, base = rng.choice(TABLET_KINDS)
                 st["pick"] = rng.randint(0, 9)
-                st["patch"] = rng.choice([{"slots": rng.randint(-1, 6)}, {"name": name, "base": base},
-                                          {"price": round(rng.uniform(0, 50), 2)}, {"cur": rng.choice(["chaos", "exalted", "divine"])}])
+                st["patch"] = rng.choice(
+                    [
+                        {"slots": rng.randint(-1, 6)},
+                        {"name": name, "base": base},
+                        {"price": round(rng.uniform(0, 50), 2)},
+                        {"cur": rng.choice(["chaos", "exalted", "divine"])},
+                    ]
+                )
             elif op == "folder":
                 n += 1
-                st["newId"], st["name"] = f"k{k}-f{n}", rng.choice(["Breach", "Ritual", "Juiced"])
+                st["newId"], st["name"] = (
+                    f"k{k}-f{n}",
+                    rng.choice(["Breach", "Ritual", "Juiced"]),
+                )
             elif op in ("move", "unfolder", "deepfolder"):
-                st["pick"], st["index"], st["toRoot"] = rng.randint(0, 99), rng.randint(0, 3), rng.random() < 0.3
+                st["pick"], st["index"], st["toRoot"] = (
+                    rng.randint(0, 99),
+                    rng.randint(0, 3),
+                    rng.random() < 0.3,
+                )
             elif op in ("unique", "floor"):
                 st["u"] = rng.choice(UNIQUES)
-                st["listings"] = [{"amount": round(_logu(rng, 1, 5000), 2), "currency": rng.choice(["divine", "exalted", "chaos"])}
-                                  for _ in range(rng.randint(0, 10))]
+                st["listings"] = [
+                    {
+                        "amount": round(_logu(rng, 1, 5000), 2),
+                        "currency": rng.choice(["divine", "exalted", "chaos"]),
+                    }
+                    for _ in range(rng.randint(0, 10))
+                ]
             elif op == "cur":
-                st["part"], st["cur"] = rng.choice(["maps", "override"]), rng.choice(["chaos", "exalted", "divine"])
+                st["part"], st["cur"] = (
+                    rng.choice(["maps", "override"]),
+                    rng.choice(["chaos", "exalted", "divine"]),
+                )
             steps.append(st)
         scripts.append({"steps": steps, "prices": prices})
     runs = _js("actions", scripts)
     for script, docs in zip(scripts, runs):
         for step, d in zip(script["steps"], docs):
             assert d["running"] <= 1, (step, "two strats running at once")
-            assert d["roundtrip"], (step, "the document reloads exactly as it was", _first_diff(d["back"], d["doc"]))
+            assert d["roundtrip"], (
+                step,
+                "the document reloads exactly as it was",
+                _first_diff(d["back"], d["doc"]),
+            )
             err = stratcalc.validate(d["doc"])
             assert err is None, (step, err)
-        _save_and_reload(docs[-1]["doc"])          # and the backend really stores the last one
+        _save_and_reload(docs[-1]["doc"])  # and the backend really stores the last one
 
 
 # ------------------------------------------------------------------ a lineage support gem
 def test_a_lineage_gem_is_priced_through_the_one_value_table(monkeypatch):
     """Lineage support gems are registry currencies (category "Lineage Support Gems"), priced by
     Graph.values like any other: the calculator needs no second price source for them."""
-    div = {"divine": 1.0, "exalted": 1 / EX_PER_DIV, "chaos": 0.125, "ataluis-bloodletting": 4.5}
+    div = {
+        "divine": 1.0,
+        "exalted": 1 / EX_PER_DIV,
+        "chaos": 0.125,
+        "ataluis-bloodletting": 4.5,
+    }
     body = _prices_through_the_app(monkeypatch, div)
     assert _close(body["prices"]["ataluis-bloodletting"], 4.5)
-    s = _strat_from_profile({"name": "Lineage test", "minutes": 60, "maps": {"count": 10, "price": 0, "cur": "chaos"},
-                             "tablets": {"perMap": 0, "price": 0, "cur": "chaos"}, "override": None,
-                             "loot": [{"cur": "ataluis-bloodletting", "qty": 2}, {"cur": "divine", "qty": 1}]})
+    s = _strat_from_profile(
+        {
+            "name": "Lineage test",
+            "minutes": 60,
+            "maps": {"count": 10, "price": 0, "cur": "chaos"},
+            "tablets": {"perMap": 0, "price": 0, "cur": "chaos"},
+            "override": None,
+            "loot": [
+                {"cur": "ataluis-bloodletting", "qty": 2},
+                {"cur": "divine", "qty": 1},
+            ],
+        }
+    )
     doc = _save_and_reload(_doc(s))
     [res] = _js("tally", [{"calc": doc, "prices": body["prices"], "now": 0}])
     assert _close(res["strats"][0]["loot"], 10.0)
@@ -523,21 +817,48 @@ def test_a_unique_is_valued_at_the_cheapest_listing_its_search_found(monkeypatch
     the one value table → a saved floor on the row → the strat's profit; a typed price still wins."""
     div = {"divine": 1.0, "exalted": 1 / EX_PER_DIV, "chaos": 0.125}
     prices = _prices_through_the_app(monkeypatch, div)["prices"]
-    listings = [{"amount": 150, "currency": "divine"}, {"amount": 140 * EX_PER_DIV, "currency": "exalted"}, {"amount": 1200, "currency": "chaos"}]
-    s = _strat_from_profile({"name": "Uniques", "minutes": 60, "maps": {"count": 0, "price": 0, "cur": "chaos"},
-                             "tablets": {"perMap": 0, "price": 0, "cur": "chaos"}, "override": None, "loot": []})
-    s["loot"] = [{"cur": None, "name": "Mageblood", "base": "Utility Belt", "qty": 1, "price": None, "floor": None}]
+    listings = [
+        {"amount": 150, "currency": "divine"},
+        {"amount": 140 * EX_PER_DIV, "currency": "exalted"},
+        {"amount": 1200, "currency": "chaos"},
+    ]
+    s = _strat_from_profile(
+        {
+            "name": "Uniques",
+            "minutes": 60,
+            "maps": {"count": 0, "price": 0, "cur": "chaos"},
+            "tablets": {"perMap": 0, "price": 0, "cur": "chaos"},
+            "override": None,
+            "loot": [],
+        }
+    )
+    s["loot"] = [
+        {
+            "cur": None,
+            "name": "Mageblood",
+            "base": "Utility Belt",
+            "qty": 1,
+            "price": None,
+            "floor": None,
+        }
+    ]
     cases = [{"calc": _doc(s), "prices": prices, "now": 0}]
     floor = min(listings, key=lambda x: x["amount"] * div[x["currency"]])
     want = floor["amount"] * div[floor["currency"]]
-    s2 = json.loads(json.dumps(s)); s2["loot"][0]["floor"] = {"div": want, "at": 1}
-    s3 = json.loads(json.dumps(s2)); s3["loot"][0]["price"] = 99.0
+    s2 = json.loads(json.dumps(s))
+    s2["loot"][0]["floor"] = {"div": want, "at": 1}
+    s3 = json.loads(json.dumps(s2))
+    s3["loot"][0]["price"] = 99.0
     for v in (s2, s3):
         _save_and_reload(_doc(v))
         cases.append({"calc": _doc(v), "prices": prices, "now": 0})
     unpriced, floored, typed = [r["strats"][0] for r in _js("tally", cases)]
-    assert unpriced["unpriced"] == ["unique:Mageblood|Utility Belt"], "no floor yet: unpriced, never free"
-    assert _close(want, 140.0), "the cheapest of the three, in divines (140 div of exalted)"
+    assert unpriced["unpriced"] == ["unique:Mageblood|Utility Belt"], (
+        "no floor yet: unpriced, never free"
+    )
+    assert _close(want, 140.0), (
+        "the cheapest of the three, in divines (140 div of exalted)"
+    )
     assert _close(floored["loot"], 140.0)
     assert _close(typed["loot"], 99.0), "your price wins"
 
@@ -553,12 +874,43 @@ def test_a_mixed_tablet_setup_spreads_each_tablet_over_its_own_full_uses(monkeyp
     assert {"name": None, "base": "Breach Tablet", "uses": 10} in uses
     assert {"name": "Freedom of Faith", "base": "Ritual Tablet", "uses": 5} in uses
     assert {"name": "Mastered Domain", "base": "Irradiated Tablet", "uses": 1} in uses
-    s = _strat_from_profile({"name": "Mixed tablets", "minutes": 60, "maps": {"count": 30, "price": 0, "cur": "chaos"},
-                             "tablets": {"lines": [
-                                 {"id": "a", "base": "Breach Tablet", "name": None, "slots": 2, "price": 8, "cur": "chaos"},       # 6 × 1 div
-                                 {"id": "b", "base": "Ritual Tablet", "name": "Freedom of Faith", "slots": 1, "price": 2, "cur": "divine"},   # 6 × 2
-                                 {"id": "c", "base": "Irradiated Tablet", "name": "Mastered Domain", "slots": 1, "price": 0.5, "cur": "divine"},  # 30 × 0.5
-                             ]}, "override": None, "loot": [{"cur": "divine", "qty": 100}]})
+    s = _strat_from_profile(
+        {
+            "name": "Mixed tablets",
+            "minutes": 60,
+            "maps": {"count": 30, "price": 0, "cur": "chaos"},
+            "tablets": {
+                "lines": [
+                    {
+                        "id": "a",
+                        "base": "Breach Tablet",
+                        "name": None,
+                        "slots": 2,
+                        "price": 8,
+                        "cur": "chaos",
+                    },  # 6 × 1 div
+                    {
+                        "id": "b",
+                        "base": "Ritual Tablet",
+                        "name": "Freedom of Faith",
+                        "slots": 1,
+                        "price": 2,
+                        "cur": "divine",
+                    },  # 6 × 2
+                    {
+                        "id": "c",
+                        "base": "Irradiated Tablet",
+                        "name": "Mastered Domain",
+                        "slots": 1,
+                        "price": 0.5,
+                        "cur": "divine",
+                    },  # 30 × 0.5
+                ]
+            },
+            "override": None,
+            "loot": [{"cur": "divine", "qty": 100}],
+        }
+    )
     doc = _save_and_reload(_doc(s))
     [res] = _js("tally", [{"calc": doc, "prices": body["prices"], "now": 0}])
     t = res["strats"][0]
@@ -567,13 +919,38 @@ def test_a_mixed_tablet_setup_spreads_each_tablet_over_its_own_full_uses(monkeyp
     assert t["unpriced"] == []
 
 
-def test_a_unique_tablet_the_pipeline_could_not_read_is_unpriced_not_guessed(monkeypatch):
+def test_a_unique_tablet_the_pipeline_could_not_read_is_unpriced_not_guessed(
+    monkeypatch,
+):
     """Forgotten By Time has no sample item on poe2db, so the pipeline stores no uses for it."""
-    body = _prices_through_the_app(monkeypatch, {"divine": 1.0, "exalted": 1 / EX_PER_DIV, "chaos": 0.125})
+    body = _prices_through_the_app(
+        monkeypatch, {"divine": 1.0, "exalted": 1 / EX_PER_DIV, "chaos": 0.125}
+    )
     assert not any(u["name"] == "Forgotten By Time" for u in body["uses"])
-    s = _strat_from_profile({"name": "FBT", "minutes": 60, "maps": {"count": 10, "price": 0, "cur": "chaos"},
-                             "tablets": {"lines": [{"id": "a", "base": "Expedition Tablet", "name": "Forgotten By Time", "slots": 1, "price": 3, "cur": "divine"}]},
-                             "override": None, "loot": []})
-    [res] = _js("tally", [{"calc": _save_and_reload(_doc(s)), "prices": body["prices"], "now": 0}])
+    s = _strat_from_profile(
+        {
+            "name": "FBT",
+            "minutes": 60,
+            "maps": {"count": 10, "price": 0, "cur": "chaos"},
+            "tablets": {
+                "lines": [
+                    {
+                        "id": "a",
+                        "base": "Expedition Tablet",
+                        "name": "Forgotten By Time",
+                        "slots": 1,
+                        "price": 3,
+                        "cur": "divine",
+                    }
+                ]
+            },
+            "override": None,
+            "loot": [],
+        }
+    )
+    [res] = _js(
+        "tally",
+        [{"calc": _save_and_reload(_doc(s)), "prices": body["prices"], "now": 0}],
+    )
     assert res["strats"][0]["unpriced"] == ["tablet:Forgotten By Time"]
     assert res["strats"][0]["tablets"] == 0

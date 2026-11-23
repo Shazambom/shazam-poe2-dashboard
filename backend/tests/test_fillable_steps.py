@@ -16,6 +16,7 @@ papered over the missing sellers with `stock = hi_stock or volume`.
 
     python -m pytest backend/tests/test_fillable_steps.py -q
 """
+
 import sys
 from pathlib import Path
 
@@ -36,14 +37,27 @@ def _row(**kw):
 def test_no_standing_sellers_means_no_edge_in_that_direction():
     """Radiance(a) <-> chaos(b): chaos is on offer (120), Radiance is not (0)."""
     out = digest.directed_rates("radiance", "chaos", _row(), age=60.0)
-    assert set(out) == {("radiance", "chaos")}                 # you CAN sell a Radiance into the chaos bids
-    assert out[("radiance", "chaos")]["rate"] == 13.0 and out[("radiance", "chaos")]["stock"] == 120
+    assert set(out) == {
+        ("radiance", "chaos")
+    }  # you CAN sell a Radiance into the chaos bids
+    assert (
+        out[("radiance", "chaos")]["rate"] == 13.0
+        and out[("radiance", "chaos")]["stock"] == 120
+    )
     # ...but you cannot BUY one with chaos: nobody is selling. (Old code: stock = volume = 1.)
 
 
 def test_both_sides_standing_gives_both_edges_with_real_stock():
-    out = digest.directed_rates("radiance", "divine", _row(vol_a=17, vol_b=564, hi_stock_a=39, hi_stock_b=576), age=60.0)
-    assert out[("radiance", "divine")]["stock"] == 576 and out[("divine", "radiance")]["stock"] == 39
+    out = digest.directed_rates(
+        "radiance",
+        "divine",
+        _row(vol_a=17, vol_b=564, hi_stock_a=39, hi_stock_b=576),
+        age=60.0,
+    )
+    assert (
+        out[("radiance", "divine")]["stock"] == 576
+        and out[("divine", "radiance")]["stock"] == 39
+    )
     assert out[("divine", "radiance")]["rate"] == pytest.approx(17 / 564)
 
 
@@ -53,7 +67,9 @@ def test_a_dead_market_gives_nothing():
 
 # ---------------------------------------------------------------- 2. turnover relative to the trade
 def _edge(a, b, rate, vol):
-    return Edge(a, b, "digest", rate, [{"rate": rate, "stock": 10_000_000}], vol_in_per_h=vol)
+    return Edge(
+        a, b, "digest", rate, [{"rate": rate, "stock": 10_000_000}], vol_in_per_h=vol
+    )
 
 
 def _graph(edges):
@@ -65,21 +81,42 @@ def _graph(edges):
 
 
 def test_simulate_reports_the_slowest_steps_share_of_its_market():
-    cyc = [_edge("a", "b", 1.0, 1000.0), _edge("b", "c", 1.0, 40.0), _edge("c", "a", 1.05, 1000.0)]
+    cyc = [
+        _edge("a", "b", 1.0, 1000.0),
+        _edge("b", "c", 1.0, 40.0),
+        _edge("c", "a", 1.05, 1000.0),
+    ]
     sim = simulate(_graph(cyc), cyc, 20, {"a": 1.0, "b": 1.0, "c": 1.0})
-    assert sim["slowest_step_hours"] == pytest.approx(20 / 40)      # 20 units into a 40/h market
+    assert sim["slowest_step_hours"] == pytest.approx(
+        20 / 40
+    )  # 20 units into a 40/h market
     assert sim["fill_hours"] == pytest.approx(20 / 1000 + 20 / 40 + 20 / 1000)
 
 
 def test_a_step_with_no_turnover_at_all_is_infinitely_slow():
     cyc = [_edge("a", "b", 1.0, 1000.0), _edge("b", "a", 1.05, 0.0)]
-    assert simulate(_graph(cyc), cyc, 20, {"a": 1.0, "b": 1.0})["slowest_step_hours"] is None
+    assert (
+        simulate(_graph(cyc), cyc, 20, {"a": 1.0, "b": 1.0})["slowest_step_hours"]
+        is None
+    )
 
 
 def _route(**kw):
-    base = {"margin_pct": 5.0, "margin_ref": 5.0, "gold": 0, "gold_free": True, "margin_per_1k_gold": None,
-            "liquidity_ref": 9999, "all_live": False, "volume_ref_per_h": 9999, "fill_hours": 1.0,
-            "velocity": None, "velocity_inf": True, "uses_recipe": False, "slowest_step_hours": 0.5}
+    base = {
+        "margin_pct": 5.0,
+        "margin_ref": 5.0,
+        "gold": 0,
+        "gold_free": True,
+        "margin_per_1k_gold": None,
+        "liquidity_ref": 9999,
+        "all_live": False,
+        "volume_ref_per_h": 9999,
+        "fill_hours": 1.0,
+        "velocity": None,
+        "velocity_inf": True,
+        "uses_recipe": False,
+        "slowest_step_hours": 0.5,
+    }
     return {**base, **kw}
 
 
@@ -87,12 +124,20 @@ def test_keep_drops_a_loop_whose_slowest_step_exceeds_the_limit():
     f = {"max_step_minutes": 45}
     assert routes._keep(_route(slowest_step_hours=0.74), f)
     assert not routes._keep(_route(slowest_step_hours=0.76), f)
-    assert not routes._keep(_route(slowest_step_hours=None), f)           # unknown turnover = cannot fill
-    assert routes._keep(_route(slowest_step_hours=9.0), {"max_step_minutes": 0})   # 0 = off, like the others
+    assert not routes._keep(
+        _route(slowest_step_hours=None), f
+    )  # unknown turnover = cannot fill
+    assert routes._keep(
+        _route(slowest_step_hours=9.0), {"max_step_minutes": 0}
+    )  # 0 = off, like the others
 
 
 def test_default_is_the_balanced_presets():
-    assert settings.DEFAULTS["filters"]["max_step_minutes"] == settings.ARBITRAGE_PRESETS[0]["values"]["filters"]["max_step_minutes"] == 60
+    assert (
+        settings.DEFAULTS["filters"]["max_step_minutes"]
+        == settings.ARBITRAGE_PRESETS[0]["values"]["filters"]["max_step_minutes"]
+        == 60
+    )
 
 
 # ---------------------------------------------------------------- 3. an inactive market trades at its ask
@@ -103,17 +148,41 @@ def test_a_wide_ask_bid_gap_is_priced_at_the_ask_not_the_average(monkeypatch):
     item under the ask, so averaging the two sides is a lie: a market whose ask is far above its
     bid is priced at the ASK when you are buying and at the BID when you are selling. A tight
     market (the gaze's divine market ran 10 … 14) keeps its executed rate."""
-    wide = _row(vol_a=175, vol_b=2, hi_stock_a=1190, hi_stock_b=6,
-                lo_ratio_a=75, hi_ratio_a=3113, lo_ratio_b=1, hi_ratio_b=1)     # exalted(a) per gaze(b)
-    out = digest.directed_rates("exalted", "gaze", wide, age=60.0, bounds=(87.5, 3113.0))
-    assert abs(out[("exalted", "gaze")]["rate"] - 1 / 3113) < 1e-12   # buying a gaze costs the ask
-    assert abs(out[("gaze", "exalted")]["rate"] - 87.5) < 1e-9      # selling one pays the cheapest
+    wide = _row(
+        vol_a=175,
+        vol_b=2,
+        hi_stock_a=1190,
+        hi_stock_b=6,
+        lo_ratio_a=75,
+        hi_ratio_a=3113,
+        lo_ratio_b=1,
+        hi_ratio_b=1,
+    )  # exalted(a) per gaze(b)
+    out = digest.directed_rates(
+        "exalted", "gaze", wide, age=60.0, bounds=(87.5, 3113.0)
+    )
+    assert (
+        abs(out[("exalted", "gaze")]["rate"] - 1 / 3113) < 1e-12
+    )  # buying a gaze costs the ask
+    assert (
+        abs(out[("gaze", "exalted")]["rate"] - 87.5) < 1e-9
+    )  # selling one pays the cheapest
     assert out[("exalted", "gaze")]["inactive"] is True
 
-    tight = _row(vol_a=531, vol_b=44, hi_stock_a=1011, hi_stock_b=97,
-                 lo_ratio_a=11, hi_ratio_a=13, lo_ratio_b=1, hi_ratio_b=1)      # divine(a) per gaze(b)
+    tight = _row(
+        vol_a=531,
+        vol_b=44,
+        hi_stock_a=1011,
+        hi_stock_b=97,
+        lo_ratio_a=11,
+        hi_ratio_a=13,
+        lo_ratio_b=1,
+        hi_ratio_b=1,
+    )  # divine(a) per gaze(b)
     out = digest.directed_rates("divine", "gaze", tight, age=60.0, bounds=(11.8, 12.3))
-    assert abs(out[("divine", "gaze")]["rate"] - 44 / 531) < 1e-12    # the executed rate, as before
+    assert (
+        abs(out[("divine", "gaze")]["rate"] - 44 / 531) < 1e-12
+    )  # the executed rate, as before
     assert abs(out[("gaze", "divine")]["rate"] - 531 / 44) < 1e-12
     assert not out[("divine", "gaze")].get("inactive")
 

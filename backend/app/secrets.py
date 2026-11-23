@@ -4,6 +4,7 @@ Secrets (trade session cookie, OAuth tokens) are Fernet-encrypted with a key tha
 generated on first run and kept in DATA_DIR/secret.key (mode 600). The ciphertext lives
 in the kv table, so a copy of the database alone reveals nothing.
 """
+
 from __future__ import annotations
 
 import json

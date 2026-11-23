@@ -29,6 +29,7 @@ boundary). Before persistence can be measured (the first 2H days, and until at l
 the day's traded items have the full 2H-day history) a = 1: a league with no price history is
 in price discovery by definition.
 """
+
 from __future__ import annotations
 
 import datetime as _dt
@@ -38,8 +39,8 @@ import statistics
 from . import marketseries
 
 DIVINE_ID = marketseries.DIVINE_ID
-H = 3               # return leg, days (two legs = one week of history)
-WEEK = 7            # smoothing window: removes the weekday/weekend cycle and a partial last day
+H = 3  # return leg, days (two legs = one week of history)
+WEEK = 7  # smoothing window: removes the weekday/weekend cycle and a partial last day
 LIQUID_SHARE = 0.5  # the day's top half by traded value (holdscore.VALUE_PERCENTILE)
 MIN_ITEMS = 10
 
@@ -71,7 +72,7 @@ def _spearman(a, b) -> float:
         o = sorted(range(len(v)), key=v.__getitem__)
         r = [0.0] * len(v)
         i = 0
-        while i < len(o):                       # average ranks over ties
+        while i < len(o):  # average ranks over ties
             j = i
             while j + 1 < len(o) and v[o[j + 1]] == v[o[i]]:
                 j += 1
@@ -79,6 +80,7 @@ def _spearman(a, b) -> float:
                 r[o[k]] = (i + j) / 2
             i = j + 1
         return r
+
     ra, rb = rk(a), rk(b)
     ma, mb = statistics.fmean(ra), statistics.fmean(rb)
     num = sum((x - ma) * (y - mb) for x, y in zip(ra, rb))
@@ -93,7 +95,7 @@ def _raw_persistence(per, t):
     if len(have) < max(MIN_ITEMS, sum(1 for s in per.values() if t in s) / 2):
         return None
     have.sort(key=lambda i: -per[i][t][0] * per[i][t][1])
-    have = have[:max(MIN_ITEMS, int(len(have) * LIQUID_SHARE))]
+    have = have[: max(MIN_ITEMS, int(len(have) * LIQUID_SHARE))]
     r1 = [math.log(per[i][t][0] / per[i][t - H][0]) for i in have]
     r0 = [math.log(per[i][t - H][0] / per[i][t - 2 * H][0]) for i in have]
     return _spearman(r0, r1)
@@ -128,8 +130,18 @@ def timeline(per: dict, divine_id: int = DIVINE_ID) -> list[dict]:
         # so a one-day wobble around a boundary can't flip the label
         last = daily[-WEEK:]
         w = {k: statistics.fmean(d[k] for d in last) for k in ("early", "mid", "late")}
-        out.append({"t": t, "p": p, "raw_p": rp, "R": R, "value_div": vs, "a": a, **w,
-                    "regime": max(w, key=w.get)})
+        out.append(
+            {
+                "t": t,
+                "p": p,
+                "raw_p": rp,
+                "R": R,
+                "value_div": vs,
+                "a": a,
+                **w,
+                "regime": max(w, key=w.get),
+            }
+        )
     return out
 
 

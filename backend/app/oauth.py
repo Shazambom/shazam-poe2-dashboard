@@ -14,6 +14,7 @@ Two ways the browser can come back:
 Tokens are stored encrypted (see secrets.py). GGG requires a specific User-Agent for
 OAuth'd requests: "OAuth {client_id}/{version} (contact: {contact})".
 """
+
 from __future__ import annotations
 
 import base64
@@ -27,7 +28,9 @@ from . import db, gateway, secrets
 
 CLIENT_ID = os.environ.get("OAUTH_CLIENT_ID", "").strip()
 CLIENT_SECRET = os.environ.get("OAUTH_CLIENT_SECRET", "").strip()
-REDIRECT_URI = os.environ.get("OAUTH_REDIRECT_URI", "http://127.0.0.1:8080/callback").strip()
+REDIRECT_URI = os.environ.get(
+    "OAUTH_REDIRECT_URI", "http://127.0.0.1:8080/callback"
+).strip()
 SCOPES = os.environ.get("OAUTH_SCOPES", "account:profile account:characters").strip()
 CONTACT = os.environ.get("OAUTH_CONTACT", "unset@example.com").strip()
 VERSION = "0.1"
@@ -52,7 +55,9 @@ def _b64url(b: bytes) -> str:
 # ------------------------------------------------------------------ flow
 def start(redirect_uri: str | None = None) -> dict:
     if not configured():
-        raise RuntimeError("OAUTH_CLIENT_ID is not set; register a client with GGG first")
+        raise RuntimeError(
+            "OAUTH_CLIENT_ID is not set; register a client with GGG first"
+        )
     verifier = _b64url(os.urandom(32))
     challenge = _b64url(hashlib.sha256(verifier.encode()).digest())
     state = pysecrets.token_hex(16)
@@ -63,11 +68,23 @@ def start(redirect_uri: str | None = None) -> dict:
         live = {k: v for k, v in (pending or {}).items() if now - v["created"] < 600}
         live[state] = {"verifier": verifier, "redirect_uri": redirect, "created": now}
         return live
+
     db.kv_update("oauth_pending", apply, {})
-    url = AUTHORIZE_URL + "?" + urlencode({
-        "client_id": CLIENT_ID, "response_type": "code", "scope": SCOPES, "state": state,
-        "redirect_uri": redirect, "code_challenge": challenge, "code_challenge_method": "S256",
-    })
+    url = (
+        AUTHORIZE_URL
+        + "?"
+        + urlencode(
+            {
+                "client_id": CLIENT_ID,
+                "response_type": "code",
+                "scope": SCOPES,
+                "state": state,
+                "redirect_uri": redirect,
+                "code_challenge": challenge,
+                "code_challenge_method": "S256",
+            }
+        )
+    )
     return {"url": url, "state": state, "redirect_uri": redirect}
 
 
@@ -78,13 +95,18 @@ async def complete(code: str, state: str) -> dict:
         pending = dict(pending or {})
         taken["p"] = pending.pop(state, None)
         return pending
+
     db.kv_update("oauth_pending", apply, {})
     p = taken.get("p")
     if not p:
         raise ValueError("unknown or expired state; start the login again")
     form = {
-        "client_id": CLIENT_ID, "grant_type": "authorization_code", "code": code,
-        "redirect_uri": p["redirect_uri"], "scope": SCOPES, "code_verifier": p["verifier"],
+        "client_id": CLIENT_ID,
+        "grant_type": "authorization_code",
+        "code": code,
+        "redirect_uri": p["redirect_uri"],
+        "scope": SCOPES,
+        "code_verifier": p["verifier"],
     }
     if CLIENT_SECRET:
         form["client_secret"] = CLIENT_SECRET
@@ -94,11 +116,19 @@ async def complete(code: str, state: str) -> dict:
 
 
 async def _token_request(form: dict) -> dict:
-    r = await gateway.request("POST", TOKEN_URL, policy="ggg-api", data=form, headers={"User-Agent": user_agent()})
+    r = await gateway.request(
+        "POST",
+        TOKEN_URL,
+        policy="ggg-api",
+        data=form,
+        headers={"User-Agent": user_agent()},
+    )
     if r.status_code >= 400:
         try:
             err = r.json()
-            raise ValueError(f"{err.get('error')}: {err.get('error_description', '')}".strip())
+            raise ValueError(
+                f"{err.get('error')}: {err.get('error_description', '')}".strip()
+            )
         except ValueError:
             raise
         except Exception:
@@ -108,14 +138,20 @@ async def _token_request(form: dict) -> dict:
 
 def _save(tok: dict) -> None:
     existing = secrets.load("oauth") or {}
-    secrets.store("oauth", {
-        "access_token": tok["access_token"],
-        "refresh_token": tok.get("refresh_token") or existing.get("refresh_token"),
-        "expires_at": time.time() + float(tok.get("expires_in") or 0),
-        "refresh_expires_at": existing.get("refresh_expires_at") or (time.time() + 7 * 86400 if tok.get("refresh_token") else None),
-        "username": tok.get("username"), "sub": tok.get("sub"), "scope": tok.get("scope"),
-        "obtained_at": time.time(),
-    })
+    secrets.store(
+        "oauth",
+        {
+            "access_token": tok["access_token"],
+            "refresh_token": tok.get("refresh_token") or existing.get("refresh_token"),
+            "expires_at": time.time() + float(tok.get("expires_in") or 0),
+            "refresh_expires_at": existing.get("refresh_expires_at")
+            or (time.time() + 7 * 86400 if tok.get("refresh_token") else None),
+            "username": tok.get("username"),
+            "sub": tok.get("sub"),
+            "scope": tok.get("scope"),
+            "obtained_at": time.time(),
+        },
+    )
 
 
 async def token() -> str | None:
@@ -126,7 +162,11 @@ async def token() -> str | None:
         return rec["access_token"]
     if not rec.get("refresh_token"):
         return None
-    form = {"client_id": CLIENT_ID, "grant_type": "refresh_token", "refresh_token": rec["refresh_token"]}
+    form = {
+        "client_id": CLIENT_ID,
+        "grant_type": "refresh_token",
+        "refresh_token": rec["refresh_token"],
+    }
     if CLIENT_SECRET:
         form["client_secret"] = CLIENT_SECRET
     try:
@@ -145,7 +185,8 @@ def status() -> dict:
         "client_type": "confidential" if CLIENT_SECRET else "public",
         "redirect_uri": REDIRECT_URI,
         "scopes": SCOPES,
-        "logged_in": bool(rec.get("access_token")) and time.time() < (rec.get("refresh_expires_at") or rec.get("expires_at") or 0),
+        "logged_in": bool(rec.get("access_token"))
+        and time.time() < (rec.get("refresh_expires_at") or rec.get("expires_at") or 0),
         "username": rec.get("username"),
         "scope": rec.get("scope"),
         "expires_at": rec.get("expires_at"),
@@ -163,8 +204,13 @@ async def get(path: str, params: dict | None = None) -> dict:
     tok = await token()
     if not tok:
         raise PermissionError("not logged in with OAuth, or the token expired")
-    r = await gateway.request("GET", f"{API}{path}", policy="ggg-api", params=params,
-                              headers={"User-Agent": user_agent(), "Authorization": f"Bearer {tok}"})
+    r = await gateway.request(
+        "GET",
+        f"{API}{path}",
+        policy="ggg-api",
+        params=params,
+        headers={"User-Agent": user_agent(), "Authorization": f"Bearer {tok}"},
+    )
     if r.status_code == 401:
         raise PermissionError("token rejected; log in again")
     if r.status_code == 403:

@@ -17,6 +17,7 @@ Built on SYNTHETIC graphs (no DB), mirroring test_convert.py.
 
     python -m pytest backend/tests/test_centrality.py -q
 """
+
 import sys
 from pathlib import Path
 
@@ -26,7 +27,15 @@ from app.arbitrage import Edge, Graph
 
 
 def _edge(a, b, rate, vol=100.0, stock=1_000_000):
-    return Edge(a, b, "live", rate, [{"rate": rate, "stock": stock}], age_s=0.0, vol_in_per_h=vol)
+    return Edge(
+        a,
+        b,
+        "live",
+        rate,
+        [{"rate": rate, "stock": stock}],
+        age_s=0.0,
+        vol_in_per_h=vol,
+    )
 
 
 def _star():
@@ -53,8 +62,10 @@ def test_pagerank_weight_pulls_rank_to_higher_volume():
     """Edge weight = executed value/hour; a fatter-volume edge concentrates more rank."""
     g = Graph({"reference": "s", "league": "T", "max_steps": 4})
     g.fee_table = {}
-    g.add(_edge("s", "t1", 1.0, vol=1000.0)); g.add(_edge("t1", "s", 1.0, vol=1000.0))
-    g.add(_edge("s", "t2", 1.0, vol=10.0));   g.add(_edge("t2", "s", 1.0, vol=10.0))
+    g.add(_edge("s", "t1", 1.0, vol=1000.0))
+    g.add(_edge("t1", "s", 1.0, vol=1000.0))
+    g.add(_edge("s", "t2", 1.0, vol=10.0))
+    g.add(_edge("t2", "s", 1.0, vol=10.0))
     rv = g.ref_values()
     pr = centrality.pagerank(g, rv)
     assert pr["t1"] > pr["t2"]
@@ -64,7 +75,7 @@ def test_pagerank_dangling_node_is_safe():
     """A node with no out-edges must not crash or leak rank mass."""
     g = Graph({"reference": "a", "league": "T", "max_steps": 4})
     g.fee_table = {}
-    g.add(_edge("a", "b", 1.0))   # b is dangling (no out-edge)
+    g.add(_edge("a", "b", 1.0))  # b is dangling (no out-edge)
     rv = g.ref_values()
     pr = centrality.pagerank(g, rv)
     assert set(pr) == {"a", "b"}
@@ -77,8 +88,10 @@ def test_betweenness_flags_the_bridge():
     """a <-> m <-> b, no direct a-b: every a↔b route passes through m, so m is the bridge."""
     g = Graph({"reference": "m", "league": "T", "max_steps": 4})
     g.fee_table = {}
-    g.add(_edge("a", "m", 1.0)); g.add(_edge("m", "a", 1.0))
-    g.add(_edge("m", "b", 1.0)); g.add(_edge("b", "m", 1.0))
+    g.add(_edge("a", "m", 1.0))
+    g.add(_edge("m", "a", 1.0))
+    g.add(_edge("m", "b", 1.0))
+    g.add(_edge("b", "m", 1.0))
     rv = g.ref_values()
     bl = centrality.betweenness_lite(g, rv)
     assert bl.get("m", 0.0) > bl.get("a", 0.0)
@@ -100,10 +113,17 @@ def test_seed_missing_adds_only_new_hubs_excluding_reference():
     """The Board's one-time hub seed: add hub currencies not already watched, never the
     reference (it's never a board row), stable-ordered, no duplicates."""
     # divine already watched; mirror is a new hub; exalted is the reference → excluded.
-    got = centrality.seed_missing(["chaos", "divine"], {"divine", "mirror", "exalted"}, "exalted")
+    got = centrality.seed_missing(
+        ["chaos", "divine"], {"divine", "mirror", "exalted"}, "exalted"
+    )
     assert got == ["mirror"]
     # nothing new to add → empty
-    assert centrality.seed_missing(["chaos", "divine", "mirror"], {"divine", "mirror"}, "exalted") == []
+    assert (
+        centrality.seed_missing(
+            ["chaos", "divine", "mirror"], {"divine", "mirror"}, "exalted"
+        )
+        == []
+    )
     # no hubs known yet (cold graph) → empty, so the seed waits rather than seeding nothing
     assert centrality.seed_missing(["chaos"], set(), "exalted") == []
 
@@ -125,12 +145,19 @@ def _tie_graph():
       chaos --x2--> alpha --x0.05--> divine   (= 0.10 div/chaos)
       chaos --x5--> beta  --x0.02--> divine   (= 0.10 div/chaos)
     """
-    s = {"gold_model": {}, "reference": "divine", "league": "T",
-         "step_overhead_min": 0, "max_steps": 4}
+    s = {
+        "gold_model": {},
+        "reference": "divine",
+        "league": "T",
+        "step_overhead_min": 0,
+        "max_steps": 4,
+    }
     g = Graph(s)
     g.fee_table = {}
-    g.add(_edge("chaos", "alpha", 2.0));  g.add(_edge("alpha", "divine", 0.05))
-    g.add(_edge("chaos", "beta", 5.0));   g.add(_edge("beta", "divine", 0.02))
+    g.add(_edge("chaos", "alpha", 2.0))
+    g.add(_edge("alpha", "divine", 0.05))
+    g.add(_edge("chaos", "beta", 5.0))
+    g.add(_edge("beta", "divine", 0.02))
     return g
 
 
@@ -141,15 +168,18 @@ def test_convert_tiebreak_prefers_central_bridge():
     neutral = arbitrage._best_conversions(g, rv, "chaos", "divine", 100, max_steps=4)
     assert neutral["best"]["out"] == 10
 
-    via_alpha = arbitrage._best_conversions(g, rv, "chaos", "divine", 100, max_steps=4,
-                                            bridge={"alpha": 0.9, "beta": 0.1})
+    via_alpha = arbitrage._best_conversions(
+        g, rv, "chaos", "divine", 100, max_steps=4, bridge={"alpha": 0.9, "beta": 0.1}
+    )
     assert via_alpha["best"]["path"] == ["chaos", "alpha", "divine"]
 
-    via_beta = arbitrage._best_conversions(g, rv, "chaos", "divine", 100, max_steps=4,
-                                           bridge={"alpha": 0.1, "beta": 0.9})
+    via_beta = arbitrage._best_conversions(
+        g, rv, "chaos", "divine", 100, max_steps=4, bridge={"alpha": 0.1, "beta": 0.9}
+    )
     assert via_beta["best"]["path"] == ["chaos", "beta", "divine"]
 
 
 if __name__ == "__main__":
     import pytest
+
     raise SystemExit(pytest.main([__file__, "-q"]))

@@ -13,6 +13,7 @@ which rides the seed; installs only read it.
 
     DATA_DIR=$(mktemp -d) MARKET_SEED= python -m pytest backend/tests/test_tablet_uses.py -q
 """
+
 import asyncio
 import gzip
 import sys
@@ -31,33 +32,62 @@ def page(slug: str) -> str:
         return f.read()
 
 
-BASES = ["Abyss Tablet", "Breach Tablet", "Delirium Tablet", "Expedition Tablet", "Irradiated Tablet",
-         "Overseer Tablet", "Ritual Tablet", "Temple Tablet"]
+BASES = [
+    "Abyss Tablet",
+    "Breach Tablet",
+    "Delirium Tablet",
+    "Expedition Tablet",
+    "Irradiated Tablet",
+    "Overseer Tablet",
+    "Ritual Tablet",
+    "Temple Tablet",
+]
 
 
 def test_the_tablet_page_gives_every_normal_base_at_ten_uses():
-    assert sorted(modpool.tablet_bases_from(page("Tablet")), key=lambda r: r["base"]) == \
-        [{"name": None, "base": b, "uses": 10} for b in BASES]
+    assert sorted(
+        modpool.tablet_bases_from(page("Tablet")), key=lambda r: r["base"]
+    ) == [{"name": None, "base": b, "uses": 10} for b in BASES]
 
 
 def test_the_tablet_page_lists_the_unique_pages_to_read():
     uniques = modpool.tablet_unique_pages(page("Tablet"))
     assert ("Freedom_of_Faith", "Freedom of Faith") in uniques
     assert ("Mastered_Domain", "Mastered Domain") in uniques
-    assert len(uniques) == 9, "Forgotten By Time no longer drops, so poe2db's list leaves it out"
+    assert len(uniques) == 9, (
+        "Forgotten By Time no longer drops, so poe2db's list leaves it out"
+    )
     assert all(" " not in s for s, _ in uniques)
 
 
 def test_a_unique_reads_its_sample_item_not_the_popup():
-    assert modpool.unique_tablet_uses_from(page("Freedom_of_Faith")) == {"name": "Freedom of Faith", "base": "Ritual Tablet", "uses": 5}
-    assert modpool.unique_tablet_uses_from(page("Wraeclast_Besieged")) == {"name": "Wraeclast Besieged", "base": "Breach Tablet", "uses": 5}
-    assert modpool.unique_tablet_uses_from(page("Mastered_Domain")) == {"name": "Mastered Domain", "base": "Irradiated Tablet", "uses": 1}
+    assert modpool.unique_tablet_uses_from(page("Freedom_of_Faith")) == {
+        "name": "Freedom of Faith",
+        "base": "Ritual Tablet",
+        "uses": 5,
+    }
+    assert modpool.unique_tablet_uses_from(page("Wraeclast_Besieged")) == {
+        "name": "Wraeclast Besieged",
+        "base": "Breach Tablet",
+        "uses": 5,
+    }
+    assert modpool.unique_tablet_uses_from(page("Mastered_Domain")) == {
+        "name": "Mastered Domain",
+        "base": "Irradiated Tablet",
+        "uses": 1,
+    }
 
 
 def test_a_unique_without_a_trustworthy_sample_is_unknown():
-    assert modpool.unique_tablet_uses_from(page("Forgotten_By_Time")) is None, "no sample item: never the popup's 10"
-    corrupted = page("Freedom_of_Faith").replace('"rarity": "Unique",', '"rarity": "Unique",\n    "corrupted": true,', 1)
-    assert modpool.unique_tablet_uses_from(corrupted) is None, "a corrupted sample's uses are not the full uses"
+    assert modpool.unique_tablet_uses_from(page("Forgotten_By_Time")) is None, (
+        "no sample item: never the popup's 10"
+    )
+    corrupted = page("Freedom_of_Faith").replace(
+        '"rarity": "Unique",', '"rarity": "Unique",\n    "corrupted": true,', 1
+    )
+    assert modpool.unique_tablet_uses_from(corrupted) is None, (
+        "a corrupted sample's uses are not the full uses"
+    )
     assert modpool.unique_tablet_uses_from("<html>poe2db changed</html>") is None
 
 
@@ -81,22 +111,31 @@ def fake_pages(monkeypatch):
     monkeypatch.setattr(modpool, "_page", fake_page)
     yield served
     from app import db
+
     db.kv_set("tablet_uses", [])
 
 
 def test_refresh_stores_bases_and_the_uniques_it_could_read(fake_pages):
     from app import db
+
     err = asyncio.run(modpool.refresh_tablet_uses(0))
     stored = db.kv_get("tablet_uses")
     assert {"name": None, "base": "Breach Tablet", "uses": 10} in stored
     assert {"name": "Freedom of Faith", "base": "Ritual Tablet", "uses": 5} in stored
     assert {"name": "Mastered Domain", "base": "Irradiated Tablet", "uses": 1} in stored
-    assert len(stored) == 8 + 3, "uniques whose page could not be read are left out, not guessed"
-    assert err is None, "a missing unique page is not a failed run: the bases and the readable uniques stored"
+    assert len(stored) == 8 + 3, (
+        "uniques whose page could not be read are left out, not guessed"
+    )
+    assert err is None, (
+        "a missing unique page is not a failed run: the bases and the readable uniques stored"
+    )
 
 
-def test_an_unreadable_tablet_page_keeps_the_last_good_list_and_fails_the_run(fake_pages):
+def test_an_unreadable_tablet_page_keeps_the_last_good_list_and_fails_the_run(
+    fake_pages,
+):
     from app import db
+
     asyncio.run(modpool.refresh_tablet_uses(0))
     good = db.kv_get("tablet_uses")
     fake_pages["Tablet"] = "<html><body>poe2db changed</body></html>"
@@ -107,10 +146,12 @@ def test_an_unreadable_tablet_page_keeps_the_last_good_list_and_fails_the_run(fa
 
 def test_refresh_runs_the_tablet_step():
     import inspect
+
     assert "refresh_tablet_uses(" in inspect.getsource(modpool.refresh)
 
 
 def test_the_tablet_uses_ride_the_seed():
     from app import datapolicy
+
     assert not datapolicy.is_user_kv("tablet_uses")
     assert "kv_ops" in datapolicy.SEED_TABLES

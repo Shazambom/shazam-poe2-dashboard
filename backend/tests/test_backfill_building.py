@@ -8,6 +8,7 @@ populated install is a refresh too (code review 2026-09-29).
 
     DATA_DIR=$(mktemp -d) MARKET_SEED= python -m pytest backend/tests/test_backfill_building.py -q
 """
+
 import sys
 from pathlib import Path
 
@@ -40,21 +41,28 @@ def _building_during_fetches(monkeypatch, name):
         if league_name == name:
             seen.append(lh.progress.get("building"))
         return await real(league_name, *a, **k)
+
     monkeypatch.setattr(lh, "fetch_item", spy)
     crawl()
     monkeypatch.setattr(lh, "fetch_item", real)
     return seen
 
 
-def test_an_install_with_no_history_is_being_built(scout, monkeypatch, keeps_lh_current):
+def test_an_install_with_no_history_is_being_built(
+    scout, monkeypatch, keeps_lh_current
+):
     monkeypatch.setattr(lh, "_has_history", lambda: False)
     seen = _building_during_fetches(monkeypatch, league(scout))
     assert seen and all(b is True for b in seen)
 
 
-def test_a_new_league_on_a_populated_install_is_a_refresh(scout, monkeypatch, keeps_lh_current):
+def test_a_new_league_on_a_populated_install_is_a_refresh(
+    scout, monkeypatch, keeps_lh_current
+):
     monkeypatch.setattr(lh, "_has_history", lambda: True)
-    seen = _building_during_fetches(monkeypatch, league(scout))   # this league has no rows yet
+    seen = _building_during_fetches(
+        monkeypatch, league(scout)
+    )  # this league has no rows yet
     assert seen and all(b is False for b in seen)
 
 

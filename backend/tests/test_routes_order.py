@@ -1,6 +1,7 @@
 """The loop search fills its candidate cap shortest-first and fairly across held currencies (learnability QA pass 2,
 2026-10-05): depth-first from the first held currency let Chaos's 4–5-step loops fill all 20,000 slots, so raising
 Maximum steps per loop shrank the list (Quick flips: 34 loops at 3 steps, 2 at 5) and Divine/Exalted got none."""
+
 import sys
 from pathlib import Path
 
@@ -11,7 +12,15 @@ NODES = ["chaos", "divine", "exalted", "a", "b", "c", "d", "e"]
 
 
 def _complete():
-    g = Graph({"gold_model": {}, "reference": "exalted", "league": "T", "step_overhead_min": 0, "max_steps": 5})
+    g = Graph(
+        {
+            "gold_model": {},
+            "reference": "exalted",
+            "league": "T",
+            "step_overhead_min": 0,
+            "max_steps": 5,
+        }
+    )
     for x in NODES:
         for y in NODES:
             if x != y:
@@ -24,7 +33,9 @@ def _ids(cycles):
 
 
 def test_every_shorter_loop_comes_before_any_longer_one():
-    cyc = list(routes.cycles_shortest_first(_complete(), ["chaos", "divine"], 5, cap=10_000))
+    cyc = list(
+        routes.cycles_shortest_first(_complete(), ["chaos", "divine"], 5, cap=10_000)
+    )
     lengths = [len(c) for c in cyc]
     assert lengths == sorted(lengths), "shortest first"
     assert set(lengths) == {2, 3, 4, 5}
@@ -32,17 +43,35 @@ def test_every_shorter_loop_comes_before_any_longer_one():
 
 def test_raising_the_step_count_only_adds_longer_loops_under_the_cap():
     g = _complete()
-    at3 = set(_ids(routes.cycles_shortest_first(g, ["chaos", "divine", "exalted"], 3, cap=600)))
-    at5 = set(_ids(routes.cycles_shortest_first(g, ["chaos", "divine", "exalted"], 5, cap=600)))
+    at3 = set(
+        _ids(
+            routes.cycles_shortest_first(g, ["chaos", "divine", "exalted"], 3, cap=600)
+        )
+    )
+    at5 = set(
+        _ids(
+            routes.cycles_shortest_first(g, ["chaos", "divine", "exalted"], 5, cap=600)
+        )
+    )
     assert at3 and at3 <= at5, "nothing found at 3 steps is lost at 5"
 
 
 def test_held_currencies_share_the_cap_at_the_longest_length():
-    cyc = list(routes.cycles_shortest_first(_complete(), ["chaos", "divine", "exalted"], 5, cap=3000))
+    cyc = list(
+        routes.cycles_shortest_first(
+            _complete(), ["chaos", "divine", "exalted"], 5, cap=3000
+        )
+    )
     assert len(cyc) == 3000
     longest = [c for c in cyc if len(c) == max(len(x) for x in cyc)]
-    per_start = {s: sum(1 for c in longest if c[0].src == s) for s in ("chaos", "divine", "exalted")}
-    assert min(per_start.values()) > 0 and max(per_start.values()) - min(per_start.values()) <= 1, per_start
+    per_start = {
+        s: sum(1 for c in longest if c[0].src == s)
+        for s in ("chaos", "divine", "exalted")
+    }
+    assert (
+        min(per_start.values()) > 0
+        and max(per_start.values()) - min(per_start.values()) <= 1
+    ), per_start
 
 
 def test_the_same_cycles_as_before_when_nothing_is_capped():

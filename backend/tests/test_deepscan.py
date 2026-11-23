@@ -10,6 +10,7 @@ Built on SYNTHETIC graphs (no DB), mirroring test_centrality.py / test_convert.p
 
     python -m pytest backend/tests/test_deepscan.py -q
 """
+
 import sys
 from pathlib import Path
 
@@ -20,12 +21,26 @@ from app.arbitrage import Edge, Graph, deepscan, routes
 
 pytest.importorskip("numpy")
 
-SETTINGS = {"reference": "a", "league": "T", "max_steps": 3, "max_start_fraction": 1.0,
-            "step_overhead_min": 0.0, "gold_model": {}}
+SETTINGS = {
+    "reference": "a",
+    "league": "T",
+    "max_steps": 3,
+    "max_start_fraction": 1.0,
+    "step_overhead_min": 0.0,
+    "gold_model": {},
+}
 
 
 def _edge(a, b, rate, stock=1_000_000):
-    return Edge(a, b, "live", rate, [{"rate": rate, "stock": stock}], age_s=0.0, vol_in_per_h=100.0)
+    return Edge(
+        a,
+        b,
+        "live",
+        rate,
+        [{"rate": rate, "stock": stock}],
+        age_s=0.0,
+        vol_in_per_h=100.0,
+    )
 
 
 def _graph(edges, **over):
@@ -39,7 +54,9 @@ def _graph(edges, **over):
 def _ring(nodes, gain):
     """A loop over `nodes` at 1:1 whose LAST hop pays `gain` (1.05 = +5% per lap)."""
     hops = list(zip(nodes, nodes[1:] + nodes[:1]))
-    return [(a, b, gain if i == len(hops) - 1 else 1.0) for i, (a, b) in enumerate(hops)]
+    return [
+        (a, b, gain if i == len(hops) - 1 else 1.0) for i, (a, b) in enumerate(hops)
+    ]
 
 
 def _candidates(g, capital, notional=False):
@@ -57,7 +74,7 @@ def test_finds_a_loop_longer_than_max_steps():
     assert len(loops) == 1
     assert sorted(e.src for e in loops[0]) == list("abcde")
     for e, nxt in zip(loops[0], loops[0][1:] + loops[0][:1]):
-        assert e.dst == nxt.src                       # a closed chain of real Edge objects
+        assert e.dst == nxt.src  # a closed chain of real Edge objects
 
 
 def test_no_loop_in_a_fair_market():
@@ -68,7 +85,10 @@ def test_no_loop_in_a_fair_market():
 def test_returns_several_distinct_loops():
     g = _graph(_ring(list("abcde"), 1.05) + _ring(list("vwxyz"), 1.08))
     loops = deepscan.deep_loops(g, {})
-    assert sorted("".join(sorted(e.src for e in l)) for l in loops) == ["abcde", "vwxyz"]
+    assert sorted("".join(sorted(e.src for e in l)) for l in loops) == [
+        "abcde",
+        "vwxyz",
+    ]
 
 
 def test_drops_the_mispriced_edge_so_the_next_loop_is_new():
@@ -77,7 +97,7 @@ def test_drops_the_mispriced_edge_so_the_next_loop_is_new():
     terminates and doesn't hand back the same loop."""
     g = _graph(_ring(list("abcde"), 1.05))
     loops = deepscan.deep_loops(g, {n: 1.0 for n in "abcde"})
-    assert len(loops) == 1                            # removing e->a (the 1.05 hop) kills it
+    assert len(loops) == 1  # removing e->a (the 1.05 hop) kills it
 
 
 def test_max_loops_caps_the_scan():
@@ -96,7 +116,7 @@ def test_degrades_to_nothing_without_numpy(monkeypatch):
 def test_deep_loop_becomes_an_ordinary_route_from_the_held_currency():
     g = _graph(_ring(list("abcde"), 1.05))
     got, stats = _candidates(g, {"c": 1000.0})
-    assert len(got) == 1                              # DFS (max 3 hops) found nothing; deep did
+    assert len(got) == 1  # DFS (max 3 hops) found nothing; deep did
     r = got[0]
     assert r["deep"] is True
     assert r["start"] == "c" and r["path"] == list("cdeabc")
@@ -129,20 +149,28 @@ def test_notional_search_lists_the_deep_loop_from_every_vertex_once():
 
 def test_telemetry_is_gated_throttled_and_carries_no_currency_names(monkeypatch):
     sent = []
-    monkeypatch.setattr(deepscan.devtelemetry, "tlog", lambda tag, msg: sent.append((tag, msg)))
+    monkeypatch.setattr(
+        deepscan.devtelemetry, "tlog", lambda tag, msg: sent.append((tag, msg))
+    )
     g = _graph(_ring(["exalted", "divine", "chaos", "regal", "vaal"], 1.05))
 
     monkeypatch.setattr(deepscan.devtelemetry, "enabled", lambda: False)
     monkeypatch.setattr(deepscan, "_last_report", 0.0)
     deepscan.deep_loops(g, {})
-    assert sent == []                                              # stable build: nothing leaves
+    assert sent == []  # stable build: nothing leaves
 
     monkeypatch.setattr(deepscan.devtelemetry, "enabled", lambda: True)
     deepscan.deep_loops(g, {})
-    deepscan.deep_loops(g, {})                                     # inside the throttle window
+    deepscan.deep_loops(g, {})  # inside the throttle window
     assert len(sent) == 1 and sent[0][0] == "deepscan"
-    assert "numpy=ok" in sent[0][1] and "loops=1" in sent[0][1] and "hops=[5]" in sent[0][1]
-    assert not any(name in sent[0][1] for name in ("exalted", "divine", "chaos", "regal", "vaal"))
+    assert (
+        "numpy=ok" in sent[0][1]
+        and "loops=1" in sent[0][1]
+        and "hops=[5]" in sent[0][1]
+    )
+    assert not any(
+        name in sent[0][1] for name in ("exalted", "divine", "chaos", "regal", "vaal")
+    )
 
 
 # ---------------------------------------------------------------- recipes never crowd out market loops
@@ -152,7 +180,17 @@ def test_the_deep_scan_reads_markets_only_so_recipes_never_crowd_out_a_market_lo
     only (as before recipes existed); recipe loops come from the DFS. Here a recipe loop (x -> y at 3,
     back at 0.5: +50% a lap) is the most profitable cycle, and the scan still returns the market loop."""
     g = _graph(_ring(list("abcde"), 1.05) + [("y", "x", 0.5)])
-    g.add_recipe({"from": "x", "to": "y", "rate": 3.0, "lot": 1, "recipe_id": "r", "name": "r", "kind": "disenchant"})
+    g.add_recipe(
+        {
+            "from": "x",
+            "to": "y",
+            "rate": 3.0,
+            "lot": 1,
+            "recipe_id": "r",
+            "name": "r",
+            "kind": "disenchant",
+        }
+    )
     loops = deepscan.deep_loops(g, {n: 1.0 for n in "abcdexy"}, max_loops=1)
     assert len(loops) == 1 and {e.src for e in loops[0]} == set("abcde")
     assert all(e.kind != "recipe" for loop in deepscan.deep_loops(g, {}) for e in loop)

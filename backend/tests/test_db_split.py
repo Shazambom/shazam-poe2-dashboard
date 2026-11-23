@@ -11,6 +11,7 @@ migrations_user.py can't silently drift:
 
     DATA_DIR=$(mktemp -d) MARKET_SEED= python -m pytest backend/tests/test_db_split.py -q
 """
+
 import gzip
 import os
 import json
@@ -25,9 +26,24 @@ from app import db, migrations_user
 
 
 # ----------------------------------------------------------------- kv routing
-USER_KEYS = ["settings", "watches", "oauth_pending", "meta_overrides", "trading_workspace",
-             "signals_ack", "strat_calc", "secret:poesessid", "secret:oauth"]
-OPS_KEYS = ["lh_current", "meta_bridge", "digest_cursor", "trade_leagues", "lh_fetch:Standard"]
+USER_KEYS = [
+    "settings",
+    "watches",
+    "oauth_pending",
+    "meta_overrides",
+    "trading_workspace",
+    "signals_ack",
+    "strat_calc",
+    "secret:poesessid",
+    "secret:oauth",
+]
+OPS_KEYS = [
+    "lh_current",
+    "meta_bridge",
+    "digest_cursor",
+    "trade_leagues",
+    "lh_fetch:Standard",
+]
 
 
 @pytest.mark.parametrize("key", USER_KEYS)
@@ -46,17 +62,38 @@ def test_kv_roundtrip_lands_in_the_right_file():
     db.kv_set("settings", {"a": 1})
     db.kv_set("lh_current", ["X"])
     with db.q() as c:
-        assert c.execute("SELECT value FROM main.kv WHERE key='settings'").fetchone()[0] == '{"a": 1}'
-        assert c.execute("SELECT value FROM market.kv_ops WHERE key='lh_current'").fetchone()[0] == '["X"]'
-        assert c.execute("SELECT COUNT(*) FROM main.kv WHERE key='lh_current'").fetchone()[0] == 0
-        assert c.execute("SELECT COUNT(*) FROM market.kv_ops WHERE key='settings'").fetchone()[0] == 0
+        assert (
+            c.execute("SELECT value FROM main.kv WHERE key='settings'").fetchone()[0]
+            == '{"a": 1}'
+        )
+        assert (
+            c.execute(
+                "SELECT value FROM market.kv_ops WHERE key='lh_current'"
+            ).fetchone()[0]
+            == '["X"]'
+        )
+        assert (
+            c.execute("SELECT COUNT(*) FROM main.kv WHERE key='lh_current'").fetchone()[
+                0
+            ]
+            == 0
+        )
+        assert (
+            c.execute(
+                "SELECT COUNT(*) FROM market.kv_ops WHERE key='settings'"
+            ).fetchone()[0]
+            == 0
+        )
 
 
 # ----------------------------------------------------------------- seeding
 def _make_market(path: Path, version: int) -> None:
     c = sqlite3.connect(str(path))
     c.executescript(db.MARKET_SCHEMA)
-    c.execute("INSERT OR REPLACE INTO market_meta(key, value) VALUES('snapshot_version', ?)", (str(version),))
+    c.execute(
+        "INSERT OR REPLACE INTO market_meta(key, value) VALUES('snapshot_version', ?)",
+        (str(version),),
+    )
     c.commit()
     c.close()
 
@@ -117,8 +154,12 @@ def _legacy_db(path: Path) -> None:
     c = sqlite3.connect(str(path))
     c.executescript(db.USER_SCHEMA)
     c.execute("INSERT INTO capital(currency, qty) VALUES('chaos', 12.5), ('divine', 3)")
-    for k, v in [("settings", {"league": "L"}), ("secret:poesessid", {"cookie": "x"}),
-                 ("lh_current", ["L"]), ("meta_bridge", {"a": "b"})]:
+    for k, v in [
+        ("settings", {"league": "L"}),
+        ("secret:poesessid", {"cookie": "x"}),
+        ("lh_current", ["L"]),
+        ("meta_bridge", {"a": "b"}),
+    ]:
         c.execute("INSERT INTO kv(key, value) VALUES(?, ?)", (k, json.dumps(v)))
     c.commit()
     c.close()
@@ -139,12 +180,17 @@ def test_m1_lifts_user_rows_only_and_renames_legacy(tmp_path, monkeypatch, user_
     monkeypatch.setattr(migrations_user, "DB_PATH", legacy)
     after = migrations_user._m1_split_from_legacy(user_conn)
     user_conn.commit()
-    after()                                   # the runner calls this post-commit hook
+    after()  # the runner calls this post-commit hook
     keys = {r[0] for r in user_conn.execute("SELECT key FROM kv")}
     assert keys == {"settings", "secret:poesessid"}
     caps = dict(user_conn.execute("SELECT currency, qty FROM capital").fetchall())
     assert caps == {"chaos": 12.5, "divine": 3}
-    assert user_conn.execute("SELECT value FROM user_meta WHERE key='split_done'").fetchone()[0] == "1"
+    assert (
+        user_conn.execute(
+            "SELECT value FROM user_meta WHERE key='split_done'"
+        ).fetchone()[0]
+        == "1"
+    )
     assert not legacy.exists()
     assert (tmp_path / "poe2arb.sqlite.premigration").exists()
 
@@ -152,7 +198,12 @@ def test_m1_lifts_user_rows_only_and_renames_legacy(tmp_path, monkeypatch, user_
 def test_m1_fresh_install_marks_done_without_legacy(tmp_path, monkeypatch, user_conn):
     monkeypatch.setattr(migrations_user, "DB_PATH", tmp_path / "poe2arb.sqlite")
     migrations_user._m1_split_from_legacy(user_conn)
-    assert user_conn.execute("SELECT value FROM user_meta WHERE key='split_done'").fetchone()[0] == "1"
+    assert (
+        user_conn.execute(
+            "SELECT value FROM user_meta WHERE key='split_done'"
+        ).fetchone()[0]
+        == "1"
+    )
 
 
 def test_m1_is_idempotent(tmp_path, monkeypatch, user_conn):
@@ -160,23 +211,50 @@ def test_m1_is_idempotent(tmp_path, monkeypatch, user_conn):
     _legacy_db(legacy)
     monkeypatch.setattr(migrations_user, "DB_PATH", legacy)
     migrations_user._m1_split_from_legacy(user_conn)()
-    _legacy_db(legacy)   # a legacy file reappears — must NOT be re-lifted
+    _legacy_db(legacy)  # a legacy file reappears — must NOT be re-lifted
     user_conn.execute("UPDATE capital SET qty=99 WHERE currency='chaos'")
     migrations_user._m1_split_from_legacy(user_conn)
-    assert user_conn.execute("SELECT qty FROM capital WHERE currency='chaos'").fetchone()[0] == 99
+    assert (
+        user_conn.execute("SELECT qty FROM capital WHERE currency='chaos'").fetchone()[
+            0
+        ]
+        == 99
+    )
 
 
 # ----------------------------------------------------------------- m2 watches → workspace
 def test_m2_derives_workspace_once(user_conn):
-    folders = [{"id": 1, "title": "F", "searches": [{"id": 7, "title": "S", "type": "search", "slug": "abc", "live": True}]}]
-    user_conn.execute("INSERT INTO kv(key, value) VALUES('watches', ?)", (json.dumps(folders),))
+    folders = [
+        {
+            "id": 1,
+            "title": "F",
+            "searches": [
+                {"id": 7, "title": "S", "type": "search", "slug": "abc", "live": True}
+            ],
+        }
+    ]
+    user_conn.execute(
+        "INSERT INTO kv(key, value) VALUES('watches', ?)", (json.dumps(folders),)
+    )
     migrations_user._m2_watches_to_workspace(user_conn)
-    ws = json.loads(user_conn.execute("SELECT value FROM kv WHERE key='trading_workspace'").fetchone()[0])
+    ws = json.loads(
+        user_conn.execute(
+            "SELECT value FROM kv WHERE key='trading_workspace'"
+        ).fetchone()[0]
+    )
     assert ws["version"] == 2
     assert ws["tree"][0]["children"][0]["slug"] == "abc"
-    user_conn.execute("UPDATE kv SET value='{\"version\":2,\"tree\":[]}' WHERE key='trading_workspace'")
-    migrations_user._m2_watches_to_workspace(user_conn)   # idempotent: does not overwrite
-    ws2 = json.loads(user_conn.execute("SELECT value FROM kv WHERE key='trading_workspace'").fetchone()[0])
+    user_conn.execute(
+        "UPDATE kv SET value='{\"version\":2,\"tree\":[]}' WHERE key='trading_workspace'"
+    )
+    migrations_user._m2_watches_to_workspace(
+        user_conn
+    )  # idempotent: does not overwrite
+    ws2 = json.loads(
+        user_conn.execute(
+            "SELECT value FROM kv WHERE key='trading_workspace'"
+        ).fetchone()[0]
+    )
     assert ws2["tree"] == []
 
 
@@ -185,13 +263,16 @@ def test_seed_market_syncs_through_the_write_handle(seed_env, monkeypatch):
     unseeded until beta telemetry showed it (2026-09-25). The seed must be synced through the
     handle it was written with."""
     import fcntl
+
     d, market = seed_env
     _make_seed(d, 9)
     modes = []
     real = os.fsync
+
     def spy(fd):
         modes.append(fcntl.fcntl(fd, fcntl.F_GETFL) & os.O_ACCMODE)
         real(fd)
+
     monkeypatch.setattr(os, "fsync", spy)
     db.seed_market()
     assert db._read_snapshot_version(market) == 9

@@ -16,6 +16,7 @@ negative cycle plus everything downstream). That makes it a useful independent o
 
     python -m pytest backend/tests/test_negcycle_fiset.py -q
 """
+
 import random
 import sys
 from pathlib import Path
@@ -23,7 +24,7 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # backend/
-sys.path.insert(0, str(Path(__file__).resolve().parent))      # tests/ (shared fuzz helpers)
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # tests/ (shared fuzz helpers)
 from test_negcycle import IMPLS, assert_negative_cycle, random_graph, run
 
 INF, NINF = float("inf"), float("-inf")
@@ -58,24 +59,58 @@ def _fiset(edges, V, start):
 
 # his test cases: (name, V, edges, expected dist from 0)
 CASES = [
-    ("unreachableNodeDoesNotPolluteCostOfReachableNeighbor", 4,
-     [(0, 2, 5), (1, 2, -100)], [0, INF, 5, INF]),
-    ("nodeReachableOnlyThroughUnreachableIntermediaryStaysUnreachable", 3,
-     [(1, 2, 5)], [0, INF, INF]),
-    ("unreachableNegativeCycleDoesNotTaintReachableNode", 4,
-     [(0, 3, 10), (1, 2, -1), (2, 1, -1), (2, 3, 5)], [0, INF, INF, 10]),
+    (
+        "unreachableNodeDoesNotPolluteCostOfReachableNeighbor",
+        4,
+        [(0, 2, 5), (1, 2, -100)],
+        [0, INF, 5, INF],
+    ),
+    (
+        "nodeReachableOnlyThroughUnreachableIntermediaryStaysUnreachable",
+        3,
+        [(1, 2, 5)],
+        [0, INF, INF],
+    ),
+    (
+        "unreachableNegativeCycleDoesNotTaintReachableNode",
+        4,
+        [(0, 3, 10), (1, 2, -1), (2, 1, -1), (2, 3, 5)],
+        [0, INF, INF, 10],
+    ),
     ("singleNode", 1, [], [0]),
     ("twoNodesDirectEdge", 2, [(0, 1, 7)], [0, 7]),
     ("shortestPathChosenOverLonger", 3, [(0, 2, 10), (0, 1, 3), (1, 2, 4)], [0, 3, 7]),
     ("negativeEdgeWeightWithoutCycle", 3, [(0, 1, 1), (1, 2, -2)], [0, 1, -1]),
-    ("reachableNegativeCycleMarkedNegativeInfinity", 3,
-     [(0, 1, 1), (1, 2, 1), (2, 1, -3)], [0, NINF, NINF]),
-    ("nodeDownstreamOfNegativeCycleMarkedNegativeInfinity", 4,
-     [(0, 1, 1), (1, 2, 1), (2, 1, -3), (2, 3, 5)], [0, NINF, NINF, NINF]),
+    (
+        "reachableNegativeCycleMarkedNegativeInfinity",
+        3,
+        [(0, 1, 1), (1, 2, 1), (2, 1, -3)],
+        [0, NINF, NINF],
+    ),
+    (
+        "nodeDownstreamOfNegativeCycleMarkedNegativeInfinity",
+        4,
+        [(0, 1, 1), (1, 2, 1), (2, 1, -3), (2, 3, 5)],
+        [0, NINF, NINF, NINF],
+    ),
     ("disconnectedGraph", 4, [(0, 1, 3), (2, 3, 1)], [0, 3, INF, INF]),
-    ("exampleFromMain", 9,
-     [(0, 1, 1), (1, 2, 1), (2, 4, 1), (4, 3, -3), (3, 2, 1), (1, 5, 4), (1, 6, 4), (5, 6, 5),
-      (6, 7, 4), (5, 7, 3)], [0, 1, NINF, NINF, NINF, 5, 5, 8, INF]),
+    (
+        "exampleFromMain",
+        9,
+        [
+            (0, 1, 1),
+            (1, 2, 1),
+            (2, 4, 1),
+            (4, 3, -3),
+            (3, 2, 1),
+            (1, 5, 4),
+            (1, 6, 4),
+            (5, 6, 5),
+            (6, 7, 4),
+            (5, 7, 3),
+        ],
+        [0, 1, NINF, NINF, NINF, 5, 5, 8, INF],
+    ),
 ]
 
 
@@ -118,7 +153,7 @@ def test_fuzz_against_fiset(impl, kind):
     seen = {"cycle": 0, "ok": 0}
     for seed in range(300):
         rng = random.Random(f"fiset-{kind}-{seed}")
-        n = rng.choice([2, 3, 4, 9, 20, 45])          # V == 1: see test_single_vertex_self_loop
+        n = rng.choice([2, 3, 4, 9, 20, 45])  # V == 1: see test_single_vertex_self_loop
         edges = random_graph(rng, n, kind)
         source = rng.randrange(n)
         theirs = _fiset(edges, n, source)
@@ -129,6 +164,6 @@ def test_fuzz_against_fiset(impl, kind):
             assert all(theirs[v] == NINF for v in got[1]), (kind, seed, got[1])
         else:
             assert got[0] == "ok", (kind, seed)
-            assert got[1].tolist() == theirs, (kind, seed)          # bit-identical
+            assert got[1].tolist() == theirs, (kind, seed)  # bit-identical
         seen[got[0]] += 1
     assert seen["cycle"] > 30 and seen["ok"] > 30, seen

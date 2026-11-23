@@ -10,7 +10,11 @@ from .config import LEAGUE, TRADE_LEAGUES_TTL_S
 log = logging.getLogger(__name__)
 
 
-from .arbpresets import ARBITRAGE_PRESETS, ARBITRAGE_UNIT, HIDDEN_KNOB_DEFAULTS as _HIDDEN  # (re-exported)
+from .arbpresets import (
+    ARBITRAGE_PRESETS,
+    ARBITRAGE_UNIT,
+    HIDDEN_KNOB_DEFAULTS as _HIDDEN,
+)  # (re-exported)
 
 _BALANCED = ARBITRAGE_PRESETS[0]["values"]
 
@@ -44,24 +48,27 @@ DEFAULTS: dict = {
     # (GoldPurchaseFee), fetched automatically. `per_unit` is only for manual
     # overrides; `per_ref_unit` is the fallback for items missing from the table.
     # `fee_side`: "buy" charges per unit received, "sell" per unit given.
-    "gold_model": {**_HIDDEN["gold_model"], "per_unit": dict(_HIDDEN["gold_model"]["per_unit"])},   # a copy, never the constant
+    "gold_model": {
+        **_HIDDEN["gold_model"],
+        "per_unit": dict(_HIDDEN["gold_model"]["per_unit"]),
+    },  # a copy, never the constant
     # Route search
     "max_steps": _BALANCED["max_steps"],
-    "max_start_fraction": 1.0,      # fraction of held capital to commit per route
-    "live_max_age_s": 1800,         # order book older than this is ignored
+    "max_start_fraction": 1.0,  # fraction of held capital to commit per route
+    "live_max_age_s": 1800,  # order book older than this is ignored
     # Live refresh policy (all fetches go through the rate-limited queue)
-    "live_top_n": 5,                # after display, refresh pairs behind the top N loops only
-    "live_min_age_s": 300,          # ...and only pairs older than this
-    "min_refetch_s": 300,           # never refetch the same pair sooner (unless forced)
-    "routes_cache_s": 300,          # serve identical route queries from memory this long
-    "background_sweep": False,      # opt-in low-priority sweep of the whole watchlist
+    "live_top_n": 5,  # after display, refresh pairs behind the top N loops only
+    "live_min_age_s": 300,  # ...and only pairs older than this
+    "min_refetch_s": 300,  # never refetch the same pair sooner (unless forced)
+    "routes_cache_s": 300,  # serve identical route queries from memory this long
+    "background_sweep": False,  # opt-in low-priority sweep of the whole watchlist
     # Batch padding: a request for want=W carries the requested haves first, then fills
     # the remaining slots with the haves that trade into W most (by digest volume),
     # skipping anything cached within min_refetch_s. Free data on a request we're
     # making anyway; requested pairs still get starvation follow-ups, padded ones don't.
     "batch_pad": True,
     "batch_max_have": 10,
-    "digest_max_age_h": 6,          # digest rate older than this is ignored
+    "digest_max_age_h": 6,  # digest rate older than this is ignored
     "allow_digest_edges": _HIDDEN["allow_digest_edges"],
     "allow_recipe_edges": _HIDDEN["allow_recipe_edges"],
     # Edge culling: markets thinner than this never enter the graph, so junk
@@ -84,7 +91,9 @@ DEFAULTS: dict = {
     # market that moves ten a day and one that moves a hundred thousand meet the same bar.
     "depth_hours": 1.0,
     "depth_balance": 0.1,
-    "step_overhead_min": _BALANCED["step_overhead_min"],   # minutes per exchange step to place and collect an order
+    "step_overhead_min": _BALANCED[
+        "step_overhead_min"
+    ],  # minutes per exchange step to place and collect an order
     # Price of gold for ranking, in Divine per 1000 gold. Gold's real worth shifts across a
     # league, so a slider (Arbitrage page, range 100k–10M gold/Divine) tunes this; it feeds
     # Convert's net-value ranking and Arbitrage velocity. Default: the Balanced preset's (1 Divine ≈ 105k gold).
@@ -104,7 +113,12 @@ DEFAULTS: dict = {
     # history folder. `max` rows kept (20…1000), `retentionDays` (7…90); both enforced by the client store.
     "ee2History": {"enabled": True, "max": 200, "retentionDays": 14},
     # Default filters (UI can override per request): the Balanced preset's, plus the user's own choices.
-    "filters": {**_BALANCED["filters"], "live_only": False, "sort": "score", "limit": _HIDDEN["limit"]},
+    "filters": {
+        **_BALANCED["filters"],
+        "live_only": False,
+        "sort": "score",
+        "limit": _HIDDEN["limit"],
+    },
 }
 
 
@@ -115,9 +129,17 @@ def _fresh_trade_league_ids() -> list[str]:
         return []
     at = trade.get("at")
     leagues = trade.get("leagues")
-    if not isinstance(at, (int, float)) or time.time() - at >= TRADE_LEAGUES_TTL_S or not isinstance(leagues, list):
+    if (
+        not isinstance(at, (int, float))
+        or time.time() - at >= TRADE_LEAGUES_TTL_S
+        or not isinstance(leagues, list)
+    ):
         return []
-    return [lid for l in leagues if isinstance(l, dict) and isinstance((lid := l.get("id")), str) and lid.strip()]
+    return [
+        lid
+        for l in leagues
+        if isinstance(l, dict) and isinstance((lid := l.get("id")), str) and lid.strip()
+    ]
 
 
 def _is_retired_league(league: str) -> bool:
@@ -132,11 +154,23 @@ def _is_retired_league(league: str) -> bool:
     if not current or league in current:
         return False
     low = league.strip().lower()
-    base = league[3:].strip() if low.startswith("hc ") else league[9:].strip() if low.startswith("hardcore ") else league
+    base = (
+        league[3:].strip()
+        if low.startswith("hc ")
+        else league[9:].strip()
+        if low.startswith("hardcore ")
+        else league
+    )
     if base in current:
         return False
     with db.q() as c:
-        return c.execute("SELECT 1 FROM league_daily WHERE league IN (?, ?) LIMIT 1", (league, base)).fetchone() is not None
+        return (
+            c.execute(
+                "SELECT 1 FROM league_daily WHERE league IN (?, ?) LIMIT 1",
+                (league, base),
+            ).fetchone()
+            is not None
+        )
 
 
 def _merged(stored: dict | None) -> dict:
@@ -174,15 +208,21 @@ def _youngest_now() -> str:
         live_set = set(live_ids)
         current = [lg for lg in current if lg in live_set]
         if not current:
-            live_challenge = [lg for lg in live_ids if not leaguehistory.is_skipped_league(lg)]
+            live_challenge = [
+                lg for lg in live_ids if not leaguehistory.is_skipped_league(lg)
+            ]
             if live_challenge:
                 return live_challenge[0]
     if not current:
         return LEAGUE
     with db.q() as c:
-        first = {r[0]: r[1] for r in c.execute(
-            f"SELECT league, MIN(day) FROM league_daily WHERE league IN ({','.join('?' * len(current))}) GROUP BY league",
-            current)}
+        first = {
+            r[0]: r[1]
+            for r in c.execute(
+                f"SELECT league, MIN(day) FROM league_daily WHERE league IN ({','.join('?' * len(current))}) GROUP BY league",
+                current,
+            )
+        }
     return max(current, key=lambda lg: first.get(lg) or "9999-12-31")
 
 
@@ -200,8 +240,14 @@ def forget_youngest() -> None:
 def get_settings() -> dict:
     """Stored settings over DEFAULTS. Read-only (one-time transforms are user migrations)."""
     ver = (str(db.USER_DB_PATH), db.tx_gen(), _youngest_gen)
-    cached = cache.memo(_settings_cache, "s", _SETTINGS_TTL,
-                        lambda: _merged(db.kv_get("settings", {})), version=ver, max_entries=2)
+    cached = cache.memo(
+        _settings_cache,
+        "s",
+        _SETTINGS_TTL,
+        lambda: _merged(db.kv_get("settings", {})),
+        version=ver,
+        max_entries=2,
+    )
     return copy.deepcopy(cached)
 
 
@@ -221,8 +267,11 @@ def save_settings(patch: dict) -> dict:
             if raw_league:
                 current["league"] = raw_league
             else:
-                current.pop("league", None)   # the default is read, never stored: the next league reaches everyone
+                current.pop(
+                    "league", None
+                )  # the default is read, never stored: the next league reaches everyone
         return current
+
     saved = db.kv_update("settings", apply, {})
     cache.clear(_settings_cache)
     effective = _merged(saved)
@@ -243,8 +292,8 @@ def _log_changes(before: dict, after: dict) -> None:
 
 
 # Read-site clamps for tunables the UI can save as 0/blank — one home, not per caller.
-GOLD_VALUE_DIVINE_PER_1K = 0.01   # fallback: 1 Divine ≈ 100k gold (the slider's default)
-HUB_N = 5                         # fallback hub count (centrality.HUB_N mirrors this)
+GOLD_VALUE_DIVINE_PER_1K = 0.01  # fallback: 1 Divine ≈ 100k gold (the slider's default)
+HUB_N = 5  # fallback hub count (centrality.HUB_N mirrors this)
 
 
 def gold_value_per_1k(s: dict) -> float:
@@ -254,6 +303,7 @@ def gold_value_per_1k(s: dict) -> float:
 def hold_caution(s: dict) -> float:
     """Hold's drawdown weight. Clamped by `holdscore.clamp_k`, which owns the range."""
     from .holdscore import clamp_k
+
     v = s.get("hold_caution")
     return clamp_k(DEFAULTS["hold_caution"] if v is None else v)
 
@@ -287,7 +337,9 @@ def depth_balance(s: dict) -> float:
     return _positive(s, "depth_balance")
 
 
-STASH_COUNTED_BY_DEFAULT = True     # every holding is liquid until the user switches it off
+STASH_COUNTED_BY_DEFAULT = (
+    True  # every holding is liquid until the user switches it off
+)
 
 
 def stash_counted(s: dict, currency: str) -> bool:

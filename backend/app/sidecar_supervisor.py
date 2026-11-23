@@ -6,6 +6,7 @@ and passes ARBITER_PARENT_PID (the backup POSIX/Win poll). Restarts it with capp
 sidecar is available (no bundled binary and not running from source), it's a NO-OP: the app still
 works because endpoints only READ analytics_cache — they just serve empty/stale results.
 """
+
 from __future__ import annotations
 
 import collections
@@ -48,8 +49,11 @@ def _sidecar_cmd() -> Optional[list[str]]:
         # observable (WARNING) rather than a silent no-op.
         if Path(exe).exists():
             return [exe]
-        log.warning("SIDECAR_BIN set but not found at %s — bundled sidecar missing; analytics "
-                    "disabled (packaging regression?)", exe)
+        log.warning(
+            "SIDECAR_BIN set but not found at %s — bundled sidecar missing; analytics "
+            "disabled (packaging regression?)",
+            exe,
+        )
         return None
     if getattr(sys, "frozen", False):
         return [sys.executable, "--sidecar"]
@@ -60,7 +64,7 @@ def _sidecar_cmd() -> Optional[list[str]]:
     return None
 
 
-HEALTHY_RUN_S = 60.0   # a child that lived this long earns a quick restart; one that dies sooner backs off
+HEALTHY_RUN_S = 60.0  # a child that lived this long earns a quick restart; one that dies sooner backs off
 
 
 def _drain_stderr(stream, tail: collections.deque) -> None:
@@ -81,14 +85,20 @@ def _supervise(cmd: list[str]) -> None:
             env = dict(os.environ, ARBITER_PARENT_PID=str(os.getpid()))
             # Capture the sidecar's stderr so a native crash (rc=0xC0000005) or traceback is
             # visible instead of being discarded — the death was invisible in v0.2.50.
-            _proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stderr=subprocess.PIPE, env=env)
+            _proc = subprocess.Popen(
+                cmd, stdin=subprocess.PIPE, stderr=subprocess.PIPE, env=env
+            )
             log.info("analytics sidecar started pid=%s (%s)", _proc.pid, cmd[0])
             started = time.monotonic()
             tail: collections.deque[bytes] = collections.deque(maxlen=32)
             reader = None
             if _proc.stderr is not None:
-                reader = threading.Thread(target=_drain_stderr, args=(_proc.stderr, tail), daemon=True,
-                                          name="sidecar-stderr")
+                reader = threading.Thread(
+                    target=_drain_stderr,
+                    args=(_proc.stderr, tail),
+                    daemon=True,
+                    name="sidecar-stderr",
+                )
                 reader.start()
             rc = _proc.wait()
             if reader is not None:
@@ -98,13 +108,15 @@ def _supervise(cmd: list[str]) -> None:
             if rc == 0:
                 # Clean idle exit (runner.IDLE_EXIT_S) — keep RAM freed until the next job arrives.
                 backoff = 1.0
-                log.info("analytics sidecar exited cleanly (idle) — sleeping until next job")
+                log.info(
+                    "analytics sidecar exited cleanly (idle) — sleeping until next job"
+                )
                 _wake.clear()
                 while not _stop and not _wake.wait(timeout=1.0):
                     pass
                 continue
             if time.monotonic() - started >= HEALTHY_RUN_S:
-                backoff = 1.0                       # it ran a while: restart it promptly
+                backoff = 1.0  # it ran a while: restart it promptly
             log.info("analytics sidecar exited rc=%s — restarting", rc)
             # rc=3221225477 (0xC0000005) = native access violation; surface crash + bounded stderr tail.
             err_tail = b"".join(tail)[-600:].decode("utf-8", "replace")
@@ -129,10 +141,13 @@ def start() -> None:
     _wake.clear()
     cmd = _sidecar_cmd()
     if not cmd:
-        log.info("analytics sidecar unavailable — analytics endpoints will serve empty results")
+        log.info(
+            "analytics sidecar unavailable — analytics endpoints will serve empty results"
+        )
         return
-    threading.Thread(target=_supervise, args=(cmd,), daemon=True,
-                     name="sidecar-supervisor").start()
+    threading.Thread(
+        target=_supervise, args=(cmd,), daemon=True, name="sidecar-supervisor"
+    ).start()
 
 
 def stop() -> None:
@@ -144,7 +159,7 @@ def stop() -> None:
     if p and p.poll() is None:
         try:
             if p.stdin:
-                p.stdin.close()          # EOF -> sidecar's stdin watchdog exits it cleanly
+                p.stdin.close()  # EOF -> sidecar's stdin watchdog exits it cleanly
         except Exception:
             pass
         try:

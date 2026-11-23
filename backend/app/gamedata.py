@@ -11,6 +11,7 @@ section. Strings are UTF-16LE terminated by four zero bytes; string/array fields
 a u64 offset relative to the start of the variable section (the 0xBB marker).
 64-bit foreign-row refs are 16 bytes (row index + padding); 0xFE.. means null.
 """
+
 from __future__ import annotations
 
 import json
@@ -33,10 +34,29 @@ NULL_ROW = 0xFEFEFEFEFEFEFEFE
 CACHE = DATA_DIR / "gamedata"
 CACHE.mkdir(parents=True, exist_ok=True)
 
-SIZES = {"bool": 1, "i16": 2, "u16": 2, "i32": 4, "u32": 4, "f32": 4, "i64": 8, "u64": 8,
-         "string": 8, "foreignrow": 16, "row": 8, "enumrow": 4, "array": 16}
+SIZES = {
+    "bool": 1,
+    "i16": 2,
+    "u16": 2,
+    "i32": 4,
+    "u32": 4,
+    "f32": 4,
+    "i64": 8,
+    "u64": 8,
+    "string": 8,
+    "foreignrow": 16,
+    "row": 8,
+    "enumrow": 4,
+    "array": 16,
+}
 
-state = {"loaded_at": None, "version": None, "rows": 0, "last_error": None, "source": None}
+state = {
+    "loaded_at": None,
+    "version": None,
+    "rows": 0,
+    "last_error": None,
+    "source": None,
+}
 
 
 # ------------------------------------------------------------------ parsing
@@ -51,7 +71,7 @@ class Dat:
 
     def row(self, i: int) -> bytes:
         off = 4 + i * self.row_width
-        return self.raw[off: off + self.row_width]
+        return self.raw[off : off + self.row_width]
 
     def string(self, offset: int) -> str:
         p = self.data_start + offset
@@ -101,8 +121,10 @@ async def _get(url: str, name: str, max_age_s: int) -> bytes:
         return path.read_bytes()
     r = await gateway.request("GET", url, policy="static")
     r.raise_for_status()
-    if r.content[:1] == b"<":   # HTML error/viewer page — never cache it as data
-        raise ValueError(f"{name}: got HTML instead of a data file (URL layout changed?)")
+    if r.content[:1] == b"<":  # HTML error/viewer page — never cache it as data
+        raise ValueError(
+            f"{name}: got HTML instead of a data file (URL layout changed?)"
+        )
     path.write_bytes(r.content)
     return r.content
 
@@ -120,10 +142,21 @@ async def refresh(force: bool = False) -> dict:
         if version and version != state.get("version"):
             max_age = 0
         schema = json.loads(await _get(SCHEMA_URL, "schema.min.json", 7 * 86400))
-        ce_raw = await _get(GGPK_FILE.format(name="currencyexchange.datc64"), "currencyexchange.datc64", max_age)
-        bit_raw = await _get(GGPK_FILE.format(name="baseitemtypes.datc64"), "baseitemtypes.datc64", max_age)
-        cat_raw = await _get(GGPK_FILE.format(name="currencyexchangecategories.datc64"),
-                             "currencyexchangecategories.datc64", max_age)
+        ce_raw = await _get(
+            GGPK_FILE.format(name="currencyexchange.datc64"),
+            "currencyexchange.datc64",
+            max_age,
+        )
+        bit_raw = await _get(
+            GGPK_FILE.format(name="baseitemtypes.datc64"),
+            "baseitemtypes.datc64",
+            max_age,
+        )
+        cat_raw = await _get(
+            GGPK_FILE.format(name="currencyexchangecategories.datc64"),
+            "currencyexchangecategories.datc64",
+            max_age,
+        )
     except Exception as exc:
         state["last_error"] = str(exc)
         log.warning("gold fee refresh failed: %s", exc)
@@ -137,9 +170,16 @@ async def refresh(force: bool = False) -> dict:
 
     ce = Dat(ce_raw)
     cols = column_offsets(table("CurrencyExchange", 2))
-    expected = sum(SIZES["array" if c.get("array") else c["type"]] for c in table("CurrencyExchange", 2))
+    expected = sum(
+        SIZES["array" if c.get("array") else c["type"]]
+        for c in table("CurrencyExchange", 2)
+    )
     if expected != ce.row_width:
-        log.warning("CurrencyExchange row width %d != schema %d; parsing may be off", ce.row_width, expected)
+        log.warning(
+            "CurrencyExchange row width %d != schema %d; parsing may be off",
+            ce.row_width,
+            expected,
+        )
 
     bit = Dat(bit_raw)  # BaseItemTypes: column 0 is Id (string) in both games
     cats = Dat(cat_raw)
@@ -172,7 +212,13 @@ async def refresh(force: bool = False) -> dict:
         }
 
     db.kv_set("gold_fees_meta", by_meta)
-    state.update(loaded_at=time.time(), version=version, rows=len(by_meta), last_error=None, source="ggpk.exposed")
+    state.update(
+        loaded_at=time.time(),
+        version=version,
+        rows=len(by_meta),
+        last_error=None,
+        source="ggpk.exposed",
+    )
     log.info("loaded %d exchange gold fees (patch %s)", len(by_meta), version)
     return fees()
 
@@ -188,8 +234,11 @@ def categories() -> dict[str, str]:
     ver = (str(db.MARKET_DB_PATH), db.tx_gen())
     if _cats_cache and _cats_cache[0] == ver:
         return _cats_cache[1]
-    res = {meta: e["category"] for meta, e in (db.kv_get("gold_fees_meta", {}) or {}).items()
-           if isinstance(e, dict) and e.get("category")}
+    res = {
+        meta: e["category"]
+        for meta, e in (db.kv_get("gold_fees_meta", {}) or {}).items()
+        if isinstance(e, dict) and e.get("category")
+    }
     _cats_cache = (ver, res)
     return res
 
@@ -199,7 +248,12 @@ def fees() -> dict:
     global _fees_cache
     from .currencies import registry
 
-    ver = (str(db.MARKET_DB_PATH), db.tx_gen(), registry.loaded_at, len(registry.meta_to_trade))
+    ver = (
+        str(db.MARKET_DB_PATH),
+        db.tx_gen(),
+        registry.loaded_at,
+        len(registry.meta_to_trade),
+    )
     if _fees_cache and _fees_cache[0] == ver:
         return _fees_cache[1]
     by_meta = db.kv_get("gold_fees_meta", {})
@@ -211,6 +265,11 @@ def fees() -> dict:
             by_trade[tid] = e["fee"]
         else:
             unmapped.append(meta)
-    res = {"by_trade": by_trade, "by_meta": by_meta, "unmapped": sorted(unmapped), "state": state}
+    res = {
+        "by_trade": by_trade,
+        "by_meta": by_meta,
+        "unmapped": sorted(unmapped),
+        "state": state,
+    }
     _fees_cache = (ver, res)
     return res

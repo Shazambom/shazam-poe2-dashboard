@@ -8,6 +8,7 @@ the public entry points against snapshots in tests/golden/. Any refactor of the 
 Regenerate deliberately (after a reviewed behaviour change) with:
     UPDATE_GOLDEN=1 DATA_DIR=$(mktemp -d) MARKET_SEED= python -m pytest backend/tests/test_arbitrage_golden.py -q
 """
+
 import json
 import os
 import sys
@@ -17,31 +18,71 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # backend/
-from app import arbitrage, db, digest, gamedata, leaguehistory, orderbook, session, settings
+from app import (
+    arbitrage,
+    db,
+    digest,
+    gamedata,
+    leaguehistory,
+    orderbook,
+    session,
+    settings,
+)
 from app.arbitrage import Edge, Graph
 
 GOLDEN = Path(__file__).parent / "golden"
-T0 = 1_800_000_000          # frozen "now" (UTC epoch seconds), on an hour boundary
+T0 = 1_800_000_000  # frozen "now" (UTC epoch seconds), on an hour boundary
 LEAGUE = "GoldenLeague"
 
 SETTINGS = {
-    "league": LEAGUE, "reference": "exalted", "watchlist": ["chaos", "exalted", "divine", "regal"],
-    "max_steps": 3, "max_start_fraction": 1.0, "step_overhead_min": 0.0, "gold_model": {},
-    "routes_cache_s": 300, "allow_digest_edges": True, "allow_recipe_edges": False,
-    "digest_max_age_h": 6, "live_max_age_s": 1800, "min_edge_volume_ref_per_h": 0,
-    "min_edge_depth": 0, "hub_count": 2, "_hub_seed_v1": True, "_liq_floor_v1": True,
-    "rank_weights": {"velocity": 0.5, "margin_per_1k_gold": 0.2, "margin_ref": 0.2, "volume": 0.1},
+    "league": LEAGUE,
+    "reference": "exalted",
+    "watchlist": ["chaos", "exalted", "divine", "regal"],
+    "max_steps": 3,
+    "max_start_fraction": 1.0,
+    "step_overhead_min": 0.0,
+    "gold_model": {},
+    "routes_cache_s": 300,
+    "allow_digest_edges": True,
+    "allow_recipe_edges": False,
+    "digest_max_age_h": 6,
+    "live_max_age_s": 1800,
+    "min_edge_volume_ref_per_h": 0,
+    "min_edge_depth": 0,
+    "hub_count": 2,
+    "_hub_seed_v1": True,
+    "_liq_floor_v1": True,
+    "rank_weights": {
+        "velocity": 0.5,
+        "margin_per_1k_gold": 0.2,
+        "margin_ref": 0.2,
+        "volume": 0.1,
+    },
     # pinned, not the defaults: the snapshots guard the arbitrage code, and the defaults are a preset (settings.py)
-    "volume_window_h": 24, "wide_spread": 2.0, "gold_value_per_1k": 0.01,
-    "filters": {"min_margin_pct": 0.0, "min_margin_ref": 0.0, "max_gold": 0, "min_margin_per_1k_gold": 0.0,
-                "min_liquidity_ref": 0.0, "min_volume_ref_per_h": 0.0, "max_fill_hours": 0,
-                "min_velocity": 0.0, "live_only": False, "sort": "score", "limit": 100,
-                "max_step_minutes": 0},   # off: the fixture commits 100 units into 100/h markets on purpose
+    "volume_window_h": 24,
+    "wide_spread": 2.0,
+    "gold_value_per_1k": 0.01,
+    "filters": {
+        "min_margin_pct": 0.0,
+        "min_margin_ref": 0.0,
+        "max_gold": 0,
+        "min_margin_per_1k_gold": 0.0,
+        "min_liquidity_ref": 0.0,
+        "min_volume_ref_per_h": 0.0,
+        "max_fill_hours": 0,
+        "min_velocity": 0.0,
+        "live_only": False,
+        "sort": "score",
+        "limit": 100,
+        "max_step_minutes": 0,
+    },  # off: the fixture commits 100 units into 100/h markets on purpose
 }
 
-META = {"chaos": "Metadata/Items/Currency/CurrencyRerollRare",
-        "exalted": "Metadata/Items/Currency/CurrencyAddModToRare",
-        "divine": "Metadata/Items/Currency/CurrencyModValues"}
+META = {
+    "chaos": "Metadata/Items/Currency/CurrencyRerollRare",
+    "exalted": "Metadata/Items/Currency/CurrencyAddModToRare",
+    "divine": "Metadata/Items/Currency/CurrencyModValues",
+}
 
 
 def _check(name: str, got) -> None:
@@ -52,7 +93,9 @@ def _check(name: str, got) -> None:
         path.write_text(text)
         return
     assert path.exists(), f"golden {name} is missing (UPDATE_GOLDEN=1 to record it)"
-    assert json.loads(path.read_text()) == json.loads(text), f"golden {name} drifted (UPDATE_GOLDEN=1 to accept)"
+    assert json.loads(path.read_text()) == json.loads(text), (
+        f"golden {name} drifted (UPDATE_GOLDEN=1 to accept)"
+    )
 
 
 @pytest.fixture
@@ -82,11 +125,15 @@ def _synthetic_graph() -> Graph:
     # chaos) and the profit lives in the gaps between them, which is how a real exchange looks.
     # They used to contradict each other 110x (divine 50 ex against exalted, 5,500 ex against
     # chaos), so whichever market the volume rule picked, the other read as a ±10,000% phantom.
-    g.add(edge("chaos", "exalted", 10.0, 5000))      # 1 chaos -> 10 ex
-    g.add(edge("exalted", "chaos", 0.11, 600))       # 1 ex -> 0.11 chaos: 1.1x round trip, a real loop
-    g.add(edge("exalted", "divine", 0.002, 100))     # 1 divine = 500 ex
-    g.add(edge("divine", "chaos", 50.0, 20000))      # 1 divine = 50 chaos = 500 ex
-    g.add(edge("chaos", "divine", 0.022, 10, kind="digest"))   # 45.5 chaos/divine: div->chaos->div = 1.1x
+    g.add(edge("chaos", "exalted", 10.0, 5000))  # 1 chaos -> 10 ex
+    g.add(
+        edge("exalted", "chaos", 0.11, 600)
+    )  # 1 ex -> 0.11 chaos: 1.1x round trip, a real loop
+    g.add(edge("exalted", "divine", 0.002, 100))  # 1 divine = 500 ex
+    g.add(edge("divine", "chaos", 50.0, 20000))  # 1 divine = 50 chaos = 500 ex
+    g.add(
+        edge("chaos", "divine", 0.022, 10, kind="digest")
+    )  # 45.5 chaos/divine: div->chaos->div = 1.1x
     for e in g.edges.values():
         e.vol_in_per_h = 100.0
     return g
@@ -100,12 +147,24 @@ def _seed_digest_league() -> None:
         hour = T0 - 3600 * (i + 1)
         drift = 1 + i * 0.01
         markets = [
-            {"league": LEAGUE, "market_pair": [META["chaos"], META["exalted"]],
-             "volume_traded": {META["chaos"]: int(1000 * drift), META["exalted"]: 10000},
-             "highest_stock": {META["chaos"]: 500, META["exalted"]: 5000}},
-            {"league": LEAGUE, "market_pair": [META["exalted"], META["divine"]],
-             "volume_traded": {META["exalted"]: int(50000 * drift), META["divine"]: 1000},
-             "highest_stock": {META["exalted"]: 20000, META["divine"]: 400}},
+            {
+                "league": LEAGUE,
+                "market_pair": [META["chaos"], META["exalted"]],
+                "volume_traded": {
+                    META["chaos"]: int(1000 * drift),
+                    META["exalted"]: 10000,
+                },
+                "highest_stock": {META["chaos"]: 500, META["exalted"]: 5000},
+            },
+            {
+                "league": LEAGUE,
+                "market_pair": [META["exalted"], META["divine"]],
+                "volume_traded": {
+                    META["exalted"]: int(50000 * drift),
+                    META["divine"]: 1000,
+                },
+                "highest_stock": {META["exalted"]: 20000, META["divine"]: 400},
+            },
         ]
         digest._store(hour, markets)
 
@@ -159,9 +218,9 @@ def test_board_golden_over_fixture_league(frozen):
     ids = [r["id"] for r in b["rows"]]
     assert "chaos" in ids and "divine" in ids
     _check("board", b)
-    assert arbitrage.board(24) is b          # TTL cache hit
+    assert arbitrage.board(24) is b  # TTL cache hit
     b2 = arbitrage.board(72)
-    assert b2 is not b                       # different window → different key
+    assert b2 is not b  # different window → different key
     _check("board_72h", b2)
 
 
