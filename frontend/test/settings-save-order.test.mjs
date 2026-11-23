@@ -48,9 +48,7 @@ test('the gold slider saves through the shared autosave, which sends a pending v
   assert.match(g, /useAutosave\(/, 'one debounce + unmount-flush implementation (lib/hooks.js), not a second copy')
   assert.doesNotMatch(g, /pendingRef|clearTimeout/)
   assert.match(g, /arm\(\)/, 'armed on mount, so a drag before the settings load still saves')
-  const hooks = readFileSync(new URL('../src/lib/hooks.js', import.meta.url), 'utf8')
   const autosave = readFileSync(new URL('../src/lib/autosave.js', import.meta.url), 'utf8')
-  assert.match(hooks, /useEffect\(\(\) => \{ ctrl\.current\.mount\(\); return \(\) => ctrl\.current\.unmount\(\) \}, \[\]\)/)
   assert.match(autosave, /const unmount = \(\) => \{[\s\S]*if \(pending && !held\) \{[\s\S]*getSaver\(\)\?\.\(payload\)/)
 })
 

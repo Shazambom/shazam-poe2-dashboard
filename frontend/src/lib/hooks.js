@@ -1,6 +1,6 @@
 import { startPoll } from './poll.js'
 import { createAutosave } from './autosave.js'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { cleanErr, toast } from './api.js'
 import { useSync } from './syncStore.js'
 
@@ -34,16 +34,16 @@ export function useApi(fn, deps) {
 // doesn't trigger a write). Failures surface as a toast.
 export function useAutosave(saver, delay = 700) {
   const [state, setState] = useState('')
-  const ctrl = useRef(null)
-  if (!ctrl.current) {
-    ctrl.current = createAutosave(saver, delay, {
-      onState: setState,
-      onError: (e) => toast(cleanErr(e), false),
-    })
-  }
-  ctrl.current.setSaver(saver)
-  useEffect(() => { ctrl.current.mount(); return () => ctrl.current.unmount() }, [])
-  const { save, flush, hold, release, discard, arm } = ctrl.current
+  const [ctrl] = useState(() => createAutosave(saver, delay, {
+    onState: setState,
+    onError: e => toast(cleanErr(e), false),
+  }))
+  useLayoutEffect(() => { ctrl.setSaver(saver) }, [ctrl, saver])
+  useEffect(() => {
+    ctrl.mount()
+    return () => ctrl.unmount()
+  }, [ctrl])
+  const { save, flush, hold, release, discard, arm } = ctrl
   return { state, save, flush, hold, release, discard, arm }
 }
 
