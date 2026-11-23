@@ -68,9 +68,9 @@ def _liquid(cand: dict, ex_in_ref: float) -> bool:
     market data" for it was wrong: there is market data."""
     if (cand["volume_ref_per_h"] or 0.0) < CASHOUT_MIN_VOLUME_EX_PER_H * ex_in_ref:
         return False
-    if cand["fill_hours"] is None or cand["fill_hours"] > CASHOUT_MAX_FILL_HOURS:
-        return False
-    return True
+    return not (
+        cand["fill_hours"] is None or cand["fill_hours"] > CASHOUT_MAX_FILL_HOURS
+    )
 
 
 def _source(kinds: list[str]) -> str:

@@ -123,14 +123,12 @@ def _best_conversions(
     starved: list[
         list[Edge]
     ] = []  # paths the amount was too small for (min_amount below)
-    count = 0
     paths = (
         g.iter_paths(have, want, steps, allowed_mids=allowed_mids)
         if allowed_mids is not None
         else g.iter_paths(have, want, steps)
     )
-    for path in paths:
-        count += 1
+    for count, path in enumerate(paths, 1):
         if count > MAX_CANDIDATES:
             break
         r = _convert_path(g, path, amount, ref_value, have, want)

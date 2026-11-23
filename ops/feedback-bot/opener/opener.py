@@ -12,6 +12,7 @@ import resource
 import subprocess
 import sys
 import time
+from contextlib import suppress
 from pathlib import Path
 
 RLIMITS = {
@@ -28,10 +29,8 @@ DEFAULT_CELL = [sys.executable, "-m", "opener.cell"]
 
 def _limits():
     for k, v in RLIMITS.items():
-        try:
+        with suppress(ValueError, OSError):
             resource.setrlimit(k, (v, v))
-        except (ValueError, OSError):
-            pass
 
 
 def _short_id(outdir: Path) -> str:
@@ -89,10 +88,8 @@ def run_one(
     os.replace(
         tmp, outdir / "result.json"
     )  # atomic: the bot's poll never sees a half file
-    try:
+    with suppress(FileNotFoundError):
         in_path.unlink()
-    except FileNotFoundError:
-        pass
     return result
 
 

@@ -217,9 +217,9 @@ class Graph:
             def _thin(e: Edge) -> bool:
                 if min_depth and e.kind == "live" and len(e.ladder) < min_depth:
                     return True
-                if min_vol and (e.vol_in_per_h or 0.0) * rv.get(e.src, 0.0) < min_vol:
-                    return True
-                return False
+                return bool(
+                    min_vol and (e.vol_in_per_h or 0.0) * rv.get(e.src, 0.0) < min_vol
+                )
 
             dropped = [k for k, e in g.edges.items() if _thin(e)]
             for k in dropped:

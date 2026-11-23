@@ -306,9 +306,7 @@ def _keep(r: dict, f: dict) -> bool:
         and (r["velocity"] or 0) < f["min_velocity"]
     ):
         return False
-    if f.get("exclude_recipes") and r["uses_recipe"]:
-        return False
-    return True
+    return not (f.get("exclude_recipes") and r["uses_recipe"])
 
 
 def _sort_key(sort: str):

@@ -818,7 +818,7 @@ def test_rows_carry_a_price_by_the_volume_rule(monkeypatch):
     assert ranked["assets"][0] is not board["assets"][0], (
         "attached to a copy: the memoized rows stay untouched"
     )
-    src = open(holdscore.__file__).read()
+    src = Path(holdscore.__file__).read_text()
     body = src[src.index("def leaderboard(") : src.index("def exchange_category(")]
     assert "attach_prices(" in body, (
         "leaderboard() attaches prices on every request, outside cache.memo"

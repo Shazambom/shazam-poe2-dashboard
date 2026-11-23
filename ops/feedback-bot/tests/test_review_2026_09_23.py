@@ -5,6 +5,7 @@ import asyncio
 import json
 import threading
 import time
+from contextlib import suppress
 
 from conftest import valid_doc
 from opener import opener
@@ -88,10 +89,9 @@ def test_a_half_written_result_json_is_waited_out_not_refused(tmp_path):
         )  # a poll sees this first
 
         def finish():
-            try:
+            with suppress(OSError):
+                # the bot gave up and cleaned up
                 (out / "result.json").write_text(full)
-            except OSError:
-                pass  # the bot gave up and cleaned up
 
         threading.Timer(0.35, finish).start()
 

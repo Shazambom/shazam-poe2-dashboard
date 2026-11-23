@@ -99,9 +99,7 @@ def betweenness_lite(
         for dst in ranked:
             if src == dst:
                 continue
-            seen = 0
-            for path in g.iter_paths(src, dst, max_steps):
-                seen += 1
+            for seen, path in enumerate(g.iter_paths(src, dst, max_steps), 1):
                 if seen > MAX_CANDIDATES:
                     break
                 total += 1

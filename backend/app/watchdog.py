@@ -62,9 +62,7 @@ def _win_alive(pid: int) -> bool:
                 if hasattr(ctypes, "get_last_error")
                 else k.GetLastError()
             )
-            if err == ERROR_INVALID_PARAMETER:
-                return False
-            return True  # ACCESS_DENIED or anything ambiguous → alive
+            return err != ERROR_INVALID_PARAMETER
         try:
             code = ctypes.c_ulong()
             if k.GetExitCodeProcess(h, ctypes.byref(code)):

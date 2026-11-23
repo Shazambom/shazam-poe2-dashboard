@@ -22,6 +22,7 @@ import json
 import os
 import sys
 import time
+from contextlib import suppress
 from pathlib import Path
 from typing import cast
 
@@ -107,10 +108,8 @@ def _drop(adir: Path, name: str, obj) -> Path:
     tmp, path = adir / f".{name}.tmp", adir / name
     tmp.write_text(json.dumps(obj, ensure_ascii=False))
     for q in (adir, tmp):  # the bot consumes the file
-        try:
+        with suppress(PermissionError):
             os.chown(q, BOT_UID, -1)
-        except PermissionError:
-            pass
     os.replace(tmp, path)
     return path
 
