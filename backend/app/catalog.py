@@ -21,6 +21,8 @@ import json
 import logging
 import re
 
+from starlette.concurrency import run_in_threadpool
+
 from . import db, gamedata
 
 log = logging.getLogger("poe2arb.catalog")
@@ -99,14 +101,10 @@ def _digest_metas() -> list[str]:
         ]
 
 
-async def refresh(
-    bases: dict, metas=None, categories=None, max_age: int = 86400
-) -> str | None:
-    """Rebuild `meta_catalog`. Returns an error to report, or None. Without the trade list nothing
-    changes; an icon that cannot be fetched keeps the item's last icon."""
+def _prepare_catalog(bases: dict, metas, categories) -> tuple[dict, dict] | None:
     static = db.kv_get("trade_static_cache") or {}
     if not static.get("result"):
-        return "catalog: no trade list stored; kept the last catalog"
+        return None
     cat = build(
         bases,
         static,
@@ -117,6 +115,18 @@ async def refresh(
         else (db.kv_get("gold_fees_meta", {}) or {}),
     )
     last = db.kv_get(KEY, {}) or {}
+    return cat, last
+
+
+async def refresh(
+    bases: dict, metas=None, categories=None, max_age: int = 86400
+) -> str | None:
+    """Rebuild `meta_catalog`. Returns an error to report, or None. Without the trade list nothing
+    changes; an icon that cannot be fetched keeps the item's last icon."""
+    prepared = await run_in_threadpool(_prepare_catalog, bases, metas, categories)
+    if prepared is None:
+        return "catalog: no trade list stored; kept the last catalog"
+    cat, last = prepared
     missing = 0
     for meta, e in cat.items():
         art = e.pop("art", None)
@@ -134,7 +144,7 @@ async def refresh(
             if (last.get(meta) or {}).get("icon"):
                 e["icon"] = last[meta]["icon"]
             log.warning("catalog: icon for %s unavailable (%s)", meta, exc)
-    db.kv_set(KEY, cat)
+    await run_in_threadpool(db.kv_set, KEY, cat)
     log.info(
         "catalog: %d exchange items named (%d not on the trade site), %d icons missing",
         len(cat),
