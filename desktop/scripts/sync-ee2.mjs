@@ -4,9 +4,11 @@
 //   node scripts/sync-ee2.mjs --src ~/Exiled-Exchange-2   # dev: a local checkout (copied, never modified)
 //   --offline   reuse data/trade/*.json instead of fetching GGG's /api/trade2/data
 //   --no-goldens   skip regenerating goldens with EE2's own vitest run
+//   --types-only   offline: rewrite vendor/bundle.d.cts from ee2-bundle-types.mjs and the manifest's hashes,
+//                  keeping the recorded tag, commit, modules and sync time
 // Run by publish-github.sh before the test gate on every release; any failing step aborts.
 // Steps: fetch/copy → npm install (once per tag) → make-index-files → esbuild with shim aliases →
-// copy data + index bins → GGG trade-data snapshot → goldens via EE2's vitest → MANIFEST.json.
+// bundle types → copy data + index bins → GGG trade-data snapshot → goldens via EE2's vitest → MANIFEST.json.
 import fs from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
@@ -14,6 +16,7 @@ import crypto from 'node:crypto'
 import { execSync, spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import * as esbuild from 'esbuild'
+import { writeBundleTypes } from './ee2-bundle-types.mjs'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const DESKTOP = path.resolve(HERE, '..')
@@ -169,21 +172,28 @@ function regenerateGoldens(renderer) {
 }
 
 // 8. Manifest: every vendored file's hash so a hand edit is caught by the drift test.
-function writeManifest(meta) {
+function writeManifest(meta, syncedAt = new Date().toISOString()) {
   const files = {}
   const walk = (d) => { for (const e of fs.readdirSync(d, { withFileTypes: true })) { const p = path.join(d, e.name); if (e.isDirectory()) walk(p); else if (e.name !== 'MANIFEST.json') files[path.relative(VENDOR, p).split(path.sep).join('/')] = { sha256: sha256(p), bytes: fs.statSync(p).size } } }
   walk(path.join(VENDOR, 'vendor')); walk(path.join(VENDOR, 'data'))
-  fs.writeFileSync(path.join(VENDOR, 'data', 'MANIFEST.json'), JSON.stringify({ ...meta, syncedAt: new Date().toISOString(), files }, null, 1))
+  fs.writeFileSync(path.join(VENDOR, 'data', 'MANIFEST.json'), JSON.stringify({ ...meta, syncedAt, files }, null, 1))
 }
 
-const { dir, tag, commit } = await resolveSource()
-const renderer = path.join(dir, 'renderer')
-log(`source ${tag} (${commit || '?'}) at ${dir}`)
-ensureDeps(renderer)
-makeIndexFiles(renderer)
-const modules = await bundle(renderer)
-copyData(renderer)
-await snapshotTradeData()
-if (!has('--no-goldens')) regenerateGoldens(renderer)
-writeManifest({ ee2Tag: tag, ee2Commit: commit, modules: modules.map(m => path.relative(renderer, path.resolve(renderer, m))).sort() })
+if (has('--types-only')) {
+  const { ee2Tag, ee2Commit, modules, syncedAt } = JSON.parse(fs.readFileSync(path.join(VENDOR, 'data', 'MANIFEST.json'), 'utf8'))
+  writeBundleTypes(VENDOR)
+  writeManifest({ ee2Tag, ee2Commit, modules }, syncedAt)
+} else {
+  const { dir, tag, commit } = await resolveSource()
+  const renderer = path.join(dir, 'renderer')
+  log(`source ${tag} (${commit || '?'}) at ${dir}`)
+  ensureDeps(renderer)
+  makeIndexFiles(renderer)
+  const modules = await bundle(renderer)
+  writeBundleTypes(VENDOR)
+  copyData(renderer)
+  await snapshotTradeData()
+  if (!has('--no-goldens')) regenerateGoldens(renderer)
+  writeManifest({ ee2Tag: tag, ee2Commit: commit, modules: modules.map(m => path.relative(renderer, path.resolve(renderer, m))).sort() })
+}
 log('done')

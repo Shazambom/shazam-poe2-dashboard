@@ -43,6 +43,10 @@
    "sha256": "80837e01d945c9ced50e7baf5cd9d00316f22fc676b1daf2ba4aa3319ab3229a",
    "bytes": 262953
   },
+  "vendor/bundle.d.cts": {
+   "sha256": "fa29697534a83b39b164f2c1d0940eebe5c959b18a1265684640a8ced0a6e17d",
+   "bytes": 1880
+  },
   "data/en/app_i18n.json": {
    "sha256": "93091588afd261cbaf28f1c4c91e1b301797cb449a41eddc496c4ea5dcd78953",
    "bytes": 23170
