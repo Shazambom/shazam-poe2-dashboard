@@ -26,7 +26,7 @@ describe('Mods, Regex, Settings, ThemeBuilder, Trading, and App shell lifecycles
 
   it('ModsView loads pools, selects ring pool, and displays prefix/suffix modifiers', async () => {
     const { calls } = installApiMock()
-    render(<ModsView />)
+    const { rerender, unmount } = render(<ModsView />)
 
     await waitFor(() => {
       expect(calls.some(c => c.path === '/api/mods/pools')).toBe(true)
@@ -36,6 +36,14 @@ describe('Mods, Regex, Settings, ThemeBuilder, Trading, and App shell lifecycles
     await waitFor(() => {
       expect(document.body.textContent).toMatch(/maximum Life/i)
     })
+    const filter = screen.getByLabelText('Filter')
+    fireEvent.change(filter, { target: { value: 'Life' } })
+    rerender(<ModsView />)
+    expect(filter.value).toBe('Life')
+    expect(calls.filter(c => c.path === '/api/mods/pools')).toHaveLength(1)
+    expect(calls.filter(c => c.path === '/api/mods/pool/ring')).toHaveLength(1)
+    unmount()
+    expect(calls.filter(c => c.method === 'PUT')).toHaveLength(0)
   })
 
   it('RegexView loads saved settings and generates a live PoE2 regex string when toggled', async () => {
@@ -157,6 +165,21 @@ describe('Mods, Regex, Settings, ThemeBuilder, Trading, and App shell lifecycles
     await waitFor(() => {
       expect(wsContainer().style.display).toBe('flex')
     })
+  })
+
+  it('restores the modifier families expanded for a pool when the view reopens', async () => {
+    const first = render(<ModsView />)
+    const row = await screen.findByRole('button', { name: /maximum Life/i })
+    expect(row.getAttribute('aria-expanded')).toBe('false')
+    fireEvent.click(row)
+    expect(row.getAttribute('aria-expanded')).toBe('true')
+    first.unmount()
+    const second = render(<ModsView />)
+    const restored = await screen.findByRole('button', { name: /maximum Life/i })
+    expect(restored.getAttribute('aria-expanded')).toBe('true')
+    fireEvent.click(restored)
+    expect(restored.getAttribute('aria-expanded')).toBe('false')
+    second.unmount()
   })
 
   it('opens an off-board currency by its display name in the app-wide card', async () => {
