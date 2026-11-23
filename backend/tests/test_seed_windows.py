@@ -83,7 +83,7 @@ def _legacy_seed_copy(seed_gz: Path, tmp: Path) -> None:
 def test_the_old_copy_fails_on_windows_like_fsync(env):
     d, _market, _ = env
     seed = _make_seed(d, 5)
-    with pytest.raises(OSError) as exc:
+    with pytest.raises(OSError, match="Bad file descriptor") as exc:
         _legacy_seed_copy(seed, d / "market.sqlite.tmp")
     assert exc.value.errno == errno.EBADF, (
         "the reproduction: EBADF from fsync on a read-only handle"

@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from cryptography.exceptions import InvalidTag
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey
 
@@ -47,7 +48,7 @@ def test_round_trip_overhead_and_uniqueness():
 
 
 @pytest.mark.parametrize(
-    "name,i",
+    ("name", "i"),
     [
         ("magic", 0),
         ("keyId", 4),
@@ -61,7 +62,8 @@ def test_any_flipped_byte_fails(name, i):
     priv, pub = keys()
     sealed = bytearray(arbseal.seal(b"payload", pub))
     sealed[i] ^= 1
-    with pytest.raises(Exception):
+    expected = arbseal.ArbError if name == "magic" else InvalidTag
+    with pytest.raises(expected):
         arbseal.open_sealed(bytes(sealed), priv)
 
 
@@ -69,7 +71,7 @@ def test_wrong_key_truncation_and_bad_magic():
     priv, pub = keys()
     other, _ = keys()
     sealed = arbseal.seal(b"payload", pub)
-    with pytest.raises(Exception):
+    with pytest.raises(InvalidTag):
         arbseal.open_sealed(sealed, other)
     with pytest.raises(arbseal.ArbError, match="ARB_TRUNCATED"):
         arbseal.open_sealed(sealed[:40], priv)

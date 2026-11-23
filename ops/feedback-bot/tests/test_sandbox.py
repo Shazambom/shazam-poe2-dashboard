@@ -38,7 +38,7 @@ def test_a_broken_report_is_quarantined(tmp_path):
 
 
 @pytest.mark.parametrize(
-    "cell,why",
+    ("cell", "why"),
     [
         ("alloc", "2 GB allocation fails under RLIMIT_AS"),
         ("spin", "an infinite loop hits the wall clock / RLIMIT_CPU"),

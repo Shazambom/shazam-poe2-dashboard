@@ -152,7 +152,7 @@ def test_route_query_to_filters_drops_unset_and_keeps_wire_names():
     }
     assert q.starts() == ["chaos", "exalted"]
     assert RouteQuery().starts() is None
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="String should match pattern"):
         RouteQuery(sort="nope")
 
 

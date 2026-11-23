@@ -111,7 +111,7 @@ def test_a_failed_crawl_retries_in_30_minutes_not_12_hours(monkeypatch, outcome)
 
 
 @pytest.mark.parametrize(
-    "res,wait",
+    ("res", "wait"),
     [
         (
             {"fetched": {}, "leagues": 5, "errors": 40, "attempted": 40},

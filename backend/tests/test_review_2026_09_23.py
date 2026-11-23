@@ -1124,7 +1124,7 @@ LUMP = json.loads(
 
 
 @pytest.mark.parametrize(
-    "meta, tid, close",
+    ("meta", "tid", "close"),
     [
         (
             "Metadata/Items/Currency/CurrencySetKalguuranSkillGemLevel15",

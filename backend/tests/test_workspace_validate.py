@@ -45,7 +45,7 @@ def test_accepts_a_normal_document_and_the_new_fields():
 
 
 @pytest.mark.parametrize(
-    "bad, msg",
+    ("bad", "msg"),
     [
         ({"version": 1, "tree": []}, "version"),
         ({"version": 2, "tree": {}}, "tree"),

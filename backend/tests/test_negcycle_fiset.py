@@ -114,7 +114,9 @@ CASES = [
 ]
 
 
-@pytest.mark.parametrize("name,V,edges,want", CASES, ids=[c[0] for c in CASES])
+@pytest.mark.parametrize(
+    ("name", "V", "edges", "want"), CASES, ids=[c[0] for c in CASES]
+)
 def test_transliteration_reproduces_his_expected_output(name, V, edges, want):
     """The reference is only worth comparing to if it IS his algorithm: it must give the exact
     arrays his own JUnit tests assert."""
@@ -122,7 +124,9 @@ def test_transliteration_reproduces_his_expected_output(name, V, edges, want):
 
 
 @pytest.mark.parametrize("impl", IMPLS)
-@pytest.mark.parametrize("name,V,edges,want", CASES, ids=[c[0] for c in CASES])
+@pytest.mark.parametrize(
+    ("name", "V", "edges", "want"), CASES, ids=[c[0] for c in CASES]
+)
 def test_his_cases_against_ours(impl, name, V, edges, want):
     edges = [(u, v, float(w)) for u, v, w in edges]
     got = run(impl, V, edges, 0)

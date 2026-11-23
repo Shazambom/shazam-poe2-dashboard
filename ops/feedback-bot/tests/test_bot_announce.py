@@ -187,7 +187,7 @@ def test_once_posted_a_failed_bookkeeping_step_never_posts_it_again(h, monkeypat
         real(st)
 
     monkeypatch.setattr(h, "_save_state", flaky)
-    with pytest.raises(OSError):
+    with pytest.raises(OSError, match="disk full"):
         run(h.process_announcements(target(ch)))
     run(h.process_announcements(target(ch)))
     assert len(ch.sent) == 1, (
@@ -211,7 +211,7 @@ def test_a_failed_publish_never_posts_again(h):
 
 
 @pytest.mark.parametrize(
-    "mentionable, can_send, can_mention, problem",
+    ("mentionable", "can_send", "can_mention", "problem"),
     [
         (True, True, False, None),
         (False, True, True, None),

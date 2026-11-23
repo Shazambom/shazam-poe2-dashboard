@@ -47,7 +47,7 @@ def test_a_good_file_parses_into_version_summary_and_bullets():
 
 
 @pytest.mark.parametrize(
-    "bad, why",
+    ("bad", "why"),
     [
         (GOOD.replace("# 0.3.12", "# Arbiter"), "heading"),
         (
@@ -113,7 +113,7 @@ def test_the_payload_is_the_notes_and_the_post_links_this_releases_own_installer
     "version", ["0.3.12\n", "\u0660.\u0663.\u0661\u0662", "0.3.12 ", "v0.3.12"]
 )
 def test_only_a_plain_ascii_stable_version_is_accepted(version):
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="not a stable version"):
         rn.announce.check_payload({**rn.parse(GOOD), "version": version})
 
 

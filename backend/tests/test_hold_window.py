@@ -47,7 +47,7 @@ def order(entries, hold, t=24, past=()):
 
 
 @pytest.mark.parametrize(
-    "hours,horizon,days",
+    ("hours", "horizon", "days"),
     [(24, "1d", 1), (72, "3d", 3), (168, "7d", 7), (336, "14d", 14)],
 )
 def test_every_window_the_app_offers_is_its_own_holding_period(hours, horizon, days):

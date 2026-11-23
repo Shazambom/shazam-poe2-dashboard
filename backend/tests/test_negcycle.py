@@ -261,15 +261,15 @@ def test_degenerate_inputs(impl):
     assert result[0] == "ok"
     _, dist, pred = result
     assert dist.tolist() == [0] and pred.tolist() == [-1]
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="source 3 outside"):
         impl(3, *arrays([(0, 1, 1.0)]), 3)  # source out of range
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="edge endpoint outside"):
         impl(2, *arrays([(0, 2, 1.0)]), 0)  # edge endpoint out of range
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="1-D arrays of one length"):
         impl(
             2, np.array([0]), np.array([1, 0]), np.array([1.0]), 0
         )  # ragged edge arrays
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="NaN edge weight"):
         impl(2, *arrays([(0, 1, float("nan"))]), 0)
 
 
