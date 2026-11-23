@@ -29,6 +29,9 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # backend/
 from app import holdscore
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _proddb import PROD_DB, prod as _prod  # (opt-in: ARBITER_PROD_TESTS=1)
+
 
 def m(ret, mdd=-0.10, valvol=1_000_000.0, n=10):
     """A metrics row as `_metrics` builds one. `stab` is derived exactly as production does."""
@@ -131,9 +134,6 @@ def test_the_constants_match_the_backtest():
 
 
 # --------------------------------------------------------- 4. the whole production DB
-
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _proddb import PROD_DB, prod as _prod  # (opt-in: ARBITER_PROD_TESTS=1)
 
 
 # ------------------------------------------------ 5. k as a user-facing dial (owner directive)

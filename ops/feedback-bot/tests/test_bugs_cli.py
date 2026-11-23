@@ -9,9 +9,10 @@ import subprocess
 import sys
 from pathlib import Path
 
-HERE = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(HERE))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import bugs
+
+HERE = Path(__file__).resolve().parents[1]
 
 
 def inbox(tmp_path):

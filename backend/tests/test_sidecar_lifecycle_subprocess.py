@@ -22,10 +22,11 @@ import time
 from datetime import datetime, timezone, UTC
 from pathlib import Path
 
-BACKEND_DIR = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(BACKEND_DIR))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app import analytics, sidecar_supervisor as sup
+
+BACKEND_DIR = Path(__file__).resolve().parents[1]
 
 DAY = 86400
 

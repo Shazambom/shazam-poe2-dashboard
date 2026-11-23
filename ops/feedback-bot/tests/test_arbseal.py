@@ -10,10 +10,11 @@ import pytest
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "bot"))
+import arbseal
+
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
-sys.path.insert(0, str(HERE.parent / "bot"))
-import arbseal
 
 FIX = ROOT / "desktop" / "test" / "fixtures" / "feedback"
 

@@ -9,6 +9,7 @@ number the app shows or a call it makes.
 """
 
 import json
+import importlib
 import math
 import os
 import sqlite3
@@ -21,15 +22,16 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # backend/
 from app import db, digest, holdscore, marketseries, settings
-import importlib
+from app.currencies import registry
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import test_arbitrage_golden as G
+from _proddb import PROD_DB, prod as _prod  # (opt-in: ARBITER_PROD_TESTS=1)
 
 board = importlib.import_module(
     "app.arbitrage.board"
 )  # the module, not the package facade function
-from app.currencies import registry
-
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _proddb import PROD_DB, prod as _prod  # (opt-in: ARBITER_PROD_TESTS=1)
+frozen = G.frozen
 
 
 def _prod_rows(sql, *params):
@@ -405,10 +407,6 @@ def test_the_leaderboard_falls_back_to_the_hold_caution_setting(monkeypatch):
 # landed at -7e-15 and the API emitted a negative spread for a market whose sides agree). With the
 # bulk-exchange books gone they could never differ, and nothing rendered them; they are cut.
 
-import test_arbitrage_golden as G
-
-frozen = G.frozen
-
 
 def test_a_card_carries_no_bid_ask_or_spread(frozen):
     """Owner (2026-09-23): with the live order books gone the digest gives one window rate both
@@ -428,10 +426,6 @@ def test_a_card_carries_no_bid_ask_or_spread(frozen):
 # The board used to derive bid and ask from the same window rate via `1/px` and `px` (the round trip
 # landed at -7e-15 and the API emitted a negative spread for a market whose sides agree). With the
 # bulk-exchange books gone they could never differ, and nothing rendered them; they are cut.
-
-import test_arbitrage_golden as G
-
-frozen = G.frozen
 
 
 # ============================================================ 8. a wide spread is a question that depth answers

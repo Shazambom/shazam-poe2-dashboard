@@ -25,11 +25,12 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-BACKEND_DIR = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(BACKEND_DIR))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app import arbitrage, db, gateway, holdscore, leaguearc, main, modpool, movers
 from app.currencies import registry
+
+BACKEND_DIR = Path(__file__).resolve().parents[1]
 
 LEAGUE = "Test League"
 PAST_LEAGUE = "Past League"

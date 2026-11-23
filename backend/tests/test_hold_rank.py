@@ -31,9 +31,11 @@ from pathlib import Path
 
 import pytest
 
-ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / "backend"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from app import holdscore
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _proddb import PROD_DB, prod as _prod  # (opt-in: ARBITER_PROD_TESTS=1)
 
 
 def series(prices, value=1e8):
@@ -340,8 +342,8 @@ def test_one_day_does_not_reshuffle_the_list():
 
 # ---------------------------------------------------------------- 4. the smoke test, real DB
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _proddb import PROD_DB, prod as _prod  # (opt-in: ARBITER_PROD_TESTS=1)
+
+ROOT = Path(__file__).resolve().parents[2]
 
 
 def _backtest():

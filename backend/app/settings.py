@@ -7,14 +7,13 @@ import time
 from . import cache, db, leaguehistory, marketseries
 from .config import LEAGUE, TRADE_LEAGUES_TTL_S
 
-log = logging.getLogger(__name__)
-
-
 from .arbpresets import (
     ARBITRAGE_PRESETS,
     ARBITRAGE_UNIT,
     HIDDEN_KNOB_DEFAULTS as _HIDDEN,
 )  # (re-exported)
+
+log = logging.getLogger(__name__)
 
 _BALANCED = ARBITRAGE_PRESETS[0]["values"]
 

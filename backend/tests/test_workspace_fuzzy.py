@@ -21,12 +21,20 @@ from pathlib import Path
 # Import the REAL persistence layer (db.kv_get/kv_set do the exact production routing:
 # `trading_workspace` -> user.sqlite, JSON-serialized). Requires DATA_DIR to be set to a
 # temp dir by the caller; guard against clobbering a real install.
-_dd = os.environ.get("DATA_DIR", "")
-assert _dd and "Application Support" not in _dd, (
-    "Set DATA_DIR to a temp dir (never the real install) before running this test"
-)
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # backend/
-from app import db
+
+
+def _isolated_db():
+    data_dir = os.environ.get("DATA_DIR", "")
+    assert data_dir and "Application Support" not in data_dir, (
+        "Set DATA_DIR to a temp dir (never the real install) before running this test"
+    )
+    from app import db
+
+    return db
+
+
+db = _isolated_db()
 
 # A pool of distinct PoE2 item/base names; the generator draws WITHOUT replacement per tree
 # so every search in a given tree is a genuinely unique item.

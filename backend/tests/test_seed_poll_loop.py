@@ -11,9 +11,10 @@ from pathlib import Path
 
 import pytest
 
-ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / "backend"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from app import main, seedready
+
+ROOT = Path(__file__).resolve().parents[2]
 
 
 def test_it_is_off_unless_the_server_turns_it_on(monkeypatch):

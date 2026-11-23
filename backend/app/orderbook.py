@@ -30,7 +30,7 @@ from collections.abc import Iterable
 from itertools import permutations
 
 from . import db, digest, gateway, pairscore, session
-from .config import ORDERBOOK_SWEEP_SECONDS, TRADE_EXCHANGE_URL
+from .config import ORDERBOOK_SWEEP_SECONDS, TRADE_EXCHANGE_URL, TRADE_LEAGUES_TTL_S
 from .datapolicy import ORDERBOOK_HISTORY_RETENTION_H
 from .settings import get_settings
 
@@ -476,9 +476,6 @@ async def sweeper() -> None:
             ]
             request_pairs(pairs, priority=2, max_age_s=s["live_max_age_s"])
         await asyncio.sleep(ORDERBOOK_SWEEP_SECONDS)
-
-
-from .config import TRADE_LEAGUES_TTL_S
 
 
 async def leagues(force: bool = False) -> list[dict]:

@@ -67,13 +67,14 @@ import sys
 import tempfile
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
 os.environ.setdefault(
     "DATA_DIR", tempfile.mkdtemp(prefix="hold-backtest-")
 )  # never the app's dir
-sys.path.insert(0, str(ROOT / "backend"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "backend"))
 
 from app import holdscore as H, leagueregime as LR, marketseries as M
+
+ROOT = Path(__file__).resolve().parents[1]
 
 # The topbar's choices (frontend/src/lib/horizonStore.js HORIZONS): label -> window hours.
 SELECTIONS = {"24h": 24, "3d": 72, "7d": 168, "14d": 336}

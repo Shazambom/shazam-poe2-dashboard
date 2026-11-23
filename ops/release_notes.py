@@ -23,9 +23,10 @@ import json
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent / "feedback-bot" / "bot"))
+import announce  # The bot's definition of the message and its rules.
+
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "ops" / "feedback-bot" / "bot"))
-import announce  # (the bot's own module: one definition of the message and its rules)
 
 
 def parse(text: str) -> dict:
