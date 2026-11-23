@@ -11,6 +11,7 @@ just serves stale-or-empty results.
 
 from __future__ import annotations
 
+import importlib
 import os
 import sqlite3
 import sys
@@ -132,8 +133,9 @@ def main() -> None:
     # daemon threads already running. Doing it up-front removes that variable and surfaces a slow/
     # stuck import as its own telemetry line instead of an invisible mid-job wedge.
     try:
-        import numpy
-        from sidecar.analytics import arc, discords
+        importlib.import_module("numpy")
+        importlib.import_module("sidecar.analytics.arc")
+        importlib.import_module("sidecar.analytics.discords")
 
         _tlog("numpy+analytics imported")
     except Exception as exc:

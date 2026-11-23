@@ -9,7 +9,7 @@ from .config import LEAGUE, TRADE_LEAGUES_TTL_S
 
 from .arbpresets import (
     ARBITRAGE_PRESETS,
-    ARBITRAGE_UNIT,
+    ARBITRAGE_UNIT as ARBITRAGE_UNIT,
     HIDDEN_KNOB_DEFAULTS as _HIDDEN,
 )  # (re-exported)
 

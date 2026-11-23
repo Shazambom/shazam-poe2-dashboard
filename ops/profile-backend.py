@@ -229,7 +229,7 @@ def run_benchmarks(db_arg: str | None, runs: int) -> dict:
         import app.arbitrage
 
         board_mod = sys.modules["app.arbitrage.board"]
-        graph_mod = sys.modules["app.arbitrage.graph"]
+        graph_mod = app.arbitrage.graph
         routes_mod = sys.modules["app.arbitrage.routes"]
         import_boot_ms = round((time.perf_counter() - t_import0) * 1000, 1)
 

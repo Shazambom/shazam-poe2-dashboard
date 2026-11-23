@@ -9,7 +9,7 @@ import json
 
 import pytest
 
-from test_bot import h  # (fixture)
+from test_bot import h as h  # (fixture)
 import announce
 
 

@@ -8,7 +8,14 @@ name. A post without a readable report keeps its words too (`posts/<threadId>/di
 import asyncio
 import json
 
-from test_bot import Attachment, Author, Message, Thread, sealed_report, h  # (fixture)
+from test_bot import (
+    Attachment,
+    Author,
+    Message,
+    Thread,
+    sealed_report,
+    h as h,
+)  # (fixture)
 
 REPORTER = Author(7)
 

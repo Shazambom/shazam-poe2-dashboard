@@ -9,7 +9,7 @@ threads were handled since; one thread is never handled twice at once."""
 import asyncio
 import json
 
-from test_bot import Attachment, Thread, sealed_report, h  # (fixture)
+from test_bot import Attachment, Thread, sealed_report, h as h  # (fixture)
 
 
 def run(coro, timeout=10):

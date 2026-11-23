@@ -9,7 +9,7 @@ archived where the bot may). A malformed or unknown action is set aside, never a
 import asyncio
 import json
 
-from test_bot import Attachment, Thread, sealed_report, h  # (fixture)
+from test_bot import Attachment, Thread, sealed_report, h as h  # (fixture)
 import bot
 
 

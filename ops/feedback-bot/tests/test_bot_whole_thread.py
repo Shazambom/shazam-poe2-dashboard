@@ -7,7 +7,7 @@ has not moved is not read again. The bot's own messages are never kept."""
 import asyncio
 import json
 
-from test_bot import Attachment, Author, Thread, sealed_report, h  # (fixture)
+from test_bot import Attachment, Author, Thread, sealed_report, h as h  # (fixture)
 
 REPORTER, OTHER, BOT = Author(7), Author(8), Author(1, bot=True)
 IDEAS = 777

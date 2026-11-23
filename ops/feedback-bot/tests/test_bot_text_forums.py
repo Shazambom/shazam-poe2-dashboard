@@ -8,7 +8,7 @@ started again; an old post from before the bot read the forum is picked up by th
 import asyncio
 import json
 
-from test_bot import Attachment, Author, Message, Thread, h  # (fixture)
+from test_bot import Attachment, Author, Message, Thread, h as h  # (fixture)
 
 IDEAS, FEEDBACK = 777, 888
 
