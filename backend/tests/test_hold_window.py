@@ -104,7 +104,7 @@ def test_a_long_hold_reads_what_the_item_did_from_this_league_day_in_earlier_lea
     flat = [40.0] * 80
     rose = [40.0] * 22 + [40.0 * 1.02**d for d in range(58)]
     sagged = [40.0] * 22 + [40.0 * 0.99**d for d in range(58)]
-    past = _three_leagues({**{i: flat for i in range(100, 120)}, 1: rose, 2: sagged})
+    past = _three_leagues({**dict.fromkeys(range(100, 120), flat), 1: rose, 2: sagged})
     ents = universe() + [(1, series(now)), (2, series(now))]
     day = holdscore.hold_rank(ents, 24, None, past, None, hold=1)
     fortnight = holdscore.hold_rank(ents, 24, None, past, None, hold=14)

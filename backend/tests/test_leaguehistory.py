@@ -49,7 +49,7 @@ def test_a_current_league_ignores_complete_marks_and_a_past_league_ignores_fresh
         "a league still running is never final"
     )
     assert _plan(
-        current=False, stored={1, 2, 3, 4}, fetched_at={i: NOW for i in range(1, 5)}
+        current=False, stored={1, 2, 3, 4}, fetched_at=dict.fromkeys(range(1, 5), NOW)
     )[0] == [1, 2, 3, 4]
 
 

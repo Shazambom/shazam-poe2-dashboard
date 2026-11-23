@@ -307,7 +307,7 @@ def _market(monkeypatch, rates):
         },
     )
     monkeypatch.setattr(
-        digest, "pair_volume", lambda league, hours: {k: 100_000.0 for k in rates}
+        digest, "pair_volume", lambda league, hours: dict.fromkeys(rates, 100000.0)
     )
     monkeypatch.setattr(gamedata, "fees", lambda: {"by_trade": {}})
 

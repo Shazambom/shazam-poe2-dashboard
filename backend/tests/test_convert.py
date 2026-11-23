@@ -333,7 +333,7 @@ def test_the_bridge_tie_break_never_grows_with_the_users_step_count(monkeypatch)
     monkeypatch.setattr(
         g, "iter_paths", lambda a, b, n: (walked.append(n), real(a, b, n))[1]
     )
-    centrality.betweenness_lite(g, {c: 1.0 for c in g.adj})
+    centrality.betweenness_lite(g, dict.fromkeys(g.adj, 1.0))
     assert walked and set(walked) == {centrality.BRIDGE_MAX_STEPS} == {3}
 
 

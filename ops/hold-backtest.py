@@ -327,7 +327,7 @@ def grade_day(board, per, t, days, top, prev_top, hz=None):
         )
         / top,
         "top": [e[1] for e in board[:top]],
-        **{k: None for k in OUTCOME_KEYS},
+        **dict.fromkeys(OUTCOME_KEYS),
         "dd": None,
         "board_crash": None,
     }

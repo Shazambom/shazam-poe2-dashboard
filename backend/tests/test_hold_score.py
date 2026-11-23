@@ -648,7 +648,10 @@ def _arrow_board(monkeypatch, league_day, category="all", horizon="3d"):
     from app import currencies, movers
 
     growth = [-0.05, -0.03, -0.015, -0.005, 0.005, 0.015, 0.03, 0.05]
-    cur = {i: {a: (10.0, 1e9) for a in range(league_day + 1)} for i in range(1, 9)}
+    cur = {
+        i: dict.fromkeys(range(league_day + 1), (10.0, 1000000000.0))
+        for i in range(1, 9)
+    }
     trend = {
         i: {a: (10.0 * (1 + growth[i - 1]) ** a, 1e9) for a in range(60)}
         for i in range(1, 9)

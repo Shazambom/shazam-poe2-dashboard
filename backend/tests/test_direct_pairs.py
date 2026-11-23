@@ -518,8 +518,10 @@ def test_hold_never_reports_a_return_against_the_wrong_currency(monkeypatch):
     try:
         # two assets, both flat in Divine; their cards' lines are in different currencies
         cur = {
-            7: {a: (2.0, 1e9) for a in range(6)},  # "Right": card line in divine
-            8: {a: (3.0, 1e9) for a in range(6)},
+            7: dict.fromkeys(
+                range(6), (2.0, 1000000000.0)
+            ),  # "Right": card line in divine
+            8: dict.fromkeys(range(6), (3.0, 1000000000.0)),
         }  # "Wrong": card line fell back to exalted
         meta = {
             291: ("Divine Orb", "Currency"),

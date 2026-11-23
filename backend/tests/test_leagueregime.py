@@ -20,7 +20,7 @@ def league(days=90, discovery=20, late_from=60, items=40, seed=7):
     along its own persistent drift; afterwards prices wobble and partly reverse; from `late_from`
     trading volume falls to a fifth."""
     rnd = random.Random(seed)
-    per = {DIV: {a: (100.0, 1000.0) for a in range(days)}}
+    per = {DIV: dict.fromkeys(range(days), (100.0, 1000.0))}
     for i in range(1, items + 1):
         drift = rnd.uniform(-0.08, 0.08)
         p, s, prev = 10.0 * i, {}, 0.0

@@ -62,7 +62,7 @@ def _ring(nodes, gain):
 def _candidates(g, capital, notional=False):
     stats = {}
     starts = list(g.adj) if notional else [c for c, q in capital.items() if q > 0]
-    rv = {n: 1.0 for n in g.adj}
+    rv = dict.fromkeys(g.adj, 1.0)
     out = list(routes._iter_candidates(g, g.s, rv, capital, starts, notional, stats))
     return out, stats
 
@@ -70,7 +70,7 @@ def _candidates(g, capital, notional=False):
 # ---------------------------------------------------------------- deep_loops
 def test_finds_a_loop_longer_than_max_steps():
     g = _graph(_ring(list("abcde"), 1.05))
-    loops = deepscan.deep_loops(g, {n: 1.0 for n in "abcde"})
+    loops = deepscan.deep_loops(g, dict.fromkeys("abcde", 1.0))
     assert len(loops) == 1
     assert sorted(e.src for e in loops[0]) == list("abcde")
     for e, nxt in zip(loops[0], loops[0][1:] + loops[0][:1]):
@@ -96,7 +96,7 @@ def test_drops_the_mispriced_edge_so_the_next_loop_is_new():
     loop is taken, its most over-paying edge (vs reference value) is removed — so the scan
     terminates and doesn't hand back the same loop."""
     g = _graph(_ring(list("abcde"), 1.05))
-    loops = deepscan.deep_loops(g, {n: 1.0 for n in "abcde"})
+    loops = deepscan.deep_loops(g, dict.fromkeys("abcde", 1.0))
     assert len(loops) == 1  # removing e->a (the 1.05 hop) kills it
 
 
@@ -191,6 +191,6 @@ def test_the_deep_scan_reads_markets_only_so_recipes_never_crowd_out_a_market_lo
             "kind": "disenchant",
         }
     )
-    loops = deepscan.deep_loops(g, {n: 1.0 for n in "abcdexy"}, max_loops=1)
+    loops = deepscan.deep_loops(g, dict.fromkeys("abcdexy", 1.0), max_loops=1)
     assert len(loops) == 1 and {e.src for e in loops[0]} == set("abcde")
     assert all(e.kind != "recipe" for loop in deepscan.deep_loops(g, {}) for e in loop)

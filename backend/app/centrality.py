@@ -55,11 +55,11 @@ def pagerank(g, rv: dict[str, float], d: float = DAMPING) -> dict[str, float]:
     for (a, b), val in w.items():
         out[a] = out.get(a, 0.0) + val
         inc.setdefault(b, []).append((a, val))
-    pr = {x: 1.0 / n for x in nodes}
+    pr = dict.fromkeys(nodes, 1.0 / n)
     for _ in range(_MAX_ITER):
         dangling = sum(pr[x] for x in nodes if out.get(x, 0.0) == 0.0)
         base = (1.0 - d) / n + d * dangling / n
-        nxt = {x: base for x in nodes}
+        nxt = dict.fromkeys(nodes, base)
         for b, srcs in inc.items():
             nxt[b] += d * sum(
                 pr[a] * val / out[a] for a, val in srcs if out.get(a, 0.0) > 0
