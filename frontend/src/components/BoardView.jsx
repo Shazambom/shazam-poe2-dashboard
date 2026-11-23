@@ -87,7 +87,7 @@ export default function BoardView() {
   const [movers, setMovers] = useState(null)         // biggest movers by |% change| over the window (full universe)
   const assetModal = useAssetModal()                 // shared "zoom into any asset by name" modal (pulse-strip items)
   const [err, setErr] = useState(null)
-  const [busy, setBusy] = useState(false)
+  const refreshPending = useRef(false)
   const winH = useHorizon(s => s.hours)              // app-wide horizon (topbar picker)
   const tick = useSync(s => s.tick)                  // topbar ⟳ pulse → refresh this view
   const setSyncBusy = useSync(s => s.setBusy)        // drive the topbar ⟳ spinner
@@ -123,10 +123,12 @@ export default function BoardView() {
   }
   const removeCur = (id) => saveWatchlist((watchlist || []).filter(x => x !== id))
   const refresh = async () => {
-    if (busy) return
-    setBusy(true); setSyncBusy(true)
+    if (refreshPending.current) return
+    refreshPending.current = true
+    setSyncBusy(true)
     await load()
-    setBusy(false); setSyncBusy(false)
+    refreshPending.current = false
+    setSyncBusy(false)
   }
   usePoll(load, 30000, [winH, numsParam])
   // command palette → open a currency's detail here
