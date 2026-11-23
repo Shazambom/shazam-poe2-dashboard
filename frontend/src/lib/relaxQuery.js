@@ -227,7 +227,10 @@ export function rankRelaxedRows(rows, prices) {
       if (b.divPrice == null) return -1
       return a.divPrice - b.divPrice || a._idx - b._idx
     })
-    .map(({ _idx, ...rest }) => rest)
+    .map(row => {
+      delete row._idx
+      return row
+    })
 }
 
 // Evaluate fetched relaxed rows at real Divine-equivalent rates via reprice.js's shared rule.

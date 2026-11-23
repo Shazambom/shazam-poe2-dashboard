@@ -81,7 +81,7 @@ const store = useWorkspace.getState.bind(useWorkspace)
 
 let treesRun = 0, cyclesRun = 0, opsRun = 0, totalNodes = 0
 
-function runTree(t) {
+function runTree() {
   const tree = randTree(2 + Math.floor(rnd() * 3), 4)
   const sids = searchIds(tree)
   const doc = { version: 2, tree, layout: null, openTabs: [], activeId: sids.length ? pick(sids) : null }
@@ -189,7 +189,7 @@ function runTree(t) {
   void originalCount
 }
 
-for (let t = 0; t < 30; t++) runTree(t)
+for (let t = 0; t < 30; t++) runTree()
 
 console.log(`OK: ${treesRun} fuzzy trees, ${cyclesRun} save/rerender cycles, ${opsRun} random ops, ` +
   `${totalNodes} node-checks — zero data loss, zero id collisions`)

@@ -5,7 +5,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 
 let payload = { league: 'L', signals: [], unseen: 0 }
-globalThis.fetch = async (url) => ({ ok: true, json: async () => payload, text: async () => '' })
+globalThis.fetch = async () => ({ ok: true, json: async () => payload, text: async () => '' })
 globalThis.window = undefined
 const { useSignals, startSignalPolling, newSignals } = await import('../src/lib/signalStore.js')
 const sig = (id, t, acked = false) => ({ item_id: id, name: `Item ${id}`, t, vol_z: 3, mp_dist: 1, close: 1, acked })

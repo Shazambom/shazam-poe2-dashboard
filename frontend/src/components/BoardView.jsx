@@ -76,7 +76,7 @@ const Tile = React.forwardRef(function Tile({ r, num, factor, prices, numOptions
   )
 })
 
-export default function BoardView({ status }) {
+export default function BoardView() {
   const [data, setData] = useState(null)
   const [hold, setHold] = useState(null)             // hold leaderboard (top-3 stores of value) — feeds the pulse strip
   const [movers, setMovers] = useState(null)         // biggest movers by |% change| over the window (full universe)

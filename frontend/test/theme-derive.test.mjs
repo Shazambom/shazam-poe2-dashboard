@@ -44,7 +44,12 @@ test('deriving from each preset\'s primaries reproduces its derived tokens (erro
     assert.ok(mean <= MAX_MEAN_DE, `${id}: mean ΔE ${mean.toFixed(3)} > ${MAX_MEAN_DE}`)
   }
   console.table(rows.map(({ preset, mean, worst }) => ({ preset, mean, worst })))
-  console.table(rows.map(({ preset, mean, worst, ...per }) => ({ preset, ...per })))
+  console.table(rows.map(row => {
+    const perToken = { ...row }
+    delete perToken.mean
+    delete perToken.worst
+    return perToken
+  }))
 })
 
 test('every derived table passes the contrast rules the linter enforces on presets', () => {
@@ -87,7 +92,8 @@ test('contrast guard flags a failing pair and auto-fix nudges only the foregroun
 test('validTable / sanitizeTable / isCustomId', () => {
   assert.equal(D.validTable(tables.vault), true)
   assert.equal(D.validTable({ ...tables.vault, '--bg': 'red' }), false)
-  const { '--bg': _, ...missing } = tables.vault
+  const missing = { ...tables.vault }
+  delete missing['--bg']
   assert.equal(D.validTable(missing), false)
   assert.equal(D.sanitizeTable({ ...tables.vault, '--bg': '#ABC', '--wash-rgb': '1, 2, 3' })['--bg'], '#aabbcc')
   assert.equal(D.sanitizeTable({ ...tables.vault, '--wash-rgb': '1, 2, 3' })['--wash-rgb'], '1,2,3')

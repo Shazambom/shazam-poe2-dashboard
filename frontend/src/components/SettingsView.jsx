@@ -16,7 +16,7 @@ import ThemeBuilder from './ThemeBuilder.jsx'
 
 // Everything auto-saves (debounced) — there is no Save button. The league lives
 // in the top bar; essentials are visible; the rest sits behind "Advanced".
-export default function SettingsView({ currencies, status, onSaved, onReportProblem }) {
+export default function SettingsView({ currencies, onSaved, onReportProblem }) {
   const [s, setS] = useState(null)
   const [mapTo, setMapTo] = useState({})
   const [fees, setFees] = useState(null)
