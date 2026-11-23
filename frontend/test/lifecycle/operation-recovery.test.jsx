@@ -6,6 +6,7 @@ import { act, fireEvent, render, screen } from '@testing-library/react'
 import RecipesView from '../../src/components/RecipesView.jsx'
 import SettingsView from '../../src/components/SettingsView.jsx'
 import CautionSlider from '../../src/components/CautionSlider.jsx'
+import NotificationsPanel from '../../src/components/NotificationsPanel.jsx'
 import { useStatus } from '../../src/lib/statusStore.js'
 import { api, bus } from '../../src/lib/api.js'
 import { installApiMock, jsonResponse } from './setup.js'
@@ -156,5 +157,32 @@ it('caution: retries are bounded; the kept value goes out with the next change',
   fireEvent.change(screen.getByRole('slider'), { target: { value: '5.5' } })
   await advance(350)
   expect(sent.at(-1)).toEqual({ hold_caution: 5.5 })
+  expect(toasts).not.toHaveBeenCalled()
+})
+
+it('notifications: a failed save keeps the switch where the user put it and is retried until it lands', async () => {
+  const down = { on: true }
+  const sent = settingsBackend(down)
+  const view = render(<NotificationsPanel />)
+  await settle()
+  const banner = () => screen.getAllByRole('switch')[0]
+  const was = banner().getAttribute('aria-checked') === 'true'
+  const before = view.container.textContent
+  fireEvent.click(banner())
+  await settle()
+  expect(sent).toHaveLength(1)
+  expect(sent[0].notifications.live.banner).toBe(!was)
+  await advance(1000)
+  expect(sent).toHaveLength(2)
+  expect(banner().getAttribute('aria-checked')).toBe(String(!was))
+  expect(useStatus.getState().settings.notifications.live.banner).toBe(!was)
+  down.on = false
+  await advance(4000)
+  expect(sent).toHaveLength(3)
+  expect(sent[2].notifications.live.banner).toBe(!was)
+  await advance(60000)
+  expect(sent).toHaveLength(3)
+  expect(banner().getAttribute('aria-checked')).toBe(String(!was))
+  expect(view.container.textContent).toBe(before)
   expect(toasts).not.toHaveBeenCalled()
 })
