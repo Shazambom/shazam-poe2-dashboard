@@ -1,2 +1,4 @@
 # Format 14 shell scripts with shfmt -i 2 -ci -bn -sr
 82258f15554c3b47fcee0e310b4ff2e23a215616
+# Ruff formatting of Python sources
+2db629b3572e78d8d035f12002200574fec1eb61

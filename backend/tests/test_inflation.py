@@ -11,6 +11,7 @@ Covers:
   - Core soft currencies always included and used for the headline basket, hard anchors
     excluded from soft series, extra watchlist items marked default_on=False.
 """
+
 from __future__ import annotations
 
 import sys
@@ -20,8 +21,8 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from app import db, inflation, marketseries, settings  # noqa: E402
-from app.currencies import registry  # noqa: E402
+from app import db, inflation, marketseries, settings
+from app.currencies import registry
 
 HOUR = 3600
 LEAGUE = "Test League Inflation"
@@ -74,7 +75,7 @@ def test_velocity_uses_7d_trend_and_ignores_noisy_24h_wiggle(monkeypatch):
         elif i <= 216:
             rate = 100.0 * (1.03 ** ((i - 72) / 24.0))
         else:
-            peak = 100.0 * (1.03 ** 6.0)
+            peak = 100.0 * (1.03**6.0)
             rate = peak * (0.98 ** ((i - 216) / 24.0))
         rows.append((h, CHAOS, DIV, rate * 1000.0, 1000.0))
         rows.append((h, EXALT, DIV, rate * 5000.0, 1000.0))
@@ -184,7 +185,9 @@ def test_divine_weighted_in_divine_units_not_lock_count(monkeypatch):
     assert res["basket"]["since_base_pct"] < 15.0
 
 
-def test_core_currencies_always_included_hard_anchors_excluded_and_extras_default_off(monkeypatch):
+def test_core_currencies_always_included_hard_anchors_excluded_and_extras_default_off(
+    monkeypatch,
+):
     """Board watchlist without Exalted and with Mirror + Omen must still chart core softs,
     never plot hard anchors (Mirror/Lock), mark extra watchlist items default_on=False, and
     compute the headline basket from core currencies only."""
@@ -198,8 +201,17 @@ def test_core_currencies_always_included_hard_anchors_excluded_and_extras_defaul
         return orig_metas(tid)
 
     monkeypatch.setattr(inflation, "_metas", fake_metas)
-    monkeypatch.setattr(inflation.registry, "name", lambda tid: "Omen of Whittling" if tid == "omen-of-whittling" else orig_name(tid))
-    _use_settings(monkeypatch, ["mirror", "hinekoras-lock", "omen-of-whittling", "chaos", "divine"])
+    monkeypatch.setattr(
+        inflation.registry,
+        "name",
+        lambda tid: (
+            "Omen of Whittling" if tid == "omen-of-whittling" else orig_name(tid)
+        ),
+    )
+    _use_settings(
+        monkeypatch,
+        ["mirror", "hinekoras-lock", "omen-of-whittling", "chaos", "divine"],
+    )
 
     now_h = (int(time.time()) // HOUR) * HOUR
     rows = []
@@ -226,7 +238,10 @@ def test_core_currencies_always_included_hard_anchors_excluded_and_extras_defaul
     assert "divine" in by_id and by_id["divine"]["default_on"] is True
 
     # Extra watchlist item is present so user can toggle it on, but starts off and doesn't pollute basket
-    assert "omen-of-whittling" in by_id and by_id["omen-of-whittling"]["default_on"] is False
+    assert (
+        "omen-of-whittling" in by_id
+        and by_id["omen-of-whittling"]["default_on"] is False
+    )
     # Headline basket comes from core currencies (~0% to +10%), NOT pulled toward Omen's +200%
     assert res["basket"]["since_base_pct"] < 20.0
 
@@ -280,4 +295,3 @@ def test_ols_daily_pct_guards_subday_span_and_overflow():
     # Extreme jump over 24h -> finite clamped float, never OverflowError
     val = inflation._ols_daily_pct([(base_h, 1.0), (base_h + 24 * HOUR, 1e30)])
     assert val is not None and val > 0
-

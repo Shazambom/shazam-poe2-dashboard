@@ -7,13 +7,15 @@ are covered. Stdlib-only so the lean sidecar imports it without the backend.
 
 Run:  python -m pytest backend/tests/test_watchdog.py -q
 """
+
+import logging
 import os
 import sys
 import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # backend/
-from app import watchdog  # noqa: E402
+from app import watchdog
 
 
 def test_parent_alive_for_self_and_dead_for_impossible_pid():
@@ -35,8 +37,8 @@ def test_windows_uses_handle_check_and_never_calls_os_kill(monkeypatch):
     monkeypatch.setattr(watchdog, "_win_alive", lambda pid: pid == 1234)
     assert watchdog.parent_alive(1234) is True
     assert watchdog.parent_alive(5678) is False
-    assert watchdog.parent_alive(None) is True        # falsy short-circuits before any probe
-    assert calls == []                                # os.kill NEVER called on Windows
+    assert watchdog.parent_alive(None) is True  # falsy short-circuits before any probe
+    assert calls == []  # os.kill NEVER called on Windows
 
 
 def test_watch_parent_noop_without_pid():
@@ -47,7 +49,9 @@ def test_watch_parent_noop_without_pid():
 def test_watch_parent_fires_on_dead():
     fired = []
     # A pid that's already gone -> on_dead should fire promptly.
-    t = watchdog.watch_parent(2_000_000_000, interval=0.02, on_dead=lambda reason: fired.append(True))
+    t = watchdog.watch_parent(
+        2_000_000_000, interval=0.02, on_dead=lambda reason: fired.append(True)
+    )
     assert t is not None
     for _ in range(100):
         if fired:
@@ -62,15 +66,19 @@ def test_watch_parent_debounces_a_single_spurious_miss(monkeypatch):
     seq = iter([False, True, True, True, True, True])
     monkeypatch.setattr(watchdog, "parent_alive", lambda pid: next(seq, True))
     fired = []
-    watchdog.watch_parent(123, interval=0.01, misses=2, on_dead=lambda reason=None: fired.append(reason))
+    watchdog.watch_parent(
+        123, interval=0.01, misses=2, on_dead=lambda reason=None: fired.append(reason)
+    )
     time.sleep(0.15)
     assert fired == [], "a single spurious miss must not trigger death"
 
 
 def test_watch_parent_fires_after_consecutive_misses_with_reason(monkeypatch):
-    monkeypatch.setattr(watchdog, "parent_alive", lambda pid: False)   # always gone
+    monkeypatch.setattr(watchdog, "parent_alive", lambda pid: False)  # always gone
     fired = []
-    watchdog.watch_parent(123, interval=0.01, misses=2, on_dead=lambda reason=None: fired.append(reason))
+    watchdog.watch_parent(
+        123, interval=0.01, misses=2, on_dead=lambda reason=None: fired.append(reason)
+    )
     for _ in range(100):
         if fired:
             break
@@ -87,8 +95,10 @@ def test_win_alive_treats_access_denied_as_alive(monkeypatch):
     class _FakeK:
         def __init__(self, err):
             self._err = err
+
         def OpenProcess(self, *a):
-            return 0                      # NULL handle
+            return 0  # NULL handle
+
         # GetExitCodeProcess/CloseHandle unused on the NULL path
 
     monkeypatch.setattr(ctypes, "windll", type("W", (), {})(), raising=False)
@@ -106,6 +116,7 @@ def test_watch_stdin_eof_clean_exit_with_open_pipe_does_not_sigabrt():
     interpreter exit (like the sidecar's idle exit) aborts in CPython's _enter_buffered_busy
     with SIGABRT (rc=-6). Raw os.read(fd, 1) must exit cleanly with rc=0 while the pipe stays open."""
     import subprocess
+
     backend_dir = str(Path(__file__).resolve().parents[1])
     code = (
         f"import sys, time; sys.path.insert(0, {backend_dir!r}); "
@@ -121,18 +132,24 @@ def test_watch_stdin_eof_clean_exit_with_open_pipe_does_not_sigabrt():
     )
     try:
         rc = proc.wait(timeout=5)
+        assert proc.stderr is not None
         err = proc.stderr.read().decode("utf-8", "replace")
     finally:
         if proc.stdin:
             try:
                 proc.stdin.close()
             except Exception:
-                pass
-    assert rc == 0, f"expected clean rc=0 with open stdin pipe, got rc={rc} stderr={err!r}"
+                logging.getLogger(__name__).debug(
+                    "could not close the test child's stdin", exc_info=True
+                )
+    assert rc == 0, (
+        f"expected clean rc=0 with open stdin pipe, got rc={rc} stderr={err!r}"
+    )
 
 
 def test_watch_stdin_eof_fires_when_parent_closes_pipe():
     import subprocess
+
     backend_dir = str(Path(__file__).resolve().parents[1])
     code = (
         f"import os, sys, time; sys.path.insert(0, {backend_dir!r}); "
@@ -147,6 +164,7 @@ def test_watch_stdin_eof_fires_when_parent_closes_pipe():
         stderr=subprocess.PIPE,
     )
     time.sleep(0.15)
+    assert proc.stdin is not None
     proc.stdin.close()
     rc = proc.wait(timeout=5)
     assert rc == 42
@@ -154,4 +172,5 @@ def test_watch_stdin_eof_fires_when_parent_closes_pipe():
 
 if __name__ == "__main__":
     import pytest
+
     raise SystemExit(pytest.main([__file__, "-q"]))

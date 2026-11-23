@@ -10,10 +10,10 @@ day was final and the listing has not changed since (the two views need not agre
 without this such an item would be fetched every hour). The seed ends each current league on the latest
 day that is final for every tracked item; the items holding it back are the only ones worth fetching.
 """
+
 from __future__ import annotations
 
 import calendar
-import hashlib
 import json
 import logging
 import time
@@ -22,12 +22,14 @@ from dataclasses import dataclass, field
 from datetime import date, timedelta
 
 import httpx
+from starlette.concurrency import run_in_threadpool
 
-from . import db, leaguehistory as lh
+from . import db
+from . import leaguehistory as lh
 
 log = logging.getLogger("poe2arb.seedready")
 
-REL_TOL = 1e-5          # the listing's Price is a float32 of our stored double
+REL_TOL = 1e-5  # the listing's Price is a float32 of our stored double
 
 
 def _prev(day: str) -> str:
@@ -60,7 +62,9 @@ def _unchanged(days: dict, rec: dict, through: str) -> bool:
     """poe2scout still reports what it did when the item was fetched, for every final day it lists.
     The listing is a rolling week, so a day that slid out of it is not a change."""
     fp = rec.get("fp") or {}
-    return all(d in fp and [v[0], v[1]] == fp[d] for d, v in days.items() if d <= through)
+    return all(
+        d in fp and [v[0], v[1]] == fp[d] for d, v in days.items() if d <= through
+    )
 
 
 def _match(listed, stored) -> bool:
@@ -79,9 +83,9 @@ def _days(first: str, last: str) -> list[str]:
 
 @dataclass
 class Assessment:
-    through: str | None                 # newest day poe2scout has finished
-    cut: str | None                     # newest day the seed may carry (None: none verified)
-    stale: set = field(default_factory=set)   # tracked items whose rows are not final
+    through: str | None  # newest day poe2scout has finished
+    cut: str | None  # newest day the seed may carry (None: none verified)
+    stale: set = field(default_factory=set)  # tracked items whose rows are not final
 
 
 def assess(listing: dict, stored: dict, fingerprints: dict) -> Assessment:
@@ -98,7 +102,11 @@ def assess(listing: dict, stored: dict, fingerprints: dict) -> Assessment:
     for item, rows in stored.items():
         up = listing.get(item, {})
         rec = fingerprints.get(item)
-        vouched = rec["through"] if rec and rec.get("vouch", True) and _unchanged(up, rec, rec["through"]) else None
+        vouched = (
+            rec["through"]
+            if rec and rec.get("vouch", True) and _unchanged(up, rec, rec["through"])
+            else None
+        )
         for d in window:
             if vouched is not None and d <= vouched:
                 continue
@@ -124,8 +132,11 @@ def changed_after_final(listing: dict, stored: dict, fetched_at: dict) -> set:
     for item, rows in stored.items():
         up, at = listing.get(item, {}), fetched_at.get(item, 0)
         for d in {*up, *rows}:
-            if d <= through and at >= calendar.timegm(time.strptime(d, "%Y-%m-%d")) + 2 * 86400 \
-                    and not _match(up.get(d), rows.get(d)):
+            if (
+                d <= through
+                and at >= calendar.timegm(time.strptime(d, "%Y-%m-%d")) + 2 * 86400
+                and not _match(up.get(d), rows.get(d))
+            ):
                 out.add(item)
                 break
     return out
@@ -134,20 +145,30 @@ def changed_after_final(listing: dict, stored: dict, fetched_at: dict) -> set:
 def to_fetch(a: Assessment, listing: dict, fingerprints: dict) -> set:
     """The stale items worth a request: all of them, except one already fetched against exactly what
     poe2scout reports now (fetching it again would return the same thing)."""
-    return {i for i in a.stale
-            if not (a.through and (rec := fingerprints.get(i)) and _unchanged(listing.get(i, {}), rec, a.through))}
+    return {
+        i
+        for i in a.stale
+        if not (
+            a.through
+            and (rec := fingerprints.get(i))
+            and _unchanged(listing.get(i, {}), rec, a.through)
+        )
+    }
 
 
 # ------------------------------------------------------------------------------------------ poll
 # Runs on the server that publishes the seed (the hourly loop in main.py, gated there), never on a
 # desktop client. Everything it knows lives in the DB and kv, so a restart repeats no work.
 
+
 async def _listing(name: str) -> dict:
     """{item: {day: (price, quantity)}} for every item poe2scout lists in the league. Raises if any
     category or page fails: a partial listing would make missing items look untraded."""
     cats = await lh._get(f"/Leagues/{urllib.parse.quote(name)}/Items/Categories")
     out: dict = {}
-    for cat in [c.get("ApiId") for c in cats.get("CurrencyCategories", []) if c.get("ApiId")]:
+    for cat in [
+        c.get("ApiId") for c in cats.get("CurrencyCategories", []) if c.get("ApiId")
+    ]:
         for x in await lh.category_items(name, cat):
             if not x.get("ItemId"):
                 continue
@@ -162,10 +183,17 @@ def _stored(name: str, since: str | None) -> dict:
     """{item: {day: (average, volume)}} from `since` on, for every item the league holds history for
     (the items the seed would ship), {} for one with nothing that recent."""
     with db.q() as c:
-        tracked = {r[0]: {} for r in c.execute("SELECT DISTINCT item_id FROM league_daily WHERE league=?", (name,))}
+        tracked = {
+            r[0]: {}
+            for r in c.execute(
+                "SELECT DISTINCT item_id FROM league_daily WHERE league=?", (name,)
+            )
+        }
         if since:
             for iid, day, avg, vol in c.execute(
-                    "SELECT item_id, day, average, volume FROM league_daily WHERE league=? AND day>=?", (name, since)):
+                "SELECT item_id, day, average, volume FROM league_daily WHERE league=? AND day>=?",
+                (name, since),
+            ):
                 tracked[iid][day] = (avg, vol)
     return tracked
 
@@ -173,11 +201,13 @@ def _stored(name: str, since: str | None) -> dict:
 def _fingerprints(name: str) -> dict:
     prefix = f"seed_fp:{name}:"
     with db.q() as c:
-        rows = c.execute("SELECT key, value FROM kv_ops WHERE key LIKE ?", (prefix + "%",)).fetchall()
+        rows = c.execute(
+            "SELECT key, value FROM kv_ops WHERE key LIKE ?", (prefix + "%",)
+        ).fetchall()
     out = {}
     for key, value in rows:
         try:
-            out[int(key[len(prefix):])] = json.loads(value)
+            out[int(key[len(prefix) :])] = json.loads(value)
         except (ValueError, TypeError):
             continue
     return out
@@ -185,13 +215,17 @@ def _fingerprints(name: str) -> dict:
 
 async def poll_league(name: str) -> dict:
     """Read the league's listing, fetch only the items holding its seed back, record the cut."""
-    prev = db.kv_get(f"seed_cut:{name}")
+    prev = await run_in_threadpool(db.kv_get, f"seed_cut:{name}")
     try:
         listing = await _listing(name)
         if prev and prev.get("day") and final_through(listing) is None:
-            raise ValueError("listing has no finished day (poe2scout answered with nothing)")
+            raise ValueError(
+                "listing has no finished day (poe2scout answered with nothing)"
+            )
     except Exception as exc:
-        log.warning("seed poll %s: listing unusable, keeping the last cut: %s", name, exc)
+        log.warning(
+            "seed poll %s: listing unusable, keeping the last cut: %s", name, exc
+        )
         return {"error": str(exc), "fetched": 0}
     since = min((d for days in listing.values() for d in days), default=None)
     fps = _fingerprints(name)
@@ -199,8 +233,12 @@ async def poll_league(name: str) -> dict:
     a = assess(listing, stored, fps)
     revised = changed_after_final(listing, stored, lh._marks(name)[1])
     if revised:
-        log.warning("seed poll %s: poe2scout changed a finished day for %d item(s): %s",
-                    name, len(revised), sorted(revised)[:20])
+        log.warning(
+            "seed poll %s: poe2scout changed a finished day for %d item(s): %s",
+            name,
+            len(revised),
+            sorted(revised)[:20],
+        )
     fetched, failed = 0, 0
     for item in sorted(to_fetch(a, listing, fps)):
         gone = False
@@ -209,38 +247,81 @@ async def poll_league(name: str) -> dict:
         except httpx.HTTPStatusError as exc:
             if exc.response.status_code != 404:
                 failed += 1
-                log.warning("seed poll %s/%s: fetch failed, retrying next poll: %s", name, item, exc)
+                log.warning(
+                    "seed poll %s/%s: fetch failed, retrying next poll: %s",
+                    name,
+                    item,
+                    exc,
+                )
                 continue
-            gone, n = True, 0                    # poe2scout has no history for it: confirmed, not retried
+            gone, n = True, 0  # poe2scout has no history for it: confirmed, not retried
         except Exception as exc:
             failed += 1
-            log.warning("seed poll %s/%s: fetch failed, retrying next poll: %s", name, item, exc)
+            log.warning(
+                "seed poll %s/%s: fetch failed, retrying next poll: %s", name, item, exc
+            )
             continue
         fetched += 1
         if a.through:
             # An empty answer for an item poe2scout lists is not proof of anything: remember what was
             # asked (so it is not asked again unchanged) without vouching for the stored rows.
-            db.kv_set(f"seed_fp:{name}:{item}", {"fp": fingerprint(listing.get(item, {}), a.through),
-                                                 "through": a.through, "vouch": gone or n > 0})
+            await lh._finish_crawl_write(
+                db.kv_set,
+                f"seed_fp:{name}:{item}",
+                {
+                    "fp": fingerprint(listing.get(item, {}), a.through),
+                    "through": a.through,
+                    "vouch": gone or n > 0,
+                },
+            )
     if fetched:
         a = assess(listing, _stored(name, since), _fingerprints(name))
     cut = a.cut
     if failed and prev and prev.get("day") and (cut is None or cut < prev["day"]):
-        cut = prev["day"]                        # a failed request never costs every item its days
-    db.kv_set(f"seed_cut:{name}", {"day": cut, "through": a.through, "stale": sorted(a.stale),
-                                   "revised": sorted(revised), "at": time.time()})
-    log.info("seed poll %s: through=%s cut=%s fetched=%d failed=%d still_stale=%d revised=%d",
-             name, a.through, cut, fetched, failed, len(a.stale), len(revised))
-    return {"cut": cut, "through": a.through, "fetched": fetched, "failed": failed, "stale": sorted(a.stale),
-            "revised": sorted(revised)}
+        cut = prev["day"]  # a failed request never costs every item its days
+    await lh._finish_crawl_write(
+        db.kv_set,
+        f"seed_cut:{name}",
+        {
+            "day": cut,
+            "through": a.through,
+            "stale": sorted(a.stale),
+            "revised": sorted(revised),
+            "at": time.time(),
+        },
+    )
+    log.info(
+        "seed poll %s: through=%s cut=%s fetched=%d failed=%d still_stale=%d revised=%d",
+        name,
+        a.through,
+        cut,
+        fetched,
+        failed,
+        len(a.stale),
+        len(revised),
+    )
+    return {
+        "cut": cut,
+        "through": a.through,
+        "fetched": fetched,
+        "failed": failed,
+        "stale": sorted(a.stale),
+        "revised": sorted(revised),
+    }
 
 
 async def poll() -> dict:
     """One poll of every current league. Waits for a running crawl rather than racing it (they share
     poe2scout's rate budget and the same rows)."""
-    leagues = [l["Value"] for l in await lh._leagues() if l.get("IsCurrent") and l.get("Value")]
+    leagues = [
+        league_row["Value"]
+        for league_row in await lh._leagues()
+        if league_row.get("IsCurrent") and league_row.get("Value")
+    ]
     async with lh._backfill_lock:
         res = {name: await poll_league(name) for name in leagues}
-    # What the exporter trusts: which leagues are current per this poll, and when it ran.
-    db.kv_set("seed_poll", {"at": time.time(), "leagues": leagues})
+        # What the exporter trusts: which leagues are current per this poll, and when it ran.
+        await lh._finish_crawl_write(
+            db.kv_set, "seed_poll", {"at": time.time(), "leagues": leagues}
+        )
     return res

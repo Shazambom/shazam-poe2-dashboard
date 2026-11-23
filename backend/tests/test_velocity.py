@@ -12,35 +12,40 @@ rank-invariant scalar). gold_price_ref is the slider price in reference-per-gold
 
     python -m pytest backend/tests/test_velocity.py -q
 """
+
 import math
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # backend/
-from app import arbitrage  # noqa: E402
+from app import arbitrage
 
 
 def v(margin, gold, fill_hours, price):
-    return arbitrage._velocity(margin, fill_hours, gold, price)
+    velocity = arbitrage._velocity(margin, fill_hours, gold, price)
+    assert velocity is not None
+    return velocity
 
 
 def test_gold_free_ranks_best():
-    assert v(50, 0, 1.0, 0.01) == math.inf     # net 50 > 0
-    assert v(0, 0, 1.0, 0.01) == 0.0           # net 0
+    assert v(50, 0, 1.0, 0.01) == math.inf  # net 50 > 0
+    assert v(0, 0, 1.0, 0.01) == 0.0  # net 0
 
 
 def test_higher_gold_price_lowers_velocity_and_can_go_negative():
     # Same loop, gold now valued higher -> lower velocity; past break-even it goes negative (net loss).
     assert v(100, 5000, 1.0, 0.001) > v(100, 5000, 1.0, 0.03)
-    assert v(100, 5000, 1.0, 0.03) < 0         # net = 100 - 5000*0.03 = -50
+    assert v(100, 5000, 1.0, 0.03) < 0  # net = 100 - 5000*0.03 = -50
 
 
 def test_slider_reorders_loops():
     # Two loops, different fill times. The gold price flips which one ranks higher — proof the
     # slider meaningfully reorders (a scalar divisor never could).
     lo, hi = 0.001, 0.05
-    assert v(100, 2000, 1.0, lo) > v(110, 2000, 2.0, lo)   # cheap gold: the faster loop wins
-    assert v(110, 2000, 2.0, hi) > v(100, 2000, 1.0, hi)   # dear gold: order flips
+    assert v(100, 2000, 1.0, lo) > v(
+        110, 2000, 2.0, lo
+    )  # cheap gold: the faster loop wins
+    assert v(110, 2000, 2.0, hi) > v(100, 2000, 1.0, hi)  # dear gold: order flips
 
 
 def test_no_fill_hours_is_none():

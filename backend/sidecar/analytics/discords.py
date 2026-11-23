@@ -22,7 +22,10 @@ daily points, so the metric must produce meaning early — not only after weeks.
 Higher-resolution (hourly digest) input is the bigger lever if we need signals even sooner — a
 Phase-4 consideration.
 """
+
 from __future__ import annotations
+
+import logging
 
 import numpy as np
 
@@ -31,7 +34,7 @@ import numpy as np
 MIN_VALUE_EX = 100_000.0
 
 
-Z_CAP = 50.0   # a z past this is already "unmistakable spike"; the exact value is meaningless
+Z_CAP = 50.0  # a z past this is already "unmistakable spike"; the exact value is meaningless
 
 
 def _mad_z(arr: np.ndarray, i: int) -> float:
@@ -60,21 +63,35 @@ def _matrix_profile(a, m: int) -> np.ndarray:
     k = a.shape[0] - m + 1
     if k <= 0:
         return np.empty(0, dtype=float)
-    subs = np.lib.stride_tricks.sliding_window_view(a, m)   # (k, m) windows, read-only view
-    excl = int(np.ceil(m / 4.0))                            # STUMPY_EXCL_ZONE_DENOM = 4
+    subs = np.lib.stride_tricks.sliding_window_view(
+        a, m
+    )  # (k, m) windows, read-only view
+    excl = int(np.ceil(m / 4.0))  # STUMPY_EXCL_ZONE_DENOM = 4
     mp = np.full(k, np.inf, dtype=float)
     for i in range(k):
-        diff = subs - subs[i]                               # (k, m)
-        d = np.sqrt(np.einsum("ij,ij->i", diff, diff))      # raw Euclidean per window
-        lo, hi = max(0, i - excl), min(k, i + excl + 1)     # exclude the trivial-match zone
+        diff = subs - subs[i]  # (k, m)
+        d = np.sqrt(np.einsum("ij,ij->i", diff, diff))  # raw Euclidean per window
+        lo, hi = (
+            max(0, i - excl),
+            min(k, i + excl + 1),
+        )  # exclude the trivial-match zone
         d[lo:hi] = np.inf
         if np.isfinite(d).any():
             mp[i] = d.min()
     return mp
 
 
-def compute(series: dict, meta: dict, *, min_value_ex: float = MIN_VALUE_EX, m: int = 3,
-            recent_days: int = 5, vol_z: float = 2.5, top_n: int = 20, _mp=_matrix_profile) -> list[dict]:
+def compute(
+    series: dict,
+    meta: dict,
+    *,
+    min_value_ex: float = MIN_VALUE_EX,
+    m: int = 3,
+    recent_days: int = 5,
+    vol_z: float = 2.5,
+    top_n: int = 20,
+    _mp=_matrix_profile,
+) -> list[dict]:
     """Return volume-confirmed recent discord signals, strongest first (ranked by vol_z, capped at
     top_n): [{item_id, name, t, mp_dist, vol_z, close}]. It's a ranked shortlist, not a binary
     alarm — the vol_z floor (default 2.5 ≈ a clear robust outlier) is deliberately modest so the
@@ -83,15 +100,19 @@ def compute(series: dict, meta: dict, *, min_value_ex: float = MIN_VALUE_EX, m: 
     out: list[dict] = []
     for item_id, pts in series.items():
         try:
-            if len(pts) < 2 * m + 1:                 # need enough history for a stable profile
+            if len(pts) < 2 * m + 1:  # need enough history for a stable profile
                 continue
             closes = np.asarray([p[1] for p in pts], dtype=float)
             values = np.asarray([p[2] for p in pts], dtype=float)
-            if float(np.median(values)) < min_value_ex:      # liquidity floor (traded VALUE)
+            if (
+                float(np.median(values)) < min_value_ex
+            ):  # liquidity floor (traded VALUE)
                 continue
             # Confirm on VOLUME (units = value/close), NOT value: a price spike alone tripling
             # value must not masquerade as heavy trading. This independence is the point.
-            volumes = np.divide(values, closes, out=np.zeros_like(values), where=closes > 0)
+            volumes = np.divide(
+                values, closes, out=np.zeros_like(values), where=closes > 0
+            )
 
             # Non-normalized on PURPOSE: a z-normalized matrix profile finds unusual SHAPES and
             # normalizes magnitude away — a 3x price spike becomes just a "step-up". "About to
@@ -100,29 +121,34 @@ def compute(series: dict, meta: dict, *, min_value_ex: float = MIN_VALUE_EX, m: 
             # the discord on both a 7-day and a 30-day series; z-normalized missed it). `_mp` is
             # numpy by default; the equivalence gate injects the real stumpy profile to prove 1:1.
             dist = np.asarray(_mp(closes, m), dtype=float)
-            dist[~np.isfinite(dist)] = -np.inf               # ignore constant-window nan/inf
+            dist[~np.isfinite(dist)] = -np.inf  # ignore constant-window nan/inf
             if not np.isfinite(dist).any():
                 continue
-            di = int(np.argmax(dist))                        # discord window start
+            di = int(np.argmax(dist))  # discord window start
 
             # Volume-confirm within the discord window: take the strongest spike there.
             n = len(pts)
             window = range(di, min(di + m, n))
             vz, spike_j = max((_mad_z(volumes, j), j) for j in window)
-            if vz < vol_z:                                   # not volume-confirmed
+            if vz < vol_z:  # not volume-confirmed
                 continue
-            if spike_j < n - recent_days:                    # not recent -> not "about to move"
+            if spike_j < n - recent_days:  # not recent -> not "about to move"
                 continue
 
-            out.append({
-                "item_id": item_id,
-                "name": meta.get(item_id, ("?", ""))[0],
-                "t": pts[spike_j][0],
-                "mp_dist": float(dist[di]),
-                "vol_z": round(float(vz), 2),
-                "close": float(closes[spike_j]),
-            })
+            out.append(
+                {
+                    "item_id": item_id,
+                    "name": meta.get(item_id, ("?", ""))[0],
+                    "t": pts[spike_j][0],
+                    "mp_dist": float(dist[di]),
+                    "vol_z": round(float(vz), 2),
+                    "close": float(closes[spike_j]),
+                }
+            )
         except Exception:
+            logging.getLogger(__name__).debug(
+                "discord profile failed for an item", exc_info=True
+            )
             continue
 
     out.sort(key=lambda s: s["vol_z"], reverse=True)

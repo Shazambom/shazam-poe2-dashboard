@@ -7,11 +7,12 @@ of the recent window. These pure helpers back /api/signals (annotate + unseen co
 
 Run:  .venv-test/bin/python -m pytest backend/tests/test_signalsack.py -q
 """
+
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # backend/
-from app import signalsack  # noqa: E402
+from app import signalsack
 
 SIGS = [{"item_id": 1, "t": 100, "name": "A"}, {"item_id": 2, "t": 200, "name": "B"}]
 
@@ -36,11 +37,12 @@ def test_merge_adds_keys():
 
 
 def test_prune_drops_acks_for_signals_no_longer_present():
-    ack = {"1:100": 1, "9:999": 1}       # 9:999 is stale — no longer in the live set
+    ack = {"1:100": 1, "9:999": 1}  # 9:999 is stale — no longer in the live set
     pruned = signalsack.prune(ack, SIGS)
     assert pruned == {"1:100": 1}
 
 
 if __name__ == "__main__":
     import pytest
+
     raise SystemExit(pytest.main([__file__, "-q"]))

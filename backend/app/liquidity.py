@@ -15,13 +15,14 @@ so a holding's paper value is the price shown everywhere else. Pure over (graph,
 DB, no network, no sidecar. `liquidity` imports `arbitrage`;
 `arbitrage` never imports `liquidity` (no cycle).
 """
+
 from __future__ import annotations
 
 import math
+from typing import cast
 
 from . import arbitrage, centrality, settings
 from .currencies import registry
-
 
 # Two real hub markets of one holding disagree by a few % (a cranium's Chaos and Divine markets,
 # VWAP hours, spreads), so an honest one-hop sale can read as a small "gain" against the holding's
@@ -31,7 +32,7 @@ from .currencies import registry
 CROSS_TOLERANCE_PCT = 10.0
 
 
-def cash_set(g: "arbitrage.Graph", ref_value: dict[str, float]) -> set[str]:
+def cash_set(g: arbitrage.Graph, ref_value: dict[str, float]) -> set[str]:
     """The liquid, cash-like currencies: the market's HUBS — the same top-`hub_count` currencies
     by executed value that the Board lights with a ⬢ (centrality.hubs). These ARE realizable
     wealth (a player doesn't "cash out" a hub, they already hold liquid value), so they realize
@@ -44,7 +45,7 @@ def _whole_units_out(cand: dict) -> int:
     """What a path delivers when every hop pays out WHOLE units (you can't receive 15.71 Divine
     for a cranium — you get 15, and sell those). The convert simulation floors only the end, so a
     detour through a fractional middle leg can look like it beats the direct sale."""
-    amt = float(cand["in"])                     # the committed stack (a thin book strands the rest)
+    amt = float(cand["in"])  # the committed stack (a thin book strands the rest)
     for st in cand["steps"]:
         amt = math.floor(amt * st["out"] / st["in"] + 1e-9) if st["in"] else 0
     return int(amt)
@@ -53,8 +54,10 @@ def _whole_units_out(cand: dict) -> int:
 # Cash-out's own liquidity guards (the Arbitrage page's defaults before the presets): the page's filters are a preset
 # knob, and reading them let a preset pick — or m8's Balanced, which has no fill-time limit and states volume in
 # exalted — move every Capital/Stash value (code review 2026-10-05).
-CASHOUT_MIN_VOLUME_EX_PER_H = 100   # every leg trades at least this much value per hour, in exalted
-CASHOUT_MAX_FILL_HOURS = 24         # and the stack fills within a day
+CASHOUT_MIN_VOLUME_EX_PER_H = (
+    100  # every leg trades at least this much value per hour, in exalted
+)
+CASHOUT_MAX_FILL_HOURS = 24  # and the stack fills within a day
 
 
 def _liquid(cand: dict, ex_in_ref: float) -> bool:
@@ -65,9 +68,9 @@ def _liquid(cand: dict, ex_in_ref: float) -> bool:
     market data" for it was wrong: there is market data."""
     if (cand["volume_ref_per_h"] or 0.0) < CASHOUT_MIN_VOLUME_EX_PER_H * ex_in_ref:
         return False
-    if cand["fill_hours"] is None or cand["fill_hours"] > CASHOUT_MAX_FILL_HOURS:
-        return False
-    return True
+    return not (
+        cand["fill_hours"] is None or cand["fill_hours"] > CASHOUT_MAX_FILL_HOURS
+    )
 
 
 def _source(kinds: list[str]) -> str:
@@ -85,8 +88,15 @@ def _source(kinds: list[str]) -> str:
 CASHOUT_MAX_STEPS = 3
 
 
-def realizable(g: "arbitrage.Graph", ref_value: dict[str, float], currency: str, qty: float,
-               *, cash: set[str] | None = None, gold_value_per_1k: float = 0.0) -> dict:
+def realizable(
+    g: arbitrage.Graph,
+    ref_value: dict[str, float],
+    currency: str,
+    qty: float,
+    *,
+    cash: set[str] | None = None,
+    gold_value_per_1k: float = 0.0,
+) -> dict:
     """What `qty` of `currency` would ACTUALLY realize if cashed out now, valued in the reference.
 
     Cash-like holdings (the market's hubs — see `cash_set` — plus the reference) are already
@@ -121,43 +131,76 @@ def realizable(g: "arbitrage.Graph", ref_value: dict[str, float], currency: str,
     # somehow unpriced — an empty market — we can't claim a value, so realize to null not qty.)
     if currency in cash or currency == ref:
         if paper is None:
-            return {"paper_ref": None, "realizable_ref": None, "ghost_ref": None,
-                    "slippage_pct": None, "fill_hours": None, "source": "none",
-                    "full_fill": False, "path": None, "out": None}
-        return {"paper_ref": paper, "realizable_ref": paper, "ghost_ref": 0.0,
-                "slippage_pct": 0.0, "fill_hours": 0.0, "source": "cash",
-                "full_fill": True, "path": [currency], "out": {"amount": qty, "cur": currency}}
+            return {
+                "paper_ref": None,
+                "realizable_ref": None,
+                "ghost_ref": None,
+                "slippage_pct": None,
+                "fill_hours": None,
+                "source": "none",
+                "full_fill": False,
+                "path": None,
+                "out": None,
+            }
+        return {
+            "paper_ref": paper,
+            "realizable_ref": paper,
+            "ghost_ref": 0.0,
+            "slippage_pct": 0.0,
+            "fill_hours": 0.0,
+            "source": "cash",
+            "full_fill": True,
+            "path": [currency],
+            "out": {"amount": qty, "cur": currency},
+        }
 
     # Sell into whichever cash currency (or the reference) nets the most VALUE, through liquid
     # cash markets only, valued by the same table as paper (net of the gold the path charges).
     rv = ref_value
-    ex_in_ref = ref_value.get(settings.ARBITRAGE_UNIT) or 1.0   # cash-out's volume floor is in exalted
+    ex_in_ref = (
+        ref_value.get(settings.ARBITRAGE_UNIT) or 1.0
+    )  # cash-out's volume floor is in exalted
     best = best_value = best_key = None
     allowed_mids = frozenset(cash) | {ref}
     for target in dict.fromkeys((*sorted(cash), ref)):
         if target == currency:
             continue
-        res = arbitrage._best_conversions(g, rv, currency, target, float(qty), max_steps=CASHOUT_MAX_STEPS,
-                                          max_gain_pct=CROSS_TOLERANCE_PCT,
-                                          gold_value_per_1k=gold_value_per_1k,
-                                          allowed_mids=allowed_mids)
+        res = arbitrage._best_conversions(
+            g,
+            rv,
+            currency,
+            target,
+            float(qty),
+            max_steps=CASHOUT_MAX_STEPS,
+            max_gain_pct=CROSS_TOLERANCE_PCT,
+            gold_value_per_1k=gold_value_per_1k,
+            allowed_mids=allowed_mids,
+        )
         worth = 1.0 if target == ref else (ref_value.get(target) or 0.0)
         for cand in ([res["best"]] if res["best"] else []) + res["alternatives"]:
             if any(n not in allowed_mids for n in cand["path"][1:-1]):
-                continue                                   # a detour through a non-cash market is arbitrage
+                continue  # a detour through a non-cash market is arbitrage
             gold_ref = cand["out"] * rv.get(target, 0.0) - cand["net_ref"]
             # Ranked on what it really delivers. Clamping to paper here first made every candidate
             # at or above paper tie, and hop count alone then chose the route we display.
             value = _whole_units_out(cand) * worth - gold_ref
             key = (_liquid(cand, ex_in_ref), cand["full_fill"], value, -cand["hops"])
-            if best is None or key > best_key:
+            if best_key is None or key > best_key:
                 best, best_value, best_key = cand, value, key
-    if best is None:                                       # no exchange market to measure against
-        return {"paper_ref": paper, "realizable_ref": None, "ghost_ref": None,
-                "slippage_pct": None, "fill_hours": None, "source": "none",
-                "full_fill": False, "path": None, "out": None}
+    if best is None:  # no exchange market to measure against
+        return {
+            "paper_ref": paper,
+            "realizable_ref": None,
+            "ghost_ref": None,
+            "slippage_pct": None,
+            "fill_hours": None,
+            "source": "none",
+            "full_fill": False,
+            "path": None,
+            "out": None,
+        }
 
-    realizable_ref = best_value                            # reference-denominated, net of gold
+    realizable_ref = cast(float, best_value)  # set when a candidate becomes best
     # You can't realize MORE than paper by cashing out — any apparent surplus is a cross-rate
     # inconsistency (the convert ranker tolerates ±max_gain_pct of noise) i.e. disguised
     # arbitrage, which belongs in the Arbitrage tab, not a "what can I cash out" number. Cap at
@@ -167,13 +210,22 @@ def realizable(g: "arbitrage.Graph", ref_value: dict[str, float], currency: str,
     # A sale whose gold costs more than it fetches is one nobody makes: it realizes nothing, not a debt.
     realizable_ref = max(0.0, realizable_ref)
     ghost = (paper - realizable_ref) if paper is not None else None
-    return {"paper_ref": paper, "realizable_ref": realizable_ref, "ghost_ref": ghost,
-            "slippage_pct": max(0.0, best["loss_pct"]), "fill_hours": best["fill_hours"],
-            "source": _source(best["kinds"]), "full_fill": best["full_fill"],
-            "path": best["path"], "out": {"amount": float(_whole_units_out(best)), "cur": best["path"][-1]}}
+    return {
+        "paper_ref": paper,
+        "realizable_ref": realizable_ref,
+        "ghost_ref": ghost,
+        "slippage_pct": max(0.0, best["loss_pct"]),
+        "fill_hours": best["fill_hours"],
+        "source": _source(best["kinds"]),
+        "full_fill": best["full_fill"],
+        "path": best["path"],
+        "out": {"amount": float(_whole_units_out(best)), "cur": best["path"][-1]},
+    }
 
 
-def capital_rows(caps: dict[str, float], g: "arbitrage.Graph", ref_value: dict[str, float]) -> dict:
+def capital_rows(
+    caps: dict[str, float], g: arbitrage.Graph, ref_value: dict[str, float]
+) -> dict:
     """The /api/capital payload: every holding priced at paper AND at what it would realize
     (Ghost Wealth), plus the totals. Pure over (caps, graph, ref_value)."""
     ref = g.s["reference"]
@@ -182,30 +234,67 @@ def capital_rows(caps: dict[str, float], g: "arbitrage.Graph", ref_value: dict[s
     # up. Worth still counts (the value table has poe2scout); a cash-out, a hub or a market rate
     # judged now would be nonsense, so none is made and the view says it is syncing.
     if not any(e.kind != "recipe" for e in g.edges.values()):
-        usable = arbitrage.loop_currencies(g, ref_value, base=set(arbitrage.CASH))   # no market: no hubs judged
-        rows = [{"currency": c, "name": registry.name(c), "qty": q,
-                 "ref_value": 1.0 if c == ref else ref_value.get(c),
-                 "value_ref": q * (1.0 if c == ref else ref_value.get(c)) if (c == ref or ref_value.get(c)) else None,
-                 "realizable_ref": None, "slippage_pct": None, "fill_hours": None, "source": "none",
-                 "full_fill": None, "cashout_path": None, "native": None, "realizable_native": None,
-                 "arbitrage": c in usable}
-                for c, q in caps.items()]
-        return {"rows": rows, "total_ref": sum(r["value_ref"] for r in rows if r["value_ref"] is not None),
-                "realizable_total_ref": None, "ghost_ref": None, "reference": ref, "syncing": True,
-                "counted_by_default": settings.STASH_COUNTED_BY_DEFAULT}
+        usable = arbitrage.loop_currencies(
+            g, ref_value, base=set(arbitrage.CASH)
+        )  # no market: no hubs judged
+        rows = [
+            {
+                "currency": c,
+                "name": registry.name(c),
+                "qty": q,
+                "ref_value": 1.0 if c == ref else ref_value.get(c),
+                "value_ref": q * (1.0 if c == ref else ref_value[c])
+                if (c == ref or ref_value.get(c))
+                else None,
+                "realizable_ref": None,
+                "slippage_pct": None,
+                "fill_hours": None,
+                "source": "none",
+                "full_fill": None,
+                "cashout_path": None,
+                "native": None,
+                "realizable_native": None,
+                "arbitrage": c in usable,
+            }
+            for c, q in caps.items()
+        ]
+        return {
+            "rows": rows,
+            "total_ref": sum(
+                r["value_ref"] for r in rows if r["value_ref"] is not None
+            ),
+            "realizable_total_ref": None,
+            "ghost_ref": None,
+            "reference": ref,
+            "syncing": True,
+            "counted_by_default": settings.STASH_COUNTED_BY_DEFAULT,
+        }
     gv = settings.gold_value_per_1k(g.s)
-    cash = cash_set(g, ref_value)          # hub currencies = cash-like; derived once (PageRank)
-    usable = arbitrage.loop_currencies(g, ref_value)       # what a loop may start from (routes' one rule)
+    cash = cash_set(g, ref_value)  # hub currencies = cash-like; derived once (PageRank)
+    usable = arbitrage.loop_currencies(
+        g, ref_value
+    )  # what a loop may start from (routes' one rule)
     ranked = arbitrage.counterparts_by_volume(g, ref_value)
     rows = []
     for c, q in caps.items():
         px = 1.0 if c == g.s["reference"] else ref_value.get(c)
-        row = {"currency": c, "name": registry.name(c), "qty": q, "ref_value": px,
-               "value_ref": (q * px) if px else None, "arbitrage": c in usable}
+        row = {
+            "currency": c,
+            "name": registry.name(c),
+            "qty": q,
+            "ref_value": px,
+            "value_ref": (q * px) if px else None,
+            "arbitrage": c in usable,
+        }
         liq = realizable(g, ref_value, c, q, cash=cash, gold_value_per_1k=gv)
-        row.update(realizable_ref=liq["realizable_ref"], slippage_pct=liq["slippage_pct"],
-                   fill_hours=liq["fill_hours"], source=liq["source"], full_fill=liq["full_fill"],
-                   cashout_path=liq["path"])
+        row.update(
+            realizable_ref=liq["realizable_ref"],
+            slippage_pct=liq["slippage_pct"],
+            fill_hours=liq["fill_hours"],
+            source=liq["source"],
+            full_fill=liq["full_fill"],
+            cashout_path=liq["path"],
+        )
         # The volume rule (CLAUDE.md): the default cash IS native money, worth its own raw amount; anything
         # else (a hub like an omen included)
         # is worth its quantity at the rate of the market that trades it. A cash-out's result is
@@ -214,19 +303,31 @@ def capital_rows(caps: dict[str, float], g: "arbitrage.Graph", ref_value: dict[s
             row["native"] = {"amount": q, "cur": c}
         else:
             native = arbitrage.native_price(g, c, ref_value, ranked, ref)
-            row["native"] = {"amount": q * native[0], "cur": native[1]} if native else None
+            row["native"] = (
+                {"amount": q * native[0], "cur": native[1]} if native else None
+            )
         row["realizable_native"] = liq["out"]
         rows.append(row)
     total = sum(r["value_ref"] for r in rows if r["value_ref"] is not None)
-    realizable_total = sum(r["realizable_ref"] for r in rows if r["realizable_ref"] is not None)
+    realizable_total = sum(
+        r["realizable_ref"] for r in rows if r["realizable_ref"] is not None
+    )
     # `counted_by_default`: whether a holding the user never switched counts as liquid (the one default,
     # settings.STASH_COUNTED_BY_DEFAULT; the Stash reads it from here).
-    return {"rows": rows, "total_ref": total, "realizable_total_ref": realizable_total,
-            "ghost_ref": total - realizable_total, "reference": ref, "syncing": False,
-            "counted_by_default": settings.STASH_COUNTED_BY_DEFAULT}
+    return {
+        "rows": rows,
+        "total_ref": total,
+        "realizable_total_ref": realizable_total,
+        "ghost_ref": total - realizable_total,
+        "reference": ref,
+        "syncing": False,
+        "counted_by_default": settings.STASH_COUNTED_BY_DEFAULT,
+    }
 
 
-def group_icons(g: "arbitrage.Graph", ref_value: dict[str, float], group_of: dict[str, str]) -> dict[str, str]:
+def group_icons(
+    g: arbitrage.Graph, ref_value: dict[str, float], group_of: dict[str, str]
+) -> dict[str, str]:
     """{group: its most-traded currency} — the item that stands for a Stash group, derived from the
     market (centrality.traded_value: executed value per hour out of each currency). A group with
     nothing traded has no entry."""

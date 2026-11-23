@@ -28,8 +28,8 @@ recourse"). They skip where that DB is absent, so CI and a fresh clone still run
 
     python -m pytest backend/tests/test_window_rates.py -q
 """
+
 import math
-import os
 import sqlite3
 import sys
 import time
@@ -38,16 +38,29 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # backend/
-from app import db, digest  # noqa: E402
-from app.currencies import registry  # noqa: E402
+from app import db, digest
+from app.currencies import registry
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _proddb import PROD_DB  # (opt-in: ARBITER_PROD_TESTS=1)
+from _proddb import prod as _prod
 
 LEAGUE = "WindowLeague"
 BROAD = "BroadLeague"
 
 
 def _row(**kw):
-    base = {"vol_a": 1, "vol_b": 1, "hi_stock_a": 100, "hi_stock_b": 100, "hour": 0,
-            "lo_ratio_a": 0, "hi_ratio_a": 0, "lo_ratio_b": 0, "hi_ratio_b": 0}
+    base = {
+        "vol_a": 1,
+        "vol_b": 1,
+        "hi_stock_a": 100,
+        "hi_stock_b": 100,
+        "hour": 0,
+        "lo_ratio_a": 0,
+        "hi_ratio_a": 0,
+        "lo_ratio_b": 0,
+        "hi_ratio_b": 0,
+    }
     return {**base, **kw}
 
 
@@ -55,10 +68,29 @@ def _put(league, rows):
     """rows: (hours_ago, market, cur_a, cur_b, vol_a, vol_b)."""
     h0 = digest._hour(time.time())
     with db.tx() as c:
-        c.executemany("INSERT OR REPLACE INTO digest_markets VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                      [(h0 - ago * 3600, league, m, a, b, va, vb,
-                        None, None, 100, 100, None, None, None, None)
-                       for ago, m, a, b, va, vb in rows])
+        c.executemany(
+            "INSERT OR REPLACE INTO digest_markets VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            [
+                (
+                    h0 - ago * 3600,
+                    league,
+                    m,
+                    a,
+                    b,
+                    va,
+                    vb,
+                    None,
+                    None,
+                    100,
+                    100,
+                    None,
+                    None,
+                    None,
+                    None,
+                )
+                for ago, m, a, b, va, vb in rows
+            ],
+        )
 
 
 def _wipe(league):
@@ -82,7 +114,7 @@ def test_a_market_that_repeats_one_price_keeps_that_price_exactly():
     the same weights, and powers of two scale exactly in binary floating point, so any drift here
     would be an algorithmic one rather than rounding."""
     _wipe(LEAGUE)
-    _put(LEAGUE, [(ago, "m", "A", "B", 8, 2) for ago in range(0, 40)])
+    _put(LEAGUE, [(ago, "m", "A", "B", 8, 2) for ago in range(40)])
     assert digest.window_rates(LEAGUE)[("A", "B")] == 4.0
 
 
@@ -98,7 +130,10 @@ def test_an_hour_one_half_life_old_counts_exactly_half():
     """The decay is the one shape parameter; pin it numerically rather than by feel.
     now: 1 for 1. one half-life ago: 3 for 1. -> (1*1 + 0.5*3) / (1*1 + 0.5*1) = 5/3."""
     _wipe(LEAGUE)
-    _put(LEAGUE, [(0, "m", "A", "B", 1, 1), (int(digest.RATE_HALF_LIFE_H), "m", "A", "B", 3, 1)])
+    _put(
+        LEAGUE,
+        [(0, "m", "A", "B", 1, 1), (int(digest.RATE_HALF_LIFE_H), "m", "A", "B", 3, 1)],
+    )
     assert digest.window_rates(LEAGUE)[("A", "B")] == pytest.approx(5 / 3, rel=1e-12)
 
 
@@ -108,15 +143,23 @@ def test_the_busier_hour_decides_between_two_of_the_same_age():
     _wipe(LEAGUE)
     _put(LEAGUE, [(1, "m", "A", "B", 1000, 1000), (1, "n", "C", "D", 1, 1)])
     _put(LEAGUE, [(2, "m", "A", "B", 5, 1), (2, "n", "C", "D", 5, 1)])
-    busy, thin = digest.window_rates(LEAGUE)[("A", "B")], digest.window_rates(LEAGUE)[("C", "D")]
+    busy, thin = (
+        digest.window_rates(LEAGUE)[("A", "B")],
+        digest.window_rates(LEAGUE)[("C", "D")],
+    )
     assert busy < 1.1, "1000 units of 1:1 was outvoted by 5 units of 5:1"
     assert thin > 2.0, "a 1-unit hour should not outweigh a 5-unit one"
 
 
 def test_hours_older_than_the_window_are_not_read():
     _wipe(LEAGUE)
-    _put(LEAGUE, [(0, "m", "A", "B", 1, 1),
-                  (int(digest.RATE_WINDOW_H) + 5, "m", "A", "B", 1_000_000, 1)])
+    _put(
+        LEAGUE,
+        [
+            (0, "m", "A", "B", 1, 1),
+            (int(digest.RATE_WINDOW_H) + 5, "m", "A", "B", 1_000_000, 1),
+        ],
+    )
     assert digest.window_rates(LEAGUE)[("A", "B")] == 1.0
 
 
@@ -138,8 +181,24 @@ def test_the_rates_are_keyed_on_raw_metadata_ids():
 
 
 # ------------------------------------------------------------------ broad: every market, no garbage
-SHAPES = [(10, 20), (1, 1), (7, 3), (999999, 1), (1, 999999), (3, 7), (250, 4), (4, 250),
-          (0, 20), (10, 0), (0, 0), (None, 20), (10, None), (None, None), (None, 0), (0, None)]
+SHAPES = [
+    (10, 20),
+    (1, 1),
+    (7, 3),
+    (999999, 1),
+    (1, 999999),
+    (3, 7),
+    (250, 4),
+    (4, 250),
+    (0, 20),
+    (10, 0),
+    (0, 0),
+    (None, 20),
+    (10, None),
+    (None, None),
+    (None, 0),
+    (0, None),
+]
 MARKETS = 240
 HOURS = 50
 
@@ -148,7 +207,9 @@ def _fill_broad():
     """Every market sees every volume shape, so no market is special and every shape a volume
     column can take is exercised against every code path."""
     with db.q() as c:
-        if c.execute("SELECT 1 FROM digest_markets WHERE league=? LIMIT 1", (BROAD,)).fetchone():
+        if c.execute(
+            "SELECT 1 FROM digest_markets WHERE league=? LIMIT 1", (BROAD,)
+        ).fetchone():
             return
     rows = []
     for p in range(MARKETS):
@@ -167,10 +228,14 @@ def _traded_hours(league):
     """{(cur_a, cur_b): [a-per-b each hour it actually traded]} straight from the table."""
     out = {}
     with db.q() as c:
-        for r in c.execute("SELECT cur_a, cur_b, vol_a, vol_b FROM digest_markets WHERE league=?",
-                           (league,)).fetchall():
+        for r in c.execute(
+            "SELECT cur_a, cur_b, vol_a, vol_b FROM digest_markets WHERE league=?",
+            (league,),
+        ).fetchall():
             if r["vol_a"] and r["vol_b"]:
-                out.setdefault((r["cur_a"], r["cur_b"]), []).append(r["vol_a"] / r["vol_b"])
+                out.setdefault((r["cur_a"], r["cur_b"]), []).append(
+                    r["vol_a"] / r["vol_b"]
+                )
     return out
 
 
@@ -183,17 +248,27 @@ def test_every_market_rate_sits_inside_the_prices_that_market_traded_at():
     got = digest.window_rates(BROAD, hours=HOURS + 1)
     hours = _traded_hours(BROAD)
     assert len(got) >= MARKETS, f"only {len(got)} markets priced"
-    outside = [(k, got[k], min(hours[k]), max(hours[k])) for k in got
-               if not (min(hours[k]) <= got[k] <= max(hours[k]))]
-    assert not outside, f"{len(outside)} markets priced outside their own traded range, e.g. {outside[:3]}"
+    outside = [
+        (k, got[k], min(hours[k]), max(hours[k]))
+        for k in got
+        if not (min(hours[k]) <= got[k] <= max(hours[k]))
+    ]
+    assert not outside, (
+        f"{len(outside)} markets priced outside their own traded range, e.g. {outside[:3]}"
+    )
 
 
 def test_every_market_rate_is_a_finite_positive_number():
     """NaN and inf propagate silently through the graph and poison every route that touches them."""
     _fill_broad()
-    bad = [(k, v) for k, v in digest.window_rates(BROAD, hours=HOURS + 1).items()
-           if not (isinstance(v, float) and math.isfinite(v) and v > 0)]
-    assert not bad, f"{len(bad)} markets carry a non-finite or non-positive rate, e.g. {bad[:3]}"
+    bad = [
+        (k, v)
+        for k, v in digest.window_rates(BROAD, hours=HOURS + 1).items()
+        if not (isinstance(v, float) and math.isfinite(v) and v > 0)
+    ]
+    assert not bad, (
+        f"{len(bad)} markets carry a non-finite or non-positive rate, e.g. {bad[:3]}"
+    )
 
 
 def test_no_market_gains_or_loses_a_price():
@@ -201,19 +276,29 @@ def test_no_market_gains_or_loses_a_price():
     must not appear — this change may not add or remove a tradable market anywhere."""
     _fill_broad()
     got = set(digest.window_rates(BROAD, hours=HOURS + 1))
-    assert got == set(_traded_hours(BROAD)), \
-        f"appeared: {sorted(got - set(_traded_hours(BROAD)))[:3]}, " \
+    assert got == set(_traded_hours(BROAD)), (
+        f"appeared: {sorted(got - set(_traded_hours(BROAD)))[:3]}, "
         f"vanished: {sorted(set(_traded_hours(BROAD)) - got)[:3]}"
+    )
 
 
 def test_a_market_whose_every_hour_repeats_is_untouched_across_every_market():
     """The exactness invariant, swept over hundreds of markets rather than one."""
     _wipe("SteadyLeague")
-    _put("SteadyLeague", [(h, f"m{p}", f"a{p}", f"b{p}", p + 1, 2)
-                          for p in range(200) for h in range(20)])
+    _put(
+        "SteadyLeague",
+        [
+            (h, f"m{p}", f"a{p}", f"b{p}", p + 1, 2)
+            for p in range(200)
+            for h in range(20)
+        ],
+    )
     got = digest.window_rates("SteadyLeague", hours=25)
-    off = [(k, v, (int(k[0][1:]) + 1) / 2) for k, v in got.items()
-           if abs(math.log(v / ((int(k[0][1:]) + 1) / 2))) > 1e-15]
+    off = [
+        (k, v, (int(k[0][1:]) + 1) / 2)
+        for k, v in got.items()
+        if abs(math.log(v / ((int(k[0][1:]) + 1) / 2))) > 1e-15
+    ]
     assert not off, f"{len(off)} steady markets drifted, e.g. {off[:3]}"
 
 
@@ -225,23 +310,34 @@ def test_the_two_directions_stay_reciprocal_to_the_last_bit():
     `vol_b/vol_a` and `vol_a/vol_b` pair had the same one-ulp property; this is not a regression,
     and one ulp cannot clear the liquidity floor a route has to pass.)"""
     for rate in (1.9, 5 / 3, 400.0, 0.0025, 1e-6, 987654.321):
-        out = digest.directed_rates("a", "b", _row(vol_a=5, vol_b=3), age=60.0, rate=rate)
+        out = digest.directed_rates(
+            "a", "b", _row(vol_a=5, vol_b=3), age=60.0, rate=rate
+        )
         product = out[("a", "b")]["rate"] * out[("b", "a")]["rate"]
-        assert abs(product - 1.0) <= 2 * math.ulp(1.0), f"rate={rate} -> product {product!r}"
+        assert abs(product - 1.0) <= 2 * math.ulp(1.0), (
+            f"rate={rate} -> product {product!r}"
+        )
 
 
 def test_the_window_rate_is_what_an_active_market_is_priced_at():
     out = digest.directed_rates("a", "b", _row(vol_a=5, vol_b=3), age=60.0, rate=1.25)
-    assert out[("b", "a")]["rate"] == 1.25           # a per b
+    assert out[("b", "a")]["rate"] == 1.25  # a per b
     assert out[("a", "b")]["rate"] == pytest.approx(1 / 1.25)
 
 
 def test_an_inactive_market_ignores_the_window_and_keeps_its_pessimistic_price():
     """Rule 2 of test_inactive_markets stands: a market whose hours disagree beyond `wide_spread`
     is priced at the dearest/cheapest, never an average. The window must not soften that."""
-    out = digest.directed_rates("a", "b", _row(vol_a=5, vol_b=3), age=60.0,
-                                bounds=(10.0, 40.0), wide_spread=2.0, rate=1.25)
-    assert out[("b", "a")]["rate"] == 10.0           # cheapest a per b when selling b
+    out = digest.directed_rates(
+        "a",
+        "b",
+        _row(vol_a=5, vol_b=3),
+        age=60.0,
+        bounds=(10.0, 40.0),
+        wide_spread=2.0,
+        rate=1.25,
+    )
+    assert out[("b", "a")]["rate"] == 10.0  # cheapest a per b when selling b
     assert out[("a", "b")]["rate"] == pytest.approx(1 / 40.0)
 
 
@@ -251,15 +347,15 @@ def test_an_inactive_market_ignores_the_window_and_keeps_its_pessimistic_price()
 # chosen few — so when the real market DB is on this machine, fold every league of it through the
 # implementation and check the invariants on all of it. Read-only, never written to. Slow on
 # purpose (~1M rows); skipped anywhere the DB is absent (CI, Windows, a fresh clone).
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _proddb import PROD_DB, prod as _prod  # noqa: E402  (opt-in: ARBITER_PROD_TESTS=1)
 
 
 def _prod_rows():
     con = sqlite3.connect(f"file:{PROD_DB}?mode=ro", uri=True)
     con.row_factory = sqlite3.Row
     try:
-        return con.execute("SELECT league, hour, cur_a, cur_b, vol_a, vol_b FROM digest_markets").fetchall()
+        return con.execute(
+            "SELECT league, hour, cur_a, cur_b, vol_a, vol_b FROM digest_markets"
+        ).fetchall()
     finally:
         con.close()
 
@@ -302,9 +398,12 @@ def test_production_every_market_matches_an_exactly_summed_reference():
     for league, lrows in by_league.items():
         for (a, b), v in digest._fold_rates(lrows, now).items():
             got[(league, a, b)] = v
-    assert set(got) == set(want), \
+    assert set(got) == set(want), (
         f"implementation priced {len(got)} markets, reference {len(want)}"
-    off = [(k, got[k], want[k]) for k in want if abs(math.log(got[k] / want[k])) > 1e-12]
+    )
+    off = [
+        (k, got[k], want[k]) for k in want if abs(math.log(got[k] / want[k])) > 1e-12
+    ]
     assert not off, f"{len(off)} of {len(want)} markets disagree, e.g. {off[:3]}"
 
 
@@ -345,11 +444,15 @@ def test_a_new_digest_hour_retires_the_cached_rate():
     _put(LEAGUE, [(1, "m", "A", "B", 8, 2)])
     assert digest.window_rates(LEAGUE)[("A", "B")] == 4.0
     _put(LEAGUE, [(0, "m2", "A", "B", 2, 8)])
-    assert digest.window_rates(LEAGUE)[("A", "B")] == 4.0, "a rate must not move without a new hour"
+    assert digest.window_rates(LEAGUE)[("A", "B")] == 4.0, (
+        "a rate must not move without a new hour"
+    )
     before = digest.state["last_hour"]
     digest.state["last_hour"] = (before or 0) + 3600
     try:
-        assert digest.window_rates(LEAGUE)[("A", "B")] < 4.0, "the new hour was not picked up"
+        assert digest.window_rates(LEAGUE)[("A", "B")] < 4.0, (
+            "the new hour was not picked up"
+        )
     finally:
         digest.state["last_hour"] = before
 
@@ -363,7 +466,7 @@ def test_latest_rates_prices_a_thin_newest_hour_from_the_window():
     _put(LEAGUE, [(h, f"m{h}", dv, ex, 100, 40_000) for h in range(1, 40)])
     _put(LEAGUE, [(0, "m0", dv, ex, 1, 300)])
     got = digest.latest_rates(LEAGUE, max_age_hours=6)[("divine", "exalted")]
-    rate = got["rate"]                                   # exalted per divine
+    rate = got["rate"]  # exalted per divine
     assert not got["inactive"]
     assert rate > 380, f"the 1-divine hour set the price ({rate}); the window says ~400"
 
@@ -374,7 +477,11 @@ def test_latest_rates_still_gives_up_on_a_market_that_wanders():
     _wipe(LEAGUE)
     ex, dv = registry.metas("exalted")[0], registry.metas("divine")[0]
     _put(LEAGUE, [(h, f"m{h}", dv, ex, 1, 400) for h in range(1, 30)])
-    _put(LEAGUE, [(0, "m0", dv, ex, 1, 4)])          # the misclick: 1 divine for 4 exalted
+    _put(LEAGUE, [(0, "m0", dv, ex, 1, 4)])  # the misclick: 1 divine for 4 exalted
     got = digest.latest_rates(LEAGUE, max_age_hours=6)[("divine", "exalted")]
-    assert got["inactive"], "a market that ran 100x over six hours must still be given up on"
-    assert got["rate"] == pytest.approx(4.0), "buying divine must still cost the dearest hour"
+    assert got["inactive"], (
+        "a market that ran 100x over six hours must still be given up on"
+    )
+    assert got["rate"] == pytest.approx(4.0), (
+        "buying divine must still cost the dearest hour"
+    )

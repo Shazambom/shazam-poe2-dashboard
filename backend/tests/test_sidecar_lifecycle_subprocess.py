@@ -10,21 +10,25 @@ stdin pipe, covering OS-level failure modes mocks cannot see:
 
 Run:  DATA_DIR=$(mktemp -d) MARKET_SEED= .venv-test/bin/python -m pytest backend/tests/test_sidecar_lifecycle_subprocess.py -v
 """
+
 from __future__ import annotations
 
+import logging
 import os
 import sqlite3
 import subprocess
 import sys
 import threading
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
-BACKEND_DIR = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(BACKEND_DIR))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from app import analytics, sidecar_supervisor as sup  # noqa: E402
+from app import analytics
+from app import sidecar_supervisor as sup
+
+BACKEND_DIR = Path(__file__).resolve().parents[1]
 
 DAY = 86400
 
@@ -54,14 +58,14 @@ def _seed_market_db(data_dir: Path) -> Path:
         vol = 30_000
         if i == 27:
             close, vol = 30.0, 300_000
-        day = datetime.fromtimestamp(1_700_000_000 + i * DAY, timezone.utc).strftime("%Y-%m-%d")
+        day = datetime.fromtimestamp(1_700_000_000 + i * DAY, UTC).strftime("%Y-%m-%d")
         rows.append(("Std", 1, day, close, close, vol))
     # Two leagues for item 291 so arc DTW produces weights
     for i in range(20):
-        day = datetime.fromtimestamp(1_600_000_000 + i * DAY, timezone.utc).strftime("%Y-%m-%d")
+        day = datetime.fromtimestamp(1_600_000_000 + i * DAY, UTC).strftime("%Y-%m-%d")
         rows.append(("Old", 291, day, 8.0 + 0.5 * i, 8.0 + 0.5 * i, 100))
     for i in range(12):
-        day = datetime.fromtimestamp(1_700_000_000 + i * DAY, timezone.utc).strftime("%Y-%m-%d")
+        day = datetime.fromtimestamp(1_700_000_000 + i * DAY, UTC).strftime("%Y-%m-%d")
         rows.append(("Std", 291, day, 10.0 + 0.4 * i, 10.0 + 0.4 * i, 100))
     c.executemany("INSERT INTO league_daily VALUES(?,?,?,?,?,?)", rows)
     c.commit()
@@ -89,6 +93,26 @@ def _wait_until(pred, timeout: float = 15.0, interval: float = 0.05) -> bool:
     return False
 
 
+def test_optimized_sidecar_selftest_rejects_an_invalid_result(tmp_path):
+    code = """
+from sidecar.analytics import arc
+from sidecar.run_sidecar import main
+
+arc.compute_weights = lambda *args, **kwargs: {}
+raise SystemExit(main(["--selftest"]))
+"""
+    result = subprocess.run(
+        [sys.executable, "-O", "-c", code],
+        cwd=BACKEND_DIR,
+        env={**os.environ, "DATA_DIR": str(tmp_path), "MARKET_SEED": ""},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode != 0
+    assert "AssertionError" in result.stderr
+
+
 def test_real_sidecar_completes_jobs_and_exits_cleanly_at_idle(tmp_path):
     db_path = _seed_market_db(tmp_path)
     c = sqlite3.connect(str(db_path))
@@ -97,7 +121,12 @@ def test_real_sidecar_completes_jobs_and_exits_cleanly_at_idle(tmp_path):
     c.commit()
     c.close()
 
-    env = dict(os.environ, DATA_DIR=str(tmp_path), ARBITER_PARENT_PID=str(os.getpid()), ARBITER_TELEMETRY="0")
+    env = dict(
+        os.environ,
+        DATA_DIR=str(tmp_path),
+        ARBITER_PARENT_PID=str(os.getpid()),
+        ARBITER_TELEMETRY="0",
+    )
     proc = subprocess.Popen(
         _runner_cmd(idle_s=0.6),
         stdin=subprocess.PIPE,
@@ -108,6 +137,7 @@ def test_real_sidecar_completes_jobs_and_exits_cleanly_at_idle(tmp_path):
     try:
         # Keep stdin OPEN the entire time — matches how sidecar_supervisor runs it.
         rc = proc.wait(timeout=20)
+        assert proc.stderr is not None
         stderr = proc.stderr.read().decode("utf-8", "replace")
     finally:
         if proc.poll() is None:
@@ -117,7 +147,9 @@ def test_real_sidecar_completes_jobs_and_exits_cleanly_at_idle(tmp_path):
             try:
                 proc.stdin.close()
             except Exception:
-                pass
+                logging.getLogger(__name__).debug(
+                    "could not read the discord result", exc_info=True
+                )
 
     assert rc == 0, f"sidecar did not exit cleanly at idle: rc={rc} stderr={stderr!r}"
 
@@ -125,7 +157,9 @@ def test_real_sidecar_completes_jobs_and_exits_cleanly_at_idle(tmp_path):
     try:
         disc = analytics.read_cache(c, "discords", "current")
         arc = analytics.read_cache(c, "arc", "current")
-        states = [r[0] for r in c.execute("SELECT state FROM analytics_jobs ORDER BY id")]
+        states = [
+            r[0] for r in c.execute("SELECT state FROM analytics_jobs ORDER BY id")
+        ]
     finally:
         c.close()
 
@@ -145,7 +179,12 @@ def test_real_sidecar_heals_orphaned_running_job_at_startup(tmp_path):
     c.commit()
     c.close()
 
-    env = dict(os.environ, DATA_DIR=str(tmp_path), ARBITER_PARENT_PID=str(os.getpid()), ARBITER_TELEMETRY="0")
+    env = dict(
+        os.environ,
+        DATA_DIR=str(tmp_path),
+        ARBITER_PARENT_PID=str(os.getpid()),
+        ARBITER_TELEMETRY="0",
+    )
     proc = subprocess.Popen(
         _runner_cmd(idle_s=0.5),
         stdin=subprocess.PIPE,
@@ -155,6 +194,7 @@ def test_real_sidecar_heals_orphaned_running_job_at_startup(tmp_path):
     )
     try:
         rc = proc.wait(timeout=20)
+        assert proc.stderr is not None
         stderr = proc.stderr.read().decode("utf-8", "replace")
     finally:
         if proc.poll() is None:
@@ -164,9 +204,13 @@ def test_real_sidecar_heals_orphaned_running_job_at_startup(tmp_path):
             try:
                 proc.stdin.close()
             except Exception:
-                pass
+                logging.getLogger(__name__).debug(
+                    "could not read the recovered job", exc_info=True
+                )
 
-    assert rc == 0, f"expected clean rc=0 after orphan recovery, got rc={rc} stderr={stderr!r}"
+    assert rc == 0, (
+        f"expected clean rc=0 after orphan recovery, got rc={rc} stderr={stderr!r}"
+    )
     c = sqlite3.connect(str(db_path))
     try:
         state = c.execute("SELECT state FROM analytics_jobs").fetchone()[0]
@@ -177,7 +221,9 @@ def test_real_sidecar_heals_orphaned_running_job_at_startup(tmp_path):
     assert arc and arc["resembles"] == "Old"
 
 
-def test_supervisor_sleeps_after_idle_wakes_on_new_job_and_stops_cleanly(tmp_path, monkeypatch):
+def test_supervisor_sleeps_after_idle_wakes_on_new_job_and_stops_cleanly(
+    tmp_path, monkeypatch
+):
     db_path = _seed_market_db(tmp_path)
     c = sqlite3.connect(str(db_path))
     analytics.enqueue(c, "arc", {"league": "Std"})
@@ -191,14 +237,18 @@ def test_supervisor_sleeps_after_idle_wakes_on_new_job_and_stops_cleanly(tmp_pat
     monkeypatch.setattr(sup, "_proc", None)
     sup._wake.clear()
 
-    t = threading.Thread(target=sup._supervise, args=(_runner_cmd(idle_s=0.5),), daemon=True)
+    t = threading.Thread(
+        target=sup._supervise, args=(_runner_cmd(idle_s=0.5),), daemon=True
+    )
     t.start()
     try:
         # 1. Wait for job #1 to finish and sidecar #1 to exit cleanly into idle sleep.
         def _job_done(n: int) -> bool:
             conn = sqlite3.connect(str(db_path))
             try:
-                cnt = conn.execute("SELECT COUNT(*) FROM analytics_jobs WHERE state='done'").fetchone()[0]
+                cnt = conn.execute(
+                    "SELECT COUNT(*) FROM analytics_jobs WHERE state='done'"
+                ).fetchone()[0]
                 return cnt >= n
             finally:
                 conn.close()
@@ -206,13 +256,18 @@ def test_supervisor_sleeps_after_idle_wakes_on_new_job_and_stops_cleanly(tmp_pat
         assert _wait_until(lambda: _job_done(1), timeout=20), "job #1 did not finish"
         first_pid = sup._proc.pid if sup._proc else None
         assert first_pid is not None
-        assert _wait_until(lambda: sup._proc is not None and sup._proc.poll() == 0, timeout=10), (
+        assert _wait_until(
+            lambda: sup._proc is not None and sup._proc.poll() == 0, timeout=10
+        ), (
             f"sidecar did not idle-exit cleanly (poll={sup._proc.poll() if sup._proc else None})"
         )
 
         # Confirm it stays asleep (no crash respawn loop) for 1.2s.
         time.sleep(1.2)
-        assert sup._proc.pid == first_pid and sup._proc.poll() == 0, "sidecar unexpectedly respawned while idle"
+        assert sup._proc is not None
+        assert sup._proc.pid == first_pid and sup._proc.poll() == 0, (
+            "sidecar unexpectedly respawned while idle"
+        )
 
         # 2. Enqueue job #2 and wake the supervisor -> must spawn a new PID and finish job #2.
         c = sqlite3.connect(str(db_path))
@@ -221,14 +276,18 @@ def test_supervisor_sleeps_after_idle_wakes_on_new_job_and_stops_cleanly(tmp_pat
         c.close()
         sup.wake()
 
-        assert _wait_until(lambda: sup._proc is not None and sup._proc.pid != first_pid, timeout=10), (
-            "supervisor did not respawn sidecar after wake()"
+        assert _wait_until(
+            lambda: sup._proc is not None and sup._proc.pid != first_pid, timeout=10
+        ), "supervisor did not respawn sidecar after wake()"
+        assert _wait_until(lambda: _job_done(2), timeout=20), (
+            "job #2 did not finish after wake()"
         )
-        assert _wait_until(lambda: _job_done(2), timeout=20), "job #2 did not finish after wake()"
     finally:
         sup.stop()
         t.join(timeout=10)
 
     assert not t.is_alive(), "supervisor thread did not exit on stop()"
     if sup._proc is not None:
-        assert sup._proc.poll() is not None, "sidecar child process survived supervisor stop()"
+        assert sup._proc.poll() is not None, (
+            "sidecar child process survived supervisor stop()"
+        )

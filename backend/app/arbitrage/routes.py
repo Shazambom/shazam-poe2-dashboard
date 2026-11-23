@@ -9,11 +9,14 @@ path, simulate the fills step by step with whole-unit rounding, then score:
   margin/1k gold= gold efficiency
 Results are served either whole (find_routes) or streamed (stream_routes) through one cache.
 """
+
 from __future__ import annotations
 
 import json
+import logging
 import math
 import time
+
 from .. import cache, centrality, db, devtelemetry, orderbook, pairscore
 from .. import settings as settings_mod
 from ..currencies import registry
@@ -21,7 +24,7 @@ from ..settings import get_settings
 from . import deepscan, graph
 from .graph import INF, Edge, Graph, cycle_unit, route_cap, simulate
 
-_route_cache: dict = {}      # search key -> (ts, orderbook version, result); see _cache_get/_cache_put
+_route_cache: dict = {}  # search key -> (ts, orderbook version, result); see _cache_get/_cache_put
 ROUTE_CACHE_MAX = 32
 
 # What arbitrage may trade from (owner, 2026-10-03): the default cash plus the market's most liquid
@@ -40,20 +43,32 @@ def arbitrage_currencies(g: Graph, ref_value: dict[str, float]) -> set[str]:
 def _switches() -> dict:
     """The user's Stash switches as saved now (not the graph's copy of the settings), with the default."""
     s = settings_mod.get_settings()
-    return {"choices": {c: v for c, v in (s.get("stash_counted") or {}).items() if v is not None},
-            "default": settings_mod.STASH_COUNTED_BY_DEFAULT}
+    return {
+        "choices": {
+            c: v for c, v in (s.get("stash_counted") or {}).items() if v is not None
+        },
+        "default": settings_mod.STASH_COUNTED_BY_DEFAULT,
+    }
 
 
-def loop_currencies(g: Graph, ref_value: dict[str, float], base: set[str] | None = None) -> set[str]:
+def loop_currencies(
+    g: Graph, ref_value: dict[str, float], base: set[str] | None = None
+) -> set[str]:
     """THE rule for what a loop may start from (the route search and the Stash/Arbitrage ⬢ both use it):
     `base` (arbitrage's currencies by default), keeping only holdings the user counts as liquid on Stash."""
     s = {"stash_counted": _switches()["choices"]}
-    return {c for c in (arbitrage_currencies(g, ref_value) if base is None else base) if settings_mod.stash_counted(s, c)}
+    return {
+        c
+        for c in (arbitrage_currencies(g, ref_value) if base is None else base)
+        if settings_mod.stash_counted(s, c)
+    }
 
 
 def _edge_list_id(edges: list[Edge]) -> str:
     """Stable id for an ordered edge list (loop or open path): 'a>b|b>c', recipe hops ':r'."""
-    return "|".join(f"{e.src}>{e.dst}" + (":r" if e.kind == "recipe" else "") for e in edges)
+    return "|".join(
+        f"{e.src}>{e.dst}" + (":r" if e.kind == "recipe" else "") for e in edges
+    )
 
 
 def route_pairs(route_id: str) -> list[tuple[str, str]]:
@@ -74,6 +89,7 @@ def _cache_key(filters: dict | None, start_currencies: list[str] | None) -> str:
 
 def _cache_ver():
     from .. import digest
+
     return (orderbook.state["version"], digest.state["last_hour"])
 
 
@@ -84,26 +100,47 @@ def _cache_get(key: str, s: dict) -> dict | None:
 
 
 def _cache_put(key: str, result: dict) -> None:
-    cache.put(_route_cache, key, result, version=_cache_ver(), max_entries=ROUTE_CACHE_MAX)
+    cache.put(
+        _route_cache, key, result, version=_cache_ver(), max_entries=ROUTE_CACHE_MAX
+    )
 
 
 def _graph_summary(g: Graph) -> dict:
     return {"nodes": len(g.adj), "edges": g.sources, "fee_table_size": len(g.fee_table)}
 
 
-def _result(g: Graph, s: dict, f: dict, ref_value: dict, capital: dict, notional: bool,
-            routes: list[dict], kept: list[dict], limit: int, deep: dict | None = None) -> dict:
+def _result(
+    g: Graph,
+    s: dict,
+    f: dict,
+    ref_value: dict,
+    capital: dict,
+    notional: bool,
+    routes: list[dict],
+    kept: list[dict],
+    limit: int,
+    deep: dict | None = None,
+) -> dict:
     """The one search-result shape (served by /api/routes*, cached, and replayed by the stream)."""
     return {
-        "routes": kept[:limit], "total_candidates": len(routes), "total_after_filters": len(kept),
-        "graph": _graph_summary(g), "reference": s["reference"], "ref_values": ref_value,
-        "capital": capital, "notional": notional, "filters": f,
-        "deep_scan": deep or {},     # {loops, added, no_holding} — see deepscan.py
+        "routes": kept[:limit],
+        "total_candidates": len(routes),
+        "total_after_filters": len(kept),
+        "graph": _graph_summary(g),
+        "reference": s["reference"],
+        "ref_values": ref_value,
+        "capital": capital,
+        "notional": notional,
+        "filters": f,
+        "deep_scan": deep or {},  # {loops, added, no_holding} — see deepscan.py
     }
 
 
-def find_routes(filters: dict | None = None, start_currencies: list[str] | None = None,
-                use_cache: bool = True) -> dict:
+def find_routes(
+    filters: dict | None = None,
+    start_currencies: list[str] | None = None,
+    use_cache: bool = True,
+) -> dict:
     key = _cache_key(filters, start_currencies)
     hit = _cache_get(key, get_settings()) if use_cache else None
     if hit is not None:
@@ -113,11 +150,12 @@ def find_routes(filters: dict | None = None, start_currencies: list[str] | None 
     return {**result, "cached": False}
 
 
-MAX_CANDIDATES = 20000   # hard ceiling on simulated cycles per search
+MAX_CANDIDATES = 20000  # hard ceiling on simulated cycles per search
 
 
-def _velocity(margin_ref: float, fill_hours: float | None, gold: float,
-              gold_price_ref: float) -> float | None:
+def _velocity(
+    margin_ref: float, fill_hours: float | None, gold: float, gold_price_ref: float
+) -> float | None:
     """Velocity = margin NET of gold's value, per hour, per 1k gold.
 
     Gold is valued at the user's slider price (`gold_price_ref` = reference value of 1 gold) and
@@ -135,8 +173,14 @@ def _velocity(margin_ref: float, fill_hours: float | None, gold: float,
     return net / fill_hours / gold * 1000
 
 
-def _route_from(g: Graph, cyc: list[Edge], start: str, held: float, budget: float,
-                ref_value: dict[str, float]) -> dict | None:
+def _route_from(
+    g: Graph,
+    cyc: list[Edge],
+    start: str,
+    held: float,
+    budget: float,
+    ref_value: dict[str, float],
+) -> dict | None:
     # Size in whole tradable cycles: commit = (cycles) × (one-cycle unit), so the amount
     # always respects the trade ratios and never commits a partial lot.
     unit = cycle_unit(cyc)
@@ -151,29 +195,42 @@ def _route_from(g: Graph, cyc: list[Edge], start: str, held: float, budget: floa
     mp1k = (margin_ref / gold * 1000) if gold > 0 else (INF if margin_ref > 0 else 0.0)
     fh = sim["fill_hours"]
     # Gold priced by the user's slider (Divine per 1k gold -> reference per 1 gold).
-    gold_price_ref = settings_mod.gold_value_per_1k(g.s) * (ref_value.get("divine") or 1.0) / 1000.0   # at the one value table
+    gold_price_ref = (
+        settings_mod.gold_value_per_1k(g.s) * (ref_value.get("divine") or 1.0) / 1000.0
+    )  # at the one value table
     velocity = _velocity(margin_ref, fh, gold, gold_price_ref)
     return {
         "id": _edge_list_id(cyc),
-        "start": start, "start_name": registry.name(start),
+        "start": start,
+        "start_name": registry.name(start),
         "path": [start] + [e.dst for e in cyc],
         "path_names": [registry.name(start)] + [registry.name(e.dst) for e in cyc],
         "kinds": [e.kind for e in cyc],
         "steps": sim["steps"],
-        "start_amount": amount, "cycle_unit": unit, "cycles": cycles, "end_amount": sim["end_amount"],
-        "margin": margin, "margin_pct": (margin / amount * 100) if amount else 0.0,
+        "start_amount": amount,
+        "cycle_unit": unit,
+        "cycles": cycles,
+        "end_amount": sim["end_amount"],
+        "margin": margin,
+        "margin_pct": (margin / amount * 100) if amount else 0.0,
         "margin_ref": margin_ref,
         "value_ref": sim["value_ref"],
         "gold": gold,
         "margin_per_1k_gold": None if mp1k == INF else mp1k,
-        "velocity": None if velocity == INF else velocity,   # margin_ref / (fill_hours × gold) × 1000
+        "velocity": None
+        if velocity == INF
+        else velocity,  # margin_ref / (fill_hours × gold) × 1000
         "velocity_inf": velocity == INF,
         "profit_per_hour": (margin_ref / fh) if fh else None,
         "gold_free": gold == 0,
         "liquidity_ref": sim["liquidity_ref"],
-        "volume_ref_per_h": sim["volume_ref_per_h"],   # slowest step's executed value/hour
-        "fill_hours": sim["fill_hours"],               # sum of commit/turnover per step
-        "slowest_step_hours": sim["slowest_step_hours"],   # worst single step: hours of ITS market's turnover
+        "volume_ref_per_h": sim[
+            "volume_ref_per_h"
+        ],  # slowest step's executed value/hour
+        "fill_hours": sim["fill_hours"],  # sum of commit/turnover per step
+        "slowest_step_hours": sim[
+            "slowest_step_hours"
+        ],  # worst single step: hours of ITS market's turnover
         "max_age_s": sim["max_age_s"],
         "all_live": sim["all_live"],
         "uses_recipe": any(e.kind == "recipe" for e in cyc),
@@ -191,13 +248,21 @@ RECOMMENDED_MIN_VOLUME_REF_PER_H = 100.0
 
 # The filters' currency amounts, written in exalted (settings.ARBITRAGE_UNIT) so a preset means the same for
 # every reference currency; a route's figures are in the reference. Everything else is a ratio or a count.
-CURRENCY_THRESHOLDS = ("min_margin_ref", "min_liquidity_ref", "min_volume_ref_per_h", "min_velocity",
-                       "min_margin_per_1k_gold")
+CURRENCY_THRESHOLDS = (
+    "min_margin_ref",
+    "min_liquidity_ref",
+    "min_volume_ref_per_h",
+    "min_velocity",
+    "min_margin_per_1k_gold",
+)
 
 
 def thresholds_in_reference(f: dict, ex_in_ref: float) -> dict:
     """`f` with its exalted amounts converted to the reference (1 exalted = `ex_in_ref` reference)."""
-    return {k: (v * ex_in_ref if k in CURRENCY_THRESHOLDS and v else v) for k, v in f.items()}
+    return {
+        k: (v * ex_in_ref if k in CURRENCY_THRESHOLDS and v else v)
+        for k, v in f.items()
+    }
 
 
 def _keep(r: dict, f: dict) -> bool:
@@ -207,49 +272,80 @@ def _keep(r: dict, f: dict) -> bool:
         return False
     if f.get("max_gold") and r["gold"] > f["max_gold"]:
         return False
-    if f.get("min_margin_per_1k_gold") and not r["gold_free"] and \
-            (r["margin_per_1k_gold"] or 0) < f["min_margin_per_1k_gold"]:
+    if (
+        f.get("min_margin_per_1k_gold")
+        and not r["gold_free"]
+        and (r["margin_per_1k_gold"] or 0) < f["min_margin_per_1k_gold"]
+    ):
         return False
-    if f.get("min_liquidity_ref") and r["liquidity_ref"] is not None and \
-            r["liquidity_ref"] < f["min_liquidity_ref"]:
+    if (
+        f.get("min_liquidity_ref")
+        and r["liquidity_ref"] is not None
+        and r["liquidity_ref"] < f["min_liquidity_ref"]
+    ):
         return False
     if f.get("live_only") and not r["all_live"]:
         return False
-    if f.get("min_volume_ref_per_h") and (r["volume_ref_per_h"] or 0) < f["min_volume_ref_per_h"]:
+    if (
+        f.get("min_volume_ref_per_h")
+        and (r["volume_ref_per_h"] or 0) < f["min_volume_ref_per_h"]
+    ):
         return False
-    if f.get("max_fill_hours") and (r["fill_hours"] is None or r["fill_hours"] > f["max_fill_hours"]):
+    if f.get("max_fill_hours") and (
+        r["fill_hours"] is None or r["fill_hours"] > f["max_fill_hours"]
+    ):
         return False
-    if f.get("max_step_minutes") and (r.get("slowest_step_hours") is None
-                                      or r["slowest_step_hours"] * 60 > f["max_step_minutes"]):
+    if f.get("max_step_minutes") and (
+        r.get("slowest_step_hours") is None
+        or r["slowest_step_hours"] * 60 > f["max_step_minutes"]
+    ):
         return False
-    if f.get("min_velocity") and not r["velocity_inf"] and (r["velocity"] or 0) < f["min_velocity"]:
+    if (
+        f.get("min_velocity")
+        and not r["velocity_inf"]
+        and (r["velocity"] or 0) < f["min_velocity"]
+    ):
         return False
-    if f.get("exclude_recipes") and r["uses_recipe"]:
-        return False
-    return True
+    return not (f.get("exclude_recipes") and r["uses_recipe"])
 
 
 def _sort_key(sort: str):
     def key(r: dict):
         if sort == "margin_per_1k_gold":
-            return INF if r["gold_free"] and r["margin_ref"] > 0 else (r["margin_per_1k_gold"] or -INF)
+            return (
+                INF
+                if r["gold_free"] and r["margin_ref"] > 0
+                else (r["margin_per_1k_gold"] or -INF)
+            )
         if sort == "fill_hours":
             return -(r["fill_hours"] if r["fill_hours"] is not None else INF)
         if sort == "velocity":
-            return INF if r["velocity_inf"] else (r["velocity"] if r["velocity"] is not None else -INF)
+            return (
+                INF
+                if r["velocity_inf"]
+                else (r["velocity"] if r["velocity"] is not None else -INF)
+            )
         return r.get(sort, 0) or 0
+
     return key
 
 
 def _search_setup(filters: dict | None, start_currencies: list[str] | None):
-    g = graph.cached_graph(volume_window_h=get_settings()["volume_window_h"])   # the loop search's own window
+    g = graph.cached_graph(
+        volume_window_h=get_settings()["volume_window_h"]
+    )  # the loop search's own window
     s = g.s
     ref_value = g.values()
-    f = thresholds_in_reference({**s["filters"], **(filters or {})}, ref_value.get(settings_mod.ARBITRAGE_UNIT) or 1.0)
+    f = thresholds_in_reference(
+        {**s["filters"], **(filters or {})},
+        ref_value.get(settings_mod.ARBITRAGE_UNIT) or 1.0,
+    )
     usable = loop_currencies(g, ref_value)
     capital = {c: q for c, q in db.get_capital().items() if c in usable}
     # A saved "Start from" arbitrage may no longer use (a hub that left the top) falls back to the holdings.
-    starts = [c for c in (start_currencies or []) if c in usable] or [c for c, q in capital.items() if q > 0]
+    starts = [c for c in (start_currencies or []) if c in usable] or [
+        c for c, q in capital.items() if q > 0
+    ]
     notional = not starts
     if notional:
         starts = [c for c in g.adj if c in usable]
@@ -262,7 +358,10 @@ def cycles_shortest_first(g: Graph, starts: list[str], max_steps: int, cap: int)
     currency let its 4–5-hop loops fill the whole cap, and raising max_steps SHRANK the list (QA, 2026-10-05)."""
     n = 0
     for length in range(2, max_steps + 1):
-        gens = [(c for c in g.iter_cycles(start, length) if len(c) == length) for start in starts]
+        gens = [
+            (c for c in g.iter_cycles(start, length) if len(c) == length)
+            for start in starts
+        ]
         while gens:
             for gen in list(gens):
                 cyc = next(gen, None)
@@ -288,15 +387,27 @@ def search_cycles(g: Graph, starts: list[str], max_steps: int, cap: int):
     return iter(original)
 
 
-def _iter_candidates(g: Graph, s: dict, ref_value: dict, capital: dict, starts: list[str], notional: bool,
-                     deep_stats: dict | None = None, cancelled=lambda: False):
+def _iter_candidates(
+    g: Graph,
+    s: dict,
+    ref_value: dict,
+    capital: dict,
+    starts: list[str],
+    notional: bool,
+    deep_stats: dict | None = None,
+    cancelled=lambda: False,
+):
     """Yield route dicts as the search finds them (shortest loops first, capped at MAX_CANDIDATES) — then whatever the
     whole-market deep scan adds (loops past `max_steps` or past the cap), tagged `deep`. Both go
     through `_route_from`, so a deep loop is sized, simulated, filtered and ranked like any other."""
+
     def budget_for(start: str) -> tuple[float, float]:
         held = capital.get(start, 0.0)
-        return held, (held * s["max_start_fraction"] if not notional
-                      else (1.0 / ref_value.get(start, 1.0) or 1.0) * 10)
+        return held, (
+            held * s["max_start_fraction"]
+            if not notional
+            else (1.0 / ref_value.get(start, 1.0) or 1.0) * 10
+        )
 
     seen: set[str] = set()
     for cyc in search_cycles(g, starts, s["max_steps"], MAX_CANDIDATES):
@@ -307,7 +418,7 @@ def _iter_candidates(g: Graph, s: dict, ref_value: dict, capital: dict, starts: 
         if r is not None:
             yield r
 
-    if cancelled():          # the page has moved on: don't start the whole-market scan
+    if cancelled():  # the page has moved on: don't start the whole-market scan
         return
     stats = {"loops": 0, "added": 0, "no_holding": 0}
     startable = set(starts)
@@ -315,9 +426,9 @@ def _iter_candidates(g: Graph, s: dict, ref_value: dict, capital: dict, starts: 
         stats["loops"] += 1
         entries = [i for i, e in enumerate(loop) if e.src in startable]
         if not entries:
-            stats["no_holding"] += 1      # profitable, but through nothing the user holds
+            stats["no_holding"] += 1  # profitable, but through nothing the user holds
         for i in entries:
-            cyc = loop[i:] + loop[:i]     # the same loop, entered at the held currency
+            cyc = loop[i:] + loop[:i]  # the same loop, entered at the held currency
             if _edge_list_id(cyc) in seen:
                 continue
             seen.add(_edge_list_id(cyc))
@@ -340,59 +451,109 @@ def _finish(routes: list[dict], f: dict, s: dict) -> tuple[list[dict], int]:
     return kept, int(f.get("limit", 100))
 
 
-def _diag(cached: bool, routes: int, after_filters: int, candidates: int, t0: float,
-          notional: float, starts, g: Graph) -> None:
+def _diag(
+    cached: bool,
+    routes: int,
+    after_filters: int,
+    candidates: int,
+    t0: float,
+    notional: float,
+    starts,
+    g: Graph,
+) -> None:
     """TEMPORARY DEV DIAGNOSTIC (beta channel only, through the one gate): what a route search
     returned and what it was sized from. Owner, 2026-09-23 (0.3.4-beta.2): the Arbitrage page
     "jumping between a few offerings and many"; not reproducible on a copy of the data, and
     stable is blind. Off the request thread; never raises."""
     try:
-        quoted = sum(1 for _k, e in g.market_edges() if e.meta.get("quoted_by_volume_rule"))
-        msg = (f"cached={cached} routes={routes} after_filters={after_filters} candidates={candidates} "
-               f"ms={int((time.time() - t0) * 1000)} notional={bool(notional)} "
-               f"starts={len(starts or ())} edges={len(g.edges)} quoted={quoted}")
-        devtelemetry.tlog("routes", msg)     # queues; never waits on the network
+        quoted = sum(
+            1 for _k, e in g.market_edges() if e.meta.get("quoted_by_volume_rule")
+        )
+        msg = (
+            f"cached={cached} routes={routes} after_filters={after_filters} candidates={candidates} "
+            f"ms={int((time.time() - t0) * 1000)} notional={bool(notional)} "
+            f"starts={len(starts or ())} edges={len(g.edges)} quoted={quoted}"
+        )
+        devtelemetry.tlog("routes", msg)  # queues; never waits on the network
     except Exception:
-        pass
+        logging.getLogger(__name__).debug("route diagnostics failed", exc_info=True)
 
 
-CANCEL_CHECK_EVERY = 50   # candidates between checks that the page still wants this search
-PROGRESS_EVERY_S = 5.0    # a search with nothing new to send says it's alive this often (the page's idle watchdog)
+CANCEL_CHECK_EVERY = (
+    50  # candidates between checks that the page still wants this search
+)
+PROGRESS_EVERY_S = 5.0  # a search with nothing new to send says it's alive this often (the page's idle watchdog)
 
 
-def stream_routes(filters: dict | None = None, start_currencies: list[str] | None = None, cancelled=lambda: False):
+def stream_routes(
+    filters: dict | None = None,
+    start_currencies: list[str] | None = None,
+    cancelled=lambda: False,
+):
     """Generator for the SSE endpoint: ('meta', …) once, ('route', r) for every route
     that passes the filters as it is discovered, then ('done', summary). The finished,
     scored result is also placed in the route cache so follow-up queries are instant.
     `cancelled()` turning true (the page closed the stream) ends it early, uncached. A search that has sent nothing
     for PROGRESS_EVERY_S yields ('progress', {}), so the page's idle watchdog never mistakes a slow search for a dead one."""
     t0 = time.time()
-    g, s, f, ref_value, capital, starts, notional = _search_setup(filters, start_currencies)
+    g, s, f, ref_value, capital, starts, notional = _search_setup(
+        filters, start_currencies
+    )
     # Serve a fresh cached result as one burst instead of re-searching.
     key = _cache_key(filters, start_currencies)
     cached = _cache_get(key, s)
     if cached is not None:
-        _diag(True, len(cached["routes"]), cached["total_after_filters"], cached["total_candidates"], t0,
-              notional, starts, g)
-        yield "meta", {"reference": cached["reference"], "capital": cached["capital"],
-                       "notional": cached["notional"], "graph": cached["graph"],
-                       "filters": cached["filters"]}
+        _diag(
+            True,
+            len(cached["routes"]),
+            cached["total_after_filters"],
+            cached["total_candidates"],
+            t0,
+            notional,
+            starts,
+            g,
+        )
+        yield (
+            "meta",
+            {
+                "reference": cached["reference"],
+                "capital": cached["capital"],
+                "notional": cached["notional"],
+                "graph": cached["graph"],
+                "filters": cached["filters"],
+            },
+        )
         for r in cached["routes"]:
             yield "route", r
-        yield "done", {"total_candidates": cached["total_candidates"],
-                       "total_after_filters": cached["total_after_filters"], "truncated": False,
-                       "scores": {r["id"]: r.get("score") for r in cached["routes"]},
-                       "order": [r["id"] for r in cached["routes"]], "cached": True,
-                       "deep_scan": cached.get("deep_scan", {})}
+        yield (
+            "done",
+            {
+                "total_candidates": cached["total_candidates"],
+                "total_after_filters": cached["total_after_filters"],
+                "truncated": False,
+                "scores": {r["id"]: r.get("score") for r in cached["routes"]},
+                "order": [r["id"] for r in cached["routes"]],
+                "cached": True,
+                "deep_scan": cached.get("deep_scan", {}),
+            },
+        )
         return
-    yield "meta", {
-        "reference": s["reference"], "capital": capital, "notional": notional,
-        "graph": _graph_summary(g), "filters": f,
-    }
+    yield (
+        "meta",
+        {
+            "reference": s["reference"],
+            "capital": capital,
+            "notional": notional,
+            "graph": _graph_summary(g),
+            "filters": f,
+        },
+    )
     routes: list[dict] = []
     deep: dict = {}
     last_sent = time.time()
-    for n, r in enumerate(_iter_candidates(g, s, ref_value, capital, starts, notional, deep, cancelled), 1):
+    for n, r in enumerate(
+        _iter_candidates(g, s, ref_value, capital, starts, notional, deep, cancelled), 1
+    ):
         if n % CANCEL_CHECK_EVERY == 0:
             if cancelled():
                 return
@@ -407,17 +568,23 @@ def stream_routes(filters: dict | None = None, start_currencies: list[str] | Non
     result = _result(g, s, f, ref_value, capital, notional, routes, kept, limit, deep)
     _cache_put(key, result)
     _diag(False, len(kept[:limit]), len(kept), len(routes), t0, notional, starts, g)
-    yield "done", {
-        "total_candidates": len(routes), "total_after_filters": len(kept),
-        "truncated": len(routes) >= MAX_CANDIDATES,
-        "scores": {r["id"]: r["score"] for r in kept[:limit]},
-        "order": [r["id"] for r in kept[:limit]],
-        "deep_scan": deep,
-    }
+    yield (
+        "done",
+        {
+            "total_candidates": len(routes),
+            "total_after_filters": len(kept),
+            "truncated": len(routes) >= MAX_CANDIDATES,
+            "scores": {r["id"]: r["score"] for r in kept[:limit]},
+            "order": [r["id"] for r in kept[:limit]],
+            "deep_scan": deep,
+        },
+    )
 
 
 def _find_routes(filters: dict | None, start_currencies: list[str] | None) -> dict:
-    g, s, f, ref_value, capital, starts, notional = _search_setup(filters, start_currencies)
+    g, s, f, ref_value, capital, starts, notional = _search_setup(
+        filters, start_currencies
+    )
     deep: dict = {}
     routes = list(_iter_candidates(g, s, ref_value, capital, starts, notional, deep))
     kept, limit = _finish(routes, f, s)
@@ -440,13 +607,40 @@ def _composite_score(routes: list[dict], weights: dict) -> None:
         order = sorted(routes, key=key, reverse=True)
         return {r["id"]: 1 - i / n for i, r in enumerate(order)}
 
-    eff = ranks(lambda r: INF if r["gold_free"] and r["margin_ref"] > 0 else (r["margin_per_1k_gold"] or -INF))
+    eff = ranks(
+        lambda r: (
+            INF
+            if r["gold_free"] and r["margin_ref"] > 0
+            else (r["margin_per_1k_gold"] or -INF)
+        )
+    )
     val = ranks(lambda r: r["margin_ref"])
     # Unknown volume ranks worst (−INF), consistent with the min_volume filter which
     # treats None as 0 — previously None ranked best (INF), contradicting the filter.
-    vol = ranks(lambda r: r["volume_ref_per_h"] if r["volume_ref_per_h"] is not None else -INF)
-    vel = ranks(lambda r: INF if r["velocity_inf"] else (r["velocity"] if r["velocity"] is not None else -INF))
+    vol = ranks(
+        lambda r: r["volume_ref_per_h"] if r["volume_ref_per_h"] is not None else -INF
+    )
+    vel = ranks(
+        lambda r: (
+            INF
+            if r["velocity_inf"]
+            else (r["velocity"] if r["velocity"] is not None else -INF)
+        )
+    )
     for r in routes:
-        r["score"] = round((w_vel * vel[r["id"]] + w_eff * eff[r["id"]] + w_val * val[r["id"]] + w_vol * vol[r["id"]]) / total, 4)
-        r["score_parts"] = {"velocity": round(vel[r["id"]], 3), "efficiency": round(eff[r["id"]], 3),
-                            "value": round(val[r["id"]], 3), "volume": round(vol[r["id"]], 3)}
+        r["score"] = round(
+            (
+                w_vel * vel[r["id"]]
+                + w_eff * eff[r["id"]]
+                + w_val * val[r["id"]]
+                + w_vol * vol[r["id"]]
+            )
+            / total,
+            4,
+        )
+        r["score_parts"] = {
+            "velocity": round(vel[r["id"]], 3),
+            "efficiency": round(eff[r["id"]], 3),
+            "value": round(val[r["id"]], 3),
+            "volume": round(vol[r["id"]], 3),
+        }

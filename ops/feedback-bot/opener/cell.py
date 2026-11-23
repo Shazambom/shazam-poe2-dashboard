@@ -14,6 +14,7 @@ network, no token and no key (see opener.py). Hard stops, in order:
 Exit codes: 0 OK, 2 QUARANTINE (the file is not a report we can read); anything else is a crash,
 which the supervisor reports as REFUSE.
 """
+
 from __future__ import annotations
 
 import base64
@@ -32,10 +33,12 @@ from .dests import SCREENS
 MAX_PLAIN = 32 * 1024 * 1024
 MAX_DEPTH = 32
 MAX_KEYS = 10_000
-MAX_STR = 2000            # any string inside state
+MAX_STR = 2000  # any string inside state
 MAX_STATE_DEPTH = 8
 MAX_STATE_NODES = 20_000
-MAX_LOG_LINES = 2000      # the backend's 64 KB tail, now that successful polls aren't logged
+MAX_LOG_LINES = (
+    2000  # the backend's 64 KB tail, now that successful polls aren't logged
+)
 MAX_LOG_LINE = 1024
 MAX_SCREEN_BYTES = 2 * 1024 * 1024
 MAX_PIXELS = 4_000_000
@@ -52,12 +55,12 @@ class Refused(Exception):
 
 # ---------------------------------------------------------------- 1. decompress
 def decompress_capped(data: bytes, limit: int) -> bytes:
-    d = zlib.decompressobj(16 + zlib.MAX_WBITS)   # gzip
+    d = zlib.decompressobj(16 + zlib.MAX_WBITS)  # gzip
     out = bytearray()
     view = memoryview(data)
     pos = 0
     while pos < len(view) or d.unconsumed_tail:
-        chunk = d.unconsumed_tail if d.unconsumed_tail else view[pos:pos + 65536]
+        chunk = d.unconsumed_tail if d.unconsumed_tail else view[pos : pos + 65536]
         if not d.unconsumed_tail:
             pos += 65536
         out += d.decompress(chunk, limit - len(out) + 1)
@@ -85,7 +88,7 @@ def parse_json(text: bytes):
     try:
         doc = json.loads(text, object_pairs_hook=pairs)
     except (ValueError, RecursionError) as e:
-        raise Refused(f"bad json: {e.__class__.__name__}")
+        raise Refused(f"bad json: {e.__class__.__name__}") from e
     if not isinstance(doc, dict):
         raise Refused("not an object")
     return doc
@@ -149,7 +152,7 @@ def _bounded(v, depth=0, budget=None):
     if v is None or isinstance(v, bool):
         return v
     if isinstance(v, int):
-        return v if -2**53 <= v <= 2**53 else None
+        return v if -(2**53) <= v <= 2**53 else None
     if isinstance(v, float):
         return v if v == v and abs(v) != float("inf") else None
     if isinstance(v, str):
@@ -157,14 +160,19 @@ def _bounded(v, depth=0, budget=None):
     if isinstance(v, list):
         return [_bounded(x, depth + 1, budget) for x in v[:1000]]
     if isinstance(v, dict):
-        return {str(k)[:200]: _bounded(x, depth + 1, budget) for k, x in list(v.items())[:1000]}
+        return {
+            str(k)[:200]: _bounded(x, depth + 1, budget)
+            for k, x in list(v.items())[:1000]
+        }
     return None
 
 
 def _lines(v):
     if not isinstance(v, list):
         raise Refused("log not a list")
-    return [str(x)[:MAX_LOG_LINE] if isinstance(x, str) else "" for x in v[-MAX_LOG_LINES:]]
+    return [
+        str(x)[:MAX_LOG_LINE] if isinstance(x, str) else "" for x in v[-MAX_LOG_LINES:]
+    ]
 
 
 def _text(v):
@@ -193,24 +201,42 @@ def _missing(v) -> dict:
 def rebuild(doc: dict) -> dict:
     m = doc.get("manifest")
     s = doc.get("state")
-    l = doc.get("logs")
-    if not isinstance(m, dict) or not isinstance(s, dict) or not isinstance(l, dict):
+    raw_logs = doc.get("logs")
+    if (
+        not isinstance(m, dict)
+        or not isinstance(s, dict)
+        or not isinstance(raw_logs, dict)
+    ):
         raise Refused("missing section")
     short_id = _str(m.get("shortId"), 6, required=True)
     if not SHORT_ID.match(short_id or ""):
         raise Refused("bad shortId")
     manifest = {
         "v": _int(m.get("v"), 1, 1),
-        "id": _str(m.get("id"), 64), "ts": _str(m.get("ts"), 40), "appVersion": _str(m.get("appVersion"), 32),
-        "channel": _str(m.get("channel"), 16), "platform": _str(m.get("platform"), 16), "arch": _str(m.get("arch"), 16),
-        "osRelease": _str(m.get("osRelease"), 64), "electron": _str(m.get("electron"), 32),
-        "installId": _str(m.get("installId"), 64), "theme": _str(m.get("theme"), 64), "shortId": short_id,
+        "id": _str(m.get("id"), 64),
+        "ts": _str(m.get("ts"), 40),
+        "appVersion": _str(m.get("appVersion"), 32),
+        "channel": _str(m.get("channel"), 16),
+        "platform": _str(m.get("platform"), 16),
+        "arch": _str(m.get("arch"), 16),
+        "osRelease": _str(m.get("osRelease"), 64),
+        "electron": _str(m.get("electron"), 32),
+        "installId": _str(m.get("installId"), 64),
+        "theme": _str(m.get("theme"), 64),
+        "shortId": short_id,
         "screensPartial": _bool(m.get("screensPartial", False)),
         "screensMissing": _missing(m.get("screensMissing")),
     }
-    state = {k: _bounded(s.get(k)) for k in ("diag", "status", "backfill", "settings", "desktopSettings", "bounds")}
-    logs = {"main": _lines(l.get("main", [])), "backend": _text(l.get("backend", "")),
-            "renderer": _lines(l.get("renderer", [])), "updater": _lines(l.get("updater", []))}
+    state = {
+        k: _bounded(s.get(k))
+        for k in ("diag", "status", "backfill", "settings", "desktopSettings", "bounds")
+    }
+    logs = {
+        "main": _lines(raw_logs.get("main", [])),
+        "backend": _text(raw_logs.get("backend", "")),
+        "renderer": _lines(raw_logs.get("renderer", [])),
+        "updater": _lines(raw_logs.get("updater", [])),
+    }
     return {"manifest": manifest, "state": state, "logs": logs}
 
 
@@ -240,7 +266,9 @@ def screens_of(doc: dict) -> tuple[list[tuple[int, str, bytes]], dict]:
     if not isinstance(sc, dict):
         return [], {}
     out, dropped = [], {}
-    for i, name in enumerate(SCREENS):        # order and names from the schema, never the report
+    for i, name in enumerate(
+        SCREENS
+    ):  # order and names from the schema, never the report
         if name in sc:
             data = reencode(sc[name])
             if data:
@@ -251,7 +279,11 @@ def screens_of(doc: dict) -> tuple[list[tuple[int, str, bytes]], dict]:
     for name in sc:
         if name in SCREENS:
             continue
-        if isinstance(name, str) and SCREEN_NAME.match(name) and len(dropped) < MAX_MISSING:
+        if (
+            isinstance(name, str)
+            and SCREEN_NAME.match(name)
+            and len(dropped) < MAX_MISSING
+        ):
             dropped[name] = "not a screen this opener knows"
         else:
             invalid += 1
@@ -268,7 +300,12 @@ def _under(outdir: Path, rel: str) -> Path:
     return p
 
 
-def write_out(rebuilt: dict, screens: list[tuple[int, str, bytes]], outdir: Path, dropped: dict | None = None) -> None:
+def write_out(
+    rebuilt: dict,
+    screens: list[tuple[int, str, bytes]],
+    outdir: Path,
+    dropped: dict | None = None,
+) -> None:
     outdir.mkdir(parents=True, exist_ok=True)
     (outdir / "logs").mkdir(exist_ok=True)
     if screens:
@@ -279,9 +316,16 @@ def write_out(rebuilt: dict, screens: list[tuple[int, str, bytes]], outdir: Path
         _under(outdir, rel).write_bytes(data)
         names[name] = rel
     for k in ("main", "backend", "renderer", "updater"):
-        _under(outdir, f"logs/{k}.txt").write_text("".join(line + "\n" for line in rebuilt["logs"][k]))
-    report = {"manifest": rebuilt["manifest"], "state": rebuilt["state"], "logs": {k: f"logs/{k}.txt" for k in rebuilt["logs"]},
-              "screens": names, "screensDropped": dropped or {}}
+        _under(outdir, f"logs/{k}.txt").write_text(
+            "".join(line + "\n" for line in rebuilt["logs"][k])
+        )
+    report = {
+        "manifest": rebuilt["manifest"],
+        "state": rebuilt["state"],
+        "logs": {k: f"logs/{k}.txt" for k in rebuilt["logs"]},
+        "screens": names,
+        "screensDropped": dropped or {},
+    }
     _under(outdir, "report.json").write_text(json.dumps(report, indent=1))
     _under(outdir, "index.html").write_text(render_html(rebuilt, names))
 
@@ -289,17 +333,26 @@ def write_out(rebuilt: dict, screens: list[tuple[int, str, bytes]], outdir: Path
 def render_html(rebuilt: dict, names: dict) -> str:
     e = html.escape
     m = rebuilt["manifest"]
-    head = " · ".join(e(str(m.get(k) or "")) for k in ("shortId", "appVersion", "channel", "platform", "arch", "theme", "ts"))
-    parts = ["<!doctype html><html><head><meta charset=\"utf-8\">",
-             "<meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; img-src 'self'; style-src 'unsafe-inline'\">",
-             f"<title>Arbiter report {e(m['shortId'])}</title>",
-             "<style>body{font:13px/1.4 system-ui;margin:20px;background:#15171c;color:#ddd}img{max-width:100%;border:1px solid #444;margin:6px 0}pre{white-space:pre-wrap;background:#0e0f12;padding:8px;max-height:400px;overflow:auto}h2{margin-top:28px}</style>",
-             f"</head><body><h1>Arbiter report</h1><p>{head}</p>"]
+    head = " · ".join(
+        e(str(m.get(k) or ""))
+        for k in ("shortId", "appVersion", "channel", "platform", "arch", "theme", "ts")
+    )
+    parts = [
+        '<!doctype html><html><head><meta charset="utf-8">',
+        "<meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; img-src 'self'; style-src 'unsafe-inline'\">",
+        f"<title>Arbiter report {e(m['shortId'])}</title>",
+        "<style>body{font:13px/1.4 system-ui;margin:20px;background:#15171c;color:#ddd}img{max-width:100%;border:1px solid #444;margin:6px 0}pre{white-space:pre-wrap;background:#0e0f12;padding:8px;max-height:400px;overflow:auto}h2{margin-top:28px}</style>",
+        f"</head><body><h1>Arbiter report</h1><p>{head}</p>",
+    ]
     for name, rel in names.items():
-        parts.append(f"<h2>{e(name)}</h2><img src=\"{e(rel)}\" alt=\"{e(name)}\">")
+        parts.append(f'<h2>{e(name)}</h2><img src="{e(rel)}" alt="{e(name)}">')
     for k in ("main", "backend", "renderer", "updater"):
-        parts.append(f"<h2>log: {k}</h2><pre>{e(chr(10).join(rebuilt['logs'][k]))}</pre>")
-    parts.append(f"<h2>state</h2><pre>{e(json.dumps(rebuilt['state'], indent=1))}</pre></body></html>")
+        parts.append(
+            f"<h2>log: {k}</h2><pre>{e(chr(10).join(rebuilt['logs'][k]))}</pre>"
+        )
+    parts.append(
+        f"<h2>state</h2><pre>{e(json.dumps(rebuilt['state'], indent=1))}</pre></body></html>"
+    )
     return "".join(parts)
 
 

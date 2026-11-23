@@ -17,11 +17,14 @@ binary on Windows; `_dtw` is proven 1:1 with `dtaidistance.dtw.distance` across 
 inputs by `backend/tests/test_sidecar_equivalence.py`. Pure over plain float lists → unit-testable
 with planted arcs.
 """
+
 from __future__ import annotations
 
 import numpy as np
 
-MIN_LEN = 3   # need a few points before a shape is meaningful (short leagues are the norm)
+MIN_LEN = (
+    3  # need a few points before a shape is meaningful (short leagues are the norm)
+)
 
 
 def _z(x: np.ndarray) -> np.ndarray:
@@ -66,14 +69,16 @@ def compute_weights(cur_sig, past_sigs: dict, *, min_len: int = MIN_LEN) -> dict
         s = [float(v) for v in (sig or []) if v is not None]
         if len(s) < min_len:
             continue
-        s = s[:n] if len(s) > n else s          # compare the same elapsed league-phase
+        s = s[:n] if len(s) > n else s  # compare the same elapsed league-phase
         d = _dtw(cz, _z(np.asarray(s, dtype=float)))
         if np.isfinite(d):
             dists[lg] = float(d)
     if not dists:
         return {}
     vals = np.asarray(list(dists.values()), dtype=float)
-    temp = float(np.median(vals)) or 1.0        # scale-free: normalize distances by their spread
+    temp = (
+        float(np.median(vals)) or 1.0
+    )  # scale-free: normalize distances by their spread
     w = np.exp(-vals / temp)
     w = w / w.sum()
-    return {lg: float(wi) for lg, wi in zip(dists.keys(), w)}
+    return {lg: float(wi) for lg, wi in zip(dists.keys(), w, strict=False)}

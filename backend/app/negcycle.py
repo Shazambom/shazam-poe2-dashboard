@@ -35,13 +35,14 @@ break-even loop is never reported as profit.
 NEEDS NUMPY (in `backend/requirements.txt`; `arbitrage/deepscan.py` calls this from the route
 search and degrades to no deep loops if the import fails).
 """
+
 from __future__ import annotations
 
 import math
 
 import numpy as np
 
-NULL = -1                 # the pseudocode's null predecessor
+NULL = -1  # the pseudocode's null predecessor
 
 
 class NegativeCycle(Exception):
@@ -59,7 +60,9 @@ def _check(n, src, dst, w, source):
     w = np.asarray(w, dtype=np.float64)
     if not (src.ndim == dst.ndim == w.ndim == 1 and len(src) == len(dst) == len(w)):
         raise ValueError("src, dst and w must be 1-D arrays of one length")
-    if len(src) and (src.min() < 0 or dst.min() < 0 or src.max() >= n or dst.max() >= n):
+    if len(src) and (
+        src.min() < 0 or dst.min() < 0 or src.max() >= n or dst.max() >= n
+    ):
         raise ValueError(f"edge endpoint outside [0..{n - 1}]")
     if np.isnan(w).any():
         raise ValueError("NaN edge weight")
@@ -73,9 +76,9 @@ def _initialize(n, source):
     distance = np.full(n, np.inf)
     predecessor = np.full(n, NULL, dtype=np.int64)
     if source is None:
-        distance[:] = 0.0            # virtual super-source, one free edge to every vertex
+        distance[:] = 0.0  # virtual super-source, one free edge to every vertex
     else:
-        distance[source] = 0.0       # The distance from the source to itself is zero
+        distance[source] = 0.0  # The distance from the source to itself is zero
     return distance, predecessor
 
 
@@ -92,7 +95,9 @@ def _cycle_through(predecessor, u, v) -> list[int]:
         if u == NULL:
             # Impossible in exact arithmetic (a predecessor chain that reaches the source
             # would make (u, v) a shorter SIMPLE path than the shortest one). Never index -1.
-            raise RuntimeError("predecessor chain ended before closing a negative cycle")
+            raise RuntimeError(
+                "predecessor chain ended before closing a negative cycle"
+            )
     # u is a vertex in a negative cycle, find the cycle itself
     ncycle = [u]
     v = int(predecessor[u])
@@ -106,8 +111,12 @@ def bellman_ford_naive(n, src, dst, w, source, tol: float = 0.0):
     """The Wikipedia pseudocode, line for line. Returns (distance, predecessor); raises
     `NegativeCycle` if one is reachable from `source` (from anywhere, if `source` is None)."""
     src, dst, w = _check(n, src, dst, w, source)
-    distance, predecessor = (a.tolist() for a in _initialize(n, source))   # plain lists: the
-    edges = list(zip(src.tolist(), dst.tolist(), w.tolist()))              # loop below is scalar
+    distance, predecessor = (
+        a.tolist() for a in _initialize(n, source)
+    )  # plain lists: the
+    edges = list(
+        zip(src.tolist(), dst.tolist(), w.tolist(), strict=False)
+    )  # loop below is scalar
 
     # Step 2: relax edges repeatedly
     for _ in range(n - 1):
@@ -119,7 +128,9 @@ def bellman_ford_naive(n, src, dst, w, source, tol: float = 0.0):
     # Step 3: check for negative-weight cycles
     for u, v, wt in edges:
         if distance[u] + wt < distance[v] - tol:
-            raise NegativeCycle(_cycle_through(np.array(predecessor, dtype=np.int64), u, v))
+            raise NegativeCycle(
+                _cycle_through(np.array(predecessor, dtype=np.int64), u, v)
+            )
     return np.array(distance), np.array(predecessor, dtype=np.int64)
 
 
@@ -131,14 +142,14 @@ def bellman_ford(n, src, dst, w, source, tol: float = 0.0):
 
     # Step 2: relax edges repeatedly — all of them at once, from this round's starting distances
     for _ in range(n - 1):
-        candidate = distance[src] + w                   # distance[u] + w, for every edge
+        candidate = distance[src] + w  # distance[u] + w, for every edge
         best = np.full(n, np.inf)
-        np.minimum.at(best, dst, candidate)             # the cheapest way into each vertex
-        improved = best < distance - tol                # "if distance[u] + w < distance[v]"
+        np.minimum.at(best, dst, candidate)  # the cheapest way into each vertex
+        improved = best < distance - tol  # "if distance[u] + w < distance[v]"
         if not improved.any():
-            break                                       # early exit: nothing relaxed this round
+            break  # early exit: nothing relaxed this round
         winner = improved[dst] & (candidate == best[dst])
-        predecessor[dst[winner]] = src[winner]          # ties: any of them is a shortest path
+        predecessor[dst[winner]] = src[winner]  # ties: any of them is a shortest path
         distance = np.where(improved, best, distance)
 
     # Step 3: check for negative-weight cycles
@@ -149,7 +160,9 @@ def bellman_ford(n, src, dst, w, source, tol: float = 0.0):
     return distance, predecessor
 
 
-def find_negative_cycle(n, src, dst, w, source=None, tol: float = 0.0) -> list[int] | None:
+def find_negative_cycle(
+    n, src, dst, w, source=None, tol: float = 0.0
+) -> list[int] | None:
     """A negative cycle (distinct vertices, travel order) or None. `source=None`: anywhere."""
     try:
         bellman_ford(n, src, dst, w, source, tol)
@@ -158,7 +171,9 @@ def find_negative_cycle(n, src, dst, w, source=None, tol: float = 0.0) -> list[i
     return None
 
 
-def profitable_loop(rates: dict[tuple[str, str], float], min_gain: float = 1e-9) -> list[str] | None:
+def profitable_loop(
+    rates: dict[tuple[str, str], float], min_gain: float = 1e-9
+) -> list[str] | None:
     """`{(have, want): rate}` → a loop of currency ids whose rates multiply above 1, or None.
     `rate` = units of `want` per unit of `have`; weight = -log(rate), so a loop multiplying to
     m weighs -log(m). `min_gain` is `tol` in those log units (≈ the fractional gain when small):

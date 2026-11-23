@@ -6,6 +6,7 @@ once the spike ages out of the recent window. The ack set is `{sig_key: acked_at
 user kv `signals_ack`; these helpers annotate the read surface, count what's unseen, merge new
 dismissals, and prune acks whose signal is gone so the set stays bounded.
 """
+
 from __future__ import annotations
 
 from . import analytics, db, movers
@@ -43,7 +44,9 @@ def prune(ack: dict, signals: list[dict]) -> dict:
 def _fired():
     """(league, signals) from the sidecar's cache — empty when it hasn't run (graceful degrade)."""
     with db.q() as c:
-        blob = analytics.read_cache(c, "discords", "current")   # {league, signals}, or None
+        blob = analytics.read_cache(
+            c, "discords", "current"
+        )  # {league, signals}, or None
     league = blob.get("league") if blob else movers.current_league()
     return league, ((blob.get("signals") or []) if blob else [])
 
@@ -52,7 +55,11 @@ def read() -> dict:
     """The /api/signals payload. READ-ONLY: never writes the ack set."""
     league, signals = _fired()
     ack = db.kv_get("signals_ack", {}) or {}
-    return {"league": league, "signals": annotate(signals, ack), "unseen": unseen_count(signals, ack)}
+    return {
+        "league": league,
+        "signals": annotate(signals, ack),
+        "unseen": unseen_count(signals, ack),
+    }
 
 
 def ack(keys, all_fired: bool, now: int) -> dict:
@@ -60,5 +67,7 @@ def ack(keys, all_fired: bool, now: int) -> dict:
     gone. Returns the /api/signals/ack payload."""
     _league, signals = _fired()
     to_ack = [sig_key(s) for s in signals] if all_fired else (keys or [])
-    merged = db.kv_update("signals_ack", lambda a: prune(merge(a or {}, to_ack, now), signals), {})
+    merged = db.kv_update(
+        "signals_ack", lambda a: prune(merge(a or {}, to_ack, now), signals), {}
+    )
     return {"ok": True, "unseen": unseen_count(signals, merged)}

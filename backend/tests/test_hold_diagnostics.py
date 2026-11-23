@@ -1,4 +1,5 @@
 """The pure pieces of ops/hold-diagnostics.py (the measurements behind Hold's crash conclusions)."""
+
 import importlib.util
 from pathlib import Path
 
@@ -6,7 +7,10 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 def _hd():
-    spec = importlib.util.spec_from_file_location("hold_diagnostics", ROOT / "ops" / "hold-diagnostics.py")
+    spec = importlib.util.spec_from_file_location(
+        "hold_diagnostics", ROOT / "ops" / "hold-diagnostics.py"
+    )
+    assert spec is not None and spec.loader is not None
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
@@ -22,8 +26,10 @@ def test_auc_is_one_for_a_perfect_sign_and_half_for_none():
 
 def test_a_never_crashing_list_ties_when_nothing_on_the_board_crashes():
     hd = _hd()
-    assert hd.p_zero(40, 0) == 1.0            # no crashes: every random list ties → 50th percentile
-    assert hd.p_zero(40, 35) == 0.0           # too few survivors for a clean 10-item list
+    assert (
+        hd.p_zero(40, 0) == 1.0
+    )  # no crashes: every random list ties → 50th percentile
+    assert hd.p_zero(40, 35) == 0.0  # too few survivors for a clean 10-item list
     assert 0 < hd.p_zero(40, 5) < 1
 
 

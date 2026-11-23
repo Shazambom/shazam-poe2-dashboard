@@ -17,17 +17,16 @@ and dependency-free so a request can never depend on a heavy import (see CLAUDE.
 "Heavy analytics"). Computed live from the in-memory graph — nothing is persisted, so it
 touches no DB and needs no snapshot.
 """
+
 from __future__ import annotations
 
-
-DAMPING = 0.85           # PageRank teleport/follow split (standard 0.85)
-_MAX_ITER = 100          # power-iteration cap (converges in ~tens on these small graphs)
-_TOL = 1e-9              # L1 convergence threshold
-BRIDGE_TOP_K = 12        # betweenness enumerated among the K most valuable currencies
-BRIDGE_MAX_STEPS = 3     # ...over paths this long, whatever the route search's max_steps: at 5 the all-pairs walk
-                         # took ~36s per Convert (2026-10-05) for a score that only breaks genuine ties
-HUB_N = 5                # how many currencies get the Board hub chip
-
+DAMPING = 0.85  # PageRank teleport/follow split (standard 0.85)
+_MAX_ITER = 100  # power-iteration cap (converges in ~tens on these small graphs)
+_TOL = 1e-9  # L1 convergence threshold
+BRIDGE_TOP_K = 12  # betweenness enumerated among the K most valuable currencies
+BRIDGE_MAX_STEPS = 3  # ...over paths this long, whatever the route search's max_steps: at 5 the all-pairs walk
+# took ~36s per Convert (2026-10-05) for a score that only breaks genuine ties
+HUB_N = 5  # how many currencies get the Board hub chip
 
 
 def _weights(g, rv: dict[str, float]) -> dict[tuple[str, str], float]:
@@ -35,7 +34,7 @@ def _weights(g, rv: dict[str, float]) -> dict[tuple[str, str], float]:
     source). Recipes and zero-volume/valueless edges carry no flow. This is exactly the
     measure board() already ranks counterpart markets by."""
     w: dict[tuple[str, str], float] = {}
-    for (a, b), e in g.market_edges():      # markets only; a recipe carries no flow
+    for (a, b), e in g.market_edges():  # markets only; a recipe carries no flow
         val = (e.vol_in_per_h or 0.0) * (rv.get(a) or 0.0)
         if val > 0:
             w[(a, b)] = val
@@ -50,18 +49,20 @@ def pagerank(g, rv: dict[str, float], d: float = DAMPING) -> dict[str, float]:
     n = len(nodes)
     if n == 0:
         return {}
-    out: dict[str, float] = {}          # node → total outgoing weight
-    inc: dict[str, list[tuple[str, float]]] = {}   # node → [(src, weight)]
+    out: dict[str, float] = {}  # node → total outgoing weight
+    inc: dict[str, list[tuple[str, float]]] = {}  # node → [(src, weight)]
     for (a, b), val in w.items():
         out[a] = out.get(a, 0.0) + val
         inc.setdefault(b, []).append((a, val))
-    pr = {x: 1.0 / n for x in nodes}
+    pr = dict.fromkeys(nodes, 1.0 / n)
     for _ in range(_MAX_ITER):
         dangling = sum(pr[x] for x in nodes if out.get(x, 0.0) == 0.0)
         base = (1.0 - d) / n + d * dangling / n
-        nxt = {x: base for x in nodes}
+        nxt = dict.fromkeys(nodes, base)
         for b, srcs in inc.items():
-            nxt[b] += d * sum(pr[a] * val / out[a] for a, val in srcs if out.get(a, 0.0) > 0)
+            nxt[b] += d * sum(
+                pr[a] * val / out[a] for a, val in srcs if out.get(a, 0.0) > 0
+            )
         if sum(abs(nxt[x] - pr[x]) for x in nodes) < _TOL:
             pr = nxt
             break
@@ -69,8 +70,9 @@ def pagerank(g, rv: dict[str, float], d: float = DAMPING) -> dict[str, float]:
     return pr
 
 
-def betweenness_lite(g, rv: dict[str, float], top_k: int = BRIDGE_TOP_K,
-                     max_steps: int | None = None) -> dict[str, float]:
+def betweenness_lite(
+    g, rv: dict[str, float], top_k: int = BRIDGE_TOP_K, max_steps: int | None = None
+) -> dict[str, float]:
     """BRIDGE score: fraction of enumerated top-K routes that pass through each node as an
     intermediate. Reuses `Graph.iter_paths` (the route-search DFS), bounded to ordered pairs
     among the `top_k` most valuable currencies and the same MAX_CANDIDATES cap the route
@@ -82,7 +84,12 @@ def betweenness_lite(g, rv: dict[str, float], top_k: int = BRIDGE_TOP_K,
     memo = getattr(g, "_betweenness_memo", None)
     # Only reuse cache when iter_paths hasn't been monkeypatched on the instance (tests)
     patched = "iter_paths" in getattr(g, "__dict__", ())
-    if not patched and memo and memo[0] is rv and memo[1] == (len(g.edges), top_k, max_steps):
+    if (
+        not patched
+        and memo
+        and memo[0] is rv
+        and memo[1] == (len(g.edges), top_k, max_steps)
+    ):
         return memo[2]
     nodes = {a for a, _ in g.edges} | {b for _, b in g.edges}
     ranked = sorted(nodes, key=lambda x: rv.get(x, 0.0), reverse=True)[:top_k]
@@ -92,13 +99,13 @@ def betweenness_lite(g, rv: dict[str, float], top_k: int = BRIDGE_TOP_K,
         for dst in ranked:
             if src == dst:
                 continue
-            seen = 0
-            for path in g.iter_paths(src, dst, max_steps):
-                seen += 1
+            for seen, path in enumerate(g.iter_paths(src, dst, max_steps), 1):
                 if seen > MAX_CANDIDATES:
                     break
                 total += 1
-                for e in path[:-1]:          # every edge's dst except the final one = intermediates
+                for e in path[
+                    :-1
+                ]:  # every edge's dst except the final one = intermediates
                     counts[e.dst] = counts.get(e.dst, 0.0) + 1.0
     res = {k: v / total for k, v in counts.items()} if total else {}
     if not patched:
@@ -108,14 +115,16 @@ def betweenness_lite(g, rv: dict[str, float], top_k: int = BRIDGE_TOP_K,
 
 def _rank(g, rv: dict[str, float]) -> list[str]:
     pr = pagerank(g, rv)
-    return sorted(pr, key=pr.get, reverse=True)
+    return sorted(pr, key=pr.__getitem__, reverse=True)
 
 
 def hubs(g, rv: dict[str, float], n: int = HUB_N) -> set[str]:
     """The top-`n` most central currencies by PageRank — the set the Board hub chip lights. The ranking
     is computed once per graph state (the Board, Capital and the route search all ask for it, at
     different `n`); a graph that gains or loses edges, or a different value table, ranks again."""
-    memo = getattr(g, "_hub_rank", None)      # (value table, edge count, ranking); holding rv keeps its id unique
+    memo = getattr(
+        g, "_hub_rank", None
+    )  # (value table, edge count, ranking); holding rv keeps its id unique
     if not memo or memo[0] is not rv or memo[1] != len(g.edges):
         memo = (rv, len(g.edges), _rank(g, rv))
         g._hub_rank = memo

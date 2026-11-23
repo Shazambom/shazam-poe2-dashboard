@@ -11,12 +11,15 @@ Two layers:
 
 No new tables, no snapshot bump — the weights ride the existing `analytics_cache` (kind 'arc').
 """
+
 from __future__ import annotations
 
 from . import analytics, db, holdscore
 
-HORIZON = 7            # project a week forward — leagues are short, so a short arc is the honest one
-WINDOW_THRESH = 0.03   # min projected swing (±3%) before we flag a buy/sell window
+HORIZON = (
+    7  # project a week forward — leagues are short, so a short arc is the honest one
+)
+WINDOW_THRESH = 0.03  # min projected swing (±3%) before we flag a buy/sell window
 
 
 def _windows(arc: list[dict]) -> list[dict]:
@@ -54,14 +57,22 @@ def project(item_id, cur_per: dict, past: list, weights=None, horizon: int = HOR
             continue
         weighted = weighted or pr["weighted"]
         mean, band = pr["pred"], pr["band"]
-        arc.append({
-            "age": N + d,
-            "pred_pct": round(mean * 100, 1),
-            "lo_pct": round((mean - band) * 100, 1),
-            "hi_pct": round((mean + band) * 100, 1),
-            "price": round(cur_price * (1 + mean), 6),
-        })
-    return {"cur_age": N, "history": history, "arc": arc, "windows": _windows(arc), "weighted": weighted}
+        arc.append(
+            {
+                "age": N + d,
+                "pred_pct": round(mean * 100, 1),
+                "lo_pct": round((mean - band) * 100, 1),
+                "hi_pct": round((mean + band) * 100, 1),
+                "price": round(cur_price * (1 + mean), 6),
+            }
+        )
+    return {
+        "cur_age": N,
+        "history": history,
+        "arc": arc,
+        "windows": _windows(arc),
+        "weighted": weighted,
+    }
 
 
 def _phase(day):
@@ -85,9 +96,16 @@ def context(numeraire: str = "divine") -> dict:
     day = max((max(s) for s in cur.values() if s), default=None)
     with db.q() as c:
         blob = analytics.read_cache(c, "arc", "current")
-    resembles = blob.get("resembles") if blob and blob.get("league") == cur_name else None
-    return {"league": cur_name, "day": day, "phase": _phase(day),
-            "resembles": resembles, "weighted": bool(resembles)}
+    resembles = (
+        blob.get("resembles") if blob and blob.get("league") == cur_name else None
+    )
+    return {
+        "league": cur_name,
+        "day": day,
+        "phase": _phase(day),
+        "resembles": resembles,
+        "weighted": bool(resembles),
+    }
 
 
 def _resolve_item(meta: dict, item) -> tuple[int | None, str]:
@@ -103,8 +121,9 @@ def _resolve_item(meta: dict, item) -> tuple[int | None, str]:
     want = str(item).strip().lower()
     from .currencies import registry
     from .leaguehistory import _slug
+
     names = {want}
-    cur = registry.by_id.get(want)                 # a trade id ("chaos") names its item
+    cur = registry.by_id.get(want)  # a trade id ("chaos") names its item
     if cur:
         names.add(cur.name.lower())
     for iid, (name, _cat) in meta.items():
@@ -113,7 +132,9 @@ def _resolve_item(meta: dict, item) -> tuple[int | None, str]:
     return None, str(item)
 
 
-def pick_numeraire(item_id, num_id: int, num_name: str, ranked_names: list[str], meta: dict) -> tuple[int, str]:
+def pick_numeraire(
+    item_id, num_id: int, num_name: str, ranked_names: list[str], meta: dict
+) -> tuple[int, str]:
     """Nothing is priced in itself (Divine's arc in Divine is a flat 1.0 line). When the item IS the
     numeraire, the VOLUME RULE picks the replacement: the item's highest-traded-value counterpart
     that has daily history to price against. `ranked_names` = counterpart names, biggest market
@@ -130,14 +151,18 @@ def pick_numeraire(item_id, num_id: int, num_name: str, ranked_names: list[str],
 
 def _counterpart_names(item_name: str) -> list[str]:
     """The item's exchange counterparts by traded value (board.counterparts_by_volume), as names."""
-    from . import arbitrage                    # lazy: arbitrage pulls the whole graph stack
+    from . import arbitrage  # lazy: arbitrage pulls the whole graph stack
     from .arbitrage.board import counterparts_by_volume
     from .currencies import registry
+
     slug = registry.lookup_name(item_name.strip().lower())
     if slug is None:
         return []
     g = arbitrage.cached_graph()
-    return [registry.name(other) for _volr, other in counterparts_by_volume(g, g.values()).get(slug, [])]
+    return [
+        registry.name(other)
+        for _volr, other in counterparts_by_volume(g, g.values()).get(slug, [])
+    ]
 
 
 def arc_for(item, numeraire: str = "divine") -> dict:
@@ -147,22 +172,28 @@ def arc_for(item, numeraire: str = "divine") -> dict:
     # Divine: an omen's arc against Divine answered a question nobody asked on a card reading in
     # Chaos. Any currency with daily history can be the numeraire; anchors keep their short slugs.
     meta0 = holdscore.read_meta()
-    num_id, num_name = holdscore.NUMERAIRES.get(numeraire, (None, None))
-    if num_id is None:
+    anchor = holdscore.NUMERAIRES.get(numeraire)
+    if anchor is not None:
+        num_id, num_name = anchor
+    else:
         num_id, num_name = _resolve_item(meta0, numeraire)
         if num_id is None:
             numeraire = "divine"
             num_id, num_name = holdscore.NUMERAIRES["divine"]
     item_id, item_name = _resolve_item(meta0, item)
     if item_id is not None and item_id == num_id:
-        picked_id, picked_name = pick_numeraire(item_id, num_id, num_name, _counterpart_names(item_name), meta0)
+        picked_id, picked_name = pick_numeraire(
+            item_id, num_id, num_name, _counterpart_names(item_name), meta0
+        )
         if picked_id != item_id:
             num_id, num_name, numeraire = picked_id, picked_name, picked_name
     cur_name, cur, past, meta = holdscore.build_context(num_id)
     if item_id is None and meta is not meta0:
         item_id, item_name = _resolve_item(meta, item)
         if item_id is not None and item_id == num_id:
-            num_id, num_name = pick_numeraire(item_id, num_id, num_name, _counterpart_names(item_name), meta)
+            num_id, num_name = pick_numeraire(
+                item_id, num_id, num_name, _counterpart_names(item_name), meta
+            )
             if num_id != item_id:
                 numeraire = num_name
                 cur_name, cur, past, meta = holdscore.build_context(num_id)
@@ -174,13 +205,25 @@ def arc_for(item, numeraire: str = "divine") -> dict:
         weights = blob.get("weights") or None
         resembles = blob.get("resembles")
 
-    base = {"league": cur_name, "item": item_name, "item_id": item_id, "numeraire": numeraire,
-            "numeraire_name": num_name, "resembles": resembles,
-            "cur_age": None, "history": [], "arc": [], "windows": [], "weighted": False}
+    base = {
+        "league": cur_name,
+        "item": item_name,
+        "item_id": item_id,
+        "numeraire": numeraire,
+        "numeraire_name": num_name,
+        "resembles": resembles,
+        "cur_age": None,
+        "history": [],
+        "arc": [],
+        "windows": [],
+        "weighted": False,
+    }
     if item_id is None:
         return base
     proj = project(item_id, cur, past, weights)
     if proj:
         base.update(proj)
-        base["resembles"] = resembles if base["weighted"] else None   # only claim a match if used
+        base["resembles"] = (
+            resembles if base["weighted"] else None
+        )  # only claim a match if used
     return base

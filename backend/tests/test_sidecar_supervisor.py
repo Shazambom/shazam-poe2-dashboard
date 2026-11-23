@@ -7,11 +7,12 @@ each time, and on beta one telemetry post per second.
 
     DATA_DIR=$(mktemp -d) MARKET_SEED= python -m pytest backend/tests/test_sidecar_supervisor.py -q
 """
+
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # backend/
-from app import sidecar_supervisor as sup  # noqa: E402
+from app import sidecar_supervisor as sup
 
 
 def _run(monkeypatch, lifetimes):
@@ -30,6 +31,7 @@ def _run(monkeypatch, lifetimes):
         clock[0] += s
         if not runs:
             sup._stop = True
+
     monkeypatch.setattr(sup.subprocess, "Popen", lambda *a, **k: Child())
     monkeypatch.setattr(sup.time, "sleep", fake_sleep)
     monkeypatch.setattr(sup.time, "monotonic", lambda: clock[0])

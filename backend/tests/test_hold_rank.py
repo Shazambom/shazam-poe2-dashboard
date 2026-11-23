@@ -20,19 +20,22 @@ The contract (`holdscore.hold_rank`), every signal measured on smoothed prices (
 
     python -m pytest backend/tests/test_hold_rank.py -q
 """
+
 import importlib.util
 import math
 import random
 import statistics
-import os
 import sys
 from pathlib import Path
 
 import pytest
 
-ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / "backend"))
-from app import holdscore  # noqa: E402
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from app import holdscore
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _proddb import PROD_DB  # (opt-in: ARBITER_PROD_TESTS=1)
+from _proddb import prod as _prod
 
 
 def series(prices, value=1e8):
@@ -51,7 +54,9 @@ def spiked(p0, days, jump_at, jump):
 
 def universe(t=24, extra=()):
     """A day's board: filler at mid prices so percentile ranks mean something, plus `extra`."""
-    fill = [(100 + i, series(steady(5 + i, 0.005 * (i % 5 - 2), t + 1))) for i in range(20)]
+    fill = [
+        (100 + i, series(steady(5 + i, 0.005 * (i % 5 - 2), t + 1))) for i in range(20)
+    ]
     return fill + list(extra)
 
 
@@ -62,6 +67,7 @@ def order(entries, t=24, k=None):
 
 # ----------------------------------------------------------------- 1. what the list favours
 
+
 def test_a_steady_expensive_holder_outranks_a_cheap_item_that_just_jumped():
     """The owner's complaint, stated as a test: Perfect Flux leapt in the last days; Hinekora's Lock
     climbed steadily and costs a thousand times more. The Lock ranks first."""
@@ -69,7 +75,9 @@ def test_a_steady_expensive_holder_outranks_a_cheap_item_that_just_jumped():
     flux = (2, series(spiked(12.0, 25, 22, 2.2)))
     ranked = order(universe(extra=[lock, flux]))
     assert ranked.index(1) < ranked.index(2)
-    assert ranked.index(2) >= 5, "a last-days jump alone must not carry an item near the top"
+    assert ranked.index(2) >= 5, (
+        "a last-days jump alone must not carry an item near the top"
+    )
 
 
 def test_a_jump_in_the_last_days_does_not_count_as_kept_value():
@@ -77,6 +85,8 @@ def test_a_jump_in_the_last_days_does_not_count_as_kept_value():
     base = steady(10.0, 0.01, 22)
     a = holdscore._signals(series(base + [base[-1] * 1.01] * 3), 24)
     b = holdscore._signals(series(base + [base[-1] * 3.0] * 3), 24)
+    assert a is not None
+    assert b is not None
     assert a["kept"] == pytest.approx(b["kept"])
 
 
@@ -85,7 +95,9 @@ def test_one_odd_close_is_not_a_crash():
     −18.9% raw, −7.7% smoothed on Forbidden Rites) is not a drawdown."""
     p = steady(4000.0, 0.01, 25)
     p[15] *= 0.80
-    assert holdscore._signals(series(p), 24)["dip"] > -0.05
+    signals = holdscore._signals(series(p), 24)
+    assert signals is not None
+    assert signals["dip"] > -0.05
 
 
 def test_before_discovery_settles_only_price_and_a_smooth_path_rank():
@@ -102,7 +114,9 @@ def test_before_discovery_settles_only_price_and_a_smooth_path_rank():
 def test_better_on_every_signal_never_ranks_lower():
     """Monotone: an asset at least as good on every signal, and better on one, ranks at least as
     high — at every Caution position the slider can reach."""
-    ents = universe(extra=[(1, series(steady(50.0, 0.03, 25))), (2, series(steady(40.0, 0.02, 25)))])
+    ents = universe(
+        extra=[(1, series(steady(50.0, 0.03, 25))), (2, series(steady(40.0, 0.02, 25)))]
+    )
     lo, hi = holdscore.CAUTION_RANGE
     for k in (lo, 1.0, holdscore.CAUTION_K, hi):
         sc = holdscore.hold_rank(ents, 24, k)
@@ -116,6 +130,7 @@ def test_scores_are_finite_and_bounded():
 
 
 # ------------------------------------------------------- 1b. the record from earlier leagues
+
 
 def _past(**items):
     """One earlier league: {item_id: prices by league-day}."""
@@ -161,9 +176,17 @@ def test_this_leagues_climb_counts_once():
 # ------------------------------------------------------ 1c. each league regime ranks its own way
 # docs/hold-research.md "Regimes": price is safety early and a drag mid-league; late, momentum reverses.
 
-EARLY = lambda t: {"early": 1.0, "mid": 0.0, "late": 0.0}   # noqa: E731
-MID = lambda t: {"early": 0.0, "mid": 1.0, "late": 0.0}     # noqa: E731
-LATE = lambda t: {"early": 0.0, "mid": 0.0, "late": 1.0}    # noqa: E731
+
+def EARLY(t):
+    return {"early": 1.0, "mid": 0.0, "late": 0.0}
+
+
+def MID(t):
+    return {"early": 0.0, "mid": 1.0, "late": 0.0}
+
+
+def LATE(t):
+    return {"early": 0.0, "mid": 0.0, "late": 1.0}
 
 
 def test_without_a_regime_the_ranking_is_the_early_set():
@@ -193,9 +216,15 @@ def test_late_league_does_not_chase_momentum():
 
 
 def test_a_blend_of_regimes_blends_the_weights():
-    w = holdscore._regime_weights({"early": 0.5, "mid": 0.5, "late": 0.0}, holdscore.CAUTION_K, 24)
-    e = holdscore._regime_weights({"early": 1.0, "mid": 0.0, "late": 0.0}, holdscore.CAUTION_K, 24)
-    m = holdscore._regime_weights({"early": 0.0, "mid": 1.0, "late": 0.0}, holdscore.CAUTION_K, 24)
+    w = holdscore._regime_weights(
+        {"early": 0.5, "mid": 0.5, "late": 0.0}, holdscore.CAUTION_K, 24
+    )
+    e = holdscore._regime_weights(
+        {"early": 1.0, "mid": 0.0, "late": 0.0}, holdscore.CAUTION_K, 24
+    )
+    m = holdscore._regime_weights(
+        {"early": 0.0, "mid": 1.0, "late": 0.0}, holdscore.CAUTION_K, 24
+    )
     for name in set(e) | set(m):
         assert w.get(name, 0) == pytest.approx((e.get(name, 0) + m.get(name, 0)) / 2)
 
@@ -203,6 +232,7 @@ def test_a_blend_of_regimes_blends_the_weights():
 # ------------------------------------------------ 1d. a settled market vetoes items that are sliding
 # docs/hold-research.md "Loop 5": down-vs-up volatility (Chen, Hong & Stein 2001 DUVOL) flags crashes;
 # thin-market noise is symmetric, a real slide falls harder than it rises. Only once prices have settled.
+
 
 def slide(p0, days, up=0.01, down=0.07):
     """A slide that survives the 3-day smoothing: three small rises, then two sharp falls, repeating."""
@@ -229,49 +259,63 @@ def noisy_universe(extra=()):
 
 
 def test_symmetric_noise_is_not_a_slide():
-    readings = [holdscore._duvol(series(noisy(100.0, 25, seed)), 24) for seed in range(40)]
+    readings = [
+        holdscore._duvol(series(noisy(100.0, 25, seed)), 24) for seed in range(40)
+    ]
     readings = [r for r in readings if r is not None]
     assert len(readings) > 30 and abs(statistics.fmean(readings)) < 0.15
-    assert holdscore._duvol(series(slide(100.0, 25)), 24) > 0.2
+    slide_reading = holdscore._duvol(series(slide(100.0, 25)), 24)
+    assert slide_reading is not None
+    assert slide_reading > 0.2
 
 
 def test_a_settled_market_vetoes_a_sliding_top_pick_and_discovery_does_not():
     """In a settled market (MID) no flagged item stays in the top 10 while an unflagged one waits below;
     during discovery (EARLY) the veto doesn't run."""
-    climbers = [(i, series(slide(900.0 + i, 25, up=0.04, down=0.03))) for i in range(1, 3)]
+    climbers = [
+        (i, series(slide(900.0 + i, 25, up=0.04, down=0.03))) for i in range(1, 3)
+    ]
     ents = noisy_universe(climbers)
     flags = holdscore._crash_flags(ents, 24)
     raw = holdscore._hold_scores(ents, 24, None, (), MID)
     mid = holdscore.hold_rank(ents, 24, regime=MID)
     early = holdscore.hold_rank(ents, 24, regime=EARLY)
-    top = lambda sc: sorted(sc, key=lambda i: -sc[i])[:holdscore.VETO_TOP]  # noqa: E731
-    vetoed_before = [i for i in top(raw) if flags.get(i)][:holdscore.VETO_MAX]
-    assert vetoed_before, "the fixture must put a flagged item in the top 10, or this test checks nothing"
+
+    def top(sc):
+        return sorted(sc, key=lambda i: -sc[i])[: holdscore.VETO_TOP]
+
+    vetoed_before = [i for i in top(raw) if flags.get(i)][: holdscore.VETO_MAX]
+    assert vetoed_before, (
+        "the fixture must put a flagged item in the top 10, or this test checks nothing"
+    )
     assert all(i not in top(mid) for i in vetoed_before)
     assert early == holdscore._hold_scores(ents, 24, None, (), EARLY)
 
 
 def test_a_vetoed_slot_goes_to_an_unflagged_item_never_to_another_flagged_one():
     """Rank 2 is flagged and so is rank 11, right below the list: the freed slot goes to rank 12."""
-    sc = {i: 1.0 - i / 100 for i in range(1, 16)}           # item i is ranked i
+    sc = {i: 1.0 - i / 100 for i in range(1, 16)}  # item i is ranked i
     flags = {i: i in (2, 11) for i in sc}
     out = holdscore._apply_veto(sc, flags)
-    top = sorted(out, key=lambda i: -out[i])[:holdscore.VETO_TOP]
+    top = sorted(out, key=lambda i: -out[i])[: holdscore.VETO_TOP]
     assert 2 not in top and 11 not in top and 12 in top
-    assert sorted(out.values(), reverse=True) == sorted(sc.values(), reverse=True)   # same values, new order
+    assert sorted(out.values(), reverse=True) == sorted(
+        sc.values(), reverse=True
+    )  # same values, new order
 
 
 def test_the_veto_removes_at_most_three_a_day():
     sliders = [(i, series(slide(50.0 + i, 25))) for i in range(1, 8)]
     ents = universe(extra=sliders)
     base = holdscore.hold_rank(ents, 24, regime=MID)
-    top_ids = set(sorted(base, key=lambda i: -base[i])[:holdscore.VETO_TOP])
+    top_ids = set(sorted(base, key=lambda i: -base[i])[: holdscore.VETO_TOP])
     raw = holdscore._hold_scores(ents, 24, None, (), MID)
-    raw_top = set(sorted(raw, key=lambda i: -raw[i])[:holdscore.VETO_TOP])
+    raw_top = set(sorted(raw, key=lambda i: -raw[i])[: holdscore.VETO_TOP])
     assert len(raw_top - top_ids) <= holdscore.VETO_MAX
 
 
 # --------------------------------------------------------------------- 2. the Caution slider
+
 
 def test_caution_zero_ignores_the_dip_and_high_caution_favours_the_steadier_asset():
     """The slider keeps its meaning: 0 = the dip doesn't count; up = steadier wins."""
@@ -295,11 +339,12 @@ def test_a_garbage_k_cannot_reach_the_rank():
 
 # --------------------------------------------------------------------------- 3. it settles
 
+
 def test_one_day_does_not_reshuffle_the_list():
     """Scores average the last SETTLE_DAYS days, so one day's move can't flip two close assets."""
     a = steady(30.0, 0.020, 25)
     b = steady(30.0, 0.021, 25)
-    b[24] *= 1.5          # one hot close today
+    b[24] *= 1.5  # one hot close today
     ents = universe(extra=[(1, series(a)), (2, series(b))])
     one = holdscore._rank_day(ents, 24, holdscore.CAUTION_K)
     settled = holdscore.hold_rank(ents, 24)
@@ -308,12 +353,15 @@ def test_one_day_does_not_reshuffle_the_list():
 
 # ---------------------------------------------------------------- 4. the smoke test, real DB
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _proddb import PROD_DB, prod as _prod  # noqa: E402  (opt-in: ARBITER_PROD_TESTS=1)
+
+ROOT = Path(__file__).resolve().parents[2]
 
 
 def _backtest():
-    spec = importlib.util.spec_from_file_location("hold_backtest", ROOT / "ops" / "hold-backtest.py")
+    spec = importlib.util.spec_from_file_location(
+        "hold_backtest", ROOT / "ops" / "hold-backtest.py"
+    )
+    assert spec is not None and spec.loader is not None
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
@@ -331,4 +379,6 @@ def test_hold_passes_its_smoke_test_on_the_current_league_at_every_horizon():
     window = res.pop("window")
     misses = {label: bt.verdict(r["all"]) for label, r in res.items() if r["all"]}
     assert misses and all(not m for m in misses.values()), f"{league}: {misses}"
-    assert bt.window_verdict(window) == [], f"{league}: the window must move the board ({window})"
+    assert bt.window_verdict(window) == [], (
+        f"{league}: the window must move the board ({window})"
+    )

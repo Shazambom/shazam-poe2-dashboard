@@ -11,24 +11,29 @@ cycle, and it only searches for a cycle THROUGH that vertex) and returning cycle
 sum below zero (a zero-weight self-loop) on ~0.1%. `test_networkx_recovery_gap_is_covered`
 pins that ours answers exactly there. That is why this module is not a networkx port.
 
-networkx is never bundled; it lives in the sidecar venv with the other reference libraries:
+networkx is a test dependency and lives in the test venv:
 
-    desktop/.venv-sidecar/bin/python -m pytest backend/tests/test_negcycle_networkx.py -q
+    .venv-test/bin/python -m pytest backend/tests/test_negcycle_networkx.py -q
 """
+
 import random
 import sys
 from pathlib import Path
 
+import networkx as nx
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # backend/
-sys.path.insert(0, str(Path(__file__).resolve().parent))      # tests/ (shared fuzz helpers)
-from app import negcycle as nc  # noqa: E402
-from test_negcycle import IMPLS, INF, assert_negative_cycle, best_weight, random_graph, run  # noqa: E402
-
-# Missing → not the sidecar venv: skip loudly rather than silently pass (a green run must mean
-# the comparison actually happened).
-nx = pytest.importorskip("networkx", reason="run in desktop/.venv-sidecar (needs real networkx)")
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # tests/ (shared fuzz helpers)
+from app import negcycle as nc
+from test_negcycle import (
+    IMPLS,
+    INF,
+    assert_negative_cycle,
+    best_weight,
+    random_graph,
+    run,
+)
 
 
 def _nx_graph(n, edges):
@@ -57,6 +62,7 @@ def test_fuzz_distances_and_verdict_match_networkx(impl, kind):
         if want is None:
             assert_negative_cycle(edges, got[1])
         else:
+            assert got[0] == "ok"
             assert got[1].tolist() == [want.get(v, INF) for v in range(n)], (kind, seed)
 
         # source=None == "a negative cycle anywhere" == networkx's whole-graph verdict
@@ -77,9 +83,9 @@ def test_networkx_recovery_gap_is_covered():
         G, W = _nx_graph(n, edges), best_weight(edges)
         for source in range(n):
             try:
-                theirs = nx.find_negative_cycle(G, source)          # closed list: first == last
-                if sum(W[(a, b)] for a, b in zip(theirs, theirs[1:])) < 0:
-                    continue                                        # networkx got it right
+                theirs = nx.find_negative_cycle(G, source)  # closed list: first == last
+                if sum(W[(a, b)] for a, b in zip(theirs, theirs[1:], strict=False)) < 0:
+                    continue  # networkx got it right
             except nx.NetworkXError as e:
                 if "No negative cycles" in str(e):
                     assert nc.find_negative_cycle(n, *_arr(edges), source) is None
@@ -88,9 +94,11 @@ def test_networkx_recovery_gap_is_covered():
             ours = nc.find_negative_cycle(n, *_arr(edges), source)
             assert ours is not None, (seed, source)
             assert_negative_cycle(edges, ours)
-    assert gaps > 0, "fuzz no longer reaches networkx's gap — widen it or drop this test"
+    assert gaps > 0, (
+        "fuzz no longer reaches networkx's gap — widen it or drop this test"
+    )
 
 
 def _arr(edges):
-    u, v, w = zip(*edges) if edges else ((), (), ())
+    u, v, w = zip(*edges, strict=False) if edges else ((), (), ())
     return list(u), list(v), list(w)

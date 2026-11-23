@@ -8,6 +8,7 @@
 the tests and the cross-language fixture. `python -m arbseal keygen <keyId>` mints the owner
 keypair: the PEM stays on shazam (0600, never committed); the printed base64 goes into seal.js.
 """
+
 from __future__ import annotations
 
 import base64
@@ -15,7 +16,10 @@ import os
 import sys
 
 from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey, X25519PublicKey
+from cryptography.hazmat.primitives.asymmetric.x25519 import (
+    X25519PrivateKey,
+    X25519PublicKey,
+)
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 
@@ -33,8 +37,12 @@ def _raw_pub(key: X25519PublicKey) -> bytes:
     return key.public_bytes(serialization.Encoding.Raw, serialization.PublicFormat.Raw)
 
 
-def _derive(priv: X25519PrivateKey, pub: X25519PublicKey, eph_pub: bytes, owner_pub: bytes) -> bytes:
-    return HKDF(algorithm=hashes.SHA256(), length=32, salt=eph_pub + owner_pub, info=INFO).derive(priv.exchange(pub))
+def _derive(
+    priv: X25519PrivateKey, pub: X25519PublicKey, eph_pub: bytes, owner_pub: bytes
+) -> bytes:
+    return HKDF(
+        algorithm=hashes.SHA256(), length=32, salt=eph_pub + owner_pub, info=INFO
+    ).derive(priv.exchange(pub))
 
 
 def seal(plain: bytes, owner_pub: bytes, key_id: int = KEY_ID) -> bytes:
@@ -55,8 +63,10 @@ def open_sealed(data: bytes, private_key: X25519PrivateKey) -> bytes:
         raise ArbError("ARB_BAD_MAGIC")
     header, eph_pub, nonce, body = data[:5], data[5:37], data[37:49], data[49:]
     owner_pub = _raw_pub(private_key.public_key())
-    key = _derive(private_key, X25519PublicKey.from_public_bytes(eph_pub), eph_pub, owner_pub)
-    return AESGCM(key).decrypt(nonce, body, header)   # InvalidTag on any tampering
+    key = _derive(
+        private_key, X25519PublicKey.from_public_bytes(eph_pub), eph_pub, owner_pub
+    )
+    return AESGCM(key).decrypt(nonce, body, header)  # InvalidTag on any tampering
 
 
 def keygen(key_id: int) -> str:
@@ -64,12 +74,20 @@ def keygen(key_id: int) -> str:
     the raw public key as base64."""
     path = f"feedback-key-{key_id}.pem"
     priv = X25519PrivateKey.generate()
-    pem = priv.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption())
-    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)   # O_EXCL: refuse to overwrite
+    pem = priv.private_bytes(
+        serialization.Encoding.PEM,
+        serialization.PrivateFormat.PKCS8,
+        serialization.NoEncryption(),
+    )
+    fd = os.open(
+        path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600
+    )  # O_EXCL: refuse to overwrite
     with os.fdopen(fd, "wb") as f:
         f.write(pem)
     pub = base64.b64encode(_raw_pub(priv.public_key())).decode()
-    with open(f"feedback-key-{key_id}.pub", "w") as f:   # the public half: what the app ships
+    with open(
+        f"feedback-key-{key_id}.pub", "w"
+    ) as f:  # the public half: what the app ships
         f.write(pub + "\n")
     return pub
 

@@ -9,6 +9,7 @@ in the job params, since only the backend knows the user's selected league).
 Column order below matches the SELECTs, so both a Row-factory connection (backend) and a plain
 connection (sidecar) index the same by position.
 """
+
 from __future__ import annotations
 
 import datetime as _dt
@@ -21,8 +22,10 @@ CURRENT_LEAGUES_KEY = "lh_current"
 
 def read_meta(conn: sqlite3.Connection) -> dict:
     """{item_id: (name, category)}."""
-    return {r[0]: (r[1], r[2]) for r in conn.execute(
-        "SELECT item_id, name, category FROM item_meta")}
+    return {
+        r[0]: (r[1], r[2])
+        for r in conn.execute("SELECT item_id, name, category FROM item_meta")
+    }
 
 
 def read_rows(conn: sqlite3.Connection, league: str | None = None) -> list:
@@ -32,16 +35,20 @@ def read_rows(conn: sqlite3.Connection, league: str | None = None) -> list:
     if league is None:
         return conn.execute(
             "SELECT league, item_id, day, close, volume FROM league_daily "
-            "WHERE close>0 ORDER BY league, day").fetchall()
+            "WHERE close>0 ORDER BY league, day"
+        ).fetchall()
     return conn.execute(
         "SELECT league, item_id, day, close, volume FROM league_daily "
-        "WHERE close>0 AND league=? ORDER BY league, day", (league,)).fetchall()
+        "WHERE close>0 AND league=? ORDER BY league, day",
+        (league,),
+    ).fetchall()
 
 
 def day_to_epoch(day: str) -> int:
     """UTC epoch seconds for a YYYY-MM-DD day string (the league_daily day key)."""
-    return int(_dt.datetime.strptime(day, "%Y-%m-%d")
-               .replace(tzinfo=_dt.timezone.utc).timestamp())
+    return int(
+        _dt.datetime.strptime(day, "%Y-%m-%d").replace(tzinfo=_dt.UTC).timestamp()
+    )
 
 
 _epoch = day_to_epoch
@@ -67,17 +74,17 @@ def change_over(pts: list, window_s: float, t=lambda p: p["t"], v=lambda p: p["v
     return base, (v(pts[-1]) - v(base)) / v(base) * 100
 
 
-def pick_league(rows: list, preferred: str, current_leagues=()) -> str | None:
+def pick_league(rows: list, preferred: str) -> str | None:
     """Which league's series to serve: the league the user selected, or NOTHING.
 
     There is no fallback on purpose (owner directive 2026-09-19). Quietly serving another
     league's prices is worse than showing nothing: Hold, Movers and the league arc would answer
     about a different economy than the Board, with no way to tell from the screen. `rows` must be
-    ORDER BY league, day; `current_leagues` is unused and kept for callers."""
+    ORDER BY league, day."""
     return preferred if any(r[0] == preferred for r in rows) else None
 
 
-def build_series(rows: list, league: str) -> dict:
+def build_series(rows: list, league: str | None) -> dict:
     """{item_id: [(t_epoch, close, value_ex)] oldest→newest} for one league. value = close*volume,
     the traded-value measure movers/holdscore already use so thin days can be floored."""
     series: dict = {}
@@ -111,11 +118,15 @@ class Anchor(NamedTuple):
 
 ANCHORS: dict[str, Anchor] = {
     "divine": Anchor(291, "Divine Orb", "Metadata/Items/Currency/CurrencyModValues"),
-    "mirror": Anchor(295, "Mirror of Kalandra", "Metadata/Items/Currency/CurrencyDuplicate"),
-    "lock": Anchor(4287, "Hinekora's Lock", "Metadata/Items/Currency/CurrencyHinekorasLock"),
+    "mirror": Anchor(
+        295, "Mirror of Kalandra", "Metadata/Items/Currency/CurrencyDuplicate"
+    ),
+    "lock": Anchor(
+        4287, "Hinekora's Lock", "Metadata/Items/Currency/CurrencyHinekorasLock"
+    ),
     "chaos": Anchor(287, "Chaos Orb", "Metadata/Items/Currency/CurrencyRerollRare"),
 }
-ANCHOR_ALIASES = {"hinekora": "lock"}   # older URL spelling, kept so links never break
+ANCHOR_ALIASES = {"hinekora": "lock"}  # older URL spelling, kept so links never break
 # Divine — the anchor whose Exalted price arc IS the league's inflation curve (see leaguearc).
 DIVINE_ID = ANCHORS["divine"].item_id
 
@@ -136,7 +147,8 @@ def item_rows(conn: sqlite3.Connection, item_id: int) -> list:
     (indexed on item_id — cheap even on the full history)."""
     return conn.execute(
         "SELECT league, day, close FROM league_daily WHERE item_id=? AND close>0 ORDER BY league, day",
-        (item_id,)).fetchall()
+        (item_id,),
+    ).fetchall()
 
 
 def league_signatures(conn: sqlite3.Connection, anchor_id: int = DIVINE_ID) -> dict:

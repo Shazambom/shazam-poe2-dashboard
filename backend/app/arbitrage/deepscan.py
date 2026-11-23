@@ -14,6 +14,7 @@ of simulating. Nothing here knows about capital, filters or ranking.
 numpy is optional at runtime: without it the scan returns nothing and the route search is
 exactly what it was.
 """
+
 from __future__ import annotations
 
 import math
@@ -22,8 +23,8 @@ import time
 from .. import devtelemetry
 from .graph import Edge, Graph
 
-MAX_LOOPS = 12        # Bellman-Ford runs per search (each ~ms-15ms on the live graph)
-MIN_GAIN = 1e-6       # log units ≈ fractional gain; below this a "loop" is float dust
+MAX_LOOPS = 12  # Bellman-Ford runs per search (each ~ms-15ms on the live graph)
+MIN_GAIN = 1e-6  # log units ≈ fractional gain; below this a "loop" is float dust
 
 
 REPORT_EVERY_S = 1800
@@ -40,20 +41,23 @@ def _report(msg: str) -> None:
     if not devtelemetry.enabled() or now - _last_report < REPORT_EVERY_S:
         return
     _last_report = now
-    devtelemetry.tlog("deepscan", msg)       # queues; never waits on the network
+    devtelemetry.tlog("deepscan", msg)  # queues; never waits on the network
 
 
 def _load():
     """(negcycle, numpy) or None — the scan degrades to nothing rather than break routes."""
     try:
         import numpy as np
+
         from .. import negcycle
     except ImportError:
         return None
     return negcycle, np
 
 
-def deep_loops(g: Graph, ref_value: dict[str, float], max_loops: int = MAX_LOOPS) -> list[list[Edge]]:
+def deep_loops(
+    g: Graph, ref_value: dict[str, float], max_loops: int = MAX_LOOPS
+) -> list[list[Edge]]:
     """Up to `max_loops` distinct profitable loops (by top-of-book rate), each a closed chain of
     the graph's own Edges: loop[i].dst == loop[i+1].src, and the last hops back to the first."""
     loaded = _load()
@@ -82,13 +86,20 @@ def deep_loops(g: Graph, ref_value: dict[str, float], max_loops: int = MAX_LOOPS
 
     loops: list[list[Edge]] = []
     while len(loops) < max_loops:
-        cyc = negcycle.find_negative_cycle(len(ids), src[alive], dst[alive], w[alive], None, MIN_GAIN)
+        cyc = negcycle.find_negative_cycle(
+            len(ids), src[alive], dst[alive], w[alive], None, MIN_GAIN
+        )
         if cyc is None:
             break
-        loop = [edges[index[(names[a], names[b])]] for a, b in zip(cyc, cyc[1:] + cyc[:1])]
+        loop = [
+            edges[index[(names[a], names[b])]]
+            for a, b in zip(cyc, cyc[1:] + cyc[:1], strict=False)
+        ]
         loops.append(loop)
         worst = max(loop, key=overpay)
         alive[index[(worst.src, worst.dst)]] = False
-    _report(f"numpy=ok nodes={len(ids)} edges={len(edges)} loops={len(loops)} "
-            f"hops={[len(l) for l in loops]} ms={(time.perf_counter() - t0) * 1000:.0f}")
+    _report(
+        f"numpy=ok nodes={len(ids)} edges={len(edges)} loops={len(loops)} "
+        f"hops={[len(loop) for loop in loops]} ms={(time.perf_counter() - t0) * 1000:.0f}"
+    )
     return loops

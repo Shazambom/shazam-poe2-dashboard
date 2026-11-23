@@ -1,17 +1,18 @@
 """bot.py's handler with discord objects faked and the spool on disk. The bot fetches only
 `arbiter-report-*.arb` attachments, decrypts (a bad tag acks ⚠️ without spooling), waits for the
 opener's result.json, moves only fixed filenames into the inbox, acks, and records the thread."""
+
 import asyncio
 import gzip
 import json
-from pathlib import Path
+from typing import ClassVar
 
 import pytest
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey
 
 import arbseal
-from bot import Handler, ATTACHMENT_RE
+from bot import ATTACHMENT_RE, Handler
 from conftest import valid_doc
 from opener import opener
 
@@ -32,7 +33,12 @@ class Author:
 
 
 class Message:
-    def __init__(self, attachments, content="", author=None, at="2026-10-02T23:54:10+00:00"):
+    id: int
+    channel: "Thread"
+
+    def __init__(
+        self, attachments, content="", author=None, at="2026-10-02T23:54:10+00:00"
+    ):
         self.attachments, self.reactions = attachments, []
         self.content, self.author = content, author or Author(7)
         self.created_at = __import__("datetime").datetime.fromisoformat(at)
@@ -45,8 +51,8 @@ class Thread:
     def __init__(self, tid, attachments, name="my report", content=""):
         self.id, self.name, self.parent_id = tid, name, 999
         self.starter = Message(attachments, content)
-        self.starter.id = tid                       # a forum post's starter shares its thread's id
-        self.messages = [self.starter]              # the thread on Discord, oldest first
+        self.starter.id = tid  # a forum post's starter shares its thread's id
+        self.messages = [self.starter]  # the thread on Discord, oldest first
         self.sent = []
         self.history_reads = 0
 
@@ -68,6 +74,7 @@ class Thread:
         async def gen():
             for m in msgs[:limit]:
                 yield m
+
         return gen()
 
     async def fetch_message(self, mid):
@@ -81,7 +88,9 @@ class Thread:
 
 def keys():
     priv = X25519PrivateKey.generate()
-    pub = priv.public_key().public_bytes(serialization.Encoding.Raw, serialization.PublicFormat.Raw)
+    pub = priv.public_key().public_bytes(
+        serialization.Encoding.Raw, serialization.PublicFormat.Raw
+    )
     return priv, pub
 
 
@@ -89,15 +98,25 @@ def sealed_report(pub, doc=None):
     return arbseal.seal(gzip.compress(json.dumps(doc or valid_doc()).encode()), pub)
 
 
+class _HandlerWithPublicKey(Handler):
+    pub: bytes
+
+
 @pytest.fixture
 def h(tmp_path):
     priv, pub = keys()
     spool, inbox = tmp_path / "spool", tmp_path / "inbox"
     # `process` stands in for the opener container: the real cell, run synchronously.
-    handler = Handler(spool=spool, inbox=inbox, private_key=priv, forum_id=999,
-                      process=lambda inp, out: opener.run_one(inp, out, wall_s=10), wait_s=5)
+    handler = _HandlerWithPublicKey(
+        spool=spool,
+        inbox=inbox,
+        private_key=priv,
+        forum_id=999,
+        process=lambda inp, out: opener.run_one(inp, out, wall_s=10),
+        wait_s=5,
+    )
     handler.pub = pub
-    handler.retry_delays = (0,)          # the real backoff schedule is test_bot_retry's
+    handler.retry_delays = (0,)  # the real backoff schedule is test_bot_retry's
     return handler
 
 
@@ -107,17 +126,39 @@ def run(coro):
 
 def test_attachment_name_rule():
     assert ATTACHMENT_RE.match("arbiter-report-7F3K2Q.arb")
-    for bad in ("arbiter-report-7F3K2Q.arb.exe", "report.arb", "arbiter-report-7f3k2q.arb", "arbiter-report-7F3K2QQ.arb", "../arbiter-report-7F3K2Q.arb"):
+    for bad in (
+        "arbiter-report-7F3K2Q.arb.exe",
+        "report.arb",
+        "arbiter-report-7f3k2q.arb",
+        "arbiter-report-7F3K2QQ.arb",
+        "../arbiter-report-7F3K2Q.arb",
+    ):
         assert not ATTACHMENT_RE.match(bad), bad
 
 
 def test_a_good_report_lands_in_the_inbox_and_is_acked(h):
     t = Thread(1001, [Attachment("arbiter-report-7F3K2Q.arb", sealed_report(h.pub))])
     assert run(h.handle(t)) == "OK"
-    assert t.starter.reactions == ["✅"] and t.sent == ["report 7F3K2Q received — thanks"]
-    got = sorted(str(p.relative_to(h.inbox / "7F3K2Q")) for p in (h.inbox / "7F3K2Q").rglob("*") if p.is_file())
-    assert got == ["discord.json", "index.html", "logs/backend.txt", "logs/main.txt", "logs/renderer.txt", "logs/updater.txt",
-                   "report.json", "screens/00-current.jpg", "screens/01-board.jpg", "status.json"]
+    assert t.starter.reactions == ["✅"] and t.sent == [
+        "report 7F3K2Q received — thanks"
+    ]
+    got = sorted(
+        str(p.relative_to(h.inbox / "7F3K2Q"))
+        for p in (h.inbox / "7F3K2Q").rglob("*")
+        if p.is_file()
+    )
+    assert got == [
+        "discord.json",
+        "index.html",
+        "logs/backend.txt",
+        "logs/main.txt",
+        "logs/renderer.txt",
+        "logs/updater.txt",
+        "report.json",
+        "screens/00-current.jpg",
+        "screens/01-board.jpg",
+        "status.json",
+    ]
     assert json.loads((h.inbox / "state.json").read_text())["last_thread_id"] == 1001
     assert not list((h.spool / "in").glob("*")), "spool input consumed"
 
@@ -139,7 +180,8 @@ def test_no_report_attachment_is_skipped_silently(h):
 
 
 def test_a_bad_tag_acks_warning_without_spooling(h):
-    data = bytearray(sealed_report(h.pub)); data[-1] ^= 1
+    data = bytearray(sealed_report(h.pub))
+    data[-1] ^= 1
     t = Thread(1004, [Attachment("arbiter-report-7F3K2Q.arb", bytes(data))])
     assert run(h.handle(t)) == "REFUSE"
     assert t.starter.reactions == ["⚠️"] and "couldn't read that file" in t.sent[0]
@@ -150,15 +192,19 @@ def test_a_bad_tag_acks_warning_without_spooling(h):
 def test_a_wrong_magic_or_key_id_is_refused_before_decrypting(h):
     t = Thread(1005, [Attachment("arbiter-report-7F3K2Q.arb", b"NOPE" + b"x" * 100)])
     assert run(h.handle(t)) == "REFUSE"
-    data = bytearray(sealed_report(h.pub)); data[4] = 9
+    data = bytearray(sealed_report(h.pub))
+    data[4] = 9
     t = Thread(1006, [Attachment("arbiter-report-7F3K2Q.arb", bytes(data))])
     assert run(h.handle(t)) == "REFUSE"
     assert "⚠️" in t.starter.reactions
 
 
 def test_a_hostile_plaintext_is_quarantined_with_the_sealed_original_kept(h):
-    doc = valid_doc(); del doc["manifest"]["shortId"]
-    t = Thread(1007, [Attachment("arbiter-report-7F3K2Q.arb", sealed_report(h.pub, doc))])
+    doc = valid_doc()
+    del doc["manifest"]["shortId"]
+    t = Thread(
+        1007, [Attachment("arbiter-report-7F3K2Q.arb", sealed_report(h.pub, doc))]
+    )
     assert run(h.handle(t)) == "QUARANTINE"
     assert t.starter.reactions == ["⚠️"]
     assert (h.inbox / "quarantine" / "1007.arb").exists()
@@ -173,9 +219,18 @@ def test_a_malformed_result_json_is_refused_and_only_fixed_filenames_move(tmp_pa
         out.mkdir(parents=True, exist_ok=True)
         (out / "report.json").write_text("{}")
         (out / "extra.sh").write_text("rm -rf /")
-        (out / "result.json").write_text(json.dumps({"status": "OK", "shortId": "../../x", "reason": "x"}))
+        (out / "result.json").write_text(
+            json.dumps({"status": "OK", "shortId": "../../x", "reason": "x"})
+        )
 
-    h = Handler(spool=spool, inbox=inbox, private_key=priv, forum_id=999, process=evil_opener, wait_s=2)
+    h = Handler(
+        spool=spool,
+        inbox=inbox,
+        private_key=priv,
+        forum_id=999,
+        process=evil_opener,
+        wait_s=2,
+    )
     t = Thread(1008, [Attachment("arbiter-report-7F3K2Q.arb", sealed_report(pub))])
     assert run(h.handle(t)) == "REFUSE"
     assert not list(inbox.glob("**/extra.sh"))
@@ -184,24 +239,59 @@ def test_a_malformed_result_json_is_refused_and_only_fixed_filenames_move(tmp_pa
         out.mkdir(parents=True, exist_ok=True)
         (out / "report.json").write_text("{}")
         (out / "extra.sh").write_text("rm -rf /")
-        (out / "screens").mkdir(); (out / "screens" / "00-current.jpg").write_bytes(b"\xff\xd8\xff")
+        (out / "screens").mkdir()
+        (out / "screens" / "00-current.jpg").write_bytes(b"\xff\xd8\xff")
         (out / "screens" / "99-evil.jpg").write_bytes(b"x")
-        (out / "discord.json").write_text('{"title": "forged by the report"}')   # the report never speaks for the post
-        (out / "status.json").write_text('{"state": "resolved"}')                # nor sets its own status
-        (out / "result.json").write_text(json.dumps({"status": "OK", "shortId": "7F3K2Q", "reason": ""}))
+        (out / "discord.json").write_text(
+            '{"title": "forged by the report"}'
+        )  # the report never speaks for the post
+        (out / "status.json").write_text(
+            '{"state": "resolved"}'
+        )  # nor sets its own status
+        (out / "result.json").write_text(
+            json.dumps({"status": "OK", "shortId": "7F3K2Q", "reason": ""})
+        )
 
-    h2 = Handler(spool=spool, inbox=inbox, private_key=priv, forum_id=999, process=sloppy_opener, wait_s=2)
+    h2 = Handler(
+        spool=spool,
+        inbox=inbox,
+        private_key=priv,
+        forum_id=999,
+        process=sloppy_opener,
+        wait_s=2,
+    )
     t = Thread(1009, [Attachment("arbiter-report-7F3K2Q.arb", sealed_report(pub))])
     assert run(h2.handle(t)) == "OK"
-    got = sorted(str(p.relative_to(inbox / "7F3K2Q")) for p in (inbox / "7F3K2Q").rglob("*") if p.is_file())
-    assert got == ["discord.json", "report.json", "screens/00-current.jpg", "status.json"]
-    assert json.loads((inbox / "7F3K2Q" / "status.json").read_text())["state"] == "new", "the bot's status, not the report's"
-    assert json.loads((inbox / "7F3K2Q" / "discord.json").read_text())["title"] == "my report", "the bot's, not the report's"
+    got = sorted(
+        str(p.relative_to(inbox / "7F3K2Q"))
+        for p in (inbox / "7F3K2Q").rglob("*")
+        if p.is_file()
+    )
+    assert got == [
+        "discord.json",
+        "report.json",
+        "screens/00-current.jpg",
+        "status.json",
+    ]
+    assert (
+        json.loads((inbox / "7F3K2Q" / "status.json").read_text())["state"] == "new"
+    ), "the bot's status, not the report's"
+    assert (
+        json.loads((inbox / "7F3K2Q" / "discord.json").read_text())["title"]
+        == "my report"
+    ), "the bot's, not the report's"
 
 
 def test_opener_timeout_is_refused(tmp_path):
     priv, pub = keys()
-    h = Handler(spool=tmp_path / "spool", inbox=tmp_path / "inbox", private_key=priv, forum_id=999, process=lambda i, o: None, wait_s=0.3)
+    h = Handler(
+        spool=tmp_path / "spool",
+        inbox=tmp_path / "inbox",
+        private_key=priv,
+        forum_id=999,
+        process=lambda i, o: None,
+        wait_s=0.3,
+    )
     t = Thread(1010, [Attachment("arbiter-report-7F3K2Q.arb", sealed_report(pub))])
     assert run(h.handle(t)) == "REFUSE"
     assert t.starter.reactions == ["⚠️"]
@@ -212,19 +302,26 @@ def test_catch_up_walks_newest_first_and_stops_at_the_last_seen_thread(h):
     orig = h.handle
 
     async def spy(t):
-        seen.append(t.id); return await orig(t)
+        seen.append(t.id)
+        return await orig(t)
+
     h.handle = spy
     (h.inbox).mkdir(parents=True, exist_ok=True)
     (h.inbox / "state.json").write_text(json.dumps({"last_thread_id": 2002}))
-    mk = lambda i: Thread(i, [Attachment("arbiter-report-7F3K2Q.arb", sealed_report(h.pub))])
+
+    def mk(i):
+        return Thread(
+            i, [Attachment("arbiter-report-7F3K2Q.arb", sealed_report(h.pub))]
+        )
 
     class Forum:
-        threads = [mk(2004), mk(2001)]              # active, any order
+        threads: ClassVar[list[Thread]] = [mk(2004), mk(2001)]  # active, any order
 
         def archived_threads(self, limit=None):
             async def gen():
                 for t in (mk(2003), mk(2002), mk(2000)):
                     yield t
+
             return gen()
 
     run(h.catch_up(Forum()))
@@ -236,16 +333,88 @@ def test_an_exception_in_one_thread_does_not_stop_the_next(h):
     class Broken(Thread):
         async def fetch_message(self, mid):
             raise RuntimeError("discord hiccup")
+
     (h.inbox).mkdir(parents=True, exist_ok=True)
 
     class Forum:
-        threads = [Broken(3002, []), Thread(3001, [Attachment("arbiter-report-7F3K2Q.arb", sealed_report(h.pub))])]
+        threads: ClassVar[list[Thread]] = [
+            Broken(3002, []),
+            Thread(
+                3001, [Attachment("arbiter-report-7F3K2Q.arb", sealed_report(h.pub))]
+            ),
+        ]
 
         def archived_threads(self, limit=None):
             async def gen():
-                return
-                yield
+                for thread in ():
+                    yield thread
+
             return gen()
 
     run(h.catch_up(Forum()))
     assert (h.inbox / "7F3K2Q").exists()
+
+
+def test_report_input_is_atomic_and_private_until_the_opener_returns(h):
+    report = sealed_report(h.pub)
+    paths = []
+
+    def process(inp, out):
+        paths.extend((inp, out))
+        assert inp.is_file()
+        assert not inp.with_suffix(".tmp").exists()
+        assert inp.stat().st_mode & 0o777 == 0o600
+        assert json.loads(gzip.decompress(inp.read_bytes())) == valid_doc()
+        out.mkdir(parents=True)
+        (out / "result.json").write_text(
+            '{"status": "REFUSE", "shortId": "", "reason": ""}'
+        )
+
+    h.process = process
+    assert run(h._process(3002, report)) == {
+        "status": "REFUSE",
+        "shortId": "",
+        "reason": "",
+    }
+    assert len(paths) == 2
+    assert all(not path.exists() for path in paths)
+
+
+def test_cancelled_report_keeps_the_thread_busy_until_staging_finishes(h, monkeypatch):
+    import threading
+
+    import bot
+
+    report = sealed_report(h.pub)
+    thread = Thread(3003, [Attachment("arbiter-report-123456.arb", report)])
+    started, release = threading.Event(), threading.Event()
+    stage_report = bot._stage_report
+
+    def stage(inp, plain):
+        started.set()
+        assert release.wait(5)
+        stage_report(inp, plain)
+
+    monkeypatch.setattr(bot, "_stage_report", stage)
+
+    async def process():
+        task = asyncio.create_task(h.handle(thread))
+        try:
+            assert await asyncio.to_thread(started.wait, 2)
+            task.cancel()
+            await asyncio.sleep(0)
+            task.cancel()
+            await asyncio.sleep(0)
+            assert not task.done()
+            assert await h.handle(thread) == "BUSY"
+        finally:
+            release.set()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+
+    run(process())
+    staged = h.spool / "in" / "3003.gz"
+    assert json.loads(gzip.decompress(staged.read_bytes())) == valid_doc()
+    assert staged.stat().st_mode & 0o777 == 0o600
+    assert not staged.with_suffix(".tmp").exists()
+    assert 3003 not in h._busy

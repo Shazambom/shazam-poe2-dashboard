@@ -5,14 +5,18 @@ sidecar startup runs — just the route handlers against an empty (schema-only) 
 
 Run:  DATA_DIR=$(mktemp -d) MARKET_SEED= .venv-test/bin/python -m pytest backend/tests/test_signals_api.py -q
 """
+
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # backend/
-from starlette.testclient import TestClient  # noqa: E402
-from app.main import app  # noqa: E402
+from starlette.testclient import TestClient
 
-client = TestClient(app)   # NOT used as a context manager → lifespan (backfill/sidecar) never runs
+from app.main import app
+
+client = TestClient(
+    app
+)  # NOT used as a context manager → lifespan (backfill/sidecar) never runs
 
 
 def test_signals_endpoint_degrades_to_empty():
@@ -38,4 +42,5 @@ def test_leaguearc_and_arc_endpoints_respond():
 
 if __name__ == "__main__":
     import pytest
+
     raise SystemExit(pytest.main([__file__, "-q"]))

@@ -8,8 +8,10 @@ analytics handlers, keeping this module import-cheap for tests that stub them ou
 Endpoints only READ analytics_cache, so if this loop is slow or dead the app still serves — it
 just serves stale-or-empty results.
 """
+
 from __future__ import annotations
 
+import importlib
 import os
 import sqlite3
 import sys
@@ -31,16 +33,22 @@ def _tlog(msg: str) -> None:
 # re-resolve the league and hope it matches what was written. New kinds register here.
 def handle_discords(conn: sqlite3.Connection, job: dict) -> None:
     from sidecar.analytics import discords
+
     league = (job.get("params") or {}).get("league")
     series, meta = marketseries.series_for_league(conn, league) if league else ({}, {})
-    _tlog(f"discords read league={league!r} items={len(series)}")   # <-- pinpoints read vs compute hang
+    _tlog(
+        f"discords read league={league!r} items={len(series)}"
+    )  # <-- pinpoints read vs compute hang
     signals = discords.compute(series, meta) if league else []
     _tlog(f"discords computed n={len(signals)}")
-    analytics.complete(conn, job["id"], "discords", "current", {"league": league, "signals": signals})
+    analytics.complete(
+        conn, job["id"], "discords", "current", {"league": league, "signals": signals}
+    )
 
 
 def handle_arc(conn: sqlite3.Connection, job: dict) -> None:
     from sidecar.analytics import arc
+
     league = (job.get("params") or {}).get("league")
     sigs = marketseries.league_signatures(conn)
     weights: dict = {}
@@ -49,9 +57,16 @@ def handle_arc(conn: sqlite3.Connection, job: dict) -> None:
         past = {lg: s for lg, s in sigs.items() if lg != league}
         weights = arc.compute_weights(sigs[league], past)
         if weights:
-            resembles = max(weights, key=weights.get)   # the most-similar past league
-    analytics.complete(conn, job["id"], "arc", "current",
-                       {"league": league, "weights": weights, "resembles": resembles})
+            resembles = max(
+                weights, key=weights.__getitem__
+            )  # the most-similar past league
+    analytics.complete(
+        conn,
+        job["id"],
+        "arc",
+        "current",
+        {"league": league, "weights": weights, "resembles": resembles},
+    )
 
 
 HANDLERS = {"discords": handle_discords, "arc": handle_arc}
@@ -67,19 +82,25 @@ def run_once(conn: sqlite3.Connection) -> bool:
         return False
     handler = HANDLERS.get(job["kind"])
     if handler is None:
-        with conn:                      # the sidecar owns its transactions (helpers never commit)
+        with conn:  # the sidecar owns its transactions (helpers never commit)
             analytics.fail(conn, job["id"], f"no handler for kind {job['kind']!r}")
         return True
     kind = job["kind"]
     league = (job.get("params") or {}).get("league")
-    _tlog(f"claim {kind} league={league!r}")   # <-- last line before a native death pinpoints it
+    _tlog(
+        f"claim {kind} league={league!r}"
+    )  # <-- last line before a native death pinpoints it
     try:
-        with conn:                      # compute + cache write + 'done' land as one commit
+        with conn:  # compute + cache write + 'done' land as one commit
             handler(conn, job)
         cached = analytics.read_cache(conn, kind, "current") or {}
-        n = len(cached.get("signals") or []) if kind == "discords" else len(cached.get("weights") or {})
+        n = (
+            len(cached.get("signals") or [])
+            if kind == "discords"
+            else len(cached.get("weights") or {})
+        )
         _tlog(f"done {kind} n={n}")
-    except Exception as exc:            # a bad series must not wedge the loop
+    except Exception as exc:  # a bad series must not wedge the loop
         with conn:
             analytics.fail(conn, job["id"], repr(exc))
         _tlog(f"FAIL {kind} {exc!r}")
@@ -95,13 +116,15 @@ def open_market(data_dir: str | None = None) -> sqlite3.Connection:
     return conn
 
 
-IDLE_EXIT_S = 60.0   # exit cleanly (rc=0) after 60s idle; supervisor wakes us when new jobs enqueue
+IDLE_EXIT_S = 60.0  # exit cleanly (rc=0) after 60s idle; supervisor wakes us when new jobs enqueue
 
 
 def main() -> None:
     parent = os.environ.get("ARBITER_PARENT_PID")
     ppid = int(parent) if parent and parent.isdigit() else None
-    _tlog(f"start pid={os.getpid()} parent={ppid} stdin={bool(getattr(sys, 'stdin', None))}")
+    _tlog(
+        f"start pid={os.getpid()} parent={ppid} stdin={bool(getattr(sys, 'stdin', None))}"
+    )
 
     # Eagerly import numpy + the analytics modules HERE — in the main thread, BEFORE any watchdog
     # threads exist — so it matches the (proven-good) --selftest import order. The v0.2.50/0.2.51
@@ -110,8 +133,10 @@ def main() -> None:
     # daemon threads already running. Doing it up-front removes that variable and surfaces a slow/
     # stuck import as its own telemetry line instead of an invisible mid-job wedge.
     try:
-        import numpy  # noqa: F401
-        from sidecar.analytics import arc, discords  # noqa: F401
+        importlib.import_module("numpy")
+        importlib.import_module("sidecar.analytics.arc")
+        importlib.import_module("sidecar.analytics.discords")
+
         _tlog("numpy+analytics imported")
     except Exception as exc:
         _tlog(f"IMPORT CRASH {exc!r}")
@@ -123,6 +148,7 @@ def main() -> None:
     def _on_dead(reason: str = "?") -> None:
         _tlog(f"WATCHDOG EXIT reason={reason}")
         os._exit(0)
+
     watchdog.guard(parent_pid=ppid, on_dead=_on_dead)
 
     conn = open_market()
@@ -142,14 +168,16 @@ def main() -> None:
         try:
             worked = run_once(conn)
         except sqlite3.Error:
-            time.sleep(2.0)             # transient DB contention — back off and retry
+            time.sleep(2.0)  # transient DB contention — back off and retry
             continue
-        except Exception as exc:        # never let an unexpected error die silently — report it
+        except (
+            Exception
+        ) as exc:  # never let an unexpected error die silently — report it
             _tlog(f"LOOP CRASH {exc!r}\n{traceback.format_exc()[-1500:]}")
             raise
         if worked:
             done += 1
-            if done % 50 == 0:          # trim occasionally, not on every job's hot path
+            if done % 50 == 0:  # trim occasionally, not on every job's hot path
                 with conn:
                     analytics.prune_jobs(conn)
             idle = 0
@@ -167,5 +195,5 @@ def main() -> None:
                 conn.close()
                 devtelemetry.flush(timeout=2.0)
                 return
-            time.sleep(min(5.0, 0.5 * (idle + 1)))   # gentle idle backoff
+            time.sleep(min(5.0, 0.5 * (idle + 1)))  # gentle idle backoff
             idle = min(idle + 1, 9)

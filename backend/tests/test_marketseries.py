@@ -9,12 +9,13 @@ Built against a hand-rolled sqlite DB (no app.db boot) to prove the standalone s
 
 Run:  python -m pytest backend/tests/test_marketseries.py -q
 """
+
 import sqlite3
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # backend/
-from app import marketseries  # noqa: E402
+from app import marketseries
 
 
 def _db():
@@ -24,14 +25,16 @@ def _db():
         CREATE TABLE league_daily (league TEXT, item_id INTEGER, day TEXT, close REAL,
                                    average REAL, volume INTEGER, PRIMARY KEY(league,item_id,day));
     """)
-    c.executemany("INSERT INTO item_meta VALUES(?,?,?)",
-                  [(1, "Divine Orb", "currency"), (2, "Chaos Orb", "currency")])
+    c.executemany(
+        "INSERT INTO item_meta VALUES(?,?,?)",
+        [(1, "Divine Orb", "currency"), (2, "Chaos Orb", "currency")],
+    )
     rows = [
-        ("Old",  1, "2026-08-01", 5.0, 5.0, 10),
-        ("Std",  1, "2026-09-01", 10.0, 10.0, 100),
-        ("Std",  1, "2026-09-02", 11.0, 11.0, 200),
-        ("Std",  2, "2026-09-01", 1.0, 1.0, 50),
-        ("Std",  2, "2026-09-02", 0.0, 0.0, 999),   # close<=0 must be dropped
+        ("Old", 1, "2026-08-01", 5.0, 5.0, 10),
+        ("Std", 1, "2026-09-01", 10.0, 10.0, 100),
+        ("Std", 1, "2026-09-02", 11.0, 11.0, 200),
+        ("Std", 2, "2026-09-01", 1.0, 1.0, 50),
+        ("Std", 2, "2026-09-02", 0.0, 0.0, 999),  # close<=0 must be dropped
     ]
     c.executemany("INSERT INTO league_daily VALUES(?,?,?,?,?,?)", rows)
     c.commit()
@@ -45,7 +48,7 @@ def test_series_for_league_shapes_points():
     # item 1: two points oldest->newest, value = close*volume
     pts = series[1]
     assert [round(v, 2) for (_t, _close, v) in pts] == [1000.0, 2200.0]
-    assert pts[0][0] < pts[1][0]                     # epoch ascending
+    assert pts[0][0] < pts[1][0]  # epoch ascending
     # item 2: the close<=0 day is filtered, leaving one point
     assert len(series[2]) == 1
     # 'Old' league rows never leak into 'Std'
@@ -56,12 +59,13 @@ def test_pick_league_serves_the_selected_league_or_nothing():
     """No silent fallback: a league with no stored data serves nothing rather than quietly
     answering about a different economy than the Board (owner directive 2026-09-19)."""
     c = _db()
-    rows = marketseries.read_rows(c)                 # all leagues, ORDER BY league, day
-    assert marketseries.pick_league(rows, "Std", []) == "Std"
-    assert marketseries.pick_league(rows, "Nope", current_leagues=["Std"]) is None
-    assert marketseries.pick_league(rows, "Nope", current_leagues=[]) is None
+    rows = marketseries.read_rows(c)  # all leagues, ORDER BY league, day
+    assert marketseries.pick_league(rows, "Std") == "Std"
+    assert marketseries.pick_league(rows, "Nope") is None
+    assert marketseries.pick_league([], "Std") is None
 
 
 if __name__ == "__main__":
     import pytest
+
     raise SystemExit(pytest.main([__file__, "-q"]))

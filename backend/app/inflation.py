@@ -15,11 +15,13 @@ as %/day; Last 24h = 24h change via marketseries.change_over.
 Pure Python on purpose: the data is hourly per league (hundreds of rows), so pandas
 / numpy would only bloat the desktop binary for no speed that matters here.
 """
+
 from __future__ import annotations
 
 import math
 import statistics
 import time
+from string import Template
 
 from . import cache, db, marketseries
 from .currencies import registry
@@ -30,8 +32,11 @@ HOUR = 3600
 # Hard-asset anchors by GGG metadata id. Divine is dense (appears every hour);
 # Mirror and Hinekora are the truest stores of value but trade thinly, so their
 # pivot leg is despiked and volume-smoothed before chaining.
-ANCHORS: dict[str, tuple[str, str]] = {k: (a.name, a.metadata_id)
-                                       for k, a in marketseries.ANCHORS.items() if k in ("divine", "mirror", "lock")}
+ANCHORS: dict[str, tuple[str, str]] = {
+    k: (a.name, a.metadata_id)
+    for k, a in marketseries.ANCHORS.items()
+    if k in ("divine", "mirror", "lock")
+}
 DEFAULT_ANCHOR = "lock"
 
 # Divine is the pivot: soft currencies almost never trade DIRECTLY against a Mirror
@@ -40,7 +45,9 @@ DEFAULT_ANCHOR = "lock"
 PIVOT_META = marketseries.ANCHORS["divine"].metadata_id
 
 # Hard-asset stores of value are never plotted as soft currencies in Inflation.
-HARD_ANCHOR_METAS = frozenset(meta for _, meta in ANCHORS.values() if meta != PIVOT_META)
+HARD_ANCHOR_METAS = frozenset(
+    meta for _, meta in ANCHORS.values() if meta != PIVOT_META
+)
 
 # Core liquid currencies always form the default chart and headline basket, independent
 # of what niche items a player pins on their Board. Thin orbs (e.g. Regal at ~8 div/hr)
@@ -48,31 +55,46 @@ HARD_ANCHOR_METAS = frozenset(meta for _, meta in ANCHORS.values() if meta != PI
 CORE_SOFT = ("exalted", "vaal", "chaos", "annul", "divine")
 
 # Outlier suppression, volume-weighted smoothing, and trend velocity constants.
-SPIKE_RADIUS = 3                 # ±3 neighboring points for centered rolling median
-SPIKE_MAX_GAP_H = 24             # only compare against neighbors within ±24h (never across multi-day gaps)
-SPIKE_MAX_LOG_DEV = math.log(1.25)  # flag single-hour prints >25% away from local median
-ANCHOR_SMOOTH_H = 3              # ±3h VWMA on thin hard-anchor pivot legs (Lock/Mirror)
-SOFT_SMOOTH_H = 2                # ±2h VWMA on soft/divine legs
-VELOCITY_WINDOW_H = 7 * 24       # 7-day OLS log-trend for Per day pace (%/day)
+SPIKE_RADIUS = 3  # ±3 neighboring points for centered rolling median
+SPIKE_MAX_GAP_H = (
+    24  # only compare against neighbors within ±24h (never across multi-day gaps)
+)
+SPIKE_MAX_LOG_DEV = math.log(
+    1.25
+)  # flag single-hour prints >25% away from local median
+ANCHOR_SMOOTH_H = 3  # ±3h VWMA on thin hard-anchor pivot legs (Lock/Mirror)
+SOFT_SMOOTH_H = 2  # ±2h VWMA on soft/divine legs
+VELOCITY_WINDOW_H = 7 * 24  # 7-day OLS log-trend for Per day pace (%/day)
 
 
 _metas = registry.metas
+_CROSS_MARKET_ROWS = Template(
+    """SELECT hour, cur_a, cur_b, vol_a, vol_b FROM digest_markets
+            WHERE league=? AND hour>=? AND ((cur_a IN ($soft) AND cur_b IN ($hard))
+                              OR (cur_a IN ($hard) AND cur_b IN ($soft)))"""
+)
 
 
-def _hourly_soft_per_hard(c, league, soft_metas, hard_metas, since=0) -> dict[int, tuple[float, float]]:
+def _hourly_soft_per_hard(
+    c, league, soft_metas, hard_metas, since=0
+) -> dict[int, tuple[float, float]]:
     """{hour: (soft_units_per_hard_unit, hard_volume)} from executed volume ratios."""
     if not soft_metas or not hard_metas:
         return {}
-    sp, hp = ",".join("?" * len(soft_metas)), ",".join("?" * len(hard_metas))
     rows = c.execute(
-        f"""SELECT hour, cur_a, cur_b, vol_a, vol_b FROM digest_markets
-            WHERE league=? AND hour>=? AND ((cur_a IN ({sp}) AND cur_b IN ({hp}))
-                              OR (cur_a IN ({hp}) AND cur_b IN ({sp})))""",
-        (league, since, *soft_metas, *hard_metas, *hard_metas, *soft_metas)).fetchall()
+        db.sql_with_lists(
+            _CROSS_MARKET_ROWS, soft=len(soft_metas), hard=len(hard_metas)
+        ),
+        (league, since, *soft_metas, *hard_metas, *hard_metas, *soft_metas),
+    ).fetchall()
     soft_set = set(soft_metas)
     agg: dict[int, list[float]] = {}
     for r in rows:
-        vs, vh = (r["vol_a"], r["vol_b"]) if r["cur_a"] in soft_set else (r["vol_b"], r["vol_a"])
+        vs, vh = (
+            (r["vol_a"], r["vol_b"])
+            if r["cur_a"] in soft_set
+            else (r["vol_b"], r["vol_a"])
+        )
         if not vs or not vh:
             continue
         a = agg.setdefault(r["hour"], [0.0, 0.0])
@@ -82,8 +104,11 @@ def _hourly_soft_per_hard(c, league, soft_metas, hard_metas, since=0) -> dict[in
     return {h: (vs / vh, vh) for h, (vs, vh) in agg.items() if vs > 0 and vh > 0}
 
 
-def _despike(series: dict[int, tuple[float, float]], radius: int = SPIKE_RADIUS,
-             max_log_dev: float = SPIKE_MAX_LOG_DEV) -> dict[int, tuple[float, float]]:
+def _despike(
+    series: dict[int, tuple[float, float]],
+    radius: int = SPIKE_RADIUS,
+    max_log_dev: float = SPIKE_MAX_LOG_DEV,
+) -> dict[int, tuple[float, float]]:
     """Replace isolated single-hour outlier prints with their local neighbor median and zero
     their smoothing weight so bad prints cannot pollute neighboring hours."""
     pts = sorted(series.items())
@@ -93,8 +118,11 @@ def _despike(series: dict[int, tuple[float, float]], radius: int = SPIKE_RADIUS,
     out: dict[int, tuple[float, float]] = {}
     for i, (h, (p, w)) in enumerate(pts):
         lo, hi = max(0, i - radius), min(len(pts), i + radius + 1)
-        nb = [pts[j][1][0] for j in range(lo, hi)
-              if j != i and pts[j][1][0] > 0 and abs(pts[j][0] - h) <= max_gap_s]
+        nb = [
+            pts[j][1][0]
+            for j in range(lo, hi)
+            if j != i and pts[j][1][0] > 0 and abs(pts[j][0] - h) <= max_gap_s
+        ]
         if len(nb) < 2:
             out[h] = (p, w)
             continue
@@ -106,7 +134,9 @@ def _despike(series: dict[int, tuple[float, float]], radius: int = SPIKE_RADIUS,
     return out
 
 
-def _vwma(series: dict[int, tuple[float, float]], half_window_h: int) -> dict[int, tuple[float, float]]:
+def _vwma(
+    series: dict[int, tuple[float, float]], half_window_h: int
+) -> dict[int, tuple[float, float]]:
     """Centered volume-weighted moving average over ±half_window_h hours. Thin hours (e.g. a
     single Lock trade) carry tiny weight compared to normal neighboring hours; despiked hours
     (w == 0) do not pollute neighbors, then inherit neighbor mean weight for downstream basket weighting."""
@@ -151,7 +181,9 @@ def _rebase(series: dict[int, tuple[float, float]]):
     return {h: (100.0 * p / base, w) for h, (p, w) in pts}, base
 
 
-def _ols_daily_pct(basket: list[tuple[int, float]], window_s: int = VELOCITY_WINDOW_H * HOUR) -> float | None:
+def _ols_daily_pct(
+    basket: list[tuple[int, float]], window_s: int = VELOCITY_WINDOW_H * HOUR
+) -> float | None:
     """Inflation velocity (%/day) via OLS linear regression on ln(v) against elapsed days.
     Uses every point in [t_end - window_s, t_end] and handles missing hours by real timestamps."""
     if len(basket) < 2:
@@ -168,7 +200,7 @@ def _ols_daily_pct(basket: list[tuple[int, float]], window_s: int = VELOCITY_WIN
     denom = sum((x - mx) ** 2 for x in xs)
     if denom <= 0:
         return 0.0
-    slope = sum((x - mx) * (y - my) for x, y in zip(xs, ys)) / denom
+    slope = sum((x - mx) * (y - my) for x, y in zip(xs, ys, strict=False)) / denom
     slope = max(-10.0, min(10.0, slope))
     return round((math.exp(slope) - 1) * 100, 2)
 
@@ -184,7 +216,38 @@ def compute(anchor_key: str, hours: int = 336) -> dict:
     # Watchlist extras only: order, core softs, and duplicates don't change the output.
     extra_wl = ",".join(sorted(set(s["watchlist"]) - set(CORE_SOFT)))
     ck = f"{league}|{anchor_key}|{hours}|{extra_wl}"
-    return cache.memo(_cache, ck, TTL_S, lambda: _compute(anchor_key, hours, s, league), max_entries=32)
+    return cache.memo(
+        _cache,
+        ck,
+        TTL_S,
+        lambda: _compute(anchor_key, hours, s, league),
+        max_entries=32,
+    )
+
+
+def _basket_index(basket_src: dict, all_hours: list[int]) -> list[tuple[int, float]]:
+    basket: list[tuple[int, float]] = []
+    for h in all_hours:
+        num = den = 0.0
+        fb_num = 0.0
+        fb_cnt = 0
+        for idx in basket_src.values():
+            pt = idx.get(h)
+            if not pt or pt[0] <= 0:
+                continue
+            v, w = pt
+            lv = math.log(v)
+            if w > 0:
+                num += w * lv
+                den += w
+            fb_num += lv
+            fb_cnt += 1
+        if den > 0:
+            basket.append((h, math.exp(num / den)))
+        elif fb_cnt > 0:
+            basket.append((h, math.exp(fb_num / fb_cnt)))
+
+    return basket
 
 
 def _compute(anchor_key: str, hours: int, s: dict, league: str) -> dict:
@@ -221,18 +284,23 @@ def _compute(anchor_key: str, hours: int, s: dict, league: str) -> dict:
                 if set(metas) & HARD_ANCHOR_METAS:
                     continue
                 raw: dict[int, tuple[float, float]] = {}
-                if metas == [PIVOT_META]:                      # the pivot currency itself (Divine)
+                if metas == [PIVOT_META]:  # the pivot currency itself (Divine)
                     if not pivot_is_hard:
                         # Weight Divine in Divine units (p * hard_vol = div_vol) to match all other legs.
                         raw = {h: (p, p * w) for h, (p, w) in divine_per_hard.items()}
                 else:
-                    raw_spd = _hourly_soft_per_hard(c, league, metas, [PIVOT_META], since)
+                    raw_spd = _hourly_soft_per_hard(
+                        c, league, metas, [PIVOT_META], since
+                    )
                     soft_per_divine = _vwma(_despike(raw_spd), SOFT_SMOOTH_H)
                     for h, (sp, w) in soft_per_divine.items():
                         if pivot_is_hard:
-                            raw[h] = (sp, w)                   # soft→divine already IS soft→hard
+                            raw[h] = (sp, w)  # soft→divine already IS soft→hard
                         elif h in divine_per_hard:
-                            raw[h] = (sp * divine_per_hard[h][0], w)   # chain: soft→divine × divine→hard
+                            raw[h] = (
+                                sp * divine_per_hard[h][0],
+                                w,
+                            )  # chain: soft→divine × divine→hard
                 idx, base = _rebase(raw)
                 if not idx or not base:
                     continue
@@ -240,47 +308,37 @@ def _compute(anchor_key: str, hours: int, s: dict, league: str) -> dict:
                 if is_core:
                     core_percur[tid] = idx
                 arr = sorted(idx.items())
-                currencies.append({
-                    "id": tid, "name": registry.name(tid),
-                    "points": [{"t": h, "v": round(v, 2)} for h, (v, _w) in arr],
-                    "current": round(arr[-1][1][0], 2),
-                    "since_base_pct": round(arr[-1][1][0] - 100, 2),
-                    "coverage": len(arr),
-                    "default_on": is_core,
-                })
+                currencies.append(
+                    {
+                        "id": tid,
+                        "name": registry.name(tid),
+                        "points": [{"t": h, "v": round(v, 2)} for h, (v, _w) in arr],
+                        "current": round(arr[-1][1][0], 2),
+                        "since_base_pct": round(arr[-1][1][0] - 100, 2),
+                        "coverage": len(arr),
+                        "default_on": is_core,
+                    }
+                )
 
     # Basket: Divine-volume-weighted geometric mean of the core liquid currencies each hour.
     basket_src = core_percur or all_percur
     all_hours = sorted({h for idx in basket_src.values() for h in idx})
-    basket: list[tuple[int, float]] = []
-    for h in all_hours:
-        num = den = 0.0
-        fb_num = 0.0
-        fb_cnt = 0
-        for idx in basket_src.values():
-            pt = idx.get(h)
-            if not pt or pt[0] <= 0:
-                continue
-            v, w = pt
-            lv = math.log(v)
-            if w > 0:
-                num += w * lv
-                den += w
-            fb_num += lv
-            fb_cnt += 1
-        if den > 0:
-            basket.append((h, math.exp(num / den)))
-        elif fb_cnt > 0:
-            basket.append((h, math.exp(fb_num / fb_cnt)))
+    basket = _basket_index(basket_src, all_hours)
 
     velocity = _ols_daily_pct(basket, VELOCITY_WINDOW_H * HOUR)
-    _, chg_24h = marketseries.change_over(basket, 24 * HOUR, t=lambda p: p[0], v=lambda p: p[1])
+    _, chg_24h = marketseries.change_over(
+        basket, 24 * HOUR, t=lambda p: p[0], v=lambda p: p[1]
+    )
     change_24h = round(chg_24h, 2) if chg_24h is not None else None
 
     result = {
-        "anchor": anchor_key, "anchor_name": name, "league": league,
+        "anchor": anchor_key,
+        "anchor_name": name,
+        "league": league,
         "base_note": "indexed to the first captured 24h = 100",
-        "currencies": sorted(currencies, key=lambda x: (not x["default_on"], -x["current"])),
+        "currencies": sorted(
+            currencies, key=lambda x: (not x["default_on"], -x["current"])
+        ),
         "basket": {
             "points": [{"t": h, "v": round(v, 2)} for h, v in basket],
             "since_base_pct": round(basket[-1][1] - 100, 2) if basket else None,

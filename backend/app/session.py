@@ -6,6 +6,7 @@ in either by pasting it into Settings or by running tools/connect.py on the mach
 whose browser is logged in. It is stored encrypted; the POESESSID env var is honoured
 only as a legacy fallback.
 """
+
 from __future__ import annotations
 
 import time
@@ -44,17 +45,28 @@ def status() -> dict:
 async def validate(cookie: str) -> tuple[bool, str]:
     """One cheap exchange query: 401/403 means the cookie is bad."""
     league = get_settings()["league"]
-    body = {"query": {"status": {"option": "online"}, "have": ["exalted"], "want": ["chaos"]},
-            "sort": {"have": "asc"}, "engine": "new"}
+    body = {
+        "query": {
+            "status": {"option": "online"},
+            "have": ["exalted"],
+            "want": ["chaos"],
+        },
+        "sort": {"have": "asc"},
+        "engine": "new",
+    }
     try:
         from . import orderbook
+
         r = await orderbook.exchange_post(league, body, cookie, retries=0)
     except gateway.RateLimited as exc:
         return True, f"session stored; verification deferred ({exc})"
     except Exception as exc:
         return False, f"could not reach the trade site: {exc}"
     if r.status_code in (401, 403):
-        return False, "the trade site rejected this session; log in on pathofexile.com and copy the cookie again"
+        return (
+            False,
+            "the trade site rejected this session; log in on pathofexile.com and copy the cookie again",
+        )
     if r.status_code == 429:
         return True, "session accepted (rate limited right now, so not fully verified)"
     if r.status_code >= 400:
@@ -69,7 +81,15 @@ async def connect(cookie: str, label: str | None = None) -> dict:
     ok, msg = await validate(cookie)
     if not ok:
         raise ValueError(msg)
-    secrets.store("poesessid", {"cookie": cookie, "set_at": time.time(), "last_ok": time.time(), "label": label})
+    secrets.store(
+        "poesessid",
+        {
+            "cookie": cookie,
+            "set_at": time.time(),
+            "last_ok": time.time(),
+            "label": label,
+        },
+    )
     return status() | {"message": msg}
 
 

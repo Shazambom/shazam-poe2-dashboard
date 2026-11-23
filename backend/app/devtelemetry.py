@@ -8,14 +8,17 @@ where they die. Best-effort, stdlib-only, no secrets.
 Gate: ARBITER_TELEMETRY=1, which Electron sets ONLY on the beta/dev channel — stable builds and the
 web/server env never post. This module is stdlib-only and importable by the lean sidecar binary.
 """
+
 from __future__ import annotations
 
 import atexit
+import logging
 import os
 import queue
 import sys
 import threading
 import urllib.request
+from functools import cache
 
 _URL = "http://192.168.1.250:8080/api/installlog?p=sidecar"
 
@@ -28,22 +31,25 @@ def enabled() -> bool:
 # T0 blocker for a stable release (owner directive 2026-09-25); `t0()` names it as one greppable
 # line, ops/t0-scan.py classifies it on the server, and the stable publisher refuses while one
 # exists for the version's beta line.
-T0_KINDS = frozenset({
-    "seed-failed",        # the bundled seed could not be applied
-    "unseeded",           # a seed is bundled yet the local DB has no snapshot
-    "seed-unreadable",    # the bundled seed's version or bytes cannot be read
-    "digest-cold",        # the hourly digest starts from scratch with a seed bundled
-    "league-full-crawl",  # the league-history crawl refetches a league it should have had
-    "mods-empty",         # a seed is bundled yet there are no mod tables
-    "crawl-lost",         # a seed replace could not carry the client's newer crawl over
-    "seed-partial",       # the seed ships a current league's days past the day verified final
-})
+T0_KINDS = frozenset(
+    {
+        "seed-failed",  # the bundled seed could not be applied
+        "unseeded",  # a seed is bundled yet the local DB has no snapshot
+        "seed-unreadable",  # the bundled seed's version or bytes cannot be read
+        "digest-cold",  # the hourly digest starts from scratch with a seed bundled
+        "league-full-crawl",  # the league-history crawl refetches a league it should have had
+        "mods-empty",  # a seed is bundled yet there are no mod tables
+        "crawl-lost",  # a seed replace could not carry the client's newer crawl over
+        "seed-partial",  # the seed ships a current league's days past the day verified final
+    }
+)
 
 
 def t0(kind: str, msg: str) -> None:
     """Report a full-sync fallback. Always logged locally; posted on the beta channel."""
-    assert kind in T0_KINDS, kind
-    import logging
+    if kind not in T0_KINDS:
+        raise AssertionError(kind)
+
     logging.getLogger("poe2arb.t0").error("T0 %s: %s", kind, msg)
     tlog("T0", f"{kind}: {msg}")
 
@@ -56,7 +62,11 @@ def tlog(tag: str, msg: str) -> None:
         return
     ver = os.environ.get("ARBITER_VERSION", "?")
     frozen = getattr(sys, "frozen", False)
-    _queue.put(f"v{ver} {sys.platform} frozen={frozen} [{tag}]: {msg}".encode("utf-8", "replace"))
+    _queue.put(
+        f"v{ver} {sys.platform} frozen={frozen} [{tag}]: {msg}".encode(
+            "utf-8", "replace"
+        )
+    )
     _start()
 
 
@@ -65,12 +75,36 @@ _worker: threading.Thread | None = None
 _lock = threading.Lock()
 
 
+@cache
+def _http_opener() -> urllib.request.OpenerDirector:
+    """Use urllib's HTTP handlers without enabling local files or other transports."""
+    opener = urllib.request.OpenerDirector()
+    proxies = {
+        scheme: url
+        for scheme, url in urllib.request.getproxies().items()
+        if scheme in {"http", "https"}
+    }
+    for handler in (
+        urllib.request.ProxyHandler(proxies),
+        urllib.request.UnknownHandler(),
+        urllib.request.HTTPHandler(),
+        urllib.request.HTTPDefaultErrorHandler(),
+        urllib.request.HTTPRedirectHandler(),
+        urllib.request.HTTPErrorProcessor(),
+        urllib.request.HTTPSHandler(),
+    ):
+        opener.add_handler(handler)
+    return opener
+
+
 def _post(body: bytes) -> None:
     try:
-        req = urllib.request.Request(_URL, data=body, headers={"Content-Type": "text/plain"})
-        urllib.request.urlopen(req, timeout=4).close()
+        req = urllib.request.Request(
+            _URL, data=body, headers={"Content-Type": "text/plain"}
+        )
+        _http_opener().open(req, timeout=4).close()
     except Exception:
-        pass
+        logging.getLogger(__name__).debug("telemetry post failed", exc_info=True)
 
 
 def _run() -> None:

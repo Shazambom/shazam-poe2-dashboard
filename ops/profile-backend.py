@@ -10,22 +10,23 @@ Modes:
   2. PyInstaller binary contaminant & size inspection:
      desktop/.venv-build/bin/python ops/profile-backend.py --pyi-inspect desktop/backend-bin/poe2arb-backend
 """
+
 from __future__ import annotations
 
 import argparse
 import gzip
-import importlib
 import json
 import math
 import os
 import resource
 import shutil
-import sqlite3
 import statistics
 import sys
 import tempfile
 import time
+from collections.abc import Callable
 from pathlib import Path
+from typing import cast
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -68,19 +69,7 @@ CONTAMINANT_TOP_LEVEL = {
 }
 
 
-def inspect_pyinstaller(bin_path: Path) -> dict:
-    """Break down a PyInstaller --onefile binary by subsystem and flag venv contaminants."""
-    try:
-        from PyInstaller.archive.readers import CArchiveReader
-    except ImportError as exc:
-        return {"available": False, "error": f"PyInstaller not importable: {exc}"}
-
-    if not bin_path.exists():
-        return {"available": False, "error": f"Binary not found: {bin_path}"}
-
-    arch = CArchiveReader(str(bin_path))
-    groups: dict[str, int] = {}
-    contam_native_bytes = 0
+def _archive_entry_group(name: str) -> tuple[str, bool]:
     pil_markers = (
         "libjpeg",
         "libtiff",
@@ -94,32 +83,57 @@ def inspect_pyinstaller(bin_path: Path) -> dict:
         "libfreetype",
         "libpng",
     )
+    if name.startswith("PIL") or any(m in name for m in pil_markers):
+        return "PIL/Pillow (contaminant)", True
+    elif name.startswith(("aiohttp", "multidict", "yarl", "frozenlist", "propcache")):
+        return "aiohttp stack (contaminant)", True
+    elif name.startswith(("discord", "nacl")):
+        return "discord/nacl (contaminant)", True
+    elif name.startswith(
+        ("charset_normalizer", "opentelemetry", "attrs-", "rich", "pygments")
+    ):
+        return "other contaminants", True
+    elif (
+        name.startswith("cryptography")
+        or "libcrypto" in name
+        or "libssl" in name
+        or "_rust.abi3" in name
+    ):
+        return "cryptography/ssl", False
+    elif (
+        name.startswith("numpy")
+        or "openblas" in name
+        or "libgfortran" in name
+        or "libquadmath" in name
+    ):
+        return "numpy", False
+    elif name.startswith("pydantic"):
+        return "pydantic_core", False
+    elif name == "PYZ.pyz":
+        return "PYZ.pyz", False
+    elif name.startswith(("Python.framework", "libpython", "python", "lib-dynload")):
+        return "python-runtime", False
+    else:
+        return "other", False
 
+
+def inspect_pyinstaller(bin_path: Path) -> dict:
+    """Break down a PyInstaller --onefile binary by subsystem and flag venv contaminants."""
+    try:
+        from PyInstaller.archive.readers import CArchiveReader
+    except ImportError as exc:
+        return {"available": False, "error": f"PyInstaller not importable: {exc}"}
+
+    if not bin_path.exists():
+        return {"available": False, "error": f"Binary not found: {bin_path}"}
+
+    arch = CArchiveReader(str(bin_path))
+    groups: dict[str, int] = {}
+    contam_native_bytes = 0
     for name, (_pos, dlen, _ulen, _flag, _typcd) in arch.toc.items():
-        if name.startswith("PIL") or any(m in name for m in pil_markers):
-            key = "PIL/Pillow (contaminant)"
+        key, contaminant = _archive_entry_group(name)
+        if contaminant:
             contam_native_bytes += dlen
-        elif name.startswith(("aiohttp", "multidict", "yarl", "frozenlist", "propcache")):
-            key = "aiohttp stack (contaminant)"
-            contam_native_bytes += dlen
-        elif name.startswith(("discord", "nacl")):
-            key = "discord/nacl (contaminant)"
-            contam_native_bytes += dlen
-        elif name.startswith(("charset_normalizer", "opentelemetry", "attrs-", "rich", "pygments")):
-            key = "other contaminants"
-            contam_native_bytes += dlen
-        elif name.startswith("cryptography") or "libcrypto" in name or "libssl" in name or "_rust.abi3" in name:
-            key = "cryptography/ssl"
-        elif name.startswith("numpy") or "openblas" in name or "libgfortran" in name or "libquadmath" in name:
-            key = "numpy"
-        elif name.startswith("pydantic"):
-            key = "pydantic_core"
-        elif name == "PYZ.pyz":
-            key = "PYZ.pyz"
-        elif name.startswith(("Python.framework", "libpython", "python", "lib-dynload")):
-            key = "python-runtime"
-        else:
-            key = "other"
         groups[key] = groups.get(key, 0) + dlen
 
     pyz_groups: dict[str, int] = {}
@@ -138,15 +152,20 @@ def inspect_pyinstaller(bin_path: Path) -> dict:
     return {
         "available": True,
         "sizeBytes": bin_path.stat().st_size,
-        "groupsMB": {k: round(v / 1048576, 2) for k, v in sorted(groups.items(), key=lambda x: -x[1])},
+        "groupsMB": {
+            k: round(v / 1048576, 2)
+            for k, v in sorted(groups.items(), key=lambda x: -x[1])
+        },
         "contaminantNativeMB": round(contam_native_bytes / 1048576, 2),
         "contaminantPyzMB": round(contam_pyz_bytes / 1048576, 2),
         "contaminantTotalMB": round(total_contam_bytes / 1048576, 2),
         "contaminantPackagesKB": {
-            k: round(v / 1024, 1) for k, v in sorted(pyz_contam_pkgs.items(), key=lambda x: -x[1])[:15]
+            k: round(v / 1024, 1)
+            for k, v in sorted(pyz_contam_pkgs.items(), key=lambda x: -x[1])[:15]
         },
         "topPyzPackagesKB": {
-            k: round(v / 1024, 1) for k, v in sorted(pyz_groups.items(), key=lambda x: -x[1])[:15]
+            k: round(v / 1024, 1)
+            for k, v in sorted(pyz_groups.items(), key=lambda x: -x[1])[:15]
         },
     }
 
@@ -166,7 +185,12 @@ def resolve_market_db(explicit_db: str | None, tmp_dir: Path) -> tuple[Path, str
         return dst, str(src)
 
     candidates = [
-        Path.home() / "Library" / "Application Support" / "Arbiter" / "data" / "market.sqlite",
+        Path.home()
+        / "Library"
+        / "Application Support"
+        / "Arbiter"
+        / "data"
+        / "market.sqlite",
         ROOT / "data" / "market.sqlite",
         ROOT / "desktop" / "market-seed" / "market-seed.sqlite.gz",
     ]
@@ -178,7 +202,20 @@ def resolve_market_db(explicit_db: str | None, tmp_dir: Path) -> tuple[Path, str
             else:
                 shutil.copy2(src, dst)
             return dst, str(src)
-    raise FileNotFoundError("No market.sqlite or market-seed.sqlite.gz found; pass --db <path>.")
+    raise FileNotFoundError(
+        "No market.sqlite or market-seed.sqlite.gz found; pass --db <path>."
+    )
+
+
+def _clear_profile_caches(mod) -> None:
+    for attr in dir(mod):
+        v = getattr(mod, attr)
+        if isinstance(v, dict) and (
+            "cache" in attr.lower() or attr.startswith("_c") or attr == "_CACHE"
+        ):
+            v.clear()
+        if hasattr(v, "cache_clear"):
+            cast(Callable[[], None], getattr(v, "cache_clear", None))()
 
 
 def run_benchmarks(db_arg: str | None, runs: int) -> dict:
@@ -194,10 +231,11 @@ def run_benchmarks(db_arg: str | None, runs: int) -> dict:
         sys.path.insert(0, str(ROOT / "backend"))
 
         t_import0 = time.perf_counter()
+        import app.arbitrage
         from app import db, digest, holdscore, inflation, leaguearc, liquidity, settings
-        import app.arbitrage  # noqa: F401
+
         board_mod = sys.modules["app.arbitrage.board"]
-        graph_mod = sys.modules["app.arbitrage.graph"]
+        graph_mod = app.arbitrage.graph
         routes_mod = sys.modules["app.arbitrage.routes"]
         import_boot_ms = round((time.perf_counter() - t_import0) * 1000, 1)
 
@@ -206,7 +244,9 @@ def run_benchmarks(db_arg: str | None, runs: int) -> dict:
                 "SELECT league, COUNT(*), MAX(hour) FROM digest_markets "
                 "GROUP BY league ORDER BY COUNT(*) DESC LIMIT 1"
             ).fetchone()
-            n_digest_all = c.execute("SELECT COUNT(*) FROM digest_markets").fetchone()[0]
+            n_digest_all = c.execute("SELECT COUNT(*) FROM digest_markets").fetchone()[
+                0
+            ]
             n_daily = c.execute("SELECT COUNT(*) FROM league_daily").fetchone()[0]
 
         age_h = max(0.0, (time.time() - (max_hour or 0)) / 3600.0)
@@ -215,25 +255,30 @@ def run_benchmarks(db_arg: str | None, runs: int) -> dict:
         settings.save_settings({"league": league, "digest_max_age_h": digest_max_age_h})
 
         def flush_all() -> None:
-            for mod in (digest, holdscore, leaguearc, inflation, board_mod, graph_mod, routes_mod):
-                for attr in dir(mod):
-                    v = getattr(mod, attr)
-                    if isinstance(v, dict) and ("cache" in attr.lower() or attr.startswith("_c") or attr == "_CACHE"):
-                        v.clear()
-                    if hasattr(v, "cache_clear"):
-                        v.cache_clear()
+            for mod in (
+                digest,
+                holdscore,
+                leaguearc,
+                inflation,
+                board_mod,
+                graph_mod,
+                routes_mod,
+            ):
+                _clear_profile_caches(mod)
             holdscore.invalidate()
 
-        def bench(fn, n: int = runs, flush: bool = False):
+        def bench[T](
+            fn: Callable[[], T], n: int = runs, flush: bool = False
+        ) -> tuple[T, dict]:
             times = []
-            res = None
+            res: T | None = None
             for _ in range(n):
                 if flush:
                     flush_all()
                 t0 = time.perf_counter()
                 res = fn()
                 times.append((time.perf_counter() - t0) * 1000)
-            return res, {
+            return cast(T, res), {
                 "firstMs": round(times[0], 1),
                 "medMs": round(statistics.median(times), 1),
                 "minMs": round(min(times), 1),
@@ -248,7 +293,7 @@ def run_benchmarks(db_arg: str | None, runs: int) -> dict:
         )
         ops["digest.latest_rates(24h)"]["edges"] = len(rates)
 
-        g, ops["Graph.build()"] = bench(lambda: graph_mod.Graph.build(), n=runs, flush=True)
+        g, ops["Graph.build()"] = bench(graph_mod.Graph.build, n=runs, flush=True)
         g = graph_mod.cached_graph()
         if len(g.adj) == 0:
             raise RuntimeError(
@@ -256,53 +301,87 @@ def run_benchmarks(db_arg: str | None, runs: int) -> dict:
             )
         ops["Graph.build()"]["nodes"] = len(g.adj)
 
-        b, ops["board._board(24h)"] = bench(lambda: board_mod._board(24, {}), n=runs, flush=False)
+        b, ops["board._board(24h)"] = bench(
+            lambda: board_mod._board(24, {}), n=runs, flush=False
+        )
         rows = b.get("rows") or []
         card_ids = [r["id"] for r in rows[:12]] or [
-            "divine", "chaos", "exalted", "annul", "vaal", "regal",
-            "chance", "alchemy", "mirror", "hinekora", "gcp", "artificer",
+            "divine",
+            "chaos",
+            "exalted",
+            "annul",
+            "vaal",
+            "regal",
+            "chance",
+            "alchemy",
+            "mirror",
+            "hinekora",
+            "gcp",
+            "artificer",
         ]
         ops["board._board(24h)"]["rows"] = len(rows)
 
-        cs, ops["board.cards(12, 24h)"] = bench(lambda: board_mod.cards(card_ids, 24), n=runs, flush=False)
+        cs, ops["board.cards(12, 24h)"] = bench(
+            lambda: board_mod.cards(card_ids, 24), n=runs, flush=False
+        )
         ops["board.cards(12, 24h)"]["cards"] = len(cs)
 
         def find_routes_cold():
             for attr in dir(routes_mod):
                 v = getattr(routes_mod, attr)
-                if isinstance(v, dict) and ("cache" in attr.lower() or attr.startswith("_c")):
+                if isinstance(v, dict) and (
+                    "cache" in attr.lower() or attr.startswith("_c")
+                ):
                     v.clear()
             return routes_mod._find_routes(None, None)
 
-        r_out, ops["routes._find_routes(default)"] = bench(find_routes_cold, n=cold_runs, flush=False)
-        ops["routes._find_routes(default)"]["candidates"] = r_out.get("total_candidates", 0)
+        r_out, ops["routes._find_routes(default)"] = bench(
+            find_routes_cold, n=cold_runs, flush=False
+        )
+        ops["routes._find_routes(default)"]["candidates"] = r_out.get(
+            "total_candidates", 0
+        )
         ops["routes._find_routes(default)"]["routes"] = len(r_out.get("routes", []))
         rv = r_out["ref_values"]
 
         r_vaal, ops["liquidity.realizable(1000 vaal)"] = bench(
             lambda: liquidity.realizable(g, rv, "vaal", 1000.0), n=runs, flush=False
         )
-        ops["liquidity.realizable(1000 vaal)"]["realizableRef"] = round(float(r_vaal.get("realizable_ref") or 0), 1)
+        ops["liquidity.realizable(1000 vaal)"]["realizableRef"] = round(
+            float(r_vaal.get("realizable_ref") or 0), 1
+        )
 
         r_annul, ops["liquidity.realizable(50 annul)"] = bench(
             lambda: liquidity.realizable(g, rv, "annul", 50.0), n=runs, flush=False
         )
-        ops["liquidity.realizable(50 annul)"]["realizableRef"] = round(float(r_annul.get("realizable_ref") or 0), 1)
+        ops["liquidity.realizable(50 annul)"]["realizableRef"] = round(
+            float(r_annul.get("realizable_ref") or 0), 1
+        )
 
         h_cold, ops["holdscore.leaderboard(cold)"] = bench(
-            lambda: holdscore.leaderboard("3d", "all", "divine"), n=cold_runs, flush=True
+            lambda: holdscore.leaderboard("3d", "all", "divine"),
+            n=cold_runs,
+            flush=True,
         )
-        ops["holdscore.leaderboard(cold)"]["items"] = len(h_cold.get("items") or h_cold.get("rows") or [])
+        ops["holdscore.leaderboard(cold)"]["items"] = len(
+            h_cold.get("items") or h_cold.get("rows") or []
+        )
 
         h_warm, ops["holdscore.leaderboard(Currency,warm)"] = bench(
-            lambda: holdscore.leaderboard("3d", "Currency", "divine"), n=runs, flush=False
+            lambda: holdscore.leaderboard("3d", "Currency", "divine"),
+            n=runs,
+            flush=False,
         )
-        ops["holdscore.leaderboard(Currency,warm)"]["items"] = len(h_warm.get("items") or h_warm.get("rows") or [])
+        ops["holdscore.leaderboard(Currency,warm)"]["items"] = len(
+            h_warm.get("items") or h_warm.get("rows") or []
+        )
 
         arc_out, ops["leaguearc.arc_for(Divine Orb,cold)"] = bench(
             lambda: leaguearc.arc_for("Divine Orb", "divine"), n=cold_runs, flush=True
         )
-        ops["leaguearc.arc_for(Divine Orb,cold)"]["historyPoints"] = len(arc_out.get("history") or [])
+        ops["leaguearc.arc_for(Divine Orb,cold)"]["historyPoints"] = len(
+            arc_out.get("history") or []
+        )
         _, ops["leaguearc.arc_for(Divine Orb,warm)"] = bench(
             lambda: leaguearc.arc_for("Divine Orb", "divine"), n=runs, flush=False
         )
@@ -311,7 +390,9 @@ def run_benchmarks(db_arg: str | None, runs: int) -> dict:
             inf, ops[f"inflation.compute({anc},336h)"] = bench(
                 lambda a=anc: inflation.compute(a, 336), n=cold_runs, flush=True
             )
-            ops[f"inflation.compute({anc},336h)"]["series"] = len(inf.get("series") or [])
+            ops[f"inflation.compute({anc},336h)"]["series"] = len(
+                inf.get("series") or []
+            )
 
         # macOS ru_maxrss is in bytes; Linux is in kilobytes.
         ru = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
@@ -337,10 +418,17 @@ def run_benchmarks(db_arg: str | None, runs: int) -> dict:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Arbiter repeatable backend microbenchmark & PyInstaller inspector")
+    parser = argparse.ArgumentParser(
+        description="Arbiter repeatable backend microbenchmark & PyInstaller inspector"
+    )
     parser.add_argument("--db", help="Path to market.sqlite or market-seed.sqlite.gz")
-    parser.add_argument("--runs", type=int, default=5, help="Iterations per benchmark (default: 5)")
-    parser.add_argument("--pyi-inspect", help="Inspect a PyInstaller --onefile binary instead of running compute benchmarks")
+    parser.add_argument(
+        "--runs", type=int, default=5, help="Iterations per benchmark (default: 5)"
+    )
+    parser.add_argument(
+        "--pyi-inspect",
+        help="Inspect a PyInstaller --onefile binary instead of running compute benchmarks",
+    )
     args = parser.parse_args()
 
     if args.pyi_inspect:

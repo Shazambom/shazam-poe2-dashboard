@@ -4,13 +4,14 @@ PyInstaller bundles this as a second single binary (numpy/stumpy). It reads mark
 DATA_DIR (RO/RW on the disposable market DB), never opens a socket, and dies with the backend
 (ARBITER_PARENT_PID + stdin-EOF). See docs/db-architecture.md "Heavy analytics".
 """
+
 import sys
 from pathlib import Path
 
 # When frozen, `app`/`sidecar` are on the bundle path; in dev, add backend/ so both import.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from sidecar import runner  # noqa: E402
+from sidecar import runner
 
 
 def _selftest() -> int:
@@ -24,13 +25,21 @@ def _selftest() -> int:
     DAY, t0 = 86400, 1_700_000_000
     closes = [10.0, 9.8, 10.2, 9.9, 10.1, 9.8, 30.0]
     vols = [30_000] * 6 + [300_000]
-    series = {1: [(t0 + i * DAY, float(c), float(c) * float(v))
-                  for i, (c, v) in enumerate(zip(closes, vols))]}
+    series = {
+        1: [
+            (t0 + i * DAY, float(c), float(c) * float(v))
+            for i, (c, v) in enumerate(zip(closes, vols, strict=False))
+        ]
+    }
     signals = discords.compute(series, {1: ("Divine Orb", "currency")})
-    weights = arc.compute_weights([1, 1.3, 1.6, 1.9, 1.7],
-                                  {"A": [10, 13, 16, 19, 17], "B": [1, .8, .6, .4, .3]})
-    assert len(signals) == 1 and signals[0]["item_id"] == 1, signals
-    assert weights and abs(sum(weights.values()) - 1.0) < 1e-9, weights
+    weights = arc.compute_weights(
+        [1, 1.3, 1.6, 1.9, 1.7],
+        {"A": [10, 13, 16, 19, 17], "B": [1, 0.8, 0.6, 0.4, 0.3]},
+    )
+    if not (len(signals) == 1 and signals[0]["item_id"] == 1):
+        raise AssertionError(signals)
+    if not (weights and abs(sum(weights.values()) - 1.0) < 1e-9):
+        raise AssertionError(weights)
     print(f"sidecar selftest OK: discords={signals} arc={weights}")
     return 0
 
@@ -42,8 +51,11 @@ def main(argv: list[str] | None = None) -> int:
     try:
         runner.main()
         return 0
-    except BaseException as exc:            # a startup crash (e.g. DB open) must not vanish silently
+    except (
+        BaseException
+    ) as exc:  # a startup crash (e.g. DB open) must not vanish silently
         import traceback as _tb
+
         runner._tlog(f"TOP-LEVEL CRASH {exc!r}\n{_tb.format_exc()[-1500:]}")
         raise
 

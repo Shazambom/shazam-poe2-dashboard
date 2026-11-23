@@ -27,6 +27,7 @@ Derivations, each one a rule the export supports:
   tag) are two more. The orb's minimum modifier level applies where regular orbs roll: item-domain
   prefix/suffix pools.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -38,6 +39,8 @@ import time
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 
+from starlette.concurrency import run_in_threadpool
+
 from . import catalog, db, gamedata, gateway
 
 log = logging.getLogger("poe2arb.modpool")
@@ -45,16 +48,30 @@ log = logging.getLogger("poe2arb.modpool")
 REPOE = "https://repoe-fork.github.io/poe2/"
 REPOE_FILES = ("mods.json", "base_items.json", "item_classes.json", "augments.min.json")
 POE2DB = "https://poe2db.tw/us/"
-PAGE_HEADERS = {"Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8", "Accept-Language": "en-US,en;q=0.9"}
+PAGE_HEADERS = {
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.9",
+}
 AFFIXES = ("prefix", "suffix", "corrupted", "enchant")
 # Tags that group families for the game's bookkeeping, never worth a chip.
-GENERIC_TAGS = frozenset({"resource", "drop", "default", "unveiled_mod", "upgraded_corruption_mod"})
+GENERIC_TAGS = frozenset(
+    {"resource", "drop", "default", "unveiled_mod", "upgraded_corruption_mod"}
+)
 # The one class whose bases carry no spawn tag: a logbook rolls its areas' mods. Keyed by the
 # class's display name, since the export lists two logbook classes under one name.
 DOMAIN_OVERRIDES = {"Expedition Logbooks": "expedition_relic"}
 # PoE1 leftovers the export still carries with released bases and a category. A class with no
 # category at all (hidden items) is not an item class and needs no listing.
-LEGACY_CLASSES = frozenset({"FishingRod", "MemoryLine", "HeistEquipmentWeapon", "HeistEquipmentTool", "HeistEquipmentUtility", "HeistEquipmentReward"})
+LEGACY_CLASSES = frozenset(
+    {
+        "FishingRod",
+        "MemoryLine",
+        "HeistEquipmentWeapon",
+        "HeistEquipmentTool",
+        "HeistEquipmentUtility",
+        "HeistEquipmentReward",
+    }
+)
 # Socketable target phrases that name a group rather than classes. Armour and the martial weapons
 # are read off base tags; the caster weapons and jewellery carry no shared tag.
 CASTER = ("Wand", "Staff", "Sceptre")
@@ -69,7 +86,9 @@ class Export:
     bases: dict
     classes: dict
     augments: dict
-    _class_tags: dict | None = field(default=None, repr=False, compare=False)   # memo of _class_tags()
+    _class_tags: dict | None = field(
+        default=None, repr=False, compare=False
+    )  # memo of _class_tags()
 
 
 @dataclass
@@ -167,8 +186,13 @@ def classes_of(target, plural: dict, export: Export) -> list:
     martial = [plural[c] for c, t in ctags.items() if "weapon" in t and c in plural]
     caster = [plural[c] for c in CASTER if c in plural]
     jewellery = [plural[c] for c in JEWELLERY if c in plural]
-    groups = {"Martial Weapon": martial, "Caster Weapon": caster, "Weapon": martial + caster, "Armour": armour,
-              "All Equipment": armour + martial + caster + jewellery}
+    groups = {
+        "Martial Weapon": martial,
+        "Caster Weapon": caster,
+        "Weapon": martial + caster,
+        "Armour": armour,
+        "All Equipment": armour + martial + caster + jewellery,
+    }
     out = []
     for part in re.split(r",\s*|\s+(?:or|and)\s+", strip_markup(target)):
         p = part.strip()
@@ -177,13 +201,17 @@ def classes_of(target, plural: dict, export: Export) -> list:
         elif p in plural:
             out.append(plural[p])
         else:
-            log.warning("modpool: unknown socketable target %r in %r; dropped", p, target)
+            log.warning(
+                "modpool: unknown socketable target %r in %r; dropped", p, target
+            )
     seen = set()
     return [c for c in out if not (c in seen or seen.add(c))]
 
 
 # ------------------------------------------------------------------ pools
-_ATTR = re.compile(r"^((?:str|dex|int)(?:_(?:str|dex|int))*)_(?:armour|shield|special_relic)$")
+_ATTR = re.compile(
+    r"^((?:str|dex|int)(?:_(?:str|dex|int))*)_(?:armour|shield|special_relic)$"
+)
 _TIER_IN_NAME = re.compile(r"\(Tier (\d+)\)")
 
 
@@ -202,12 +230,18 @@ def pool_name(class_name: str, tags: list, bases: list, split: bool) -> str:
         return f"{class_name} · {'/'.join(attrs)}"
     if not split:
         return class_name
-    tiers = sorted(int(m.group(1)) for n in bases for m in [_TIER_IN_NAME.search(n)] if m)
+    tiers = sorted(
+        int(m.group(1)) for n in bases for m in [_TIER_IN_NAME.search(n)] if m
+    )
     if tiers and len(tiers) == len(bases):
-        return f"{class_name} · T{tiers[0]}" + (f"–{tiers[-1]}" if tiers[-1] != tiers[0] else "")
+        return f"{class_name} · T{tiers[0]}" + (
+            f"–{tiers[-1]}" if tiers[-1] != tiers[0] else ""
+        )
     words = [n.split(" ") for n in bases]
     last = words[0][-1]
-    shared = all(len(w) > 1 and w[-1] == last for w in words) and (len(words) > 1 or last == class_name or last in singulars(class_name))
+    shared = all(len(w) > 1 and w[-1] == last for w in words) and (
+        len(words) > 1 or last == class_name or last in singulars(class_name)
+    )
     short = sorted(" ".join(w[:-1]) for w in words) if shared else sorted(bases)
     head = ", ".join(short[:3])
     return f"{class_name} · {head}" + (f" +{len(short) - 3}" if len(short) > 3 else "")
@@ -237,8 +271,7 @@ def _domain_of(class_tags: set, mods: dict) -> str | None:
     return counts.most_common(1)[0][0] if counts else None
 
 
-def pools_from(export: Export, families: list | None = None) -> list:
-    spawn_tags = _spawn_tags_by_domain(export.mods)
+def _released_classes(export: Export) -> dict:
     # Classes are grouped by display name: two class ids with one name are one thing to the user.
     by_name: dict = {}
     for b in export.bases.values():
@@ -254,7 +287,11 @@ def pools_from(export: Export, families: list | None = None) -> list:
     # one thing: keep the name the overrides know, else the first.
     by_bases: dict = {}
     for name, entry in list(by_name.items()):
-        key = tuple(sorted((b["name"], tuple(sorted(b.get("tags") or []))) for b in entry["bases"]))
+        key = tuple(
+            sorted(
+                (b["name"], tuple(sorted(b.get("tags") or []))) for b in entry["bases"]
+            )
+        )
         other = by_bases.get(key)
         if other and other != name:
             keep, drop = (name, other) if name in DOMAIN_OVERRIDES else (other, name)
@@ -262,47 +299,98 @@ def pools_from(export: Export, families: list | None = None) -> list:
             by_bases[key] = keep
         else:
             by_bases[key] = name
+    return by_name
+
+
+def pools_from(export: Export, families: list | None = None) -> list:
+    spawn_tags = _spawn_tags_by_domain(export.mods)
+    by_name = _released_classes(export)
     pools = []
     for class_name, entry in by_name.items():
         cid, bases = entry["cid"], entry["bases"]
-        class_tags = set(t for b in bases for t in b.get("tags") or [])
+        class_tags = {t for b in bases for t in b.get("tags") or []}
         domain = DOMAIN_OVERRIDES.get(class_name) or _domain_of(class_tags, export.mods)
         if not domain:
             continue
         spawn = spawn_tags[domain]
         groups = defaultdict(list)
-        desecrates = defaultdict(set)   # a variant's base tags the bones' mods key on (a waystone's `map` is no area tag)
+        desecrates = defaultdict(
+            set
+        )  # a variant's base tags the bones' mods key on (a waystone's `map` is no area tag)
         for b in bases:
             tags = tuple(sorted(set(b.get("tags") or []) & spawn))
-            if class_name in DOMAIN_OVERRIDES:   # a logbook: every tag its domain's mods roll on
-                tags = tuple(sorted(set(w["tag"] for m in export.mods.values() if m.get("domain") == domain for w in m.get("spawn_weights") or [] if w["weight"] > 0) - {"default"}))
+            if (
+                class_name in DOMAIN_OVERRIDES
+            ):  # a logbook: every tag its domain's mods roll on
+                tags = tuple(
+                    sorted(
+                        {
+                            w["tag"]
+                            for m in export.mods.values()
+                            if m.get("domain") == domain
+                            for w in m.get("spawn_weights") or []
+                            if w["weight"] > 0
+                        }
+                        - {"default"}
+                    )
+                )
             groups[tags].append(b["name"])
-            desecrates[tags] |= set(b.get("tags") or []) & spawn_tags.get("desecrated", set())
+            desecrates[tags] |= set(b.get("tags") or []) & spawn_tags.get(
+                "desecrated", set()
+            )
         variants = [(list(t), sorted(set(n))) for t, n in groups.items() if t]
-        if any(_attrs(t) for t, _ in variants):   # the attribute-less golden bases are unique-only
+        if any(
+            _attrs(t) for t, _ in variants
+        ):  # the attribute-less golden bases are unique-only
             variants = [(t, n) for t, n in variants if _attrs(t)]
         split = len(variants) > 1 and not any(_attrs(t) for t, _ in variants)
         big = max(variants, key=lambda v: len(v[1])) if split else None
-        generic = big if big and len(big[1]) >= 3 and all(v is big or len(big[1]) > 2 * len(v[1]) for v in variants) else None
+        generic = (
+            big
+            if big
+            and len(big[1]) >= 3
+            and all(v is big or len(big[1]) > 2 * len(v[1]) for v in variants)
+            else None
+        )
         for tags, names in variants:
             attrs = _attrs(tags)
-            name = class_name if (tags, names) == generic else pool_name(class_name, tags, names, split)
+            name = (
+                class_name
+                if (tags, names) == generic
+                else pool_name(class_name, tags, names, split)
+            )
             if attrs:
                 pid = f"{slug(cid)}_{'_'.join(a.lower() for a in attrs)}"
             elif not split or (tags, names) == generic:
                 pid = slug(cid)
             else:
                 pid = f"{slug(cid)}_{slug(name.split(' · ', 1)[1])}"
-            if any(p["id"] == pid for p in pools):   # two tag sets with the same attributes: the bases tell them apart
+            if any(
+                p["id"] == pid for p in pools
+            ):  # two tag sets with the same attributes: the bases tell them apart
                 pid = f"{pid}_{slug(names[0])}"
-            pools.append({"id": pid, "name": name, "class": class_name, "domain": domain, "tags": tags, "keywords": names,
-                          "desecrates": sorted(desecrates[tuple(tags)])})
+            pools.append(
+                {
+                    "id": pid,
+                    "name": name,
+                    "class": class_name,
+                    "domain": domain,
+                    "tags": tags,
+                    "keywords": names,
+                    "desecrates": sorted(desecrates[tuple(tags)]),
+                }
+            )
     # A pool nothing rolls on is not a pool (sanctified relics, junk classes).
     fams = families if families is not None else families_from(export)
     keep = []
     for p in pools:
         tags = set(p["tags"])
-        if any(f["domain"] == p["domain"] and f["affix"] in ("prefix", "suffix") and any(rolls_on(t["weights"], tags) for t in f["tiers"]) for f in fams):
+        if any(
+            f["domain"] == p["domain"]
+            and f["affix"] in ("prefix", "suffix")
+            and any(rolls_on(t["weights"], tags) for t in f["tiers"])
+            for f in fams
+        ):
             keep.append(p)
         else:
             log.info("modpool: nothing rolls on %s; not a pool", p["id"])
@@ -317,12 +405,22 @@ def primary_tags(tags, universe: set, freq: Counter) -> list:
     """The tags worth a chip: no bookkeeping tag, no compound whose part is itself a tag
     (elemental_damage beside elemental and damage); rarest first, so a family's chips are its
     most specific."""
-    out = [t for t in set(tags) if t not in GENERIC_TAGS and not ("_" in t and any(p in universe for p in t.split("_")))]
+    out = [
+        t
+        for t in set(tags)
+        if t not in GENERIC_TAGS
+        and not ("_" in t and any(p in universe for p in t.split("_")))
+    ]
     return sorted(out, key=lambda t: (freq.get(t, 0), t))
 
 
 def _base_tags(export: Export) -> set:
-    return set(t for b in export.bases.values() if b.get("release_state") == "released" for t in b.get("tags") or [])
+    return {
+        t
+        for b in export.bases.values()
+        if b.get("release_state") == "released"
+        for t in b.get("tags") or []
+    }
 
 
 def families_from(export: Export) -> list:
@@ -331,7 +429,7 @@ def families_from(export: Export) -> list:
     Collarbone, the jewel and waystone bones)."""
     domains = set(DOMAIN_OVERRIDES.values())
     class_tags = _class_tags(export)
-    for cid, tags in class_tags.items():
+    for _cid, tags in class_tags.items():
         d = _domain_of(tags, export.mods)
         if d:
             domains.add(d)
@@ -342,20 +440,46 @@ def families_from(export: Export) -> list:
             continue
         affix = m.get("generation_type")
         implicit = m.get("implicit_tags") or []
-        if m.get("domain") in domains and affix in ("prefix", "suffix", "corrupted") and not m.get("is_essence_only"):
+        if (
+            m.get("domain") in domains
+            and affix in ("prefix", "suffix", "corrupted")
+            and not m.get("is_essence_only")
+        ):
             pass
-        elif m.get("domain") == "item" and affix == "unique" and "upgraded_corruption_mod" in implicit:
+        elif (
+            m.get("domain") == "item"
+            and affix == "unique"
+            and "upgraded_corruption_mod" in implicit
+        ):
             affix = "enchant"
         elif m.get("domain") == "desecrated" and affix in ("prefix", "suffix"):
-            pass   # every rollable desecration: the bones' lords, the Altered Collarbone, the jewel/waystone bones
+            pass  # every rollable desecration: the bones' lords, the Altered Collarbone, the jewel/waystone bones
         else:
             continue
         text = strip_markup(m["text"])
         group = (m.get("groups") or [None])[0] or m.get("type") or mid
         key = (m["domain"], affix, group, family_text(text))
-        fam = by_key.setdefault(key, {"affix": affix, "domain": m["domain"], "group": group, "text": family_text(text), "tags": set(), "tiers": []})
+        fam = by_key.setdefault(
+            key,
+            {
+                "affix": affix,
+                "domain": m["domain"],
+                "group": group,
+                "text": family_text(text),
+                "tags": set(),
+                "tiers": [],
+            },
+        )
         fam["tags"].update(implicit)
-        fam["tiers"].append({"id": mid, "name": m.get("name") or "", "ilvl": int(m.get("required_level") or 0), "text": tier_text(text), "weights": weights})
+        fam["tiers"].append(
+            {
+                "id": mid,
+                "name": m.get("name") or "",
+                "ilvl": int(m.get("required_level") or 0),
+                "text": tier_text(text),
+                "weights": weights,
+            }
+        )
     universe, freq = set(), Counter()
     for f in by_key.values():
         for t in f["tags"]:
@@ -364,22 +488,30 @@ def families_from(export: Export) -> list:
     seen = Counter()
     out = []
     for f in by_key.values():
-        base = f"{f['affix']}:{f['group']}" + ("" if f["domain"] == "item" else f"@{f['domain']}")
+        base = f"{f['affix']}:{f['group']}" + (
+            "" if f["domain"] == "item" else f"@{f['domain']}"
+        )
         seen[base] += 1
         fid = base if seen[base] == 1 else f"{base}#{seen[base]}"
-        out.append({"id": fid, "affix": f["affix"], "domain": f["domain"], "group": f["group"], "text": f["text"],
-                    "tags": primary_tags(f["tags"], universe, freq),
-                    "tiers": sorted(f["tiers"], key=lambda t: (-t["ilvl"], t["id"]))})
+        out.append(
+            {
+                "id": fid,
+                "affix": f["affix"],
+                "domain": f["domain"],
+                "group": f["group"],
+                "text": f["text"],
+                "tags": primary_tags(f["tags"], universe, freq),
+                "tiers": sorted(f["tiers"], key=lambda t: (-t["ilvl"], t["id"])),
+            }
+        )
     return out
 
 
-# ------------------------------------------------------------------ sections (derived)
+# ------------------------------------------------------------------ derived sections for mod pools
 _CAN_ROLL = re.compile(r"Can roll (\w+) modifiers", re.I)
 
 
-def sections_from(export: Export, families: list, pools: list | None = None) -> list:
-    carried = _base_tags(export)
-    plural = plural_index(export.classes)
+def _socketable_carriers(export: Export, plural: dict) -> dict:
     # Carriers: a socketable whose text names the pool it opens.
     carriers = {}
     for mid, a in export.augments.items():
@@ -387,8 +519,18 @@ def sections_from(export: Export, families: list, pools: list | None = None) -> 
             for t in c.get("stat_text") or []:
                 m = _CAN_ROLL.search(strip_markup(t))
                 if m:
-                    carriers[m.group(1).lower()] = (export.bases.get(mid, {}).get("name") or mid.split("/")[-1], classes_of(c.get("target"), plural, export))
-    keyed: dict = defaultdict(list)   # key tag → the (family, tier) pairs keyed on it
+                    carriers[m.group(1).lower()] = (
+                        export.bases.get(mid, {}).get("name") or mid.split("/")[-1],
+                        classes_of(c.get("target"), plural, export),
+                    )
+    return carriers
+
+
+def sections_from(export: Export, families: list, pools: list | None = None) -> list:
+    carried = _base_tags(export)
+    plural = plural_index(export.classes)
+    carriers = _socketable_carriers(export, plural)
+    keyed: dict = defaultdict(list)  # key tag → the (family, tier) pairs keyed on it
     for f in families:
         if f["affix"] not in ("prefix", "suffix"):
             continue
@@ -396,41 +538,118 @@ def sections_from(export: Export, families: list, pools: list | None = None) -> 
             for tag, w in t["weights"]:
                 if w > 0 and tag not in carried:
                     keyed[tag].append((f, t))
-    sections = [{"id": "base", "title": None, "domain": None, "affixes": ["prefix", "suffix"], "keys": [], "classes": None, "floored": True}]
-    pool_classes = {p["class"] for p in (pools if pools is not None else pools_from(export, families))}
-    by_domain: dict = {}   # the unveiled keys of a non-item domain are one section (poe2db: one "Desecrated" group, the lords as tags in it)
+    sections = [
+        {
+            "id": "base",
+            "title": None,
+            "domain": None,
+            "affixes": ["prefix", "suffix"],
+            "keys": [],
+            "classes": None,
+            "floored": True,
+        }
+    ]
+    pool_classes = {
+        p["class"]
+        for p in (pools if pools is not None else pools_from(export, families))
+    }
+    by_domain: dict = {}  # the unveiled keys of a non-item domain are one section (poe2db: one "Desecrated" group, the lords as tags in it)
     for tag, pairs in sorted(keyed.items()):
         domain = Counter(f["domain"] for f, _ in pairs).most_common(1)[0][0]
         socketed = tag in carriers
         if socketed:
             title, classes = carriers[tag]
-        elif any(t in carried and t != "default" for _, tier in pairs for t, _w in tier["weights"]):
+        elif any(
+            t in carried and t != "default"
+            for _, tier in pairs
+            for t, _w in tier["weights"]
+        ):
             # No currency names the pool, so its mods do: each zero-weights the scoped classes it is
             # not for (a Genesis Tree ring mod names belt 0, a belt mod ring 0), and the union is
             # where the pool lands. Measured against poe2db 2026-09-28: Genesis Tree on Rings and
             # Belts only, the Altered Collarbone's on Amulets, Rings and Belts.
-            zeroed = {t for _, tier in pairs for t, w in tier["weights"] if w == 0 and t in carried and t != "default"}
+            zeroed = {
+                t
+                for _, tier in pairs
+                for t, w in tier["weights"]
+                if w == 0 and t in carried and t != "default"
+            }
             title = label(tag)
-            classes = sorted({plural.get(c, c) for c, ct in _class_tags(export).items() if c and ct & zeroed} & pool_classes) if zeroed else None
+            classes = (
+                sorted(
+                    {
+                        plural.get(c, c)
+                        for c, ct in _class_tags(export).items()
+                        if c and ct & zeroed
+                    }
+                    & pool_classes
+                )
+                if zeroed
+                else None
+            )
         else:
             log.info("modpool: key %s has no carrier and no base tag; skipped", tag)
             continue
-        unveiled = all("unveiled_mod" in (export.mods.get(tier["id"], {}).get("implicit_tags") or []) for _, tier in pairs)
+        unveiled = all(
+            "unveiled_mod"
+            in (export.mods.get(tier["id"], {}).get("implicit_tags") or [])
+            for _, tier in pairs
+        )
         if domain != "item" and not unveiled:
             # Same domain, never unveiled at the Well: another currency's pool (the Altered
             # Collarbone's otherworldly mods; poe2db "Otherworldly", owner 2026-09-28).
-            sections.append({"id": tag, "title": title, "domain": domain, "affixes": ["prefix", "suffix"], "keys": [tag], "classes": classes, "floored": False})
+            sections.append(
+                {
+                    "id": tag,
+                    "title": title,
+                    "domain": domain,
+                    "affixes": ["prefix", "suffix"],
+                    "keys": [tag],
+                    "classes": classes,
+                    "floored": False,
+                }
+            )
             continue
         if domain != "item":
             if domain not in by_domain:
-                by_domain[domain] = {"id": domain, "title": label(domain), "domain": domain, "affixes": ["prefix", "suffix"], "keys": [], "classes": None, "floored": False, "unkeyed": True}
+                by_domain[domain] = {
+                    "id": domain,
+                    "title": label(domain),
+                    "domain": domain,
+                    "affixes": ["prefix", "suffix"],
+                    "keys": [],
+                    "classes": None,
+                    "floored": False,
+                    "unkeyed": True,
+                }
                 sections.append(by_domain[domain])
             by_domain[domain]["keys"].append(tag)
             continue
-        sections.append({"id": tag, "title": title, "domain": domain, "affixes": ["prefix", "suffix"], "keys": [tag], "classes": classes, "floored": True, "socketed": socketed})
+        sections.append(
+            {
+                "id": tag,
+                "title": title,
+                "domain": domain,
+                "affixes": ["prefix", "suffix"],
+                "keys": [tag],
+                "classes": classes,
+                "floored": True,
+                "socketed": socketed,
+            }
+        )
     for affix, title in (("corrupted", "Corrupted"), ("enchant", "Corrupted upgrade")):
         if any(f["affix"] == affix for f in families):
-            sections.append({"id": affix, "title": title, "domain": "item", "affixes": [affix], "keys": [], "classes": None, "floored": False})
+            sections.append(
+                {
+                    "id": affix,
+                    "title": title,
+                    "domain": "item",
+                    "affixes": [affix],
+                    "keys": [],
+                    "classes": None,
+                    "floored": False,
+                }
+            )
     return sections
 
 
@@ -443,33 +662,81 @@ def _keys_on(family: dict, keys: list) -> bool:
     return not keys or bool(_rolled(family["tiers"]) & set(keys))
 
 
-def _row_tags(family: dict, section: dict, rolled: set, all_keys: set = frozenset()) -> list:
+def _row_tags(
+    family: dict, section: dict, rolled: set, all_keys: set | frozenset = frozenset()
+) -> list:
     """The row's tags. A section's keys are never tags in it (one key is the section's title); in a
     section of several keys (the bones) the keys the family rolls on lead, so the two tags a row
     shows include the bone, then the family's own tags. Another pool's key rides on a family that
     also holds that pool's tiers; it is a tag only where the shown tiers roll on it."""
     keys = set(section["keys"])
-    own = [t for t in family["tags"] if t not in keys and not (t in all_keys and t not in rolled)]
-    lead = [k for k in section["keys"] if k in rolled] if len(section["keys"]) > 1 else []
+    own = [
+        t
+        for t in family["tags"]
+        if t not in keys and not (t in all_keys and t not in rolled)
+    ]
+    lead = (
+        [k for k in section["keys"] if k in rolled] if len(section["keys"]) > 1 else []
+    )
     return lead + own
+
+
+def _section_tiers(f, s, pool, domain, tags, corruption, corrupted_groups, all_keys):
+    if s["id"] == "enchant" and pool["domain"] != "item":
+        # Off gear, the upgrades are the ones weighted on no class, of a corruption the pool has
+        # (poe2db Ruby: 7; a relic's one corruption has no upgrade).
+        tiers = [
+            t
+            for t in f["tiers"]
+            if f["group"] in corrupted_groups and _rolled([t]) == {"default"}
+        ]
+    elif s.get("socketed"):
+        # A socketable's pool is all of it on any item the socketable fits, whatever the base
+        # (owner 2026-10-12; poe2db lists it so): the export's per-base zeros are not applied.
+        tiers = [t for t in f["tiers"] if _rolled([t]) & set(s["keys"])]
+    else:
+        tiers = [t for t in f["tiers"] if rolls_on(t["weights"], tags)]
+    if domain != "item" and s["id"] != "base" and not corruption:
+        # A desecration pool shows the tiers its own currency adds: a lord's tier under the
+        # lords, an otherworldly tier under the Altered Collarbone, a tier keyed on no one
+        # under the jewel and waystone bones. One family can hold tiers of two of them.
+        tiers = [
+            t
+            for t in tiers
+            if (_rolled([t]) & set(s["keys"]))
+            or (s.get("unkeyed") and not _rolled([t]) & all_keys)
+        ]
+    return tiers
 
 
 def build_pool(pool: dict, families: list, sections: list) -> dict:
     """One item type's pools, precomputed for the client: no spawn weights leave here."""
     out = []
-    count, base = Counter(), Counter()   # tag → rows carrying it, over every table / the base table
+    count, base = (
+        Counter(),
+        Counter(),
+    )  # tag → rows carrying it, over every table / the base table
     all_keys = {k for s in sections for k in s["keys"]}
-    corrupted_groups: set = set()   # the corruption families this pool shows (an upgrade upgrades one of them)
+    corrupted_groups: set = (
+        set()
+    )  # the corruption families this pool shows (an upgrade upgrades one of them)
     for s in sections:
         corruption = s["id"] in ("corrupted", "enchant")
-        if s["id"] != "base" and pool["domain"] != "item" and s["domain"] == "item" and not corruption:
-            continue   # a jewel or waystone takes no item-domain pool, but it can be desecrated and corrupted
+        if (
+            s["id"] != "base"
+            and pool["domain"] != "item"
+            and s["domain"] == "item"
+            and not corruption
+        ):
+            continue  # a jewel or waystone takes no item-domain pool, but it can be desecrated and corrupted
         if s["classes"] is not None and pool["class"] not in s["classes"]:
             continue
         tags = set(pool["tags"]) | set(s["keys"])
         domain = s["domain"] or pool["domain"]
         if s["id"] == "corrupted":
-            domain = pool["domain"]   # a jewel's and a relic's corruption modifiers are their own domain's
+            domain = pool[
+                "domain"
+            ]  # a jewel's and a relic's corruption modifiers are their own domain's
         if s["id"] != "base" and domain != "item" and not corruption:
             tags |= set(pool.get("desecrates") or ())
         sec = {"id": s["id"], "title": s["title"], "floored": s["floored"]}
@@ -478,30 +745,34 @@ def build_pool(pool: dict, families: list, sections: list) -> dict:
         for f in families:
             if f["domain"] != domain or f["affix"] not in s["affixes"]:
                 continue
-            if not _keys_on(f, s["keys"]) and not (s.get("unkeyed") and not _rolled(f["tiers"]) & all_keys):
+            if not _keys_on(f, s["keys"]) and not (
+                s.get("unkeyed") and not _rolled(f["tiers"]) & all_keys
+            ):
                 continue
-            if s["id"] == "enchant" and pool["domain"] != "item":
-                # Off gear, the upgrades are the ones weighted on no class, of a corruption the pool has
-                # (poe2db Ruby: 7; a relic's one corruption has no upgrade).
-                tiers = [t for t in f["tiers"] if f["group"] in corrupted_groups and _rolled([t]) == {"default"}]
-            elif s.get("socketed"):
-                # A socketable's pool is all of it on any item the socketable fits, whatever the base
-                # (owner 2026-10-12; poe2db lists it so): the export's per-base zeros are not applied.
-                tiers = [t for t in f["tiers"] if _rolled([t]) & set(s["keys"])]
-            else:
-                tiers = [t for t in f["tiers"] if rolls_on(t["weights"], tags)]
-            if domain != "item" and s["id"] != "base" and not corruption:
-                # A desecration pool shows the tiers its own currency adds: a lord's tier under the
-                # lords, an otherworldly tier under the Altered Collarbone, a tier keyed on no one
-                # under the jewel and waystone bones. One family can hold tiers of two of them.
-                tiers = [t for t in tiers if (_rolled([t]) & set(s["keys"])) or (s.get("unkeyed") and not _rolled([t]) & all_keys)]
+            tiers = _section_tiers(
+                f, s, pool, domain, tags, corruption, corrupted_groups, all_keys
+            )
             if not tiers:
                 continue
             if s["id"] == "corrupted":
                 corrupted_groups.add(f["group"])
             row_tags = _row_tags(f, s, _rolled(tiers), all_keys)
-            sec[f["affix"]].append({"id": f["id"], "text": f["text"], "tags": row_tags,
-                                    "tiers": [{"tier": i + 1, "name": t["name"], "ilvl": t["ilvl"], "text": t["text"]} for i, t in enumerate(tiers)]})
+            sec[f["affix"]].append(
+                {
+                    "id": f["id"],
+                    "text": f["text"],
+                    "tags": row_tags,
+                    "tiers": [
+                        {
+                            "tier": i + 1,
+                            "name": t["name"],
+                            "ilvl": t["ilvl"],
+                            "text": t["text"],
+                        }
+                        for i, t in enumerate(tiers)
+                    ],
+                }
+            )
             count.update(row_tags)
             if s["id"] == "base":
                 base.update(row_tags)
@@ -509,53 +780,83 @@ def build_pool(pool: dict, families: list, sections: list) -> dict:
             out.append(sec)
     # Chips: every tag on any table, the base pool's tags first (as poe2db's row reads), commonest
     # first within a group, then the keys and whatever only the other pools carry.
-    chips = [{"id": t, "label": label(t)} for t in sorted(count, key=lambda t: (-base[t], -count[t], t))]
+    chips = [
+        {"id": t, "label": label(t)}
+        for t in sorted(count, key=lambda t: (-base[t], -count[t], t))
+    ]
     return {"sections": out, "tags": chips}
 
 
 def derive(export: Export) -> Derived:
     families = families_from(export)
     pools = pools_from(export, families)
-    return Derived(pools=pools, families=families, sections=sections_from(export, families, pools))
+    return Derived(
+        pools=pools, families=families, sections=sections_from(export, families, pools)
+    )
 
 
 # ------------------------------------------------------------------ poe2db pages
-_ITEM = re.compile(r'<a class="item_currency[^"]*"[^>]*href="([^"]+)"[^>]*>(?:<img[^>]*/>)?([^<]+)</a>(.*?)(?=<a class="item_currency|$)', re.S)
-_LEVEL = re.compile(r"(Minimum Modifier Level|Maximum Item Level)</a>:\s*<span[^>]*>(\d+)</span>")
-_TABLE = re.compile(r"<table[^>]*>.*?<th>Class</th><th>Modifier</th><th>Pre/Suf</th><th>Required Level</th>.*?<tbody[^>]*>(.*?)</tbody>", re.S)
+_ITEM = re.compile(
+    r'<a class="item_currency[^"]*"[^>]*href="([^"]+)"[^>]*>(?:<img[^>]*/>)?([^<]+)</a>(.*?)(?=<a class="item_currency|$)',
+    re.S,
+)
+_LEVEL = re.compile(
+    r"(Minimum Modifier Level|Maximum Item Level)</a>:\s*<span[^>]*>(\d+)</span>"
+)
+_TABLE = re.compile(
+    r"<table[^>]*>.*?<th>Class</th><th>Modifier</th><th>Pre/Suf</th><th>Required Level</th>.*?<tbody[^>]*>(.*?)</tbody>",
+    re.S,
+)
 _ROW = re.compile(r"<tr>(.*?)</tr>", re.S)
 _CELL = re.compile(r"<td>(.*?)</td>", re.S)
 # The Reforging Bench's "Three to One" list: the card that says so, then its From / To table.
-_BENCH = re.compile(r"Used in Three to One Reforge.*?<table[^>]*><thead><tr><th>From</th><th>To</th></tr></thead><tbody[^>]*>(.*?)</tbody>", re.S)
+_BENCH = re.compile(
+    r"Used in Three to One Reforge.*?<table[^>]*><thead><tr><th>From</th><th>To</th></tr></thead><tbody[^>]*>(.*?)</tbody>",
+    re.S,
+)
 _QTY = re.compile(r"^(.+) x(\d+)$")
 _TAGS = re.compile(r"<[^>]+>")
 
 
 def _text(fragment: str) -> str:
     t = html_lib.unescape(_TAGS.sub("", fragment))
-    return re.sub(r"\s+", " ", t.replace("—", "–")).replace("( ", "(").replace(" )", ")").replace(" %", "%").replace(" ,", ",").strip()
+    return (
+        re.sub(r"\s+", " ", t.replace("—", "–"))
+        .replace("( ", "(")
+        .replace(" )", ")")
+        .replace(" %", "%")
+        .replace(" ,", ",")
+        .strip()
+    )
 
 
 def currencies_from(page: str) -> list:
     """Every currency on poe2db's stackable list with a Minimum Modifier Level or a Maximum Item Level."""
     out, seen = [], set()
-    for slug_, name, body in _ITEM.findall(page):
-        name = html_lib.unescape(name).strip()
+    for slug_, raw_name, body in _ITEM.findall(page):
+        name = html_lib.unescape(raw_name).strip()
         if not name or name in seen:
             continue
         levels = {k: int(v) for k, v in _LEVEL.findall(body)}
         if not levels:
             continue
         seen.add(name)
-        out.append({"id": slug_.lower().replace("_", "-"), "name": name, "floor": levels.get("Minimum Modifier Level", 0), "cap": levels.get("Maximum Item Level")})
+        out.append(
+            {
+                "id": slug_.lower().replace("_", "-"),
+                "name": name,
+                "floor": levels.get("Minimum Modifier Level", 0),
+                "cap": levels.get("Maximum Item Level"),
+            }
+        )
     return out
 
 
 def grant_slugs(page: str) -> list:
     """The currencies whose text says they add a guaranteed modifier: their pages carry the table."""
     out, seen = [], set()
-    for slug_, name, body in _ITEM.findall(page):
-        name = html_lib.unescape(name).strip()
+    for slug_, raw_name, body in _ITEM.findall(page):
+        name = html_lib.unescape(raw_name).strip()
         if name and name not in seen and "guaranteed modifier" in _text(body):
             seen.add(name)
             out.append((slug_, name))
@@ -572,9 +873,24 @@ def grant_from(name: str, page: str) -> dict | None:
         cells = [_text(c) for c in _CELL.findall(row)]
         if len(cells) < 4:
             continue
-        rows.append({"class": cells[0], "text": cells[1], "affix": cells[2].lower(), "level": int(cells[3]) if cells[3].isdigit() else 0})
+        rows.append(
+            {
+                "class": cells[0],
+                "text": cells[1],
+                "affix": cells[2].lower(),
+                "level": int(cells[3]) if cells[3].isdigit() else 0,
+            }
+        )
     kind = "alloy" if "Alloy" in name else "essence"
-    tier = 0 if name.startswith("Lesser ") else 2 if name.startswith("Greater ") else 3 if name.startswith("Perfect ") else 1
+    tier = (
+        0
+        if name.startswith("Lesser ")
+        else 2
+        if name.startswith("Greater ")
+        else 3
+        if name.startswith("Perfect ")
+        else 1
+    )
     return {"name": name, "kind": kind, "tier": tier, "rows": rows}
 
 
@@ -584,14 +900,19 @@ def bench_recipes_from(page: str) -> list:
     gives nothing (never a wrong recipe)."""
     m = _BENCH.search(page)
     if not m:
-        log.warning("bench recipes: no Three to One table on the page (layout changed?)")
+        log.warning(
+            "bench recipes: no Three to One table on the page (layout changed?)"
+        )
         return []
     out = []
     for row in _ROW.findall(m.group(1)):
         cells = [_QTY.match(_text(c)) for c in _CELL.findall(row)]
-        if len(cells) == 2 and all(cells):
-            (a, qa), (b, qb) = (c.groups() for c in cells)
-            out.append({"from": a, "from_qty": int(qa), "to": b, "to_qty": int(qb)})
+        if len(cells) == 2:
+            first, second = cells
+            if first and second:
+                a, qa = first.groups()
+                b, qb = second.groups()
+                out.append({"from": a, "from_qty": int(qa), "to": b, "to_qty": int(qb)})
     return out
 
 
@@ -599,9 +920,17 @@ def bench_recipes_from(page: str) -> list:
 # maps it lasts). Normal bases from the Tablet page's "Tablet Item" list; each unique from the sample
 # item on its own page, never the popup or Stats row, which print the base's 10 for the 5-use uniques.
 _PANE = r'id="{}" class="tab-pane[^"]*">(.*?)(?=<div id="[A-Za-z]+" class="tab-pane|\Z)'
-_BASE_CARD = re.compile(r'<a class="whiteitem TowerAugmentation"[^>]*href="[A-Za-z_]+">([^<]+Tablet)</a>.*?<span class=\'mod-value\'>(\d+)</span> uses? remaining', re.S)
-_UNIQUE_LINK = re.compile(r'<a class="UniqueItem"[^>]*href="(?:/us/)?([A-Za-z_]+)"><span class="uniqueName">([^<]+)</span>')
-_SAMPLE = re.compile(r'"name": "([^"]+)",\s*"typeLine": "[^"]*",\s*"baseType": "([^"]+Tablet)",(.*?)"implicitMods": \[\s*"[^"]*?\\n(\d+) uses? remaining"', re.S)
+_BASE_CARD = re.compile(
+    r'<a class="whiteitem TowerAugmentation"[^>]*href="[A-Za-z_]+">([^<]+Tablet)</a>.*?<span class=\'mod-value\'>(\d+)</span> uses? remaining',
+    re.S,
+)
+_UNIQUE_LINK = re.compile(
+    r'<a class="UniqueItem"[^>]*href="(?:/us/)?([A-Za-z_]+)"><span class="uniqueName">([^<]+)</span>'
+)
+_SAMPLE = re.compile(
+    r'"name": "([^"]+)",\s*"typeLine": "[^"]*",\s*"baseType": "([^"]+Tablet)",(.*?)"implicitMods": \[\s*"[^"]*?\\n(\d+) uses? remaining"',
+    re.S,
+)
 
 
 def _pane(page: str, pane_id: str) -> str:
@@ -626,10 +955,16 @@ def unique_tablet_uses_from(page: str) -> dict | None:
     m = _SAMPLE.search(page)
     if not m or re.search(r'"corrupted":\s*true', m.group(3)):
         return None
-    return {"name": html_lib.unescape(m.group(1)), "base": m.group(2), "uses": int(m.group(4))}
+    return {
+        "name": html_lib.unescape(m.group(1)),
+        "base": m.group(2),
+        "uses": int(m.group(4)),
+    }
 
 
-TABLET_USES = "tablet_uses"   # kv_ops key: the tablets' full uses (read by GET /api/strategy/calc)
+TABLET_USES = (
+    "tablet_uses"  # kv_ops key: the tablets' full uses (read by GET /api/strategy/calc)
+)
 
 
 async def refresh_tablet_uses(max_age: int) -> str | None:
@@ -652,7 +987,7 @@ async def refresh_tablet_uses(max_age: int) -> str | None:
             continue
         if u:
             uniques.append(u)
-    db.kv_set(TABLET_USES, bases + uniques)
+    await run_in_threadpool(db.kv_set, TABLET_USES, bases + uniques)
     return None
 
 
@@ -669,11 +1004,25 @@ def _augments(export: Export, plural: dict) -> list:
                 fits.append({"classes": classes, "text": text, "bonded": bonded})
         name = export.bases.get(mid, {}).get("name") or mid.split("/")[-1]
         if fits:
-            out.append({"id": slug(mid.split("/")[-1]), "name": name, "type": strip_markup(a.get("type_name") or ""), "level": a.get("required_level"), "fits": fits})
+            out.append(
+                {
+                    "id": slug(mid.split("/")[-1]),
+                    "name": name,
+                    "type": strip_markup(a.get("type_name") or ""),
+                    "level": a.get("required_level"),
+                    "fits": fits,
+                }
+            )
     return sorted(out, key=lambda a: a["name"])
 
 
-def assemble(derived: Derived, export: Export | None = None, currencies: list | None = None, grants: list | None = None, source: dict | None = None) -> dict:
+def assemble(
+    derived: Derived,
+    export: Export | None = None,
+    currencies: list | None = None,
+    grants: list | None = None,
+    source: dict | None = None,
+) -> dict:
     """Everything the tables hold: per pool its sections, chips and grants; the currencies; the watermark."""
     grants = [g for g in grants or [] if g]
     augments = _augments(export, plural_index(export.classes)) if export else []
@@ -681,36 +1030,91 @@ def assemble(derived: Derived, export: Export | None = None, currencies: list | 
     for p in derived.pools:
         built = build_pool(p, derived.families, derived.sections)
         cls = p["class"]
-        ess = [{**g, "rows": [r for r in g["rows"] if r["class"] == cls]} for g in grants]
+        ess = [
+            {**g, "rows": [r for r in g["rows"] if r["class"] == cls]} for g in grants
+        ]
         ess = [g for g in ess if g["rows"]]
         ess.sort(key=lambda g: (g["tier"], g["name"]))
         aug = []
         for a in augments:
             fits = [f for f in a["fits"] if cls in f["classes"]]
             if fits:
-                aug.append({"id": a["id"], "name": a["name"], "type": a["type"], "level": a["level"],
-                            "text": sorted(set(t for f in fits for t in f["text"]), key=lambda t: [f["text"].index(t) if t in f["text"] else 0 for f in fits]),
-                            "bonded": [t for f in fits for t in f["bonded"]]})
+                aug.append(
+                    {
+                        "id": a["id"],
+                        "name": a["name"],
+                        "type": a["type"],
+                        "level": a["level"],
+                        "text": sorted(
+                            {t for f in fits for t in f["text"]},
+                            key=lambda t: [
+                                f["text"].index(t) if t in f["text"] else 0
+                                for f in fits
+                            ],
+                        ),
+                        "bonded": [t for f in fits for t in f["bonded"]],
+                    }
+                )
         order = {"Rune": 0, "Soul Core": 1, "Idol": 2}
         aug.sort(key=lambda a: (order.get(a["type"], 9), a["name"]))
-        pools.append({**p, "data": {"sections": built["sections"], "tags": built["tags"],
-                                    "grants": {"essences": [g for g in ess if g["kind"] == "essence"], "alloys": [g for g in ess if g["kind"] == "alloy"], "augments": aug}}})
-    return {"pools": pools, "currencies": currencies or [], "meta": {"built_at": time.time(), "source": source or {}, "pools": len(pools), "families": len(derived.families)}}
+        pools.append(
+            {
+                **p,
+                "data": {
+                    "sections": built["sections"],
+                    "tags": built["tags"],
+                    "grants": {
+                        "essences": [g for g in ess if g["kind"] == "essence"],
+                        "alloys": [g for g in ess if g["kind"] == "alloy"],
+                        "augments": aug,
+                    },
+                },
+            }
+        )
+    return {
+        "pools": pools,
+        "currencies": currencies or [],
+        "meta": {
+            "built_at": time.time(),
+            "source": source or {},
+            "pools": len(pools),
+            "families": len(derived.families),
+        },
+    }
 
 
 def store(result: dict) -> None:
     with db.tx() as c:
         c.execute("DELETE FROM mod_pools")
-        c.executemany("INSERT INTO mod_pools(id, name, class, domain, keywords, data) VALUES (?,?,?,?,?,?)",
-                      [(p["id"], p["name"], p["class"], p["domain"], json.dumps(p["keywords"]), json.dumps(p["data"], separators=(",", ":"))) for p in result["pools"]])
+        c.executemany(
+            "INSERT INTO mod_pools(id, name, class, domain, keywords, data) VALUES (?,?,?,?,?,?)",
+            [
+                (
+                    p["id"],
+                    p["name"],
+                    p["class"],
+                    p["domain"],
+                    json.dumps(p["keywords"]),
+                    json.dumps(p["data"], separators=(",", ":")),
+                )
+                for p in result["pools"]
+            ],
+        )
         c.execute("DELETE FROM mod_currencies")
-        c.executemany("INSERT INTO mod_currencies(id, name, floor, cap) VALUES (?,?,?,?)",
-                      [(x["id"], x["name"], x["floor"], x["cap"]) for x in result["currencies"]])
+        c.executemany(
+            "INSERT INTO mod_currencies(id, name, floor, cap) VALUES (?,?,?,?)",
+            [(x["id"], x["name"], x["floor"], x["cap"]) for x in result["currencies"]],
+        )
     db.kv_set("mods_meta", result["meta"])
-    state.update(loaded_at=time.time(), pools=len(result["pools"]), last_error=None, source=result["meta"].get("source"))
+    state.update(
+        loaded_at=time.time(),
+        pools=len(result["pools"]),
+        last_error=None,
+        source=result["meta"].get("source"),
+    )
 
 
-# ------------------------------------------------------------------ reads (endpoints)
+# ------------------------------------------------------------------ endpoint readers
 _pools_cache: tuple | None = None
 _currencies_cache: tuple | None = None
 _pool_cache: dict[str, dict | None] = {}
@@ -728,8 +1132,19 @@ def pools() -> list:
     if _pools_cache and _pools_cache[0] == ver:
         return _pools_cache[1]
     with db.q() as c:
-        rows = c.execute("SELECT id, name, class, domain, keywords FROM mod_pools ORDER BY class, name").fetchall()
-    res = [{"id": r["id"], "name": r["name"], "class": r["class"], "domain": r["domain"], "keywords": json.loads(r["keywords"])} for r in rows]
+        rows = c.execute(
+            "SELECT id, name, class, domain, keywords FROM mod_pools ORDER BY class, name"
+        ).fetchall()
+    res = [
+        {
+            "id": r["id"],
+            "name": r["name"],
+            "class": r["class"],
+            "domain": r["domain"],
+            "keywords": json.loads(r["keywords"]),
+        }
+        for r in rows
+    ]
     _pools_cache = (ver, res)
     return res
 
@@ -743,8 +1158,21 @@ def pool(pool_id: str) -> dict | None:
     if pool_id in _pool_cache:
         return _pool_cache[pool_id]
     with db.q() as c:
-        r = c.execute("SELECT id, name, class, domain, data FROM mod_pools WHERE id = ?", (pool_id,)).fetchone()
-    res = {"id": r["id"], "name": r["name"], "class": r["class"], "domain": r["domain"], **json.loads(r["data"])} if r else None
+        r = c.execute(
+            "SELECT id, name, class, domain, data FROM mod_pools WHERE id = ?",
+            (pool_id,),
+        ).fetchone()
+    res = (
+        {
+            "id": r["id"],
+            "name": r["name"],
+            "class": r["class"],
+            "domain": r["domain"],
+            **json.loads(r["data"]),
+        }
+        if r
+        else None
+    )
     if len(_pool_cache) >= _POOL_CACHE_MAX:
         _pool_cache.pop(next(iter(_pool_cache)))
     _pool_cache[pool_id] = res
@@ -757,8 +1185,13 @@ def currencies() -> list:
     if _currencies_cache and _currencies_cache[0] == ver:
         return _currencies_cache[1]
     with db.q() as c:
-        rows = c.execute("SELECT id, name, floor, cap FROM mod_currencies ORDER BY rowid").fetchall()
-    res = [{"id": r["id"], "name": r["name"], "floor": r["floor"], "cap": r["cap"]} for r in rows]
+        rows = c.execute(
+            "SELECT id, name, floor, cap FROM mod_currencies ORDER BY rowid"
+        ).fetchall()
+    res = [
+        {"id": r["id"], "name": r["name"], "floor": r["floor"], "cap": r["cap"]}
+        for r in rows
+    ]
     _currencies_cache = (ver, res)
     return res
 
@@ -773,25 +1206,36 @@ def prices(pool_id: str) -> dict | None:
     from . import arbitrage
     from .currencies import registry
     from .movers import _slug
+
     p = pool(pool_id)
     if p is None:
         return None
     try:
         g = arbitrage.cached_graph()
         values, ref = g.values(), g.s["reference"]
-    except Exception as exc:                       # a cold or empty graph is no price, never an error
+    except Exception as exc:  # a cold or empty graph is no price, never an error
         log.warning("modpool: prices unavailable: %s", exc)
         return {"reference": None, "prices": {}}
     ranked = arbitrage.counterparts_by_volume(g, values)
-    by_name = {cur.name.lower(): cid for cid, cur in registry.by_id.items()}   # one pass, not one per grant
+    by_name = {
+        cur.name.lower(): cid for cid, cur in registry.by_id.items()
+    }  # one pass, not one per grant
     out = {}
     for kind in ("essences", "alloys", "augments"):
         for grant in p.get("grants", {}).get(kind, []):
             name = grant["name"]
-            tid = next((c for c in (name.lower(), _slug(name)) if c in registry.by_id), None) or by_name.get(name.lower())
-            native = arbitrage.native_price(g, tid, values, ranked, ref) if tid else None
+            tid = next(
+                (c for c in (name.lower(), _slug(name)) if c in registry.by_id), None
+            ) or by_name.get(name.lower())
+            if not tid:
+                continue
+            native = arbitrage.native_price(g, tid, values, ranked, ref)
             if native:
-                out[name] = {"price": native[0], "cur": native[1], "value_ref": float(values[tid])}
+                out[name] = {
+                    "price": native[0],
+                    "cur": native[1],
+                    "value_ref": float(values[tid]),
+                }
     return {"reference": ref, "prices": out}
 
 
@@ -803,7 +1247,9 @@ async def _page(slug_: str, max_age: int) -> str:
     if path.exists() and time.time() - path.stat().st_mtime < max_age:
         return path.read_text("utf-8", "replace")
     # poe2db's edge answers 503 to a request without a browser's Accept headers.
-    r = await gateway.request("GET", POE2DB + slug_, policy="poe2db", headers=PAGE_HEADERS)
+    r = await gateway.request(
+        "GET", POE2DB + slug_, policy="poe2db", headers=PAGE_HEADERS
+    )
     r.raise_for_status()
     gamedata.CACHE.mkdir(parents=True, exist_ok=True)
     path.write_bytes(r.content)
@@ -820,7 +1266,10 @@ def stored_grants() -> tuple[list, list]:
     for r in rows:
         g = json.loads(r["data"]).get("grants") or {}
         for e in [*g.get("essences", []), *g.get("alloys", [])]:
-            slot = by_name.setdefault(e["name"], {"name": e["name"], "kind": e["kind"], "tier": e["tier"], "rows": []})
+            slot = by_name.setdefault(
+                e["name"],
+                {"name": e["name"], "kind": e["kind"], "tier": e["tier"], "rows": []},
+            )
             for row in e["rows"]:
                 if row not in slot["rows"]:
                     slot["rows"].append(row)
@@ -834,8 +1283,18 @@ async def refresh(force: bool = False) -> dict:
     outcome is in `state`."""
     max_age = 0 if force else 86400
     try:
-        raw = {f: await gamedata._get(REPOE + f, f"repoe-{f}", max_age) for f in REPOE_FILES}
-        export = Export(**{k: json.loads(raw[f]) for k, f in zip(("mods", "bases", "classes", "augments"), REPOE_FILES)})
+        raw = {
+            f: await gamedata._get(REPOE + f, f"repoe-{f}", max_age)
+            for f in REPOE_FILES
+        }
+        export = Export(
+            **{
+                k: json.loads(raw[f])
+                for k, f in zip(
+                    ("mods", "bases", "classes", "augments"), REPOE_FILES, strict=False
+                )
+            }
+        )
     except Exception as exc:
         state["last_error"] = str(exc)
         log.warning("mod pool refresh failed: %s", exc)
@@ -843,14 +1302,24 @@ async def refresh(force: bool = False) -> dict:
     try:
         stackable = await _page("Stackable_Currency", max_age)
         cur = currencies_from(stackable)
-        grants = [grant_from(name, await _page(s, max_age)) for s, name in grant_slugs(stackable)]
+        grants = [
+            grant_from(name, await _page(s, max_age))
+            for s, name in grant_slugs(stackable)
+        ]
         if not cur:
-            raise ValueError("the currency list parsed to nothing (page layout changed?)")
+            raise ValueError(
+                "the currency list parsed to nothing (page layout changed?)"
+            )
         pages_error = None
     except Exception as exc:
         cur, grants = stored_grants()
         pages_error = str(exc)
-        log.warning("mod pool refresh: poe2db unreachable (%s); keeping %d currencies and %d grant pages from the last build", exc, len(cur), len(grants))
+        log.warning(
+            "mod pool refresh: poe2db unreachable (%s); keeping %d currencies and %d grant pages from the last build",
+            exc,
+            len(cur),
+            len(grants),
+        )
     # The Reforging Bench's 3-to-1 list (route search's reforge steps, `recipes.derived`). Nothing
     # parsed keeps the last good list in kv_ops and fails the run so the cron shows it.
     try:
@@ -859,29 +1328,57 @@ async def refresh(force: bool = False) -> dict:
         bench = []
         log.warning("bench recipes: poe2db unreachable (%s)", exc)
     if bench:
-        db.kv_set("bench_recipes", bench)
+        await run_in_threadpool(db.kv_set, "bench_recipes", bench)
     else:
-        pages_error = "; ".join(filter(None, [pages_error, "bench recipes: nothing parsed; kept the last good list"]))
-    pages_error = "; ".join(filter(None, [pages_error, await refresh_tablet_uses(max_age)])) or None
+        pages_error = "; ".join(
+            filter(
+                None,
+                [pages_error, "bench recipes: nothing parsed; kept the last good list"],
+            )
+        )
+    pages_error = (
+        "; ".join(filter(None, [pages_error, await refresh_tablet_uses(max_age)]))
+        or None
+    )
     derived = derive(export)
     import hashlib
+
     source = {f: hashlib.sha256(raw[f]).hexdigest()[:16] for f in REPOE_FILES}
-    result = assemble(derived, export=export, currencies=cur, grants=grants, source=source)
+    result = assemble(
+        derived, export=export, currencies=cur, grants=grants, source=source
+    )
     if not result["pools"] or not derived.families:
         err = f"RePoE derived 0 pools / {len(derived.families)} families; kept the last good tables"
         state["last_error"] = "; ".join(filter(None, [pages_error, err]))
         log.warning("mod pool refresh refused empty build: %s", err)
         return state
     # The exchange's items named the game's way (only after RePoE passes validation so empty bases never wipe meta_catalog).
-    pages_error = "; ".join(filter(None, [pages_error, await catalog.refresh(export.bases, max_age=max_age)])) or None
+    pages_error = (
+        "; ".join(
+            filter(
+                None,
+                [pages_error, await catalog.refresh(export.bases, max_age=max_age)],
+            )
+        )
+        or None
+    )
     store(result)
     state["last_error"] = pages_error
-    log.info("mod pools rebuilt: %d pools, %d families, %d currencies, %d grant pages", len(result["pools"]), len(derived.families), len(result["currencies"]), len([g for g in grants if g]))
+    log.info(
+        "mod pools rebuilt: %d pools, %d families, %d currencies, %d grant pages",
+        len(result["pools"]),
+        len(derived.families),
+        len(result["currencies"]),
+        len([g for g in grants if g]),
+    )
     return state
 
 
-if __name__ == "__main__":   # the cron entry inside the backend container: python -m app.modpool [--force]
+if (
+    __name__ == "__main__"
+):  # the cron entry inside the backend container: python -m app.modpool [--force]
     logging.basicConfig(level=logging.INFO)
     import sys
+
     asyncio.run(refresh(force="--force" in sys.argv))
     raise SystemExit(1 if state.get("last_error") else 0)

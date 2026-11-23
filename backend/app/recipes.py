@@ -13,6 +13,7 @@ Where they come from (`edges()`; docs/bugs/2026-09-29-crafting-recipes-missing-f
 - The user's own recipes.json (the Recipes editor, `load`/`save`), which wins over a derived recipe
   with the same id. Derived recipes are never written into the user's file.
 """
+
 from __future__ import annotations
 
 import json
@@ -59,15 +60,25 @@ def save(data: list[dict]) -> list[dict]:
     global _load_cache, _edges_cache
     clean = []
     for r in data:
-        clean.append({
-            "id": r.get("id") or uuid.uuid4().hex[:8],
-            "name": r.get("name", ""),
-            "kind": r.get("kind", "combine"),
-            "inputs": {k: float(v) for k, v in (r.get("inputs") or {}).items() if float(v) > 0},
-            "outputs": {k: float(v) for k, v in (r.get("outputs") or {}).items() if float(v) > 0},
-            "enabled": bool(r.get("enabled", True)),
-            "note": r.get("note", ""),
-        })
+        clean.append(
+            {
+                "id": r.get("id") or uuid.uuid4().hex[:8],
+                "name": r.get("name", ""),
+                "kind": r.get("kind", "combine"),
+                "inputs": {
+                    k: float(v)
+                    for k, v in (r.get("inputs") or {}).items()
+                    if float(v) > 0
+                },
+                "outputs": {
+                    k: float(v)
+                    for k, v in (r.get("outputs") or {}).items()
+                    if float(v) > 0
+                },
+                "enabled": bool(r.get("enabled", True)),
+                "note": r.get("note", ""),
+            }
+        )
     RECIPES_PATH.write_text(json.dumps(clean, indent=2))
     _load_cache = None
     _edges_cache = None
@@ -78,8 +89,11 @@ def derived() -> list[dict]:
     """The game's conversions, as recipes: the orb disenchants and the bench's reforges."""
     from . import db
     from .currencies import registry
+
     names = {cur.name: tid for tid, cur in registry.by_id.items()}
-    return disenchant_recipes(names) + reforge_recipes(db.kv_get("bench_recipes", []) or [], names)
+    return disenchant_recipes(names) + reforge_recipes(
+        db.kv_get("bench_recipes", []) or [], names
+    )
 
 
 def edges() -> list[dict]:
@@ -88,9 +102,17 @@ def edges() -> list[dict]:
     global _edges_cache
     from . import db
     from .currencies import registry
+
     _ensure()
     st = RECIPES_PATH.stat()
-    ver = (str(RECIPES_PATH), st.st_mtime_ns, st.st_size, str(db.MARKET_DB_PATH), db.tx_gen(), len(registry.by_id))
+    ver = (
+        str(RECIPES_PATH),
+        st.st_mtime_ns,
+        st.st_size,
+        str(db.MARKET_DB_PATH),
+        db.tx_gen(),
+        len(registry.by_id),
+    )
     if _edges_cache and _edges_cache[0] == ver:
         return _edges_cache[1]
     user = load()
@@ -99,19 +121,36 @@ def edges() -> list[dict]:
     for r in [r for r in derived() if r["id"] not in mine] + user:
         if not (r["enabled"] and r["routable"]):
             continue
-        (src, in_q), = r["inputs"].items()
-        (dst, out_q), = r["outputs"].items()
+        ((src, in_q),) = r["inputs"].items()
+        ((dst, out_q),) = r["outputs"].items()
         if src == dst:
             continue
-        out.append({"from": src, "to": dst, "rate": out_q / in_q, "lot": in_q,
-                    "recipe_id": r["id"], "name": r["name"], "kind": r["kind"]})
+        out.append(
+            {
+                "from": src,
+                "to": dst,
+                "rate": out_q / in_q,
+                "lot": in_q,
+                "recipe_id": r["id"],
+                "name": r["name"],
+                "kind": r["kind"],
+            }
+        )
     _edges_cache = (ver, out)
     return out
 
 
 def _recipe(kind: str, src: str, in_q: int, dst: str, out_q: int, name: str) -> dict:
-    return {"id": f"{kind}:{src}", "name": name, "kind": kind, "inputs": {src: in_q}, "outputs": {dst: out_q},
-            "enabled": True, "note": "", "routable": True}
+    return {
+        "id": f"{kind}:{src}",
+        "name": name,
+        "kind": kind,
+        "inputs": {src: in_q},
+        "outputs": {dst: out_q},
+        "enabled": True,
+        "note": "",
+        "routable": True,
+    }
 
 
 def disenchant_recipes(names: dict[str, str]) -> list[dict]:
@@ -124,11 +163,18 @@ def disenchant_recipes(names: dict[str, str]) -> list[dict]:
         base = name.removeprefix("Perfect ")
         if base == name or "Orb" not in base.split():
             continue
-        tiers = [names.get(t) for t in (name, "Greater " + base, base)]
-        if all(tiers):
-            perfect, greater, normal = tiers
-            out.append(_recipe("disenchant", perfect, 1, greater, 3, f"Disenchant {name}"))
-            out.append(_recipe("disenchant", greater, 1, normal, 3, f"Disenchant Greater {base}"))
+        perfect, greater, normal = (
+            names.get(t) for t in (name, "Greater " + base, base)
+        )
+        if perfect and greater and normal:
+            out.append(
+                _recipe("disenchant", perfect, 1, greater, 3, f"Disenchant {name}")
+            )
+            out.append(
+                _recipe(
+                    "disenchant", greater, 1, normal, 3, f"Disenchant Greater {base}"
+                )
+            )
     return out
 
 
@@ -147,8 +193,19 @@ def reforge_recipes(rows: list[dict], names: dict[str, str]) -> list[dict]:
         if not (src and dst):
             dropped += 1
             continue
-        out.append(_recipe("reforge", src, r["from_qty"], dst, r["to_qty"], f"Reforge {r['from_qty']}x {r['from']}"))
-    if dropped != _last_dropped[0]:      # every graph build reads this; say it when it changes
+        out.append(
+            _recipe(
+                "reforge",
+                src,
+                r["from_qty"],
+                dst,
+                r["to_qty"],
+                f"Reforge {r['from_qty']}x {r['from']}",
+            )
+        )
+    if (
+        dropped != _last_dropped[0]
+    ):  # every graph build reads this; say it when it changes
         _last_dropped[0] = dropped
         log.info("bench recipes: %d with a name the trade site does not list", dropped)
     return out

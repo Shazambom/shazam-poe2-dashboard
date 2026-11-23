@@ -15,6 +15,7 @@ redirect on 127.0.0.1 (the address a public client must use), and hands the code
 to the dashboard, which exchanges it with its PKCE verifier. Nothing secret touches this
 script.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -27,14 +28,55 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import webbrowser
+from functools import cache
+
+
+class _HttpRequest(urllib.request.Request):
+    def __init__(
+        self,
+        url: str,
+        *,
+        data: bytes | None,
+        method: str,
+        headers: dict[str, str],
+    ) -> None:
+        if urllib.parse.urlsplit(url).scheme not in {"http", "https"}:
+            raise ValueError("Dashboard URL must use HTTP or HTTPS")
+        super().__init__(url, data=data, method=method, headers=headers)
+
+
+@cache
+def _http_opener() -> urllib.request.OpenerDirector:
+    """Use urllib's HTTP handlers without enabling local files or other transports."""
+    opener = urllib.request.OpenerDirector()
+    proxies = {
+        scheme: url
+        for scheme, url in urllib.request.getproxies().items()
+        if scheme in {"http", "https"}
+    }
+    for handler in (
+        urllib.request.ProxyHandler(proxies),
+        urllib.request.UnknownHandler(),
+        urllib.request.HTTPHandler(),
+        urllib.request.HTTPDefaultErrorHandler(),
+        urllib.request.HTTPRedirectHandler(),
+        urllib.request.HTTPErrorProcessor(),
+        urllib.request.HTTPSHandler(),
+    ):
+        opener.add_handler(handler)
+    return opener
 
 
 def call(server: str, path: str, method: str = "GET", body: dict | None = None) -> dict:
     data = json.dumps(body).encode() if body is not None else None
-    req = urllib.request.Request(server.rstrip("/") + path, data=data, method=method,
-                                 headers={"Content-Type": "application/json"})
+    req = _HttpRequest(
+        server.rstrip("/") + path,
+        data=data,
+        method=method,
+        headers={"Content-Type": "application/json"},
+    )
     try:
-        with urllib.request.urlopen(req, timeout=60) as r:
+        with _http_opener().open(req, timeout=60) as r:
             return json.loads(r.read() or b"{}")
     except urllib.error.HTTPError as e:
         try:
@@ -48,9 +90,17 @@ def read_cookie(browser: str) -> str | None:
     try:
         import browser_cookie3 as bc
     except ImportError:
-        print("browser-cookie3 not installed (pip install browser-cookie3); falling back to paste.")
+        print(
+            "browser-cookie3 not installed (pip install browser-cookie3); falling back to paste."
+        )
         return None
-    loaders = {"chrome": bc.chrome, "firefox": bc.firefox, "edge": bc.edge, "brave": bc.brave, "opera": bc.opera}
+    loaders = {
+        "chrome": bc.chrome,
+        "firefox": bc.firefox,
+        "edge": bc.edge,
+        "brave": bc.brave,
+        "opera": bc.opera,
+    }
     order = [browser] if browser != "auto" else list(loaders)
     for name in order:
         try:
@@ -69,21 +119,32 @@ def read_cookie(browser: str) -> str | None:
 def do_session(server: str, browser: str) -> None:
     cookie = read_cookie(browser)
     if not cookie:
-        print("Paste POESESSID (devtools -> Application/Storage -> Cookies -> pathofexile.com):")
+        print(
+            "Paste POESESSID (devtools -> Application/Storage -> Cookies -> pathofexile.com):"
+        )
         cookie = getpass.getpass("POESESSID: ").strip()
-    res = call(server, "/api/session", "POST", {"cookie": cookie, "label": f"connect.py ({browser})"})
+    res = call(
+        server,
+        "/api/session",
+        "POST",
+        {"cookie": cookie, "label": f"connect.py ({browser})"},
+    )
     print(res.get("message", "connected"))
 
 
 def do_oauth(server: str) -> None:
     start = call(server, "/api/oauth/start", "POST", {})
     redirect = urllib.parse.urlparse(start["redirect_uri"])
-    host, port, path = redirect.hostname or "127.0.0.1", redirect.port or 80, redirect.path or "/callback"
+    host, port, path = (
+        redirect.hostname or "127.0.0.1",
+        redirect.port or 80,
+        redirect.path or "/callback",
+    )
     done = threading.Event()
     result: dict = {}
 
     class Handler(http.server.BaseHTTPRequestHandler):
-        def log_message(self, *_):
+        def log_message(self, *_args: object, **_kwargs: object) -> None:
             pass
 
         def do_GET(self):
@@ -96,13 +157,17 @@ def do_oauth(server: str) -> None:
             self.send_response(200)
             self.send_header("Content-Type", "text/html")
             self.end_headers()
-            self.wfile.write(b"<p style='font-family:sans-serif'>Logged in. You can close this tab.</p>")
+            self.wfile.write(
+                b"<p style='font-family:sans-serif'>Logged in. You can close this tab.</p>"
+            )
             done.set()
 
     try:
         srv = http.server.HTTPServer((host, port), Handler)
     except OSError as exc:
-        sys.exit(f"could not listen on {host}:{port} ({exc}); the registered redirect port must be free")
+        sys.exit(
+            f"could not listen on {host}:{port} ({exc}); the registered redirect port must be free"
+        )
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     print(f"listening on {host}:{port}{path}; opening browser")
     webbrowser.open(start["url"])
@@ -113,14 +178,27 @@ def do_oauth(server: str) -> None:
     if "error" in result:
         sys.exit(f"login failed: {result.get('error_description') or result['error']}")
     # Authorization codes expire in 30 s, so hand it over immediately.
-    res = call(server, "/api/oauth/complete", "POST", {"code": result["code"], "state": result["state"]})
+    res = call(
+        server,
+        "/api/oauth/complete",
+        "POST",
+        {"code": result["code"], "state": result["state"]},
+    )
     print(f"logged in as {res.get('username')} with scope '{res.get('scope')}'")
 
 
 def main() -> None:
-    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--server", required=True, help="dashboard URL, e.g. http://192.168.1.50:8080")
-    ap.add_argument("--browser", default="auto", choices=["auto", "chrome", "firefox", "edge", "brave", "opera"])
+    ap = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    ap.add_argument(
+        "--server", required=True, help="dashboard URL, e.g. http://192.168.1.50:8080"
+    )
+    ap.add_argument(
+        "--browser",
+        default="auto",
+        choices=["auto", "chrome", "firefox", "edge", "brave", "opera"],
+    )
     ap.add_argument("what", choices=["session", "oauth", "both"])
     a = ap.parse_args()
     if a.what in ("session", "both"):

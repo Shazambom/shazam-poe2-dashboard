@@ -25,12 +25,14 @@ ignore = [
     "ASYNC109", # Gateway APIs accept explicit timeout parameters.
     "PT018", # Tests may assert related invariants together.
     "S603", # Ordinary argument-vector subprocess calls are deliberate.
+    "S607", # Ops tests resolve fake commands on PATH across platforms.
     "PLW0603", # Shared module state is deliberate in these runtimes.
 ]
 
 [lint.per-file-ignores]
 "backend/tests/**/*.py" = ["S101", "S311"] # Pytest assertions and seeded fuzzing.
 "ops/feedback-bot/tests/**/*.py" = ["S101", "S311"] # Pytest assertions and seeded fuzzing.
+"ops/lint/test_*.py" = ["S101"] # Pytest assertions in the lint self-tests.
 "ops/hold-backtest.py" = ["S311"] # Reproducible seeded simulation.
 "ops/hold-diagnostics.py" = ["S311"] # Reproducible seeded simulation.
 "ops/export-market-snapshot.py" = ["S608"] # A test pins live-schema identifier quoting and values stay bound.

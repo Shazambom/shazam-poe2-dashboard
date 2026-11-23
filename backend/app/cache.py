@@ -10,11 +10,12 @@ TTL; only the bookkeeping â€” timestamp, optional version stamp, expiry check â€
 `version` (e.g. orderbook.state["version"]) invalidates the entry when it changes, regardless
 of age. Stdlib-only.
 """
+
 from __future__ import annotations
 
 import time
-from typing import Any, Callable, Hashable
-
+from collections.abc import Callable, Hashable
+from typing import Any
 
 _MISS = object()
 
@@ -27,14 +28,24 @@ def get(store: dict, key: Hashable, ttl_s: float, version: Any = None) -> Any:
     return _MISS
 
 
-def put(store: dict, key: Hashable, value: Any, version: Any = None, max_entries: int | None = None,
-        ttl_s: float | None = None) -> Any:
+def put(
+    store: dict,
+    key: Hashable,
+    value: Any,
+    version: Any = None,
+    max_entries: int | None = None,
+    ttl_s: float | None = None,
+) -> Any:
     now = time.time()
     store[key] = (now, version, value)
     if max_entries and len(store) > max_entries:
         # First drop entries invalidated by version or TTL before evicting live entries.
-        stale = [k for k, (ts, ver, _v) in store.items()
-                 if k != key and (ver != version or (ttl_s is not None and now - ts >= ttl_s))]
+        stale = [
+            k
+            for k, (ts, ver, _v) in store.items()
+            if k != key
+            and (ver != version or (ttl_s is not None and now - ts >= ttl_s))
+        ]
         for k in stale:
             store.pop(k, None)
         while len(store) > max_entries:
@@ -43,8 +54,14 @@ def put(store: dict, key: Hashable, value: Any, version: Any = None, max_entries
     return value
 
 
-def memo(store: dict, key: Hashable, ttl_s: float, build: Callable[[], Any], version: Any = None,
-         max_entries: int | None = None) -> Any:
+def memo(
+    store: dict,
+    key: Hashable,
+    ttl_s: float,
+    build: Callable[[], Any],
+    version: Any = None,
+    max_entries: int | None = None,
+) -> Any:
     value = get(store, key, ttl_s, version)
     if value is _MISS:
         value = put(store, key, build(), version, max_entries, ttl_s=ttl_s)
