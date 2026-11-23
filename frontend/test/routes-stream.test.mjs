@@ -6,7 +6,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { finishRoutes } from '../src/lib/routesStream.js'
+import { finishRoutes, streamSearch, SEARCH_IDLE_MS } from '../src/lib/routesStream.js'
 
 const loop = (id, score) => ({ id, score })
 
@@ -36,7 +36,6 @@ test('the page uses it on done', async () => {
 })
 
 // ---- the page never waits on a dead search (docs/learnability-plan.md part 5) -------------------------------
-import { streamSearch, SEARCH_IDLE_MS } from '../src/lib/routesStream.js'
 
 function fakes() {
   const timers = new Map(); let nextId = 1; let es

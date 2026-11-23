@@ -1,10 +1,9 @@
-import { useEffect } from 'react'
+import React, { useEffect } from 'react'
 import { useWorkspace, HISTORY_PREFS, HISTORY_MAX_LIMIT } from './workspaceStore.js'
 import { useStatus, ensureSettings } from './statusStore.js'
 import { diag } from './diag.js'
 import { hasTradeEngine as isDesktop } from './session.js'
 import { bus, toast } from './api.js'
-import React from 'react'
 
 // 🗑 / context menu / Settings / ⌘K all clear through here: one toast, one undo slot.
 export function clearHistoryWithUndo() {

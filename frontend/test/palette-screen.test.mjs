@@ -6,7 +6,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { buildPaletteItems } from '../src/lib/palette.js'
 import { DESTS, SUB_DESTS, SCREEN_COMMANDS } from '../src/lib/dests.js'
-import { runTarget } from '../src/lib/paletteRun.js'
+import { runTarget, usableHere } from '../src/lib/paletteRun.js'
 
 const TABS = ['Board', 'Stash', 'Trading', 'Economy', 'Settings']
 const withRuns = () => Object.fromEntries(Object.entries(SCREEN_COMMANDS).map(([s, cs]) => [s, cs.map(c => ({ ...c, run: () => {} }))]))
@@ -155,7 +155,6 @@ test('App feeds ⌘K the current screen, and the sub-tab views report theirs', (
 
 // Code review 2026-10-05: an action whose control isn't drawn (Start timer with Override on) or is disabled (Copy regex
 // with no regex, Category on Positive movers) did nothing at all. ⌘K lists this screen's actions only when usable.
-import { usableHere } from '../src/lib/paletteRun.js'
 
 test('this screen lists only the actions whose control is drawn and enabled', () => {
   const els = { 'calc-loot': { disabled: false }, 'regex-copy': { disabled: true } }
