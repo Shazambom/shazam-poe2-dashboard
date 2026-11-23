@@ -241,7 +241,7 @@ function StratTree({ doc, ctx, change, treeRef }) {
       : { id: n.id, kind: 'strat', name: names[n.id] ?? '' }))
     return map(doc.tree)
   }, [doc.tree, names])
-  const initialOpen = useMemo(() => Object.fromEntries(sc.flattenFolders(doc.tree).map(f => [f.id, f.open])), [])
+  const [initialOpen] = useState(() => Object.fromEntries(sc.flattenFolders(doc.tree).map(f => [f.id, f.open])))
   const wrap = useRef(null)
   const [dims, setDims] = useState({ w: 240, h: 300 })
   useEffect(() => {
