@@ -4,6 +4,8 @@ import { installApiMock, DEFAULT_CURRENCIES } from './setup.js'
 import StashView from '../../src/components/StashView.jsx'
 import RoutesView from '../../src/components/RoutesView.jsx'
 import ConvertView from '../../src/components/ConvertView.jsx'
+import * as sc from '../../src/lib/stratcalc.js'
+import { useStratStore } from '../../src/lib/stratStore.js'
 import StratCalcView from '../../src/components/StratCalcView.jsx'
 import { useStatus } from '../../src/lib/statusStore.js'
 import { loadIcons } from '../../src/lib/icons.js'
@@ -209,11 +211,42 @@ describe('Stash, Arbitrage SSE, Convert, and StratCalc lifecycles', () => {
 
   it('StratCalcView loads saved strats and renders calculator cleanly', async () => {
     const { calls } = installApiMock()
-    render(<StratCalcView />)
+    const { rerender, unmount } = render(<StratCalcView />)
 
     await waitFor(() => {
       expect(calls.some(c => c.path === '/api/strategy/calc')).toBe(true)
     })
     expect(document.body.textContent.length).toBeGreaterThan(0)
+    const maps = await screen.findByLabelText('Maps run')
+    fireEvent.focus(maps)
+    fireEvent.change(maps, { target: { value: '3*2' } })
+    rerender(<StratCalcView currencies={DEFAULT_CURRENCIES} />)
+    expect(maps.value).toBe('3*2')
+    expect(calls.filter(c => c.path === '/api/strategy/calc' && !c.url.includes('prices=1') && c.method === 'GET')).toHaveLength(1)
+    unmount()
+    expect(screen.queryByLabelText('Maps run')).toBeNull()
   })
+  it('preserves map and tablet prices in their selected currencies when unlinking', async () => {
+    const now = Date.now()
+    const search = { query: { query: {}, sort: { price: 'asc' } }, league: 'Test League' }
+    let doc = sc.newStrat(sc.blankDoc(), { id: 's', name: 'Prices', now })
+    doc = sc.addTablet(doc, 's', { id: 't', now })
+    doc = sc.recordMapsPrice(sc.linkMaps(doc, 's', search, now), 's', 2, now, 'chaos')
+    doc = sc.recordLinkPrice(sc.linkTablet(doc, 's', 't', search, now), 's', 't', 3, now, 'exalted')
+    installApiMock({ '/api/strategy/calc': { calc: doc, prices: { chaos: 0.5, exalted: 0.25, divine: 1 }, uses: [] } })
+    useStratStore.setState({ doc: null })
+    const { unmount } = render(<StratCalcView league="Test League" />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Trade search for maps' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Unlink' }))
+    const active = () => sc.activeStrat(useStratStore.getState().doc)
+    expect(active().maps).toMatchObject({ price: 4, cur: 'chaos' })
+    expect(active().maps.link).toBeUndefined()
+    fireEvent.click(screen.getByRole('button', { name: 'Trade search for Any tablet' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Unlink' }))
+    expect(active().tablets.lines[0]).toMatchObject({ price: 12, cur: 'exalted' })
+    expect(active().tablets.lines[0].link).toBeUndefined()
+    unmount()
+    await useStratStore.getState().flush()
+  })
+
 })

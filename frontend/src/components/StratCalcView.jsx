@@ -1,5 +1,5 @@
 import { ignoredError } from '../lib/ignoredError.js'
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
 import { Tree } from 'react-arborist'
 import { api, bus, fmt, toast, undoToast } from '../lib/api.js'
 import { usePoll } from '../lib/hooks.js'
@@ -26,6 +26,7 @@ import { useStratStore } from '../lib/stratStore.js'
 // hour. The math, the strats and the input rules are lib/stratcalc.js; the strats autosave to the user
 // kv `strat_calc`; prices are divines per unit off the backend's one value table.
 
+const EMPTY_COST_OPTIONS = []
 const PRICE_POLL_MS = 60_000
 const HOLD_DELAY_MS = 400    // +1 held: repeats after this…
 const HOLD_EVERY_MS = 90     // …this often
@@ -358,14 +359,13 @@ export default function StratCalcView({ league, currencies }) {
 
   // Space starts/pauses, M counts a map — only while this view is mounted, and never while a box
   // has the focus or the palette / a menu is open (lib/stratcalc.js shortcut).
-  const keys = useRef(null)
-  keys.current = (a) => (a === 'toggle' ? toggleRun() : addMaps(1))
+  const runShortcut = useEffectEvent(a => (a === 'toggle' ? toggleRun() : addMaps(1)))
   useEffect(() => {
     const onKey = (e) => {
       const a = sc.shortcut(e, { typing: sc.isTyping(document.activeElement), overlay: !!document.querySelector(OVERLAY) })
       if (!a) return
       e.preventDefault()
-      keys.current(a)
+      runShortcut(a)
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -385,8 +385,7 @@ export default function StratCalcView({ league, currencies }) {
   const wakeTimer = useRef(null)
   useEffect(() => () => clearTimeout(wakeTimer.current), [])
   const blocked = useRef(false)
-  const pricesRef = useRef(prices)
-  pricesRef.current = prices
+  const priceFound = useEffectEvent((job, result) => SP.priceFound(job, result, prices))
   const open = doc && sc.activeStrat(doc)
   // A linked tablet search is priced the same way, held to the tablet's full uses: the average of its
   // cheapest ten listings.
@@ -403,7 +402,7 @@ export default function StratCalcView({ league, currencies }) {
     setPending(key)
     trade.priceQuery({ query: job.query, league }).then(res => {
       if (res?.ok) {
-        const found = SP.priceFound(job, res, pricesRef.current), now = Date.now()
+        const found = priceFound(job, res), now = Date.now()
         if (found.div != null) change(d => SP.recordFound(d, stratId, job, found, now))
         else if (found.retry) SP.retryLater(retryAt.current, job, found.retry, now)   // no prices yet: again in a minute
       } else if (res?.error === 'auth') blocked.current = true
@@ -430,7 +429,7 @@ export default function StratCalcView({ league, currencies }) {
     hold.current = { t: setTimeout(() => { hold.current = { i: setInterval(() => addMaps(1), HOLD_EVERY_MS) } }, HOLD_DELAY_MS) }
   }
 
-  const costOptions = currencies?.currencies ?? []
+  const costOptions = currencies?.currencies ?? EMPTY_COST_OPTIONS
   const names = useMemo(() => Object.fromEntries(costOptions.map(c => [c.id, c.name])), [costOptions])
   const options = useMemo(() => {
     const twice = new Set(), seen = new Set()
@@ -551,7 +550,7 @@ export default function StratCalcView({ league, currencies }) {
     )
   }
 
-  const t = sc.tally(s, prices, Date.now(), uses)   // the cost lines (they don't change with time)
+  const t = sc.tally(s, prices, 0, uses)   // the cost lines (they don't change with time)
   const on = sc.running(s.timer)
   const sign = (v) => (v == null ? '' : v < 0 ? 'loss' : v > 0 ? 'gain' : '')
   // A cost line's value, once it costs something (or can't be priced): no "0 ◆" on an empty line.
@@ -591,12 +590,18 @@ export default function StratCalcView({ league, currencies }) {
   const n = built && sc.usesOf(built, uses)
   const target = building === 'maps' ? {
     title: 'Waystones', x: s.maps, base: baseQuery({ category: { option: 'map.waystone' } }, []),
-    priced: waystonePriceQuery, link: (d, f) => sc.linkMaps(d, d.active, f, Date.now()), unlink: (d) => sc.unlinkMaps(d, d.active, Date.now(), prices),
+    priced: waystonePriceQuery,
   } : built ? {
     title: tabletName(built), x: built,
     base: { query: { ...baseQuery({ category: { option: 'map.tablet' } }, []).query, ...(built.base ? { type: built.base } : {}), ...(built.name ? { name: built.name } : {}) } },
-    priced: (q) => fullTabletQuery(q, n ?? 10), link: (d, f) => sc.linkTablet(d, d.active, built.id, f, Date.now()), unlink: (d) => sc.unlinkTablet(d, d.active, built.id, Date.now(), prices),
+    priced: (q) => fullTabletQuery(q, n ?? 10),
   } : null
+  const link = (d, f, now) => building === 'maps'
+    ? sc.linkMaps(d, d.active, f, now)
+    : sc.linkTablet(d, d.active, built.id, f, now)
+  const unlink = (d, now) => building === 'maps'
+    ? sc.unlinkMaps(d, d.active, now, prices)
+    : sc.unlinkTablet(d, d.active, built.id, now, prices)
   const toTrading = (query, name) => { setBuilding(null); openInTrading({ query, name, league, store: useWorkspace.getState, go: () => nav.goTrading() }) }
   const backToAdd = () => lootAdd.current?.querySelector('.curpick-input')?.focus()
 
@@ -706,14 +711,14 @@ export default function StratCalcView({ league, currencies }) {
       {target && (
         <TradeBuilder league={league} title={`Trade search · ${target.title}`} url={queryUrl({ q: JSON.stringify(target.priced(target.x.link?.query ?? target.base)) }, league)}
           onClose={() => setBuilding(null)}
-          onUnlink={target.x.link ? () => { editDoc(target.unlink); setBuilding(null) } : null}
+          onUnlink={target.x.link ? () => { editDoc(d => unlink(d, Date.now())); setBuilding(null) } : null}
           onOpenTrading={target.x.link && (building === 'maps' || n != null)
             ? () => toTrading(target.priced(target.x.link.query), target.x.link.query.query?.type ?? target.title) : null}
           onUse={(f) => {
             // the search it already holds (as linked, or as the window opened it): keep its price, spend no search
             const held = target.x.link
             if (!(held && (SP.sameSearch(f, held.query) || SP.sameSearch(f, target.priced(held.query))))) {
-              SP.relinked(retryAt.current, building); editDoc(d => target.link(d, f))
+              SP.relinked(retryAt.current, building); editDoc(d => link(d, f, Date.now()))
             }
             setBuilding(null)
           }} />

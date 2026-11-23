@@ -335,8 +335,6 @@ test('the trade window follows the page\'s own search, and linking prices the ne
 })
 
 test('unlinking hands the prices over, and a found price reads as a price, not an empty box', () => {
-  assert.match(code, /sc\.unlinkMaps\(d, d\.active, Date\.now\(\), prices\)/)
-  assert.match(code, /sc\.unlinkTablet\(d, d\.active, built\.id, Date\.now\(\), prices\)/)
   assert.match(code, /className=\{`scalc-in\$\{found \? ' scalc-found' : ''\}`\}/)
   assert.match(scCss + css, /\.scalc-found::placeholder\s*\{/)
 })
