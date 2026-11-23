@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from app import leagueregime as LR  # noqa: E402
+from app import leagueregime as LR
 
 DIV = LR.DIVINE_ID
 
@@ -64,7 +64,7 @@ def test_settled_prices_read_as_mid_and_fading_trade_as_late():
 def test_the_switch_follows_the_market_not_the_calendar():
     """A league whose prices take longer to settle stays EARLY longer."""
     fast, slow = league(discovery=14), league(discovery=30)
-    first_mid = lambda per: next(t for t in range(90) if label(per, t) == "mid")  # noqa: E731
+    first_mid = lambda per: next(t for t in range(90) if label(per, t) == "mid")
     assert first_mid(slow) > first_mid(fast) + 5
 
 

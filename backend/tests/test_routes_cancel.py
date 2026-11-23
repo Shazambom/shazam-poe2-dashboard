@@ -6,7 +6,7 @@ import threading
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # backend/
-from app.arbitrage import routes  # noqa: E402
+from app.arbitrage import routes
 
 
 def _fake_search(monkeypatch, produced):

@@ -16,7 +16,7 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # backend/
-from app.arbitrage import Edge, Graph, deepscan, routes  # noqa: E402
+from app.arbitrage import Edge, Graph, deepscan, routes
 
 pytest.importorskip("numpy")
 

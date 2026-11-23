@@ -8,8 +8,8 @@ import urllib.request
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # backend/
-from app import devtelemetry, sidecar_supervisor  # noqa: E402
-from sidecar import runner  # noqa: E402
+from app import devtelemetry, sidecar_supervisor
+from sidecar import runner
 
 
 def _capture(monkeypatch):

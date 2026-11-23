@@ -24,7 +24,7 @@ _dd = os.environ.get("DATA_DIR", "")
 assert _dd and "Application Support" not in _dd, \
     "Set DATA_DIR to a temp dir (never the real install) before running this test"
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # backend/
-from app import db  # noqa: E402
+from app import db
 
 # A pool of distinct PoE2 item/base names; the generator draws WITHOUT replacement per tree
 # so every search in a given tree is a genuinely unique item.

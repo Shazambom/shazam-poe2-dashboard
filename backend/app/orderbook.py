@@ -363,7 +363,7 @@ async def sweeper() -> None:
         await asyncio.sleep(ORDERBOOK_SWEEP_SECONDS)
 
 
-from .config import TRADE_LEAGUES_TTL_S  # noqa: E402,F401
+from .config import TRADE_LEAGUES_TTL_S
 
 
 async def leagues(force: bool = False) -> list[dict]:

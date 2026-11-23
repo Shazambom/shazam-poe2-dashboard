@@ -13,8 +13,8 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # backend/
-from app import accesslog, db, diag, settings  # noqa: E402
-from app.currencies import registry  # noqa: E402
+from app import accesslog, db, diag, settings
+from app.currencies import registry
 
 
 def _access(method, path, status):

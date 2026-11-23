@@ -30,7 +30,7 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # backend/
-from app import db, digest  # noqa: E402
+from app import db, digest
 
 # `app.arbitrage` re-exports a board() FUNCTION under the same name, which shadows the submodule
 # for both `from … import board` and `import … as board`. import_module returns the module.
@@ -258,7 +258,7 @@ def test_the_raw_history_readers_are_untouched():
 
 # ------------------------------------------------------------------ the whole production DB
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _proddb import PROD_DB, prod as _prod  # noqa: E402  (opt-in: ARBITER_PROD_TESTS=1)
+from _proddb import PROD_DB, prod as _prod  # (opt-in: ARBITER_PROD_TESTS=1)
 
 
 @_prod

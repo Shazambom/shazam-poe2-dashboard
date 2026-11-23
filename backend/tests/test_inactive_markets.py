@@ -27,8 +27,8 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # backend/
-from app import db, digest, settings  # noqa: E402
-from app.arbitrage import Edge, Graph  # noqa: E402
+from app import db, digest, settings
+from app.arbitrage import Edge, Graph
 
 FX = json.loads((Path(__file__).parent / "fixtures" / "tecrods_gaze_2026-09-19.json").read_text())
 

@@ -17,8 +17,8 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # backend/
-from app import db, digest  # noqa: E402
-from app.currencies import registry  # noqa: E402
+from app import db, digest
+from app.currencies import registry
 
 LEAGUE = "PlanLeague"
 HOURS = 72

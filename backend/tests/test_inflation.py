@@ -20,8 +20,8 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from app import db, inflation, marketseries, settings  # noqa: E402
-from app.currencies import registry  # noqa: E402
+from app import db, inflation, marketseries, settings
+from app.currencies import registry
 
 HOUR = 3600
 LEAGUE = "Test League Inflation"

@@ -27,7 +27,7 @@ import numpy as np
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # backend/
-from app import negcycle as nc  # noqa: E402
+from app import negcycle as nc
 
 IMPLS = [nc.bellman_ford_naive, nc.bellman_ford]
 INF = float("inf")

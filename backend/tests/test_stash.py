@@ -17,9 +17,9 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # backend/
-from app import arbitrage, db, liquidity, settings  # noqa: E402
-from app.arbitrage import Edge, Graph, routes  # noqa: E402
-from app.currencies import Currency, Registry  # noqa: E402
+from app import arbitrage, db, liquidity, settings
+from app.arbitrage import Edge, Graph, routes
+from app.currencies import Currency, Registry
 
 
 def _edge(a, b, rate, vol, stock=10_000_000):

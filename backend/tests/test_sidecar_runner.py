@@ -14,8 +14,8 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # backend/
-from app import analytics  # noqa: E402
-from sidecar import runner  # noqa: E402
+from app import analytics
+from sidecar import runner
 
 DAY = 86400
 

@@ -13,7 +13,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # backend/
-from app.currencies import Currency, Registry  # noqa: E402
+from app.currencies import Currency, Registry
 
 
 def _reg():

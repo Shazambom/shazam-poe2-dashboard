@@ -14,8 +14,8 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # backend/
-from app import marketseries  # noqa: E402
-from sidecar.analytics import arc  # noqa: E402
+from app import marketseries
+from sidecar.analytics import arc
 
 
 def test_weights_favor_the_resembling_shape_not_the_level():

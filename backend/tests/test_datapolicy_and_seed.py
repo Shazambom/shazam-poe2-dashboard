@@ -17,7 +17,7 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # backend/
-from app import datapolicy, db, digest, migrations_user, orderbook  # noqa: E402
+from app import datapolicy, db, digest, migrations_user, orderbook
 
 ROOT = Path(__file__).resolve().parents[2]
 EXPORTER = ROOT / "ops" / "export-market-snapshot.py"

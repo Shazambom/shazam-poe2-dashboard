@@ -32,7 +32,7 @@ import time
 
 try:
     from app.datapolicy import MARKET_RETENTION_DAYS, SEED_TABLES
-except ImportError as exc:                     # pragma: no cover — misuse, not a code path
+except ImportError as exc:  # misuse, not a code path
     raise SystemExit(f"run this from the backend directory / container (cwd=/app): {exc}")
 
 MARKET_META_DDL = "CREATE TABLE IF NOT EXISTS market_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)"

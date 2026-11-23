@@ -10,7 +10,7 @@ from pathlib import Path
 # When frozen, `app`/`sidecar` are on the bundle path; in dev, add backend/ so both import.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from sidecar import runner  # noqa: E402
+from sidecar import runner
 
 
 def _selftest() -> int:

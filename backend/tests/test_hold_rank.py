@@ -32,7 +32,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "backend"))
-from app import holdscore  # noqa: E402
+from app import holdscore
 
 
 def series(prices, value=1e8):
@@ -161,9 +161,9 @@ def test_this_leagues_climb_counts_once():
 # ------------------------------------------------------ 1c. each league regime ranks its own way
 # docs/hold-research.md "Regimes": price is safety early and a drag mid-league; late, momentum reverses.
 
-EARLY = lambda t: {"early": 1.0, "mid": 0.0, "late": 0.0}   # noqa: E731
-MID = lambda t: {"early": 0.0, "mid": 1.0, "late": 0.0}     # noqa: E731
-LATE = lambda t: {"early": 0.0, "mid": 0.0, "late": 1.0}    # noqa: E731
+EARLY = lambda t: {"early": 1.0, "mid": 0.0, "late": 0.0}
+MID = lambda t: {"early": 0.0, "mid": 1.0, "late": 0.0}
+LATE = lambda t: {"early": 0.0, "mid": 0.0, "late": 1.0}
 
 
 def test_without_a_regime_the_ranking_is_the_early_set():
@@ -244,7 +244,7 @@ def test_a_settled_market_vetoes_a_sliding_top_pick_and_discovery_does_not():
     raw = holdscore._hold_scores(ents, 24, None, (), MID)
     mid = holdscore.hold_rank(ents, 24, regime=MID)
     early = holdscore.hold_rank(ents, 24, regime=EARLY)
-    top = lambda sc: sorted(sc, key=lambda i: -sc[i])[:holdscore.VETO_TOP]  # noqa: E731
+    top = lambda sc: sorted(sc, key=lambda i: -sc[i])[:holdscore.VETO_TOP]
     vetoed_before = [i for i in top(raw) if flags.get(i)][:holdscore.VETO_MAX]
     assert vetoed_before, "the fixture must put a flagged item in the top 10, or this test checks nothing"
     assert all(i not in top(mid) for i in vetoed_before)
@@ -309,7 +309,7 @@ def test_one_day_does_not_reshuffle_the_list():
 # ---------------------------------------------------------------- 4. the smoke test, real DB
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _proddb import PROD_DB, prod as _prod  # noqa: E402  (opt-in: ARBITER_PROD_TESTS=1)
+from _proddb import PROD_DB, prod as _prod  # (opt-in: ARBITER_PROD_TESTS=1)
 
 
 def _backtest():

@@ -24,7 +24,7 @@ from pathlib import Path
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(BACKEND_DIR))
 
-from app import analytics, sidecar_supervisor as sup  # noqa: E402
+from app import analytics, sidecar_supervisor as sup
 
 DAY = 86400
 

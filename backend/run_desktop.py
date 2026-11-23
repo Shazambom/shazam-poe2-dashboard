@@ -13,13 +13,13 @@ if len(sys.argv) > 1 and sys.argv[1] == "--sidecar":
     from sidecar.run_sidecar import main as _sidecar_main
     raise SystemExit(_sidecar_main(sys.argv[2:]))
 
-import uvicorn  # noqa: E402
+import uvicorn
 
 # The desktop backend answers only its own app on loopback (app/main.py `loopback_only`).
 os.environ.setdefault("ARBITER_LOOPBACK_ONLY", "1")
 
-from app import accesslog  # noqa: E402
-from app.main import app  # noqa: E402
+from app import accesslog
+from app.main import app
 
 if __name__ == "__main__":
     accesslog.install()   # successful polls stay out of the log a problem report carries

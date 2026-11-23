@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # backend/
-from app import cache, db, holdscore, settings  # noqa: E402
+from app import cache, db, holdscore, settings
 
 
 def test_switching_league_is_not_served_the_old_leagues_cached_board(monkeypatch):

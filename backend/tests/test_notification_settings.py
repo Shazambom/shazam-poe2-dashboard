@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # backend/
-from app import db, migrations_user, settings  # noqa: E402
+from app import db, migrations_user, settings
 
 
 def test_defaults_banner_on_sound_on_os_off():

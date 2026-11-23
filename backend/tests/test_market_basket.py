@@ -28,8 +28,8 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # backend/
-from app import liquidity  # noqa: E402
-from app.arbitrage import Edge, Graph  # noqa: E402
+from app import liquidity
+from app.arbitrage import Edge, Graph
 
 FX = json.loads((Path(__file__).parent / "fixtures" / "market_basket_2026-09-19.json").read_text())
 REF = FX["reference"]

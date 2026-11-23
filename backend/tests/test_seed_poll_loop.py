@@ -12,7 +12,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "backend"))
-from app import main, seedready  # noqa: E402
+from app import main, seedready
 
 
 def test_it_is_off_unless_the_server_turns_it_on(monkeypatch):

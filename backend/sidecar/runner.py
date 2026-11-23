@@ -110,8 +110,8 @@ def main() -> None:
     # daemon threads already running. Doing it up-front removes that variable and surfaces a slow/
     # stuck import as its own telemetry line instead of an invisible mid-job wedge.
     try:
-        import numpy  # noqa: F401
-        from sidecar.analytics import arc, discords  # noqa: F401
+        import numpy
+        from sidecar.analytics import arc, discords
         _tlog("numpy+analytics imported")
     except Exception as exc:
         _tlog(f"IMPORT CRASH {exc!r}")

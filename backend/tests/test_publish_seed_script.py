@@ -15,7 +15,7 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # backend/
-from app import db  # noqa: E402
+from app import db
 
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "ops" / "publish-market-snapshot.sh"

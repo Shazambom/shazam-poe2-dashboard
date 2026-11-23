@@ -12,8 +12,8 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # backend/
-from app import db, migrations_user, settings  # noqa: E402
-from app.arbitrage import routes  # noqa: E402
+from app import db, migrations_user, settings
+from app.arbitrage import routes
 
 OWNER = {
     "balanced": ("Balanced", dict(min_margin_pct=20, max_gold=0, min_margin_per_1k_gold=0, min_liquidity_ref=1000,

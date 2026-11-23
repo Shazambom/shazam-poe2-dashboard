@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # backend/
-from app import leaguehistory as lh  # noqa: E402
+from app import leaguehistory as lh
 
 NOW = 1_790_000_000.0
 

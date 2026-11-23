@@ -67,7 +67,7 @@ ROOT = Path(__file__).resolve().parent.parent
 os.environ.setdefault("DATA_DIR", tempfile.mkdtemp(prefix="hold-backtest-"))   # never the app's dir
 sys.path.insert(0, str(ROOT / "backend"))
 
-from app import holdscore as H, leagueregime as LR, marketseries as M   # noqa: E402
+from app import holdscore as H, leagueregime as LR, marketseries as M
 
 # The topbar's choices (frontend/src/lib/horizonStore.js HORIZONS): label -> window hours.
 SELECTIONS = {"24h": 24, "3d": 72, "7d": 168, "14d": 336}

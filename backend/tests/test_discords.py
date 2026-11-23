@@ -15,7 +15,7 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # backend/
-from sidecar.analytics import discords  # noqa: E402
+from sidecar.analytics import discords
 
 DAY = 86400
 

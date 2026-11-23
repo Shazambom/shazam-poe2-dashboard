@@ -24,13 +24,13 @@ import numpy as np
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # backend/
-from sidecar.analytics import arc, discords  # noqa: E402
+from sidecar.analytics import arc, discords
 
 # The real heavy libraries. If they're missing we're not in the sidecar venv — skip loudly
 # rather than silently pass (a green run must mean the comparison actually happened).
 stumpy = pytest.importorskip("stumpy", reason="run in desktop/.venv-sidecar (needs real stumpy)")
 _dtai = pytest.importorskip("dtaidistance", reason="run in desktop/.venv-sidecar (needs real dtaidistance)")
-from dtaidistance import dtw as _dtw_lib  # noqa: E402
+from dtaidistance import dtw as _dtw_lib
 
 # Tight but not zero: STUMPY computes the profile via running dot-products (STOMP), the numpy
 # impl sums squared diffs directly, so the two accumulate FP error differently. 1e-6 relative

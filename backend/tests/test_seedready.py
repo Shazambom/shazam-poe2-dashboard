@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # backend/
-from app import seedready as sr  # noqa: E402
+from app import seedready as sr
 
 D1, D2, D3, D4, D5 = "2026-09-25", "2026-09-26", "2026-09-27", "2026-09-28", "2026-09-29"
 

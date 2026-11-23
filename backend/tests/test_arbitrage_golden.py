@@ -17,8 +17,8 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # backend/
-from app import arbitrage, db, digest, gamedata, leaguehistory, orderbook, session, settings  # noqa: E402
-from app.arbitrage import Edge, Graph  # noqa: E402
+from app import arbitrage, db, digest, gamedata, leaguehistory, orderbook, session, settings
+from app.arbitrage import Edge, Graph
 
 GOLDEN = Path(__file__).parent / "golden"
 T0 = 1_800_000_000          # frozen "now" (UTC epoch seconds), on an hour boundary

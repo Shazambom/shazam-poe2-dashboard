@@ -21,8 +21,8 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # backend/
-from app import arbitrage, centrality  # noqa: E402
-from app.arbitrage import Edge, Graph  # noqa: E402
+from app import arbitrage, centrality
+from app.arbitrage import Edge, Graph
 
 
 def _edge(a, b, rate, vol=100.0, stock=1_000_000):

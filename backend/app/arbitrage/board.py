@@ -194,7 +194,7 @@ def _priced_history(league: str, window_h: int, shared=None, now: int | None = N
     number whether the market traded this hour or two days ago (owner, 2026-09-23)."""
     span = window_h + RATE_WARMUP_H
     base = shared if shared is not None else (
-        lambda a, b, _h: digest.pair_history(league, a, b, span))   # noqa: E731
+        lambda a, b, _h: digest.pair_history(league, a, b, span))
     end = digest._hour(time.time()) if now is None else now
     memo: dict[tuple[str, str, int], list[dict]] = {}
 

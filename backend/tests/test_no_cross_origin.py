@@ -16,8 +16,8 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # backend/
-from fastapi.testclient import TestClient  # noqa: E402
-from app import main  # noqa: E402
+from fastapi.testclient import TestClient
+from app import main
 
 LOOP = {"Host": "127.0.0.1:8210"}
 

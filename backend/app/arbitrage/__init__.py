@@ -14,7 +14,7 @@ from .graph import (GRAPH_TTL_S, INF, Edge, Graph, anchor_prices, cached_graph, 
 from .routes import (ARBITRAGE_HUBS, CASH, MAX_CANDIDATES, RECOMMENDED_MIN_LIQUIDITY_REF, RECOMMENDED_MIN_VOLUME_REF_PER_H,
                      ROUTE_CACHE_MAX, _composite_score, _find_routes, _keep, _route_cache,
                      _sort_key, _velocity, arbitrage_currencies, find_routes, loop_currencies, route_pairs, stream_routes)
-from . import graph  # noqa: F401  — tests monkeypatch arbitrage.graph.cached_graph
+from . import graph  # tests monkeypatch arbitrage.graph.cached_graph
 
 
 def invalidate_caches() -> None:

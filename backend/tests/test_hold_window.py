@@ -21,7 +21,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "backend"))
-from app import holdscore  # noqa: E402
+from app import holdscore
 
 
 def series(prices, value=1e8):

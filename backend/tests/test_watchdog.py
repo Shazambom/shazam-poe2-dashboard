@@ -13,7 +13,7 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # backend/
-from app import watchdog  # noqa: E402
+from app import watchdog
 
 
 def test_parent_alive_for_self_and_dead_for_impossible_pid():

@@ -23,7 +23,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "ops" / "feedback-bot" / "bot"))
-import announce  # noqa: E402  (the bot's own module: one definition of the message and its rules)
+import announce  # (the bot's own module: one definition of the message and its rules)
 
 
 def parse(text: str) -> dict:

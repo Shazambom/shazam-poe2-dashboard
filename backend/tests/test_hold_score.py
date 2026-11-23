@@ -26,7 +26,7 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # backend/
-from app import holdscore  # noqa: E402
+from app import holdscore
 
 
 def m(ret, mdd=-0.10, valvol=1_000_000.0, n=10):
@@ -108,7 +108,7 @@ def test_the_constants_match_the_backtest():
 # --------------------------------------------------------- 4. the whole production DB
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _proddb import PROD_DB, prod as _prod  # noqa: E402  (opt-in: ARBITER_PROD_TESTS=1)
+from _proddb import PROD_DB, prod as _prod  # (opt-in: ARBITER_PROD_TESTS=1)
 
 
 # ------------------------------------------------ 5. k as a user-facing dial (owner directive)

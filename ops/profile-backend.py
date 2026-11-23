@@ -195,7 +195,7 @@ def run_benchmarks(db_arg: str | None, runs: int) -> dict:
 
         t_import0 = time.perf_counter()
         from app import db, digest, holdscore, inflation, leaguearc, liquidity, settings
-        import app.arbitrage  # noqa: F401
+        import app.arbitrage
         board_mod = sys.modules["app.arbitrage.board"]
         graph_mod = sys.modules["app.arbitrage.graph"]
         routes_mod = sys.modules["app.arbitrage.routes"]

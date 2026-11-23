@@ -15,11 +15,11 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # backend/
-from app import (arbitrage, cache, db, diag, digest, holdscore, leaguehistory, liquidity,  # noqa: E402
+from app import (arbitrage, cache, db, diag, digest, holdscore, leaguehistory, liquidity,
                  marketseries, orderbook, session, settings)
-from app.currencies import registry  # noqa: E402
-from starlette.testclient import TestClient  # noqa: E402
-from app.main import app, RouteQuery  # noqa: E402
+from app.currencies import registry
+from starlette.testclient import TestClient
+from app.main import app, RouteQuery
 
 client = TestClient(app)
 APP = Path(__file__).resolve().parents[1] / "app"

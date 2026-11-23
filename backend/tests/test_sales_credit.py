@@ -13,9 +13,9 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # backend/
-from starlette.testclient import TestClient  # noqa: E402
-from app import db, datapolicy  # noqa: E402
-from app.main import app  # noqa: E402
+from starlette.testclient import TestClient
+from app import db, datapolicy
+from app.main import app
 
 client = TestClient(app)
 LEAGUE = "Credit-tests"

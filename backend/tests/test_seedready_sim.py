@@ -15,8 +15,8 @@ from pyrate_limiter import Duration, Rate
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # backend/
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from app import db, gateway, leaguehistory as lh, seedready as sr  # noqa: E402
-from fake_poe2scout import FakeScout  # noqa: E402
+from app import db, gateway, leaguehistory as lh, seedready as sr
+from fake_poe2scout import FakeScout
 
 D1, D2, D3, D4, D5 = "2026-09-25", "2026-09-26", "2026-09-27", "2026-09-28", "2026-09-29"
 

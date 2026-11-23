@@ -15,8 +15,8 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # backend/
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from app import db, leaguehistory as lh  # noqa: E402
-from test_seedready_sim import crawl, league, run, scout  # noqa: E402,F401  (fixture)
+from app import db, leaguehistory as lh
+from test_seedready_sim import crawl, league, run, scout  # (fixture)
 
 
 @pytest.fixture

@@ -38,8 +38,8 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # backend/
-from app import db, digest  # noqa: E402
-from app.currencies import registry  # noqa: E402
+from app import db, digest
+from app.currencies import registry
 
 LEAGUE = "WindowLeague"
 BROAD = "BroadLeague"
@@ -252,7 +252,7 @@ def test_an_inactive_market_ignores_the_window_and_keeps_its_pessimistic_price()
 # implementation and check the invariants on all of it. Read-only, never written to. Slow on
 # purpose (~1M rows); skipped anywhere the DB is absent (CI, Windows, a fresh clone).
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _proddb import PROD_DB, prod as _prod  # noqa: E402  (opt-in: ARBITER_PROD_TESTS=1)
+from _proddb import PROD_DB, prod as _prod  # (opt-in: ARBITER_PROD_TESTS=1)
 
 
 def _prod_rows():

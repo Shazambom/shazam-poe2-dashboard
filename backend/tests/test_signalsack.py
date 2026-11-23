@@ -11,7 +11,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # backend/
-from app import signalsack  # noqa: E402
+from app import signalsack
 
 SIGS = [{"item_id": 1, "t": 100, "name": "A"}, {"item_id": 2, "t": 200, "name": "B"}]
 

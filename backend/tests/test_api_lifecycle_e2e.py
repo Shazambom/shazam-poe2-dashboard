@@ -27,8 +27,8 @@ from fastapi.testclient import TestClient
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(BACKEND_DIR))
 
-from app import arbitrage, db, gateway, holdscore, leaguearc, main, modpool, movers  # noqa: E402
-from app.currencies import registry  # noqa: E402
+from app import arbitrage, db, gateway, holdscore, leaguearc, main, modpool, movers
+from app.currencies import registry
 
 LEAGUE = "Test League"
 PAST_LEAGUE = "Past League"

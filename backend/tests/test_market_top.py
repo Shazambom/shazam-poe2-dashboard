@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # backend/
-from app import digest  # noqa: E402
+from app import digest
 
 
 def test_top_markets_valued_carries_the_realised_rate(monkeypatch):

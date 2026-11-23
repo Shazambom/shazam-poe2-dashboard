@@ -12,7 +12,7 @@ from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
 sys.path.insert(0, str(HERE.parent / "bot"))
-import arbseal  # noqa: E402
+import arbseal
 
 FIX = ROOT / "desktop" / "test" / "fixtures" / "feedback"
 

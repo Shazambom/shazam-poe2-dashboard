@@ -32,10 +32,10 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # backend/
-from starlette.testclient import TestClient  # noqa: E402
-from app import arbitrage, db, modpool, settings, stratcalc  # noqa: E402
-from app.arbitrage.graph import Edge, Graph  # noqa: E402
-from app.main import app  # noqa: E402
+from starlette.testclient import TestClient
+from app import arbitrage, db, modpool, settings, stratcalc
+from app.arbitrage.graph import Edge, Graph
+from app.main import app
 
 ROOT = Path(__file__).resolve().parents[2]
 FIXTURES = json.loads((Path(__file__).parent / "fixtures" / "strat_profiles.json").read_text())
@@ -330,7 +330,7 @@ def _rand_tablets(rng, prices, cur) -> dict:
 def _rand_strat(rng, prices, sid) -> dict:
     minutes = rng.uniform(*ENV["minutes"])
     maps = max(0, round(minutes / 60 * rng.uniform(*ENV["maps_per_hour"])))
-    cur = lambda: rng.choice(["chaos", "chaos", "exalted", "divine"])  # noqa: E731
+    cur = lambda: rng.choice(["chaos", "chaos", "exalted", "divine"])
     mcur, tcur, ocur = cur(), cur(), cur()
     pool = sorted(prices)
     loot = [{"cur": c, "name": None, "qty": round(_logu(rng, ENV["loot_count"][0], ENV["loot_count"][1] / 10)), "price": None}

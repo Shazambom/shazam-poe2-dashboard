@@ -16,7 +16,7 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # backend/
-from app import orderbook, session  # noqa: E402
+from app import orderbook, session
 
 TOO_MANY = RuntimeError('exchange HTTP 400: {"error":{"code":2,"message":"Too many items `have` items selected."}}')
 

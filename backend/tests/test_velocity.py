@@ -17,7 +17,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # backend/
-from app import arbitrage  # noqa: E402
+from app import arbitrage
 
 
 def v(margin, gold, fill_hours, price):

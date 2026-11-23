@@ -13,8 +13,8 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # backend/
-from app import db, migrations_user, settings  # noqa: E402
-from app.config import LEAGUE  # noqa: E402
+from app import db, migrations_user, settings
+from app.config import LEAGUE
 
 
 def _history(rows):

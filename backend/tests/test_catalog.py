@@ -22,8 +22,8 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # backend/
-from app import catalog, datapolicy, db  # noqa: E402
-from app.currencies import Registry  # noqa: E402
+from app import catalog, datapolicy, db
+from app.currencies import Registry
 
 RAVEN = "Metadata/Items/Currency/Delirium/DeliriumPinnacleKey"
 BLOOM = "Metadata/Items/MapFragments/CurrencyWildwoodFragment"

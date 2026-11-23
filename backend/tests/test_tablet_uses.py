@@ -21,7 +21,7 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # backend/
-from app import modpool  # noqa: E402
+from app import modpool
 
 FIX = Path(__file__).resolve().parent / "fixtures" / "mods"
 

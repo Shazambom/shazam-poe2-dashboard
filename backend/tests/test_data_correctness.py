@@ -21,9 +21,9 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # backend/
-from app import analytics, db, migrations_user, settings, signalsack  # noqa: E402
-from starlette.testclient import TestClient  # noqa: E402
-from app.main import app  # noqa: E402
+from app import analytics, db, migrations_user, settings, signalsack
+from starlette.testclient import TestClient
+from app.main import app
 
 client = TestClient(app)
 

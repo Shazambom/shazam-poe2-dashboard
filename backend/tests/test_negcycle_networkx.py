@@ -23,8 +23,8 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # backend/
 sys.path.insert(0, str(Path(__file__).resolve().parent))      # tests/ (shared fuzz helpers)
-from app import negcycle as nc  # noqa: E402
-from test_negcycle import IMPLS, INF, assert_negative_cycle, best_weight, random_graph, run  # noqa: E402
+from app import negcycle as nc
+from test_negcycle import IMPLS, INF, assert_negative_cycle, best_weight, random_graph, run
 
 # Missing → not the sidecar venv: skip loudly rather than silently pass (a green run must mean
 # the comparison actually happened).

@@ -10,7 +10,7 @@ from .config import LEAGUE, TRADE_LEAGUES_TTL_S
 log = logging.getLogger(__name__)
 
 
-from .arbpresets import ARBITRAGE_PRESETS, ARBITRAGE_UNIT, HIDDEN_KNOB_DEFAULTS as _HIDDEN  # noqa: F401 (re-exported)
+from .arbpresets import ARBITRAGE_PRESETS, ARBITRAGE_UNIT, HIDDEN_KNOB_DEFAULTS as _HIDDEN  # (re-exported)
 
 _BALANCED = ARBITRAGE_PRESETS[0]["values"]
 

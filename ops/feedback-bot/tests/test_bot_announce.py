@@ -8,7 +8,7 @@ import json
 
 import pytest
 
-from test_bot import h  # noqa: F401 (fixture)
+from test_bot import h  # (fixture)
 import announce
 
 

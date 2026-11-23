@@ -19,13 +19,13 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # backend/
-from app import db, digest, holdscore, marketseries, settings  # noqa: E402
+from app import db, digest, holdscore, marketseries, settings
 import importlib
 board = importlib.import_module("app.arbitrage.board")  # the module, not the package facade function
-from app.currencies import registry  # noqa: E402
+from app.currencies import registry
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _proddb import PROD_DB, prod as _prod  # noqa: E402  (opt-in: ARBITER_PROD_TESTS=1)
+from _proddb import PROD_DB, prod as _prod  # (opt-in: ARBITER_PROD_TESTS=1)
 
 
 def _prod_rows(sql, *params):
@@ -280,7 +280,7 @@ def test_the_leaderboard_falls_back_to_the_hold_caution_setting(monkeypatch):
 # landed at -7e-15 and the API emitted a negative spread for a market whose sides agree). With the
 # bulk-exchange books gone they could never differ, and nothing rendered them; they are cut.
 
-import test_arbitrage_golden as G  # noqa: E402
+import test_arbitrage_golden as G
 
 frozen = G.frozen
 
@@ -301,7 +301,7 @@ def test_a_card_carries_no_bid_ask_or_spread(frozen):
 # landed at -7e-15 and the API emitted a negative spread for a market whose sides agree). With the
 # bulk-exchange books gone they could never differ, and nothing rendered them; they are cut.
 
-import test_arbitrage_golden as G  # noqa: E402
+import test_arbitrage_golden as G
 
 frozen = G.frozen
 
