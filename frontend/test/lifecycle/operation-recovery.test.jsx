@@ -13,6 +13,7 @@ import { useStratStore } from '../../src/lib/stratStore.js'
 import * as sc from '../../src/lib/stratcalc.js'
 import ThemeBuilder from '../../src/components/ThemeBuilder.jsx'
 import { PRIMARY_KEYS, derive } from '../../src/lib/themeDerive.js'
+import TradingSettings from '../../src/components/TradingSettings.jsx'
 import { useStatus } from '../../src/lib/statusStore.js'
 import { saveHistoryPrefs } from '../../src/lib/ee2History.js'
 import { useWorkspace } from '../../src/lib/workspaceStore.js'
@@ -389,4 +390,31 @@ it('theme export: a refused clipboard write leaves the exported text on screen t
     else delete navigator.clipboard
     useTheme.setState({ customs: [] })
   }
+})
+
+// Today's behaviour already is the recovery: the picker is cleared before the file is read, and nothing is
+// imported until the text parses, so an unreadable file leaves the workspace as it was and the next pick works.
+it('workspace import: an unreadable file leaves the workspace untouched and the picker ready for another file', async () => {
+  installApiMock()
+  const mine = { id: 'n_mine', kind: 'search', name: 'Mine', slug: 'abc', type: 'search', live: false, done: false, armed: false }
+  useWorkspace.getState().hydrate({ version: 2, tree: [mine] })
+  await advance(0)
+  render(<TradingSettings />)
+  await settle()
+  const picker = screen.getByLabelText('Import searches file')
+  const unreadable = { text: vi.fn().mockRejectedValue(new Error('NotReadableError')) }
+  fireEvent.change(picker, { target: { files: [unreadable] } })
+  await settle()
+  expect(unreadable.text).toHaveBeenCalledTimes(1)
+  expect(useWorkspace.getState().tree).toEqual([mine])
+  expect(picker.value).toBe('')
+  expect(toasts).not.toHaveBeenCalled()
+
+  const other = { id: 'n_other', kind: 'search', name: 'Other', slug: 'def', type: 'search', live: false, done: false, armed: false }
+  const good = { text: vi.fn(async () => JSON.stringify({ version: 2, tree: [other] })) }
+  fireEvent.change(picker, { target: { files: [good] } })
+  await settle()
+  expect(useWorkspace.getState().tree.map(n => n.name)).toEqual(['Mine', 'Other'])
+  expect(toasts).toHaveBeenCalledWith(expect.objectContaining({ text: 'Imported 1 item (merge)', ok: true }))
+  useWorkspace.getState().hydrate({ version: 2, tree: [] })
 })
