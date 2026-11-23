@@ -50,8 +50,11 @@ keystrokes or their content.
 | `ee2-config.js` | Locates/loads/parses/**watches** EE2 `config.json`; extracts normalized `{action,target,shortcut}` bindings. |
 | `clipboard-watcher.js` | Adaptive clipboard poll + `captureItemBurst()` + PoE2 item parser (self-test: `node clipboard-watcher.js`). |
 | `detect.js` | Best-effort EE2 detection (config dir / process). |
-| `subscribers/log-demo.js` | Demo subscriber; `console.log`s every hook. No side effects. |
-| `server-watcher.js`, `log-watcher.js` | OPTIONAL extras (HTTP `/config` probe; PoE2 `Client.txt` tail). Not wired by default — see comments in each. |
+| `log-watcher.js`, `client-log-parser.js` | PoE2 `Client.txt` tail and its parser (wired by `desktop/src/main.js`). |
+
+Never connect to EE2's own server: on every `/events` websocket connection EE2 makes that socket its
+"last-active" client and routes price-check replies to it, so a listener there would divert results away
+from EE2's overlay. (An unwired `GET /config` probe, `server-watcher.js`, was deleted as dead code.)
 
 ## Hooks (events)
 
@@ -91,8 +94,7 @@ hard-fail and never spam OS permission prompts.
 const { ExiledExchangeIntegration } = require('./integrations/exiled-exchange')
 
 const ee2 = new ExiledExchangeIntegration()
-// attach subscribers here — the shipped one is desktop/src/ee2-history;
-// subscribers/log-demo.js is the reference example (not attached in production)
+// attach subscribers here — the shipped one is desktop/src/ee2-history
 await ee2.start()   // self-gates on EE2 presence
 // ...later...
 ee2.stop()          // stops uiohook + timers cleanly
@@ -100,7 +102,7 @@ ee2.stop()          // stops uiohook + timers cleanly
 
 ## Adding an actions layer later
 
-1. Write a new subscriber under `subscribers/` (like `log-demo.js`) reacting to
+1. Write a new subscriber (like `desktop/src/ee2-history`) reacting to
    the events it cares about (e.g. `origin:'ee2'` `item-checked`).
 2. Keep it local: any data lookup must go through the **bundled local backend on
    127.0.0.1**, never a remote server (desktop contract).
