@@ -994,8 +994,8 @@ input[type=range] { accent-color: var(--gold); }
 .pt-chg.gain { color: var(--gain); background: rgba(var(--gain-rgb),.13); }
 .pt-chg.loss { color: var(--loss); background: rgba(var(--loss-rgb),.13); }
 /* price flashes when its value changes (up=green, down=red), then settles */
-@keyframes flash-gain { 0% { color: var(--gain); text-shadow: 0 0 14px rgba(var(--gain-rgb),.6); } 100% {} }
-@keyframes flash-loss { 0% { color: var(--loss); text-shadow: 0 0 14px rgba(var(--loss-rgb),.6); } 100% {} }
+@keyframes flash-gain { 0% { color: var(--gain); text-shadow: 0 0 14px rgba(var(--gain-rgb),.6); } }
+@keyframes flash-loss { 0% { color: var(--loss); text-shadow: 0 0 14px rgba(var(--loss-rgb),.6); } }
 .pt-num.up { animation: flash-gain .6s var(--ease); }
 .pt-num.down { animation: flash-loss .6s var(--ease); }
 .spark { display: block; }
