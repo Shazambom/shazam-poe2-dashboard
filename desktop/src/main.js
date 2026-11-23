@@ -760,9 +760,9 @@ app.whenReady().then(async () => {
     const r = registerHotkey(() => win, combo)
     if (!r.ok) console.log('[hotkey] combo unavailable:', combo)
     ipcMain.handle('hotkey:get', () => ({ combo: settings.focusHotkey || 'CommandOrControl+G' }))
-    ipcMain.handle('hotkey:set', (_e, combo) => {
-      const res = registerHotkey(() => win, combo)
-      if (res.ok) { settings.focusHotkey = combo; saveSettings() }
+    ipcMain.handle('hotkey:set', (_e, next) => {
+      const res = registerHotkey(() => win, next)
+      if (res.ok) { settings.focusHotkey = next; saveSettings() }
       return res
     })
   } catch (e) { console.log('[hotkey] register failed:', String(e)) }
