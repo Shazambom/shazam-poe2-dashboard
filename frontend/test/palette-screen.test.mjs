@@ -145,7 +145,7 @@ test('App feeds ⌘K the current screen, and the sub-tab views report theirs', (
   const app = readFileSync(new URL('../src/App.jsx', import.meta.url), 'utf8')
   assert.match(app, /screen=\{screen\}/)
   assert.match(app, /screenCommands=\{screenCommands\}/)
-  assert.match(app, /onGoSub=\{goSub\}/, 'one section\/sub-view dispatch, shared by ⌘K\'s screens and actions')
+  assert.match(app, /onGoSub=\{goSub\}/, 'one section/sub-view dispatch, shared by ⌘K\'s screens and actions')
   assert.match(app, /if \(d\) goSub\(d\.section, d\.sub\)/)
   for (const [file, section] of [['StashTab', 'Stash'], ['EconomyView', 'Economy'], ['TradingView', 'Trading']]) {
     const src = readFileSync(new URL(`../src/components/${file}.jsx`, import.meta.url), 'utf8')
