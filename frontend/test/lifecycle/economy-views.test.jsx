@@ -27,13 +27,18 @@ describe('Economy views lifecycles (Hold, Market, Inflation, Movers)', () => {
     const { calls } = installApiMock({
       '/api/market/top': [{ a: 'chaos', b: 'exalted', volume_a: 10, volume_b: 100, rate: 10 }],
     })
-    render(<MarketView />)
+    const { rerender, unmount } = render(<MarketView />)
 
     await waitFor(() => {
       expect(calls.some(c => c.path === '/api/market/top')).toBe(true)
       expect(calls.some(c => c.path === '/api/market/edges')).toBe(true)
     })
 
+    const filter = screen.getByPlaceholderText('Filter by currency')
+    fireEvent.change(filter, { target: { value: 'chaos' } })
+    rerender(<MarketView />)
+    expect(filter.value).toBe('chaos')
+    expect(calls.filter(c => c.path === '/api/market/edges')).toHaveLength(1)
     const marketTable = await screen.findByRole('columnheader', { name: 'Market' })
     const row = marketTable.closest('table').querySelector('tbody tr')
     expect(row).toBeTruthy()
@@ -42,6 +47,8 @@ describe('Economy views lifecycles (Hold, Market, Inflation, Movers)', () => {
       expect(calls.some(c => c.path === '/api/market/history' &&
         new URL(c.url, 'http://localhost').searchParams.get('a') === 'chaos')).toBe(true)
     })
+    unmount()
+    expect(calls.filter(c => c.path === '/api/market/history')).toHaveLength(2)
   })
 
   it('InflationView loads inflation, cross-league, and marketcap endpoints cleanly', async () => {

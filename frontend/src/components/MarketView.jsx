@@ -9,6 +9,7 @@ import CurrencyPicker from './CurrencyPicker.jsx'
 import Toggle from './Toggle.jsx'
 import Wealth from './Wealth.jsx'
 
+const EMPTY_EDGES = []
 const AXIS = { fill: chart.axis, fontSize: 11 }
 const TIP = { background: chart.tooltipBg, border: `1px solid ${chart.tooltipBorder}` }
 const hourLabel = fmt.hourLabel
@@ -17,7 +18,7 @@ export default function MarketView({ currencies }) {
   const [pair, setPair] = useState({ a: 'divine', b: 'exalted' })
   const [q, setQ] = useState('')
   const [byValue, setByValue] = useState(false)   // false = raw turnover, true = Exalted-normalized value
-  const edges = useApi(() => api.edges(), []).data ?? []
+  const edges = useApi(() => api.edges(), []).data ?? EMPTY_EDGES
   const top = useApi(() => api.topMarkets(byValue ? 'value' : 'activity'), [byValue]).data ?? []
   const hist = useApi(() => api.history(pair.a, pair.b), [pair.a, pair.b]).data
 
