@@ -16,13 +16,16 @@ const GROUPS = { prefix: ['explicit', 'desecrated'], suffix: ['explicit', 'desec
 const groupsFor = (affix) => GROUPS[affix] || []
 
 let _cat = null
+let _byGroupLower = null
 function catalogue() {
   if (_cat) return _cat
   // group id → (text → [ids]): a text can sit under two ids in one group.
   const byGroup = new Map()
   for (const g of JSON.parse(fs.readFileSync(path.join(DATA, 'trade', 'stats.json'), 'utf8')).result) {
     const m = new Map()
-    for (const e of g.entries) { const ids = m.get(e.text) || []; ids.push(e.id); m.set(e.text, ids) }
+    for (const e of g.entries) {
+      const ids = m.get(e.text) || []; ids.push(e.id); m.set(e.text, ids)
+    }
     byGroup.set(g.id, m)
   }
   // EE2's own category → trade category table, read out of its bundle.
@@ -41,8 +44,27 @@ function catalogue() {
   return _cat
 }
 
+function groupLowerIndex() {
+  if (_byGroupLower) return _byGroupLower
+  const { byGroup } = catalogue()
+  const out = new Map()
+  for (const [gid, m] of byGroup) {
+    const ml = new Map()
+    for (const [text, ids] of m) {
+      const lk = text.toLowerCase()
+      const lids = ml.get(lk)
+      if (lids) lids.push(...ids)
+      else ml.set(lk, [...ids])
+    }
+    out.set(gid, ml)
+  }
+  _byGroupLower = out
+  return _byGroupLower
+}
+
 // The site prints a stat without its sign: "+# to maximum Life" is listed as "# to maximum Life".
 const siteText = (line) => line.replace(/^\+/, '')
+const cleanModLine = (t) => String(t ?? '').replace(/\[([^\]|]*)\|([^\]]*)\]/g, '$2').replace(/\[([^\]]*)\]/g, '$1').trim()
 
 // { stats: [[ids of line 1], [ids of line 2], …] | null, category: 'accessory.ring' | null }
 function lookup({ text, affix, bases }) {
@@ -55,4 +77,56 @@ function lookup({ text, affix, bases }) {
   return { stats: stats.every(ids => ids.length) ? stats : null, category }
 }
 
-module.exports = { lookup, groupsFor }
+const ITEM_MOD_GROUPS = [
+  ['fracturedMods', ['fractured', 'explicit']],
+  ['explicitMods', ['explicit', 'desecrated']],
+  ['implicitMods', ['implicit']],
+  ['craftedMods', ['crafted', 'explicit']],
+  ['enchantMods', ['enchant']],
+]
+
+// Resolve a trade2 item JSON's rolled mod lines to trade2 stat ids + numeric roll values + category,
+// reusing the already-loaded EE2 stats.json & items.ndjson catalogue (shared with Stash → Merchant).
+function lookupItemMods(item) {
+  if (!item || typeof item !== 'object') return null
+  const { ofBase } = catalogue()
+  const byGroupLower = groupLowerIndex()
+  const category = ofBase.get(item.baseType) || ofBase.get(item.typeLine) || null
+  const mods = []
+  const seen = new Set()
+
+  for (const [field, groups] of ITEM_MOD_GROUPS) {
+    const lines = Array.isArray(item[field]) ? item[field] : []
+    for (const raw of lines) {
+      const cleaned = cleanModLine(typeof raw === 'string' ? raw : (raw?.description ?? raw?.text ?? ''))
+      if (!cleaned) continue
+      const nums = []
+      const tmpl = cleaned
+        .replace(/[+-]?\d+(?:\.\d+)?/g, (m) => { nums.push(Number(m)); return '#' })
+        .replace(/^\+/, '')
+        .toLowerCase()
+      let ids = null
+      for (const g of groups) {
+        const hit = byGroupLower.get(g)?.get(tmpl)
+        if (hit && hit.length) { ids = hit; break }
+      }
+      if (!ids) continue
+      const sig = ids.join('|')
+      if (seen.has(sig)) continue
+      seen.add(sig)
+      const val = nums.length === 1
+        ? nums[0]
+        : nums.length >= 2
+          ? nums.reduce((a, b) => a + b, 0) / nums.length
+          : null
+      mods.push({ ids, value: Number.isFinite(val) ? val : null })
+      if (mods.length >= 8) break
+    }
+    if (mods.length >= 8) break
+  }
+
+  if (!category && !mods.length) return null
+  return { category, mods }
+}
+
+module.exports = { lookup, lookupItemMods, groupsFor }

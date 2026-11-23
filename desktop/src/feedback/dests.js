@@ -5,6 +5,7 @@
 const DESTS = [
   { id: 'board', section: 'Board', sub: null },
   { id: 'stash', section: 'Stash', sub: 'stash' },
+  { id: 'stash-merchant', section: 'Stash', sub: 'merchant' },
   { id: 'stash-arbitrage', section: 'Stash', sub: 'arbitrage' },
   { id: 'stash-calc', section: 'Stash', sub: 'calc' },
   { id: 'economy-hold', section: 'Economy', sub: 'hold' },

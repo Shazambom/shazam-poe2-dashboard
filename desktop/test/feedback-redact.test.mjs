@@ -61,3 +61,19 @@ test('pickAllowed keeps only allow-listed keys (fail-closed)', () => {
   assert.deepEqual(out, { league: 'L', reference: 'divine' })
   assert.deepEqual(pickAllowed(null, SETTINGS_KEYS), {})
 })
+
+test('account keys are never carried in feedback reports', () => {
+  const allowed = pickAllowed({ league: 'Standard', account: 'ExileShop#4242' }, SETTINGS_KEYS)
+  assert.deepEqual(allowed, { league: 'Standard' })
+  const scrubbed = redactDeep({
+    league: 'Standard',
+    account: 'ExileShop#4242',
+    listing: { account: { name: 'ExileShop#4242' }, price: { amount: 5, currency: 'divine' } },
+  })
+  const text = JSON.stringify(scrubbed)
+  assert.ok(!text.includes('ExileShop#4242'), `account leaked: ${text}`)
+  assert.ok(!('account' in scrubbed))
+  assert.ok(!('account' in scrubbed.listing))
+  assert.equal(scrubbed.listing.price.amount, 5)
+})
+

@@ -16,13 +16,13 @@ test('the tabs are Board · Stash · Trading · Economy · Settings', () => {
   assert.doesNotMatch(src('components/TradingView.jsx'), /StashView|'sales'/, 'the Stash no longer lives under Trading')
 })
 
-test('the Stash section opens on the stash, then Arbitrage, Strat Calculator; Economy is Hold, Inflation, Top movers, Market', () => {
-  assert.deepEqual(subsOf('Stash'), [{ id: 'stash', label: 'Stash' }, { id: 'arbitrage', label: 'Arbitrage' }, { id: 'calc', label: 'Strat Calculator' }])
+test('the Stash section opens on the stash, then Merchant, Arbitrage, Strat Calculator; Economy is Hold, Inflation, Top movers, Market', () => {
+  assert.deepEqual(subsOf('Stash'), [{ id: 'stash', label: 'Stash' }, { id: 'merchant', label: 'Merchant' }, { id: 'arbitrage', label: 'Arbitrage' }, { id: 'calc', label: 'Strat Calculator' }])
   // owner: "hold and positive movers should be broken out and put under economy. Hold should be first then inflation
   // then top movers then market"
   assert.deepEqual(subsOf('Economy'), [{ id: 'hold', label: 'Hold' }, { id: 'inflation', label: 'Inflation' }, { id: 'movers', label: 'Top movers' }, { id: 'market', label: 'Market' }])
   const eco = src('components/EconomyView.jsx')
-  assert.match(eco, /useState\('hold'\)/, 'Economy opens on Hold')
+  assert.match(eco, /useState\((?:initialSub \|\| )?'hold'\)/, 'Economy opens on Hold')
   assert.match(eco, /sub === 'hold' && <HoldView /)
   assert.match(eco, /sub === 'movers' && <MoversView /)
   const hold = src('components/HoldView.jsx')
@@ -33,7 +33,7 @@ test('the Stash section opens on the stash, then Arbitrage, Strat Calculator; Ec
   assert.deepEqual(DESTS.slice(0, 2).map(d => d.id), ['board', 'stash'])
   assert.ok(!DESTS.some(d => d.section === 'Strategy'))
   const tab = src('components/StashTab.jsx')
-  assert.match(tab, /useState\('stash'\)/, 'opens on the stash')
+  assert.match(tab, /useState\((?:initialSub \|\| )?'stash'\)/, 'opens on the stash')
   assert.match(tab, /sub === 'stash' && <StashView /)
   assert.deepEqual(subsOf('Trading').map(s => s.id), ['workspace', 'live', 'regex', 'mods'])
 })
@@ -44,5 +44,5 @@ test('every road to the Stash goes to its tab and sub-view', () => {
     assert.doesNotMatch(s, /goTrading\('sales'\)/, f)
     assert.match(s, /nav\.goStash\(\)/, f)
   }
-  assert.match(src('App.jsx'), /if \(e\.type === 'goStash'\) \{ setTab\('Stash'\); setTimeout\(\(\) => nav\.openSub\('Stash', 'stash'\), 0\) \}/)
+  assert.match(src('App.jsx'), /if \(e\.type === 'goStash'\) \{[\s\S]*?nav\.openSub\('Stash', 'stash'\)[\s\S]*?setTab\('Stash'\)/)
 })

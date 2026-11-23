@@ -12,8 +12,8 @@ import ModsView from './ModsView.jsx'
 // The Stash is its own tab (owner, 2026-10-08). The trade site lives INSIDE the workspace — no separate Browse tab.
 const SUBS = subsOf('Trading')
 
-export default function TradingView({ league }) {
-  const [sub, setSub] = useState(() => nav.consumePendingTrading() || 'workspace')
+export default function TradingView({ league, initialSub = null }) {
+  const [sub, setSub] = useState(() => nav.consumePendingTrading() || initialSub || 'workspace')
   useEffect(() => nav.on(e => {
     if (e.type === 'openTrading' && e.sub) setSub(e.sub === 'browse' || e.sub === 'watches' ? 'workspace' : e.sub)
   }), [])

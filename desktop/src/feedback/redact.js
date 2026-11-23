@@ -16,7 +16,7 @@ const SETTINGS_KEYS = [
   'betaChannel', 'customBackdrop', 'focusHotkey',
 ]
 
-const DROP_KEY = /sess|cookie|token|secret|password|authorization|username/i
+const DROP_KEY = /sess|cookie|token|secret|password|authorization|username|account/i
 // A path under the user's home names the OS user; the report keeps only the folder's own name.
 const PATH_KEY = /(^|_)(dir|path|file)$/i
 const lastSegment = (s) => String(s).split(/[\\/]/).filter(Boolean).pop() || ''

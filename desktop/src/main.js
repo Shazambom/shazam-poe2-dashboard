@@ -356,6 +356,10 @@ function connectPoeFlow() {
 
 async function connectPoeSession() {   // menu entry point: adds dialogs
   const r = await connectPoeFlow()
+  if (r.ok) {
+    try { require('./trade').resetMerchantAccount() } catch {}
+    reloadTradeWebviews()
+  }
   dialog.showMessageBox(win, { message: r.ok ? `✓ ${r.message}` : `Failed: ${r.message}` })
   if (r.ok) win?.webContents.reload()
 }
@@ -382,7 +386,10 @@ ipcMain.handle('open-login', () => shell.openExternal(`${POE}/login`))
 
 ipcMain.handle('poe-connect', async () => {
   const r = await connectPoeFlow()
-  if (r.ok) reloadTradeWebviews()   // native login lands in defaultSession; refresh an open Trade tab
+  if (r.ok) {
+    try { require('./trade').resetMerchantAccount() } catch {}
+    reloadTradeWebviews()   // native login lands in defaultSession; refresh an open Trade tab
+  }
   return r
 })
 
@@ -405,6 +412,7 @@ ipcMain.handle('poe-set-cookie', async (_e, cookie) => {
       domain: '.pathofexile.com', path: '/', secure: true, httpOnly: true,
       sameSite: 'lax', expirationDate: Math.floor(Date.now() / 1000) + 30 * 24 * 3600,
     })
+    try { require('./trade').resetMerchantAccount() } catch {}
     reloadTradeWebviews()
     return { ok: true }
   } catch (e) { return { ok: false, message: String(e.message || e) } }
@@ -550,6 +558,7 @@ function buildMenu() {
     { label: 'Connect PoE trade session…', click: connectPoeSession },
     { label: 'Log out of pathofexile.com', click: async () => {
         await session.defaultSession.clearStorageData({ origin: POE })
+        try { require('./trade').resetMerchantAccount() } catch {}
         dialog.showMessageBox(win, { message: 'Cleared the pathofexile.com login.' })
       } },
     { type: 'separator' },
@@ -625,6 +634,63 @@ ipcMain.handle('dev:ee2-item', (_e, item) => {
   return true
 })
 
+// ------------------------------------------- Client.txt log watcher
+// Passively tails PoE 2's local Client.txt to drive Strat Calculator's auto-timer
+// and map counter. Only safe zone/area-gen/afk events cross IPC (never whisper text).
+let _clientLog = null
+let _clientLogPath = null
+let _clientLogStartPromise = null
+const { parseLine: parseClientLogLine, toRendererEvent } = require('./integrations/exiled-exchange/client-log-parser.js')
+function handleClientLogLine(line) {
+  const ev = toRendererEvent(parseClientLogLine(line))
+  if (!ev) return null
+  try { win?.webContents.send('client-log:event', ev) } catch {}
+  return ev
+}
+function startClientLogWatcher() {
+  if (_clientLogStartPromise) return _clientLogStartPromise
+  if (_clientLog) return Promise.resolve(_clientLogPath)
+  const p = (async () => {
+    try {
+      const { LogWatcher } = require('./integrations/exiled-exchange/log-watcher.js')
+      const watcher = new LogWatcher({ onLine: handleClientLogLine })
+      _clientLog = watcher
+      const found = await watcher.start()
+      if (_clientLog !== watcher) { watcher.stop(); return null }
+      _clientLogPath = found
+      if (_clientLogPath) {
+        console.log('[client-log] watching:', path.basename(_clientLogPath))
+        try { win?.webContents.send('client-log:status', { watching: true }) } catch {}
+      }
+      return _clientLogPath
+    } catch (e) {
+      console.log('[client-log] disabled:', String(e))
+      _clientLog = null
+      _clientLogPath = null
+      return null
+    } finally {
+      if (_clientLogStartPromise === p) _clientLogStartPromise = null
+    }
+  })()
+  _clientLogStartPromise = p
+  return p
+}
+function stopClientLogWatcher() {
+  try { _clientLog?.stop() } catch {}
+  _clientLog = null
+  _clientLogPath = null
+  _clientLogStartPromise = null
+}
+ipcMain.handle('client-log:status', async () => {
+  if (_clientLogStartPromise) await _clientLogStartPromise.catch(() => {})
+  return { watching: !!_clientLogPath }
+})
+// DIAGNOSTIC (dev launch or the beta channel — never a stable build): inject a Client.txt line for deterministic QA.
+ipcMain.handle('dev:client-log-line', (_e, line) => {
+  if (!diagTelemetryOn()) return null
+  return handleClientLogLine(line)
+})
+
 // ------------------------------------------------------------------- boot
 // Single-instance lock: a second launch (or the installer relaunching us) hands
 // focus to the existing window instead of spawning a duplicate process. Without
@@ -653,6 +719,7 @@ app.whenReady().then(async () => {
       zoomFactor: 1,      // never inherit a persisted per-origin zoom (see menu.js)
     },
   })
+  startClientLogWatcher() // tails PoE 2 Client.txt if present; starts before loadURL so client-log:status awaits it
   win.loadURL(uiUrl)
   win.webContents.setWindowOpenHandler(({ url }) => { shell.openExternal(url); return { action: 'deny' } })
   win.webContents.on('did-finish-load', () => { _history?.setSender((ch, p) => { try { win?.webContents.send(ch, p) } catch {} }) })
@@ -767,7 +834,7 @@ ipcMain.handle('mods:item', async () => {
 // still trying to PUT /api/workspace).
 // (`_flushedForQuit` is declared up top so the update handler can set it before quitAndInstall.)
 const stopTrade = () => { try { require('./trade').engine.stopAll() } catch {}; try { require('./trade/hotkey.js').unregisterAll() } catch {} }
-const stopAll = () => { stopTrade(); stopEe2Integration(); stopBackend() }
+const stopAll = () => { stopTrade(); stopEe2Integration(); stopClientLogWatcher(); stopBackend() }
 app.on('before-quit', (e) => {
   if (!_flushedForQuit && win && !win.isDestroyed()) {
     e.preventDefault()

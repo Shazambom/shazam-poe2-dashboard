@@ -77,9 +77,9 @@
   --bg: #efd9b8; --bg-2: #e6cba5; --panel: #f7e9cf; --panel-2: #ecd8b6; --panel-hi: #fff6e3; --surface-1: #f2e2c4; --surface-pop: #fbf1de;
   --line: #d3b58c; --line-strong: #b8935f; --line-hover: #a07f52;
   --ink: #2a1c14; --ink-2: #4f3931; --muted: #715747;
-  --gold: #9a4f0f; --gold-2: #a8560f; --gold-dim: #f3c98a; --gold-3: #7a3d0a; --ink-on-gold: #fff3dc;
-  --gain: #0f5a34; --loss: #b8362a; --live: #2f6e9a; --digest: #6a4aa8; --recipe: #8a5a10;
-  --accent-rgb: 154,79,15; --gain-rgb: 15,90,52; --loss-rgb: 184,54,42; --live-rgb: 47,110,154; --digest-rgb: 106,74,168; --wash-rgb: 240,160,64;
+  --gold: #83420a; --gold-2: #9a4f0f; --gold-dim: #f3c98a; --gold-3: #6c3508; --ink-on-gold: #fff3dc;
+  --gain: #0f5a34; --loss: #9d271c; --live: #2f6e9a; --digest: #6a4aa8; --recipe: #8a5a10;
+  --accent-rgb: 131,66,10; --gain-rgb: 15,90,52; --loss-rgb: 157,39,28; --live-rgb: 47,110,154; --digest-rgb: 106,74,168; --wash-rgb: 240,160,64;
   --backdrop: #e9d2ae;
 }
 /* Zarokh's arena: violet-grey stone, white-cyan temporal light, gold rings (--recipe), violet orbs (--live) */
@@ -117,6 +117,7 @@
    ember/bronze panels of Ash and Azmeri and the parchment of Divinity pull the accents toward their own ink. */
 html[data-theme="ash"], html[data-theme="azmeri"] { --grp-mix: 55%; }
 html[data-theme="divinity"] { --grp-mix: 62%; }
+html[data-theme="divinity"], html[data-light="1"] { --rarity-mix: 34%; }
 html[data-theme="vaal"] { --grp-mix: 78%; }
 /* The light preset: the few translucent-white fills that give depth on dark surfaces become translucent-black. */
 :root[data-theme="divinity"] .sk { background: linear-gradient(100deg, rgba(0,0,0,.04) 30%, rgba(0,0,0,.09) 50%, rgba(0,0,0,.04) 70%); background-size: 220% 100%; }
@@ -242,7 +243,7 @@ a { color: var(--live); }
   box-shadow: 0 0 10px rgba(var(--accent-rgb),.55);
 }
 /* Consolidated tabs with an internal sub-nav (Trading / Strategy / Economy). */
-.trading, .section { display: flex; flex-direction: column; min-height: 0; }
+.trading, .section { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
 .subtabs { display: flex; gap: 2px; padding: 4px 0 10px; border-bottom: 1px solid var(--line); margin-bottom: 12px; }
 .subtabs button {
   position: relative; background: none; border: 0; padding: 5px 12px 8px; color: var(--muted); cursor: pointer;
@@ -260,7 +261,7 @@ a { color: var(--live); }
 
 /* Trade workspace: file tree of searches (left) + embedded trade site (right).
    NOTE: named .trade-ws (NOT .workspace) — .workspace is RoutesView's grid layout. */
-.trade-ws { display: flex; gap: 0; flex: 1; height: calc(100vh - 150px); min-height: 400px; align-items: stretch; }
+.trade-ws { display: flex; gap: 0; flex: 1; height: calc(100vh - 150px); min-height: 400px; min-width: 0; max-width: 100%; align-items: stretch; }
 .ws-rail { width: 240px; flex: 0 0 240px; display: flex; flex-direction: column; container: rail / inline-size;
   background: var(--surface-1); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
 /* Compact rail (WorkspaceView RAIL_MIN 180 … default 240): under 280px the head keeps every button and
@@ -303,7 +304,7 @@ a { color: var(--live); }
 .ws-tree > div:focus-visible { outline: none; }
 .ws-node:focus-within .ws-mini, .ws-node.focused .ws-mini { opacity: .8; }
 .ws-webhint-name { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
-.ws-chip { display: inline-flex; align-items: center; gap: 4px; border-radius: 999px; padding: 1px 8px; font-size: 11px; color: var(--muted); border: 1px solid var(--line); white-space: nowrap; }
+.ws-chip { display: inline-flex; align-items: center; gap: 4px; border-radius: 999px; padding: 1px 8px; font-size: 11px; color: var(--muted); border: 1px solid var(--line); white-space: nowrap; flex: 0 0 auto; }
 .ws-chip.ok { color: var(--gain); border-color: rgba(var(--gain-rgb),.35); }
 /* Reprice in the cheapest currency: the one actionable chip in the strip (docs/reprice-design.md) */
 .ws-chip.act { color: var(--gold); border-color: rgba(var(--accent-rgb),.45); background: none; cursor: pointer; font: inherit; font-size: 11px; }
@@ -377,8 +378,8 @@ a { color: var(--live); }
 .sale-icon { width: 24px; height: 24px; object-fit: contain; flex: 0 0 24px; }
 .sale-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sale-base { font-size: 12px; }
-.sale-glyph { font-size: 9px; margin-right: 6px; vertical-align: middle; }
-.sale-glyph.normal { color: var(--rarity-normal); } .sale-glyph.magic { color: var(--rarity-magic); } .sale-glyph.rare { color: var(--rarity-rare); } .sale-glyph.unique { color: var(--rarity-unique); } .sale-glyph.gem { color: var(--rarity-gem); } .sale-glyph.currency { color: var(--rarity-currency); }
+.sale-glyph { font-size: 9px; margin-right: 6px; vertical-align: middle; color: color-mix(in oklab, var(--rc, var(--ink-2)) var(--rarity-mix, 100%), var(--ink)); }
+.sale-glyph.normal { --rc: var(--rarity-normal); } .sale-glyph.magic { --rc: var(--rarity-magic); } .sale-glyph.rare { --rc: var(--rarity-rare); } .sale-glyph.unique { --rc: var(--rarity-unique); } .sale-glyph.gem { --rc: var(--rarity-gem); } .sale-glyph.currency { --rc: var(--rarity-currency); }
 .sale-price { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
 .sale-time { font-size: 11.5px; white-space: nowrap; min-width: 56px; text-align: right; }
 .sale-row > .ws-mini { margin-right: 8px; }
@@ -386,14 +387,14 @@ a { color: var(--live); }
 .item-card { border: 1px solid var(--line-strong); border-radius: 10px; background: linear-gradient(165deg, var(--panel-hi) -20%, var(--panel) 45%); box-shadow: var(--shadow-1); padding: 10px 12px; max-width: 520px; font-size: 12.5px; }
 .ic-head { display: flex; align-items: center; gap: 10px; padding-bottom: 8px; border-bottom: 1px solid var(--line); margin-bottom: 6px; }
 .ic-icon { width: 40px; height: 40px; object-fit: contain; }
-.ic-name { font-weight: 700; font-size: 14px; }
+.ic-name { font-weight: 700; font-size: 14px; color: color-mix(in oklab, var(--rc, var(--ink)) var(--rarity-mix, 100%), var(--ink)); }
 .ic-type { color: var(--ink-2); }
-.item-card.normal .ic-name { color: var(--rarity-normal); } .item-card.magic .ic-name { color: var(--rarity-magic); } .item-card.rare .ic-name { color: var(--rarity-rare); } .item-card.unique .ic-name { color: var(--rarity-unique); } .item-card.gem .ic-name { color: var(--rarity-gem); } .item-card.currency .ic-name { color: var(--rarity-currency); }
+.item-card.normal .ic-name { --rc: var(--rarity-normal); } .item-card.magic .ic-name { --rc: var(--rarity-magic); } .item-card.rare .ic-name { --rc: var(--rarity-rare); } .item-card.unique .ic-name { --rc: var(--rarity-unique); } .item-card.gem .ic-name { --rc: var(--rarity-gem); } .item-card.currency .ic-name { --rc: var(--rarity-currency); }
 .ic-block { padding: 5px 0; border-bottom: 1px solid var(--line); }
 .ic-block:last-child { border-bottom: 0; }
 .ic-line { color: var(--ink-2); line-height: 1.4; }
 .ic-augmented { color: var(--live); }
-.ic-implicit .ic-line, .ic-explicit .ic-line, .ic-crafted .ic-line, .ic-fractured .ic-line { color: var(--rarity-magic); }
+.ic-implicit .ic-line, .ic-explicit .ic-line, .ic-crafted .ic-line, .ic-fractured .ic-line { color: color-mix(in oklab, var(--rarity-magic) var(--rarity-mix, 100%), var(--ink)); }
 .ic-rune .ic-line, .ic-enchant .ic-line { color: var(--live); }
 .ic-flags .ic-line { color: var(--loss); }
 .ws-chip.warn { color: var(--afk); border-color: rgba(224,168,58,.45); }
@@ -461,7 +462,7 @@ a { color: var(--live); }
 /* Right side: the embedded trade window (or the empty-state overlay). */
 .ws-main { flex: 1 1 auto; min-width: 0; min-height: 0; position: relative; display: flex; flex-direction: column;
   border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: #0e0f13; } /* style-ok: near-black behind the embedded webview, intentionally below --bg */
-.ws-webhint { display: flex; align-items: center; gap: 10px; padding: 6px 12px; border-bottom: 1px solid var(--line); font-size: 12px; min-height: 30px; flex: 0 0 auto; }
+.ws-webhint { display: flex; align-items: center; gap: 10px; padding: 6px 12px; border-bottom: 1px solid var(--line); font-size: 12px; min-height: 30px; min-width: 0; overflow: hidden; flex: 0 0 auto; }
 .ws-webhint-empty { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; white-space: normal; }
 .ws-webhint-empty .ws-inline-add { width: 18px; height: 18px; font-size: 12px; }
 .ws-cap { color: var(--muted); }
@@ -798,6 +799,7 @@ details.adv[open] summary { color: var(--ink-2); margin-bottom: 8px; }
 .scalc-hm input.scalc-in { width: 4.5rem; font-size: 16px; }
 .scalc-top { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 16px; }
 .scalc-timer { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.scalc-auto { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; color: var(--muted); }
 .scalc-clock { all: unset; font-size: 27px; font-weight: 700; letter-spacing: -.02em; min-width: 6.2ch; color: var(--muted);
   cursor: text; border-radius: var(--radius); transition: color .15s var(--ease); }
 .scalc-clock.on { color: var(--ink); }
@@ -1277,3 +1279,76 @@ code { background: var(--bg); padding: 1px 5px; border-radius: 3px; font-size: 1
 .mods-grant-name { display: flex; align-items: center; gap: 8px; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mods-grant-name .cur { flex: none; }
 .mods-bonded { color: var(--recipe); }
+
+/* ---------- merchant (Stash → Merchant): active shop listings ---------- */
+.merchant-view { display: flex; flex-direction: column; gap: 12px; padding: 14px 24px 48px; }
+.merchant-head { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-1); flex-wrap: wrap; box-shadow: var(--shadow-1); }
+.merchant-updated { font-size: 12px; white-space: nowrap; }
+.merchant-setup { max-width: 520px; margin: 28px auto; padding: 24px 26px; border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--card-gradient); box-shadow: var(--shadow-1); display: flex; flex-direction: column; gap: 12px; }
+.merchant-setup h2 { margin: 0; font-size: 17px; font-weight: 600; color: var(--ink); }
+.merchant-setup p { margin: 0; font-size: 13px; line-height: 1.45; }
+.merchant-setup-actions { display: flex; align-items: center; gap: 10px; margin-top: 4px; }
+.merchant-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px 24px; padding: 12px 16px; border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--card-gradient); box-shadow: var(--shadow-1); }
+.merchant-stat-sub { font-size: 11.5px; margin-top: 2px; }
+.merchant-total-cap { font-size: 15px; font-weight: 500; }
+.merchant-alert { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; font-size: 12.5px; padding: 8px 14px; }
+.merchant-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 6px 12px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface-1); font-size: 12.5px; }
+.merchant-batch, .merchant-done-ctrl { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.merchant-batch-label { font-size: 12px; }
+.merchant-table-wrap { border: 1px solid var(--line); border-radius: 10px; background: var(--surface-1); box-shadow: var(--shadow-1); overflow-x: auto; }
+.merchant-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.merchant-table th { text-align: left; font-size: 12.5px; font-weight: 600; color: var(--muted); padding: 9px 12px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.merchant-table th.num { text-align: right; }
+.merchant-table td { padding: 8px 12px; border-bottom: 1px solid color-mix(in srgb, var(--line) 55%, transparent); vertical-align: middle; }
+.merchant-table tbody tr:last-child td { border-bottom: 0; }
+.merchant-table tbody tr:not(.merchant-detail-row):hover { background: rgba(var(--accent-rgb),.05); }
+.merchant-row-open td { border-bottom-color: transparent; }
+.merchant-row-done { opacity: .55; }
+.merchant-detail-row td { padding: 4px 14px 14px 36px; }
+.merchant-item-btn { display: flex; align-items: center; gap: 8px; background: none; border: 0; padding: 0; color: var(--ink); font: inherit; text-align: left; cursor: pointer; min-width: 0; }
+.merchant-chev { flex: none; color: var(--muted); transition: transform .15s var(--ease); }
+.merchant-chev.open { transform: rotate(90deg); color: var(--ink); }
+.merchant-item-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.merchant-item-name { display: inline-flex; align-items: center; gap: 5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.merchant-rarity { font-size: 10.5px; font-weight: 600; padding: 0 5px; border-radius: 4px; border: 1px solid color-mix(in srgb, currentColor 35%, transparent); line-height: 1.5; flex: none; color: color-mix(in oklab, var(--rc, var(--ink-2)) var(--rarity-mix, 100%), var(--ink)); }
+.merchant-rarity.normal { --rc: var(--rarity-normal); }
+.merchant-rarity.magic { --rc: var(--rarity-magic); }
+.merchant-rarity.rare { --rc: var(--rarity-rare); }
+.merchant-rarity.unique { --rc: var(--rarity-unique); }
+.merchant-rarity.gem { --rc: var(--rarity-gem); }
+.merchant-rarity.currency { --rc: var(--rarity-currency); }
+.merchant-item-meta { font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.merchant-price-cell { white-space: nowrap; }
+.merchant-ask-stack { display: inline-flex; flex-direction: column; align-items: flex-end; gap: 1px; line-height: 1.2; }
+.merchant-ask-equiv { font-size: 11px; }
+.merchant-alert-copy { display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.merchant-alert-cur { font-weight: 600; color: var(--ink); padding: 0; }
+.merchant-alert-actions { display: inline-flex; align-items: center; gap: 10px; flex: none; }
+.merchant-badge { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 999px; font-size: 11.5px; font-weight: 600; white-space: nowrap; border: 1px solid transparent; }
+.merchant-badge.reprice { color: var(--loss); background: rgba(var(--loss-rgb),.11); border-color: rgba(var(--loss-rgb),.45); }
+.merchant-badge.cut { color: var(--gold); background: rgba(var(--accent-rgb),.11); border-color: rgba(var(--accent-rgb),.4); }
+.merchant-badge.vendor { color: var(--ink-2); background: var(--panel); border-color: var(--line-strong); }
+.merchant-actions { display: inline-flex; align-items: center; justify-content: flex-end; gap: 6px; white-space: nowrap; }
+.merchant-floor-pill { display: inline-flex; align-items: center; gap: 4px; }
+.merchant-done-btn { min-width: 26px; padding-inline: 6px; }
+.merchant-done-btn.on { color: var(--gain); border-color: rgba(var(--gain-rgb),.5); background: rgba(var(--gain-rgb),.11); }
+.merchant-drawer { align-items: start; gap: 18px; }
+.merchant-triage { display: flex; flex-direction: column; gap: 12px; padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel); }
+.merchant-triage-sec { display: flex; flex-direction: column; gap: 4px; }
+.merchant-triage-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+.merchant-triage-text { margin: 0; font-size: 12.5px; line-height: 1.45; color: var(--ink-2); }
+.merchant-inline-link { align-self: flex-start; font-size: 12px; padding: 0; }
+.merchant-floor-block { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+.merchant-floor-summary { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12.5px; }
+.merchant-floor-note { font-size: 11.5px; line-height: 1.4; }
+.merchant-waterfall { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.merchant-step { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: var(--radius); border: 1px solid var(--line); background: var(--surface-1); font-size: 12px; }
+.merchant-triage-foot { display: flex; align-items: center; gap: 8px; padding-top: 4px; border-top: 1px solid var(--line); }
+.merchant-foot { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 8px 14px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface-1); font-size: 12.5px; }
+@media (max-width: 900px) {
+  .merchant-summary { grid-template-columns: 1fr; }
+  .merchant-drawer { grid-template-columns: 1fr; }
+  .merchant-detail-row td { padding-left: 12px; }
+}
+
+

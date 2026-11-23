@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Tree } from 'react-arborist'
 import { api, bus, fmt, toast, undoToast } from '../lib/api.js'
-import { useAutosave, usePoll } from '../lib/hooks.js'
+import { usePoll } from '../lib/hooks.js'
 import { uid } from '../lib/session.js'
 import { find } from '../lib/tree.js'
 import { useSync } from '../lib/syncStore.js'
@@ -19,6 +19,7 @@ import { queryUrl } from '../lib/session.js'
 import { nav } from '../lib/nav.js'
 import { openInTrading } from '../lib/stratTrading.js'
 import { useWorkspace } from '../lib/workspaceStore.js'
+import { useStratStore } from '../lib/stratStore.js'
 
 // Stash → Strat Calculator: named farming strats in a sidebar tree (folders, drag and drop — the
 // trade searches' tree), each a session you can leave and resume, and each one's profit in divines per
@@ -288,9 +289,13 @@ const uniqueId = (u) => `unique:${u.name}|${u.type}`
 const pickIcon = (o, size) => (o.unique ? null : <Cur id={o.id} name={o.name} size={size} />)
 
 export default function StratCalcView({ league, currencies }) {
-  const [doc, setDoc] = useState(null)
-  const [prices, setPrices] = useState({})
-  const [uses, setUses] = useState([])          // the tablets' full uses (the pipeline's table, via the seed)
+  const doc = useStratStore(s => s.doc)
+  const prices = useStratStore(s => s.prices)
+  const uses = useStratStore(s => s.uses)          // the tablets' full uses (the pipeline's table, via the seed)
+  const state = useStratStore(s => s.saveState)
+  const watching = useStratStore(s => s.watching)
+  const setPrices = useStratStore(s => s.setPrices)
+  const change = useStratStore(s => s.change)
   const [bump, setBump] = useState(0)          // counts edits, so only an edit flashes a total
   const [menu, setMenu] = useState(null)        // { at, id } — the sidebar's right-click menu
   const [added, setAdded] = useState(null)      // the row just added: its count takes the focus
@@ -302,30 +307,30 @@ export default function StratCalcView({ league, currencies }) {
   const treeRef = useRef(null)
   const lootAdd = useRef(null)
   const fileBox = useRef(null)                  // the hidden file picker behind ⤓ Import
-  const { state, save, arm } = useAutosave(api.putStratCalc)
 
-  // The strats are read once, then owned by the inputs (a poll never overwrites typing); a first visit
-  // opens on a blank strat. Prices follow the market every minute and on the app-wide ⟳.
+  // The strats are read once into stratStore (sharing in-flight dedup with background Client.txt),
+  // then owned by the inputs and auto-timer; a first visit opens on a blank strat.
+  // Prices follow the market every minute and on the app-wide ⟳.
   useEffect(() => {
-    api.stratCalc().then(d => {
-      setPrices(d.prices || {})
-      setUses(d.uses || [])
-      let n = sc.normalize(d.calc)
-      if (!n.strats.length) n = sc.newStrat(n, { id: newId('s'), name: sc.nextName(n), now: Date.now() })
-      setDoc(n)
-      arm()
-    }).catch(() => {})
+    useStratStore.getState().load({ createIfEmpty: true })
   }, []) // eslint-disable-line
   const tick = useSync(s => s.tick)
   usePoll(() => api.stratPrices().then(d => setPrices(d.prices || {})).catch(() => {}), PRICE_POLL_MS, [tick])
 
-  const change = useCallback((fn) => setDoc(d => { const n = fn(d); if (n !== d) save(n); return n }), [save])
   // An Undo needs this view mounted (it runs through `change`): leaving it takes the toast along.
   useEffect(() => () => bus.emit({ id: 'sc-undo', dismiss: true }), [])
   // An edit (it flashes the totals): `editDoc` for the whole calculator, `editActive` for the open strat.
   const editDoc = useCallback((fn) => { setBump(b => b + 1); change(fn) }, [change])
   const editActive = useCallback((fn) => editDoc(d => (d.active ? sc.edit(d, d.active, fn, Date.now()) : d)), [editDoc])
-  const toggleRun = useCallback(() => change(d => (d.active ? sc.toggle(d, d.active, Date.now()) : d)), [change])
+  const toggleRun = useCallback(() => change(d => {
+    if (!d?.active) return d
+    const active = sc.activeStrat(d)
+    if (active) {
+      if (sc.running(active.timer)) useStratStore.getState().noteManualPause()
+      else useStratStore.getState().noteManualResume()
+    }
+    return sc.toggle(d, d.active, Date.now())
+  }), [change])
   const addMaps = useCallback((k) => editActive(s => ({ ...s, maps: { ...s.maps, count: Math.max(0, s.maps.count + k) } })), [editActive])
   const anyRunning = !!doc?.strats.some(s => sc.running(s.timer))
 
@@ -450,9 +455,13 @@ export default function StratCalcView({ league, currencies }) {
     window.poe2desktop?.ws?.exportFile(`${name}.arbiterstrat`, text).then(() => toast('Saved to Downloads')).catch(() => toast('Could not save the file', false))
   }
   const importFile = (file) => file?.text().then(text => {
-    const r = sc.importStrats(doc, text, { newId, now: Date.now() })
-    if (r) change(() => r.doc)
-    toast(r ? `Imported ${r.count} strat${r.count === 1 ? '' : 's'}` : "Couldn't read this strat file", !!r)
+    let imported = null
+    change(d => {
+      const r = sc.importStrats(d, text, { newId, now: Date.now() })
+      imported = r
+      return r ? r.doc : d
+    })
+    toast(imported ? `Imported ${imported.count} strat${imported.count === 1 ? '' : 's'}` : "Couldn't read this strat file", !!imported)
   }).catch(() => toast("Couldn't read this strat file", false))
   const menuItems = !menu ? [] : menu.kind === 'folder' ? [
     { label: 'Rename', run: () => menu.node.edit() },
@@ -585,6 +594,12 @@ export default function StratCalcView({ league, currencies }) {
                 </>}
                 <Toggle checked={s.time.on} label="Override" ariaLabel="Override the session time"
                   onChange={v => editActive(x => (v ? sc.timeOverrideOn(x, Date.now()) : { ...x, time: { ...x.time, on: false } }))} />
+                {watching && (
+                  <span className="scalc-auto" title="Auto-timer active (Client.txt)">
+                    <span className={on && !s.time.on ? 'dot ok' : 'dot'} aria-hidden="true" />
+                    Auto
+                  </span>
+                )}
                 <span className="save-state">{state === 'saving' ? 'saving…' : state === 'saved' ? 'saved ✓' : ''}</span>
               </div>
               <div className="scalc-result">

@@ -5,6 +5,8 @@ const { ipcMain } = require('electron')
 const { installCloudflareCookieFix } = require('./proxy.js')
 const engine = require('./engine.js')
 
+let _resetMerchantAccount = () => {}
+
 // getBackendUrl: where the bundled backend (the rate-budget owner) lives — set once it has bound.
 function registerTrade(getWin, getBackendUrl) {
   installCloudflareCookieFix()
@@ -27,6 +29,27 @@ function registerTrade(getWin, getBackendUrl) {
     log: (line) => { try { require('../telemetry.js').installLog('sales', line) } catch {} },
   })
   ipcMain.handle('sales:fetch', (_e, p) => salesFetch(p?.league).catch(e => ({ ok: false, error: String(e && e.message || e) })))
+  // Stash → Merchant: active Instant Buyout shop listings + inline floor checks under spare: 0.5 headroom.
+  const merchantMod = require('./merchant.js')
+  const merchantFetch = merchantMod.makeMerchantFetcher({
+    request: (r) => require('./proxy.js').poeRequest(r),
+    budget: require('./budget.js'),
+    log: (line) => { try { require('../telemetry.js').installLog('merchant', line) } catch {} },
+  })
+  _resetMerchantAccount = () => merchantFetch.resetAccount()
+  const merchantPriceCheck = merchantMod.makeMerchantPricer({
+    request: (r) => require('./proxy.js').poeRequest(r),
+    budget: require('./budget.js'),
+    log: (line) => { try { require('../telemetry.js').installLog('merchant', line) } catch {} },
+  })
+  ipcMain.handle('merchant:fetch', (_e, p) => merchantFetch(p || {}).catch(e => ({ ok: false, error: String(e && e.message || e) })))
+  ipcMain.handle('merchant:price-check', (_e, p) => merchantPriceCheck(p || {}).catch(e => ({ ok: false, error: String(e && e.message || e) })))
+  ipcMain.handle('merchant:cancel', (_e, p) => {
+    const scope = p?.scope || 'all'
+    if (scope === 'all' || scope === 'fetch') merchantFetch.cancel()
+    if (scope === 'all' || scope === 'price') merchantPriceCheck.cancel()
+    return { ok: true }
+  })
   ipcMain.handle('trade:uniques', () => require('./uniqueprice.js').uniques())
   // Strat Calculator: a search's cheapest listings (a unique's floor, a linked tablet or waystone search).
   const priceQuery = require('./uniqueprice.js').makeQueryPricer({
@@ -49,6 +72,14 @@ function registerTrade(getWin, getBackendUrl) {
     log: (line) => { try { require('../telemetry.js').installLog('tap', line) } catch {} },
   })
   ipcMain.handle('trade:recheck', (_e, p) => recheck(p || {}).catch(e => ({ ok: false, error: String(e && e.message || e) })))
+  // "Close enough": relaxed rare search check on demand (1 budgeted search + 1 fetch of top 10; user-triggered only).
+  const relax = require('./relax.js').makeRelaxChecker({
+    request: (r) => require('./proxy.js').poeRequest(r),
+    budget: require('./budget.js'),
+    log: (line) => { try { require('../telemetry.js').installLog('tap', line) } catch {} },
+  })
+  ipcMain.handle('trade:relax', (_e, p) => relax(p || {}).catch(e => ({ ok: false, error: String(e && e.message || e) })))
+  ipcMain.handle('trade:relax-cancel', () => { relax.cancel(); return { ok: true } })
   ipcMain.handle('trade:listings-cancel', () => { fetchListings.cancel(); recheck.cancel(); return { ok: true } })
   ipcMain.handle('trade:query-price', (_e, p) => priceQuery(p || {}).catch(e => ({ ok: false, error: String(e && e.message || e) })))
   ipcMain.handle('trade:teleport', async (_e, { token }) => {
@@ -57,4 +88,6 @@ function registerTrade(getWin, getBackendUrl) {
   })
 }
 
-module.exports = { registerTrade, engine }
+function resetMerchantAccount() { _resetMerchantAccount() }
+
+module.exports = { registerTrade, resetMerchantAccount, engine }

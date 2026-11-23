@@ -6,10 +6,10 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { DESTS, SUB_DESTS, SNAP_PARAM, subsOf } from '../src/lib/dests.js'
 
-const IDS = ['board', 'stash', 'stash-arbitrage', 'stash-calc', 'economy-hold', 'economy-inflation', 'economy-movers', 'economy-market',
+const IDS = ['board', 'stash', 'stash-merchant', 'stash-arbitrage', 'stash-calc', 'economy-hold', 'economy-inflation', 'economy-movers', 'economy-market',
   'trading-workspace', 'trading-live', 'trading-regex', 'trading-mods', 'settings']
 
-test('thirteen screens with unique slug ids: board, every sub-view, settings', () => {
+test('fourteen screens with unique slug ids: board, every sub-view, settings', () => {
   const ids = DESTS.map(d => d.id)
   assert.deepEqual(ids, IDS)
   assert.equal(new Set(ids).size, ids.length)
@@ -18,7 +18,7 @@ test('thirteen screens with unique slug ids: board, every sub-view, settings', (
 })
 
 test('each section\'s sub-tabs are its slice of the list, in the order the tabs show', () => {
-  assert.deepEqual(subsOf('Stash'), [{ id: 'stash', label: 'Stash' }, { id: 'arbitrage', label: 'Arbitrage' }, { id: 'calc', label: 'Strat Calculator' }])
+  assert.deepEqual(subsOf('Stash'), [{ id: 'stash', label: 'Stash' }, { id: 'merchant', label: 'Merchant' }, { id: 'arbitrage', label: 'Arbitrage' }, { id: 'calc', label: 'Strat Calculator' }])
   assert.deepEqual(subsOf('Economy'), [{ id: 'hold', label: 'Hold' }, { id: 'inflation', label: 'Inflation' }, { id: 'movers', label: 'Top movers' }, { id: 'market', label: 'Market' }])
   assert.deepEqual(subsOf('Trading').map(s => s.id), ['workspace', 'live', 'regex', 'mods'])
   for (const [file, section] of [['StashTab', 'Stash'], ['EconomyView', 'Economy'], ['TradingView', 'Trading']]) {

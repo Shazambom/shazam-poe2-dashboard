@@ -1,98 +1,158 @@
-// OPTIONAL secondary observer: tail the Path of Exile 2 client log.
+// Passive observer: tail the Path of Exile 2 client log (Client.txt).
 //
-// Why this exists: EE2's most useful non-clipboard signal is the GAME'S OWN log
-// file, Client.txt — EE2 watches it too (main/src/host-files/GameLogWatcher.ts)
-// to know which zone you're in, whom you whispered, trade-chat, etc. It's a
-// passive, append-only file we can read without touching EE2 or the game. It does
-// NOT tell us about price checks (those never hit the log), so it's complementary
-// to the clipboard watcher, not a replacement.
-//
-// This is feature-flagged OFF by default because it opens a file handle / polling
-// timer on a path we can only guess at. If the file isn't where we look, we
-// degrade to silence — never an error.
+// Reads only locally-appended lines without touching the game process. If the
+// log file isn't present in any candidate location, degrades silently to null —
+// never an error.
 'use strict'
 
 const fs = require('fs')
+const fsp = fs.promises
 const os = require('os')
 const path = require('path')
+const { StringDecoder } = require('string_decoder')
 
 // Common install locations for PoE2's Client.txt (standalone + Steam), per
-// platform. Mirrors where EE2 looks, but the list is ours.
-function candidateLogPaths() {
-  const home = os.homedir()
-  if (process.platform === 'win32') {
+// platform. Accepts optional (platform, home) for deterministic testing.
+function candidateLogPaths(platform = process.platform, home = os.homedir()) {
+  if (platform === 'win32') {
+    const winSteamLibs = ['C:', 'D:', 'E:', 'F:'].map(
+      (d) => `${d}\\SteamLibrary\\steamapps\\common\\Path of Exile 2\\logs\\Client.txt`,
+    )
     return [
       'C:\\Program Files (x86)\\Grinding Gear Games\\Path of Exile 2\\logs\\Client.txt',
+      'C:\\Program Files\\Grinding Gear Games\\Path of Exile 2\\logs\\Client.txt',
       'C:\\Program Files (x86)\\Steam\\steamapps\\common\\Path of Exile 2\\logs\\Client.txt',
       'C:\\Program Files\\Steam\\steamapps\\common\\Path of Exile 2\\logs\\Client.txt',
+      'D:\\Steam\\steamapps\\common\\Path of Exile 2\\logs\\Client.txt',
+      'D:\\Program Files (x86)\\Steam\\steamapps\\common\\Path of Exile 2\\logs\\Client.txt',
+      ...winSteamLibs,
     ]
   }
-  if (process.platform === 'darwin') {
-    return [path.join(home, 'Library', 'Caches', 'com.GGG.PathOfExile', 'Logs', 'Client.txt')]
+  if (platform === 'darwin') {
+    return [
+      path.join(home, 'Library', 'Caches', 'com.GGG.PathOfExile', 'Logs', 'Client.txt'),
+      path.join(home, 'Library', 'Application Support', 'Steam', 'steamapps', 'common', 'Path of Exile 2', 'logs', 'Client.txt'),
+    ]
   }
   // Linux (Steam/Proton).
   return [
     path.join(home, '.steam', 'steam', 'steamapps', 'common', 'Path of Exile 2', 'logs', 'Client.txt'),
+    path.join(home, '.local', 'share', 'Steam', 'steamapps', 'common', 'Path of Exile 2', 'logs', 'Client.txt'),
   ]
 }
 
-function findLog() {
+async function exists(p) {
+  try { await fsp.access(p, fs.constants.R_OK); return true } catch { return false }
+}
+
+async function findLog() {
   for (const p of candidateLogPaths()) {
-    try { if (fs.existsSync(p)) return p } catch {}
+    if (await exists(p)) return p
   }
   return null
 }
 
-// Tails Client.txt and calls onLine(text) for each newly-appended line. Uses
-// fs.watchFile polling (like EE2) because Client.txt is written by another
-// process and native fs.watch is unreliable across platforms for that.
+// Tails Client.txt and calls onLine(text) for each newly-appended complete line. Polls
+// file size asynchronously against our tracked byte offset and buffers incomplete trailing
+// lines until a newline arrives so split writes are never dropped or truncated.
 class LogWatcher {
-  constructor({ intervalMs = 1000, onLine } = {}) {
-    this._intervalMs = Math.max(intervalMs, 450)
+  constructor({ intervalMs = 1000, onLine, filePath = null } = {}) {
+    this._intervalMs = Math.max(intervalMs, 50)
     this._onLine = typeof onLine === 'function' ? onLine : () => {}
+    this._explicitPath = filePath
     this._file = null
     this._offset = 0
-    this._listener = null
+    this._partial = ''
+    this._decoder = new StringDecoder('utf8')
+    this._timer = null
+    this._reading = false
+    this._pendingRead = false
+    this._stopped = false
   }
 
-  // Returns the resolved log path if watching started, else null.
-  start() {
+  // Returns Promise<string|null>: the resolved log path if watching started, else null.
+  async start() {
     if (this._file) return this._file
-    const file = findLog()
-    if (!file) return null
+    this._stopped = false
+    const file = this._explicitPath
+      ? ((await exists(this._explicitPath)) ? this._explicitPath : null)
+      : await findLog()
+    if (!file || this._stopped) return null
+    let size = 0
+    try { size = (await fsp.stat(file)).size } catch { size = 0 }
+    if (this._stopped) return null
     this._file = file
     // Start at end-of-file so we only report activity from now on, not history.
-    try { this._offset = fs.statSync(file).size } catch { this._offset = 0 }
-    this._listener = (curr) => { if (curr.size > this._offset) this._readAppended() }
-    fs.watchFile(file, { interval: this._intervalMs }, this._listener)
+    this._offset = size
+    this._partial = ''
+    this._decoder = new StringDecoder('utf8')
+    this._timer = setInterval(() => { this._readAppended() }, this._intervalMs)
+    if (this._timer.unref) this._timer.unref()
     return file
   }
 
   stop() {
-    if (this._file && this._listener) {
-      try { fs.unwatchFile(this._file, this._listener) } catch {}
+    this._stopped = true
+    if (this._timer) {
+      clearInterval(this._timer)
+      this._timer = null
     }
     this._file = null
-    this._listener = null
     this._offset = 0
+    this._partial = ''
+    this._decoder = new StringDecoder('utf8')
+    this._reading = false
+    this._pendingRead = false
   }
 
-  _readAppended() {
+  async _readAppended() {
     const file = this._file
+    if (!file) return
+    if (this._reading) { this._pendingRead = true; return }
+    this._reading = true
+    this._pendingRead = false
     let end = this._offset
-    try { end = fs.statSync(file).size } catch { return }
-    if (end <= this._offset) { this._offset = end; return }  // truncated/rotated
-    const stream = fs.createReadStream(file, { start: this._offset, end: end - 1, encoding: 'utf8' })
-    let buf = ''
-    stream.on('data', (d) => { buf += d })
+    try {
+      end = (await fsp.stat(file)).size
+    } catch {
+      this._reading = false
+      return
+    }
+    if (this._file !== file) { this._reading = false; return }
+    if (end < this._offset) {
+      // Truncated/rotated: reset offset and discard any partial fragment from the old file.
+      this._offset = 0
+      this._partial = ''
+      this._decoder = new StringDecoder('utf8')
+    }
+    const done = () => {
+      this._reading = false
+      if (this._pendingRead && this._file === file) {
+        this._pendingRead = false
+        this._readAppended()
+      }
+    }
+    if (end <= this._offset) {
+      done()
+      return
+    }
+    const start = this._offset
+    const stream = fs.createReadStream(file, { start, end: end - 1 })
+    let text = ''
+    stream.on('data', (chunk) => { text += this._decoder.write(chunk) })
     stream.on('end', () => {
+      if (this._file !== file) { this._reading = false; return }
       this._offset = end
-      for (const line of buf.split(/\r?\n/)) {
+      const combined = this._partial + text
+      const parts = combined.split(/\r?\n/)
+      this._partial = parts.pop() || ''
+      for (const line of parts) {
         const t = line.trim()
         if (t) { try { this._onLine(t) } catch {} }
       }
+      done()
     })
-    stream.on('error', () => {})
+    stream.on('error', () => { done() })
   }
 }
 

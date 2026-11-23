@@ -13,6 +13,8 @@ export const nav = {
   goTrading(sub = 'workspace') { subs.forEach(f => { try { f({ type: 'goTrading', sub }) } catch {} }) },
   // Ask the app to show the Stash tab on its stash (the Arbitrage rail, the top bar's empty state).
   goStash() { subs.forEach(f => { try { f({ type: 'goStash' }) } catch {} }) },
+  // Ask the app to show the Economy tab at a sub-view (e.g. Merchant Currency Watch -> Inflation).
+  goEconomy(sub = 'inflation') { subs.forEach(f => { try { f({ type: 'goEconomy', sub }) } catch {} }) },
   // Ask a section container (Stash/Economy) to switch to a sub-view.
   openSub(section, sub) { subs.forEach(f => { try { f({ type: 'openSub', section, sub }) } catch {} }) },
   // A section container reports the sub-view it shows, so App knows the current screen (⌘K lists its actions first).

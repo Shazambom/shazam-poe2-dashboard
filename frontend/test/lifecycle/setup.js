@@ -74,6 +74,7 @@ if (typeof window !== 'undefined' && !window.poe2desktop) {
       onTap: noopSub(),
       listings: vi.fn(async () => ({ ok: true, listings: [] })),
       recheck: vi.fn(async () => ({ ok: true, listings: [] })),
+      relax: vi.fn(async () => ({ ok: true, searchId: '', total: 0, rows: [] })),
       listingsCancel: vi.fn(async () => ({ ok: true })),
       startSearch: vi.fn(async () => ({ ok: true })),
       stopSearch: vi.fn(async () => ({ ok: true })),
@@ -98,10 +99,18 @@ if (typeof window !== 'undefined' && !window.poe2desktop) {
     sales: {
       fetch: vi.fn(async () => ({ ok: true, rows: [] })),
     },
+    merchant: {
+      fetch: vi.fn(async () => ({ ok: true, total: 0, truncated: false, rows: [], fetchedAt: Date.now() })),
+      cancel: vi.fn(async () => ({ ok: true })),
+    },
     ee2: {
       setEnabled: vi.fn(),
       setSearchPrefs: vi.fn(),
       status: vi.fn(async () => ({ enabled: false })),
+    },
+    clientLog: {
+      onEvent: noopSub(),
+      status: vi.fn(async () => ({ watching: false })),
     },
     diag: { log: vi.fn(async () => ({ ok: true })) },
     clipboard: { classify: vi.fn(async () => ({ kind: 'other' })) },

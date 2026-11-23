@@ -20,6 +20,7 @@ const Cur = React.memo(function Cur({ id, name, size = 18, text = false, classNa
   const rec = lookup({ id, name })
   const label = rec?.name || name || id || '?'
   const icon = rec?.icon
+  useEffect(() => { setBroken(false) }, [icon])
 
   if (!icon || broken) {
     return <span className={`cur cur-text ${className}`} title={label}>{label}</span>

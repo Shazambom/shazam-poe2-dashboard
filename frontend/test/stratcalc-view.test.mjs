@@ -206,7 +206,8 @@ test('the open strat\'s name box uses the whole row: "Strat 1" is never clipped 
 })
 
 test('a tablet is picked from the pipeline\'s table (full uses known), and every tally gets the uses', () => {
-  assert.ok(code.includes('setUses(d.uses'), 'the uses come with the strats from GET /api/strategy/calc')
+  const storeCode = read('../src/lib/stratStore.js')
+  assert.ok(code.includes('useStratStore.getState().load({ createIfEmpty: true })') && storeCode.includes('uses: d.uses'), 'the uses come with the strats from GET /api/strategy/calc via stratStore.load')
   assert.ok(/function tabletOptions[\s\S]*?uses/.test(code), 'the tablet picker offers what the table knows: never a tablet the cost cannot be worked out for')
   assert.ok(!/sc\.tally\([^)]*now\)/.test(code) && !/sc\.tally\([^)]*Date\.now\(\)\)/.test(code), 'no tally without the uses')
   assert.ok(code.includes('sc.overrideOn(x, prices, uses)'))

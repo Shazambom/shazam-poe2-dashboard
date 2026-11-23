@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useWorkspace, loadWorkspace, HISTORY_SYS } from '../lib/workspaceStore.js'
-import { tradeUrl, tradeHome, queryUrl, parseTradeUrl, openTrade, isDesktop } from '../lib/session.js'
+import { tradeUrl, tradeHome, queryUrl, parseTradeUrl, isAuthBounceUrl, openTrade, isDesktop } from '../lib/session.js'
 import { shouldAcceptNav, homeCapture } from '../lib/webview.js'
 import { SNAP } from '../lib/dests.js'
 import { addFromClipboard } from '../lib/clipboardAdd.js'
@@ -15,6 +15,7 @@ import { saveHistoryPrefs, clearHistoryWithUndo } from '../lib/ee2History.js'
 import { usePings } from '../lib/pingStore.js'
 import { useStatus } from '../lib/statusStore.js'
 import { useReprice } from '../lib/useReprice.js'
+import { useRelax } from '../lib/useRelax.js'
 
 // The Trading workspace: a file-tree of saved searches on the left, the live trade site
 // embedded on the right. Press + → a new entry is created and the trade window opens; you
@@ -156,8 +157,21 @@ export default function WorkspaceView({ league, visible = true }) {
     if (n && n.ts && inHistory(id)) diag('ee2', `history-open age=${Math.round((Date.now() - n.ts) / 60000)}m`)
   }, [setActive, inHistory])
   // Reprice in the cheapest currency (docs/reprice-design.md): at most one chip in the strip above the window.
+  const remountKey = `${activeId}:${wvNonce}:${rerunTick}`
   const shownNode = useWorkspace(s => (s.activeId ? s.nodeById(s.activeId) : null))
-  const reprice = useReprice({ wv, node: shownNode, navUrl: navState.url, inHistory: shownNode ? inHistory(shownNode.id) : false, remountKey: `${activeId}:${wvNonce}:${rerunTick}`, league, visible })
+  const reprice = useReprice({ wv, node: shownNode, navUrl: navState.url, inHistory: shownNode ? inHistory(shownNode.id) : false, remountKey, league, visible })
+  const relax = useRelax({
+    node: shownNode, league, visible, remountKey,
+    page: reprice.own, rowQuery: reprice.rowQuery, prices: reprice.prices, options: reprice.options, emptyExact: reprice.emptyExact,
+  })
+  const relaxActiveRef = useRef(false)
+  relaxActiveRef.current = relax.active
+  useEffect(() => {
+    setNavState({ url: '', loading: false, hint: '' })
+  }, [remountKey, relax.relaxTick])
+  useEffect(() => {
+    if (relax.relaxUrl) window.poe2desktop?.trade?.listingsCancel?.()
+  }, [relax.relaxUrl])
   const collapsed = !!layout?.collapsed
   const railWidth = Math.min(RAIL_MAX, Math.max(RAIL_MIN, layout?.railWidth || RAIL_DEFAULT))
   const [dragWidth, setDragWidth] = useState(null)   // live width while the divider is being dragged
@@ -304,11 +318,18 @@ export default function WorkspaceView({ league, visible = true }) {
   const mountUrl = useMemo(() => {
     const n = activeId ? useWorkspace.getState().nodeById(activeId) : null
     return n?.slug ? tradeUrl(n, league, n.live) : (n?.q && !n.degraded) ? queryUrl(n, league) : tradeHome(league)
-  }, [activeId, league, rerunTick, wvNonce])   // ↻ reloads the row's saved search, not the address it first opened on
+  }, [activeId, league, rerunTick, wvNonce, relax.relaxTick])   // ↻ or Exact reloads the row's latest saved search, not a stale initial mount URL
+  const viewUrl = relax.relaxUrl || mountUrl
 
   // A tab mounted on the Instant Buyout home: the site's own landing slug for it is not the user's search.
   const homeNav = useRef(homeCapture.start(false))
-  useEffect(() => { homeNav.current = homeCapture.start(mountUrl === tradeHome(league)) }, [mountUrl, league, wvNonce])
+  const authBouncedRef = useRef(false)
+  const replayedAuthIdRef = useRef(null)
+  useEffect(() => {
+    homeNav.current = homeCapture.start(viewUrl === tradeHome(league))
+    authBouncedRef.current = false
+  }, [viewUrl, league, wvNonce])
+  useEffect(() => { replayedAuthIdRef.current = null }, [activeId, league])
 
   // Default each freshly-mounted trade window to Instant Buyout (the mode travel-to-hideout
   // needs). Re-attaches per webview instance (keyed remount).
@@ -318,10 +339,11 @@ export default function WorkspaceView({ league, visible = true }) {
     // A ?q= mount (a new tab, an EE2 query) already carries its status — forcing the dropdown would
     // rewrite the query; only a saved search (slug) opens on whatever status the site stored.
     if (/[?&]q=/.test(mountUrl)) return
+    if (/[?&]q=/.test(viewUrl)) return
     const onReady = () => ensureInstantBuyout(el).then(r => { if (r === 'other') setNavState(s => ({ ...s, hint: 'Set delivery to Instant Buyout for travel-to-hideout' })) })
     el.addEventListener('dom-ready', onReady)
     return () => el.removeEventListener('dom-ready', onReady)
-  }, [activeId, league, wvNonce, mountUrl])
+  }, [activeId, league, wvNonce, mountUrl, viewUrl])
 
   // Capture a run search into the active entry. The trade SPA doesn't fire <webview> DOM
   // navigation events, but the guest webContents DOES — main forwards them here as
@@ -335,11 +357,23 @@ export default function WorkspaceView({ league, visible = true }) {
       try { myId = wv.current?.getWebContentsId() } catch {}
       if (!shouldAcceptNav(p, myId)) return
       const { url, phase } = p
+      if (isAuthBounceUrl(url)) authBouncedRef.current = true
       if (phase === 'start') { setNavState(s => ({ ...s, url, loading: true })); return }
       if (phase === 'stop') { setNavState(s => ({ ...s, url, loading: false })); return }
       setNavState(s => ({ ...s, url, hint: '' }))
-      const parsed = parseTradeUrl(url)
       const id = activeRef.current
+      if (authBouncedRef.current && id && /\/trade2?\//i.test(String(url))) {
+        const cur = useWorkspace.getState().nodeById(id)
+        if (cur && cur.q && !cur.slug && !inHistory(id) && !relaxActiveRef.current) {
+          authBouncedRef.current = false
+          if (replayedAuthIdRef.current !== id) {
+            replayedAuthIdRef.current = id
+            setWvNonce(v => v + 1)
+          }
+          return
+        }
+      }
+      const parsed = parseTradeUrl(url)
       if (!parsed || !parsed.slug || !id) return
       const step = homeCapture.next(homeNav.current, parsed.slug)
       homeNav.current = step.state
@@ -352,8 +386,8 @@ export default function WorkspaceView({ league, visible = true }) {
       if (owner && owner.id !== id) return
       const n = st.nodeById(id)
       if (!n) return
-      // A history row is the query EE2 built; the site's search id is never written into it (promote by dragging it out).
-      if (inHistory(id)) return
+      // A history row or an ephemeral relaxed search never writes the site's search id back into the row.
+      if (inHistory(id) || relaxActiveRef.current) return
       if (n.slug !== parsed.slug || n.live !== parsed.live || n.type !== parsed.type) {
         setField(id, { type: parsed.type, slug: parsed.slug, live: parsed.live })
       }
@@ -377,7 +411,7 @@ export default function WorkspaceView({ league, visible = true }) {
   }
 
   const activeNode = activeId ? nodeById(activeId) : null
-  const activeUrl = activeNode?.slug ? tradeUrl(activeNode, league, activeNode.live) : activeNode?.q ? queryUrl(activeNode, league) : null
+  const activeUrl = relax.relaxUrl || (activeNode?.slug ? tradeUrl(activeNode, league, activeNode.live) : activeNode?.q ? queryUrl(activeNode, league) : null)
   const width = dragWidth ?? railWidth
   const saveTitle = { idle: 'Saved', dirty: 'Unsaved changes', saving: 'Saving…', error: 'Save failed — retrying on the next change' }[saveState]
 
@@ -437,7 +471,7 @@ export default function WorkspaceView({ league, visible = true }) {
           <>
             <div className="ws-webhint">
               {activeNode
-                ? <span className="ws-webhint-name" title={navState.url || mountUrl}>{activeNode.name}</span>
+                ? <span className="ws-webhint-name" title={navState.url || viewUrl}>{activeNode.name}</span>
                 : <span className="ws-webhint-name ws-webhint-empty">Press <button className="ws-inline-add" onClick={() => newSearch(null)} aria-label="New search">+</button> to build a search · Paste a trade URL{isDesktop && historyOn ? EMPTY_HINT_EE2 : '.'}</span>}
               {navState.hint && <span className="ws-chip" title="The site's delivery dropdown could not be set automatically">{navState.hint}</span>}
               {!sessionOk && <span className="ws-chip warn" title="No PoE trade session is connected — the site may show a login page and captures can silently fail. Connect it in Settings → Accounts.">no session</span>}
@@ -450,6 +484,44 @@ export default function WorkspaceView({ league, visible = true }) {
                     {reprice.state === 'find' && <button className="ws-chip find" title="Check whether this search is cheaper in another currency" onClick={reprice.find}>Find cheapest</button>}
                     {reprice.state === 'checking' && <span className="ws-chip" role="status">Checking…</span>}
                     {reprice.state === 'cheapest' && <span className="ws-chip ok" role="status">Already cheapest</span>}
+                    {relax.state === 'idle' && relax.preview && (
+                      <button
+                        className={`ws-chip ${relax.emptyExact ? 'act' : 'find'}`}
+                        title="Broaden this search to similar items"
+                        onClick={relax.apply}
+                      >
+                        Close enough
+                      </button>
+                    )}
+                    {relax.state === 'checking' && <span className="ws-chip" role="status">Relaxing…</span>}
+                    {relax.authRequired && (
+                      <button
+                        type="button"
+                        className="ws-chip act"
+                        disabled={relax.connecting}
+                        title="Connect your Path of Exile account and retry Close enough"
+                        onClick={relax.reconnect}
+                      >
+                        {relax.connecting ? 'Connecting…' : 'Connect PoE account'}
+                      </button>
+                    )}
+                    {(relax.state === 'relaxed' || relax.state === 'empty') && (
+                      <>
+                        <span className={`ws-chip ${relax.state === 'relaxed' ? 'ok' : ''}`} role="status">
+                          {relax.state === 'relaxed' ? 'Relaxed' : 'No matches'}
+                        </span>
+                        {relax.level === 1 && relax.summary?.canRelaxFurther && (
+                          <button
+                            className="ws-chip find"
+                            title="Broaden this search further"
+                            onClick={relax.further}
+                          >
+                            Relax further
+                          </button>
+                        )}
+                        <button className="ws-chip find" title="Return to the exact search" onClick={relax.reset}>Exact</button>
+                      </>
+                    )}
                   </>
                 : <span className="ws-chip">build your search — it captures automatically</span>)}
               <span className="spacer" />
@@ -458,7 +530,7 @@ export default function WorkspaceView({ league, visible = true }) {
               <button className="ws-mini on" title="Reload" aria-label="Reload" onClick={() => setWvNonce(n => n + 1)}>↻</button>
             </div>
             <div className={`ws-progress ${navState.loading ? 'on' : ''}`} aria-hidden="true" />
-            {!SNAP && <webview key={`${activeId || 'home'}:${wvNonce}:${rerunTick}`} ref={wv} src={mountUrl} className="ws-webview" allowpopups="true" />}
+            {!SNAP && <webview key={`${activeId || 'home'}:${wvNonce}:${rerunTick}:${relax.relaxTick}`} ref={wv} src={viewUrl} className="ws-webview" allowpopups="true" />}
           </>
         ) : (
           <div className="ws-overlay">

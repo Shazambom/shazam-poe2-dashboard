@@ -7,6 +7,7 @@ export const DESTS = [
   { id: 'board', section: 'Board', sub: null, label: 'Board', aka: ['prices', 'price board'] },
   // The Stash tab (owner, 2026-10-08; was "Strategy"): what you hold first, then what to do with it.
   { id: 'stash', section: 'Stash', sub: 'stash', label: 'Stash', aka: ['Sales', 'net worth', 'what I have', 'holdings'] },
+  { id: 'stash-merchant', section: 'Stash', sub: 'merchant', label: 'Merchant', aka: ['shop', 'listed', 'unsold', 'stale', 'ange'] },
   { id: 'stash-arbitrage', section: 'Stash', sub: 'arbitrage', label: 'Arbitrage', aka: ['flip', 'loop', 'convert'] },
   { id: 'stash-calc', section: 'Stash', sub: 'calc', label: 'Strat Calculator', aka: ['farm', 'profit per hour'] },
   // Economy (owner, 2026-10-08): Hold and the movers broken out of one board, Hold first.
@@ -27,6 +28,7 @@ export const DESTS = [
 // Never an action that spends the shared trade-history allowance (the Stash's history fetch).
 export const SCREEN_COMMANDS = {
   board: [{ id: 'board-add', label: 'Add a currency', target: 'board-add', act: 'focus', aka: ['watch'] }],
+  'stash-merchant': [{ id: 'merchant-find', label: 'Find in shop…', target: 'merchant-find', act: 'focus', aka: ['search', 'filter', 'item'] }],
   'stash-arbitrage': [{ id: 'convert', label: 'Convert…', target: 'convert-have', act: 'focus', aka: ['have', 'want'] }],
   'economy-hold': [{ id: 'hold-category', label: 'Category…', target: 'hold-category', act: 'focus' }],
   'stash-calc': [   // a focus action first: Enter on a just-opened ⌘K must not start the timer (QA 2026-10-05)

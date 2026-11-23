@@ -73,10 +73,13 @@ async def connect(cookie: str, label: str | None = None) -> dict:
     return status() | {"message": msg}
 
 
-def mark_ok() -> None:
+def mark_ok(min_interval_s: float = 0.0) -> None:
     rec = secrets.load("poesessid")
     if rec:
-        rec["last_ok"] = time.time()
+        now = time.time()
+        if min_interval_s > 0 and now - float(rec.get("last_ok") or 0) < min_interval_s:
+            return
+        rec["last_ok"] = now
         secrets.store("poesessid", rec)
 
 

@@ -37,14 +37,14 @@ async function cookieHeader() {
 
 // Perform a trade-API request through the user's session. Returns { status, headers, body }.
 // `path` is an absolute path like "/api/trade2/search/poe2/Standard".
-function poeRequest({ method = 'GET', path, body = null, referer = null }) {
+function poeRequest({ method = 'GET', path, body = null, referer = null, accept = 'application/json', xhr = true }) {
   return new Promise((resolve, reject) => {
     const request = net.request({ method, url: POE + path, session: session.defaultSession, useSessionCookies: true })
     request.setHeader('User-Agent', userAgent())
-    request.setHeader('Accept', 'application/json')
+    request.setHeader('Accept', accept)
     request.setHeader('Origin', POE)
     request.setHeader('Referer', referer || `${POE}/trade2`)
-    request.setHeader('X-Requested-With', 'XMLHttpRequest')   // omitting -> 403 code 6 on whisper
+    if (xhr) request.setHeader('X-Requested-With', 'XMLHttpRequest')   // omitting -> 403 code 6 on whisper
     if (body != null) request.setHeader('Content-Type', 'application/json')
     let data = ''
     request.on('response', (res) => {

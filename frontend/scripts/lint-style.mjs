@@ -42,18 +42,14 @@ const CHART_EXTRAS = new Set(
 // isn't colour. A preset must redeclare every OTHER token in :root — a missing one silently
 // falls through to the default theme, which no human spots on screen.
 import { isNeverThemed } from '../src/lib/themeCss.js'
+import { CONTRAST_RULES as CONTRAST, TINT_CONTRAST_RULES as TINT_CONTRAST, blendHex } from '../src/lib/themeDerive.js'
 // The channel triplets that must equal their colour token, per block.
 const RGB_PAIRS = [['--accent-rgb', '--gold'], ['--gain-rgb', '--gain'], ['--loss-rgb', '--loss'], ['--live-rgb', '--live'], ['--digest-rgb', '--digest']]
-// WCAG: [foreground, background, minimum ratio]. 4.5 = AA body text; 7 = AAA for the primary ink.
-const CONTRAST = [
-  ['--ink', '--panel', 7], ['--ink', '--bg', 7], ['--ink-2', '--panel', 4.5], ['--muted', '--panel', 4.5], ['--muted', '--bg', 4.5],
-  ['--gold', '--panel', 4.5], ['--gain', '--panel', 4.5], ['--loss', '--panel', 4.5],
-  ['--live', '--panel', 4.5], ['--digest', '--panel', 4.5], ['--recipe', '--panel', 4.5], ['--ink-on-gold', '--gold', 4.5],
-]
 
 const NEAR_THRESHOLD = 12 // RGB Euclidean distance below which two colors are "the same, drifted"
 
 const HEX = /#[0-9a-fA-F]{3}\b|#[0-9a-fA-F]{6}\b/g
+const IS_HEX = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/
 const RGBA = /rgba?\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*[,)]/g
 
 // Escape hatch: a line carrying `style-ok` (in a comment) is a deliberate exception —
@@ -201,14 +197,27 @@ for (const b of blocks) {
     const r = contrast(a, c)
     if (r < min) err(file, b.line.get(fg), `preset "${b.name}": ${fg} ${a} on ${bg} ${c} is ${r.toFixed(2)}:1, needs ≥ ${min}:1`)
   }
+  for (const [fg, bg, alpha, min] of TINT_CONTRAST) {
+    const a = hexOf(fg), c = hexOf(bg)
+    if (!a || !c) continue
+    const tinted = blendHex(a, c, alpha)
+    const r = contrast(a, tinted)
+    if (r < min) err(file, b.line.get(fg), `preset "${b.name}": ${fg} ${a} on ${alpha * 100}% tinted ${bg} (${tinted}) is ${r.toFixed(2)}:1, needs ≥ ${min}:1`)
+  }
 }
 // The default theme is held to the same contrast bar (it is the reference the presets copy).
 for (const [fg, bg, min] of CONTRAST) {
   const a = tokenValue.get(fg), c = tokenValue.get(bg)
-  if (!a || !c || !HEX.test(a) || !HEX.test(c)) { HEX.lastIndex = 0; continue }
-  HEX.lastIndex = 0
+  if (!a || !c || !IS_HEX.test(a) || !IS_HEX.test(c)) continue
   const r = contrast(a, c)
   if (r < min) err('src/styles.css', root.line.get(fg), `:root ${fg} ${a} on ${bg} ${c} is ${r.toFixed(2)}:1, needs ≥ ${min}:1`)
+}
+for (const [fg, bg, alpha, min] of TINT_CONTRAST) {
+  const a = tokenValue.get(fg), c = tokenValue.get(bg)
+  if (!a || !c || !IS_HEX.test(a) || !IS_HEX.test(c)) continue
+  const tinted = blendHex(a, c, alpha)
+  const r = contrast(a, tinted)
+  if (r < min) err('src/styles.css', root.line.get(fg), `:root ${fg} ${a} on ${alpha * 100}% tinted ${bg} (${tinted}) is ${r.toFixed(2)}:1, needs ≥ ${min}:1`)
 }
 
 console.log('')

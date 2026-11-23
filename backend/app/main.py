@@ -808,10 +808,28 @@ def rate_acquire(body: RateAcquire):
     return {"ok": True} if wait <= 0 else {"ok": False, "retry_after_s": round(wait, 1)}
 
 
+_AUTH_TRADE_POLICIES = frozenset({"trade-history", "trade-whisper"})
+_TRADE_SESSION_POLICIES = frozenset({"trade", "trade-search", "trade-fetch", "trade-history", "trade-whisper"})
+
+
+def _proves_trade_session(policy: str, headers: dict[str, str]) -> bool:
+    if policy in _AUTH_TRADE_POLICIES:
+        return True
+    if policy not in _TRADE_SESSION_POLICIES:
+        return False
+    lower = {k.lower(): str(v) for k, v in (headers or {}).items()}
+    if "x-rate-limit-account" in lower or "x-rate-limit-account-state" in lower:
+        return True
+    rules = [r.strip().lower() for r in lower.get("x-rate-limit-rules", "").split(",")]
+    return "account" in rules
+
+
 @app.post("/api/ratelimits/observe")
 def rate_observe(body: RateObserve):
     """Feed the X-Rate-Limit-* headers (and 429s) the engine saw into the shared budget."""
     _policy_or_404(body.policy).observe_headers(body.status, body.headers)
+    if 200 <= body.status < 300 and _proves_trade_session(body.policy, body.headers):
+        session.mark_ok(min_interval_s=60.0)
     return {"ok": True}
 
 

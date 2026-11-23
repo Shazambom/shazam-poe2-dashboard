@@ -85,6 +85,8 @@ use the `ws` package already in `desktop/node_modules` — run them from `deskto
 
 ## Notes / gotchas
 
+- **Running from an Electron host shell (e.g. T3 Code / VS Code):** `ELECTRON_RUN_AS_NODE=1` may be set in the environment, which causes `electron .` to launch as plain Node and crash on `ipcMain`. Prefix the launch with `env -u ELECTRON_RUN_AS_NODE` and pass `--user-data-dir="$HOME/Library/Application Support/Arbiter"` explicitly so you hit the real profile.
+- **Never substitute a mock-user Chromium harness for this drive.** Offline mocks miss stale `desktop/app-dist`, expired PoE sessions (`status.session.connected: true` with `401` on `pathofexile.com`), and live HTTP contract drift.
 - **The dev launch uses the packaged app's data dir** (`~/Library/Application Support/Arbiter/data`
   — the owner's real settings, capital and saved searches). Probe `/api` read-only; exercise
   writers through the UI the way a user would; never `PUT`/`POST` synthetic payloads at

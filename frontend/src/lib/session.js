@@ -10,6 +10,7 @@ import { INSTANT_BUYOUT } from './regex/trade.js'
 // The ONE "are we in the desktop app" predicate (and its trade-engine refinement).
 export const isDesktop = typeof window !== 'undefined' && !!window.poe2desktop
 export const hasTradeEngine = typeof window !== 'undefined' && !!window.poe2desktop?.trade
+export const hasMerchant = () => typeof window !== 'undefined' && !!window.poe2desktop?.merchant
 
 export const connectBridge = () => (isDesktop ? 'desktop' : null)   // 'desktop' | null
 
@@ -55,6 +56,16 @@ export function parseTradeUrl(url) {
     || pathname.match(/\/trade2?\/([a-z]+)\/(?!poe2\/)[^/]+\/([^/]+?)(\/live)?\/?$/i)
   if (!m) return null
   return { type: m[1], slug: m[2], live: !!m[3] }
+}
+
+// Detect pathofexile.com auth redirects (/login, /oauth/...) that drop a `?q=` query string
+// when bouncing back to /trade2/search/..., so Workspace never saves the empty fallback slug.
+export function isAuthBounceUrl(url) {
+  try {
+    const u = new URL(String(url), TRADE_BASE)
+    if (!/(^|\.)pathofexile\.com$/i.test(u.hostname)) return false
+    return /^\/(?:login|oauth)(?:\/|$)/i.test(u.pathname)
+  } catch { return false }
 }
 
 // Parse an EE2-style query link — /trade2/search/poe2/{league}?q=<json> — into { q } where q is

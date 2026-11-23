@@ -275,7 +275,7 @@ test('the trade window\'s address is recomputed on a reload (↻), from the save
   const { readFileSync } = await import('node:fs')
   const src = readFileSync(new URL('../src/components/WorkspaceView.jsx', import.meta.url), 'utf8')
   const memo = src.slice(src.indexOf('const mountUrl = useMemo('), src.indexOf('const mountUrl = useMemo(') + 400)
-  assert.match(memo, /\}, \[activeId, league, rerunTick, wvNonce\]\)/)
+  assert.match(memo, /\}, \[activeId, league, rerunTick, wvNonce, relax\.relaxTick\]\)/)
 })
 
 // Aggressive caching (owner, 2026-10-03: "5min ttl"): a search whose deeper listings were fetched in the last 5

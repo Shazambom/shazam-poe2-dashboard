@@ -465,12 +465,22 @@ export const useWorkspace = create((set, get) => ({
   nodeById: (id) => findNode(get().tree, id),
 }))
 
+let loadWorkspacePromise = null
+
 export async function loadWorkspace() {
-  try {
-    const { workspace } = await api.workspace()
-    useWorkspace.getState().hydrate(workspace)
-  } catch (e) {
-    useWorkspace.getState().failLoad(cleanErr(e))
-    diag('ws', `ws-load fail err="${cleanErr(e).slice(0, 120)}"`)
-  }
+  const st = useWorkspace.getState()
+  if (st.loaded && !st.loadError) return
+  if (loadWorkspacePromise) return loadWorkspacePromise
+  loadWorkspacePromise = (async () => {
+    try {
+      const { workspace } = await api.workspace()
+      useWorkspace.getState().hydrate(workspace)
+    } catch (e) {
+      useWorkspace.getState().failLoad(cleanErr(e))
+      diag('ws', `ws-load fail err="${cleanErr(e).slice(0, 120)}"`)
+    } finally {
+      loadWorkspacePromise = null
+    }
+  })()
+  return loadWorkspacePromise
 }

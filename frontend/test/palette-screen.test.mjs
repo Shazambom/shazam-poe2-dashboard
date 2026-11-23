@@ -89,7 +89,7 @@ test('every screen has its actions, keyed by the one screen list', () => {
 
 // each action names the control it works; that control carries the marker in its screen's source
 const SOURCE = {
-  board: ['BoardView'], 'stash-arbitrage': ['ConvertView'], 'economy-hold': ['HoldView'], 'stash-calc': ['StratCalcView'],
+  board: ['BoardView'], 'stash-merchant': ['MerchantView'], 'stash-arbitrage': ['ConvertView'], 'economy-hold': ['HoldView'], 'stash-calc': ['StratCalcView'],
   'economy-inflation': ['InflationView'], 'economy-market': ['MarketView'], 'trading-live': ['LiveView'], stash: ['StashView'],
   'trading-regex': ['RegexView', 'RegexResult'], 'trading-mods': ['ModsBar'], settings: ['NotificationsPanel'],
 }

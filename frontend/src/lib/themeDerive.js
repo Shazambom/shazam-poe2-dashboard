@@ -7,7 +7,7 @@
 // pins how closely each preset is reproduced). The Advanced disclosure in the builder lets the owner
 // pin any derived token; a pinned value survives later primary changes because `rederive` keeps each
 // token's offset from its derived value rather than snapping back to the formula.
-import { adjustL, contrast, ensureContrast, hexToOklab, hexToOklch, hexToTriplet, lightness, mix, normHex, oklabToHex, oklchToHex } from './color.js'
+import { adjustL, contrast, ensureContrast, hexToOklab, hexToOklch, hexToRgb, hexToTriplet, lightness, mix, normHex, oklabToHex, oklchToHex, rgbToHex } from './color.js'
 
 export const PRIMARIES = [
   ['--bg', 'Background'], ['--panel', 'Panel'], ['--ink', 'Text'], ['--gold', 'Accent'],
@@ -37,6 +37,19 @@ export const CONTRAST_RULES = [
   ['--gold', '--panel', 4.5], ['--gain', '--panel', 4.5], ['--loss', '--panel', 4.5],
   ['--live', '--panel', 4.5], ['--digest', '--panel', 4.5], ['--recipe', '--panel', 4.5], ['--ink-on-gold', '--gold', 4.5],
 ]
+// Tinted badge pills sitting on --surface-1 (e.g. .merchant-badge): foreground over rgba(fg, alpha) composited on bg.
+export const TINT_CONTRAST_RULES = [
+  ['--gold', '--surface-1', 0.11, 4.5],
+  ['--loss', '--surface-1', 0.11, 4.5],
+  ['--gain', '--surface-1', 0.11, 4.5],
+]
+
+export function blendHex(fgHex, bgHex, alpha) {
+  const f = normHex(fgHex), b = normHex(bgHex)
+  if (!f || !b) return null
+  const fr = hexToRgb(f), br = hexToRgb(b)
+  return rgbToHex(fr.map((v, i) => v * alpha + br[i] * (1 - alpha)))
+}
 
 export const isLightTheme = (p) => lightness(p['--ink']) < lightness(p['--bg'])
 
@@ -124,7 +137,7 @@ export function buildTable(primaries, overrides = {}) {
   return t
 }
 
-// Every contrast rule the table fails: [{ fg, bg, ratio, min }].
+// Every contrast rule the table fails: [{ fg, bg, ratio, min, alpha? }].
 export function contrastIssues(colors) {
   const out = []
   for (const [fg, bg, min] of CONTRAST_RULES) {
@@ -133,12 +146,26 @@ export function contrastIssues(colors) {
     const ratio = contrast(a, b)
     if (ratio < min - 1e-9) out.push({ fg, bg, ratio, min })
   }
+  for (const [fg, bg, alpha, min] of TINT_CONTRAST_RULES) {
+    const a = normHex(colors[fg]), b = normHex(colors[bg])
+    if (!a || !b) continue
+    const tinted = blendHex(a, b, alpha)
+    const ratio = contrast(a, tinted)
+    if (ratio < min - 1e-9) out.push({ fg, bg, alpha, ratio, min })
+  }
   return out
 }
 // Nudge every failing foreground (lightness only) until its rule passes. Never touches a background.
 export function autoFixContrast(colors) {
   const t = { ...colors }
-  for (const { fg, bg, min } of contrastIssues(t)) t[fg] = ensureContrast(t[fg], t[bg], min)
+  for (let pass = 0; pass < 3; pass++) {
+    const issues = contrastIssues(t)
+    if (!issues.length) break
+    for (const { fg, bg, alpha, min } of issues) {
+      const surface = alpha != null ? blendHex(t[fg], t[bg], alpha) : t[bg]
+      t[fg] = ensureContrast(t[fg], surface, min)
+    }
+  }
   for (const [trip, col] of Object.entries(TRIPLET_OF)) t[trip] = hexToTriplet(t[col])
   return t
 }

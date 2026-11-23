@@ -8,7 +8,7 @@
 // layout, components or copy.
 import { create } from 'zustand'
 import { useStatus, onSettingsTheme } from './statusStore.js'
-import { TOKEN_KEYS, isCustomId, validTable, sanitizeTable } from './themeDerive.js'
+import { TOKEN_KEYS, isCustomId, isLightTheme, validTable, sanitizeTable } from './themeDerive.js'
 
 export const THEMES = [
   { id: 'vault', name: 'Vault' },
@@ -31,9 +31,12 @@ export const cleanCustoms = (list) => (Array.isArray(list) ? list : [])
 const html = () => document.documentElement
 function paintTable(colors) {
   html().dataset.theme = 'custom'
+  if (isLightTheme(colors)) html().dataset.light = '1'
+  else delete html().dataset.light
   for (const k of TOKEN_KEYS) html().style.setProperty(k, colors[k])
 }
 function clearTable() {
+  delete html().dataset.light
   for (const k of TOKEN_KEYS) html().style.removeProperty(k)
 }
 

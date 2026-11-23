@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { api, fmt } from '../lib/api.js'
 import { connectBridge, connectSession } from '../lib/session.js'
 import { useStatus } from '../lib/statusStore.js'
+import { clearMerchantShopCache } from './MerchantView.jsx'
 
 const ago = (t) => t ? fmt.age(Date.now() / 1000 - t) + ' ago' : '–'
 
@@ -26,7 +27,7 @@ export default function AccountsPanel({ onChange }) {
     setBusy(true); setMsg(null)
     const r = await connectSession()
     setMsg({ ok: r.ok !== false, text: r.message })
-    if (r.ok) { await load(); onChange?.() }
+    if (r.ok) { clearMerchantShopCache(); await load(); onChange?.() }
     setBusy(false)
   }
 
@@ -38,6 +39,7 @@ export default function AccountsPanel({ onChange }) {
       // Desktop: also mirror the cookie into the Electron session so the embedded
       // Trade site is logged in (paste otherwise only reaches the backend).
       if (window.poe2desktop?.setCookie) { try { await window.poe2desktop.setCookie(raw) } catch {} }
+      clearMerchantShopCache()
       setMsg({ ok: true, text: r.message }); setCookie(''); await load(); onChange?.()
     }
     catch (e) { setMsg({ ok: false, text: String(e.message || e) }) }
@@ -54,7 +56,7 @@ export default function AccountsPanel({ onChange }) {
       <h2>Account</h2>
       {sess?.connected ? (
         <p className="notice">Connected{sess.label ? ` · ${sess.label}` : ''} · set {ago(sess.set_at)} · last successful fetch {ago(sess.last_ok)}.
-          {' '}{sess.source !== 'env' && <button className="btn small" onClick={async () => { await api.disconnectSession(); await load(); onChange?.() }}>Disconnect</button>}
+          {' '}{sess.source !== 'env' && <button className="btn small" onClick={async () => { await api.disconnectSession(); clearMerchantShopCache(); await load(); onChange?.() }}>Disconnect</button>}
         </p>
       ) : desktop ? (
         <>
@@ -96,7 +98,7 @@ export default function AccountsPanel({ onChange }) {
         )}
         <div className="row">
           {!oa.logged_in && <button className="btn primary" onClick={login}>Log in with Path of Exile</button>}
-          {oa.logged_in && <button className="btn" onClick={async () => { await api.oauthLogout(); await load(); onChange?.() }}>Log out</button>}
+          {oa.logged_in && <button className="btn" onClick={async () => { await api.oauthLogout(); clearMerchantShopCache(); await load(); onChange?.() }}>Log out</button>}
         </div>
         {!oa.logged_in && (
           <p className="hint">The button works when the dashboard is open at <code>{oa.redirect_uri.replace(/\/callback$/, '')}</code> (same machine or SSH tunnel);

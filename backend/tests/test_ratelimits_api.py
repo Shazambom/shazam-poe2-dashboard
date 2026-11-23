@@ -209,3 +209,53 @@ def test_rate_chain_never_loosens_a_rule_it_drops():
     # today's real rules are unchanged: 1 per 5 s already implies ≤ 2 in 10 s (under 4)
     assert [(r.limit, r.interval // 1000) for r in gateway._rate_chain([(1, 5), (4, 10), (7, 60), (30, 300), (300, 10800)])] == [(1, 5), (7, 60), (30, 300), (300, 10800)]
     assert [(r.limit, r.interval // 1000) for r in gateway._rate_chain([(3, 4), (6, 4), (8, 12), (50, 300), (500, 10800)])] == [(3, 4), (8, 12), (50, 300), (500, 10800)]
+
+
+def test_observe_2xx_refreshes_session_last_ok_with_throttle():
+    from app import secrets
+    prev = secrets.load("poesessid")
+    try:
+        stale_ts = time.time() - 3600
+        secrets.store("poesessid", {"cookie": "abc", "set_at": stale_ts, "last_ok": stale_ts})
+        # Non-2xx does not bump last_ok
+        r429 = client.post("/api/ratelimits/observe", json={"policy": "trade-fetch", "status": 429, "headers": {"Retry-After": "1"}})
+        assert r429.status_code == 200
+        assert secrets.load("poesessid")["last_ok"] == stale_ts
+        gateway.POLICIES["trade-fetch"].penalty_until = 0.0
+
+        # Anonymous / IP-only 200 on public trade-search or trade-fetch does NOT bump last_ok
+        r_anon_empty = client.post("/api/ratelimits/observe", json={"policy": "trade-fetch", "status": 200, "headers": {}})
+        assert r_anon_empty.status_code == 200
+        assert secrets.load("poesessid")["last_ok"] == stale_ts
+
+        r_anon_ip = client.post("/api/ratelimits/observe", json={"policy": "trade-search", "status": 200, "headers": SEARCH_HEADERS})
+        assert r_anon_ip.status_code == 200
+        assert secrets.load("poesessid")["last_ok"] == stale_ts
+
+        # Non-trade policy 200 does NOT bump last_ok
+        r_scout = client.post("/api/ratelimits/observe", json={"policy": "poe2scout", "status": 200, "headers": FETCH_HEADERS})
+        assert r_scout.status_code == 200
+        assert secrets.load("poesessid")["last_ok"] == stale_ts
+
+        # Authenticated 200 carrying X-Rate-Limit-Account headers DOES bump stale last_ok
+        r200 = client.post("/api/ratelimits/observe", json={"policy": "trade-fetch", "status": 200, "headers": FETCH_HEADERS})
+        assert r200.status_code == 200
+        bumped = secrets.load("poesessid")["last_ok"]
+        assert bumped > stale_ts + 3500
+
+        # Immediate second authenticated 200 is throttled (min_interval_s=60)
+        r200b = client.post("/api/ratelimits/observe", json={"policy": "trade-fetch", "status": 200, "headers": FETCH_HEADERS})
+        assert r200b.status_code == 200
+        assert secrets.load("poesessid")["last_ok"] == bumped
+
+        # Auth-only policy (trade-history) 200 bumps stale last_ok even without explicit Account header
+        secrets.store("poesessid", {"cookie": "abc", "set_at": stale_ts, "last_ok": stale_ts})
+        r_hist = client.post("/api/ratelimits/observe", json={"policy": "trade-history", "status": 200, "headers": {}})
+        assert r_hist.status_code == 200
+        assert secrets.load("poesessid")["last_ok"] > stale_ts + 3500
+    finally:
+        if prev is None:
+            secrets.clear("poesessid")
+        else:
+            secrets.store("poesessid", prev)
+

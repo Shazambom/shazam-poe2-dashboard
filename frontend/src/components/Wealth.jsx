@@ -23,14 +23,15 @@ export default function Wealth({ v, cur = null, size = 14, suffix = null, digits
 
 // An amount native to a currency (lib/wealth.js nativeAmount): `v` in `cur`, precisely; when too
 // large to read, "≈" the wealth rule over `vRef` (its reference value), the native amount on hover.
-export function Native({ v, cur, vRef = null, size = 14, suffix = null, className = '' }) {
+export function Native({ v, cur, vRef = null, size = 14, suffix = null, className = '', title = undefined }) {
   const status = useStatus(s => s.status)
   const ref = status?.reference || 'exalted'
   const a = nativeAmount(v, cur, vRef, ref, status?.wealth_prices)
   if (!a) return <span className={`muted ${className}`}>–</span>
   const shown = Math.abs(a.value) >= 1 ? fmt.n(a.value, wealthDigits(a.value)) : fmt.rate(a.value)
+  const tip = title !== undefined ? title : (a.approx ? `${fmt.n(v, wealthDigits(v))} ${cur}` : undefined)
   return (
-    <span className={`wealth ${className}`} title={a.approx ? `${fmt.n(v, wealthDigits(v))} ${cur}` : undefined}>
+    <span className={`wealth ${className}`} title={tip}>
       {a.approx && '≈'}{shown} <Cur id={a.unit} size={size} />{suffix}
     </span>
   )

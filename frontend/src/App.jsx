@@ -23,6 +23,7 @@ import { connectBridge, connectSessionWithToast } from './lib/session.js'
 import { useWorkspace, HISTORY_SYS } from './lib/workspaceStore.js'
 import { addFromClipboard } from './lib/clipboardAdd.js'
 import { useEe2History, clearHistoryWithUndo } from './lib/ee2History.js'
+import { useStratStore, useStratAutoTimer } from './lib/stratStore.js'
 import { findWhere } from './lib/tree.js'
 import { DESTS, SCREEN_COMMANDS, SUB_DESTS, SNAP, settle } from './lib/dests.js'
 import { runTarget } from './lib/paletteRun.js'
@@ -40,6 +41,8 @@ const TradingView = lazy(() => import('./components/TradingView.jsx'))
 const SettingsView = lazy(() => import('./components/SettingsView.jsx'))
 
 const TABS = ['Board', 'Stash', 'Trading', 'Economy', 'Settings']   // owner's order, 2026-10-08
+// Screens that consume useHorizon (the rest ignore the global time window).
+const HORIZON_SCREENS = new Set(['board', 'economy-hold', 'economy-movers'])
 export default function App() {
   const [tab, setTab] = useState('Board')
   const status = useStatus(s => s.status)
@@ -134,17 +137,19 @@ export default function App() {
   useLiveWiring(goLive)
   useLiveSync(status?.league ?? '')   // keep the live engine reconciled to the DB's armed searches
   useEe2History()                     // ExiledExchange2 History: main's item intents → the workspace store
+  useStratAutoTimer()                 // PoE 2 Client.txt → active strat timer + map counter
   useEffect(() => { useWorkspace.getState().setLeague(status?.league ?? '') }, [status?.league])
-  // Flush debounced workspace edits on hide/quit regardless of which tab is mounted, so quitting
+  // Flush debounced workspace & strat edits on hide/quit regardless of which tab is mounted, so quitting
   // from Board/Stash/Economy/Settings never stalls 1 s waiting for ws:flushed.
   useEffect(() => {
-    const flush = () => { if (document.visibilityState === 'hidden') useWorkspace.getState().flush() }
-    const hide = () => useWorkspace.getState().flush()
+    const flushAll = () => Promise.all([useWorkspace.getState().flush(), useStratStore.getState().flush()])
+    const flush = () => { if (document.visibilityState === 'hidden') flushAll() }
+    const hide = () => flushAll()
     document.addEventListener('visibilitychange', flush)
     window.addEventListener('pagehide', hide)
     const offQuit = window.poe2desktop?.ws?.onFlush?.(() => {
       const t0 = Date.now()
-      useWorkspace.getState().flush().then(() => diag('ws', `ws-flush-on-quit ok ms=${Date.now() - t0}`)).catch(() => {}).finally(() => window.poe2desktop.ws.flushed())
+      flushAll().then(() => diag('ws', `ws-flush-on-quit ok ms=${Date.now() - t0}`)).catch(() => {}).finally(() => window.poe2desktop.ws.flushed())
     })
     return () => { document.removeEventListener('visibilitychange', flush); window.removeEventListener('pagehide', hide); offQuit?.() }
   }, [])
@@ -154,24 +159,37 @@ export default function App() {
     return window.poe2desktop.trade.onFocusLive(() => goLive())
   }, [goLive])
 
-  // ⌘K workspace commands: each lands on Trading → Workspace and mutates the store directly.
-  const goWorkspace = React.useCallback(() => { setTab('Trading'); setTimeout(() => nav.openTrading('workspace'), 0) }, [])
-  useEffect(() => nav.on(e => {
-    if (e.type === 'goTrading') { setTab('Trading'); setTimeout(() => nav.openTrading(e.sub || 'workspace'), 0) }
-    if (e.type === 'goStash') { setTab('Stash'); setTimeout(() => nav.openSub('Stash', 'stash'), 0) }
-  }), [])
-  const ee2Present = useWorkspace(s => s.ee2Present)
-  const hasHistoryRows = useWorkspace(s => !!(findWhere(s.tree, n => n.kind === 'folder' && n.sys === HISTORY_SYS)?.children || []).length)
-  const customThemes = useTheme(s => s.customs)
   // The screen ⌘K opens on: the tab, and the sub-view its section reports (nav.reportSub).
   const [subs, setSubs] = useState({})
   useEffect(() => nav.on(e => { if (e.type === 'sub') setSubs(m => ({ ...m, [e.section]: e.sub })) }), [])
   const screen = (DESTS.find(d => d.section === tab && (!d.sub || d.sub === subs[tab])) || DESTS[0]).id
   const goSub = React.useCallback((section, sub) => {
+    if (sub) {
+      setSubs(m => ({ ...m, [section]: sub }))
+      if (section === 'Trading') nav.openTrading(sub)
+      else nav.openSub(section, sub)
+    }
     setTab(section)
-    if (sub) setTimeout(() => (section === 'Trading' ? nav.openTrading(sub) : nav.openSub(section, sub)), 0)
   }, [])
   const goScreen = React.useCallback((id) => { const d = DESTS.find(x => x.id === id); if (d) goSub(d.section, d.sub) }, [goSub])
+  // ⌘K workspace commands: each lands on Trading → Workspace and mutates the store directly.
+  const goWorkspace = React.useCallback(() => {
+    nav.openTrading('workspace')
+    setSubs(m => ({ ...m, Trading: 'workspace' }))
+    setTab('Trading')
+  }, [])
+  useEffect(() => nav.on(e => {
+    if (e.type === 'goTrading') goSub('Trading', e.sub || 'workspace')
+    if (e.type === 'goStash') {
+      setSubs(m => ({ ...m, Stash: 'stash' }))
+      nav.openSub('Stash', 'stash')
+      setTab('Stash')
+    }
+    if (e.type === 'goEconomy') goSub('Economy', e.sub || 'inflation')
+  }), [goSub])
+  const ee2Present = useWorkspace(s => s.ee2Present)
+  const hasHistoryRows = useWorkspace(s => !!(findWhere(s.tree, n => n.kind === 'folder' && n.sys === HISTORY_SYS)?.children || []).length)
+  const customThemes = useTheme(s => s.customs)
   // ⌘K actions App runs itself (SCREEN_COMMANDS entries without a control): each lands on Trading → Workspace and
   // mutates the store directly, or opens the report dialog. Absent = not available here (no clipboard bridge…).
   const appRuns = React.useMemo(() => ({
@@ -211,8 +229,7 @@ export default function App() {
   useEffect(() => {
     if (!SNAP) return
     window.__arbiterSnap = async ({ section, sub }) => {
-      setTab(section)
-      if (sub) setTimeout(() => (section === 'Trading' ? nav.openTrading(sub) : nav.openSub(section, sub)), 0)
+      goSub(section, sub)
       await new Promise(res => { const tick = () => (useStatus.getState().status ? res() : setTimeout(tick, 50)); tick() })
       await new Promise(res => setTimeout(res, 100))   // let the view mount and fire its loads
       await settle()
@@ -220,7 +237,7 @@ export default function App() {
       return true
     }
     return () => { delete window.__arbiterSnap }
-  }, [])
+  }, [goSub])
 
   const ref = capital?.reference ?? 'ref'
   const league = status?.league ?? ''
@@ -264,7 +281,7 @@ export default function App() {
               day {arcCtx.day}<i className="arc-phase">{arcCtx.phase}</i><span className="arc-lg">league</span>
             </span>
           )}
-          <HorizonPicker />
+          {HORIZON_SCREENS.has(screen) && <HorizonPicker />}
           <span className="tb-spacer" />
           <SyncMetrics status={status} bridge={bridge} connecting={connecting} onConnect={doConnect} />
           {/* Nothing entered yet: the one action that fills it, where the number will be (styleguide §0.1). */}
@@ -281,9 +298,9 @@ export default function App() {
 
       {tab === 'Board' && <BoardView key={league} status={status} />}
       <Suspense fallback={null}>
-        {tab === 'Stash' && <StashTab key={league} league={league} capital={capital} status={status} currencies={currencies} />}
-        {tab === 'Economy' && <EconomyView key={league} league={league} currencies={currencies} />}
-        {tab === 'Trading' && <TradingView league={league} />}
+        {tab === 'Stash' && <StashTab key={league} league={league} capital={capital} status={status} currencies={currencies} initialSub={subs.Stash} />}
+        {tab === 'Economy' && <EconomyView key={league} league={league} currencies={currencies} initialSub={subs.Economy} />}
+        {tab === 'Trading' && <TradingView league={league} initialSub={subs.Trading} />}
         {tab === 'Settings' && <SettingsView currencies={currencies} status={status} onSaved={refreshHeader} onReportProblem={() => setFeedbackOpen(true)} />}
       </Suspense>
 

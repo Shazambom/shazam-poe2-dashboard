@@ -4,6 +4,7 @@ SCREENS = (
     "current",
     "board",
     "stash",
+    "stash-merchant",
     "stash-arbitrage",
     "stash-calc",
     "economy-hold",

@@ -51,6 +51,7 @@ export function makeTapStore() {
       notify()
     },
     pageOf: get,
+    options: () => options,
     recentSize: () => recent.size,
     seenAtOf: (wcId) => seenAt.get(wcId) ?? null,
     recentFor(league, query, now = Date.now()) {

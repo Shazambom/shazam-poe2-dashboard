@@ -12,8 +12,8 @@ const MarketView = lazy(() => import('./MarketView.jsx'))
 // price trends vs hard-currency anchors; Top movers = the biggest upward swings; Market = top markets / exchange edges.
 const SUBS = subsOf('Economy')
 
-export default function EconomyView({ league, currencies }) {
-  const [sub, setSub] = useState('hold')
+export default function EconomyView({ league, currencies, initialSub = null }) {
+  const [sub, setSub] = useState(initialSub || 'hold')
   useEffect(() => nav.on(e => { if (e.type === 'openSub' && e.section === 'Economy' && e.sub) setSub(e.sub) }), [])
   useEffect(() => nav.reportSub('Economy', sub), [sub])
   return (

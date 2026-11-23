@@ -4,7 +4,7 @@
 // anything else on it. These helpers only divide.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { factorFor, trendIn, valueIn } from '../src/lib/price.js'
+import { factorFor, trendIn, valueIn, exchange, makeExchange } from '../src/lib/price.js'
 
 // Real numbers from the incident: the divine↔chaos market trades at 8.376, chaos is 58.07 ex, so
 // Divine is 486.4 ex — priced through the market that trades it, not through a thin exalted one.
@@ -33,6 +33,23 @@ test('valueIn is the same ratio, and tolerates missing data', () => {
   assert.ok(Math.abs(valueIn('divine', divine.mid, 'chaos', prices) - MARKET) < 1e-9)
   assert.equal(valueIn('divine', null, 'chaos', prices), null)
   assert.equal(valueIn('divine', divine.mid, 'nothing', prices), null)
+})
+
+test('exchange and makeExchange convert amounts across currencies using valueIn', () => {
+  assert.equal(exchange(15, 'divine', 'divine', prices), 15)
+  assert.equal(exchange(7, 'mystery-orb', 'mystery-orb', prices), 7)
+  assert.ok(Math.abs(exchange(2, 'divine', 'chaos', prices) - 2 * MARKET) < 1e-9)
+  assert.equal(exchange(10, 'mystery-orb', 'chaos', prices), null)
+
+  // Primary table (divines per unit) + fallback table (reference per unit) bridge cleanly via divine.
+  const ex = makeExchange(
+    { divine: 1, annul: 0.25 },
+    { exalted: 1, chaos: 10, divine: 120, mirror: 78000 },
+  )
+  assert.ok(Math.abs(ex(4, 'annul', 'divine') - 1) < 1e-9)
+  assert.ok(Math.abs(ex(100, 'chaos', 'exalted') - 1000) < 1e-9)
+  assert.ok(Math.abs(ex(4, 'annul', 'chaos') - 12) < 1e-9)
+  assert.equal(ex(5, 'mystery-orb', 'divine'), null)
 })
 
 // The sparkline is the history of the markets the number comes from, so its last point meets the

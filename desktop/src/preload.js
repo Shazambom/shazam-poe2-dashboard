@@ -37,6 +37,8 @@ contextBridge.exposeInMainWorld('poe2desktop', {
     onTap: sub('trade:tap'),   // the trade tap: the embedded page's own search, listing prices and price options
     listings: (p) => ipcRenderer.invoke('trade:listings', p),   // reprice: a few listings of a search the page ran
     recheck: (p) => ipcRenderer.invoke('trade:recheck', p),   // "Find cheapest": the reprice check on demand (1 search + 2 fetches)
+    relax: (p) => ipcRenderer.invoke('trade:relax', p),       // "Close enough": relaxed rare check on demand (1 search + 1 fetch)
+    relaxCancel: () => ipcRenderer.invoke('trade:relax-cancel'),   // drop an in-flight relax check without cancelling reprice
     listingsCancel: () => ipcRenderer.invoke('trade:listings-cancel'),   // drop reprice fetches still waiting (row/tab switched)
     startSearch: (itemId, league, slug, type) => ipcRenderer.invoke('trade:start-search', { itemId, league, slug, type }),
     stopSearch: (itemId) => ipcRenderer.invoke('trade:stop-search', { itemId }),
@@ -58,13 +60,28 @@ contextBridge.exposeInMainWorld('poe2desktop', {
   ws: { onFlush: sub('ws:flush'), flushed: () => ipcRenderer.send('ws:flushed'), exportFile: (name, text) => ipcRenderer.invoke('ws:export-file', { name, text }) },
   // Trading → Sales: fetch the trade site's Merchant History for a league (main: session + budget + ledger).
   sales: { fetch: (league) => ipcRenderer.invoke('sales:fetch', { league }) },
+  // Stash → Merchant: fetch active Instant Buyout shop listings + inline floor checks (main: session + spare budget).
+  merchant: {
+    fetch: (p) => ipcRenderer.invoke('merchant:fetch', p),
+    priceCheck: (p) => ipcRenderer.invoke('merchant:price-check', p),
+    cancel: (opts) => ipcRenderer.invoke('merchant:cancel', opts),
+  },
   ee2: {
     setEnabled: (enabled) => ipcRenderer.send('ee2:set-enabled', { enabled }),
     setSearchPrefs: (p) => ipcRenderer.send('ee2:set-search', { waystoneStats: p?.waystoneStats !== false }),
     status: () => ipcRenderer.invoke('ee2:status'),
   },
-  // DEV ONLY (main refuses when packaged): push a fixture item through the real consumer + worker.
-  dev: { ee2Item: (item) => ipcRenderer.invoke('dev:ee2-item', item) },
+  // PoE 2 Client.txt passive auto-timer events (area-gen, zone, afk-on, afk-off — never whisper text).
+  clientLog: {
+    onEvent: sub('client-log:event'),
+    onStatus: sub('client-log:status'),
+    status: () => ipcRenderer.invoke('client-log:status'),
+  },
+  // DEV / BETA ONLY (main refuses on stable packaged builds): push fixtures through the real main pipelines.
+  dev: {
+    ee2Item: (item) => ipcRenderer.invoke('dev:ee2-item', item),
+    clientLogLine: (line) => ipcRenderer.invoke('dev:client-log-line', line),
+  },
   // Batch 1 bridges. diag.log: the renderer's one narrow telemetry path (allow-listed markers,
   // clamped + budgeted in main, beta/dev-gated). clipboard.classify: main reads + classifies the
   // clipboard and returns ONLY the classification. ws: main asks for a flush before quitting.

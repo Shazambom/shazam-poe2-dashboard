@@ -213,8 +213,10 @@ test('recheck is registered over IPC and cancelled with the listings', async () 
   const idx = readFileSync(new URL('../src/trade/index.js', import.meta.url), 'utf8')
   assert.match(idx, /ipcMain\.handle\('trade:recheck'/)
   assert.match(idx, /ipcMain\.handle\('trade:listings-cancel', \(\) => \{ fetchListings\.cancel\(\); recheck\.cancel\(\); return \{ ok: true \} \}\)/)
+  assert.match(idx, /ipcMain\.handle\('trade:relax-cancel', \(\) => \{ relax\.cancel\(\); return \{ ok: true \} \}\)/)
   const pre = readFileSync(new URL('../src/preload.js', import.meta.url), 'utf8')
   assert.match(pre, /recheck: \(p\) => ipcRenderer\.invoke\('trade:recheck', p\)/)
+  assert.match(pre, /relaxCancel: \(\) => ipcRenderer\.invoke\('trade:relax-cancel'\)/)
 })
 
 // QA (2026-10-03): double-clicking "Find cheapest" ran two background searches (the click guard is React state, which

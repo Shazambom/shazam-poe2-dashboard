@@ -148,7 +148,14 @@ export function useReprice({ wv, node, navUrl, inHistory, remountKey, league, vi
     diag('ws', `reprice-find rows=${r.rows.length} ms=${Date.now() - t0}`)   // how long the user saw "Checking…"
   }, [page, checking])
   const known = key != null && sampledRecently(SIBLINGS, page.search.league, page.search.body?.query)
-  const state = findState({ shown, filtered: !!page?.search && currencyFiltered(page.search.body), judgeable: !!page && judgeable(page, prices.P), empty: !!page?.search && !page.search.ids?.length, offer, checking: checking != null && checking === key, known })
+  const emptyExact = !!page?.search && !page.search.ids?.length
+  const state = findState({ shown, filtered: !!page?.search && currencyFiltered(page.search.body), judgeable: !!page && judgeable(page, prices.P), empty: emptyExact, offer, checking: checking != null && checking === key, known })
 
-  return { offer, apply, state, find }
+  return {
+    offer, apply, state, find,
+    own, rowQuery,
+    prices: page?.prices || prices.P,
+    options: page?.options || TAP.options(),
+    emptyExact,
+  }
 }

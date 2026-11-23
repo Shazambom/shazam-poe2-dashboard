@@ -298,6 +298,22 @@ dep), **port that code's TESTS for the piece first, watch them fail, then port t
 they pass. Never port implementation without its tests. This keeps vendored algorithms faithful
 to their upstream behavior and is TDD applied to porting.
 
+## Mistakes & prevention
+
+### 2026-11-22: Stash -> Merchant verified with a mocked user, siloed logic, and broken expired-session recovery
+
+**What went wrong:**
+1. **Verified against a mocked synthetic user instead of the owner's real Arbiter profile.** Offline Chromium screenshots used a fake account (`ExileTrader#4821`) and mocked IPC responses rather than driving the real desktop app against `~/Library/Application Support/Arbiter`. That hid two live failures until the owner asked to test with their real logged-in account:
+   - Live `pathofexile.com` returned `404` on `/character-window/get-account-name`, forcing fallback to `/my-account`, which `proxy.js` was requesting with `Accept: application/json` and `X-Requested-With: XMLHttpRequest` instead of HTML headers.
+   - The owner's stored `POESESSID` in `user.sqlite` (from `2026-10-08`) had expired on GGG's side while `/api/status` still reported `session.connected: true` (because `backend/app/session.py`'s `validate()` hits `exchange_post`, which returns `200 OK` even on expired/bogus cookies; Python cannot hit Cloudflare-gated `/my-account` without `cf_clearance`). When `merchant:fetch` returned `{ ok: false, error: 'auth', status: 401 }`, `MerchantView` showed a dead **Retry** button instead of **Connect PoE account**, and `doConnect()` did not re-fetch when `isLoggedIn` was already `true`.
+2. **Built as a disconnected silo with needless UI friction.** The first pass added an account selector and a manual **Load shop** button, sorted mixed currencies by raw numbers instead of pairwise conversion via `exchange()`, and duplicated floor-check/UI primitives instead of reusing Arbiter's shared subsystems.
+
+**How to prevent this in the future:**
+- **Real-profile desktop drive is mandatory; mock harnesses never count as verification.** Before claiming any desktop/Electron/trade feature works, run `npm --prefix desktop run build:frontend` (so `desktop/app-dist` is not stale), launch the real Electron app against `~/Library/Application Support/Arbiter` (`env -u ELECTRON_RUN_AS_NODE` inside Electron host shells; probe user data read-only), and verify the live UI and real `pathofexile.com` HTTP endpoints over CDP. Never present mock-user screenshots as proof that a feature works.
+- **Never trust `status.session.connected` alone as proof of an active PoE session.** Stored `POESESSID` values can expire on GGG's servers or drop from Chromium's cookie jar while `/api/status` stays `connected: true`. Every desktop view that calls `pathofexile.com` must treat `{ ok: false, error: 'auth' }` as an actionable reconnect state: render a direct **Connect PoE account** button (never a dead **Retry**), reload immediately after reconnect even if `isLoggedIn` was already `true`, and ship a Vitest lifecycle regression test covering `session.connected: true` + `auth` error -> reconnect -> auto-reload.
+- **Probe live `pathofexile.com` endpoints and headers before hardcoding them.** Do not assume legacy PoE1 endpoints (like `/character-window/get-account-name`) still exist or accept `Accept: application/json` + `X-Requested-With: XMLHttpRequest` on HTML routes. Verify the real HTTP status and response in Electron's session once during dev.
+- **Subsystem reuse audit before coding (the orchestra rule).** Before writing a new view, fetcher, comparator, or modal, list the existing shared modules it must wire into (`frontend/src/lib/price.js` `exchange`, `wealth.js` `stashUnit`, `relaxQuery.js`, `CardDetail.jsx`, `nav.js`, `workspaceStore`, `/api/sales`, `desktop/src/trade/listings.js` `makeRechecker`, `modsearch.js`). Default user-scoped tabs straight to the logged-in user on tab open with zero account selector or manual "Load" button unless multi-account lookup is explicitly requested.
+
 ## Layout
 
 - `backend/` — FastAPI + SQLite (`run_desktop.py` is the local-mode entrypoint; reads
