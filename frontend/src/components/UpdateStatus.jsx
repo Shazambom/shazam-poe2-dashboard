@@ -9,9 +9,8 @@ export default function UpdateStatus({ version }) {
   const [st, setSt] = useState(null)
 
   useEffect(() => {
-    if (!bridge?.onUpdate) return
-    const off = bridge.onUpdate(setSt)
-    return off
+    const updater = isDesktop ? window.poe2desktop : null
+    return updater?.onUpdate?.(setSt)
   }, [])
 
   if (!bridge?.onUpdate) return null
