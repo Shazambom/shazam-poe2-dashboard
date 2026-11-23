@@ -413,6 +413,27 @@ def test_asset_modal_is_one_source_in_the_shown_numeraire(monkeypatch):
         _teardown()
 
 
+def test_first_daily_close_draws_a_point_without_a_percent_change(monkeypatch):
+    from app import movers
+
+    day = 1_700_000_000
+    monkeypatch.setattr(
+        movers,
+        "_current_series",
+        lambda: (
+            "PairsLeague",
+            {2: [(day, 120.0, 200_000.0)]},
+            {2: ("Scout-only currency", "Currency")},
+        ),
+    )
+    result = movers.asset_row("Scout-only currency")
+    assert result is not None
+    row = result["row"]
+    assert row["source"] == "scout"
+    assert row["trend"] == [{"t": day, "v": 120.0}]
+    assert row["change_pct"] is None
+
+
 def test_an_exchange_asset_is_served_from_the_exchange_not_the_dailies(monkeypatch):
     """The same modal for something the exchange DOES trade: this hour's price from the one table,
     not yesterday's close (Preserved Cranium read 17.53 on Hold and 15.71 on the Board because the

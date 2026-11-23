@@ -350,7 +350,9 @@ def _daily_row(q: str, window_h: int = 24, num: str | None = None) -> dict | Non
     base, ch = marketseries.change_over(
         in_num, wd * _DAY, t=lambda p: p[0], v=lambda p: p[1]
     )
-    win_pts = [base] + [p for p in in_num if p[0] > start]
+    win_pts = (
+        [base] + [p for p in in_num if p[0] > start] if base is not None else in_num
+    )
     if len(win_pts) < 2:  # degenerate (e.g. brand-new item): show a bit more
         win_pts = in_num[-2:] if len(in_num) >= 2 else in_num
     trend = [{"t": p[0], "v": p[1]} for p in win_pts]
