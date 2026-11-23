@@ -9,6 +9,7 @@ the graph falls back to poe2scout's daily close for what the exchange doesn't tr
 import copy
 import sys
 from pathlib import Path
+from typing import ClassVar
 
 import pytest
 
@@ -373,7 +374,7 @@ def test_no_divine_price_is_no_table():
 
 def test_endpoint_serves_the_strats_and_the_one_table(monkeypatch):
     class G:
-        s = {"reference": "exalted"}
+        s: ClassVar[dict[str, str]] = {"reference": "exalted"}
 
         def values(self):
             return {"divine": 400.0, "chaos": 20.0}
@@ -429,7 +430,7 @@ def test_prices_only_skips_the_saved_document(monkeypatch):
     """The view's minute poll needs the prices; the strats were read once on mount."""
 
     class G:
-        s = {"reference": "exalted"}
+        s: ClassVar[dict[str, str]] = {"reference": "exalted"}
 
         def values(self):
             return {"divine": 400.0}

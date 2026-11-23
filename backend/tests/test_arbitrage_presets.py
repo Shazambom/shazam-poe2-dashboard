@@ -9,6 +9,7 @@ import json
 import sqlite3
 import sys
 from pathlib import Path
+from typing import ClassVar
 
 import pytest
 
@@ -355,7 +356,7 @@ def test_presets_endpoint_serves_the_one_definition():
 def test_the_search_applies_the_conversion(monkeypatch):
     class StubGraph:
         s = settings._merged({"reference": "divine"})
-        adj = {}
+        adj: ClassVar[dict] = {}
 
         def values(self):
             return {"divine": 1.0, "exalted": 0.01}
@@ -439,7 +440,7 @@ def test_the_route_search_builds_over_the_presets_window(monkeypatch):
 
     class StubGraph:
         s = settings._merged({})
-        adj = {}
+        adj: ClassVar[dict] = {}
 
         def values(self):
             return {"exalted": 1.0}

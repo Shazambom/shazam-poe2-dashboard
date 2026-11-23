@@ -5,6 +5,7 @@ opener's result.json, moves only fixed filenames into the inbox, acks, and recor
 import asyncio
 import gzip
 import json
+from typing import ClassVar
 
 import pytest
 from cryptography.hazmat.primitives import serialization
@@ -314,7 +315,7 @@ def test_catch_up_walks_newest_first_and_stops_at_the_last_seen_thread(h):
         )
 
     class Forum:
-        threads = [mk(2004), mk(2001)]  # active, any order
+        threads: ClassVar[list[Thread]] = [mk(2004), mk(2001)]  # active, any order
 
         def archived_threads(self, limit=None):
             async def gen():
@@ -336,7 +337,7 @@ def test_an_exception_in_one_thread_does_not_stop_the_next(h):
     (h.inbox).mkdir(parents=True, exist_ok=True)
 
     class Forum:
-        threads = [
+        threads: ClassVar[list[Thread]] = [
             Broken(3002, []),
             Thread(
                 3001, [Attachment("arbiter-report-7F3K2Q.arb", sealed_report(h.pub))]
