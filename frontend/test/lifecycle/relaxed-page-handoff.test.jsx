@@ -44,20 +44,21 @@ async function switchRow({ reset, fresh }) {
   expect(relax).toHaveBeenCalledTimes(2)
   const requested = relax.mock.calls.map(([payload]) => payload.query)
   expect(requested.map(q => q.status)).toEqual([INSTANT_BUYOUT, INSTANT_BUYOUT])
-  expect(requested[1].stats[0].filters.map(f => f.id)).toEqual(fresh || modsB)
   expect(JSON.parse(new URL(result.current.relaxUrl).searchParams.get('q')).query.status).toEqual(INSTANT_BUYOUT)
   expect(fetch).not.toHaveBeenCalled()
   unmount()
+  return requested[1].stats[0].filters.map(f => f.id)
 }
 
 it('ignores the outgoing relaxed search after Exact and another render on the next saved row', async () => {
-  await switchRow({ reset: true })
+  expect(await switchRow({ reset: true })).toEqual(modsB)
 })
 
 it('ignores the outgoing relaxed search when switching directly to the next saved row', async () => {
-  await switchRow({ reset: false })
+  expect(await switchRow({ reset: false })).toEqual(modsB)
 })
 
 it('accepts a newly observed search on the next row even when the site reuses its search id', async () => {
-  await switchRow({ reset: false, fresh: ['explicit.stat_mana', 'explicit.stat_accuracy', 'explicit.stat_strength'] })
+  const fresh = ['explicit.stat_mana', 'explicit.stat_accuracy', 'explicit.stat_strength']
+  expect(await switchRow({ reset: false, fresh })).toEqual(fresh)
 })
