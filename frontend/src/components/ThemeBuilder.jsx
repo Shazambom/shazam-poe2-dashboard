@@ -116,8 +116,8 @@ export default function ThemeBuilder() {
 
       {draft && (
         <div>
-          <div className="field"><label>Name</label>
-            <input value={draft.name} onChange={e => update({ ...draft, name: e.target.value })} />
+          <div className="field"><label htmlFor="theme-draft-name">Name</label>
+            <input id="theme-draft-name" value={draft.name} onChange={e => update({ ...draft, name: e.target.value })} />
           </div>
           <div className="row" style={{ marginBottom: 10 }}>
             {PRIMARIES.map(([k, name]) => (

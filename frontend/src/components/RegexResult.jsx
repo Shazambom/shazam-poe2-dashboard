@@ -23,8 +23,8 @@ export default function RegexResult({ lead, text, onCopy, onReset, onTrade, auto
         <div className="rx-options">
           <Toggle checked={autoCopy} onChange={onAutoCopy} label="Copy on every change" />
           <div className="field">
-            <label>Append to the string</label>
-            <input value={append} onChange={e => onAppend(e.target.value)} spellCheck={false} />
+            <label htmlFor="regex-append">Append to the string</label>
+            <input id="regex-append" value={append} onChange={e => onAppend(e.target.value)} spellCheck={false} />
           </div>
         </div>
       </details>

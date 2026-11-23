@@ -15,7 +15,7 @@ const CREATE = '\u0000create'   // the "Add “…”" row's id: never a real op
 // `onCreate(text)`, when given, offers a typed name that matches no option as a new entry ("Add “…”");
 // `known` (a Set of lowercased names) lists names that exist even when not offered, so they are never "added".
 // `onClear`, when given: the user typed over a pick (it is dropped until they choose again).
-export default function CurrencyPicker({ value, onChange, options = [], placeholder = 'search…', renderIcon = defaultIcon, onCreate = null, known = null, onClear = null, cmd }) {
+export default function CurrencyPicker({ value, onChange, options = [], placeholder = 'search…', renderIcon = defaultIcon, onCreate = null, known = null, onClear = null, cmd, inputId }) {
   const [open, setOpen] = useState(false)
   const [q, setQ] = useState('')
   const [sel, setSel] = useState(0)
@@ -67,7 +67,7 @@ export default function CurrencyPicker({ value, onChange, options = [], placehol
     <div className="curpick" ref={boxRef} data-cmd={cmd}>
       <div className={`curpick-box ${open ? 'open' : ''}`} onClick={() => { setOpen(true); inputRef.current?.focus() }}>
         {selected && !open && renderIcon && renderIcon(selected, 18)}
-        <input ref={inputRef} className="curpick-input"
+        <input id={inputId} ref={inputRef} className="curpick-input"
           value={open ? q : (selected?.name ?? '')}
           placeholder={placeholder}
           onFocus={() => { setOpen(true); setSel(0) }}

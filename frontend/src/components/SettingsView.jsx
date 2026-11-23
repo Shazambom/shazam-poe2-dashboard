@@ -75,8 +75,8 @@ export default function SettingsView({ currencies, onSaved, onReportProblem }) {
 
           <h2 style={{ marginTop: 28 }}>Market</h2>
           <p className="hint">The league is set from the dropdown in the top bar.</p>
-          <div className="field"><label>Reference currency for values</label>
-            <CurrencyPicker value={s.reference} onChange={id => set('reference', id)} options={opts} placeholder="reference currency…" />
+          <div className="field"><label htmlFor="settings-reference">Reference currency for values</label>
+            <CurrencyPicker inputId="settings-reference" value={s.reference} onChange={id => set('reference', id)} options={opts} placeholder="reference currency…" />
           </div>
           {tweaks && <>
             <div className="check"><Toggle checked={s.allow_digest_edges} onChange={v => set('allow_digest_edges', v)} label="Fill missing pairs from hourly market data" /></div>
@@ -98,15 +98,15 @@ export default function SettingsView({ currencies, onSaved, onReportProblem }) {
               <RefreshButton busy={busy} onClick={async () => { setBusy(true); try { setFees(await surface(api.refreshGoldFees(), 'Gold fees refreshed')) } catch { ignoredError('refresh gold fees') } finally { setBusy(false) } }} title="Refresh gold fees from game data" />
               <span className="hint">Gold fees from game data</span>
             </div>
-            <div className="field"><label>Fee applies to</label>
-              <select value={s.gold_model.fee_side ?? 'buy'} onChange={e => setGold('fee_side', e.target.value)}>
+            <div className="field"><label htmlFor="settings-fee-side">Fee applies to</label>
+              <select id="settings-fee-side" value={s.gold_model.fee_side ?? 'buy'} onChange={e => setGold('fee_side', e.target.value)}>
                 <option value="buy">units received (buy side)</option>
                 <option value="sell">units given (sell side)</option>
               </select>
             </div>
-            <div className="field"><label>Extra gold per order (usually 0)</label><input type="number" value={s.gold_model.base_per_order} onChange={e => setGold('base_per_order', Number(e.target.value))} /></div>
-            <div className="field"><label>Manual overrides (id=gold, comma separated)</label>
-              <input defaultValue={perUnitText} onBlur={e => {
+            <div className="field"><label htmlFor="settings-gold-per-order">Extra gold per order (usually 0)</label><input id="settings-gold-per-order" type="number" value={s.gold_model.base_per_order} onChange={e => setGold('base_per_order', Number(e.target.value))} /></div>
+            <div className="field"><label htmlFor="settings-gold-overrides">Manual overrides (id=gold, comma separated)</label>
+              <input id="settings-gold-overrides" defaultValue={perUnitText} onBlur={e => {
                 const m = {}; e.target.value.split(',').forEach(p => { const [k, v] = p.split('='); if (k && v && !isNaN(Number(v))) m[k.trim()] = Number(v) }); setGold('per_unit', m)
               }} />
             </div>
@@ -214,8 +214,8 @@ function ThemeRow() {
   const customs = useTheme(s => s.customs)
   const options = [...THEMES, ...customs.map(t => ({ id: t.id, name: `${t.name} ·` }))]
   return (
-    <div className="field"><label>Theme</label>
-      <CurrencyPicker value={id} onChange={apply} options={options} placeholder="theme…" renderIcon={null} />
+    <div className="field"><label htmlFor="settings-theme">Theme</label>
+      <CurrencyPicker inputId="settings-theme" value={id} onChange={apply} options={options} placeholder="theme…" renderIcon={null} />
     </div>
   )
 }

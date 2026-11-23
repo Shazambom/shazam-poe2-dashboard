@@ -185,9 +185,9 @@ export default function RoutesView({ capital, status, currencies }) {
         </>}
 
         <h2>Filters</h2>
-        {tweaks && <div className="field"><label>Minimum margin %</label><input type="number" step="0.1" value={f.min_margin_pct} onChange={set('min_margin_pct')} /></div>}
-        <div className="field"><label>Start from</label>
-          <select value={f.start} onChange={set('start')}>
+        {tweaks && <div className="field"><label htmlFor="route-min-margin-pct">Minimum margin %</label><input id="route-min-margin-pct" type="number" step="0.1" value={f.min_margin_pct} onChange={set('min_margin_pct')} /></div>}
+        <div className="field"><label htmlFor="route-start">Start from</label>
+          <select id="route-start" value={f.start} onChange={set('start')}>
             <option value="">Everything I hold</option>
             {held.map(c => <option key={c} value={c}>{nameOf(c)}</option>)}
           </select>
@@ -195,19 +195,19 @@ export default function RoutesView({ capital, status, currencies }) {
 
         {tweaks && <details className="adv">
           <summary>More filters</summary>
-          <div className="field"><label>Minimum margin, in exalted</label><input type="number" step="0.1" value={f.min_margin_ref} onChange={set('min_margin_ref')} /></div>
-          <div className="field"><label>Maximum gold per loop</label><input type="number" step="100" placeholder="no limit" value={f.max_gold} onChange={set('max_gold')} /></div>
-          <div className="field"><label>Minimum margin per 1k gold</label><input type="number" step="0.01" placeholder="no limit" value={f.min_margin_per_1k_gold} onChange={set('min_margin_per_1k_gold')} /></div>
-          <div className="field"><label>Minimum liquidity, in exalted</label><input type="number" step="1" placeholder="no limit" value={f.min_liquidity_ref} onChange={set('min_liquidity_ref')} />
+          <div className="field"><label htmlFor="route-min-margin-ref">Minimum margin, in exalted</label><input id="route-min-margin-ref" type="number" step="0.1" value={f.min_margin_ref} onChange={set('min_margin_ref')} /></div>
+          <div className="field"><label htmlFor="route-max-gold">Maximum gold per loop</label><input id="route-max-gold" type="number" step="100" placeholder="no limit" value={f.max_gold} onChange={set('max_gold')} /></div>
+          <div className="field"><label htmlFor="route-min-margin-per-1k-gold">Minimum margin per 1k gold</label><input id="route-min-margin-per-1k-gold" type="number" step="0.01" placeholder="no limit" value={f.min_margin_per_1k_gold} onChange={set('min_margin_per_1k_gold')} /></div>
+          <div className="field"><label htmlFor="route-min-liquidity-ref">Minimum liquidity, in exalted</label><input id="route-min-liquidity-ref" type="number" step="1" placeholder="no limit" value={f.min_liquidity_ref} onChange={set('min_liquidity_ref')} />
             {f.min_liquidity_ref !== '' && Number(f.min_liquidity_ref) < 200 && <span className="warn-hint">⚠ Below 200 you'll see routes you can't actually fill — expect a bad time.</span>}</div>
-          <div className="field"><label>Minimum velocity, exalted/h per 1k gold</label><input type="number" step="0.01" placeholder="no limit" value={f.min_velocity} onChange={set('min_velocity')} /></div>
-          <div className="field"><label>Minimum traded volume, exalted per hour</label><input type="number" step="1" placeholder="no limit" value={f.min_volume_ref_per_h} onChange={set('min_volume_ref_per_h')} />
+          <div className="field"><label htmlFor="route-min-velocity">Minimum velocity, exalted/h per 1k gold</label><input id="route-min-velocity" type="number" step="0.01" placeholder="no limit" value={f.min_velocity} onChange={set('min_velocity')} /></div>
+          <div className="field"><label htmlFor="route-min-volume-ref-per-h">Minimum traded volume, exalted per hour</label><input id="route-min-volume-ref-per-h" type="number" step="1" placeholder="no limit" value={f.min_volume_ref_per_h} onChange={set('min_volume_ref_per_h')} />
             {f.min_volume_ref_per_h !== '' && Number(f.min_volume_ref_per_h) < 100 && <span className="warn-hint">⚠ Below 100/h markets are too thin to trust — expect a bad time.</span>}</div>
-          <div className="field"><label>Maximum minutes per step</label><input type="number" step="5" placeholder="no limit" value={f.max_step_minutes} onChange={set('max_step_minutes')}
+          <div className="field"><label htmlFor="route-max-step-minutes">Maximum minutes per step</label><input id="route-max-step-minutes" type="number" step="5" placeholder="no limit" value={f.max_step_minutes} onChange={set('max_step_minutes')}
             title="How long the slowest step would take at that market's own trading pace: the units you push in ÷ the units it trades per hour." /></div>
-          <div className="field"><label>Maximum estimated fill time, hours</label><input type="number" step="0.5" placeholder="no limit" value={f.max_fill_hours} onChange={set('max_fill_hours')} /></div>
+          <div className="field"><label htmlFor="route-max-fill-hours">Maximum estimated fill time, hours</label><input id="route-max-fill-hours" type="number" step="0.5" placeholder="no limit" value={f.max_fill_hours} onChange={set('max_fill_hours')} /></div>
           <div className="check"><Toggle checked={!!f.exclude_recipes} onChange={v => update('exclude_recipes', v)} label="Exchange steps only" /></div>
-          <div className="field"><label>Show at most</label><input type="number" value={f.limit} onChange={set('limit')} /></div>
+          <div className="field"><label htmlFor="route-limit">Show at most</label><input id="route-limit" type="number" value={f.limit} onChange={set('limit')} /></div>
         </details>}
         {tweaks && <ArbitrageAlgorithm key={`algo-${rev}`} onSaved={load} />}
 
