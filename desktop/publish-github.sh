@@ -171,3 +171,9 @@ case "$VER" in *-beta*) ;; *) ../ops/bugs.sh resolve-shipped "$TAG" \
 # A failure here never fails the release that is already live.
 case "$VER" in *-beta*) ;; *) ../ops/announce.sh "$TAG" \
   || echo "WARNING: the release announcement was not sent; run ops/announce.sh $TAG" ;; esac
+
+# Every release left its .dmg and .zip in release/ (160 versions filled the disk). Now that this one is
+# live, drop the Mac installers of every other version. A failure here never fails the release.
+if ! ./prune-release.sh "$VER"; then
+  echo "WARNING: could not remove old Mac installers; run desktop/prune-release.sh $VER"
+fi
