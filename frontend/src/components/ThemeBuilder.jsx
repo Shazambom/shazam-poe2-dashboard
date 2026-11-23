@@ -30,7 +30,7 @@ export default function ThemeBuilder() {
   const [base, setBase] = useState('vault')
   const [editId, setEditId] = useState(null)
   const [draft, setDraft] = useState(null)      // the theme being edited (unsaved edits live here)
-  const [exported, setExported] = useState('')
+  const [exported, setExported] = useState(null)   // { id, text }: the last export, shown while its theme is open
   const saveTimer = useRef(null)
   const previewTimer = useRef(null)
 
@@ -48,7 +48,7 @@ export default function ThemeBuilder() {
   if (draftId !== editingId) {
     setDraftId(editingId)
     setDraft(editing ? { ...editing, colors: { ...editing.colors } } : null)
-    setExported('')
+    setExported(e => (e?.id === editingId ? e : null))
   }
 
   const persist = (list) => useTheme.getState().saveCustoms(list).catch(() => toast('Could not save themes', false))
@@ -81,10 +81,10 @@ export default function ThemeBuilder() {
   }
   const doExport = (t) => {
     const text = `${exportCss(t)}\n${exportJson(t)}\n`
-    setEditId(t.id); setExported(text)
+    setEditId(t.id); setExported({ id: t.id, text })
     navigator.clipboard?.writeText(text).then(() => toast('Theme CSS + JSON copied')).catch(() => {
       ignoredError('copy theme export')
-      setExported(text)   // not copied: the text stays in the export box to copy by hand
+      setExported({ id: t.id, text })   // not copied: the text stays in the export box to copy by hand
     })
   }
   const use = (t) => { clearTimeout(previewTimer.current); useTheme.getState().apply(t.id) }
@@ -154,7 +154,7 @@ export default function ThemeBuilder() {
               ))}
             </div>
           </details>
-          {exported && <pre className="diag-pre">{exported}</pre>}
+          {exported?.id === editingId && <pre className="diag-pre">{exported.text}</pre>}
         </div>
       )}
     </details>

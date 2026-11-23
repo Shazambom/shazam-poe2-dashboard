@@ -357,14 +357,52 @@ it('strategy pricing: retries of a failing search are bounded, then it waits its
   expect(priceQuery).toHaveBeenCalledTimes(4)
   for (let i = 0; i < 20; i++) await advance(60_000)
   expect(priceQuery).toHaveBeenCalledTimes(4)
-  // Its next turn, an hour on (the queue runs again on the next edit), fails too: a fresh set of short retries.
-  for (let i = 0; i < 41; i++) await advance(60_000)
-  await act(async () => { useStratStore.getState().change(d => sc.rename(d, 's', 'Edited an hour later')) })
+  // Its next turn, an hour after its last try, comes on its own (an edit does not bring it early) and fails
+  // too: a fresh set of short retries.
+  for (let i = 0; i < 39; i++) await advance(60_000)
+  await act(async () => { useStratStore.getState().change(d => sc.rename(d, 's', 'Edited before the hour')) })
+  expect(priceQuery).toHaveBeenCalledTimes(4)
+  for (let i = 0; i < 60; i++) await advance(1000)
   expect(priceQuery).toHaveBeenCalledTimes(5)
   for (let i = 0; i < 25; i++) await advance(1000)
   expect(priceQuery).toHaveBeenCalledTimes(8)
   expect(toasts).not.toHaveBeenCalled()
   view.unmount()
+  await useStratStore.getState().flush()
+})
+
+// An open, idle strat: a unique's floor is an hour old, so it is searched again then, with no input, one
+// search per hour (never a loop); a rate-limit wait that covers its hour holds it until the wait ends.
+it('strategy pricing: an idle open strat re-prices its unique every hour on its own', async () => {
+  stratWithUnique()
+  const found = { ok: true, listings: [{ amount: 2, currency: 'divine' }] }
+  const priceQuery = vi.spyOn(window.poe2desktop.trade, 'priceQuery').mockResolvedValue(found)
+  const view = render(<StratCalcView league="A" />)
+  await settle()
+  expect(priceQuery).toHaveBeenCalledTimes(1)
+  // 10 s steps: React renders (and the queue runs) between steps, as it would between real seconds.
+  const minutes = async (n) => { for (let i = 0; i < n * 6; i++) await advance(10_000) }
+  await minutes(59)
+  expect(priceQuery).toHaveBeenCalledTimes(1)
+  await minutes(2)
+  expect(priceQuery).toHaveBeenCalledTimes(2)
+  await minutes(3 * 60)
+  expect(priceQuery).toHaveBeenCalledTimes(5)
+  // Its next hour is answered "wait ten minutes": nothing is searched before the wait ends, then once.
+  priceQuery.mockResolvedValueOnce({ ok: false, error: 'rate', retryAfter: 600 })
+  await minutes(60)
+  expect(priceQuery).toHaveBeenCalledTimes(6)
+  await minutes(9)
+  expect(priceQuery).toHaveBeenCalledTimes(6)
+  await minutes(2)
+  expect(priceQuery).toHaveBeenCalledTimes(7)
+  await minutes(57)
+  expect(priceQuery).toHaveBeenCalledTimes(7)
+  expect(priceQuery.mock.calls.every(c => c[0].league === 'A')).toBe(true)
+  expect(toasts).not.toHaveBeenCalled()
+  view.unmount()
+  await minutes(120)
+  expect(priceQuery).toHaveBeenCalledTimes(7)
   await useStratStore.getState().flush()
 })
 
@@ -392,6 +430,49 @@ it('theme export: a refused clipboard write leaves the exported text on screen t
     expect(view.container.querySelectorAll('pre.diag-pre')).toHaveLength(1)
     expect(view.container.querySelector('pre.diag-pre').textContent).toBe(writeText.mock.calls[1][0])
     expect(toasts).not.toHaveBeenCalled()
+  } finally {
+    if (had) Object.defineProperty(navigator, 'clipboard', had)
+    else delete navigator.clipboard
+    useTheme.setState({ customs: [] })
+  }
+})
+
+// A copy that succeeds shows the same text in the export box, whether or not the theme was open in the
+// builder; opening a different theme afterwards clears the box.
+it('theme export: a copied export stays in the export box until another theme is opened', async () => {
+  installApiMock()
+  const primaries = Object.fromEntries(PRIMARY_KEYS.map((k, i) => [k, `#${String(i + 1).repeat(6)}`]))
+  const colors = { ...derive(primaries), ...primaries }
+  useTheme.setState({ customs: [
+    { id: 'custom-a', name: 'Alpha', base: 'vault', colors },
+    { id: 'custom-b', name: 'Beta', base: 'vault', colors },
+  ] })
+  const had = Object.getOwnPropertyDescriptor(navigator, 'clipboard')
+  const writeText = vi.fn().mockResolvedValue(undefined)
+  Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
+  const box = (view) => view.container.querySelector('pre.diag-pre')
+  try {
+    const view = render(<ThemeBuilder />)
+    await settle()
+    fireEvent.click(screen.getByRole('button', { name: 'Alpha' }))   // Alpha is open; Beta is exported
+    await settle()
+    expect(box(view)).toBeNull()
+    fireEvent.click(screen.getByLabelText('Actions for Beta').querySelector('button:nth-child(3)'))
+    await settle()
+    expect(writeText).toHaveBeenCalledTimes(1)
+    expect(writeText.mock.calls[0][0]).toContain('Beta')
+    expect(box(view)?.textContent).toBe(writeText.mock.calls[0][0])
+    expect(screen.getByLabelText('Name').value).toBe('Beta')
+    fireEvent.click(screen.getByLabelText('Actions for Beta').querySelector('button:nth-child(3)'))   // already open
+    await settle()
+    expect(writeText).toHaveBeenCalledTimes(2)
+    expect(view.container.querySelectorAll('pre.diag-pre')).toHaveLength(1)
+    expect(box(view).textContent).toBe(writeText.mock.calls[1][0])
+    fireEvent.click(screen.getByRole('button', { name: 'Alpha' }))
+    await settle()
+    expect(screen.getByLabelText('Name').value).toBe('Alpha')
+    expect(box(view)).toBeNull()
+    expect(toasts).toHaveBeenCalledTimes(2)
   } finally {
     if (had) Object.defineProperty(navigator, 'clipboard', had)
     else delete navigator.clipboard
@@ -452,6 +533,36 @@ it('focus hotkey: a failed registration leaves the shown combo and the next pres
     expect(button.textContent).toBe('⌘/Ctrl+J')
   } finally {
     window.poe2desktop.hotkey = previous
+  }
+})
+
+// The label shows only a combo main says is registered. Reading it fails when the hotkey never started this
+// session, and main answers { combo: null } when the OS refused the saved combo at launch: both show the
+// control empty (not the default ⌘/Ctrl+G, which nothing registered), and a press that registers fills it.
+it('focus hotkey: no registered hotkey shows the control empty, never the default combo', async () => {
+  const previous = window.poe2desktop.hotkey
+  const debug = vi.spyOn(console, 'debug')
+  try {
+    installApiMock()
+    for (const get of [vi.fn().mockRejectedValue(new Error('No handler registered')), vi.fn(async () => ({ combo: null }))]) {
+      const set = vi.fn(async () => ({ ok: true }))
+      window.poe2desktop.hotkey = { get, set }
+      const view = render(<TradingSettings />)
+      await settle()
+      expect(get).toHaveBeenCalledTimes(1)
+      const button = screen.getByText('Focus hotkey').nextElementSibling
+      expect(button.textContent).toBe('')
+      fireEvent.click(button)
+      fireEvent.keyDown(button, { key: 'j', ctrlKey: true })
+      await settle()
+      expect(set).toHaveBeenCalledWith('CommandOrControl+J')
+      expect(button.textContent).toBe('⌘/Ctrl+J')
+      view.unmount()
+    }
+    expect(debug).toHaveBeenCalledWith('[Arbiter]', 'load hotkey')
+  } finally {
+    window.poe2desktop.hotkey = previous
+    debug.mockRestore()
   }
 })
 

@@ -31,6 +31,18 @@ export function nextPricing(s, { now, retryAt, uses }) {
   return null
 }
 
+// When the next search falls due (the time `nextPricing` stops returning null), or null when nothing is
+// waiting to be priced: each searched price is due an hour after it was found, or when its back-off ends.
+export function nextDue(s, { retryAt, uses }) {
+  const at = (key, found) => Math.max(found ? found + sc.FLOOR_TTL_MS : 0, retryAt.get(key) ?? 0)
+  const times = [
+    ...[...s.loot, ...s.fixed].filter(r => r.base && r.price == null).map(r => at(sc.rowKey(r), r.floor?.at)),
+    ...sc.lines(s).filter(l => l.link && l.price == null && sc.usesOf(l, uses) != null).map(l => at(linkKey(l.id), l.link.at)),
+    ...(s.maps.link && s.maps.price == null ? [at(linkKey('maps'), s.maps.link.at)] : []),
+  ]
+  return times.length ? Math.min(...times) : null
+}
+
 // A search is being asked: it is not asked again for an hour (unless its answer says sooner).
 export const started = (retryAt, job, now) => { job.mark = now + sc.FLOOR_TTL_MS; retryAt.set(job.key, job.mark) }
 
