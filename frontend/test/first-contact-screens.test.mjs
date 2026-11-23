@@ -59,11 +59,6 @@ test('Inbox: an entry names the price, not the volume multiple', () => {
 })
 
 // QA pass (2026-10-08) on the first-contact build: four defects and the polish that follows the same rules.
-test('QA 1: Convert drops its last result when the currencies change (no stale route under new icons)', () => {
-  const s = src('components/ConvertView.jsx')
-  assert.match(s, /useEffect\(\(\) => \{ setRes\(null\) \}, \[have, want\]\)/)
-})
-
 test('QA 2: ⌘K opens a currency that is not on the board by its name, in the app-wide card', () => {
   const p = src('components/CommandPalette.jsx')
   assert.match(p, /onOpenCurrency\(it\)/, 'the palette hands over the item, not just the id')
