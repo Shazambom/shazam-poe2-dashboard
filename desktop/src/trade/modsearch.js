@@ -5,6 +5,7 @@
 'use strict'
 const fsp = require('node:fs').promises
 const path = require('node:path')
+const { lazyAsync } = require('./lazy.js')
 
 const DATA = path.join(__dirname, '..', 'vendor', 'ee2-query', 'data')
 const BUNDLE = path.join(__dirname, '..', 'vendor', 'ee2-query', 'vendor', 'bundle.cjs')
@@ -15,19 +16,9 @@ const BUNDLE = path.join(__dirname, '..', 'vendor', 'ee2-query', 'vendor', 'bund
 const GROUPS = { prefix: ['explicit', 'desecrated'], suffix: ['explicit', 'desecrated'], corrupted: ['enchant'], enchant: ['enchant'] }
 const groupsFor = (affix) => GROUPS[affix] || []
 
-/** @type {Promise<{ byGroup: Map<string, Map<string, string[]>>, ofBase: Map<string, string> }> | null} */
-let _cat = null
-/** @type {Map<string, Map<string, string[]>> | null} */
-let _byGroupLower = null
-
 // The catalogue, read on first use. Callers that overlap share the one read; a read that fails throws to
 // its callers and the next call reads again (nothing is kept from it).
-function catalogue() {
-  if (!_cat) {
-    _cat = loadCatalogue().catch((e) => { _cat = null; throw e })
-  }
-  return _cat
-}
+const catalogue = lazyAsync(loadCatalogue)
 
 async function loadCatalogue() {
   // group id → (text → [ids]): a text can sit under two ids in one group.
@@ -51,13 +42,11 @@ async function loadCatalogue() {
     const cat = it.namespace === 'ITEM' && it.craftable && it.craftable.category
     if (cat && tradeId.has(cat)) ofBase.set(it.refName, tradeId.get(cat))
   }
-  return { byGroup, ofBase }
+  return { byGroup, ofBase, byGroupLower: groupLowerIndex(byGroup) }
 }
 
-async function groupLowerIndex() {
-  if (_byGroupLower) return _byGroupLower
-  const { byGroup } = await catalogue()
-  if (_byGroupLower) return _byGroupLower   // an overlapping first call built it meanwhile
+// group id → (lower-case text → [ids]): every id of the texts that differ only in case.
+function groupLowerIndex(byGroup) {
   const out = new Map()
   for (const [gid, m] of byGroup) {
     const ml = new Map()
@@ -69,8 +58,7 @@ async function groupLowerIndex() {
     }
     out.set(gid, ml)
   }
-  _byGroupLower = out
-  return _byGroupLower
+  return out
 }
 
 // The site prints a stat without its sign: "+# to maximum Life" is listed as "# to maximum Life".
@@ -133,8 +121,7 @@ function rollValue(nums) {
 // reusing the already-loaded EE2 stats.json & items.ndjson catalogue (shared with Stash → Merchant).
 async function lookupItemMods(item) {
   if (!item || typeof item !== 'object') return null
-  const { ofBase } = await catalogue()
-  const byGroupLower = await groupLowerIndex()
+  const { ofBase, byGroupLower } = await catalogue()
   const category = ofBase.get(item.baseType) || ofBase.get(item.typeLine) || null
   const mods = []
   const seen = new Set()

@@ -8,6 +8,7 @@ const fsp = require('node:fs').promises
 const path = require('node:path')
 
 const { budgeted } = require('./budget.js')
+const { lazyAsync } = require('./lazy.js')
 const { TRADE_BASE, FETCH_MAX, INSTANT_BUYOUT } = require('./urls.js')
 
 const SEARCH_POLICY = 'trade-search'
@@ -17,15 +18,7 @@ const KEEP_MS = 5 * 60_000   // a search whose fetch was refused is kept this lo
 // Every unique the trade site knows, by name and base: its own item list (EE2's data, synced every
 // release), read once. Callers that overlap share the one read. A read that fails throws to its callers
 // and is forgotten, so the next call reads again.
-/** @type {Promise<Array<{ name: string, type: string }>> | null} */
-let _uniques = null
-function uniques() {
-  if (_uniques) return _uniques
-  const read = loadUniques()
-  _uniques = read
-  read.catch(() => { if (_uniques === read) _uniques = null })
-  return read
-}
+const uniques = lazyAsync(loadUniques)
 
 async function loadUniques() {
   /** @type {Array<{ name: string, type: string }>} */
