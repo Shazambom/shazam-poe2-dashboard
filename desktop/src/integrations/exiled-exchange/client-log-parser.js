@@ -51,4 +51,4 @@ function toRendererEvent(ev) {
   return ev && RENDERER_EVENT_TYPES.has(ev.type) ? ev : null
 }
 
-module.exports = { parseLine, toRendererEvent, RENDERER_EVENT_TYPES }
+module.exports = { parseLine, toRendererEvent }

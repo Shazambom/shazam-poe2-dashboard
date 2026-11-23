@@ -24,4 +24,4 @@ function makeRing(n, now = () => new Date()) {
   }
 }
 
-module.exports = { makeRing, MAX_LINE }
+module.exports = { makeRing }

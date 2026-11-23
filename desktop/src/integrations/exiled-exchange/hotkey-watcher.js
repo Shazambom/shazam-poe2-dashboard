@@ -138,4 +138,4 @@ class HotkeyWatcher {
   }
 }
 
-module.exports = { HotkeyWatcher, parseShortcut }
+module.exports = { HotkeyWatcher }

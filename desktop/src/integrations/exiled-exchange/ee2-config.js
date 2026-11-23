@@ -128,4 +128,4 @@ function watchConfig(onChange) {
   }
 }
 
-module.exports = { configPath, loadConfig, extractShortcuts, readShortcuts, watchConfig, defaultShortcuts }
+module.exports = { loadConfig, readShortcuts, watchConfig }

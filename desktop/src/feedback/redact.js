@@ -61,4 +61,4 @@ function pickAllowed(obj, keys) {
   return out
 }
 
-module.exports = { SETTINGS_KEYS, SECRET_PATTERNS, pickAllowed, scrubText, redactDeep }
+module.exports = { SETTINGS_KEYS, pickAllowed, scrubText, redactDeep }

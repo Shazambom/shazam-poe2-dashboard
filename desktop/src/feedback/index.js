@@ -91,4 +91,4 @@ function registerFeedback({ ipcMain, BrowserWindow, session, win, uiUrl, backend
   ipcMain.handle('feedback:discord', (e) => { if (fromApp(e)) shell.openExternal(DISCORD_INVITE) })
 }
 
-module.exports = { registerFeedback, shortId, DISCORD_INVITE, KEEP_REPORTS, THROTTLE_MS }
+module.exports = { registerFeedback, shortId, KEEP_REPORTS, THROTTLE_MS }

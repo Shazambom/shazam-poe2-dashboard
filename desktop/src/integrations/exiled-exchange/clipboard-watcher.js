@@ -227,7 +227,7 @@ function captureItemBurst({ intervalMs = 15, durationMs = 250, onItem } = {}) {
   return () => { done = true; clearInterval(timer) }
 }
 
-module.exports = { ClipboardWatcher, parseItem, looksLikeItem, captureItemBurst, _useClipboard }
+module.exports = { ClipboardWatcher, looksLikeItem, captureItemBurst, _useClipboard }
 
 // --- tiny self-test: `node clipboard-watcher.js` (pure parser, no Electron) ---
 // Guards against parser regressions for the common PoE2 item shapes.

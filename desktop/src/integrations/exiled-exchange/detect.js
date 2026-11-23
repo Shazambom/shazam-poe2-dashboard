@@ -81,4 +81,4 @@ async function detectEE2({ checkProcess = false } = {}) {
   }
 }
 
-module.exports = { detectEE2, configDirs }
+module.exports = { detectEE2 }

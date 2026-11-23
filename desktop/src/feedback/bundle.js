@@ -66,4 +66,4 @@ async function buildBundle({ meta, sources, get, readJson, bounds, screens, time
   return pack(doc, screens)
 }
 
-module.exports = { buildBundle, STATE_ENDPOINTS, MAX_BUNDLE, LIMITS }
+module.exports = { buildBundle, STATE_ENDPOINTS, MAX_BUNDLE }

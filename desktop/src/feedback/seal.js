@@ -63,4 +63,4 @@ function open(sealed, privateKeyPem) {
   return Buffer.concat([d.update(ct), d.final()])   // a bad tag throws here
 }
 
-module.exports = { MAGIC, KEY_ID, INFO, OWNER_PUB_B64, OVERHEAD, seal, open }
+module.exports = { MAGIC, KEY_ID, OWNER_PUB_B64, OVERHEAD, seal, open }

@@ -4,7 +4,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 const require = createRequire(import.meta.url)
-const R = require('../src/trade/relax.js')
+const { makeRelaxChecker, projectRows } = require('../src/trade/relax.js')
 
 const ID = (i) => i.toString(16).padStart(64, '0')
 const fullListing = (id, amount, currency, extraItem = {}) => ({
@@ -36,7 +36,7 @@ const RELAXED_Q = {
 function harness({ searchRes = { id: 'RX1', result: Array.from({ length: 50 }, (_, i) => ID(i + 1)), total: 120 }, refuse = 0, status = 200 } = {}) {
   const calls = { acquire: [], observe: [], requests: [] }
   const lines = []
-  const check = R.makeRelaxChecker({
+  const check = makeRelaxChecker({
     request: async (req) => {
       calls.requests.push(req)
       if (status !== 200) return { status, headers: { 'retry-after': '12' }, body: '{}' }
@@ -62,7 +62,7 @@ function harness({ searchRes = { id: 'RX1', result: Array.from({ length: 50 }, (
 }
 
 test('relax reuses listings.js projectRows ({id, amount, currency} only) and strips private/item fields', () => {
-  const rows = R.projectRows({
+  const rows = projectRows({
     result: [
       fullListing(ID(1), 15, 'chaos'),
       null,
@@ -75,7 +75,7 @@ test('relax reuses listings.js projectRows ({id, amount, currency} only) and str
     { id: ID(3), amount: 105, currency: 'vaal' },
   ])
   assert.doesNotMatch(JSON.stringify(rows), /SECRET|PrivateTab|whisper|hideout_token|extended|Doom Band/)
-  assert.deepEqual(R.projectRows(null), [])
+  assert.deepEqual(projectRows(null), [])
 })
 
 test('hard cap: at most 1 trade-search + 1 trade-fetch (top 10) even when 50+ ids return', async () => {
@@ -129,7 +129,7 @@ test('in-flight dedup shares one search regardless of key order; subsequent call
 test('budget wait-once retries once; cancel aborts waiting or in-flight search without fetching', async () => {
   const waits = []
   let refusals = 1
-  const waitOnce = R.makeRelaxChecker({
+  const waitOnce = makeRelaxChecker({
     request: async (req) => req.method === 'POST'
       ? { status: 200, headers: {}, body: JSON.stringify({ id: 'W1', result: [ID(1)], total: 1 }) }
       : { status: 200, headers: {}, body: JSON.stringify({ result: [fullListing(ID(1), 5, 'chaos')] }) },
@@ -141,7 +141,7 @@ test('budget wait-once retries once; cancel aborts waiting or in-flight search w
 
   // Cancel while search is in flight -> no fetch sent, returns cancelled.
   const sent = []
-  const c = R.makeRelaxChecker({
+  const c = makeRelaxChecker({
     request: async (req) => {
       sent.push(req.method)
       if (req.method === 'POST') {
@@ -157,7 +157,7 @@ test('budget wait-once retries once; cancel aborts waiting or in-flight search w
   assert.deepEqual(sent, ['POST'])
 
   // Later click after cancel runs fresh.
-  const fresh = R.makeRelaxChecker({
+  const fresh = makeRelaxChecker({
     request: async (req) => req.method === 'POST'
       ? { status: 200, headers: {}, body: JSON.stringify({ id: 'C2', result: [ID(1)], total: 1 }) }
       : { status: 200, headers: {}, body: JSON.stringify({ result: [fullListing(ID(1), 5, 'chaos')] }) },

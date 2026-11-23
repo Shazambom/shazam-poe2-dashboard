@@ -157,4 +157,4 @@ function createHistoryConsumer({ manager, worker, prefs, send = null, log = () =
   }
 }
 
-module.exports = { createHistoryConsumer, NO_WINDOW_BUFFER, RESTART_MIN_MS, WARM_DELAY_MS }
+module.exports = { createHistoryConsumer, NO_WINDOW_BUFFER, RESTART_MIN_MS }

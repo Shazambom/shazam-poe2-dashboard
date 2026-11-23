@@ -63,4 +63,4 @@ function spawnWorker({ onExit } = {}) {
   return { build, parse, warm, kill }
 }
 
-module.exports = { spawnWorker, unpacked, IDLE_EXIT_MS, BUILD_TIMEOUT_MS }
+module.exports = { spawnWorker, unpacked }

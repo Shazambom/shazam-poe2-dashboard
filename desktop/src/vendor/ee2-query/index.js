@@ -9,8 +9,8 @@
 const path = require('node:path')
 const { makeFetch } = require('./shims/fetch.js')
 const config = require('./shims/config.js')
-const tradedata = require('./shims/tradedata.js')
-const clientstrings = require('./shims/clientstrings.js')
+const { setDataDir: setTradeDataDir, useTradeData } = require('./shims/tradedata.js')
+const { setDataDir: setClientStringsDataDir } = require('./shims/clientstrings.js')
 
 const DATA_DIR = path.join(__dirname, 'data')
 
@@ -22,11 +22,11 @@ function init(dataDir = DATA_DIR) {
   ready = (async () => {
     const t0 = Date.now()
     globalThis.fetch = makeFetch(dataDir)   // this process only; refuses anything but ee2data://
-    tradedata.setDataDir(dataDir); clientstrings.setDataDir(dataDir)
+    setTradeDataDir(dataDir); setClientStringsDataDir(dataDir)
     config.setPrefs({})
     ee2 = require('./vendor/bundle.cjs')
     await ee2.init('en')
-    const td = tradedata.useTradeData()
+    const td = useTradeData()
     counts = { items: td.tradeItemData.value.size, stats: td.tradeStatDataSet.value.size }
     return { ms: Date.now() - t0, ...counts }
   })()

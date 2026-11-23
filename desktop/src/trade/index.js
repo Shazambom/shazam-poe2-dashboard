@@ -31,14 +31,14 @@ function registerTrade(getWin, getBackendUrl) {
   })
   ipcMain.handle('sales:fetch', (_e, p) => salesFetch(p?.league).catch(e => ({ ok: false, error: String(e && e.message || e) })))
   // Stash → Merchant: active Instant Buyout shop listings + inline floor checks under spare: 0.5 headroom.
-  const merchantMod = require('./merchant.js')
-  const merchantFetch = merchantMod.makeMerchantFetcher({
+  const { makeMerchantFetcher, makeMerchantPricer } = require('./merchant.js')
+  const merchantFetch = makeMerchantFetcher({
     request: (r) => require('./proxy.js').poeRequest(r),
     budget: require('./budget.js'),
     log: (line) => { try { require('../telemetry.js').installLog('merchant', line) } catch (e) { ignored('trade:log', e) } },
   })
   _resetMerchantAccount = () => merchantFetch.resetAccount()
-  const merchantPriceCheck = merchantMod.makeMerchantPricer({
+  const merchantPriceCheck = makeMerchantPricer({
     request: (r) => require('./proxy.js').poeRequest(r),
     budget: require('./budget.js'),
     log: (line) => { try { require('../telemetry.js').installLog('merchant', line) } catch (e) { ignored('trade:log', e) } },

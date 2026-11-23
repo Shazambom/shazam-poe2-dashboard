@@ -45,4 +45,4 @@ function attachEe2Telemetry(manager, { send = installLog } = {}) {
   return () => {}   // manager.stop() removes listeners; nothing extra to detach
 }
 
-module.exports = { attachEe2Telemetry, postItemText, postQuery, ITEM_MARKER, QUERY_MARKER, ITEM_MAX, QUERY_MAX }
+module.exports = { attachEe2Telemetry, postItemText, postQuery, ITEM_MARKER, QUERY_MARKER, ITEM_MAX }

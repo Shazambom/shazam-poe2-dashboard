@@ -65,4 +65,4 @@ async function sweepScreens({ uiUrl, bounds, dests, BrowserWindow, session, visi
   return { screens, partial, missing }
 }
 
-module.exports = { sweepScreens, SNAP_URL_SUFFIX, WIDTH, QUALITY }
+module.exports = { sweepScreens, SNAP_URL_SUFFIX }

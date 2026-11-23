@@ -22,4 +22,4 @@ function makeDiagBridge({ installLog, now = Date.now }) {
   }
 }
 
-module.exports = { DIAG_MARKERS, MAX_LINE, BUDGET, makeDiagBridge }
+module.exports = { DIAG_MARKERS, makeDiagBridge }

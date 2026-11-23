@@ -377,7 +377,4 @@ module.exports = {
   makeMerchantPricer,
   MAX_SHOP_ITEMS,
   CURSOR_TTL_MS,
-  SPARE,
-  SEARCH_POLICY,
-  FETCH_POLICY,
 }
