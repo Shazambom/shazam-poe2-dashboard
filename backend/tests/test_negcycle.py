@@ -134,6 +134,8 @@ def random_graph(rng, n, kind):
         # an exchange: true values + spreads + quote noise → profitable loops rare but present
         val = [math.exp(rng.uniform(-5, 5)) for _ in range(n)]
         noise = rng.choice([0.0, 0.02, 0.06])
+    else:
+        val, noise = [], 0.0
     lo = rng.choice([-2.0, -0.5, 0.0])
     for u in range(n):
         for v in range(n):
@@ -166,8 +168,9 @@ def test_worst_case_chain_needs_all_rounds(impl):
     """The article's figure: a 5-vertex chain with edges listed right-to-left needs the full
     |V|-1 rounds. (The parallel version ALWAYS needs path-length rounds — it must still get it.)"""
     edges = [(3, 4, 1.0), (2, 3, 1.0), (1, 2, 1.0), (0, 1, 1.0)]
-    kind, dist, pred = run(impl, 5, edges, 0)
-    assert kind == "ok"
+    result = run(impl, 5, edges, 0)
+    assert result[0] == "ok"
+    _, dist, pred = result
     assert dist.tolist() == [0, 1, 2, 3, 4]
     assert pred.tolist() == [-1, 0, 1, 2, 3]
 
@@ -175,16 +178,18 @@ def test_worst_case_chain_needs_all_rounds(impl):
 @pytest.mark.parametrize("impl", IMPLS)
 def test_negative_edges_without_a_cycle(impl):
     edges = [(0, 3, 0.0), (0, 1, 1.0), (1, 2, -3.0), (2, 3, 1.0)]
-    kind, dist, pred = run(impl, 4, edges, 0)
-    assert kind == "ok"
+    result = run(impl, 4, edges, 0)
+    assert result[0] == "ok"
+    _, dist, pred = result
     assert dist.tolist() == [0, 1, -2, -1]
     assert pred.tolist() == [-1, 0, 1, 2]
 
 
 @pytest.mark.parametrize("impl", IMPLS)
 def test_unreachable_vertices_stay_infinite(impl):
-    kind, dist, pred = run(impl, 4, [(0, 1, 2.0), (2, 3, -5.0), (3, 2, 1.0)], 0)
-    assert kind == "ok"  # the negative cycle 2<->3 is NOT reachable
+    result = run(impl, 4, [(0, 1, 2.0), (2, 3, -5.0), (3, 2, 1.0)], 0)
+    assert result[0] == "ok"  # the negative cycle 2<->3 is NOT reachable
+    _, dist, pred = result
     assert dist.tolist() == [0, 2, INF, INF]
     assert pred.tolist() == [-1, 0, -1, -1]
 
@@ -194,16 +199,19 @@ def test_zero_weight_cycle_is_not_negative(impl):
     edges = [(0, 1, 1.0), (1, 2, 1.0), (2, 3, 1.0), (3, 1, -2.0)]
     assert run(impl, 4, edges, 0)[0] == "ok"
     edges[-1] = (3, 1, -2.0001)
-    kind, cyc = run(impl, 4, edges, 0)
-    assert kind == "cycle" and sorted(cyc) == [1, 2, 3]
+    result = run(impl, 4, edges, 0)
+    assert result[0] == "cycle"
+    _, cyc = result
+    assert sorted(cyc) == [1, 2, 3]
     assert_negative_cycle(edges, cyc)
 
 
 @pytest.mark.parametrize("impl", IMPLS)
 def test_cycle_is_reported_in_travel_order(impl):
     edges = [(0, 1, 1.0), (1, 2, 1.0), (2, 0, -5.0)]
-    kind, cyc = run(impl, 3, edges, 0)
-    assert kind == "cycle"
+    result = run(impl, 3, edges, 0)
+    assert result[0] == "cycle"
+    _, cyc = result
     i = cyc.index(0)
     assert cyc[i:] + cyc[:i] == [0, 1, 2]
 
@@ -222,14 +230,18 @@ def test_flagged_vertex_downstream_of_the_cycle(impl):
         (4, 5, 1.0),
     ]
     for order in (edges, edges[::-1]):
-        kind, cyc = run(impl, 6, order, 0)
-        assert kind == "cycle" and sorted(cyc) == [1, 2]
+        result = run(impl, 6, order, 0)
+        assert result[0] == "cycle"
+        _, cyc = result
+        assert sorted(cyc) == [1, 2]
 
 
 @pytest.mark.parametrize("impl", IMPLS)
 def test_negative_self_loop(impl):
-    kind, cyc = run(impl, 2, [(0, 1, 1.0), (1, 1, -1.0)], 0)
-    assert kind == "cycle" and cyc == [1]
+    result = run(impl, 2, [(0, 1, 1.0), (1, 1, -1.0)], 0)
+    assert result[0] == "cycle"
+    _, cyc = result
+    assert cyc == [1]
     assert (
         run(impl, 2, [(0, 1, 1.0), (1, 1, 0.0)], 0)[0] == "ok"
     )  # zero self-loop: fine
@@ -237,14 +249,18 @@ def test_negative_self_loop(impl):
 
 @pytest.mark.parametrize("impl", IMPLS)
 def test_parallel_edges_use_the_cheapest(impl):
-    kind, dist, _ = run(impl, 2, [(0, 1, 5.0), (0, 1, 2.0), (0, 1, 9.0)], 0)
-    assert kind == "ok" and dist.tolist() == [0, 2]
+    result = run(impl, 2, [(0, 1, 5.0), (0, 1, 2.0), (0, 1, 9.0)], 0)
+    assert result[0] == "ok"
+    _, dist, _ = result
+    assert dist.tolist() == [0, 2]
 
 
 @pytest.mark.parametrize("impl", IMPLS)
 def test_degenerate_inputs(impl):
-    kind, dist, pred = run(impl, 1, [], 0)
-    assert kind == "ok" and dist.tolist() == [0] and pred.tolist() == [-1]
+    result = run(impl, 1, [], 0)
+    assert result[0] == "ok"
+    _, dist, pred = result
+    assert dist.tolist() == [0] and pred.tolist() == [-1]
     with pytest.raises(ValueError):
         impl(3, *arrays([(0, 1, 1.0)]), 3)  # source out of range
     with pytest.raises(ValueError):
@@ -262,8 +278,10 @@ def test_source_none_searches_the_whole_graph(impl):
     """source=None starts every vertex at 0 (a virtual super-source): finds a negative cycle
     ANYWHERE, including one no single vertex of interest can reach."""
     edges = [(0, 1, 2.0), (2, 3, -5.0), (3, 2, 1.0)]
-    kind, cyc = run(impl, 4, edges, None)
-    assert kind == "cycle" and sorted(cyc) == [2, 3]
+    result = run(impl, 4, edges, None)
+    assert result[0] == "cycle"
+    _, cyc = result
+    assert sorted(cyc) == [2, 3]
     assert run(impl, 4, [(0, 1, 2.0), (2, 3, -5.0), (3, 2, 5.0)], None)[0] == "ok"
 
 
@@ -280,7 +298,7 @@ def test_fuzz_small_graphs_against_brute_force(kind):
         for impl in IMPLS:
             got = run(impl, n, edges, source)
             assert (got[0] == "cycle") == negative, (impl.__name__, kind, seed)
-            if negative:
+            if got[0] == "cycle":
                 assert_negative_cycle(edges, got[1])
             else:
                 # brute force sums each path left to right exactly as Bellman-Ford accumulates
@@ -309,9 +327,11 @@ def test_fuzz_parallel_matches_naive(kind):
             fast = run(nc.bellman_ford, n, edges, source)
             assert naive[0] == fast[0], (kind, seed, source)
             if naive[0] == "cycle":
+                assert fast[0] == "cycle"
                 assert_negative_cycle(edges, naive[1])
                 assert_negative_cycle(edges, fast[1])
             else:
+                assert fast[0] == "ok"
                 assert fast[1].tolist() == naive[1].tolist(), (
                     kind,
                     seed,
@@ -335,6 +355,7 @@ def test_edge_order_never_changes_the_parallel_answer():
         b = run(nc.bellman_ford, n, sorted(edges), 0)
         assert a[0] == b[0]
         if a[0] == "ok":
+            assert b[0] == "ok"
             assert a[1].tolist() == b[1].tolist()
 
 
@@ -345,6 +366,7 @@ def test_find_negative_cycle_returns_none_or_a_cycle():
         is None
     )
     cyc = nc.find_negative_cycle(3, *arrays([(0, 1, 1.0), (1, 2, 1.0), (2, 0, -2.5)]))
+    assert cyc is not None
     assert sorted(cyc) == [0, 1, 2]
 
 
@@ -354,6 +376,7 @@ def test_profitable_loop_is_a_negative_cycle():
     assert nc.profitable_loop(fair) is None
     rich = {**fair, ("c", "a"): 1 / 6.0 * 1.02}  # gains 2%
     loop = nc.profitable_loop(rich)
+    assert loop is not None
     i = loop.index("a")
     assert loop[i:] + loop[:i] == ["a", "b", "c"]
     gain = math.prod(rich[(a, b)] for a, b in zip(loop, loop[1:] + loop[:1]))

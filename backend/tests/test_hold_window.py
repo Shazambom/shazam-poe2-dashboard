@@ -130,10 +130,13 @@ def test_the_trend_is_read_over_a_span_that_grows_with_the_hold():
     """Flat for a month, then climbing for the last two weeks: a week-long hold reads the last 14 days
     (all climb); a 14-day hold reads 28 days, half of them flat, so its climb is less clean."""
     p = [10.0] * 30 + [10.0 * 1.02**d for d in range(1, 17)]
-    week = holdscore._signals(series(p), 45, 7)["trend"]
-    fortnight = holdscore._signals(series(p), 45, 14)["trend"]
-    assert fortnight < week
-    assert holdscore._signals(series(p), 45, 1)["trend"] == pytest.approx(week), (
+    week = holdscore._signals(series(p), 45, 7)
+    fortnight = holdscore._signals(series(p), 45, 14)
+    assert week is not None and fortnight is not None
+    assert fortnight["trend"] < week["trend"]
+    day = holdscore._signals(series(p), 45, 1)
+    assert day is not None
+    assert day["trend"] == pytest.approx(week["trend"]), (
         "short holds keep the 14-day read"
     )
 

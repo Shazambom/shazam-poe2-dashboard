@@ -433,9 +433,11 @@ def test_a_holding_is_worth_its_own_currency_or_its_market_rate_never_a_conversi
         assert rows[c]["native"] == {"amount": caps[c], "cur": c}, c
         assert rows[c]["realizable_native"] == {"amount": caps[c], "cur": c}, c
     cr = rows["preserved-cranium"]
-    rate, cur = arbitrage.native_price(
+    native = arbitrage.native_price(
         g, "preserved-cranium", rv, arbitrage.counterparts_by_volume(g, rv), REF
     )
+    assert native is not None
+    rate, cur = native
     assert cr["native"] == {"amount": pytest.approx(2.0 * rate), "cur": cur}
     assert cur == REF or g.direct_rate("preserved-cranium", cur) == pytest.approx(
         rate

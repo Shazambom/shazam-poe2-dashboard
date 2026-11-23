@@ -323,9 +323,11 @@ def test_one_freak_start_day_no_longer_dictates_the_forecast():
     past = [("B", _step_league(13)), ("A", _step_league(13))]
     one_day = holdscore._predict(1, 10, 3, past, window=0)
     windowed = holdscore._predict(1, 10, 3, past, window=5)
+    assert one_day is not None
     assert one_day["pred"] == pytest.approx(
         1.0, abs=1e-9
     )  # the single day says "+100%"
+    assert windowed is not None
     assert 0.0 < windowed["pred"] < 0.5  # the neighbourhood says "some"
 
 
@@ -499,6 +501,7 @@ def test_the_band_sees_a_forecast_that_swings_with_the_start_day():
     -50%. The band must say so."""
     past = [("B", _zigzag_league()), ("A", _zigzag_league())]
     pr = holdscore._predict(1, 20, 3, past, window=5)
+    assert pr is not None
     assert pr["band"] > 0.3, (
         f"band {pr['band']:.3f} hides a forecast that swings by +/-70% per day"
     )

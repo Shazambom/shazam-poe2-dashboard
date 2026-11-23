@@ -12,6 +12,7 @@ ROOT = Path(__file__).resolve().parents[2]
 _spec = importlib.util.spec_from_file_location(
     "regression_diff", ROOT / "ops" / "regression-diff.py"
 )
+assert _spec is not None and _spec.loader is not None
 rd = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(rd)
 

@@ -61,6 +61,7 @@ def test_run_once_computes_discords_into_cache():
     assert did is True
     # discords caches ONE blob under a fixed key with the league carried inside the value.
     blob = analytics.read_cache(c, "discords", "current")
+    assert blob is not None
     assert blob["league"] == "Std"
     sigs = blob["signals"]
     assert isinstance(sigs, list) and len(sigs) == 1
@@ -93,6 +94,7 @@ def test_run_once_computes_arc_weights_into_cache():
     c.commit()
     assert runner.run_once(c) is True
     blob = analytics.read_cache(c, "arc", "current")
+    assert blob is not None
     assert blob["league"] == "Std"
     assert blob["weights"].get("Old") is not None  # weighted the one past league
     assert blob["resembles"] == "Old"

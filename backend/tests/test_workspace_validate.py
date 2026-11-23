@@ -65,16 +65,19 @@ def test_shape_errors_name_the_problem(bad, msg):
 def test_limits_are_named_not_truncated():
     big = _doc([_s(i) for i in range(W.MAX_WORKSPACE_NODES + 1)])
     err = W.validate_workspace(big)
+    assert err is not None
     assert err.status == 400 and "MAX_WORKSPACE_NODES" in err.detail
 
     deep = _s(0)
     for i in range(W.MAX_WORKSPACE_DEPTH + 1):
         deep = {"id": f"f_{i}", "kind": "folder", "children": [deep]}
     err = W.validate_workspace(_doc([deep]))
+    assert err is not None
     assert err.status == 400 and "MAX_WORKSPACE_DEPTH" in err.detail
 
     fat = _doc([_s(1, slug="x" * (W.MAX_WORKSPACE_BYTES + 10))])
     err = W.validate_workspace(fat)
+    assert err is not None
     assert err.status == 413 and "MAX_WORKSPACE_BYTES" in err.detail
 
 

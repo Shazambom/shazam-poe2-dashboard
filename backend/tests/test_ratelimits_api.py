@@ -332,6 +332,11 @@ def test_rate_chain_never_loosens_a_rule_it_drops():
 def test_observe_2xx_refreshes_session_last_ok_with_throttle():
     from app import secrets
 
+    def last_ok():
+        saved = secrets.load("poesessid")
+        assert saved is not None
+        return saved["last_ok"]
+
     prev = secrets.load("poesessid")
     try:
         stale_ts = time.time() - 3600
@@ -348,7 +353,7 @@ def test_observe_2xx_refreshes_session_last_ok_with_throttle():
             },
         )
         assert r429.status_code == 200
-        assert secrets.load("poesessid")["last_ok"] == stale_ts
+        assert last_ok() == stale_ts
         gateway.POLICIES["trade-fetch"].penalty_until = 0.0
 
         # Anonymous / IP-only 200 on public trade-search or trade-fetch does NOT bump last_ok
@@ -357,14 +362,14 @@ def test_observe_2xx_refreshes_session_last_ok_with_throttle():
             json={"policy": "trade-fetch", "status": 200, "headers": {}},
         )
         assert r_anon_empty.status_code == 200
-        assert secrets.load("poesessid")["last_ok"] == stale_ts
+        assert last_ok() == stale_ts
 
         r_anon_ip = client.post(
             "/api/ratelimits/observe",
             json={"policy": "trade-search", "status": 200, "headers": SEARCH_HEADERS},
         )
         assert r_anon_ip.status_code == 200
-        assert secrets.load("poesessid")["last_ok"] == stale_ts
+        assert last_ok() == stale_ts
 
         # Non-trade policy 200 does NOT bump last_ok
         r_scout = client.post(
@@ -372,7 +377,7 @@ def test_observe_2xx_refreshes_session_last_ok_with_throttle():
             json={"policy": "poe2scout", "status": 200, "headers": FETCH_HEADERS},
         )
         assert r_scout.status_code == 200
-        assert secrets.load("poesessid")["last_ok"] == stale_ts
+        assert last_ok() == stale_ts
 
         # Authenticated 200 carrying X-Rate-Limit-Account headers DOES bump stale last_ok
         r200 = client.post(
@@ -380,7 +385,7 @@ def test_observe_2xx_refreshes_session_last_ok_with_throttle():
             json={"policy": "trade-fetch", "status": 200, "headers": FETCH_HEADERS},
         )
         assert r200.status_code == 200
-        bumped = secrets.load("poesessid")["last_ok"]
+        bumped = last_ok()
         assert bumped > stale_ts + 3500
 
         # Immediate second authenticated 200 is throttled (min_interval_s=60)
@@ -389,7 +394,7 @@ def test_observe_2xx_refreshes_session_last_ok_with_throttle():
             json={"policy": "trade-fetch", "status": 200, "headers": FETCH_HEADERS},
         )
         assert r200b.status_code == 200
-        assert secrets.load("poesessid")["last_ok"] == bumped
+        assert last_ok() == bumped
 
         # Auth-only policy (trade-history) 200 bumps stale last_ok even without explicit Account header
         secrets.store(
@@ -400,7 +405,7 @@ def test_observe_2xx_refreshes_session_last_ok_with_throttle():
             json={"policy": "trade-history", "status": 200, "headers": {}},
         )
         assert r_hist.status_code == 200
-        assert secrets.load("poesessid")["last_ok"] > stale_ts + 3500
+        assert last_ok() > stale_ts + 3500
     finally:
         if prev is None:
             secrets.clear("poesessid")

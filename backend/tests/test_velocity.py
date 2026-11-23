@@ -22,7 +22,9 @@ from app import arbitrage
 
 
 def v(margin, gold, fill_hours, price):
-    return arbitrage._velocity(margin, fill_hours, gold, price)
+    velocity = arbitrage._velocity(margin, fill_hours, gold, price)
+    assert velocity is not None
+    return velocity
 
 
 def test_gold_free_ranks_best():

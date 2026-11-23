@@ -73,11 +73,13 @@ def test_metrics_horizon_and_fallback():
     # Prices are neighbour-median smoothed (_smooth): last (age 5) = 15; base for hz=3 is the
     # latest age <= 5-3 → age 2 → median(11, 12) = 11.5.
     m = holdscore._metrics(series, 3)
+    assert m is not None
     assert m["ret"] == pytest.approx(15.0 / 11.5 - 1)
     assert m["n"] == 4 and m["mdd"] == 0.0
     young = holdscore._metrics(
         series, 30
     )  # league younger than horizon → earliest (median(10, 11))
+    assert young is not None
     assert young["ret"] == pytest.approx(15.0 / 10.5 - 1)
     assert holdscore._metrics({0: (1.0, 1.0)}, 1) is None
 
@@ -85,6 +87,7 @@ def test_metrics_horizon_and_fallback():
 def test_metrics_drawdown_and_confidence():
     series = {0: (10.0, 0.0), 1: (5.0, 0.0), 2: (8.0, 0.0)}
     m = holdscore._metrics(series, 1)
+    assert m is not None
     assert m["mdd"] == -0.5
     assert m["stab"] == 0.5
     assert m["conf"] == 0.0  # zero traded value → no liquidity confidence

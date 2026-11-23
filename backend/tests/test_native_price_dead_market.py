@@ -41,7 +41,9 @@ def test_a_dead_market_shows_what_it_traded_at_not_its_worst_hour():
     g = _graph(_edge("transmute", "exalted", 0.0319, inactive=True, quoted=0.577))
     rv = {"exalted": 1.0, "transmute": 1.36}
     ranked = {"transmute": [(1.0, "exalted")]}
-    rate, cur = arbitrage.native_price(g, "transmute", rv, ranked, "exalted")
+    native = arbitrage.native_price(g, "transmute", rv, ranked, "exalted")
+    assert native is not None
+    rate, cur = native
     assert cur == "exalted"
     assert rate == pytest.approx(0.577)
 
@@ -51,7 +53,9 @@ def test_a_dead_market_seen_from_its_other_side_inverts_the_traded_rate():
     g = _graph(_edge("exalted", "essence", 1 / 39.9, inactive=True, quoted=1 / 25.0))
     rv = {"exalted": 1.0, "essence": 30.0}
     ranked = {"essence": [(1.0, "exalted")]}
-    rate, cur = arbitrage.native_price(g, "essence", rv, ranked, "exalted")
+    native = arbitrage.native_price(g, "essence", rv, ranked, "exalted")
+    assert native is not None
+    rate, cur = native
     assert (rate, cur) == (pytest.approx(25.0), "exalted")
 
 

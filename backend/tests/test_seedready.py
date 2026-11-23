@@ -95,6 +95,7 @@ def test_a_row_poe2scout_no_longer_reports_is_stale():
     listing = {1: {D2: _row(1, 1), D3: _row(1, 1)}, 2: {D1: _row(5, 1)}}
     stored = {1: {D2: _row(1, 1)}, 2: {D1: _row(5, 1), D2: _row(5, 3)}}
     a = sr.assess(listing, stored, fingerprints={})
+    assert a.cut is not None
     assert a.stale == {2} and a.cut < D2
 
 
@@ -206,6 +207,7 @@ def test_a_refetch_that_did_not_fix_the_row_blocks_the_cut_but_is_not_refetched(
     stored = {1: {D2: _row(1, 1)}, 2: {D2: _row(5, 8)}}
     fp = {2: {"fp": sr.fingerprint(listing[2], D2), "through": D2, "vouch": False}}
     a = sr.assess(listing, stored, fingerprints=fp)
+    assert a.cut is not None
     assert a.stale == {2} and a.cut < D2
     assert sr.to_fetch(a, listing, fp) == set()
     changed = {**listing, 2: {D2: _row(5, 10), D3: _row(1, 1)}}

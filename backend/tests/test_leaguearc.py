@@ -46,6 +46,7 @@ def test_predict_weights_that_miss_all_data_fall_back_to_recency():
     # weights name a league that has no data for this item → must not zero-out; degrade to recency.
     got = holdscore._predict(1, 0, 3, past, weights={"Nonexistent": 1.0})
     ref = holdscore._predict(1, 0, 3, past)
+    assert ref is not None
     assert got is not None and abs(got["pred"] - ref["pred"]) < 1e-9
     assert got.get("weighted") is False  # fell back → not DTW-weighted
 

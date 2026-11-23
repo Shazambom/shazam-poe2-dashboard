@@ -180,6 +180,7 @@ def test_m1_lifts_user_rows_only_and_renames_legacy(tmp_path, monkeypatch, user_
     monkeypatch.setattr(migrations_user, "DB_PATH", legacy)
     after = migrations_user._m1_split_from_legacy(user_conn)
     user_conn.commit()
+    assert after is not None
     after()  # the runner calls this post-commit hook
     keys = {r[0] for r in user_conn.execute("SELECT key FROM kv")}
     assert keys == {"settings", "secret:poesessid"}
@@ -210,7 +211,9 @@ def test_m1_is_idempotent(tmp_path, monkeypatch, user_conn):
     legacy = tmp_path / "poe2arb.sqlite"
     _legacy_db(legacy)
     monkeypatch.setattr(migrations_user, "DB_PATH", legacy)
-    migrations_user._m1_split_from_legacy(user_conn)()
+    after = migrations_user._m1_split_from_legacy(user_conn)
+    assert after is not None
+    after()
     _legacy_db(legacy)  # a legacy file reappears — must NOT be re-lifted
     user_conn.execute("UPDATE capital SET qty=99 WHERE currency='chaos'")
     migrations_user._m1_split_from_legacy(user_conn)

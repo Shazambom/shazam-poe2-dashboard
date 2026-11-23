@@ -106,7 +106,9 @@ def test_a_card_shows_the_rate_of_the_market_that_prices_it(monkeypatch):
     g = _graph(monkeypatch)
     try:
         V = g.values()
-        assert abs(V["divine"] / V["chaos"] - g.direct_rate("divine", "chaos")) < 1e-9
+        rate = g.direct_rate("divine", "chaos")
+        assert rate is not None
+        assert abs(V["divine"] / V["chaos"] - rate) < 1e-9
         b = client.get("/api/board?window_h=24").json()
         rows = {r["id"]: r for r in b["rows"]}
         assert rows["divine"]["pref_num"] == "chaos"
@@ -372,6 +374,7 @@ def test_asset_modal_is_one_source_in_the_shown_numeraire(monkeypatch):
             ),
         )
         res = movers.asset_row("Omen of Light", 24 * 7)
+        assert res is not None
         row = res["row"]
         assert row["source"] == "scout"  # the exchange doesn't trade it
         assert row["pref_num"] == "divine" and row["trend_num"] == "divine"
@@ -383,7 +386,9 @@ def test_asset_modal_is_one_source_in_the_shown_numeraire(monkeypatch):
         # The client's contract: mid / prices[num] is the shown price = the last trend point.
         assert abs(row["mid"] / res["prices"]["divine"] - row["trend"][-1]["v"]) < 1e-9
         # Shown in Exalted, the same asset rose 25%.
-        ex = movers.asset_row("Omen of Light", 24 * 7, "exalted")["row"]
+        priced_in_exalted = movers.asset_row("Omen of Light", 24 * 7, "exalted")
+        assert priced_in_exalted is not None
+        ex = priced_in_exalted["row"]
         assert ex["trend_num"] == "exalted" and abs(ex["change_pct"] - 19.5) < 0.05
         # An anchor missing the asset's latest day carries its previous close forward.
         monkeypatch.setattr(
@@ -399,6 +404,7 @@ def test_asset_modal_is_one_source_in_the_shown_numeraire(monkeypatch):
             ),
         )
         late = movers.asset_row("Omen of Light", 24 * 7)
+        assert late is not None
         assert late["prices"]["divine"] == 480.0 and late["row"]["pref_num"] == "divine"
         # the carried-forward day lifts the omen to 1000/480 = 2.083, damped by the smoothing to
         # the median of it and the day before (2.0)
@@ -434,7 +440,9 @@ def test_an_exchange_asset_is_served_from_the_exchange_not_the_dailies(monkeypat
                 {291: ("Divine Orb", "Currency")},
             ),
         )
-        row = movers.asset_row("Divine Orb", 24)["row"]
+        divine = movers.asset_row("Divine Orb", 24)
+        assert divine is not None
+        row = divine["row"]
         assert row["source"] in ("live", "digest") and row["id"] == "divine"
         assert abs(row["mid"] - g.values()["divine"]) < 1e-9
         assert row["trend_num"] == "chaos" and abs(row["change_pct"] - 10.0) < 1e-9
@@ -623,7 +631,9 @@ def test_a_daily_only_mover_agrees_with_the_card_it_opens(monkeypatch):
             for a in movers.top_movers(24 * 5, 5, 0.0, "up")["assets"]
             if a["name"] == "Thingy"
         )
-        card = movers.asset_row("Thingy", 24 * 5, row["num"])["row"]
+        asset = movers.asset_row("Thingy", 24 * 5, row["num"])
+        assert asset is not None
+        card = asset["row"]
         assert card["source"] == "scout"
         assert abs(card["change_pct"] - row["change_pct"]) < 0.6, (
             row["change_pct"],
@@ -763,6 +773,8 @@ def test_the_reference_currency_is_a_card_like_any_other(monkeypatch):
         assert ex["id"] == "exalted" and ex["mid"] == 1.0 and ex["source"] == "live"
         assert ex["pref_num"] == "chaos" and ex["trend_num"] == "chaos"
         assert abs(ex["trend"][-1]["v"] - 0.1) < 1e-9 and ex["change_pct"] < 0
-        assert arbitrage.asset("exalted", 24)["row"]["id"] == "exalted"
+        asset = arbitrage.asset("exalted", 24)
+        assert asset is not None
+        assert asset["row"]["id"] == "exalted"
     finally:
         _teardown()

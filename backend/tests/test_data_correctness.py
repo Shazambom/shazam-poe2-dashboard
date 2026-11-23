@@ -229,6 +229,7 @@ def test_analytics_helpers_do_not_commit_callers_connection(tmp_path):
     assert b.execute("SELECT COUNT(*) FROM analytics_jobs").fetchone()[0] == 1
     job = analytics.claim(a)  # claim owns its own transaction
     assert b.execute("SELECT state FROM analytics_jobs").fetchone()[0] == "running"
+    assert job is not None
     analytics.complete(a, job["id"], "discords", "current", {"x": 1})
     assert b.execute("SELECT COUNT(*) FROM analytics_cache").fetchone()[0] == 0, (
         "complete committed"

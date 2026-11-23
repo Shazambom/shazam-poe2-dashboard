@@ -131,6 +131,7 @@ def test_watch_stdin_eof_clean_exit_with_open_pipe_does_not_sigabrt():
     )
     try:
         rc = proc.wait(timeout=5)
+        assert proc.stderr is not None
         err = proc.stderr.read().decode("utf-8", "replace")
     finally:
         if proc.stdin:
@@ -160,6 +161,7 @@ def test_watch_stdin_eof_fires_when_parent_closes_pipe():
         stderr=subprocess.PIPE,
     )
     time.sleep(0.15)
+    assert proc.stdin is not None
     proc.stdin.close()
     rc = proc.wait(timeout=5)
     assert rc == 42

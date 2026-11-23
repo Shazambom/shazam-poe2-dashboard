@@ -467,6 +467,7 @@ def test_grant_pages_are_found_from_the_list_and_parsed_from_their_table():
     ess = modpool.grant_from(
         "Greater Essence of the Body", (FIX / "essence-greater-body.html").read_text()
     )
+    assert ess is not None
     assert ess["kind"] == "essence" and ess["tier"] == 2
     assert {
         "class": "Body Armours",
@@ -481,6 +482,7 @@ def test_grant_pages_are_found_from_the_list_and_parsed_from_their_table():
         "level": 36,
     } in ess["rows"]
     alloy = modpool.grant_from("Runic Alloy", (FIX / "alloy-runic.html").read_text())
+    assert alloy is not None
     assert alloy["kind"] == "alloy" and alloy["tier"] == 1
     assert {
         "class": "Rings",
@@ -536,21 +538,23 @@ def test_store_then_read_back_through_the_query_layer(export, derived):
         "sections" not in p for p in pools
     )
     ring = modpool.pool("ring")
+    assert ring is not None
     assert ring["sections"][0]["id"] == "base" and ring["tags"]
     assert any(g["name"] == "Runic Alloy" for g in ring["grants"]["alloys"])
     assert not any(
         g["name"] == "Greater Essence of the Body" for g in ring["grants"]["essences"]
     ), "the Body essence names no ring"
     amulet = modpool.pool("amulet")
+    assert amulet is not None
     assert any(
         g["name"] == "Greater Essence of the Body" for g in amulet["grants"]["essences"]
     )
     assert all(
         r["class"] == "Amulets" for g in amulet["grants"]["essences"] for r in g["rows"]
     )
-    assert any(
-        a["name"] == "Adept Rune" for a in modpool.pool("wand")["grants"]["augments"]
-    )
+    wand = modpool.pool("wand")
+    assert wand is not None
+    assert any(a["name"] == "Adept Rune" for a in wand["grants"]["augments"])
     assert modpool.pool("nope") is None
     cur = modpool.currencies()
     assert any(c["name"] == "Greater Exalted Orb" and c["floor"] == 35 for c in cur)
@@ -687,12 +691,15 @@ def test_a_cost_is_shown_in_the_market_that_trades_the_grant_at_that_markets_rat
     )
     monkeypatch.setattr(arbitrage, "cached_graph", lambda *a, **k: g)
     out = modpool.prices("ring")
+    assert out is not None
     assert out["reference"] == "exalted"
     assert out["prices"] == {
         "Runic Alloy": {"price": 0.1, "cur": "divine", "value_ref": 49.11},
         "Adept Rune": {"price": 2.1, "cur": "divine", "value_ref": 1005.0},
     }
-    assert modpool.prices("wand")["prices"] == {
+    wand_prices = modpool.prices("wand")
+    assert wand_prices is not None
+    assert wand_prices["prices"] == {
         "Adept Rune": {"price": 2.1, "cur": "divine", "value_ref": 1005.0}
     }, "a pool prices its own grants only"
     assert modpool.prices("nope") is None
@@ -719,7 +726,9 @@ def test_a_cost_with_no_market_in_its_currency_stays_in_the_reference_at_its_val
         ],
     )
     monkeypatch.setattr(arbitrage, "cached_graph", lambda *a, **k: g)
-    assert modpool.prices("ring")["prices"] == {
+    ring_prices = modpool.prices("ring")
+    assert ring_prices is not None
+    assert ring_prices["prices"] == {
         "Adept Rune": {"price": 1005.0, "cur": "exalted", "value_ref": 1005.0}
     }
 

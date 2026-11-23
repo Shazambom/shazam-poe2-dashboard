@@ -17,6 +17,7 @@ ROOT = Path(__file__).resolve().parents[3]
 _spec = importlib.util.spec_from_file_location(
     "release_notes", ROOT / "ops" / "release_notes.py"
 )
+assert _spec is not None and _spec.loader is not None
 rn = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(rn)
 

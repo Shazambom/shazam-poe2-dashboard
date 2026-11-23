@@ -70,6 +70,7 @@ def test_complete_writes_cache_and_marks_done():
     jid = analytics.enqueue(c, "discords")
     c.commit()
     job = analytics.claim(c)
+    assert job is not None
     analytics.complete(c, job["id"], "discords", "62", {"z": 3.1, "day": "2026-09-14"})
 
     assert analytics.read_cache(c, "discords", "62") == {"z": 3.1, "day": "2026-09-14"}
@@ -99,6 +100,7 @@ def test_fail_marks_error():
     jid = analytics.enqueue(c, "discords")
     c.commit()
     job = analytics.claim(c)
+    assert job is not None
     analytics.fail(c, job["id"], "boom")
     row = c.execute(
         "SELECT state, error FROM analytics_jobs WHERE id=?", (jid,)
@@ -117,6 +119,8 @@ def test_claim_is_fifo_across_kinds():
     c.commit()
     first = analytics.claim(c)
     second = analytics.claim(c)
+    assert first is not None
+    assert second is not None
     assert [first["kind"], second["kind"]] == ["discords", "arc"]
     assert analytics.claim(c) is None
 

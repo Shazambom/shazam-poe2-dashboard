@@ -302,6 +302,7 @@ def test_digest_cold_start_with_a_seed_bundled_is_a_t0(monkeypatch, lines):
 # ------------------------------------------------------------------ the server-side classifier
 def _load_scan():
     spec = importlib.util.spec_from_file_location("t0scan", ROOT / "ops" / "t0-scan.py")
+    assert spec is not None and spec.loader is not None
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod

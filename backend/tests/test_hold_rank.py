@@ -83,6 +83,8 @@ def test_a_jump_in_the_last_days_does_not_count_as_kept_value():
     base = steady(10.0, 0.01, 22)
     a = holdscore._signals(series(base + [base[-1] * 1.01] * 3), 24)
     b = holdscore._signals(series(base + [base[-1] * 3.0] * 3), 24)
+    assert a is not None
+    assert b is not None
     assert a["kept"] == pytest.approx(b["kept"])
 
 
@@ -91,7 +93,9 @@ def test_one_odd_close_is_not_a_crash():
     −18.9% raw, −7.7% smoothed on Forbidden Rites) is not a drawdown."""
     p = steady(4000.0, 0.01, 25)
     p[15] *= 0.80
-    assert holdscore._signals(series(p), 24)["dip"] > -0.05
+    signals = holdscore._signals(series(p), 24)
+    assert signals is not None
+    assert signals["dip"] > -0.05
 
 
 def test_before_discovery_settles_only_price_and_a_smooth_path_rank():
@@ -250,7 +254,9 @@ def test_symmetric_noise_is_not_a_slide():
     ]
     readings = [r for r in readings if r is not None]
     assert len(readings) > 30 and abs(statistics.fmean(readings)) < 0.15
-    assert holdscore._duvol(series(slide(100.0, 25)), 24) > 0.2
+    slide_reading = holdscore._duvol(series(slide(100.0, 25)), 24)
+    assert slide_reading is not None
+    assert slide_reading > 0.2
 
 
 def test_a_settled_market_vetoes_a_sliding_top_pick_and_discovery_does_not():
@@ -342,6 +348,7 @@ def _backtest():
     spec = importlib.util.spec_from_file_location(
         "hold_backtest", ROOT / "ops" / "hold-backtest.py"
     )
+    assert spec is not None and spec.loader is not None
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod

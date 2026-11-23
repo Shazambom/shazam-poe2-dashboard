@@ -114,6 +114,7 @@ def test_real_sidecar_completes_jobs_and_exits_cleanly_at_idle(tmp_path):
     try:
         # Keep stdin OPEN the entire time — matches how sidecar_supervisor runs it.
         rc = proc.wait(timeout=20)
+        assert proc.stderr is not None
         stderr = proc.stderr.read().decode("utf-8", "replace")
     finally:
         if proc.poll() is None:
@@ -168,6 +169,7 @@ def test_real_sidecar_heals_orphaned_running_job_at_startup(tmp_path):
     )
     try:
         rc = proc.wait(timeout=20)
+        assert proc.stderr is not None
         stderr = proc.stderr.read().decode("utf-8", "replace")
     finally:
         if proc.poll() is None:
@@ -235,6 +237,7 @@ def test_supervisor_sleeps_after_idle_wakes_on_new_job_and_stops_cleanly(
 
         # Confirm it stays asleep (no crash respawn loop) for 1.2s.
         time.sleep(1.2)
+        assert sup._proc is not None
         assert sup._proc.pid == first_pid and sup._proc.poll() == 0, (
             "sidecar unexpectedly respawned while idle"
         )
