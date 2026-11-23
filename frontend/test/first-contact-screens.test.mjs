@@ -22,7 +22,6 @@ test('Settings: gold fees, recipes, the currency linker and the market switches 
 
 test('Inflation: measured against the anchor, drawn in ink with an arrow, no Hours column', () => {
   const s = src('components/InflationView.jsx')
-  assert.match(s, /\}>Against\s/)
   assert.doesNotMatch(s, /<th className="num">Hours<\/th>/)
   assert.doesNotMatch(s, /\? 'loss' : 'gain'/, 'inflation is neither a gain nor a loss')
   assert.match(s, /▲|▼/)

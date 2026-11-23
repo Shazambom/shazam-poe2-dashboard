@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { opensUp, room } from '../lib/dropdown.js'
 import Cur from './Cur.jsx'
 import { norm, search } from '../lib/search.js'
@@ -21,7 +21,8 @@ export default function CurrencyPicker({ value, onChange, options = [], placehol
   const [sel, setSel] = useState(0)
   const [up, setUp] = useState(false)   // open the list upward when it would be cut off below
   const boxRef = useRef(null)
-  const inputRef = useRef(null)
+  const listId = useId()
+  const fieldId = inputId || `${listId}-input`
 
   const selected = useMemo(() => options.find(o => o.id === value), [options, value])
   const matches = useMemo(() => {
@@ -65,20 +66,23 @@ export default function CurrencyPicker({ value, onChange, options = [], placehol
 
   return (
     <div className="curpick" ref={boxRef} data-cmd={cmd}>
-      <div className={`curpick-box ${open ? 'open' : ''}`} onClick={() => { setOpen(true); inputRef.current?.focus() }}>
+      <label htmlFor={fieldId} className={`curpick-box ${open ? 'open' : ''}`}>
         {selected && !open && renderIcon && renderIcon(selected, 18)}
-        <input id={inputId} ref={inputRef} className="curpick-input"
+        <input id={fieldId} role="combobox" aria-label={inputId ? undefined : placeholder}
+          aria-autocomplete="list" aria-expanded={open} aria-controls={listId}
+          aria-activedescendant={open && matches[sel] && sel < 80 ? `${listId}-${sel}` : undefined}
+          onClick={e => { setOpen(true); e.currentTarget.focus() }} className="curpick-input"
           value={open ? q : (selected?.name ?? '')}
           placeholder={placeholder}
           onFocus={() => { setOpen(true); setSel(0) }}
           onChange={e => { setQ(e.target.value); setSel(0); setOpen(true); if (value) onClear?.() }}   // typing replaces the pick
           onKeyDown={onKey} />
-      </div>
+      </label>
       {open && (
-        <div className={`curpick-pop ${up ? 'up' : ''}`}>
+        <div id={listId} role="listbox" aria-label={placeholder} className={`curpick-pop ${up ? 'up' : ''}`}>
           {matches.length === 0 && <div className="cmdk-empty">No matches</div>}
           {matches.slice(0, 80).map((o, i) => (
-            <div key={o.id} className={`cmdk-item ${i === sel ? 'sel' : ''}`}
+            <div key={o.id} id={`${listId}-${i}`} role="option" tabIndex={-1} aria-selected={i === sel} className={`cmdk-item ${i === sel ? 'sel' : ''}`}
               onMouseMove={() => setSel(i)} onMouseDown={e => { e.preventDefault(); choose(o) }}>
               {renderIcon && !o.create && <span className="cmdk-ic">{renderIcon(o, 16)}</span>}
               <span className="cmdk-label">{o.name}</span>

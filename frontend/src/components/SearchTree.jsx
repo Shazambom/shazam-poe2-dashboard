@@ -31,9 +31,20 @@ function Node({ node, style, dragHandle }) {
   const cls = ['ws-node', isFolder ? 'folder' : 'search', active ? 'active' : '', d.done ? 'done' : '',
     node.willReceiveDrop ? 'drop-target' : '', node.isDragging ? 'dragging' : '', node.isFocused ? 'focused' : '', node.isSelected ? 'selected' : ''].join(' ')
   return (
-    <div className={cls} style={style} ref={dragHandle} role="treeitem" aria-level={node.level + 1} data-id={d.id}
+    <div className={cls} style={style} ref={dragHandle} role="treeitem" tabIndex={node.isFocused ? 0 : -1} aria-level={node.level + 1} data-id={d.id}
       aria-expanded={isFolder ? node.isOpen : undefined} aria-selected={active || undefined}
-      onClick={() => isFolder ? node.toggle() : onSelect(d.id, node)}
+      onKeyDown={e => {
+        if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) {
+          e.preventDefault()
+          e.stopPropagation()
+          e.currentTarget.click()
+        }
+      }}
+      onClick={e => {
+        if (e.target.closest('.ws-confirm')) e.stopPropagation()
+        else if (isFolder) node.toggle()
+        else onSelect(d.id, node)
+      }}
       onContextMenu={onContext ? (e) => { e.preventDefault(); e.stopPropagation(); node.focus(); onContext(e, d, node) } : undefined}>
       <span className="ws-grip" aria-hidden="true" title="Drag to move">⋮⋮</span>
       <span className="ws-caret">{isFolder ? (node.isOpen ? '▾' : '▸') : ''}</span>

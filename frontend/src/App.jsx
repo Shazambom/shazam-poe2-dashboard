@@ -254,7 +254,7 @@ export default function App() {
           <button type="button" className="cmdk-chip" title="Command palette (⌘K)" onClick={() => setCmdOpen(true)}>
             <span className="cmdk-k">⌘K</span> Search
           </button>
-          <nav className="tabs" role="tablist">
+          <div className="tabs" role="tablist">
             {TABS.map(t => (
               <button type="button" key={t} role="tab" aria-selected={tab === t} onClick={() => setTab(t)}>
                 {t}
@@ -263,7 +263,7 @@ export default function App() {
                   transition={{ type: 'spring', stiffness: 420, damping: 34 }} />}
               </button>
             ))}
-          </nav>
+          </div>
           <span className="tb-spacer" />
           <RefreshControls />
           <DivinePingOrb onOpenSignal={(s) => assetModal.open(s.name)} />

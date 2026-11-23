@@ -57,9 +57,9 @@ function ConvertView({ currencies, capital }) {
         <span className="hint">Cheapest way to turn one currency into another</span>
       </div>
       <div className="convert-form">
-        <label htmlFor="convert-have" className="convert-field" data-cmd="convert-have">Have<CurrencyPicker inputId="convert-have" value={have} onChange={setHave} options={opts} placeholder="have…" /></label>
+        <div className="convert-field" data-cmd="convert-have"><label htmlFor="convert-have">Have</label><CurrencyPicker inputId="convert-have" value={have} onChange={setHave} options={opts} placeholder="have…" /></div>
         <span className="convert-arrow">→</span>
-        <label htmlFor="convert-want" className="convert-field">Want<CurrencyPicker inputId="convert-want" value={want} onChange={setWant} options={opts} placeholder="want…" /></label>
+        <div className="convert-field"><label htmlFor="convert-want">Want</label><CurrencyPicker inputId="convert-want" value={want} onChange={setWant} options={opts} placeholder="want…" /></div>
         <label className="convert-field amount">Amount<input type="number" min="1"
           value={amount} onChange={e => { setDirty(true); setTyped(e.target.value) }} /></label>
         <button type="button" className="btn primary" disabled={busy} onClick={run}>{busy ? 'Finding…' : 'Find route'}</button>

@@ -50,9 +50,9 @@ const Tile = React.forwardRef(function Tile({ r, num, factor, prices, numOptions
       whileHover={{ y: -3 }}
       transition={{ duration: 0.18, ease: [0.22, 0.61, 0.36, 1], delay: Math.min(index * 0.012, 0.07) }}
       className="price-tile clickable"
-      onClick={() => onOpen?.(r.id)}
+      onClick={e => { if (e.target.closest('.pt-num-row')) e.stopPropagation(); else onOpen?.(r.id) }}
       role="button" tabIndex={0}
-      onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen?.(r.id) } }}
+      onKeyDown={e => { if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); onOpen?.(r.id) } }}
     >
       <div className="pt-head">
         <span className={`pt-name${(r.name || '').length > 14 ? ' long' : ''}`}><Cur id={r.id} text /></span>
@@ -68,7 +68,7 @@ const Tile = React.forwardRef(function Tile({ r, num, factor, prices, numOptions
       {/* one caption: when the price last moved; which source gave it stays in the backend (styleguide §0.1) */}
       <div className="pt-foot muted">{r.age_s != null ? <>{r.source === 'scout' ? 'updated' : 'traded'} {fmt.age(r.age_s)} ago</> : ' '}</div>
       {onNum && numOptions.length > 0 && (
-        <div className="pt-num-row" onClick={e => e.stopPropagation()}>priced in{' '}
+        <div className="pt-num-row">priced in{' '}
           <select value={num} onChange={e => onNum(r.id, e.target.value)} title="Currency this card is priced in (defaults to its highest-volume market)">
             {numOptions.filter(o => o.id !== r.id).map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
           </select>

@@ -122,9 +122,9 @@ export default function InflationView({ league }) {
       <div className="board-bar">
         <h2 style={{ margin: 0 }}>Inflation</h2>
         <span className="spacer" />
-        <label htmlFor="inflation-anchor" className="hint" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>Against
+        <div className="hint" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><label htmlFor="inflation-anchor">Against</label>
           <CurrencyPicker inputId="inflation-anchor" value={anchor} onChange={setAnchor} options={anchors} placeholder="anchor…" cmd="inflation-anchor" />
-        </label>
+        </div>
       </div>
 
       {err && <div className="notice error">{err}</div>}
@@ -286,9 +286,9 @@ const CrossLeague = React.memo(function CrossLeague({ league }) {
       <div className="board-bar">
         <h2 style={{ margin: 0 }}>Across leagues <span className="muted" style={{ fontWeight: 400 }}>· {data?.item_name || 'Divine'} priced in Exalted, each league rebased to day-0 = 100 and aligned by day-of-league</span></h2>
         <span className="spacer" />
-        <label htmlFor="inflation-cross-anchor" className="hint" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>Against
+        <div className="hint" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><label htmlFor="inflation-cross-anchor">Against</label>
           <CurrencyPicker inputId="inflation-cross-anchor" value={item} onChange={setItem} options={items} placeholder="anchor…" />
-        </label>
+        </div>
       </div>
       {err && <div className="notice error">{err}</div>}
       <div className="chart-box" style={{ height: 340 }}>

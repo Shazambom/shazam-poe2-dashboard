@@ -578,7 +578,7 @@ a { color: var(--live); }
 
 /* ---------- forms ---------- */
 .field { display: grid; gap: 4px; margin-bottom: 12px; }
-.field label { color: var(--muted); font-size: 12.5px; }
+.field label:where(:not(.curpick-box)) { color: var(--muted); font-size: 12.5px; }
 /* EVERY native text control is themed at the element level, so nothing can fall through to Chromium's
    default chrome (which is dark, whatever the theme). Classed variants (.btn, .league-select, .cmdk-input,
    .curpick-input, .ws-filter-input, .pt-num-row) override this by specificity. */

@@ -453,7 +453,7 @@ export default function WorkspaceView({ league, visible = true }) {
             : (
               <SearchTree treeRef={treeApi} filter={filter} onSelect={selectNode} onContext={openMenu} onKey={onTreeKey} onDelete={(id) => { const n = nodeById(id); if (n) requestDelete(n) }} renderTrailing={(d, node) => (
                 confirmId === d.id
-                  ? <span className="ws-confirm" onClick={e => e.stopPropagation()}>
+                  ? <span className="ws-confirm">
                       <span>Delete {(d.children || []).length} inside?</span>
                       <button type="button" className="ws-mini on" title="Confirm delete" aria-label="Confirm delete" onClick={() => deleteNode(d.id)}>✓</button>
                       <button type="button" className="ws-mini on" title="Cancel" aria-label="Cancel" onClick={() => setConfirmId(null)}>✕</button>

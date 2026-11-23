@@ -70,7 +70,10 @@ export default function CommandPalette({ open, onClose, tabs, onGoTab, subDests 
             <div className="cmdk-list" ref={listRef}>
               {items.length === 0 && <div className="cmdk-empty">No matches</div>}
               {items.slice(0, 60).map((it, i) => (
-                <div key={it.kind + it.id} className={`cmdk-item ${i === sel ? 'sel' : ''}`}
+                <div key={it.kind + it.id} role="button" tabIndex={-1} className={`cmdk-item ${i === sel ? 'sel' : ''}`}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); run(it) }
+                  }}
                   onMouseMove={() => setSel(i)} onClick={() => run(it)}>
                   <span className="cmdk-ic">{it.kind === 'cur' ? <Cur id={it.id} size={16} /> : it.kind === 'league' ? '◆' : it.kind === 'sub' ? '→' : it.kind === 'ws' ? '⌕' : it.kind === 'cmd' ? '⌘' : '↗'}</span>
                   <span className="cmdk-label">{it.label}</span>

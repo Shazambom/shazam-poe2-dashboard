@@ -5,7 +5,7 @@ import { motion } from 'motion/react'
 // the underline animates across sections.
 export default function SubTabs({ subs, value, onChange, layoutId }) {
   return (
-    <nav className="subtabs" role="tablist">
+    <div className="subtabs" role="tablist">
       {subs.map(s => (
         <button type="button" key={s.id} role="tab" aria-selected={value === s.id} onClick={() => onChange(s.id)}>
           {s.label}
@@ -13,6 +13,6 @@ export default function SubTabs({ subs, value, onChange, layoutId }) {
             transition={{ type: 'spring', stiffness: 420, damping: 34 }} />}
         </button>
       ))}
-    </nav>
+    </div>
   )
 }

@@ -20,7 +20,7 @@ function ModPicker({ mods, selected, hide, onToggle, onMin, header, children, cm
     <div className="rx-picker rx-surface">
       <div className="rx-head"><span className="settings-sub">{header}</span>{children}</div>
       <input className="ws-filter-input" data-cmd={cmd} value={filter} onChange={e => setFilter(e.target.value)} placeholder="Filter modifiers" spellCheck={false} />
-      <div className="rx-list" role="listbox" aria-multiselectable="true" aria-label={header} onMouseLeave={() => setSettled(n => n + 1)}>
+      <div className="rx-list" role="listbox" tabIndex={-1} aria-multiselectable="true" aria-label={header} onMouseLeave={() => setSettled(n => n + 1)}>
         {shown.map(m => {
           const on = selected.has(m.id)
           return (

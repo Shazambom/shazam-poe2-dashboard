@@ -84,6 +84,10 @@ describe('Economy views lifecycles (Hold, Market, Inflation, Movers)', () => {
       expect(screen.getByText('Last 14 days')).toBeTruthy()
       expect(screen.getByText('7d trend')).toBeTruthy()
     })
+    const anchor = document.querySelector('[data-cmd="inflation-anchor"] input')
+    expect(screen.getAllByRole('combobox', { name: /^Against\b/ })).toContain(anchor)
+    expect(screen.getAllByText('Against').map(label => label.htmlFor)).toContain(anchor.id)
+
     // Must not falsely claim "Since league start" or "day 0 = 100" for a 14-day window
     expect(screen.queryByText('Since league start')).toBeNull()
     expect(document.body.textContent).not.toContain('day 0 = 100')

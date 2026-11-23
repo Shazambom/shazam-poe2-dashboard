@@ -189,8 +189,15 @@ function StratRow({ node, style, dragHandle }) {
   const active = d.id === activeId
   const cls = [folder ? 'folder' : 'search', active ? 'active' : '', node.willReceiveDrop ? 'drop-target' : '', node.isDragging ? 'dragging' : ''].join(' ')
   return (
-    <div className={`ws-node ${cls}`} style={style} ref={dragHandle} role="treeitem" aria-level={node.level + 1}
+    <div className={`ws-node ${cls}`} style={style} ref={dragHandle} role="treeitem" tabIndex={node.isFocused ? 0 : -1} aria-level={node.level + 1}
       aria-expanded={folder ? node.isOpen : undefined} aria-selected={active || undefined}
+      onKeyDown={e => {
+        if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) {
+          e.preventDefault()
+          e.stopPropagation()
+          e.currentTarget.click()
+        }
+      }}
       onClick={() => (folder ? node.toggle() : onSelect(d.id))}
       onDoubleClick={() => (folder ? node.edit() : setTimeout(() => nameBox.current?.focus(), 0))}
       onContextMenu={e => { e.preventDefault(); e.stopPropagation(); onMenu(e, d, node) }}>
@@ -217,8 +224,8 @@ function StratRow({ node, style, dragHandle }) {
           : <span className="ws-name">{d.name}</span>}
       {!folder && d.id === runningId && <span className="dot ok" title="Running" />}
       {!folder && <span className="scalc-rate"><Div v={rateOf(d.id)} size={12} /></span>}
-      {!folder && <span onClick={e => e.stopPropagation()}><RefreshButton className="scalc-refresh" title="Refresh its prices"
-        busy={refreshing === d.id} onClick={() => onRefresh(d.id)} /></span>}
+      {!folder && <span><RefreshButton className="scalc-refresh" title="Refresh its prices"
+        busy={refreshing === d.id} onClick={e => { e.stopPropagation(); onRefresh(d.id) }} /></span>}
       <button type="button" className="scalc-x" title={folder ? 'Delete the folder and its strats' : 'Delete'} aria-label={`Delete ${d.name}`}
         onClick={e => { e.stopPropagation(); onDelete(d) }}>×</button>
     </div>
