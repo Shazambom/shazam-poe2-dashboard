@@ -408,7 +408,7 @@ async def worker() -> None:
             else requested
         )
         state["in_flight"] = (
-            f"{'+'.join(requested)}{'(+%d)' % (len(haves) - len(requested)) if len(haves) > len(requested) else ''}->{want}"
+            f"{'+'.join(requested)}{f'(+{len(haves) - len(requested)})' if len(haves) > len(requested) else ''}->{want}"
         )
         try:
             books, starved = await _fetch_batch(
