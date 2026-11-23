@@ -48,7 +48,8 @@ def horizon_for(window_h: int | None = None, horizon: str | None = None) -> str:
     if window_h:
         days = marketseries.win_days(window_h)
         return max(
-            (h for h, d in HORIZON_DAYS.items() if d <= days), key=HORIZON_DAYS.get
+            (h for h, d in HORIZON_DAYS.items() if d <= days),
+            key=HORIZON_DAYS.__getitem__,
         )
     return "3d"
 
@@ -700,8 +701,10 @@ def _predict(
     if len(fwd) < min_leagues:
         return None
     wts = [max(0.0, weights.get(lg, 0.0)) for _r, lg, _f in fwd] if weights else None
-    used_weights = bool(wts) and sum(wts) > 0
-    if not used_weights:
+    if wts and sum(wts) > 0:
+        used_weights = True
+    else:
+        used_weights = False
         wts = [GAMMA**r for r, _lg, _f in fwd]
     vals = [f for _r, _lg, f in fwd]
     wmean = sum(f * w for f, w in zip(vals, wts)) / sum(wts)

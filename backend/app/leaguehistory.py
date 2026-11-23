@@ -20,6 +20,7 @@ import logging
 import re
 import time
 import urllib.parse
+from typing import TypedDict
 
 from . import cache, db, devtelemetry, gateway, marketseries
 
@@ -440,7 +441,16 @@ def plan_league(
     return todo, tally
 
 
-async def backfill(force: bool = False, full: bool = True) -> dict:
+class CrawlResult(TypedDict, total=False):
+    skipped: str
+    error: str
+    fetched: dict[str, int]
+    leagues: int
+    attempted: int
+    errors: int
+
+
+async def backfill(force: bool = False, full: bool = True) -> CrawlResult:
     """Pull daily history for the target leagues × items into league_daily. Past
     leagues are fetched once; current leagues refresh on a 12h cadence.
 

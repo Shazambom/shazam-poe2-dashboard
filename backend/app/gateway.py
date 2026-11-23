@@ -20,7 +20,9 @@ from dataclasses import dataclass, field
 from urllib.parse import urlparse
 
 import httpx
-from pyrate_limiter import Duration, Limiter, Rate, RateItem
+from typing import cast
+
+from pyrate_limiter import Duration, InMemoryBucket, Limiter, Rate, RateItem
 
 from .config import USER_AGENT
 
@@ -121,10 +123,11 @@ class Policy:
         """Seconds until the limiter has a slot again — from the bucket that is full (a long rule can be the one), not
         a guess from the windows. Falls back to the shortest window if the library cannot say."""
         try:
-            bucket = self.limiter.bucket_factory.get(RateItem(self.name, 0))
-            ms = bucket.waiting(
-                RateItem(self.name, bucket.now())
-            )  # the bucket's own (monotonic) clock
+            # Limiter(rates) creates a synchronous InMemoryBucket.
+            bucket = cast(
+                InMemoryBucket, self.limiter.bucket_factory.get(RateItem(self.name, 0))
+            )
+            ms = cast(int, bucket.waiting(RateItem(self.name, cast(int, bucket.now()))))
             if ms and ms > 0:
                 return ms / 1000.0
         except Exception:  # an internal of the rate library changed: still answer

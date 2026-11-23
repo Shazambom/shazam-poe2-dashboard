@@ -146,7 +146,7 @@ CRAWL_FAILED_RETRY_S = (
 
 async def _league_history_loop():
     while True:
-        res = {}
+        res: leaguehistory.CrawlResult = {}
         try:
             res = await leaguehistory.backfill()
         except Exception as exc:
@@ -1076,7 +1076,7 @@ class RouteQuery(BaseModel):
     max_fill_hours: float | None = None
     max_step_minutes: float | None = None
     min_velocity: float | None = None
-    sort: str | None = Field(None, pattern=SORT_KEYS)
+    sort: str | None = Field(default=None, pattern=SORT_KEYS)
     limit: int | None = None
     start: str | None = None  # comma-separated start currencies; omitted = all held
 

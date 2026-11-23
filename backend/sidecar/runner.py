@@ -56,7 +56,9 @@ def handle_arc(conn: sqlite3.Connection, job: dict) -> None:
         past = {lg: s for lg, s in sigs.items() if lg != league}
         weights = arc.compute_weights(sigs[league], past)
         if weights:
-            resembles = max(weights, key=weights.get)  # the most-similar past league
+            resembles = max(
+                weights, key=weights.__getitem__
+            )  # the most-similar past league
     analytics.complete(
         conn,
         job["id"],

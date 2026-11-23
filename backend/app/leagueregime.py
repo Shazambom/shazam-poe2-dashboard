@@ -139,7 +139,7 @@ def timeline(per: dict, divine_id: int = DIVINE_ID) -> list[dict]:
                 "value_div": vs,
                 "a": a,
                 **w,
-                "regime": max(w, key=w.get),
+                "regime": max(w, key=w.__getitem__),
             }
         )
     return out

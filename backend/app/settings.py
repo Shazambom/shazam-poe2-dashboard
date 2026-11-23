@@ -311,7 +311,10 @@ def hold_caution(s: dict) -> float:
 def wide_spread(s: dict) -> float:
     """How far apart a market's traded prices may run before it counts as inactive (0 = never)."""
     try:
-        v = float(s.get("wide_spread"))
+        value = s.get("wide_spread")
+        if value is None:
+            return DEFAULTS["wide_spread"]
+        v = float(value)
     except (TypeError, ValueError):
         return DEFAULTS["wide_spread"]
     # `hi/lo >= wide` with wide in (0, 1) is true of every market that traded twice; only 0 (off)
@@ -321,7 +324,10 @@ def wide_spread(s: dict) -> float:
 
 def _positive(s: dict, key: str) -> float:
     try:
-        v = float(s.get(key))
+        value = s.get(key)
+        if value is None:
+            return DEFAULTS[key]
+        v = float(value)
     except (TypeError, ValueError):
         return DEFAULTS[key]
     return v if v >= 0 else DEFAULTS[key]

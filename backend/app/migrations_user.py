@@ -19,6 +19,7 @@ import json
 import logging
 import sqlite3
 from collections.abc import Callable
+from typing import cast
 
 from .config import DB_PATH
 from .datapolicy import is_user_kv as _is_user_kv
@@ -306,7 +307,7 @@ def _m9_reset_hidden_knobs(conn: sqlite3.Connection) -> None:
     s["allow_digest_edges"] = d["allow_digest_edges"]
     s["allow_recipe_edges"] = d["allow_recipe_edges"]
     s["gold_model"] = json.loads(json.dumps(d["gold_model"]))
-    filters = s.get("filters") if isinstance(s.get("filters"), dict) else {}
+    filters = cast(dict, s.get("filters")) if isinstance(s.get("filters"), dict) else {}
     s["filters"] = {**filters, "limit": d["limit"]}
     s["_hidden_knobs_reset_v1"] = True
     conn.execute("UPDATE kv SET value=? WHERE key='settings'", (json.dumps(s),))
@@ -332,7 +333,9 @@ def _m8_arbitrage_balanced(conn: sqlite3.Connection) -> None:
     balanced = json.loads(
         json.dumps(ARBITRAGE_PRESETS[0]["values"])
     )  # a copy: never alias the constant
-    saved_filters = s.get("filters") if isinstance(s.get("filters"), dict) else {}
+    saved_filters = (
+        cast(dict, s.get("filters")) if isinstance(s.get("filters"), dict) else {}
+    )
     s.update({k: v for k, v in balanced.items() if k != "filters"})
     s["filters"] = {**saved_filters, **balanced["filters"]}
     s["_arb_balanced_v1"] = True

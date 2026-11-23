@@ -6,6 +6,7 @@ read is not an event; a write, or any request that failed, is."""
 from __future__ import annotations
 
 import logging
+from typing import SupportsIndex, SupportsInt, cast
 
 READS = {"GET", "HEAD", "OPTIONS"}
 
@@ -17,7 +18,10 @@ class QuietReads(logging.Filter):
             return True  # not uvicorn's access shape: keep
         method, status = a[1], a[4]
         try:
-            return not (method in READS and int(status) < 400)
+            return not (
+                method in READS
+                and int(cast(str | int | SupportsInt | SupportsIndex, status)) < 400
+            )
         except (TypeError, ValueError):
             return True
 

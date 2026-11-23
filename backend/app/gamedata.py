@@ -18,6 +18,7 @@ import json
 import logging
 import struct
 import time
+from typing import cast
 
 from . import db, gateway
 from .config import DATA_DIR
@@ -188,25 +189,27 @@ async def refresh(force: bool = False) -> dict:
     def base_id(idx: int | None) -> str | None:
         if idx is None or idx >= bit.count:
             return None
-        return read(bit, bit.row(idx), 0, "string")
+        return cast(str, read(bit, bit.row(idx), 0, "string"))
 
     def cat_name(idx: int | None) -> str | None:
         if idx is None or idx >= cats.count:
             return None
-        o, t = cat_cols.get("Name", cat_cols.get("_1"))
-        return read(cats, cats.row(idx), o, t)
+        o, t = cast(tuple[int, str], cat_cols.get("Name", cat_cols.get("_1")))
+        return cast(str, read(cats, cats.row(idx), o, t))
 
     by_meta: dict[str, dict] = {}
     for i in range(ce.count):
         r = ce.row(i)
         item = read(ce, r, *cols["Item"])
-        meta = base_id(item)
+        meta = base_id(cast(int | None, item))
         if not meta:
             continue
         by_meta[meta] = {
             "fee": read(ce, r, *cols["GoldPurchaseFee"]),
-            "category": cat_name(read(ce, r, *cols["Category"])),
-            "subcategory": cat_name(read(ce, r, *cols["SubCategory"])),
+            "category": cat_name(cast(int | None, read(ce, r, *cols["Category"]))),
+            "subcategory": cat_name(
+                cast(int | None, read(ce, r, *cols["SubCategory"]))
+            ),
             "standard": read(ce, r, *cols["EnabledInStandardLeague"]),
             "challenge": read(ce, r, *cols["EnabledInChallengeLeague"]),
         }

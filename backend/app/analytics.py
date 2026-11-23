@@ -26,7 +26,7 @@ from __future__ import annotations
 import json
 import sqlite3
 import time
-from typing import Any, Optional
+from typing import Any, Optional, cast
 
 
 def _now() -> int:
@@ -55,7 +55,7 @@ def enqueue(
         "INSERT INTO analytics_jobs(kind, params_json, state, enqueued_at) VALUES(?,?, 'queued', ?)",
         (kind, json.dumps(params or {}), _now()),
     )
-    return cur.lastrowid
+    return cast(int, cur.lastrowid)  # this INSERT succeeds or raises
 
 
 def requeue_stale(conn: sqlite3.Connection, *, older_than_s: int = 120) -> int:

@@ -4,6 +4,7 @@ freshness, trend and %-change over the app-wide window; plus the edge table / pa
 from __future__ import annotations
 
 import time
+from typing import cast
 
 from .. import (
     cache,
@@ -237,7 +238,7 @@ def _fold_series(series: list[dict], until: int | None = None) -> list[dict]:
             out.append({**p, "rate": nb / na})
     if out and until is not None and until > out[-1]["hour"]:
         # One more point at `until`: the same fold, decayed and expired forward to that hour.
-        decay = 2.0 ** (-((until - prev) / 3600.0) / digest.RATE_HALF_LIFE_H)
+        decay = 2.0 ** (-((until - cast(int, prev)) / 3600.0) / digest.RATE_HALF_LIFE_H)
         na *= decay
         nb *= decay
         while start < len(pts) and pts[start]["hour"] < until - window:

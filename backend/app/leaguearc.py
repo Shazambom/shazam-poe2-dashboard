@@ -172,8 +172,10 @@ def arc_for(item, numeraire: str = "divine") -> dict:
     # Divine: an omen's arc against Divine answered a question nobody asked on a card reading in
     # Chaos. Any currency with daily history can be the numeraire; anchors keep their short slugs.
     meta0 = holdscore.read_meta()
-    num_id, num_name = holdscore.NUMERAIRES.get(numeraire, (None, None))
-    if num_id is None:
+    anchor = holdscore.NUMERAIRES.get(numeraire)
+    if anchor is not None:
+        num_id, num_name = anchor
+    else:
         num_id, num_name = _resolve_item(meta0, numeraire)
         if num_id is None:
             numeraire = "divine"

@@ -888,9 +888,12 @@ def bench_recipes_from(page: str) -> list:
     out = []
     for row in _ROW.findall(m.group(1)):
         cells = [_QTY.match(_text(c)) for c in _CELL.findall(row)]
-        if len(cells) == 2 and all(cells):
-            (a, qa), (b, qb) = (c.groups() for c in cells)
-            out.append({"from": a, "from_qty": int(qa), "to": b, "to_qty": int(qb)})
+        if len(cells) == 2:
+            first, second = cells
+            if first and second:
+                a, qa = first.groups()
+                b, qb = second.groups()
+                out.append({"from": a, "from_qty": int(qa), "to": b, "to_qty": int(qb)})
     return out
 
 
@@ -1205,9 +1208,9 @@ def prices(pool_id: str) -> dict | None:
             tid = next(
                 (c for c in (name.lower(), _slug(name)) if c in registry.by_id), None
             ) or by_name.get(name.lower())
-            native = (
-                arbitrage.native_price(g, tid, values, ranked, ref) if tid else None
-            )
+            if not tid:
+                continue
+            native = arbitrage.native_price(g, tid, values, ranked, ref)
             if native:
                 out[name] = {
                     "price": native[0],

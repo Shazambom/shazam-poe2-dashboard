@@ -118,7 +118,7 @@ def betweenness_lite(
 
 def _rank(g, rv: dict[str, float]) -> list[str]:
     pr = pagerank(g, rv)
-    return sorted(pr, key=pr.get, reverse=True)
+    return sorted(pr, key=pr.__getitem__, reverse=True)
 
 
 def hubs(g, rv: dict[str, float], n: int = HUB_N) -> set[str]:

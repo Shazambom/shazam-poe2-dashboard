@@ -114,8 +114,7 @@ def _best_conversions(
     A conversion CANNOT legitimately create value: any path implying a value GAIN beyond
     `max_gain_pct` is a cross-rate inconsistency / disguised arbitrage (belongs in the Arbitrage
     tab), so it is rejected here. Set a huge tolerance to disable (tests)."""
-    if max_steps is None:
-        max_steps = g.s.get("max_steps", 4)
+    steps = g.s.get("max_steps", 4) if max_steps is None else max_steps
     ref = g.s["reference"]
     gold_ref_per_1k = gold_value_per_1k * (
         ref_value.get("divine") or 1.0
@@ -126,9 +125,9 @@ def _best_conversions(
     ] = []  # paths the amount was too small for (min_amount below)
     count = 0
     paths = (
-        g.iter_paths(have, want, max_steps, allowed_mids=allowed_mids)
+        g.iter_paths(have, want, steps, allowed_mids=allowed_mids)
         if allowed_mids is not None
-        else g.iter_paths(have, want, max_steps)
+        else g.iter_paths(have, want, steps)
     )
     for path in paths:
         count += 1

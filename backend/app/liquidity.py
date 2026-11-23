@@ -19,6 +19,7 @@ DB, no network, no sidecar. `liquidity` imports `arbitrage`;
 from __future__ import annotations
 
 import math
+from typing import cast
 
 from . import arbitrage, centrality, settings
 from .currencies import registry
@@ -185,7 +186,7 @@ def realizable(
             # at or above paper tie, and hop count alone then chose the route we display.
             value = _whole_units_out(cand) * worth - gold_ref
             key = (_liquid(cand, ex_in_ref), cand["full_fill"], value, -cand["hops"])
-            if best is None or key > best_key:
+            if best_key is None or key > best_key:
                 best, best_value, best_key = cand, value, key
     if best is None:  # no exchange market to measure against
         return {
@@ -200,7 +201,7 @@ def realizable(
             "out": None,
         }
 
-    realizable_ref = best_value  # reference-denominated, net of gold
+    realizable_ref = cast(float, best_value)  # set when a candidate becomes best
     # You can't realize MORE than paper by cashing out — any apparent surplus is a cross-rate
     # inconsistency (the convert ranker tolerates ±max_gain_pct of noise) i.e. disguised
     # arbitrage, which belongs in the Arbitrage tab, not a "what can I cash out" number. Cap at
@@ -243,7 +244,7 @@ def capital_rows(
                 "name": registry.name(c),
                 "qty": q,
                 "ref_value": 1.0 if c == ref else ref_value.get(c),
-                "value_ref": q * (1.0 if c == ref else ref_value.get(c))
+                "value_ref": q * (1.0 if c == ref else ref_value[c])
                 if (c == ref or ref_value.get(c))
                 else None,
                 "realizable_ref": None,

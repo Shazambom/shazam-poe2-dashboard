@@ -163,9 +163,10 @@ def disenchant_recipes(names: dict[str, str]) -> list[dict]:
         base = name.removeprefix("Perfect ")
         if base == name or "Orb" not in base.split():
             continue
-        tiers = [names.get(t) for t in (name, "Greater " + base, base)]
-        if all(tiers):
-            perfect, greater, normal = tiers
+        perfect, greater, normal = (
+            names.get(t) for t in (name, "Greater " + base, base)
+        )
+        if perfect and greater and normal:
             out.append(
                 _recipe("disenchant", perfect, 1, greater, 3, f"Disenchant {name}")
             )

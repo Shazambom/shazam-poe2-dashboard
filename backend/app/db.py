@@ -206,7 +206,7 @@ def _seed_version() -> int:
     `<seed>.version` sidecar so we don't decompress 300MB+ on every launch; fall back to
     decompressing if the sidecar is missing. For a plain .sqlite seed, read it directly."""
     p = MARKET_SEED_PATH
-    if str(p).endswith(".gz"):
+    if p is not None and str(p).endswith(".gz"):
         sidecar = p.parent / (p.name + ".version")
         if sidecar.exists():
             try:

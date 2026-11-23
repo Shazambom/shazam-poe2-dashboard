@@ -16,7 +16,7 @@ from __future__ import annotations
 import os
 import sys
 import threading
-from typing import Optional
+from typing import BinaryIO, Optional, cast
 from collections.abc import Callable
 
 
@@ -140,7 +140,7 @@ def watch_stdin_eof(on_dead: Callable | None = None) -> threading.Thread | None:
                 ):  # returns b'' only on EOF (parent gone); blocks otherwise
                     pass
             else:
-                while buf.read(1):
+                while cast(BinaryIO, buf).read(1):
                     pass
         except Exception:
             pass
