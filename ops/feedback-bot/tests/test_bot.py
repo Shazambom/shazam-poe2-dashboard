@@ -353,3 +353,68 @@ def test_an_exception_in_one_thread_does_not_stop_the_next(h):
 
     run(h.catch_up(Forum()))
     assert (h.inbox / "7F3K2Q").exists()
+
+
+def test_report_input_is_atomic_and_private_until_the_opener_returns(h):
+    report = sealed_report(h.pub)
+    paths = []
+
+    def process(inp, out):
+        paths.extend((inp, out))
+        assert inp.is_file()
+        assert not inp.with_suffix(".tmp").exists()
+        assert inp.stat().st_mode & 0o777 == 0o600
+        assert json.loads(gzip.decompress(inp.read_bytes())) == valid_doc()
+        out.mkdir(parents=True)
+        (out / "result.json").write_text(
+            '{"status": "REFUSE", "shortId": "", "reason": ""}'
+        )
+
+    h.process = process
+    assert run(h._process(3002, report)) == {
+        "status": "REFUSE",
+        "shortId": "",
+        "reason": "",
+    }
+    assert len(paths) == 2
+    assert all(not path.exists() for path in paths)
+
+
+def test_cancelled_report_keeps_the_thread_busy_until_staging_finishes(h, monkeypatch):
+    import threading
+
+    import bot
+
+    report = sealed_report(h.pub)
+    thread = Thread(3003, [Attachment("arbiter-report-123456.arb", report)])
+    started, release = threading.Event(), threading.Event()
+    stage_report = bot._stage_report
+
+    def stage(inp, plain):
+        started.set()
+        assert release.wait(5)
+        stage_report(inp, plain)
+
+    monkeypatch.setattr(bot, "_stage_report", stage)
+
+    async def process():
+        task = asyncio.create_task(h.handle(thread))
+        try:
+            assert await asyncio.to_thread(started.wait, 2)
+            task.cancel()
+            await asyncio.sleep(0)
+            task.cancel()
+            await asyncio.sleep(0)
+            assert not task.done()
+            assert await h.handle(thread) == "BUSY"
+        finally:
+            release.set()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+
+    run(process())
+    staged = h.spool / "in" / "3003.gz"
+    assert json.loads(gzip.decompress(staged.read_bytes())) == valid_doc()
+    assert staged.stat().st_mode & 0o777 == 0o600
+    assert not staged.with_suffix(".tmp").exists()
+    assert 3003 not in h._busy

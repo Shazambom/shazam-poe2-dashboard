@@ -88,6 +88,15 @@ def _log(msg):
     print(f"[bot] {msg}", flush=True)
 
 
+def _stage_report(inp: Path, plain: bytes) -> None:
+    inp.parent.mkdir(parents=True, exist_ok=True)
+    tmp = inp.with_suffix(".tmp")
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "wb") as f:
+        f.write(plain)
+    os.replace(tmp, inp)  # atomic: the opener never sees a half file
+
+
 class Handler:
     def __init__(
         self,
@@ -408,12 +417,17 @@ class Handler:
             return {"status": "REFUSE", "shortId": "", "reason": "bad tag"}
         inp = self.spool / "in" / f"{thread_id}.gz"
         out = self.spool / "out" / str(thread_id)
-        inp.parent.mkdir(parents=True, exist_ok=True)
-        tmp = inp.with_suffix(".tmp")
-        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-        with os.fdopen(fd, "wb") as f:
-            f.write(plain)
-        os.replace(tmp, inp)  # atomic: the opener never sees a half file
+        stage = asyncio.create_task(asyncio.to_thread(_stage_report, inp, plain))
+        cancelled = False
+        while not stage.done():
+            try:
+                await asyncio.shield(stage)
+            except asyncio.CancelledError:
+                # Keep the thread busy until the worker closes and publishes its input.
+                cancelled = True
+        stage.result()
+        if cancelled:
+            raise asyncio.CancelledError
         if self.process:
             self.process(inp, out)
         result = await self._wait_result(out)
