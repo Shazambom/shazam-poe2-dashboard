@@ -4,6 +4,11 @@
 
 // Tokens a preset never touches: the one list, which scripts/lint-style.mjs imports.
 export const NEVER_THEMED = new Set([
+  '--update-error', '--webview-bg', '--vaal-alert',
+  '--ink-on-alert', '--teleport-hot', '--teleport-stale',
+  '--ink-on-teleport-stale', '--ink-on-teleport-pending', '--teleport-rate',
+  '--ping-banner-bg', '--ink-on-update-ready', '--update-ready-start',
+  '--update-ready-end',
   '--afk', '--offline',
   '--rarity-normal', '--rarity-magic', '--rarity-rare', '--rarity-unique', '--rarity-gem', '--rarity-currency',
   '--radius', '--radius-lg', '--shadow-1', '--shadow-2', '--ease', '--font', '--mono', '--card-gradient', '--glow-gold',
