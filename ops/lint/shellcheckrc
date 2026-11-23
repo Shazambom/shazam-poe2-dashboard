@@ -1,0 +1,17 @@
+# ShellCheck configuration passed explicitly via --rcfile=ops/lint/shellcheckrc.
+# SC1091 is intentionally NOT disabled globally; infra-steps.sh passes -e SC1091
+# only for desktop/build-backend.sh and desktop/build-sidecar.sh.
+#
+# Optional checks intentionally left off:
+# - require-variable-braces (SC2250): 288 hits of brace style churn without bugs
+# - require-double-brackets (SC2292): 43 hits; breaks a literal source-text test
+# - check-extra-masked-returns (SC2312): 17 hits in logging subshells
+shell=bash
+enable=add-default-case
+enable=avoid-negated-conditions
+enable=avoid-nullary-conditions
+enable=check-set-e-suppressed
+enable=check-unassigned-uppercase
+enable=deprecate-which
+enable=quote-safe-variables
+enable=useless-use-of-cat

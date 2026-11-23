@@ -1,0 +1,5 @@
+# lychee configuration passed explicitly via --config ops/lint/lychee.toml.
+# External HTTP/HTTPS links are excluded so offline deploy gates never flake on remote outages.
+offline = true
+include_fragments = "anchor-only"
+no_progress = true

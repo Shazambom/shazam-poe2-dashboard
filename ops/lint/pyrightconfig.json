@@ -1,0 +1,28 @@
+{
+  "include": [
+    "../../backend/app",
+    "../../backend/sidecar",
+    "../../backend/tests",
+    "../../backend/run_desktop.py",
+    "../*.py",
+    "../feedback-bot",
+    "../../tools"
+  ],
+  "exclude": ["**/node_modules", "**/__pycache__", "**/.*"],
+  "pythonVersion": "3.12",
+  "pythonPlatform": "All",
+  "typeCheckingMode": "standard",
+  "strict": ["../../backend/app/datapolicy.py"],
+  "enableTypeIgnoreComments": false,
+  "reportMissingImports": "error",
+  "reportUnusedCoroutine": "error",
+  "reportUnreachable": "error",
+  "executionEnvironments": [
+    { "root": "../../backend", "extraPaths": ["../../backend/tests"] },
+    { "root": "../feedback-bot/tests", "extraPaths": ["../feedback-bot/bot", "../feedback-bot"] },
+    { "root": "../feedback-bot/bot", "extraPaths": ["../feedback-bot"] },
+    { "root": "../feedback-bot", "extraPaths": ["../feedback-bot/bot", "../feedback-bot/tests"] },
+    { "root": "..", "extraPaths": ["../../backend", "../feedback-bot/bot"] },
+    { "root": "../../tools" }
+  ]
+}

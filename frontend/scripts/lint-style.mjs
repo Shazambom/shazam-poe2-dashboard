@@ -12,15 +12,17 @@
 //   1. .jsx must not contain raw hex colors     → use var(--x) / theme.js instead   [ERROR]
 //   2. styles.css hex (outside token blocks) that EXACTLY equals a token → var(--x)  [ERROR]
 //   3. theme.js must contain no hex except the registered chart-only extras         [ERROR]
-//   4. any hex that is a NEAR-duplicate of a token (drift) → unify it             [WARN]
-//   5. redundant fallback var(--x, #hex) where #hex == --x's value               [WARN]
+//   4. any other hex in styles.css outside the token blocks → declare a semantic
+//      token in :root and reference it (a near-duplicate of a token is named)      [ERROR]
+//   5. redundant fallback var(--x, #hex) where #hex == --x's value               [ERROR]
 //   6. raw <input type="checkbox"> is banned → <Toggle>                           [ERROR]
 //   7. a literal rgba(r,g,b,…) whose triplet is a themed colour → rgba(var(--x-rgb), a) [ERROR]
 //   8. theme presets (`:root[data-theme="x"]` blocks) redeclare EXACTLY the themed
 //      token set, their *-rgb triplets match their colours, and their text colours
 //      hold WCAG contrast on their surfaces                                       [ERROR]
 //
-// Exit code is non-zero only on ERRORs, so it is safe as a CI gate. Run: npm run lint:style
+// Every finding is an error and there is no escape marker: a colour is a token or it is a
+// finding. Run: npm run lint:style (ops/lint.sh runs it as the `tokens` step).
 
 import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
@@ -48,21 +50,16 @@ const RGB_PAIRS = [['--accent-rgb', '--gold'], ['--gain-rgb', '--gain'], ['--los
 
 const NEAR_THRESHOLD = 12 // RGB Euclidean distance below which two colors are "the same, drifted"
 
-const HEX = /#[0-9a-fA-F]{3}\b|#[0-9a-fA-F]{6}\b/g
+const HEX = /#(?:[0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{3,4})\b/g
 const IS_HEX = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/
 const RGBA = /rgba?\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*[,)]/g
 
-// Escape hatch: a line carrying `style-ok` (in a comment) is a deliberate exception —
-// a genuinely one-off color with no token. Use sparingly and explain why on the line.
-const OK = /style-ok/
 let errors = 0
-let warns = 0
-const err = (file, line, msg, src = '') => { if (OK.test(src)) return; errors++; console.log(`  ✖ ${file}:${line}  ${msg}`) }
-const warn = (file, line, msg, src = '') => { if (OK.test(src)) return; warns++; console.log(`  ⚠ ${file}:${line}  ${msg}`) }
+const err = (file, line, msg) => { errors++; console.log(`  ✖ ${file}:${line}  ${msg}`) }
 
 function norm(hex) {
   let h = hex.toLowerCase()
-  if (h.length === 4) h = '#' + [...h.slice(1)].map(c => c + c).join('')
+  if (h.length === 4 || h.length === 5) h = '#' + [...h.slice(1)].map(c => c + c).join('')
   return h
 }
 function rgb(hex) {
@@ -130,14 +127,14 @@ function walk(dir) {
       for (const raw of ln.match(HEX) || []) {
         const hex = norm(raw)
         const tok = tokenByHex.get(hex)
-        if (tok) err(rel, i + 1, `raw hex ${raw} == var(${tok}) — use the token, don't paste the hex`, ln)
+        if (tok) err(rel, i + 1, `raw hex ${raw} == var(${tok}) — use the token, don't paste the hex`)
         else {
           const n = nearestToken(hex)
           const hint = n && n.d < NEAR_THRESHOLD ? ` (near var(${n.name}) ${n.hex} — likely the same color, drifted)` : ''
-          err(rel, i + 1, `raw hex ${raw} in JSX — colors belong in styles.css tokens / theme.js, not inline${hint}`, ln)
+          err(rel, i + 1, `raw hex ${raw} in JSX — colors belong in styles.css tokens / theme.js, not inline${hint}`)
         }
       }
-      if (/type\s*=\s*["']checkbox["']/.test(ln)) err(rel, i + 1, 'raw <input type="checkbox"> is banned — use <Toggle> (components/Toggle.jsx)', ln)
+      if (/type\s*=\s*["']checkbox["']/.test(ln)) err(rel, i + 1, 'raw <input type="checkbox"> is banned — use <Toggle> (components/Toggle.jsx)')
     })
   }
 }
@@ -149,7 +146,7 @@ readFileSync(THEME, 'utf8').split('\n').forEach((ln, i) => {
     const hex = norm(raw)
     if (CHART_EXTRAS.has(hex)) continue
     const tok = tokenByHex.get(hex)
-    err('src/theme.js', i + 1, tok ? `hex ${raw} == var(${tok}) — theme.js aliases tokens as 'var(${tok})', it does not mirror hex` : `hex ${raw} is not a registered chart extra — theme.js carries no UI colours`, ln)
+    err('src/theme.js', i + 1, tok ? `hex ${raw} == var(${tok}) — theme.js aliases tokens as 'var(${tok})', it does not mirror hex` : `hex ${raw} is not a registered chart extra — theme.js carries no UI colours`)
   }
 })
 
@@ -161,17 +158,18 @@ cssLines.forEach((ln, i) => {
     const tok = tokenByHex.get(hex)
     if (tok) {
       const fallback = new RegExp(`var\\(\\s*${tok}\\s*,\\s*${raw}\\s*\\)`, 'i')
-      if (fallback.test(ln)) warn('src/styles.css', i + 1, `redundant fallback var(${tok}, ${raw}) — the fallback duplicates the token; drop it`, ln)
-      else err('src/styles.css', i + 1, `raw hex ${raw} == var(${tok}) — use the token`, ln)
+      if (fallback.test(ln)) err('src/styles.css', i + 1, `redundant fallback var(${tok}, ${raw}) — the fallback duplicates the token; drop it`)
+      else err('src/styles.css', i + 1, `raw hex ${raw} == var(${tok}) — use the token`)
       continue
     }
     const n = nearestToken(hex)
-    if (n && n.d < NEAR_THRESHOLD) warn('src/styles.css', i + 1, `${raw} is a near-duplicate of var(${n.name}) ${n.hex} — unify to the token`, ln)
+    if (n && n.d < NEAR_THRESHOLD) err('src/styles.css', i + 1, `${raw} is a near-duplicate of var(${n.name}) ${n.hex} — unify to the token`)
+    else err('src/styles.css', i + 1, `raw hex ${raw} outside the token blocks — declare a semantic token in :root and use var(--token)`)
   }
   for (const m of ln.matchAll(RGBA)) {
     const trip = `${m[1]},${m[2]},${m[3]}`
     const tok = tripletToken.get(trip)
-    if (tok) err('src/styles.css', i + 1, `literal rgba(${trip},…) is the ${tok.replace('-rgb', '')} colour — use rgba(var(${tok}), a) so presets can change it`, ln)
+    if (tok) err('src/styles.css', i + 1, `literal rgba(${trip},…) is the ${tok.replace('-rgb', '')} colour — use rgba(var(${tok}), a) so presets can change it`)
   }
 })
 
@@ -221,5 +219,5 @@ for (const [fg, bg, alpha, min] of TINT_CONTRAST) {
 }
 
 console.log('')
-if (errors) { console.log(`✖ ${errors} error(s), ${warns} warning(s) — style tokens not respected. See docs/ui-styleguide.md`); process.exit(1) }
-console.log(`✓ style tokens respected${warns ? ` (${warns} warning(s))` : ''}${blocks.length > 1 ? ` · ${blocks.length - 1} preset(s) checked` : ''}`)
+if (errors) { console.log(`✖ ${errors} error(s) — style tokens not respected. See docs/ui-styleguide.md`); process.exit(1) }
+console.log(`✓ style tokens respected${blocks.length > 1 ? ` · ${blocks.length - 1} preset(s) checked` : ''}`)

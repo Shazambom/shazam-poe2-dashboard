@@ -1,0 +1,18 @@
+# EditorConfig settings; the one lint config at the repository root.
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+# Formatters own indent size (IndentSize is disabled in ops/lint/ecrc.json).
+indent_size = 2
+
+[*.py]
+indent_size = 4
+
+[*.md]
+# Markdown two-space trailing hard line breaks are valid syntax.
+trim_trailing_whitespace = false

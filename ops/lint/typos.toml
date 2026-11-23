@@ -1,0 +1,39 @@
+# typos configuration passed explicitly via --config ops/lint/typos.toml.
+
+[files]
+extend-exclude = [
+  # Generated upstream EE2 bundle (manifest-hashed, byte-exact).
+  "desktop/src/vendor/ee2-query/vendor/**",
+  # Generated upstream EE2 game data (manifest-hashed, byte-exact).
+  "desktop/src/vendor/ee2-query/data/**",
+  # Byte-exact test fixtures.
+  "**/test/fixtures/**",
+  # Byte-exact test fixtures.
+  "**/tests/fixtures/**",
+  # Byte-exact test goldens.
+  "**/test/goldens/**",
+  # Byte-exact test goldens.
+  "**/tests/golden/**",
+  # Byte-exact test goldens.
+  "**/tests/goldens/**",
+  # Byte-exact SHA-256 manifest-hashed regex data.
+  "frontend/src/data/regex/**",
+]
+
+[default.extend-words]
+# PoE2 farming strategy domain term (StratCalc).
+strat = "strat"
+# PoE2 item implicit modifiers.
+implicits = "implicits"
+# Valid English spelling used in parser error messages.
+unparseable = "unparseable"
+# Deliberate fuzzy-search typo test query (Orb of Annulment).
+anull = "anull"
+# Deliberate fuzzy-search typo test query (Divine Orb).
+devine = "devine"
+# Deliberate fuzzy-search typo test query (Sapphire).
+saphire = "saphire"
+
+[default.extend-identifiers]
+# Pluralized SQL SELECT in prose and comments.
+SELECTs = "SELECTs"

@@ -1,0 +1,12 @@
+{
+  "Exclude": [
+    "^desktop/src/vendor/ee2-query/vendor/",
+    "^desktop/src/vendor/ee2-query/data/",
+    "(^|/)tests?/fixtures/",
+    "(^|/)tests?/goldens?/",
+    "^frontend/src/data/regex/"
+  ],
+  "Disable": {
+    "IndentSize": true
+  }
+}

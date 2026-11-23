@@ -1,0 +1,49 @@
+required-version = "==0.17.6"
+target-version = "py312"
+line-length = 88
+# Ruff resolves these paths from the working directory when --config is supplied.
+src = [
+    "backend",
+    "backend/tests",
+    "ops/feedback-bot",
+    "ops/feedback-bot/bot",
+    "ops/feedback-bot/tests",
+]
+preview = false
+fix = false
+unsafe-fixes = false
+
+[lint]
+select = [
+    "E4", "E7", "E9", "W6", "F", "I", "A", "B", "C4", "UP", "SIM",
+    "ASYNC", "FAST", "PT", "S", "DTZ", "PLE", "PIE", "LOG", "ERA",
+    "RET501", "RET502", "RET503", "TID251", "PLW", "C901", "PLR0915",
+    "RUF006", "RUF008", "RUF009", "RUF012", "RUF015", "RUF016", "RUF017",
+    "RUF019", "RUF021", "RUF043", "RUF059",
+]
+ignore = [
+    "ASYNC109", # Gateway APIs accept explicit timeout parameters.
+    "PT018", # Tests may assert related invariants together.
+    "S603", # Ordinary argument-vector subprocess calls are deliberate.
+    "PLW0603", # Shared module state is deliberate in these runtimes.
+]
+
+[lint.per-file-ignores]
+"backend/tests/**/*.py" = ["S101", "S311"] # Pytest assertions and seeded fuzzing.
+"ops/feedback-bot/tests/**/*.py" = ["S101", "S311"] # Pytest assertions and seeded fuzzing.
+"ops/hold-backtest.py" = ["S311"] # Reproducible seeded simulation.
+"ops/hold-diagnostics.py" = ["S311"] # Reproducible seeded simulation.
+"ops/export-market-snapshot.py" = ["S608"] # A test pins live-schema identifier quoting and values stay bound.
+"backend/tests/test_negcycle_networkx.py" = ["TID251"] # Compares the port with the reference library.
+"backend/tests/test_sidecar_equivalence.py" = ["TID251"] # Compares the ports with the reference libraries.
+
+[lint.flake8-tidy-imports.banned-api]
+"networkx" = { msg = "Keep heavy analytics dependencies in the sidecar." }
+"stumpy" = { msg = "Keep heavy analytics dependencies in the sidecar." }
+"dtaidistance" = { msg = "Keep heavy analytics dependencies in the sidecar." }
+
+[lint.mccabe]
+max-complexity = 15
+
+[lint.pylint]
+max-statements = 75

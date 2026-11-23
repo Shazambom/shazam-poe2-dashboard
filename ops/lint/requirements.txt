@@ -1,0 +1,6 @@
+ruff==0.17.6
+flake8-async==26.8.1
+vulture==2.16
+pip-audit==2.10.1
+yamllint==1.38.0
+check-jsonschema==0.39.0

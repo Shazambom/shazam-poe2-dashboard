@@ -1,0 +1,6 @@
+# Hadolint configuration passed explicitly via --config ops/lint/hadolint.yaml.
+failure-threshold: style
+disable-ignore-pragma: true
+override:
+  error:
+    - DL1001

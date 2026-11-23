@@ -1,0 +1,42 @@
+# Gitleaks configuration passed explicitly via --config ops/lint/gitleaks.toml.
+# Only the four known synthetic test fixtures in desktop/test are allowed, each
+# pinned by rule ID, exact path, and exact secret value (condition = "AND").
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+# Synthetic X25519 PKCS#8 private key fixture paired with pub.b64 for feedback seal/unseal unit tests.
+description = "Synthetic X25519 private key fixture in desktop/test/fixtures/feedback/test-key.pem"
+condition = "AND"
+targetRules = ["private-key"]
+paths = ['''^desktop/test/fixtures/feedback/test-key\.pem$''']
+regexTarget = "secret"
+regexes = ['''^-----BEGIN PRIVATE KEY-----\nMC4CAQAwBQYDK2VuBCIEIPDq6ez7fGEoZFc9nfIaxZFUiTeedO1nhcGlX\+neCuJv\n-----END PRIVATE KEY-----$''']
+
+[[allowlists]]
+# Synthetic RFC 7519 sample JWT used to assert bundle log redaction in feedback-bundle.test.mjs.
+description = "Synthetic JWT fixture in desktop/test/feedback-bundle.test.mjs"
+condition = "AND"
+targetRules = ["jwt"]
+paths = ['''^desktop/test/feedback-bundle\.test\.mjs$''']
+regexTarget = "secret"
+regexes = ['''^eyJhbGciOiJIUzI1NiJ9\.eyJzdWIiOiIxMjM0In0\.sflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c$''']
+
+[[allowlists]]
+# Synthetic RFC 7519 sample JWT used to assert secret scrubbing in feedback-redact.test.mjs.
+description = "Synthetic JWT fixture in desktop/test/feedback-redact.test.mjs"
+condition = "AND"
+targetRules = ["jwt"]
+paths = ['''^desktop/test/feedback-redact\.test\.mjs$''']
+regexTarget = "secret"
+regexes = ['''^eyJhbGciOiJIUzI1NiJ9\.eyJzdWIiOiIxMjM0In0\.sflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c$''']
+
+[[allowlists]]
+# Synthetic repeating hex key used to assert api-key scrubbing in feedback-redact.test.mjs.
+description = "Synthetic generic API key fixture in desktop/test/feedback-redact.test.mjs"
+condition = "AND"
+targetRules = ["generic-api-key"]
+paths = ['''^desktop/test/feedback-redact\.test\.mjs$''']
+regexTarget = "secret"
+regexes = ['''^0f1e2d3c4b5a69788796a5b4c3d2e1f00f1e2d3c$''']

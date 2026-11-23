@@ -1,0 +1,12 @@
+# yamllint configuration passed explicitly via -c ops/lint/yamllint.yml.
+extends: default
+rules:
+  # GitHub workflows and compose files omit leading --- document markers.
+  document-start: disable
+  line-length:
+    max: 120
+    allow-non-breakable-words: true
+    allow-non-breakable-inline-mappings: true
+  truthy:
+    # GitHub Actions workflows require the top-level "on:" key; values stay checked.
+    check-keys: false

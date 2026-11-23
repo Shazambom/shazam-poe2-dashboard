@@ -1,0 +1,27 @@
+{
+  "$schema": "https://unpkg.com/knip@6.48.0/schema.json",
+  "workspaces": {
+    "../../frontend": {
+      "entry": [
+        "scripts/regex-number-goldens.mjs",
+        "scripts/sync-regex-data.mjs",
+        "test/*.test.mjs",
+        "test/workspace-store.fuzzy.mjs",
+        "test/lifecycle/**/*.test.jsx"
+      ],
+      "project": ["src/**/*.{js,jsx}", "scripts/**/*.mjs", "test/**/*.{mjs,js,jsx}"]
+    },
+    "../../desktop": {
+      "entry": [
+        "src/preload.js",
+        "src/preload-snap.js",
+        "src/ee2-history/worker.js",
+        "src/vendor/ee2-query/entry.js",
+        "scripts/*.mjs",
+        "test/*.test.mjs"
+      ],
+      "project": ["src/**/*.js", "scripts/**/*.mjs", "test/**/*.mjs"]
+    }
+  },
+  "ignoreUnresolved": ["virtual:theme-presets"]
+}

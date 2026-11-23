@@ -1,0 +1,21 @@
+// markdownlint-cli2 configuration passed explicitly via --config ops/lint/.markdownlint-cli2.jsonc.
+{
+  "noInlineConfig": true,
+  "config": {
+    "default": true,
+    // Allow repeated subsection headings under distinct parent sections.
+    "MD024": { "siblings_only": true },
+    // Prose and wide tables regularly exceed 80 columns (5,641 hits).
+    "MD013": false,
+    // Strict table column pipe alignment adds formatting churn (1,150 hits).
+    "MD060": false,
+    // Bare URLs in research notes and bug reports are auto-linked by GFM.
+    "MD034": false,
+    // Docs use angle-bracket placeholders such as <currency> and <league>.
+    "MD033": false,
+    // Skill documents start with YAML frontmatter instead of an H1 heading.
+    "MD041": false,
+    // lychee owns internal link and heading anchor verification.
+    "MD051": false
+  }
+}

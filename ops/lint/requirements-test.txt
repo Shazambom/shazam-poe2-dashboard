@@ -1,0 +1,22 @@
+# Runtime manifests and Starlette, which the app and tests import directly.
+cryptography==50.0.2
+discord.py==2.7.1
+fastapi==0.165.0
+httpx==0.28.1
+numpy==2.5.5
+Pillow==13.0.0
+pydantic==2.14.4
+pyrate-limiter==4.5.1
+starlette==1.10.0
+uvicorn==0.54.0
+
+# Test runners and reference libraries for equivalence tests.
+dtaidistance==2.5.1
+hypothesis==6.168.0
+networkx==3.6.1
+pytest==9.1.1
+stumpy==1.14.1
+
+# Optional imports in the profiling and connection tools.
+browser-cookie3==0.20.1
+pyinstaller==6.22.3

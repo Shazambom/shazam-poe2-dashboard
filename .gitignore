@@ -12,5 +12,6 @@ desktop/.venv-build/
 desktop/.venv-sidecar/
 desktop/market-seed/
 .venv-test/
+.venv-lint/
 desktop/test/fixtures/ee2/live/
 .profiles/

@@ -1,0 +1,8 @@
+# Zizmor configuration passed explicitly via --config ops/lint/zizmor.yml.
+# Runs with the default regular persona; pedantic is left off because its
+# concurrency-limits audit would cancel a Windows release build mid-upload.
+rules:
+  unpinned-uses:
+    config:
+      policies:
+        "*": hash-pin
