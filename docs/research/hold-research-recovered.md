@@ -162,6 +162,7 @@ Session `15b714b2` = `~/.claude/projects/-Users-ianmoreno/15b714b2-6a76-417b-b05
 | 2026-09-21 | `c9ca0a0` / 0.3.3 | Forecast reads start days N±5 (`PRED_WINDOW`), band pooled; shown only as 1–3 arrows (3d/7d), dashes on 1d, hidden after league-day 14 | §4 |
 
 **Considered and rejected (with the reason recorded at the time):**
+
 - *Weighted-z composite* — rejected by /simplify as unexplainable and untunable. It was the sign-safe form.
 - *Calmar/Sortino/Sharpe columns* — deferred at v1. Lane A (2026-09-15) re-proposed Sortino/Calmar/VaR-CVaR as "Hold risk columns". The owner steer that day recast risk as liquidity and decay, not solvency ("no shorting, no leverage, no ruin").
 - *EWMA momentum blend `β·analog + (1−β)·EWMA·Δ`* — deferred: "a second free parameter you can't validate yet".
@@ -221,6 +222,7 @@ leagues). Everything below is the daily-close variant; production also uses hour
 ## 5. What the 2026-09-13 domain research said about stores of value in PoE2
 
 (Report a14d, live poe2scout pull 2026-09-13; the playbook report a1481, 2026-09-15.)
+
 - Divine is the reserve currency and rises all league in Ex terms (the API shows 28 → 67 → 104 → 127 ex over
   the first days; ≈100–130 early → ≈390–430 late per timesaver.gg). Mirror (763k ex) and Hinekora's Lock (181k
   ex) are "the ceiling holds" and numeraire anchors.
@@ -239,6 +241,7 @@ leagues). Everything below is the daily-close variant; production also uses hour
 ## 6. Sources
 
 Status labels are the ones the original research used:
+
 - **VERIFIED** — the agent extracted the text from the primary PDF/HTML or the pinned source file and quoted it verbatim.
 - **VIA FETCH** — returned by a summarizing fetcher; the agent did not see the surrounding text. Verify before citing.
 - **UNVERIFIED** — paywalled, 403, secondary summary only, or the agent's own arithmetic/analysis.
@@ -252,6 +255,7 @@ source); **R6** = a0a7f (event windows/overlap); **R7** = a6188 (Heston–Sadka/
 the two repo docs. The full reports are verbatim in Appendices A–I.
 
 ### 6.1 Momentum vs short-term reversal: what horizon a trailing return predicts
+
 Supports: Defect 2 of the bug doc (1–7d is the reversal horizon in equities). Our own data overruled it
 (§4, gap-corrected IC ≥ 0). Most relevant to "Hold over-weights recent risers".
 
@@ -273,6 +277,7 @@ Supports: Defect 2 of the bug doc (1–7d is the reversal horizon in equities). 
 | **Our own measurement** (supersedes the above for this market) | BUG §Experiments, HO "Read this before…" | gap-corrected IC(ret,3d) +0.009 to +0.026; score IC +0.28 in days 4–7 | Measured 2026-09-20 |
 
 ### 6.2 Return seasonality: the basis of Hold's forecast (`_predict`)
+
 Supports: the league-phase analog forecast. Also the finding that widening the start window is licensed
 only when adjacent periods share the same expected return, which our lag curve shows is true early and
 false late.
@@ -287,6 +292,7 @@ false late.
 | Hirshleifer, Jiang & DiGiovanni, "Mood betas and seasonalities in stock returns", NBER w24676 | — | — | Candidate only, not read (R7) |
 
 ### 6.3 Widening the forecast's start day: event windows and overlapping data
+
 Supports: `PRED_WINDOW = 5` and pooling the band so it widens instead of shrinking (0.3.3).
 
 | Source | Link | Quote (verbatim) | Status |
@@ -305,6 +311,7 @@ Supports: `PRED_WINDOW = 5` and pooling the band so it widens instead of shrinki
 | "Bias from including a different regime" in a shifted-start average | — | — | **No source exists (R6, HO).** Our lag curve stands in for it. |
 
 ### 6.4 Few seasons: small-sample estimation, pooling, analog forecasting
+
 Supports: why the ± band was dropped, why blend weights can't be tuned on 3–4 leagues, and why recency
 weighting is fine.
 
@@ -326,6 +333,7 @@ weighting is fine.
 | "Two cycles is the minimum" rule of thumb | — | — | Folklore; no derivation found (R3) |
 
 ### 6.5 Risk-adjusted scoring, the negative-return pathology, composites
+
 Supports: the 0.3.2 fix (sign-safe log-space score), drawdown as the "safe" dimension, and the options for
 a steadiness/inflation-resistance term.
 
@@ -353,6 +361,7 @@ a steadiness/inflation-resistance term.
 | Sortino & van der Meer (1991); Young (1991) Calmar; James–Stein (1961) | — | — | DOMAIN KNOWLEDGE (Q13) |
 
 ### 6.6 Shrinkage, confidence, and ranking under uncertainty
+
 Supports: `ret × depth` is a valid posterior mean (not a bug); a zero target is a choice; ranking by point
 estimates has no optimality guarantee.
 
@@ -369,6 +378,7 @@ estimates has no optimality guarantee.
 | Shen & Louis (1998); Gelman & Price (1999); Louis (1984); Ghosh (1992) | — | — | UNVERIFIED (403; cited via Lin et al./Ginestet) |
 
 ### 6.7 Combining a trailing score with the forecast
+
 Supports: integrate before ranking; weight the forecast by measured skill; keep weights fixed.
 
 | Source | Link | Quote (verbatim) | Status |
@@ -399,7 +409,7 @@ Supports: integrate before ranking; weight the forecast by measured skill; keep 
 |---|---|---|---|
 | FINRA Rule 2210(d)(1)(F) | https://www.finra.org/rules-guidance/rulebooks/finra-rules/2210 | "Communications may not predict or project performance, imply that past performance will recur…" | VERIFIED (R2) |
 | FCA COBS 4.6.2 R | https://www.handbook.fca.org.uk/handbook/COBS/4/6.html | "that indication is not the most prominent feature of the communication" | VERIFIED (R2) |
-| SEC investor publication; investor.gov | https://www.sec.gov/about/reports-publications/investorpubsmfperformhtm · https://www.investor.gov/introduction-investing/investing-basics/investment-products/mutual-funds-and-exchange-traded-funds-etfs/mutual-funds | "While past performance does not necessarily predict future returns, it _can_ tell you how volatile a fund has been." | VERIFIED (R2) |
+| SEC investor publication; investor.gov | https://www.sec.gov/about/reports-publications/investorpubsmfperformhtm · https://www.investor.gov/introduction-investing/investing-basics/investment-products/mutual-funds-and-exchange-traded-funds-etfs/mutual-funds | "While past performance does not necessarily predict future returns, it *can* tell you how volatile a fund has been." | VERIFIED (R2) |
 | Morningstar Medalist Ratings explainer | https://advhypo.morningstar.com/Enterprise/VTC/MorningstarMedalistRatingsExplainer.pdf | "Morningstar Rating 'Star Rating'…Backward-looking, quantitative…"; "…Forward-looking…" | VERIFIED (R2) |
 | BETTER FINANCE on PRIIPs; ESAs advice | https://betterfinance.eu/priips/ · https://www.esma.europa.eu/sites/default/files/library/jc_2022_20_esa_advice_on_priips_regulation.pdf | — | UNVERIFIED (advocacy) |
 
@@ -424,6 +434,7 @@ Supports: integrate before ranking; weight the forecast by measured skill; keep 
 | (2026-09-15, LA) PyPortfolioOpt, Riskfolio-Lib, ruptures, statsmodels (coint/adfuller/STL), sklearn LedoitWolf, hmmlearn, Structural Theta (M4) | https://github.com/PyPortfolio/PyPortfolioOpt · https://github.com/PyPortfolio/PyPortfolioOpt/blob/main/pypfopt/hierarchical_portfolio.py · https://github.com/cottrell/hrp · https://riskfolio-lib.readthedocs.io/ · https://github.com/deepcharles/ruptures · https://centre-borelli.github.io/ruptures-docs/ · https://www.statsmodels.org/stable/install.html · https://www.statsmodels.org/stable/generated/statsmodels.tsa.stattools.coint.html · https://www.statsmodels.org/stable/generated/statsmodels.tsa.stattools.adfuller.html · https://www.statsmodels.org/stable/generated/statsmodels.tsa.seasonal.STL.html · https://scikit-learn.org/stable/modules/generated/sklearn.covariance.LedoitWolf.html · https://github.com/hmmlearn/hmmlearn · https://www.sciencedirect.com/science/article/pii/S0169207024000906 | links only | not Hold scoring |
 
 ### 6.11 Inflation-index methodology (2026-09-13 19:02, feeds the numeraire choice)
+
 The "Inflation index methodology + OSS tools" agent (a977710dd727ae9c1,
 `…/15b714b2…/subagents/agent-a977710dd727ae9c1.jsonl`) proposed rebasing a hard-numeraire price to
 day-0 = 100, using a volume-weighted base over the first 24h, and a Törnqvist-style basket. This is the
@@ -431,6 +442,7 @@ origin of the "inflation index" that Hold's "resists inflation" framing sits on.
 Appendix J. It cites no URLs (unverified).
 
 ### 6.12 PoE2 domain sources (community; UNVERIFIED as economics, used for asset-class priors)
+
 From A13 (2026-09-13): Switchblade Gaming currency tier list https://www.switchbladegaming.com/path-of-exile-2/currency-tier-list/ ·
 Switchblade currency guide https://www.switchbladegaming.com/path-of-exile-2/currency-guide/ · Elyxir ritual farming
 https://www.elyxir.gg/guide/path-of-exile-2/path-of-exile-2-ritual-farming-guide-best-patch-05-setup-for-omen-profit ·
@@ -451,6 +463,7 @@ https://medium.com/@produde/path-of-exile-economy-a-time-series-analysis-b7af193
 https://poetrades.net/poe-ninja-economy-guide/.
 
 ### 6.13 Disagreements between the old records (resolve before committing to docs)
+
 - **Heston & Sadka verbatim:** R2 (2026-09-20) could not extract a quote, and BUG lists it as unverified.
   R7 (2026-09-21) verified it from the Oct 2006 NYU Stern manuscript, and HO lists it as verified. Only the
   published JFE 2008 text is unverified.
@@ -462,4 +475,3 @@ https://poetrades.net/poe-ninja-economy-guide/.
   from these libraries.
 
 ---
-

@@ -6,10 +6,12 @@ page holds the order and what each step must produce.
 
 0. **Dependabot check (prioritize over feature work).** Before starting feature work, inspect all open
    Dependabot security alerts and PRs:
+
    ```bash
    gh api "repos/:owner/:repo/dependabot/alerts?state=open"
    gh pr list --state open --author "app/dependabot"
    ```
+
    Resolve open vulnerability alerts and merge or consolidate actionable dependency updates first (with
    `ops/run-tests.sh` green and a live CDP drive for UI/Electron majors). If a major upgrade is blocked
    upstream, explain why and record what is needed before proceeding to feature work.

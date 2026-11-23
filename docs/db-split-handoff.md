@@ -40,12 +40,14 @@ Users never lose settings/capital/login and never wait for a cold backfill.
 ## Ordered implementation steps
 
 ### 1. Paths (`config.py`)
+
 - `USER_DB_PATH = DATA_DIR/"user.sqlite"`, `MARKET_DB_PATH = DATA_DIR/"market.sqlite"`.
 - `MARKET_SEED_PATH = Path(os.environ.get("MARKET_SEED", "")) or None` (Electron sets it; empty
   in dev/server → no seed, just crawl live).
 - Keep `DB_PATH` (legacy) for the one-time split detection.
 
 ### 2. Split the schema + connection (`db.py`)
+
 - Split `SCHEMA` into `USER_SCHEMA` (`capital`, `kv`, `user_meta(key,value)`) and
   `MARKET_SCHEMA` (`digest_markets`, `orderbook`, `orderbook_history`, `league_daily`,
   `item_meta`, `kv_ops(key,value)`, `market_meta(key,value)`).
@@ -71,17 +73,21 @@ Users never lose settings/capital/login and never wait for a cold backfill.
   (`market`) by that rule. `get_capital/set_capital` stay on `capital` (user).
 
 ### 3. Snapshot meta helpers (`db.py`)
+
 - `market_meta` get/set for `snapshot_version`. Export stamps it; seeding compares it.
 
 ### 4. User migration runner (`db.py` + `backend/app/migrations_user.py`)
+
 - `user_meta.schema_version` (int, default 0). Run `USER_MIGRATIONS` with `id > version` in
   order, each in its own transaction; back up `user.sqlite` before running any; set version to
   the max applied; abort startup loudly on failure.
 - `migrations_user.py`: `USER_MIGRATIONS = [(1, "initial split", _m1_split_from_legacy), …]`.
 
 ### 5. One-time legacy split (migration #1 / `run_legacy_split`)
+
 Existing installs have a single `poe2arb.sqlite` with everything. On first run of the new
 backend, if `user.sqlite` is fresh and `poe2arb.sqlite` exists:
+
 - Copy **user rows** out of `poe2arb.sqlite` into `user.sqlite`: all of `capital`; the `kv`
   rows whose key ∈ user set (`settings`,`watches`,`oauth_pending`,`meta_overrides`,`secret:*`).
 - **Do NOT** copy market tables into `market.sqlite` — let `market.sqlite` come from the bundled
@@ -93,6 +99,7 @@ backend, if `user.sqlite` is fresh and `poe2arb.sqlite` exists:
   stay decryptable — the user's PoE session/oauth survive. Verify this.
 
 ### 6. Electron wiring (`desktop/`)
+
 - `src/main.js` `startBackend()`: add `MARKET_SEED` to the child env, pointing at the bundled
   seed (e.g. `path.join(process.resourcesPath, 'market-seed', 'market-seed.sqlite')`), like
   `DATA_DIR`/`PORT`.
@@ -100,6 +107,7 @@ backend, if `user.sqlite` is fresh and `poe2arb.sqlite` exists:
 - Add `desktop/market-seed/` to `.gitignore`.
 
 ### 7. Snapshot export + publish (`ops/export-market-snapshot.py`)
+
 - Implement per architecture doc: copy market tables (+ **operational kv/cursors** — required
   for catch-up) from shazam's DB into `market-seed.sqlite`, stamp `snapshot_version`, `VACUUM`.
 - Publish to shazam `/downloads/market-seed.sqlite` **and** upload as a GitHub Release asset on
@@ -107,6 +115,7 @@ backend, if `user.sqlite` is fresh and `poe2arb.sqlite` exists:
 - Add a shazam cron (daily) + run before each desktop release.
 
 ### 8. Build consumption
+
 - `desktop/build-backend.sh` (or a sibling `fetch-seed` step): fetch seed from shazam (LAN) →
   `desktop/market-seed/market-seed.sqlite`.
 - `.github/workflows/release-desktop-win.yml`: add a step to download the seed from the GitHub

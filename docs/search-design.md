@@ -50,6 +50,7 @@ Not search boxes: the Recipes and Settings "trade id" fields take an exact id an
 Three independent designs and a judge, measured on the 660 real item names, 94 Mods pools and 747 modifier
 texts from the local market DB. On 142 common queries, the right item came first 88 of 95 times (today: 35), and
 7 searches found nothing (today: 80).
+
 - **Libraries:** uFuzzy was the best (4 KB) but still put a Vaal Infuser above Vaal Orb and has no keyword search.
   Fuse.js flooded results (6,201 irrelevant hits). match-sorter and fuzzysort have no typo tolerance. About 70
   lines of our own code beat them all.

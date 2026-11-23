@@ -18,6 +18,7 @@ restored `latest-mac.yml` believing the DMG was "fresh installs only"; the Mac u
 
 **Fix — one tool, `desktop/scripts/release-assets.mjs`, used by both `publish-github.sh` and the
 (now dispatch-only) Windows workflow; mechanics in `docs/release-runbook.md` step 5:**
+
 1. The release is a **draft** until the end — invisible to electron-updater, never "Latest".
 2. **No tag is pushed**; CI is started with `gh workflow run -f tag= -f sha=` and publishing the draft
    creates the tag (`releases.atom`, which beta clients read, lists bare tags).
@@ -30,6 +31,7 @@ restored `latest-mac.yml` believing the DMG was "fresh installs only"; the Mac u
    (re-draft + delete the tag).
 
 **Proof.**
+
 | Release | What it proved |
 |---|---|
 | 0.2.61-beta.1 | Draft-first flow end to end, zero exposure while two of three big uploads stalled. Exposed the two follow-ups (tag visibility, wall-clock timeout). |
@@ -39,6 +41,7 @@ Plus 16 unit tests (`desktop/test/release-assets.test.mjs`, incl. both incident 
 the 47 KB/s collapse) and two throwaway-draft runs that hit — and healed — real GitHub 500s.
 
 **Known residue (not blocking; open a new report if any of it bites):**
+
 - The **rollback branch has never run** — it only runs when a post-flip check fails, and none has.
 - GitHub's upload slowness was never root-caused; the evidence says it is per-connection (a fresh
   connection is fast), which is what the speed-cut exploits. "Throttling" was a guess.
@@ -53,6 +56,7 @@ same steps. Then GitHub's release-asset uploads (`uploads.github.com`) started s
 large files (~178 MB). githubstatus.com reported "All Systems Operational" throughout.
 
 **0.2.60-beta.1**
+
 - 16:58 tag pushed → Windows CI run 35249820587. Build, sidecar crash-gate, packaging: all green.
 - 17:02 step "Upload installer to a Release" (`softprops/action-gh-release@v2`) uploaded `beta.yml` +
   the `.blockmap`, then **hung on `Arbiter-Setup-0.2.60-beta.1.exe` for 28 min**. No step timeout.
@@ -64,6 +68,7 @@ large files (~178 MB). githubstatus.com reported "All Systems Operational" throu
   client checking in that window was told "update available" and then failed the download.
 
 **stable 0.2.60**
+
 - Windows CI uploaded cleanly this time. `publish-github.sh` then ran
   `gh release upload … --clobber` for the five Mac files and died:
   `HTTP 500: Error saving asset (…/assets?name=Arbiter-0.2.60-arm64-mac.zip)`; script exit 1.
@@ -155,6 +160,7 @@ Make "live" a single atomic flip at the END, and make uploads self-healing:
 ## State left behind
 
 As of 18:55 UTC 2026-09-17 (when this report was committed):
+
 - **Beta 0.2.60-beta.1:** complete and verified (9 assets `uploaded`, both manifests resolve 200).
 - **Stable 0.2.60:** GitHub "Latest". **Windows complete and correct** (`latest.yml` → `.exe` 200).
   **Mac NOT live:** `latest-mac.yml` deliberately removed; the zip re-upload was still trickling at
@@ -174,8 +180,8 @@ desktop/release/Arbiter-0.2.60-arm64.dmg --clobber` if it is missing or `starter
 Total Mac production exposure to a manifest with no file: ~13 min (18:28–18:41). Mac production was
 held on 0.2.59 for ~32 min after that (18:41–19:13) — safe, just delayed.
 
-
 **Correction 19:40 UTC — three claims above are wrong (found re-reading the report against the code).**
+
 - **The Mac update path uses the DMG, not the zip.** `desktop/src/main.js` sets `autoDownload = !IS_MAC`
   and the Mac flow opens `macDmgUrl(v)` (`…/Arbiter-<v>-arm64.dmg`) in the browser. So "the `.dmg` is
   fresh installs only" is false, and putting `latest-mac.yml` back at 19:13 re-opened the hole: Mac
@@ -233,6 +239,7 @@ four files INTO the draft (no second release); Mac files followed, manifest last
 flipped it public, re-checked every public URL → "LIVE and verified". Stable "Latest" stayed
 `desktop-v0.2.60` throughout and nothing was visible to clients until the flip. **Zero exposure**,
 on a day when two of the three big Mac uploads went bad:
+
 - `.dmg` attempt 1: ~2 MB/s, then ~47 KB/s → killed by the 20-min timeout → attempt 2 landed in ~1 min.
 - `.zip` attempt 1: dead-stopped (0 KB/s) at 65 MB → killed by hand → attempt 2 landed.
 

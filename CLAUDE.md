@@ -11,6 +11,7 @@ that **bundled local backend on 127.0.0.1** — never a remote server.
 
 The **only** permitted outbound calls are the **auto-updater** and, **on the beta/dev channel
 only**, diagnostics telemetry:
+
 - Auto-updater: electron-updater's `github` provider reads `latest*.yml` + installers from
   **GitHub Releases** (`Shazambom/shazam-poe2-dashboard`, the `desktop-v<ver>` tag GitHub
   marks "Latest"). No token needed (public repo). See the deploy section below.
@@ -22,6 +23,7 @@ only**, diagnostics telemetry:
   gate; do not add a second sender or a second URL constant.
 
 Consequences to preserve in any change:
+
 - Never route `/api`, session, board, routes, prices, telemetry, etc. to the remote
   server from a *packaged* desktop build. `startBackend()` in `desktop/src/main.js` is
   local-only; the only non-local branch is a `!app.isPackaged` DEV convenience
@@ -105,6 +107,7 @@ through the UI as a user would, never `PUT`/`POST` synthetic payloads at user-da
 ## Building a feature — the flow (owner directive 2026-10-03; updated 2026-11-22)
 
 **Dependabot check → Plan → TDD → QA → code review → send to the owner to review locally.**
+
 - **Up front (before feature work):** check all open Dependabot security alerts (`gh api repos/:owner/:repo/dependabot/alerts?state=open`) and open Dependabot PRs (`gh pr list --author "app/dependabot"`). Prioritize resolving open alerts and updating actionable dependency PRs before starting new feature work; if a major bump has an upstream blocker, document it and note what it takes to clear.
 - **Feature steps:** the plan is decided per feature (exploration, research, an arena or a mockup, as needed). Each step finishes, and its findings are fixed, before the next starts; nothing ships without an explicit "ship". What each step must produce and the skills that run it: [`docs/feature-flow.md`](docs/feature-flow.md).
 
@@ -185,6 +188,7 @@ real work. Highest-level rules:
   kv keys and market retention (`db.py`, `migrations_user.py` and the exporter all import it).
 
 Full design + rules + implementation plan live in `docs/`:
+
 - [`docs/db-architecture.md`](docs/db-architecture.md) — design & data classification.
 - [`docs/db-maintenance.md`](docs/db-maintenance.md) — how to evolve each DB going forward.
 - [`docs/db-split-handoff.md`](docs/db-split-handoff.md) — the historical build plan (done 2026-09-14).
@@ -209,6 +213,7 @@ decide the RIGHT surface for it — most are not a new page:
 
 **⛔ Restraint — cut, don't clutter (owner directive 2026-09-17).** The app must look nice and
 streamlined; nothing on screen may distract the user.
+
 - **Ruthlessly cut UI that isn't used.** A control that no longer drives anything, a status for a
   retired feature, a legend nobody acts on — delete it in the same change that made it useless.
 - **Don't propagate logic decisions to the view.** Which algorithm ran, which source won, what was
@@ -253,6 +258,7 @@ on **the side that reads at least 1** (`frontend/src/lib/price.js` `readable`, t
 element): Chaos in Divine is 0.093, shown as "10.7 per Divine"; the reference is "749 per Divine".
 A flipped card flips its line and its % with the number. The backend never flips: it hands the
 market and the rate; the view picks the side.
+
 - **Precise first.** An amount already held in a currency (a sale's price, a holding) shows in
   that currency, raw. A price shows in its trading market at the traded rate. Converting one
   currency into another through ex can mislead: it is not what anyone traded.
@@ -274,6 +280,7 @@ per-platform and spawned locally exactly as the app already spawns the PyInstall
 
 **Transport = SQLite, not a network layer** (decided via arena + owner steer). No loopback
 server, no port, no socket. Instead:
+
 - The sidecar reads `market.sqlite` **read-only** (WAL → concurrent readers) for BULK input, so
   large series/matrices never cross a channel.
 - Sidecar → backend results/events flow through a **dedicated SQLite table** (an outbox/queue
@@ -303,12 +310,14 @@ to their upstream behavior and is TDD applied to porting.
 ### 2026-11-22: Stash -> Merchant verified with a mocked user, siloed logic, and broken expired-session recovery
 
 **What went wrong:**
+
 1. **Verified against a mocked synthetic user instead of the owner's real Arbiter profile.** Offline Chromium screenshots used a fake account (`ExileTrader#4821`) and mocked IPC responses rather than driving the real desktop app against `~/Library/Application Support/Arbiter`. That hid two live failures until the owner asked to test with their real logged-in account:
    - Live `pathofexile.com` returned `404` on `/character-window/get-account-name`, forcing fallback to `/my-account`, which `proxy.js` was requesting with `Accept: application/json` and `X-Requested-With: XMLHttpRequest` instead of HTML headers.
    - The owner's stored `POESESSID` in `user.sqlite` (from `2026-10-08`) had expired on GGG's side while `/api/status` still reported `session.connected: true` (because `backend/app/session.py`'s `validate()` hits `exchange_post`, which returns `200 OK` even on expired/bogus cookies; Python cannot hit Cloudflare-gated `/my-account` without `cf_clearance`). When `merchant:fetch` returned `{ ok: false, error: 'auth', status: 401 }`, `MerchantView` showed a dead **Retry** button instead of **Connect PoE account**, and `doConnect()` did not re-fetch when `isLoggedIn` was already `true`.
 2. **Built as a disconnected silo with needless UI friction.** The first pass added an account selector and a manual **Load shop** button, sorted mixed currencies by raw numbers instead of pairwise conversion via `exchange()`, and duplicated floor-check/UI primitives instead of reusing Arbiter's shared subsystems.
 
 **How to prevent this in the future:**
+
 - **Real-profile desktop drive is mandatory; mock harnesses never count as verification.** Before claiming any desktop/Electron/trade feature works, run `npm --prefix desktop run build:frontend` (so `desktop/app-dist` is not stale), launch the real Electron app against `~/Library/Application Support/Arbiter` (`env -u ELECTRON_RUN_AS_NODE` inside Electron host shells; probe user data read-only), and verify the live UI and real `pathofexile.com` HTTP endpoints over CDP. Never present mock-user screenshots as proof that a feature works.
 - **Never trust `status.session.connected` alone as proof of an active PoE session.** Stored `POESESSID` values can expire on GGG's servers or drop from Chromium's cookie jar while `/api/status` stays `connected: true`. Every desktop view that calls `pathofexile.com` must treat `{ ok: false, error: 'auth' }` as an actionable reconnect state: render a direct **Connect PoE account** button (never a dead **Retry**), reload immediately after reconnect even if `isLoggedIn` was already `true`, and ship a Vitest lifecycle regression test covering `session.connected: true` + `auth` error -> reconnect -> auto-reload.
 - **Probe live `pathofexile.com` endpoints and headers before hardcoding them.** Do not assume legacy PoE1 endpoints (like `/character-window/get-account-name`) still exist or accept `Accept: application/json` + `X-Requested-With: XMLHttpRequest` on HTML routes. Verify the real HTTP status and response in Electron's session once during dev.

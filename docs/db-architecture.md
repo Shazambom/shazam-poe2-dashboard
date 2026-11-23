@@ -20,6 +20,7 @@ settings/capital/session **and** the huge, rebuildable market backfill. Two prob
    also blow away the user's settings, session, and capital.
 
 **Goal:** split the DB so that
+
 - **User data always persists** and is migrated carefully across app versions (seamless — the
   user never re-enters settings, never loses capital, never re-logs-in on update).
 - **Market/operational data is disposable** — it can be replaced wholesale at any time, with
@@ -50,6 +51,7 @@ are rebuildable/derivable and therefore disposable: `gamedata/` (cached game dat
 ### Data classification (authoritative)
 
 **USER → `user.sqlite`** (persist + migrate):
+
 - Table `capital` — held currency quantities.
 - `kv` keys: the `USER_KV` set in `backend/app/datapolicy.py` — settings, the trading
   workspace tree (and the legacy `watches` blob it was migrated from), signal dismissals, OAuth
@@ -57,6 +59,7 @@ are rebuildable/derivable and therefore disposable: `gamedata/` (cached game dat
   oauth tokens). The module is the authoritative list; this doc states the rule.
 
 **MARKET/OPERATIONAL → `market.sqlite`** (disposable, shippable):
+
 - Tables `digest_markets`, `orderbook`, `orderbook_history`, `league_daily`, `item_meta`,
   plus the runtime-only `analytics_jobs` / `analytics_cache` (sidecar transport; never ship).
 - `kv_ops` keys: crawl watermarks (`digest_cursor`, `lh_current`, `lh_complete:*`,
@@ -121,6 +124,7 @@ The snapshot is a **starting point**, not the final state. Once seeded, the depl
 
 This works because the snapshot carries the **crawl watermarks** (they live in the operational
 kv, which is part of the market DB and therefore ships inside the snapshot):
+
 - `digest_cursor` — the last hourly GGG digest fetched. On resume, the digest ingester fetches
   `cursor+1 … now` only.
 - `lh_current`, `lh_complete:*`, `lh_fetch:*` — poe2scout backfill completion/freshness markers.
@@ -137,6 +141,7 @@ install/update ──► seed (full history up to snapshot cutoff, instantly)
 ```
 
 Consequences / requirements:
+
 - The export MUST include the operational cursors/markers (kv_ops) in the snapshot, not just the
   data tables — otherwise the client would re-crawl from zero or sit frozen.
 - Wholesale replace on a newer snapshot also replaces the watermarks with the newer snapshot's,

@@ -146,6 +146,7 @@ sidecar so the client can compare `snapshot_version` without decompressing on ev
 ### Before you run a publish (and after)
 
 The deploy rules in [`dev-notes.md`](./dev-notes.md) → "Deploy rules — every playbook" apply.
+
 - Run it through `sshshazambom sudo` (never raw ssh); it is also root's hourly cron at :17, so a manual run near
   :17 can overlap the scheduled one — check `poe2-snapshot.log` first.
 - A pipeline change is proven side by side first (copy the DB, archive, don't publish; see memory
@@ -155,6 +156,7 @@ The deploy rules in [`dev-notes.md`](./dev-notes.md) → "Deploy rules — every
 - **After:** audit it (deploy rule 4) and record any lesson below.
 
 **Lessons (market seed)** — condensed, newest first:
+
 - **2026-10-12 (mod pool builder change):** the cron rebuilds the mod tables with the code in the backend container on
   each UTC day's first publish, so `deploy-web.sh backend` with a changed `modpool.py` IS a scheduled seed change:
   prove it side by side and get the owner's go before that deploy, not after. A one-off container proves it without

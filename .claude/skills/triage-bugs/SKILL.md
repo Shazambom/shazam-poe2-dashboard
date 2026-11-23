@@ -7,6 +7,7 @@ description: Pull every new (not yet looked at) bug report from the Discord feed
 
 Reports arrive as Discord posts in #bug-reports. The feedback bot on shazam opens each one into
 `feedback-inbox/<report>/`, which holds:
+
 - `report.json`: the app's state;
 - `logs/`: main, backend, renderer and updater logs;
 - `screens/NN-<screen>.jpg`: a picture of every screen;

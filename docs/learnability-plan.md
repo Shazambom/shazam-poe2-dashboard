@@ -9,6 +9,7 @@ how PoE2 players work. The owner ruled on each finding. The mockup of the result
 https://claude.ai/artifact/7d6cfU4JTiXtgnLeLVmFi7 (Today / After switch, "Show empty screens").
 
 **Out of scope (owner rulings):**
+
 - icon-only rows stay, with names on hover;
 - the global 24h/3d/7d/14d picker stays as it is;
 - algorithms are never explained on screen;
@@ -21,6 +22,7 @@ https://claude.ai/artifact/7d6cfU4JTiXtgnLeLVmFi7 (Today / After switch, "Show e
 matches screen names only ("bug", "waystone" and "convert" find nothing).
 
 **After:**
+
 - **Order with an empty box:** the current screen's commands first, then the five tabs (each showing ⌘1–⌘5), then
   sub-views, saved searches and currencies.
 - **When typing:** other screens' commands, themes and leagues also appear. The current screen's commands still rank
@@ -105,28 +107,33 @@ matches screen names only ("bug", "waystone" and "convert" find nothing).
 efficient · Safe**.
 
 **Behaviour:**
+
 - Picking a preset writes its values into the existing settings through the normal settings save.
 - The numbers stay where they are, under Filters, More filters and Arbitrage algorithm.
 - The highlighted button is **derived**: a preset is shown as selected while the saved values equal it. Editing any
   number therefore deselects it. There is no new setting or key.
 
 **What a preset carries:**
+
 - every value under Filters, More filters and Arbitrage algorithm;
 - the gold value slider;
 - not Start from, Show at most, or Fraction of held capital to commit.
 
 **The default:**
+
 - Balanced is the default for new installs: backend `DEFAULTS` and frontend `DEFAULT_FILTERS` both derive from it.
 - A one-time user migration (`_m8`, idempotent marker) **replaces every user's saved arbitrage values with Balanced**.
   Owner: "default will override people's current configs … by creating this new default we're improving the app, not
   changing a user's preferences."
 
 **One definition:**
+
 - The presets live once, as backend code constants (`settings.py`).
 - The frontend reads them from the settings response; no second copy in JS.
 - A test pins the five sets to the values below.
 
 **Units:**
+
 - liquidity, volume and margin-in-currency thresholds were tuned in exalted, the owner's reference;
 - gold value is divine per 1k gold.
 
@@ -257,6 +264,7 @@ The stall is gone: every scenario loaded rows in 3s or less, with no false empty
 Eight independent reviewers found 21 distinct candidates, and each went to its own fresh verifier.
 
 **Fixed, test-first:**
+
 - **The volume window moved every price (confirmed).** `volume_window_h` fed the one shared market graph, so Balanced's
   72h (and every later preset pick) would have moved Board, Hold, Convert and Capital for everyone. The market graph now
   uses a fixed `MARKET_VOLUME_WINDOW_H = 24`, and only the route search builds its own graph over the preset's window
@@ -282,6 +290,7 @@ Eight independent reviewers found 21 distinct candidates, and each went to its o
 the Convert caption (owner-approved), the warning floors' unit, and the two fixed-step constants.
 
 **Left as is:**
+
 - the eager cycle list (under 0.2s);
 - the Hold name scan (about 30ms per cache miss, as before);
 - `DEFAULT_FILTERS` (older drift, failed-load path only);

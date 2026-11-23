@@ -368,12 +368,14 @@ It runs in CI on any `frontend/src/**` change (`.github/workflows/lint-style.yml
 **no install step** (stdlib only).
 
 **Errors (fail the build):**
+
 - a raw hex in `.jsx` (colors belong in `theme.js`);
 - a hex in `styles.css` outside `:root` that **exactly equals** a token (use `var(--x)`);
 - a hex in `theme.js` that isn't a `:root` token value or a registered `CHART_EXTRAS` entry
   (catches `theme.js` ↔ `:root` drift).
 
 **Warnings (guidance, don't fail):**
+
 - a hex that is a **near-duplicate** of a token (RGB distance < 12) — e.g. a second slightly
   different "muted" grey. Fix by unifying to the token.
 - a redundant `var(--x, #samevalue)` fallback — drop the fallback.

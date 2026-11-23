@@ -163,12 +163,14 @@ very pages that list the reforge recipes, but only mined them for modifiers.
   first).
 
 **In-game check by the owner (2026-09-30):**
+
 - a Greater orb disenchants;
 - a Jeweller's Orb does not;
 - runes do not;
 - essences and Perfect orbs were not tested.
 
 Disenchant table, **orbs only**, for Transmutation, Augmentation, Regal, Chaos and Exalted:
+
 - Greater X → 3 X: confirmed in-game;
 - Perfect X → 3 Greater X: the owner's rule, not yet tried in-game.
 
@@ -201,12 +203,14 @@ client change in a beta.
 
 The owner asked for an audit ("I think you may have broken some of arbitrage"). Measured with
 `ops/regression-diff.py`, stable 0.3.7 against beta.2, on the owner's data:
+
 - **17 prices moved, by up to 4300%.** Essence of Alacrity went 0.5 → 22 ex, and Tawhoa's Tending and
   Rune of Vital Flame fell about 99%. The busiest market and the price card changed for the same 17
   currencies.
 - **Convert chaos → divine detoured** through a Greater Orb of Transmutation disenchant.
 
 Causes:
+
 1. **The cull exemption.** The thin-market cull spared every market touching a recipe's ends. The orb
    disenchants make chaos and exalted recipe ends, so 19 filtered markets came back and priced things.
 2. **A recipe hid the market it replaced.** A recipe that took a market's pair hid that market (for
@@ -219,11 +223,13 @@ Causes:
    scan's 12 runs, so a market loop it used to return disappeared. The scan now reads markets only.
 
 Fix:
+
 - `Graph.market_edge` / `market_edges` for every market reader.
 - No recipe exemption in the cull.
 - Convert exempts only leading recipe steps.
 
 Proof:
+
 - **Tests:** `test_recipes_never_change_the_market_data`,
   `test_convert_does_not_detour_a_plain_swap_through_a_recipe` and
   `test_the_market_table_still_lists_a_market_a_recipe_took_over`, each seen failing first.

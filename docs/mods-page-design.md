@@ -50,6 +50,7 @@ Augmentation) sit higher than the rare-item orbs (Regal, Exalted, Chaos), and th
 their own value. The Gnawed cap is not a pool edge; it is a rule on which items the bone can be
 used on, and it matters for the phase 2 Desecrated section (an item above 64 cannot take a
 Gnawed bone at all).
+
 - **The unit of lookup is a pool, not a base.** The pool is decided by the base's tags, so every
   ring shares one pool while gloves split by attribute. Collapsing bases by their spawn-tag set
   reproduces poe2db's index (Rings 1, Amulets 1, Belts 1, Gloves and Boots and Body Armour and

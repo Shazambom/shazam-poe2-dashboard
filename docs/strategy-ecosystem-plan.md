@@ -11,6 +11,7 @@ rule, the SQLite-transport sidecar rule, the desktop contract, and the port-test
 all govern this work.
 
 ## The four validated player problems (owner-chosen)
+
 Each tool must solve a named problem; anything that doesn't is cut. Existing: Arbitrage=MAKE,
 Hold=KEEP. The big gap was **TIME** (when to act).
 
@@ -25,6 +26,7 @@ Hold=KEEP. The big gap was **TIME** (when to act).
 | — | **Sidecar runtime** | hosts heavy libs for 3 & 4 | ✅ DONE (Phase 6 below) |
 
 ## Cross-cutting decisions (locked)
+
 - **Ecosystem, not dashboards.** Reuse `CardDetail`, the `Loop`/`Detail` route renderer
   (`RouteSteps.jsx`), `CapitalCard`, `CurrencyPicker`, the `pingStore`/`VaalPingOrb` inbox, and
   the `nav` bus. New sub-tabs only for a genuinely distinct primary workflow. Convert lives as a
@@ -43,6 +45,7 @@ Hold=KEEP. The big gap was **TIME** (when to act).
   (`movers.MIN_VALUE_EX`); winsorize returns before any correlation.
 
 ## Shared cores (all resolved)
+
 - `backend/app/analytics_common.py` — **never built, and not needed.** Phases 3 & 4 shipped
   reading `movers._current_series()` and `holdscore._smooth` directly; no shared wrapper module
   ever justified itself. Do not create one on this doc's say-so.
@@ -56,6 +59,7 @@ Hold=KEEP. The big gap was **TIME** (when to act).
 ---
 
 ## Phase 1 — Convert (DONE — reference implementation)
+
 Cheapest way to turn `have` into `want` across the exchange graph (open path, not a loop).
 
 - **Backend** `backend/app/arbitrage.py`: `Graph.iter_paths(start, target, max_steps)` (open-path
@@ -84,6 +88,7 @@ Cheapest way to turn `have` into `want` across the exchange graph (open path, no
      them.
 
 ## Phase 1.5 — Gold-value slider (IN PROGRESS, task #59)
+
 - **Setting**: `gold_value_per_1k` (Divine per 1k gold), **user data** — add to `settings.py`
   defaults + classify user-kv in `db.py`; PUT via existing `/api/settings`.
 - **UI (DONE)**: slider in the Arbitrage rail (`GoldValueSlider.jsx`). Divine-icon thumb; label
@@ -100,7 +105,9 @@ Cheapest way to turn `have` into `want` across the exchange graph (open path, no
   ~always) and sinks negative-net loops; identical-fh routes see price as a uniform offset. Match the app aesthetic; a style guide is future work.
 
 ## Phase 2 — Ghost Wealth / "can I cash out?" (TODO) — KEEP/DECIDE, NO sidecar
+
 Realizable-vs-paper value: price sites show a number, not whether the market absorbs your stack.
+
 - **Algorithm**: `liquidity.realizable()` (shared core) per held currency; `ghost = paper −
   realizable`; slippage + fill-hours. Reuse `db.get_capital`, `ref_values`, `orderbook`, `digest`.
 - **Endpoints**: extend `GET /api/capital` (rows gain `realizable_ref, slippage_pct, fill_hours,
@@ -112,8 +119,10 @@ Realizable-vs-paper value: price sites show a number, not whether the market abs
   null; `/api/capital` back-compat.
 
 ## Phase 3 — Timing / league-arc (✅ DONE) — TIME, uses SIDECAR (DTW)
+
 Where you are on the league's price arc + good buy/sell windows, DTW-weighted toward the past
 league the current run resembles.
+
 - **Algorithm**: `holdscore._predict` gained a `weights=None` arg — a `{league: weight}` map that
   REPLACES `GAMMA**rank` recency; fully backward-compatible, and if the weights cover no league
   with data (`sum ≤ 0`) it falls back to recency, so a dead sidecar degrades to today's numbers.
@@ -139,9 +148,11 @@ league the current run resembles.
   history/band/windows, phase thresholds), `test_sidecar_runner.py::…arc…`, `test_signals_api.py`.
 
 ## Phase 4 — What's about to move (✅ DONE) — TIME, uses SIDECAR + notification inbox
+
 Spot an item starting to pump/crash early — a market-signal inbox distinct from the live trade-ping
 orb. (The `mlxtend` "X moves → Y follows" association-rule variant stays deferred — not needed to
 ship the inbox, and it would bloat the sidecar binary; the volume-confirmed discord is enough.)
+
 - **Algorithm** (sidecar, from Phase 6): matrix-profile **discords** (`STUMPY`, `normalize=False`,
   short motif `m=3`) over each liquid item, **volume-confirmed** (MAD-z on volume — the piece Movers
   lacks) and RECENT. The 2h analytics loop enqueues a `discords` refresh for the on-screen league.
@@ -160,6 +171,7 @@ ship the inbox, and it would bloat the sidecar binary; the volume-confirmed disc
   (endpoint degrade + ack round-trip); discord math in `test_discords.py` (Phase 6).
 
 ## Phase 5 — Centrality (✅ DONE) — connective tissue, stdlib, NO page/sidecar
+
 `backend/app/centrality.py`: **PageRank** (power iteration) + **betweenness-lite** (reuses
 `Graph.iter_paths` — the route-search DFS — bounded to the top-K currencies), over the exchange
 graph weighted by executed value/hour (`e.vol_in_per_h * ref_value[src]` — the measure `board()`
@@ -173,11 +185,13 @@ snapshot, or sidecar (computed live from the in-memory graph). Tests: `backend/t
 Drive-validated on web + desktop: hubs resolve to divine/chaos/mirror (economically correct).
 
 ## Phase 6 — Sidecar runtime (✅ DONE) — enables 3 & 4
+
 A second bundled-per-platform PyInstaller binary (`numpy/stumpy/dtaidistance`) that hosts heavy
 analytics off the lean backend. Spawned + supervised by the BACKEND as a child (supervision tree
 Electron→backend→sidecar). Transport = **SQLite, no network**.
 
 **Built:**
+
 - **Transport** `backend/app/analytics.py` — stdlib-only, **connection-injected** so BOTH the
   backend (`db._conn()`, tables via ATTACHed `market`) and the lean sidecar (own `market.sqlite`
   conn) share it with no boot side effects. `enqueue` (coalescing) / `claim` (lock-free pre-check
@@ -235,6 +249,7 @@ graceful-degrades (sidecar off), board/capital unregressed. **NOT shipped** — 
 ### Phase 6 plumbing reference — entry points, endpoints, contracts (Phase 3/4 build ON this)
 
 **Processes / entry points**
+
 - **Sidecar binary** `backend/sidecar/run_sidecar.py` → `runner.main()`. PyInstaller onefile
   `poe2arb-sidecar[.exe]` (numpy/stumpy, ~73 MB). Opens `market.sqlite` (RO reads + writes to the
   two analytics tables) via its OWN plain sqlite3 conn — it must NEVER `import app.db` (that boots
@@ -247,6 +262,7 @@ graceful-degrades (sidecar off), board/capital unregressed. **NOT shipped** — 
   held-open stdin pipe (EOF on backend death) + `ARBITER_PARENT_PID`.
 
 **Env-var contracts** (set by Electron `desktop/src/main.js`, read by the backend/sidecar)
+
 - `DATA_DIR` — dir holding `user.sqlite` + `market.sqlite` (existing).
 - `MARKET_SEED` — bundled snapshot to seed `market.sqlite` (existing).
 - `ARBITER_PARENT_PID` — backend's parent (Electron) pid → backend watchdog. Backend passes its own
@@ -263,6 +279,7 @@ surface the Phase-4 inbox will consume.
 
 **SQLite transport** (`app/analytics.py`, stdlib-only, connection-injected — pass `db._conn()` in
 the backend or the sidecar's own conn):
+
 - Tables (market side, `MARKET_SCHEMA`): `analytics_jobs(id,kind,params_json,state,enqueued_at,
   started_at,finished_at,error)` — control channel; `analytics_cache(kind,key,computed_at,
   value_json)` PK`(kind,key)` — results, sidecar is SOLE writer.
@@ -302,9 +319,11 @@ calls and `bkLog` fires on beta/dev only. See CLAUDE.md's telemetry rule):
    `dtaidistance`'s C extension crashing under the Windows PyInstaller onefile.
 
 ### 7a. Slim the sidecar to numpy-only (fixes #2 AND cuts ~63 MB) — ✅ DONE (2026-09-16)
+
 Kept the sidecar architecture (it's the right home for heavy/slow background work + future jobs); the
 bloat was one dependency choice, not the concept. Our data is tiny (~few hundred items × ~15 daily
 points, `m=3`), so the reimplementation is trivially cheap and exact:
+
 - `discords._matrix_profile(a, m)` — pure-numpy brute-force non-normalized matrix profile, replacing
   `stumpy.stump(closes, m, normalize=False)`. `compute()` takes an injectable `_mp` (defaults to numpy;
   the gate injects real stumpy).
@@ -319,6 +338,7 @@ points, `m=3`), so the reimplementation is trivially cheap and exact:
 **⚠️ Migration TDD gate — DONE, and now the permanent proof:** `backend/tests/test_sidecar_equivalence.py`
 **imports the REAL heavy libraries** (`stumpy`, `dtaidistance`) alongside the numpy implementations,
 fuzzes randomized inputs, and asserts **1:1** agreement (`rtol=atol=1e-6`):
+
 - Matrix profile: 120 seeds × random `closes` (varied length ≥ `2m+1`, scale, planted spikes),
   `_matrix_profile(a,m)` == `stumpy.stump(a,m,normalize=False)[:,0]` (finite-mask equal + allclose),
   exclusion zone `ceil(m/4)`, plus an argmax-never-disagrees check and a full-`compute()` end-to-end
@@ -337,11 +357,13 @@ non-zero and turns the release build RED. This reproduces the exact v0.2.49 cras
 build time, so a numpy-only regression can never ship again.
 
 ### 7b. Deploy efficiency — make updates proportional to what changed (STILL OPEN as of 0.3.1)
+
 Nothing here has been started: `desktop/build-backend.sh` and `desktop/build-sidecar.sh` both still
 pass `--onefile`, and `market-seed` is still a plain `extraResources` entry in `desktop/package.json`.
 
 electron-updater already ships **block-differential** downloads (the `.blockmap` assets), but two
 things defeat it:
+
 - **PyInstaller `--onefile`** compresses each binary into one blob, so a 1-line change reshuffles all
   ~21 MB (backend) / whole sidecar of bytes → nearly a full redownload. **Switch backend + sidecar to
   `--onedir`**: numpy/etc. become stable uncompressed files whose blocks are byte-identical across
@@ -357,16 +379,19 @@ things defeat it:
   an *unchanged* seed, never about making the seed smaller.
 
 ### Note — sidecar output IS cached
+
 The sidecar is never called synchronously: it upserts results into `analytics_cache` (market.sqlite);
 endpoints (`/api/signals|arc|leaguearc`) only READ that table (instant, graceful-degrade). The cache is
 runtime-only (not in the snapshot, self-healed), so it's empty for ~1 min after an install/re-seed
 until the sidecar's first pass — which, pre-0.2.48, never happened (watchdog killed it first).
 
 ## Suggested order (lightest-first)
+
 1.5 slider → 5 centrality → 2 Ghost Wealth → 6 sidecar scaffold (+watchdog retrofit) → 3 arc →
 4 signals. Each phase: `/tdd` (tests first), then drive-validate over CDP, web env first.
 
 ## Build & validate workflow (how to actually run/test this repo)
+
 - **Backend tests**: `python3.12 -m venv .venv-test && source .venv-test/bin/activate && pip install
   -r backend/requirements.txt pytest`; run `DATA_DIR=$(mktemp -d) MARKET_SEED= python -m pytest
   backend/tests/ -q`. Tests build a synthetic `arbitrage.Graph` (no DB needed) — see test_convert.py.

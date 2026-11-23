@@ -132,6 +132,7 @@ working: *we don't believe that measurement*. The 61% inversion figure is the in
 not evidence of a defect, and whole-spectrum rank accuracy is arguably not this board's loss function anyway.
 
 The real quarrels with `conf` are narrower:
+
 - **The target should probably be the cross-sectional mean, not zero.** Every applied source shrinks toward a
   grand mean (IMDb's `C`, James–Stein's `ν`, Jewett's *"shrink observed health indices towards a regional mean"*).
   If the board's mean return is negative, zero is not neutral and unknown assets get pushed somewhere flattering.
@@ -297,6 +298,7 @@ decision each one needs are in the handoff:
 [`2026-09-20-hold-open-items-handoff.md`](2026-09-20-hold-open-items-handoff.md).
 
 Still open, **not** part of this change:
+
 - **The forecast column.** Either integrate it into the score before ranking (AQR: integrating *"avoid[s] stocks
   with offsetting style exposures"* — literally this bug) or rename the board to describe what it measures.
 - **The band.** At minimum sample SD; properly a prediction interval, or suppress the cell (NCHS-style).

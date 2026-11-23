@@ -28,6 +28,7 @@ the mod tables arrive, and the `[seed]` lines read `replacing … / replaced: no
 keeps the previous DB, leaves no temp file and reports `FAILED`.
 
 **Lessons.**
+
 - A silent fallback ("will crawl live") hid a platform bug for weeks. The seed step now reports
   kept / replaced / failed over beta telemetry, and the mod-table counts at startup.
 - The league crawl used to walk every league's item list, two kv reads per item, so a seeded

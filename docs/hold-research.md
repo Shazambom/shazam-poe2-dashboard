@@ -179,6 +179,7 @@ to rank each league **regime** its own way.
 
 **Detecting the regime from the market, not the calendar** (`backend/app/leagueregime.py`). Two
 signals, each against the league's own history, boundaries from what they measure:
+
 - *persistence* — cross-sectional Spearman between each liquid item's return over the last 3 days and
   the 3 days before (weekly median). Positive while prices are still being discovered (a re-priced item
   keeps going), ≤ 0 once they are found (moves are noise and partly reverse). EARLY ↔ MID at 0.
@@ -194,6 +195,7 @@ or hazard models); community: arpgseasons.com league cycle (secondary).
 
 **What works in each regime** (walk-forward, each league with only earlier leagues, per-league sign
 agreement, 7d/14d holds):
+
 - *Early (1–14, 5 leagues)*: the 2026-09-28 set is best — record (IC .46/.50, 4/4), price (safest top 10,
   crash ratio .41), dip; trend and recent return have spike tops early.
 - *Mid (15–45, 4 leagues)*: **price flips** (IC −.11, 0/4) and the early set is ≈ 0. Positive in 4/4 on
@@ -318,6 +320,7 @@ handicap that is largest mid-league. Proposed: grade against ~2,000 random 10-it
 (percentile of the top 10, random-10 beat rate as the null) — the per-regime targets the doc already asks for.
 
 **Proposals, ranked (impact ÷ overfit risk):**
+
 1. *Random-10 null* for grading (above). No ranking risk.
 2. *Placebo critical values* — permute item labels within each day, push placebo signals through the same
    "keep the best k" rule ~200 times; the distribution of cells gained is the bar a real change must clear
@@ -708,6 +711,7 @@ return is drift, and drift persists. Three things do depend on the holding perio
 - `window_same` is 0.00 in every league and `window_overlap` 0.27–0.47.
 
 **Limits, stated plainly.**
+
 - The lists overlap a lot: on the current league the 24h and 14d top 10 share about 8 names, and the first
   few places are usually the same, because the same items are the best holds over any of these periods.
   Forcing more difference costs returns (the chance band, and forecast weights 0.5 / 1.0 above).
