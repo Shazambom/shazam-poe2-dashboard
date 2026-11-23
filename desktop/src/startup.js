@@ -61,20 +61,19 @@ async function step(env, id, fn) {
 }
 
 // A bundled per-platform binary: the packed location (extraResources) preferred, then the dev
-// location. `found` is the existing path or null; `expected` is the packed path to report when
-// nothing is found (a packaging regression). Shared by the backend and the analytics sidecar.
-/** @param {StartupEnv} env @param {string} dir @param {string} name */
+// location; null when neither exists. Shared by the backend and the analytics sidecar.
+/** @param {StartupEnv} env @param {string} dir @param {string} name @returns {Promise<string | null>} */
 async function findBundledBin(env, dir, name) {
   const packed = path.join(env.resourcesPath || '', dir, name)
+  if (await exists(env.fs, packed)) return packed
   const dev = path.join(env.appRoot, dir, name)
-  const found = await exists(env.fs, packed) ? packed : (await exists(env.fs, dev) ? dev : null)
-  return { found, expected: packed }
+  return await exists(env.fs, dev) ? dev : null
 }
 
 /** @param {StartupEnv} env */
 async function backendBinary(env) {
   const name = env.platform === 'win32' ? 'poe2arb-backend.exe' : 'poe2arb-backend'
-  return (await findBundledBin(env, 'backend-bin', name)).found
+  return findBundledBin(env, 'backend-bin', name)
 }
 
 // Bundled market snapshot (extraResources). The backend seeds market.sqlite from it on first run /
@@ -113,7 +112,7 @@ async function planBackend(env) {
   // SIDECAR_BIN empty so sidecar_supervisor launches `[sys.executable, "--sidecar"]`.
   const sidecarBin = await step(env, 'sidecar-bin', async () => {
     const sidecarName = env.platform === 'win32' ? 'poe2arb-sidecar.exe' : 'poe2arb-sidecar'
-    return (await findBundledBin(env, 'sidecar-bin', sidecarName)).found || ''
+    return (await findBundledBin(env, 'sidecar-bin', sidecarName)) || ''
   })
   env.log('[backend] sidecar:', sidecarBin || `${bin} --sidecar`)
   return { bin, dataDir, marketSeed, sidecarBin }
