@@ -319,7 +319,8 @@ function profileBackend(opts) {
 function getProcessTree(rootPid) {
   const out = execSync('ps -axo pid,ppid,rss,pcpu,command', { encoding: 'utf8' })
   const rows = out.trim().split('\n').slice(1).map((line) => {
-    const m = line.trim().match(/^(\d+)\s+(\d+)\s+(\d+)\s+([\d.]+)\s+(.*)$/)
+    // The line is trimmed, so the command after the last column's spaces starts with a non-space.
+    const m = line.trim().match(/^(\d+)\s+(\d+)\s+(\d+)\s+([\d.]+)\s+(\S.*)$/)
     if (!m) return null
     return { pid: Number(m[1]), ppid: Number(m[2]), rssKB: Number(m[3]), cpu: Number(m[4]), cmd: m[5] }
   }).filter(Boolean)

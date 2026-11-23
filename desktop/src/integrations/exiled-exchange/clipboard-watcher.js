@@ -90,7 +90,8 @@ function parseItem(raw) {
     if (isSeparator(line)) break            // header ends at the first divider
     const t = line.trim()
     if (!t) continue
-    const m = t.match(/^([^:]{1,32}):\s*(.+)$/)
+    // t is trimmed, so the value after the colon (once leading space is skipped) starts with a non-space.
+    const m = t.match(/^([^:]{1,32}):\s*(\S.*)$/)
     if (m) {
       const label = m[1].trim()
       const value = m[2].trim()
@@ -110,16 +111,16 @@ function parseItem(raw) {
 
   // Flags are standalone lines. English-canonical (localized flag words vary and
   // aren't needed for identity); raw is always available for deeper parsing.
-  const flag = (word) => new RegExp(`^${word}$`, 'im').test(raw)
+  const flag = (line) => line.test(raw)
 
   return {
     name: nameLines[0] || '',
     baseType: nameLines[1] || '',
     rarity: rarity || 'Unknown',
     itemClass: itemClass || '',
-    corrupted: flag('Corrupted'),
-    unidentified: flag('Unidentified'),
-    mirrored: flag('Mirrored'),
+    corrupted: flag(/^Corrupted$/im),
+    unidentified: flag(/^Unidentified$/im),
+    mirrored: flag(/^Mirrored$/im),
     raw,
     ts: Date.now(),
   }
