@@ -1,5 +1,5 @@
 import { ignoredError } from './lib/ignoredError.js'
-import React, { Suspense, lazy, useEffect, useRef, useState } from 'react'
+import React, { Suspense, lazy, useEffect, useEffectEvent, useRef, useState } from 'react'
 import { motion, AnimatePresence, MotionConfig } from 'motion/react'
 import { THEMES, useTheme } from './lib/themeStore.js'
 import { api, bus, surface } from './lib/api.js'
@@ -107,12 +107,14 @@ export default function App() {
   // action lands on the SAME CardDetail the orb opens. Phase 3: poll the league-arc anchor for the
   // topbar day chip. Both re-key on league change; both degrade silently when the sidecar is idle.
   useEffect(() => (SNAP ? undefined : startSignalPolling()), [status?.league])
+  const getAssetOpener = useEffectEvent(() => assetModal.open)
   const lastNew = useSignals(s => s.lastNew)
   useEffect(() => {
     if (SNAP || !lastNew?.signals?.length) return
     const names = lastNew.signals.map(s => s.name)
     const title = `${names.length} new market signal${names.length === 1 ? '' : 's'}`
-    const openFirst = () => assetModal.open(names[0])   // the card is app-global: open it where the user is
+    const openAsset = getAssetOpener()
+    const openFirst = () => openAsset(names[0])   // the card is app-global: open it where the user is
     notify('signals', { title, body: names.slice(0, 3).join(', '), tag: `signals-${lastNew.at}`, onOpen: openFirst, ttl: 12000, node: (
       <div className="ping-banner">
         <span className="pb-dot online" />
