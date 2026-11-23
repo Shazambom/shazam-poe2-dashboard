@@ -47,11 +47,11 @@ META = {"chaos": "Metadata/Items/Currency/CurrencyRerollRare",
 def _check(name: str, got) -> None:
     path = GOLDEN / f"{name}.json"
     text = json.dumps(got, sort_keys=True, indent=1, default=str)
-    if os.environ.get("UPDATE_GOLDEN") or not path.exists():
+    if os.environ.get("UPDATE_GOLDEN"):
         GOLDEN.mkdir(exist_ok=True)
         path.write_text(text)
-        if os.environ.get("UPDATE_GOLDEN"):
-            return
+        return
+    assert path.exists(), f"golden {name} is missing (UPDATE_GOLDEN=1 to record it)"
     assert json.loads(path.read_text()) == json.loads(text), f"golden {name} drifted (UPDATE_GOLDEN=1 to accept)"
 
 
@@ -170,3 +170,12 @@ def test_edge_table_and_board_pairs_golden(frozen):
     arbitrage.invalidate_caches()
     _check("edge_table", arbitrage.edge_table())
     _check("board_pairs", sorted(arbitrage.board_pairs()))
+
+
+def test_a_missing_golden_fails_instead_of_writing_itself(monkeypatch):
+    """A deleted golden must fail the suite. It used to be rewritten from the current output and pass."""
+    monkeypatch.delenv("UPDATE_GOLDEN", raising=False)
+    name = "__never_recorded__"
+    with pytest.raises(AssertionError, match="missing"):
+        _check(name, {"a": 1})
+    assert not (GOLDEN / f"{name}.json").exists()
