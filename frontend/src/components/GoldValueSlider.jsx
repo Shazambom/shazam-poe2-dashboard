@@ -32,7 +32,7 @@ export default function GoldValueSlider({ onCommit }) {
       const gv = Number(s.gold_value_per_1k) || 0.01
       setGpd(Math.min(GPD_MAX, Math.max(GPD_MIN, Math.round(1000 / gv))))
     }).catch(() => ignoredError('load gold value'))
-  }, [])
+  }, [arm])
 
   const commit = (nextGpd) => { setGpd(nextGpd); save(nextGpd) }
 
