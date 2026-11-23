@@ -430,7 +430,7 @@ export default function StratCalcView({ league, currencies }) {
       ignoredError('price strategy search')
       // The search never ran: try it again shortly, a few times, then leave it to its hourly turn.
       const tries = failedTries.current.get(key) ?? 0
-      if (tries >= PRICE_RETRY_MS.length) return
+      if (tries >= PRICE_RETRY_MS.length) { failedTries.current.delete(key); return }   // its hourly turn starts afresh
       failedTries.current.set(key, tries + 1)
       SP.retryLater(retryAt.current, job, PRICE_RETRY_MS[tries], Date.now())
       clearTimeout(wakeTimer.current)

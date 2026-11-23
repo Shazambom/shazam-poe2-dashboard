@@ -357,6 +357,12 @@ it('strategy pricing: retries of a failing search are bounded, then it waits its
   expect(priceQuery).toHaveBeenCalledTimes(4)
   for (let i = 0; i < 20; i++) await advance(60_000)
   expect(priceQuery).toHaveBeenCalledTimes(4)
+  // Its next turn, an hour on (the queue runs again on the next edit), fails too: a fresh set of short retries.
+  for (let i = 0; i < 41; i++) await advance(60_000)
+  await act(async () => { useStratStore.getState().change(d => sc.rename(d, 's', 'Edited an hour later')) })
+  expect(priceQuery).toHaveBeenCalledTimes(5)
+  for (let i = 0; i < 25; i++) await advance(1000)
+  expect(priceQuery).toHaveBeenCalledTimes(8)
   expect(toasts).not.toHaveBeenCalled()
   view.unmount()
   await useStratStore.getState().flush()
