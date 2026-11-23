@@ -42,7 +42,7 @@ const STEPS = Object.freeze([
 ])
 
 /**
- * @typedef {{ fs: { access: (p: string) => Promise<any>, mkdir: (p: string, o?: any) => Promise<any> },
+ * @typedef {{ fs: { stat: (p: string) => Promise<any>, mkdir: (p: string, o?: any) => Promise<any> },
  *   resourcesPath: string | undefined, appRoot: string, platform: string, dataDir: () => string,
  *   log: (...a: any[]) => void, mark?: (id: string, phase: 'start' | 'done') => void,
  *   stopped?: () => boolean }} StartupEnv
@@ -59,11 +59,13 @@ async function step(env, id, fn) {
   return out
 }
 
-// fs.existsSync's answer, without blocking: false for any error (missing, unreadable parent).
+// fs.existsSync's answer, without blocking: false for any error (missing, unreadable parent). Asked through
+// stat, never access: Electron's fs.promises.access answers ENOENT for a directory inside app.asar, which is
+// where the packaged app-dist lives.
 /** @param {StartupEnv} env @param {string} p */
 async function exists(env, p) {
   try {
-    await env.fs.access(p)
+    await env.fs.stat(p)
     return true
   } catch {
     return false

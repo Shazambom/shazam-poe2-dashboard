@@ -26,11 +26,18 @@ function fakeFs(files, { mkdirError = null, delay = () => 0, trace = () => {} } 
   }
   return {
     calls,
+    // Electron's fs.promises.access answers ENOENT for a DIRECTORY inside app.asar (measured on the packaged
+    // 45.4.1 build: existsSync true, stat ok, access ENOENT), and app-dist is exactly that. Existence is asked
+    // through stat; access is here only to fail the way Electron's does.
     async access(p) {
+      throw Object.assign(new Error(`ENOENT: ${p} (fs.promises.access inside app.asar)`), { code: 'ENOENT' })
+    },
+    async stat(p) {
       const call = `exists ${p}`
       calls.push(call)
       await settle(call)
       if (!have.has(p)) throw Object.assign(new Error(`ENOENT: ${p}`), { code: 'ENOENT' })
+      return {}
     },
     async mkdir(p, o) {
       const call = `mkdir ${p} ${JSON.stringify(o)}`
@@ -241,4 +248,12 @@ test('a quit that begins while startup reads the disk: no backend is spawned, no
   const normal = await run(FULL, { stopped: () => false })
   assert.equal(normal.booted, true)
   assert.equal(normal.hooks.launched.length, 1)
+})
+
+// The packaged 0.3.17 lint build never reached the Board: app-dist lives inside app.asar, access() said it was
+// missing, and the UI server was pointed at Resources/frontend/dist, which does not exist in a packaged app.
+test('the UI bundle is found through stat, which works on a directory inside app.asar', async () => {
+  const r = await run(FULL)
+  assert.equal(r.error, null)
+  assert.deepEqual(r.hooks.served, [join(APP, 'app-dist')])
 })
