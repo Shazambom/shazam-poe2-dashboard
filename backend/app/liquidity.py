@@ -32,7 +32,7 @@ from .currencies import registry
 CROSS_TOLERANCE_PCT = 10.0
 
 
-def cash_set(g: "arbitrage.Graph", ref_value: dict[str, float]) -> set[str]:
+def cash_set(g: arbitrage.Graph, ref_value: dict[str, float]) -> set[str]:
     """The liquid, cash-like currencies: the market's HUBS — the same top-`hub_count` currencies
     by executed value that the Board lights with a ⬢ (centrality.hubs). These ARE realizable
     wealth (a player doesn't "cash out" a hub, they already hold liquid value), so they realize
@@ -89,7 +89,7 @@ CASHOUT_MAX_STEPS = 3
 
 
 def realizable(
-    g: "arbitrage.Graph",
+    g: arbitrage.Graph,
     ref_value: dict[str, float],
     currency: str,
     qty: float,
@@ -224,7 +224,7 @@ def realizable(
 
 
 def capital_rows(
-    caps: dict[str, float], g: "arbitrage.Graph", ref_value: dict[str, float]
+    caps: dict[str, float], g: arbitrage.Graph, ref_value: dict[str, float]
 ) -> dict:
     """The /api/capital payload: every holding priced at paper AND at what it would realize
     (Ghost Wealth), plus the totals. Pure over (caps, graph, ref_value)."""
@@ -326,7 +326,7 @@ def capital_rows(
 
 
 def group_icons(
-    g: "arbitrage.Graph", ref_value: dict[str, float], group_of: dict[str, str]
+    g: arbitrage.Graph, ref_value: dict[str, float], group_of: dict[str, str]
 ) -> dict[str, str]:
     """{group: its most-traded currency} — the item that stands for a Stash group, derived from the
     market (centrality.traded_value: executed value per hour out of each currency). A group with

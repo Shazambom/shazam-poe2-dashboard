@@ -79,7 +79,7 @@ class Edge:
     meta: dict = field(default_factory=dict)
     # A recipe that took a market's step keeps that market here (never in `meta`, which the screens
     # get as JSON), so `traded_rate` still prices the pair at what the market traded at.
-    market: "Edge | None" = None
+    market: Edge | None = None
 
     def capacity_in(self) -> float:
         """Max src units this edge can absorb."""
@@ -153,7 +153,7 @@ class Graph:
     # Recipes never change market data (docs/bugs/2026-09-29-crafting-recipes-missing-from-routes.md):
     # route search walks `edges`/`adj`, where a recipe may hold a pair's slot; everything that prices,
     # ranks or describes a MARKET reads these two, which give the market itself.
-    def market_edge(self, a: str, b: str) -> "Edge | None":
+    def market_edge(self, a: str, b: str) -> Edge | None:
         """The a->b exchange market: the edge, or the market a recipe took the slot from."""
         e = self.edges.get((a, b))
         return e.market if (e is not None and e.kind == "recipe") else e
@@ -167,7 +167,7 @@ class Graph:
 
     # ------------------------------------------------------------ build
     @classmethod
-    def build(cls, volume_window_h: float | None = None) -> "Graph":
+    def build(cls, volume_window_h: float | None = None) -> Graph:
         """`volume_window_h`: the hours each market's traded volume is averaged over (MARKET_VOLUME_WINDOW_H for the
         market every screen prices from; the route search passes the Arbitrage page's own window)."""
         s = get_settings()
