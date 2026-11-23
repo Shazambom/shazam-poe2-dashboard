@@ -10,7 +10,7 @@
 // guard still cannot write user data. A screenshot never blocks a report: any failure marks
 // `partial` and the sweep carries on; the window is destroyed and the filter removed in `finally`.
 'use strict'
-const path = require('path')
+const path = require('node:path')
 
 const SNAP_URL_SUFFIX = '/?snap=1'
 const WIDTH = 1200

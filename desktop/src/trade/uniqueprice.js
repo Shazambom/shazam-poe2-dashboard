@@ -4,8 +4,8 @@
 // (policy trade-search for the search, trade-fetch for the listings). Only the prices go back to the
 // renderer, which turns them into divines with the app's one value table. Dependencies are injectable.
 'use strict'
-const fs = require('fs')
-const path = require('path')
+const fs = require('node:fs')
+const path = require('node:path')
 
 const { budgeted } = require('./budget.js')
 const { TRADE_BASE, FETCH_MAX, INSTANT_BUYOUT } = require('./urls.js')

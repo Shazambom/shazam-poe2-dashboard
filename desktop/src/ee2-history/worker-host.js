@@ -3,7 +3,7 @@
 // 3 s + a little; the process exits itself after 10 idle minutes and is re-spawned on the next use
 // by the consumer (which also throttles restarts after a failure).
 'use strict'
-const path = require('path')
+const path = require('node:path')
 
 const IDLE_EXIT_MS = 10 * 60 * 1000
 const BUILD_TIMEOUT_MS = 3500

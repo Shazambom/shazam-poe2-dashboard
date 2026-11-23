@@ -20,9 +20,9 @@
 // we do not import EE2 code.
 'use strict'
 
-const fs = require('fs')
-const os = require('os')
-const path = require('path')
+const fs = require('node:fs')
+const os = require('node:os')
+const path = require('node:path')
 
 function configDir() {
   const home = os.homedir()

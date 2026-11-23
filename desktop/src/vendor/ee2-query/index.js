@@ -6,7 +6,7 @@
 //   buildQuery(raw, prefs) → { q, name, item:{name, baseType, rarity, itemClass}, host }
 //                          | { error: { stage: 'parse'|'lang'|'currency'|'presets'|'request', message } }
 'use strict'
-const path = require('path')
+const path = require('node:path')
 const { makeFetch } = require('./shims/fetch.js')
 const config = require('./shims/config.js')
 const tradedata = require('./shims/tradedata.js')

@@ -3,7 +3,7 @@
 // Electron and no network. State comes from four credential-free endpoints only — never
 // /api/session or /api/oauth/* — then the allow-list and redactDeep run over state + logs.
 'use strict'
-const { gzipSync, constants } = require('zlib')
+const { gzipSync, constants } = require('node:zlib')
 const { SETTINGS_KEYS, pickAllowed, redactDeep } = require('./redact.js')
 
 const STATE_ENDPOINTS = ['/api/diag', '/api/status', '/api/backfill', '/api/settings']

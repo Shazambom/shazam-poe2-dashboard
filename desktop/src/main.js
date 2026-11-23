@@ -8,10 +8,10 @@
 //   * being Chromium, we ARE the browser: the PoE login happens in our own window and
 //     the HttpOnly POESESSID is read from our session and handed to the backend.
 const { app, BrowserWindow, Menu, Notification, clipboard, dialog, ipcMain, session, shell, nativeTheme } = require('electron')
-const { spawn } = require('child_process')
-const fs = require('fs')
-const http = require('http')
-const path = require('path')
+const { spawn } = require('node:child_process')
+const fs = require('node:fs')
+const http = require('node:http')
+const path = require('node:path')
 const telemetry = require('./telemetry.js')
 const { loginConfirmedAt, SIGNED_IN_PROBE, LOGIN_POLL_MS } = require('./poelogin.js')
 const { postItemText, postQuery } = require('./dev-ee2-telemetry.js')   // beta/dev-gated inside installLog

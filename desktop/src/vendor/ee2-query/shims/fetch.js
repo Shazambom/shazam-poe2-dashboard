@@ -1,7 +1,7 @@
 // The port's fetch(): serves `ee2data://…` from the data dir and refuses everything else. Installed
 // on globalThis by index.js for the lifetime of the worker/CLI process (never inside main).
 'use strict'
-const fs = require('fs'), path = require('path')
+const fs = require('node:fs'), path = require('node:path')
 function makeFetch(dataDir) {
   return async function ee2Fetch(url) {
     const u = String(url)

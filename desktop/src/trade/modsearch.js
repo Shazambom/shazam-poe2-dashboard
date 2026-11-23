@@ -3,8 +3,8 @@
 // is hand-listed: a stat's ids come from the site's stat catalogue and an item kind's category
 // from its bases, both EE2's data (vendor/ee2-query/data, synced every release), read once.
 'use strict'
-const fs = require('fs')
-const path = require('path')
+const fs = require('node:fs')
+const path = require('node:path')
 
 const DATA = path.join(__dirname, '..', 'vendor', 'ee2-query', 'data')
 const BUNDLE = path.join(__dirname, '..', 'vendor', 'ee2-query', 'vendor', 'bundle.cjs')

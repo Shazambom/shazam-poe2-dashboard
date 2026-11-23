@@ -32,7 +32,7 @@
 //   'error'        Error    non-fatal (e.g. clipboard-fallback note); never thrown
 'use strict'
 
-const { EventEmitter } = require('events')
+const { EventEmitter } = require('node:events')
 const { ClipboardWatcher, captureItemBurst } = require('./clipboard-watcher')
 const { HotkeyWatcher } = require('./hotkey-watcher')
 const { readShortcuts, watchConfig } = require('./ee2-config')

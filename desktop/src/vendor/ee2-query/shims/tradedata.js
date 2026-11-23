@@ -1,7 +1,7 @@
 // EE2's useTradeData() served from the release-time snapshot (data/trade/{items,stats}.json) —
 // the same shapes TradeData.ts derives from GGG's /api/trade2/data endpoints, no fetch.
 'use strict'
-const fs = require('fs'), path = require('path')
+const fs = require('node:fs'), path = require('node:path')
 let dataDir = null
 function setDataDir(d) { dataDir = d }
 function derive() {

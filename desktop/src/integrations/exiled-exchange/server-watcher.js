@@ -24,8 +24,8 @@
 // then confirming each candidate with a /config probe. No brute port-scan.
 'use strict'
 
-const http = require('http')
-const { execFile } = require('child_process')
+const http = require('node:http')
+const { execFile } = require('node:child_process')
 
 // Run a short, guarded command and hand back stdout (or '' on any failure).
 function run(cmd, args, timeout = 2500) {

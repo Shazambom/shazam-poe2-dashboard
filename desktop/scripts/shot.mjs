@@ -2,7 +2,7 @@
 // Launch the app with --remote-debugging-port=9222 first, then (from desktop/):
 //   node scripts/shot.mjs ".pulse-strip" out.png     (selector defaults to body, out to shot.png)
 import WebSocket from 'ws'
-import fs from 'fs'
+import fs from 'node:fs'
 
 const sel = process.argv[2] || 'body'
 const out = process.argv[3] || 'shot.png'

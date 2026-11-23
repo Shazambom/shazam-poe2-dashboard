@@ -5,11 +5,11 @@
 // never an error.
 'use strict'
 
-const fs = require('fs')
+const fs = require('node:fs')
 const fsp = fs.promises
-const os = require('os')
-const path = require('path')
-const { StringDecoder } = require('string_decoder')
+const os = require('node:os')
+const path = require('node:path')
+const { StringDecoder } = require('node:string_decoder')
 
 // Common install locations for PoE2's Client.txt (standalone + Steam), per
 // platform. Accepts optional (platform, home) for deterministic testing.

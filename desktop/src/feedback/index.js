@@ -8,10 +8,10 @@
 //   feedback:drag    → native drag of that file out of the window (into the Discord post)
 //   feedback:reveal  → show the file in Finder/Explorer;  feedback:discord → open the invite
 'use strict'
-const fs = require('fs')
-const path = require('path')
-const { randomBytes, randomUUID } = require('crypto')
-const os = require('os')
+const fs = require('node:fs')
+const path = require('node:path')
+const { randomBytes, randomUUID } = require('node:crypto')
+const os = require('node:os')
 const { DESTS } = require('./dests.js')
 const { installId } = require('./installid.js')
 

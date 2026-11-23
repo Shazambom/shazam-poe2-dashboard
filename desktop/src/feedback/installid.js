@@ -2,9 +2,9 @@
 // sealed report, so the owner can tell two reports from one machine apart without it ever being
 // readable by anyone else. Not an identity — a new id is just "unknown reporter".
 'use strict'
-const fs = require('fs')
-const path = require('path')
-const { randomBytes } = require('crypto')
+const fs = require('node:fs')
+const path = require('node:path')
+const { randomBytes } = require('node:crypto')
 
 function installId(dataDir) {
   const file = path.join(dataDir, 'install-id')

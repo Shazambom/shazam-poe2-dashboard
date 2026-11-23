@@ -13,10 +13,10 @@
 //      out to tasklist/ps, so it's optional and fully guarded).
 'use strict'
 
-const fs = require('fs')
-const os = require('os')
-const path = require('path')
-const { execFile } = require('child_process')
+const fs = require('node:fs')
+const os = require('node:os')
+const path = require('node:path')
+const { execFile } = require('node:child_process')
 
 // Candidate config directories per platform. EE2 stores config under an Electron
 // userData dir named "exiled-exchange-2" (confirmed by EE2 main/src/host-files/
