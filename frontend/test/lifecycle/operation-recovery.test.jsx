@@ -7,6 +7,7 @@ import RecipesView from '../../src/components/RecipesView.jsx'
 import SettingsView from '../../src/components/SettingsView.jsx'
 import CautionSlider from '../../src/components/CautionSlider.jsx'
 import NotificationsPanel from '../../src/components/NotificationsPanel.jsx'
+import AccountsPanel from '../../src/components/AccountsPanel.jsx'
 import { useStatus } from '../../src/lib/statusStore.js'
 import { saveHistoryPrefs } from '../../src/lib/ee2History.js'
 import { useWorkspace } from '../../src/lib/workspaceStore.js'
@@ -268,4 +269,47 @@ it('release channel: when the switch fails, it ends on the channel actually in e
   expect(screen.getByRole('switch', { name: /Beta updates/ }).getAttribute('aria-checked')).toBe('true')
   expect(document.body.textContent).toBe(before)
   expect(toasts).not.toHaveBeenCalled()
+})
+
+it('login cookie: a failed mirror into the app session is retried in the background until it lands', async () => {
+  installApiMock()
+  vi.spyOn(api, 'connectSession').mockResolvedValue({ message: 'Connected as Exile' })
+  const desk = window.poe2desktop
+  const setCookie = vi.spyOn(desk, 'setCookie')
+    .mockRejectedValueOnce(new Error('ipc closed'))
+    .mockResolvedValueOnce({ ok: false, message: 'cookie store busy' })
+    .mockResolvedValue({ ok: true })
+  const view = render(<AccountsPanel />)
+  await settle()
+  fireEvent.change(screen.getByPlaceholderText('POESESSID'), { target: { value: 'abc123' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Use this cookie' }))
+  await settle()
+  expect(setCookie).toHaveBeenCalledTimes(1)
+  expect(screen.getByText('Connected as Exile')).toBeTruthy()
+  const after = view.container.textContent
+  await advance(1000)
+  expect(setCookie).toHaveBeenCalledTimes(2)
+  await advance(4000)
+  expect(setCookie).toHaveBeenCalledTimes(3)
+  expect(setCookie.mock.calls.every(c => c[0] === 'abc123')).toBe(true)
+  await advance(60000)
+  expect(setCookie).toHaveBeenCalledTimes(3)
+  expect(view.container.textContent).toBe(after)
+  expect(toasts).not.toHaveBeenCalled()
+})
+
+it('login cookie: a pending mirror retry never overwrites a newer cookie', async () => {
+  installApiMock()
+  vi.spyOn(api, 'connectSession').mockResolvedValue({ message: 'Connected' })
+  const setCookie = vi.spyOn(window.poe2desktop, 'setCookie').mockRejectedValueOnce(new Error('ipc closed')).mockResolvedValue({ ok: true })
+  render(<AccountsPanel />)
+  await settle()
+  fireEvent.change(screen.getByPlaceholderText('POESESSID'), { target: { value: 'old' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Use this cookie' }))
+  await settle()
+  fireEvent.change(screen.getByPlaceholderText('POESESSID'), { target: { value: 'new' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Use this cookie' }))
+  await settle()
+  await advance(60000)
+  expect(setCookie.mock.calls.map(c => c[0])).toEqual(['old', 'new'])
 })
