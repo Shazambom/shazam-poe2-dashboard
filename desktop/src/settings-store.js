@@ -20,23 +20,32 @@ const held = new Set()
 /** The parsed file; throws when it is missing or not JSON (callers fall back to their defaults). */
 const readSettingsFile = (file) => JSON.parse(fs.readFileSync(file, 'utf8'))
 
-// Moves an unreadable settings file aside and drops all but the newest KEEP_CORRUPT copies. Returns
-// whether the path is free for a new file.
-function keepAside(f) {
+// The kept-aside copies of `f`, oldest first: [name, stamp] pairs.
+function corruptCopies(f) {
   const prefix = `${path.basename(f)}.corrupt-`
+  return fs.readdirSync(path.dirname(f))
+    .filter(n => n.startsWith(prefix))
+    .map(n => /** @type {[string, number]} */ ([n, Number(n.slice(prefix.length))]))
+    .filter(([, t]) => Number.isFinite(t))
+    .sort((a, b) => a[1] - b[1])
+}
+
+// Moves an unreadable settings file aside and drops all but the newest KEEP_CORRUPT copies. Returns
+// whether the path is free for a new file. The stamp is the time, or one past the newest copy, so a new
+// copy always sorts newest.
+function keepAside(f) {
   let stamp = Date.now()
-  while (fs.existsSync(`${f}.corrupt-${stamp}`)) stamp++
   try {
+    const newest = corruptCopies(f).at(-1)
+    if (newest && newest[1] >= stamp) stamp = newest[1] + 1
     fs.renameSync(f, `${f}.corrupt-${stamp}`)
   } catch (e) {
     ignored('settings:keep-aside', e)
     return false
   }
-  console.log(`[settings] ${f} could not be read; kept as ${prefix}${stamp}, starting from the defaults`)
+  console.log(`[settings] ${f} could not be read; kept as ${path.basename(f)}.corrupt-${stamp}, starting from the defaults`)
   try {
-    const dir = path.dirname(f)
-    const copies = fs.readdirSync(dir).filter(n => n.startsWith(prefix)).sort((a, b) => Number(a.slice(prefix.length)) - Number(b.slice(prefix.length)))
-    for (const n of copies.slice(0, -KEEP_CORRUPT)) fs.rmSync(path.join(dir, n), { recursive: true, force: true })
+    for (const [n] of corruptCopies(f).slice(0, -KEEP_CORRUPT)) fs.rmSync(path.join(path.dirname(f), n), { recursive: true, force: true })
   } catch (e) { ignored('settings:prune-corrupt', e) }
   return true
 }
