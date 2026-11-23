@@ -72,10 +72,12 @@ let uiUrl = null
 // ---------------------------------------------------------------- backend
 // What startup reads from disk (the backend binary, its data dir, the market seed, the sidecar, the UI
 // bundle) and the order it needs, in startup.js. Resources are packed under process.resourcesPath
-// (extraResources) or, in dev, beside src/.
+// (extraResources) or, in dev, beside src/. `stopped`: a quit that began while startup was reading the
+// disk keeps the backend from being spawned after it.
 const startupEnv = {
-  fs, resourcesPath: process.resourcesPath, appRoot: path.join(__dirname, '..'), platform: process.platform,
+  fs: fs.promises, resourcesPath: process.resourcesPath, appRoot: path.join(__dirname, '..'), platform: process.platform,
   dataDir: () => path.join(app.getPath('userData'), 'data'), log: (...a) => console.log(...a),
+  stopped: () => backendStopping,
 }
 
 async function waitFor(url, tries = 240) {
@@ -197,12 +199,12 @@ async function backendReady(plan) {
   backendKind = 'local'
 }
 
-let backendStopping = false    // set by stopBackend(): the exit that follows is expected, not a crash
+let backendStopping = false    // set by stopBackend(): an exit that follows is expected, not a crash; startup spawns nothing after it
 let backendRespawner = null    // restarts a backend that dies on its own (respawn.js)
 function stopBackend() {
   backendRespawner?.stop()
-  if (!backendProc) return
   backendStopping = true
+  if (!backendProc) return
   const pid = backendProc.pid
   // Kill the whole backend tree. On Windows a plain .kill() can leave the child
   // running, which then locks the install dir and breaks the next update — so force
@@ -692,7 +694,7 @@ if (!app.requestSingleInstanceLock()) {
 
 app.whenReady().then(async () => {
   nativeTheme.themeSource = 'dark'
-  await boot(startupEnv, { launch: launchBackend, ready: backendReady, serve: startUiServer })
+  if (!await boot(startupEnv, { launch: launchBackend, ready: backendReady, serve: startUiServer })) return   // quitting
   buildMenu()
   win = new BrowserWindow({
     width: 1500, height: 950, minWidth: 900, minHeight: 600,

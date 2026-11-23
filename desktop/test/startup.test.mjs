@@ -13,41 +13,61 @@ const APP = '/app/desktop'
 const DATA = '/user/data'
 const BIN = join(RES, 'backend-bin', 'poe2arb-backend')
 
-// A fake file system holding `files`, recording every call in order.
-function fakeFs(files, { mkdirError = null } = {}) {
+// A fake file system (fs.promises) holding `files`, recording every call in order. `delay(call)` makes a
+// call take that many ms (a slow disk), so a step that did not await its prerequisites would show.
+/** @param {string[]} files @param {{ mkdirError?: any, delay?: (call: string) => number, trace?: (e: string) => void }} [opts] */
+function fakeFs(files, { mkdirError = null, delay = () => 0, trace = () => {} } = {}) {
   const have = new Set(files)
   const calls = []
+  const settle = async (call) => {
+    trace(`> ${call}`)
+    await new Promise(resolve => { setTimeout(resolve, delay(call)) })
+    trace(`< ${call}`)
+  }
   return {
     calls,
-    existsSync(p) { calls.push(`exists ${p}`); return have.has(p) },
-    mkdirSync(p, o) {
-      calls.push(`mkdir ${p} ${JSON.stringify(o)}`)
+    async access(p) {
+      const call = `exists ${p}`
+      calls.push(call)
+      await settle(call)
+      if (!have.has(p)) throw Object.assign(new Error(`ENOENT: ${p}`), { code: 'ENOENT' })
+    },
+    async mkdir(p, o) {
+      const call = `mkdir ${p} ${JSON.stringify(o)}`
+      calls.push(call)
+      await settle(call)
       if (mkdirError) throw mkdirError
     },
   }
 }
 
 // One startup run against `files`: what the fs saw, the step marks, the log, and each hook's call.
-/** @param {string[]} files @param {{ platform?: string, mkdirError?: any, failReady?: any, resourcesPath?: string }} [opts] */
-async function run(files, { platform = 'darwin', mkdirError = null, failReady = null, ...o } = {}) {
+/**
+ * @param {string[]} files
+ * @param {{ platform?: string, mkdirError?: any, failReady?: any, resourcesPath?: string, delay?: (call: string) => number,
+ *   stopped?: () => boolean }} [opts]
+ */
+async function run(files, { platform = 'darwin', mkdirError = null, failReady = null, delay, stopped, ...o } = {}) {
   const resourcesPath = 'resourcesPath' in o ? o.resourcesPath : RES
-  const fs = fakeFs(files, { mkdirError })
+  const timeline = []   // marks and the begin (>) and end (<) of every fs call, interleaved
+  const fs = fakeFs(files, { mkdirError, delay, trace: (e) => timeline.push(e) })
   const marks = []
   const logs = []
   const hooks = { launched: [], readied: [], served: [] }
   const env = {
     fs, resourcesPath, appRoot: APP, platform, dataDir: () => DATA,
-    log: (...a) => logs.push(a.join(' ')), mark: (id, phase) => marks.push(`${id}:${phase}`),
+    log: (...a) => logs.push(a.join(' ')), mark: (id, phase) => { marks.push(`${id}:${phase}`); timeline.push(`${id}:${phase}`) }, stopped,
   }
   let error = null
+  let booted = null
   try {
-    await boot(env, {
+    booted = await boot(env, {
       launch: (plan) => { marks.push('launch-hook'); hooks.launched.push(plan) },
       ready: async (plan) => { hooks.readied.push(plan); if (failReady) throw failReady },
       serve: async (dist) => { hooks.served.push(dist) },
     })
   } catch (e) { error = e }
-  return { calls: fs.calls, marks, logs, hooks, error }
+  return { calls: fs.calls, marks, logs, hooks, error, booted, timeline }
 }
 
 const FULL = [BIN, join(RES, 'market-seed', 'market-seed.sqlite.gz'), join(APP, 'app-dist')]
@@ -55,6 +75,7 @@ const FULL = [BIN, join(RES, 'market-seed', 'market-seed.sqlite.gz'), join(APP, 
 test('startup runs in the current order: binary, data dir, seed, sidecar, launch, ready, UI bundle, UI server', async () => {
   const r = await run(FULL)
   assert.equal(r.error, null)
+  assert.equal(r.booted, true)
   assert.deepEqual(r.marks, [
     'backend-bin:start', 'backend-bin:done',
     'data-dir:start', 'data-dir:done',
@@ -147,20 +168,20 @@ test('no resourcesPath (an unpackaged run): packed paths resolve relative, dev p
   assert.equal(r.hooks.launched[0].bin, devBin)
 })
 
-test('market seed: gz before plain, packed dir before dev dir, empty and no log line when there is none', () => {
+test('market seed: gz before plain, packed dir before dev dir, empty and no log line when there is none', async () => {
   const env = (files) => ({ fs: fakeFs(files), resourcesPath: RES, appRoot: APP, platform: 'darwin', dataDir: () => DATA, log: () => {} })
-  const pick = (files) => planBackend(env([BIN, ...files])).marketSeed
+  const pick = async (files) => (await planBackend(env([BIN, ...files]))).marketSeed
   const packedGz = join(RES, 'market-seed', 'market-seed.sqlite.gz')
   const packedPlain = join(RES, 'market-seed', 'market-seed.sqlite')
   const devGz = join(APP, 'market-seed', 'market-seed.sqlite.gz')
   const devPlain = join(APP, 'market-seed', 'market-seed.sqlite')
-  assert.equal(pick([packedGz, packedPlain, devGz]), packedGz)
-  assert.equal(pick([packedPlain, devGz]), packedPlain)
-  assert.equal(pick([devGz, devPlain]), devGz)
-  assert.equal(pick([devPlain]), devPlain)
-  assert.equal(pick([]), '')
+  assert.equal(await pick([packedGz, packedPlain, devGz]), packedGz)
+  assert.equal(await pick([packedPlain, devGz]), packedPlain)
+  assert.equal(await pick([devGz, devPlain]), devGz)
+  assert.equal(await pick([devPlain]), devPlain)
+  assert.equal(await pick([]), '')
   const logs = []
-  planBackend({ ...env([BIN]), log: (...a) => logs.push(a.join(' ')) })
+  await planBackend({ ...env([BIN]), log: (...a) => logs.push(a.join(' ')) })
   assert.deepEqual(logs, [`[backend] sidecar: ${BIN} --sidecar`], 'no seed line without a seed')
 })
 
@@ -180,8 +201,44 @@ test('a ready step that throws stops startup before the UI server', async () => 
   assert.deepEqual(r.hooks.served, [])
 })
 
-test('UI bundle: desktop/app-dist when it exists, else frontend/dist', () => {
+test('UI bundle: desktop/app-dist when it exists, else frontend/dist', async () => {
   const env = (files) => ({ fs: fakeFs(files), resourcesPath: RES, appRoot: APP, platform: 'darwin', dataDir: () => DATA, log: () => {} })
-  assert.equal(resolveUiDist(env([join(APP, 'app-dist')])), join(APP, 'app-dist'))
-  assert.equal(resolveUiDist(env([])), join(APP, '..', 'frontend', 'dist'))
+  assert.equal(await resolveUiDist(env([join(APP, 'app-dist')])), join(APP, 'app-dist'))
+  assert.equal(await resolveUiDist(env([])), join(APP, '..', 'frontend', 'dist'))
+})
+
+// Interleaving: a slow disk (every call takes a different time; mkdir the slowest) must not let any
+// step start before its prerequisites are done, and the order stays exactly the synchronous one.
+test('a slow, uneven disk changes nothing: same marks, same calls, every edge holds', async () => {
+  const fast = await run(FULL)
+  const slowMs = (call) => (call.startsWith('mkdir') ? 25 : (call.length * 7) % 11)
+  const slow = await run(FULL, { delay: slowMs })
+  assert.equal(slow.error, null)
+  assert.deepEqual(slow.marks, fast.marks)
+  assert.deepEqual(slow.calls, fast.calls)
+  assertEdges(slow.marks)
+  // One fs call at a time, each finished before the next starts, and inside the step that made it.
+  const t = slow.timeline
+  for (const [i, e] of t.entries()) {
+    if (e.startsWith('> ')) assert.equal(t[i + 1], `< ${e.slice(2)}`, `${e} overlapped ${t[i + 1]}`)
+  }
+  const inside = (call, id) => t.indexOf(`${id}:start`) < t.indexOf(`> ${call}`) && t.indexOf(`< ${call}`) < t.indexOf(`${id}:done`)
+  assert.ok(inside(`mkdir ${DATA} {"recursive":true}`, 'data-dir'))
+  assert.ok(inside(`exists ${join(RES, 'market-seed', 'market-seed.sqlite.gz')}`, 'market-seed'))
+  assert.ok(inside(`exists ${join(APP, 'sidecar-bin', 'poe2arb-sidecar')}`, 'sidecar-bin'))
+  assert.ok(inside(`exists ${join(APP, 'app-dist')}`, 'ui-dist'))
+  const noBin = await run([join(APP, 'app-dist')], { delay: slowMs })
+  assertEdges(noBin.marks, ['data-dir', 'market-seed', 'sidecar-bin', 'backend-launch'])
+})
+
+test('a quit that begins while startup reads the disk: no backend is spawned, nothing more runs', async () => {
+  let quitting = false
+  const r = await run(FULL, { delay: (call) => { if (call.startsWith('mkdir')) { quitting = true } return 1 }, stopped: () => quitting })
+  assert.equal(r.booted, false)
+  assert.deepEqual(r.hooks.launched, [])
+  assert.deepEqual(r.hooks.readied, [])
+  assert.deepEqual(r.hooks.served, [])
+  const normal = await run(FULL, { stopped: () => false })
+  assert.equal(normal.booted, true)
+  assert.equal(normal.hooks.launched.length, 1)
 })
