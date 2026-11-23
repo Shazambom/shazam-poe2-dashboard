@@ -115,7 +115,7 @@ def _best_conversions(
     `max_gain_pct` is a cross-rate inconsistency / disguised arbitrage (belongs in the Arbitrage
     tab), so it is rejected here. Set a huge tolerance to disable (tests)."""
     steps = g.s.get("max_steps", 4) if max_steps is None else max_steps
-    ref = g.s["reference"]
+    g.s["reference"]
     gold_ref_per_1k = gold_value_per_1k * (
         ref_value.get("divine") or 1.0
     )  # Divine/1k -> ref/1k, at the one value table

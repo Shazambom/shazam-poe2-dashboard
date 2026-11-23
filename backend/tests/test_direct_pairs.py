@@ -176,7 +176,7 @@ def test_the_busiest_market_prices_every_card_and_the_view_picks_the_readable_si
     counterpart: that walk put Exalted in verisium and Chaos in Vaal, markets #37 and #47). Chaos' busiest
     market is Divine (315k chaos/h against 40k with Exalted), so its card is priced in Divine at 0.018;
     the view shows the side that reads >= 1 ("55 per Divine"). The reference is a card like any other."""
-    g = _graph(monkeypatch)
+    _graph(monkeypatch)
     try:
         b = client.get("/api/board?window_h=24").json()
         rows = {r["id"]: r for r in b["rows"]}
@@ -200,7 +200,7 @@ def test_board_trend_and_change_follow_the_market_the_price_comes_from(monkeypat
     moved −12%."""
     from app import arbitrage as arb
 
-    g = _graph(monkeypatch)
+    _graph(monkeypatch)
     try:
         t0 = 1_700_000_000
 
@@ -241,7 +241,7 @@ def test_a_priced_in_pick_moves_the_trend_to_that_market(monkeypatch):
     line and % come from."""
     from app import arbitrage as arb
 
-    g = _graph(monkeypatch)
+    _graph(monkeypatch)
     try:
         t0 = 1_700_000_000
 
@@ -280,7 +280,7 @@ def test_a_priced_in_pick_moves_the_trend_to_that_market(monkeypatch):
 def test_source_describes_the_shown_market(monkeypatch):
     """Once the card's own market prices it, its source (and freshness) come from THAT market's
     edges, not from the reference market. (Bid/ask were cut on 2026-09-23.)"""
-    g = _graph(monkeypatch)
+    _graph(monkeypatch)
     try:
         b = client.get("/api/board?window_h=24").json()
         d = {r["id"]: r for r in b["rows"]}["divine"]
@@ -294,7 +294,7 @@ def test_convert_loss_is_measured_against_the_pairs_market(monkeypatch):
     """`loss_pct` compares what the route delivers with the have↔want market, not with a cross."""
     from app import arbitrage as arb
 
-    g = _graph(monkeypatch)
+    _graph(monkeypatch)
     try:
         direct = arb.convert("divine", "chaos", 1)["direct"]
         assert direct["path"] == ["divine", "chaos"] and direct["out"] == 55
@@ -354,7 +354,7 @@ def test_asset_modal_is_one_source_in_the_shown_numeraire(monkeypatch):
     these five closes reads +19.5%."""
     from app import movers
 
-    g = _graph(monkeypatch)
+    _graph(monkeypatch)
     try:
         t0 = 1_700_000_000
         days = [t0 + i * 86400 for i in range(5)]
@@ -514,7 +514,7 @@ def test_a_stale_conversion_leg_does_not_fake_a_line(monkeypatch):
     scaled by a constant — reporting the first leg's move as the move in the shown currency."""
     from app import arbitrage as arb
 
-    g = _graph(monkeypatch)
+    _graph(monkeypatch)
     try:
         t0 = 1_700_000_000
         fresh = [
@@ -547,7 +547,7 @@ def test_hold_never_reports_a_return_against_the_wrong_currency(monkeypatch):
     to the reference: Exalted inflates over a league, so those rows would rank on that alone."""
     from app import holdscore, movers
 
-    g = _graph(monkeypatch)
+    _graph(monkeypatch)
     try:
         # two assets, both flat in Divine; their cards' lines are in different currencies
         cur = {
@@ -600,7 +600,7 @@ def test_a_card_shown_in_a_currency_that_does_not_price_it_still_draws_that_curr
     Exalted market at −19.9% while its own markets moved −17.2% and −18.2%)."""
     from app import arbitrage as arb
 
-    g = _graph(monkeypatch)
+    _graph(monkeypatch)
     try:
         t0 = 1_700_000_000
 
@@ -635,7 +635,7 @@ def test_a_daily_only_mover_agrees_with_the_card_it_opens(monkeypatch):
     them the same way the card does, or the row and the card disagree for the same asset."""
     from app import movers
 
-    g = _graph(monkeypatch)
+    _graph(monkeypatch)
     try:
         t0 = 1_700_000_000
         days = [t0 + i * 86400 for i in range(6)]
@@ -732,7 +732,7 @@ def test_movers_rows_carry_the_games_exchange_category_like_hold(monkeypatch):
     exchange doesn't list keeps its source name, exactly as Hold does."""
     from app import movers
 
-    g = _graph(monkeypatch)
+    _graph(monkeypatch)
     try:
         t0 = 1_700_000_000
         days = [t0 + i * 86400 for i in range(6)]
@@ -780,7 +780,7 @@ def test_the_reference_currency_is_a_card_like_any_other(monkeypatch):
     "10 per Chaos" — live, with that market's own trend, and the asset view opens the same row."""
     from app import arbitrage as arb
 
-    g = _graph(monkeypatch)
+    _graph(monkeypatch)
     try:
         t0 = 1_700_000_000
 

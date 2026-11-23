@@ -47,7 +47,6 @@ def _win_alive(pid: int) -> bool:
 
         PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
         STILL_ACTIVE = 259
-        ERROR_ACCESS_DENIED = 5
         ERROR_INVALID_PARAMETER = 87  # no process with that pid
         k = ctypes.windll.kernel32
         h = k.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid)

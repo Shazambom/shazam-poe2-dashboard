@@ -483,7 +483,7 @@ def test_the_poll_records_which_leagues_it_covered_and_when(scout):
 
 
 def test_the_quick_anchor_pull_stays_quick(scout, monkeypatch):
-    name = league(scout, n=4)
+    league(scout, n=4)
     crawl()
     scout.today = D5
     fresh_log(scout)
