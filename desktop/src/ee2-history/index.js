@@ -24,6 +24,14 @@ function ticks(q) {
   } catch { return 'on=? off=?' }
 }
 
+// A degraded intent's name and item: what EE2's own item-checked event said about the item.
+function degradedItem(item) {
+  return {
+    name: String(item?.name || item?.baseType || 'Unknown item').slice(0, 60),
+    item: { name: item?.name || '', baseType: item?.baseType || '', rarity: item?.rarity || '', itemClass: item?.itemClass || '' },
+  }
+}
+
 /**
  * @param {{ manager: import('node:events').EventEmitter, worker: { spawn: (opts?: { onExit?: (info?: { idle?: boolean }) => void }) => any },
  *   prefs: () => any, send?: ((channel: string, payload: any) => void) | null, log?: (line: string) => void,
@@ -64,6 +72,14 @@ function createHistoryConsumer({ manager, worker, prefs, send = null, log = () =
   // raw item text → IngestIntent (or null when nothing should be inserted). Shared by the automatic
   // stream (folder ee2-history) and the explicit clipboard paste (folder null, batch 4-A). The
   // clipboard rung ignores `enabled` (that flag gates only the automatic stream).
+  // A build that threw or timed out: the worker is dropped (re-spawned later, at most once per
+  // RESTART_MIN_MS) and the item is skipped.
+  function workerFailed(p, e, origin) {
+    const msg = String(e && e.message || e)
+    lastFailure = now(); try { p.kill?.() } catch (err) { ignored('ee2-history:kill-worker', err) }; proc = null; status.warm = false
+    log(`history-skip reason=${/timeout/i.test(msg) ? 'timeout' : 'worker'} origin=${origin} err="${msg.slice(0, 160)}"`)
+  }
+
   async function buildIntent(raw, origin, { folder = null, item = null, source = 'clipboard' } = {}) {
     const p = ensureWorker()
     if (!p) { log(`history-skip reason=worker origin=${origin}`); return null }
@@ -73,23 +89,26 @@ function createHistoryConsumer({ manager, worker, prefs, send = null, log = () =
     // The user's EE2 settings, unchanged: EE2's window builds its default ticks with the same
     // createPresets options (CheckedItem.vue), so this is the search EE2 opens with (owner, 2026-09-28).
     try { r = await p.build(raw, pf) } catch (e) {
-      const msg = String(e && e.message || e)
-      lastFailure = now(); try { p.kill?.() } catch (err) { ignored('ee2-history:kill-worker', err) }; proc = null; status.warm = false
-      log(`history-skip reason=${/timeout/i.test(msg) ? 'timeout' : 'worker'} origin=${origin} err="${msg.slice(0, 160)}"`)
+      workerFailed(p, e, origin)
       return null
     }
     const id = `i_${now()}_${++seq}`
     const base = { id, source, origin, folder, cfgLeague: pf.leagueId || null, ts: now(), buildMs: typeof r.buildMs === 'number' ? r.buildMs : now() - t0 }
     if (r.error) {
       if (r.error.stage === 'currency') { log(`history-skip reason=currency origin=${origin}`); return null }
-      const name = String(item?.name || item?.baseType || 'Unknown item').slice(0, 60)
-      log(`history-degraded stage=${r.error.stage} name="${name}"`)
-      return { ...base, q: null, degraded: true, stage: r.error.stage, name, item: { name: item?.name || '', baseType: item?.baseType || '', rarity: item?.rarity || '', itemClass: item?.itemClass || '' } }
+      const degraded = degradedItem(item)
+      log(`history-degraded stage=${r.error.stage} name="${degraded.name}"`)
+      return { ...base, q: null, degraded: true, stage: r.error.stage, name: degraded.name, item: degraded.item }
     }
+    return builtIntent(base, r, raw, item, pf)
+  }
+
+  // A built query, refined, logged and handed to the onBuilt hook.
+  function builtIntent(base, r, raw, item, pf) {
     // Our refinement on top of EE2's search (refine.js): a waystone also requires its priced stats.
     const q = refineQuery(r.q, raw, { waystoneStats: searchPrefs.waystoneStats, range: pf.searchStatRange })
     const refined = q !== r.q ? ' waystone=refined' : ''
-    log(`history-build origin=${origin} rarity=${r.item?.rarity || item?.rarity || '?'} name="${String(r.name).slice(0, 40)}" ms=${base.buildMs} qb=${Buffer.byteLength(q, 'utf8')} ${ticks(q)}${refined}`)
+    log(`history-build origin=${base.origin} rarity=${r.item?.rarity || item?.rarity || '?'} name="${String(r.name).slice(0, 40)}" ms=${base.buildMs} qb=${Buffer.byteLength(q, 'utf8')} ${ticks(q)}${refined}`)
     const intent = { ...base, q, degraded: false, stage: null, name: r.name, item: r.item }
     if (onBuilt) { try { onBuilt(intent) } catch (e) { ignored('ee2-history:on-built', e) } }
     return intent

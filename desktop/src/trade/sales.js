@@ -8,6 +8,27 @@ const { budgeted } = require('./budget.js')
 
 const POLICY = 'trade-history'
 
+// A history request the site never answered (the budget refused it, or it failed): logged, passed back.
+/**
+ * @param {import('./budget.js').Budgeted} res
+ * @param {(line: string) => void} log
+ */
+function unanswered(res, log) {
+  log(`sales-fetch status=${res.error === 'rate' ? 'budget' : 'error'} n=0 policy="${POLICY}"${res.error === 'rate' ? ` retry=${res.retryAfter || '?'}` : ''}`)
+  return res.error === 'rate' ? { ok: false, error: 'rate', retryAfter: res.retryAfter } : { ok: false, error: res.error }
+}
+
+// Only the fields the ledger stores cross to the backend (never the account block).
+function ledgerRows(rows) {
+  return rows.filter(r => r && r.item_id && r.time).map(r => ({ item_id: String(r.item_id), time: String(r.time), item: r.item || {}, price: r.price ? { amount: r.price.amount, currency: r.price.currency } : null }))
+}
+
+// The site's clock (its Date header) lets the backend compare sale times with the user's last count.
+function ingestBody(lg, result, date) {
+  const siteTime = date ? new Date(date) : null
+  return { league: lg, result, ...(siteTime && !isNaN(/** @type {any} isNaN coerces the Date to its time value */ (siteTime)) ? { server_time: siteTime.toISOString() } : {}) }
+}
+
 /** @param {import('./listings.js').TradeDeps & { backendUrl: () => string }} deps */
 function makeSalesFetcher({ request, budget, backendUrl, log = () => {} }) {
   // request({ path, referer }) → { status, headers, body }   budget: { acquire, observe }   backendUrl(): string
@@ -19,18 +40,12 @@ function makeSalesFetcher({ request, budget, backendUrl, log = () => {} }) {
     const lg = String(league || '').trim()
     if (!lg) return { ok: false, error: 'no league' }
     const res = await budgeted({ request, budget }, POLICY, { path: `/api/trade2/history/poe2/${encodeURIComponent(lg)}`, referer: `https://www.pathofexile.com/trade2/history` })
-    if (!res.ok && res.status == null) {   // refused by the budget, or the request never got an answer
-      log(`sales-fetch status=${res.error === 'rate' ? 'budget' : 'error'} n=0 policy="${POLICY}"${res.error === 'rate' ? ` retry=${res.retryAfter || '?'}` : ''}`)
-      return res.error === 'rate' ? { ok: false, error: 'rate', retryAfter: res.retryAfter } : { ok: false, error: res.error }
-    }
+    if (!res.ok && res.status == null) return unanswered(res, log)   // refused by the budget, or the request never got an answer
     const rows = res.ok && Array.isArray(res.data?.result) ? res.data.result : []
     log(`sales-fetch status=${res.status} n=${rows.length} policy="${POLICY}"`)
     if (!res.ok) return res
-    // Only the fields the ledger stores cross to the backend (never the account block).
-    const result = rows.filter(r => r && r.item_id && r.time).map(r => ({ item_id: String(r.item_id), time: String(r.time), item: r.item || {}, price: r.price ? { amount: r.price.amount, currency: r.price.currency } : null }))
-    // The site's clock (its Date header) lets the backend compare sale times with the user's last count.
-    const siteTime = res.date ? new Date(res.date) : null
-    const body = { league: lg, result, ...(siteTime && !isNaN(/** @type {any} isNaN coerces the Date to its time value */ (siteTime)) ? { server_time: siteTime.toISOString() } : {}) }
+    const result = ledgerRows(rows)
+    const body = ingestBody(lg, result, res.date)
     let ingest
     try {
       const r = await backendFetch(`${backendUrl()}/api/sales/ingest`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(5000) })

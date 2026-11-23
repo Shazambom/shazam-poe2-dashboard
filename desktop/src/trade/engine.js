@@ -125,6 +125,15 @@ async function _onPingIds(itemId, ids) {
   }
 }
 
+// A whisper/hideout token's expiry (its JWT exp, in ms), 0 when absent or unreadable.
+function tokenExpiry(token) {
+  let tokenExp = 0
+  try { if (token) tokenExp = (JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString()).exp || 0) * 1000 } catch (e) { ignored('live-search:token-exp', e) }
+  return tokenExp
+}
+
+const pingItem = (item) => ({ name: item.name || '', typeLine: item.typeLine || item.baseType || '', icon: item.icon || '' })
+
 // Shape the fetch result into the renderer Ping.
 function _normalize(itemId, rec, r) {
   if (!r || !r.listing) return null
@@ -133,13 +142,12 @@ function _normalize(itemId, rec, r) {
   const acct = L.account || {}
   const online = acct.online ? (acct.online.status === 'afk' ? 'afk' : 'online') : 'offline'
   const item = r.item || {}
-  let tokenExp = 0
   const token = L.hideout_token || L.whisper_token || null
-  try { if (token) tokenExp = (JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString()).exp || 0) * 1000 } catch (e) { ignored('live-search:token-exp', e) }
+  const tokenExp = tokenExpiry(token)
   return {
     pingId: `p_${itemId}_${r.id}`,
     itemId, searchId: rec.searchId, listingId: r.id,
-    item: { name: item.name || '', typeLine: item.typeLine || item.baseType || '', icon: item.icon || '' },
+    item: pingItem(item),
     price,
     account: acct.name || acct.lastCharacterName || '',
     online,

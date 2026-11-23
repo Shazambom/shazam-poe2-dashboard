@@ -45,31 +45,69 @@ function resolveModsSafe(it, rarity) {
   try { return lookupItemMods(it) } catch { return null }
 }
 
+// A string field as given, or the fallback when it is missing or not a string (fields are parsed JSON).
+const str = (v, fallback) => (typeof v === 'string' ? v : fallback)
+
+// One shop listing → its display row.
+function shopRow(x) {
+  const it = x.item && typeof x.item === 'object' ? x.item : {}
+  const rarity = typeof it.rarity === 'string' && it.rarity ? it.rarity : (FRAME_RARITY[it.frameType] || '')
+  const matchedMods = resolveModsSafe(it, rarity)
+  return {
+    id: x.id,
+    indexed: str(x.listing?.indexed, null),
+    amount: x.listing.price.amount,
+    currency: x.listing.price.currency,
+    name: str(it.name, ''),
+    typeLine: str(it.typeLine, ''),
+    baseType: str(it.baseType, ''),
+    rarity,
+    icon: str(it.icon, null),
+    ilvl: Number.isFinite(it.ilvl) ? it.ilvl : null,
+    note: str(it.note, str(x.listing?.note, '')),
+    stashName: str(x.listing?.stash?.name, ''),
+    item: projectItem(it),
+    ...(matchedMods ? { matchedMods } : {}),
+  }
+}
+
 // Keep ONLY shop display fields — strip whisper, whisper_token, hideout_token, and account block.
 function projectShopRows(json) {
   return (Array.isArray(json?.result) ? json.result : [])
     .filter(x => typeof x?.id === 'string' && Number.isFinite(x.listing?.price?.amount) && typeof x.listing.price.currency === 'string')
-    .map(x => {
-      const it = x.item && typeof x.item === 'object' ? x.item : {}
-      const rarity = typeof it.rarity === 'string' && it.rarity ? it.rarity : (FRAME_RARITY[it.frameType] || '')
-      const matchedMods = resolveModsSafe(it, rarity)
-      return {
-        id: x.id,
-        indexed: typeof x.listing?.indexed === 'string' ? x.listing.indexed : null,
-        amount: x.listing.price.amount,
-        currency: x.listing.price.currency,
-        name: typeof it.name === 'string' ? it.name : '',
-        typeLine: typeof it.typeLine === 'string' ? it.typeLine : '',
-        baseType: typeof it.baseType === 'string' ? it.baseType : '',
-        rarity,
-        icon: typeof it.icon === 'string' ? it.icon : null,
-        ilvl: Number.isFinite(it.ilvl) ? it.ilvl : null,
-        note: typeof it.note === 'string' ? it.note : (typeof x.listing?.note === 'string' ? x.listing.note : ''),
-        stashName: typeof x.listing?.stash?.name === 'string' ? x.listing.stash.name : '',
-        item: projectItem(it),
-        ...(matchedMods ? { matchedMods } : {}),
-      }
-    })
+    .map(shopRow)
+}
+
+// fetchShop's arguments, normalised: trimmed league and account, a known sort, a boolean 'more'.
+/** @param {{ league?: string, account?: string, sort?: string, more?: boolean }} q */
+function shopRequest({ league, account, sort = 'price_desc', more = false }) {
+  return {
+    lg: String(league ?? '').trim(),
+    rawAcct: account == null ? '' : String(account).trim(),
+    sortKey: Object.prototype.hasOwnProperty.call(SORT_SPEC, sort) ? sort : 'price_desc',
+    isMore: Boolean(more),
+  }
+}
+
+// A shop search's id, its valid listing ids and its total (the id count when the site gives none).
+function shopSearchResult(data) {
+  const ids = Array.isArray(data?.result) ? data.result.filter(i => LISTING_ID.test(String(i))) : []
+  return { searchId: data?.id, ids, total: Number.isFinite(Number(data?.total)) ? Number(data.total) : ids.length }
+}
+
+function emptyShopPage(acct, total, sortKey, fetchedAt) {
+  return {
+    ok: true,
+    account: acct,
+    total,
+    truncated: total > 0,
+    remainingIds: 0,
+    apiCapReached: false,
+    sort: sortKey,
+    rows: [],
+    fetchedAt,
+    cursorExpiresAt: null,
+  }
 }
 
 function batchFailure(res, signal) {
@@ -201,11 +239,8 @@ function makeMerchantFetcher({ request, budget, log = () => {}, wait = defaultWa
    * @param {{ league?: string, account?: string, sort?: string, more?: boolean }} [q]
    * @returns {Promise<Budgeted & Record<string, any>>}
    */
-  async function fetchShop({ league, account, sort = 'price_desc', more = false } = {}) {
-    const lg = String(league ?? '').trim()
-    const rawAcct = account == null ? '' : String(account).trim()
-    const sortKey = Object.prototype.hasOwnProperty.call(SORT_SPEC, sort) ? sort : 'price_desc'
-    const isMore = Boolean(more)
+  async function fetchShop(q = {}) {
+    const { lg, rawAcct, sortKey, isMore } = shopRequest(q)
     if (!lg || rawAcct.length > MAX_ACCOUNT_LEN) return { ok: false, error: 'bad request' }
 
     const signal = drop.signal
@@ -225,6 +260,13 @@ function makeMerchantFetcher({ request, budget, log = () => {}, wait = defaultWa
       .finally(() => { if (inFlight.get(flightKey) === p) inFlight.delete(flightKey) })
     inFlight.set(flightKey, p)
     return p
+  }
+
+  // Remember the search for 'more', unless a newer search for the same key already did.
+  function keepCursor(cursorKey, cursor) {
+    pruneCursors(cursor.at)
+    const existing = cursors.get(cursorKey)
+    if (!existing || existing.gen < cursor.gen) cursors.set(cursorKey, cursor)
   }
 
   async function runFresh(lg, acct, cursorKey, sortKey, signal, startAccountGen) {
@@ -249,25 +291,12 @@ function makeMerchantFetcher({ request, budget, log = () => {}, wait = defaultWa
       return s
     }
 
-    const searchId = s.data?.id
-    const ids = Array.isArray(s.data?.result) ? s.data.result.filter(i => LISTING_ID.test(String(i))) : []
-    const total = Number.isFinite(Number(s.data?.total)) ? Number(s.data.total) : ids.length
+    const { searchId, ids, total } = shopSearchResult(s.data)
     const fetchedAt = now()
     if (!searchId || !SEARCH_ID.test(String(searchId)) || !ids.length) {
       if (accountGen === startAccountGen) cursors.delete(cursorKey)
       log(`merchant status=200 total=${total} rows=0`)
-      return {
-        ok: true,
-        account: acct,
-        total,
-        truncated: total > 0,
-        remainingIds: 0,
-        apiCapReached: false,
-        sort: sortKey,
-        rows: [],
-        fetchedAt,
-        cursorExpiresAt: null,
-      }
+      return emptyShopPage(acct, total, sortKey, fetchedAt)
     }
 
     const take = ids.slice(0, MAX_SHOP_ITEMS)
@@ -281,11 +310,7 @@ function makeMerchantFetcher({ request, budget, log = () => {}, wait = defaultWa
 
     const offset = res.consumed
     const at = now()
-    pruneCursors(at)
-    const existing = cursors.get(cursorKey)
-    if (!existing || existing.gen < gen) {
-      cursors.set(cursorKey, { searchId, ids, total, offset, at, gen })
-    }
+    keepCursor(cursorKey, { searchId, ids, total, offset, at, gen })
     log(`merchant status=200 total=${total} rows=${res.rows.length} sort=${sortKey}${res.ok ? '' : ' partial=1'}`)
     return pageResponse({ account: acct, total, idsLen: ids.length, offset, sortKey, res, fetchedAt: at, cursorStartAt: at })
   }

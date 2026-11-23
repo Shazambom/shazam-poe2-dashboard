@@ -15,31 +15,37 @@ const port = require('./port.js')
 
 const BUILD_TIMEOUT_MS = 3000
 
+const errText = (e) => String(e && e.message || e)
+
+async function handleInit(msg, reply) {
+  try { reply({ t: 'ready', ...(await port.init(msg.dataDir)) }) } catch (e) { reply({ t: 'error', id: null, stage: 'init', message: errText(e) }) }
+}
+
+async function handleParse(msg, reply) {
+  try { await port.init(); reply({ t: 'parsed', id: msg.id, item: port.parseItem(msg.raw) }) }
+  catch (e) { reply({ t: 'error', id: msg.id, stage: 'parse', message: errText(e) }) }
+}
+
+async function handleBuild(msg, reply) {
+  const t0 = Date.now()
+  let done = false
+  const timer = setTimeout(() => { if (!done) { done = true; reply({ t: 'error', id: msg.id, stage: 'timeout', message: `build exceeded ${BUILD_TIMEOUT_MS} ms` }) } }, BUILD_TIMEOUT_MS)
+  try {
+    await port.init()
+    const r = port.buildQuery(msg.raw, msg.prefs)
+    clearTimeout(timer)
+    if (done) return
+    done = true
+    if (r.error) reply({ t: 'error', id: msg.id, ...r.error })
+    else reply({ t: 'built', id: msg.id, ...r, buildMs: Date.now() - t0 })
+  } catch (e) { clearTimeout(timer); if (!done) { done = true; reply({ t: 'error', id: msg.id, stage: 'request', message: errText(e) }) } }
+}
+
 async function handle(msg, reply) {
   if (!msg || typeof msg !== 'object') return
-  if (msg.t === 'init') {
-    try { reply({ t: 'ready', ...(await port.init(msg.dataDir)) }) } catch (e) { reply({ t: 'error', id: null, stage: 'init', message: String(e && e.message || e) }) }
-    return
-  }
-  if (msg.t === 'parse') {
-    try { await port.init(); reply({ t: 'parsed', id: msg.id, item: port.parseItem(msg.raw) }) }
-    catch (e) { reply({ t: 'error', id: msg.id, stage: 'parse', message: String(e && e.message || e) }) }
-    return
-  }
-  if (msg.t === 'build') {
-    const t0 = Date.now()
-    let done = false
-    const timer = setTimeout(() => { if (!done) { done = true; reply({ t: 'error', id: msg.id, stage: 'timeout', message: `build exceeded ${BUILD_TIMEOUT_MS} ms` }) } }, BUILD_TIMEOUT_MS)
-    try {
-      await port.init()
-      const r = port.buildQuery(msg.raw, msg.prefs)
-      clearTimeout(timer)
-      if (done) return
-      done = true
-      if (r.error) reply({ t: 'error', id: msg.id, ...r.error })
-      else reply({ t: 'built', id: msg.id, ...r, buildMs: Date.now() - t0 })
-    } catch (e) { clearTimeout(timer); if (!done) { done = true; reply({ t: 'error', id: msg.id, stage: 'request', message: String(e && e.message || e) }) } }
-  }
+  if (msg.t === 'init') await handleInit(msg, reply)
+  else if (msg.t === 'parse') await handleParse(msg, reply)
+  else if (msg.t === 'build') await handleBuild(msg, reply)
 }
 
 if (process.argv.includes('--stdin')) {

@@ -109,6 +109,38 @@ const bkLog = (m) => telemetry.installLog('backend', m)
 // The desktop app is FULLY SELF-CONTAINED: it runs its own bundled backend + local
 // DB and NEVER calls the server for data. The ONLY permitted outbound calls are the
 // auto-updater (electron-updater → GitHub Releases) and update telemetry (installlog).
+// Bundled market snapshot (extraResources). The backend seeds market.sqlite from it
+// on first run / when newer, so users skip the cold backfill. Build-time only — the
+// desktop contract (server only for updates) is unaffected. Missing in dev = crawl live.
+// Seed ships gzipped (~8x smaller); the backend decompresses it once. Fall back to a
+// plain .sqlite if present (dev convenience). '' when there is none.
+function findMarketSeed() {
+  const seedDirs = [path.join(process.resourcesPath || '', 'market-seed'),
+                    path.join(__dirname, '..', 'market-seed')]
+  const seedNames = ['market-seed.sqlite.gz', 'market-seed.sqlite']
+  for (const d of seedDirs) {
+    for (const n of seedNames) {
+      const p = path.join(d, n); if (fs.existsSync(p)) return p
+    }
+  }
+  return ''
+}
+
+// DEV DIAGNOSTIC (beta/dev only): probe the heavy-analytics pipeline REPEATEDLY so we see
+// job progression on Windows — whether 'done' appears or jobs stay wedged at 'running'.
+function probeAnalytics(localUrl) {
+  for (const delay of [60000, 150000, 300000]) {
+    const t = setTimeout(async () => {
+      try {
+        const r = await backendFetch(`${localUrl}/api/diag`, { signal: AbortSignal.timeout(8000) })
+        const d = await r.json()
+        bkLog(`analytics@${Math.round(delay / 1000)}s ${JSON.stringify(d.analytics || {})}`)
+      } catch (e) { bkLog(`analytics-probe-failed ${String(e && e.message || e)}`) }
+    }, delay)
+    if (t.unref) t.unref()
+  }
+}
+
 // See DESKTOP_CONTRACT in the docs.
 async function startBackend() {
   const localUrl = `http://127.0.0.1:${LOCAL_BACKEND_PORT}`
@@ -116,18 +148,7 @@ async function startBackend() {
   if (bin) {
     const dataDir = path.join(app.getPath('userData'), 'data')
     fs.mkdirSync(dataDir, { recursive: true })
-    // Bundled market snapshot (extraResources). The backend seeds market.sqlite from it
-    // on first run / when newer, so users skip the cold backfill. Build-time only — the
-    // desktop contract (server only for updates) is unaffected. Missing in dev = crawl live.
-    // Seed ships gzipped (~8x smaller); the backend decompresses it once. Fall back to a
-    // plain .sqlite if present (dev convenience).
-    const seedDirs = [path.join(process.resourcesPath || '', 'market-seed'),
-                      path.join(__dirname, '..', 'market-seed')]
-    const seedNames = ['market-seed.sqlite.gz', 'market-seed.sqlite']
-    let marketSeed = ''
-    for (const d of seedDirs) { for (const n of seedNames) {
-      const p = path.join(d, n); if (fs.existsSync(p)) { marketSeed = p; break }
-    } if (marketSeed) break }
+    const marketSeed = findMarketSeed()
     if (marketSeed) console.log('[backend] market seed:', marketSeed)
     // Sidecar (heavy analytics): unified into poe2arb-backend (--sidecar), reusing the same
     // frozen Python + NumPy runtime. If a separate legacy sidecar-bin exists, honour it;
@@ -179,20 +200,7 @@ async function startBackend() {
     const t0 = Date.now()
     if (await waitFor(`${localUrl}/api/health`, 240)) {   // ~2min: cover a slow first-boot re-seed before declaring failure
       bkLog(`bound after ${Math.round((Date.now() - t0) / 1000)}s`)
-      // DEV DIAGNOSTIC (beta/dev only): probe the heavy-analytics pipeline REPEATEDLY so we see
-      // job progression on Windows — whether 'done' appears or jobs stay wedged at 'running'.
-      if (diagTelemetryOn()) {
-        for (const delay of [60000, 150000, 300000]) {
-          const t = setTimeout(async () => {
-            try {
-              const r = await backendFetch(`${localUrl}/api/diag`, { signal: AbortSignal.timeout(8000) })
-              const d = await r.json()
-              bkLog(`analytics@${Math.round(delay / 1000)}s ${JSON.stringify(d.analytics || {})}`)
-            } catch (e) { bkLog(`analytics-probe-failed ${String(e && e.message || e)}`) }
-          }, delay)
-          if (t.unref) t.unref()
-        }
-      }
+      if (diagTelemetryOn()) probeAnalytics(localUrl)
       backendUrl = localUrl
       backendKind = 'local'
       return

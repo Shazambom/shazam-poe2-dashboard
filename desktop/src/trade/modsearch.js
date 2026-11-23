@@ -86,6 +86,38 @@ const ITEM_MOD_GROUPS = [
   ['enchantMods', ['enchant']],
 ]
 
+// A mod line as the site sends it: a string, or an object with a description or text.
+const modLineText = (raw) => (typeof raw === 'string' ? raw : (raw?.description ?? raw?.text ?? ''))
+
+// A cleaned mod line → its lower-case template (numbers as #, no leading +) and the numbers taken out.
+function modTemplate(cleaned) {
+  const nums = []
+  const tmpl = cleaned
+    .replace(/[+-]?\d+(?:\.\d+)?/g, (m) => { nums.push(Number(m)); return '#' })
+    .replace(/^\+/, '')
+    .toLowerCase()
+  return { tmpl, nums }
+}
+
+// The stat ids of the first group (in order) that knows this template, or null.
+function statIdsFor(byGroupLower, groups, tmpl) {
+  for (const g of groups) {
+    const hit = byGroupLower.get(g)?.get(tmpl)
+    if (hit && hit.length) return hit
+  }
+  return null
+}
+
+// One number is the roll; several (a range like 10 to 20) average; none or a non-finite average is null.
+function rollValue(nums) {
+  const val = nums.length === 1
+    ? nums[0]
+    : nums.length >= 2
+      ? nums.reduce((a, b) => a + b, 0) / nums.length
+      : null
+  return Number.isFinite(val) ? val : null
+}
+
 // Resolve a trade2 item JSON's rolled mod lines to trade2 stat ids + numeric roll values + category,
 // reusing the already-loaded EE2 stats.json & items.ndjson catalogue (shared with Stash → Merchant).
 function lookupItemMods(item) {
@@ -99,28 +131,15 @@ function lookupItemMods(item) {
   for (const [field, groups] of ITEM_MOD_GROUPS) {
     const lines = Array.isArray(item[field]) ? item[field] : []
     for (const raw of lines) {
-      const cleaned = cleanModLine(typeof raw === 'string' ? raw : (raw?.description ?? raw?.text ?? ''))
+      const cleaned = cleanModLine(modLineText(raw))
       if (!cleaned) continue
-      const nums = []
-      const tmpl = cleaned
-        .replace(/[+-]?\d+(?:\.\d+)?/g, (m) => { nums.push(Number(m)); return '#' })
-        .replace(/^\+/, '')
-        .toLowerCase()
-      let ids = null
-      for (const g of groups) {
-        const hit = byGroupLower.get(g)?.get(tmpl)
-        if (hit && hit.length) { ids = hit; break }
-      }
+      const { tmpl, nums } = modTemplate(cleaned)
+      const ids = statIdsFor(byGroupLower, groups, tmpl)
       if (!ids) continue
       const sig = ids.join('|')
       if (seen.has(sig)) continue
       seen.add(sig)
-      const val = nums.length === 1
-        ? nums[0]
-        : nums.length >= 2
-          ? nums.reduce((a, b) => a + b, 0) / nums.length
-          : null
-      mods.push({ ids, value: Number.isFinite(val) ? val : null })
+      mods.push({ ids, value: rollValue(nums) })
       if (mods.length >= 8) break
     }
     if (mods.length >= 8) break

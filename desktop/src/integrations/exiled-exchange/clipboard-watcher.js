@@ -78,9 +78,8 @@ function looksLikeItem(text) {
 // A header line with "Label: value" shape is a FIELD; label-less lines are the
 // name then base type. We label fields by localized regex, then fall back to
 // position (1st field = class, 2nd = rarity) so non-English clients still parse.
-function parseItem(raw) {
-  const lines = raw.replace(/\r\n/g, '\n').split('\n')
-
+// The header's labelled fields and its label-less name lines, up to the first divider.
+function readHeader(lines) {
   let itemClass = ''
   let rarity = ''
   const fieldsInOrder = []   // [{label, value}] for positional fallback
@@ -102,6 +101,13 @@ function parseItem(raw) {
       nameLines.push(t)                     // name, then (maybe) base type
     }
   }
+  return { itemClass, rarity, fieldsInOrder, nameLines }
+}
+
+function parseItem(raw) {
+  const header = readHeader(raw.replace(/\r\n/g, '\n').split('\n'))
+  const { fieldsInOrder, nameLines } = header
+  let { itemClass, rarity } = header
 
   // Positional fallback for unrecognized localized labels: fields always come in
   // the order Item Class -> Rarity, so fill whichever we didn't match by label.

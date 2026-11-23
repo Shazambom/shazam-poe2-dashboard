@@ -84,6 +84,18 @@ function makeListingFetcher({ request, budget, log = () => {}, wait = defaultWai
 
 const SEARCH_POLICY = 'trade-search'
 
+// The first page of ids, plus (sample) one id from every later page and the last id: up to two fetches.
+function fetchBatches(ids, sample) {
+  const batches = [ids.slice(0, FETCH_MAX)]
+  if (sample && ids.length > FETCH_MAX) {
+    const extra = []
+    for (let r = FETCH_MAX; r < ids.length; r += FETCH_MAX) extra.push(ids[r])
+    if (extra[extra.length - 1] !== ids[ids.length - 1]) extra.push(ids[ids.length - 1])
+    batches.push(extra.slice(0, FETCH_MAX))
+  }
+  return batches
+}
+
 const KEPT_TTL_MS = 5 * 60_000
 const MAX_KEPT = 64
 
@@ -121,26 +133,44 @@ function makeRechecker({ request, budget, log = () => {}, wait = defaultWait, sp
     inFlight.set(key, p)
     return p
   }
+  // A kept search still inside its TTL (keepOnRate), or null; an expired one is dropped.
+  function keptSearch(key) {
+    const cached = keepOnRate ? kept.get(key) : null
+    if (cached && now() - cached.at > KEPT_TTL_MS) {
+      kept.delete(key)
+      return null
+    }
+    return cached
+  }
+  // One Instant Buyout search, cheapest first: { searchId, ids, total, at } or { failed } (the answer).
+  async function search(lg, query, home, signal) {
+    const body = { query: { ...query, status: INSTANT_BUYOUT }, sort: { price: 'asc' } }
+    const s = await once(SEARCH_POLICY, { method: 'POST', path: `/api/trade2/search/poe2/${encodeURIComponent(lg)}`, body, referer: home }, signal)
+    if (!s.ok) { log(`${tag} status=${s.status ?? s.error} step=search`); return { failed: s } }
+    return {
+      searchId: s.data?.id,
+      ids: Array.isArray(s.data?.result) ? s.data.result.filter(i => LISTING_ID.test(String(i))) : [],
+      total: Number(s.data?.total) || 0,
+      at: now(),
+    }
+  }
+  // When the first batch already landed and only the deeper sample hit rate limit under spare headroom,
+  // keep the valid first-page prices rather than discarding the check.
+  const keepFirstPage = (i, rows, f, signal) => spare > 0 && i > 0 && rows.length > 0 && f.error === 'rate' && !signal.aborted
+  function fetchFailed(f, key, found, signal) {
+    if (keepOnRate && f.error === 'rate' && !signal.aborted) saveKept(key, found)
+    else if (f.error !== 'cancelled') kept.delete(key)
+    log(`${tag} status=${f.status ?? f.error} step=fetch`)
+  }
   async function run(lg, query, key) {
     const signal = drop.signal
     const home = `${TRADE_BASE}/search/poe2/${encodeURIComponent(lg)}`
-    let cached = keepOnRate ? kept.get(key) : null
-    if (cached && now() - cached.at > KEPT_TTL_MS) {
-      kept.delete(key)
-      cached = null
+    let found = keptSearch(key)
+    if (!found) {
+      found = await search(lg, query, home, signal)
+      if (found.failed) return found.failed
     }
-    let searchId, ids, total, at
-    if (cached) {
-      ({ searchId, ids, total, at } = cached)
-    } else {
-      const body = { query: { ...query, status: INSTANT_BUYOUT }, sort: { price: 'asc' } }
-      const s = await once(SEARCH_POLICY, { method: 'POST', path: `/api/trade2/search/poe2/${encodeURIComponent(lg)}`, body, referer: home }, signal)
-      if (!s.ok) { log(`${tag} status=${s.status ?? s.error} step=search`); return s }
-      searchId = s.data?.id
-      ids = Array.isArray(s.data?.result) ? s.data.result.filter(i => LISTING_ID.test(String(i))) : []
-      total = Number(s.data?.total) || 0
-      at = now()
-    }
+    const { searchId, ids, total, at } = found
     const validSearchId = searchId && SEARCH_ID.test(String(searchId)) ? searchId : ''
     if (!validSearchId || !ids.length) {
       kept.delete(key)
@@ -148,24 +178,14 @@ function makeRechecker({ request, budget, log = () => {}, wait = defaultWait, sp
       return { ok: true, searchId: validSearchId, ids: [], total, rows: [] }
     }
     if (signal.aborted) return CANCELLED
-    const batches = [ids.slice(0, FETCH_MAX)]
-    if (sample && ids.length > FETCH_MAX) {
-      const extra = []
-      for (let r = FETCH_MAX; r < ids.length; r += FETCH_MAX) extra.push(ids[r])
-      if (extra[extra.length - 1] !== ids[ids.length - 1]) extra.push(ids[ids.length - 1])
-      batches.push(extra.slice(0, FETCH_MAX))
-    }
+    const batches = fetchBatches(ids, sample)
     const rows = []
     for (let i = 0; i < batches.length; i++) {
       const batch = batches[i]
       const f = await once(FETCH_POLICY, { method: 'GET', path: `/api/trade2/fetch/${batch.join(',')}?query=${searchId}&realm=poe2`, referer: `${home}/${searchId}` }, signal)
       if (!f.ok) {
-        // When the first batch already landed and only the deeper sample hit rate limit under spare headroom,
-        // keep the valid first-page prices rather than discarding the check.
-        if (spare > 0 && i > 0 && rows.length > 0 && f.error === 'rate' && !signal.aborted) break
-        if (keepOnRate && f.error === 'rate' && !signal.aborted) saveKept(key, { searchId, ids, total, at })
-        else if (f.error !== 'cancelled') kept.delete(key)
-        log(`${tag} status=${f.status ?? f.error} step=fetch`)
+        if (keepFirstPage(i, rows, f, signal)) break
+        fetchFailed(f, key, { searchId, ids, total, at }, signal)
         return f
       }
       rows.push(...projectRows(f.data))
