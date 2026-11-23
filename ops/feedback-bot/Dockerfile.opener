@@ -9,5 +9,5 @@ COPY requirements-opener.txt .
 RUN pip install --no-cache-dir -r requirements-opener.txt
 COPY opener/ ./opener/
 ENV PYTHONPATH=/app PYTHONUNBUFFERED=1
-USER opener
+USER 10001
 CMD ["python", "-m", "opener.opener"]
