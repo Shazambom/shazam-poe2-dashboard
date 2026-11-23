@@ -24,6 +24,7 @@ const { applyChannel } = require('./updater-channel.js')
 const { createRespawner, onceGone } = require('./respawn.js')
 const { boot } = require('./startup.js')
 const { staticFile } = require('./ui-files.js')
+const { makeExporter } = require('./export-file.js')
 
 // Log rings for "Report a problem" (local only — a report is a file the user drags into Discord):
 // every console.log line of this process, the updater's lines, and the backend's output tail.
@@ -609,14 +610,9 @@ ipcMain.on('ee2:set-enabled', (_e, p) => { _history?.setEnabled(p?.enabled !== f
 ipcMain.on('ee2:set-search', (_e, p) => { _history?.setSearchPrefs(p) })
 ipcMain.handle('ee2:status', () => (_history ? _history.status() : { present: false, running: false, configRead: false, leagueId: null, warm: false, enabled: true }))
 ipcMain.on('trade:ingest-ack', (_e, ack) => { if (ack && ack.result === 'dropped') telemetry.installLog('ee2', `ingest-drop reason=${ack.reason || '?'}`) })
-// Settings → Trading → Export searches: the sandboxed renderer cannot download a blob, so main writes the
-// file into the user's Downloads folder (no dialog) and returns the path for the toast.
-ipcMain.handle('ws:export-file', (_e, p) => {
-  const name = String(p?.name || 'arbiter-searches.json').replace(/[^\w.-]+/g, '_')
-  const file = path.join(app.getPath('downloads'), name)
-  fs.writeFileSync(file, String(p?.text || ''))
-  return file
-})
+// Settings → Trading → Export searches: main writes the file into Downloads (export-file.js).
+const exportFile = makeExporter({ fsp: fs.promises, downloads: () => app.getPath('downloads') })
+ipcMain.handle('ws:export-file', (_e, p) => exportFile(p))
 // DIAGNOSTIC (dev launch or the beta channel — never a stable build): feed an item's text through the
 // real consumer + worker without EE2 running, so the packaged worker path can be proven over CDP.
 ipcMain.handle('dev:ee2-item', (_e, item) => {
