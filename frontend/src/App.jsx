@@ -121,7 +121,7 @@ export default function App() {
         </div>
         <button className="btn small primary pb-go" onClick={() => { bus.emit({ id: 'signals', dismiss: true }); openFirst() }}>Open</button>
       </div>) })
-  }, [lastNew]) // eslint-disable-line
+  }, [lastNew])
   useEffect(() => {
     let live = true
     const load = () => api.leagueArc().then(d => { if (live) setArcCtx(d) }).catch(() => {})

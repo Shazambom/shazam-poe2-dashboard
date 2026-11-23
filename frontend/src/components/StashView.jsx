@@ -73,7 +73,7 @@ export default function StashView({ league }) {
   const [choices, setChoices] = useState(null)
   useEffect(() => { ensureSettings().catch(() => {}) }, [])
   // Stored choices load under any made before the settings arrived (those are newer).
-  useEffect(() => { if (stored) setChoices(c => ({ ...stored, ...(c || {}) })) }, [stored]) // eslint-disable-line
+  useEffect(() => { if (stored) setChoices(c => ({ ...stored, ...(c || {}) })) }, [stored])
   const choose = (patch) => {
     setChoices(c => ({ ...(c || {}), ...patch }))
     // A switched-off holding also stops being arbitrage capital: re-read the holdings once saved.
@@ -91,7 +91,7 @@ export default function StashView({ league }) {
   const rows = useMemo(() => Object.keys(qty || {}).map(c => {
     const v = data?.rows.find(r => r.currency === c)
     return { ...(v || {}), currency: c, name: nameOf(c), typed: qty[c] }
-  }), [qty, data, nameOf]) // eslint-disable-line
+  }), [qty, data, nameOf])
   const dflt = data?.counted_by_default   // the one default (backend settings.STASH_COUNTED_BY_DEFAULT)
   const groups = useMemo(() => stashGroups(rows, groupOf, choices, dflt), [rows, groupOf, choices, dflt])
   const total = netWorth(rows)
@@ -124,7 +124,7 @@ export default function StashView({ league }) {
     const ro = new ResizeObserver(() => view.style.setProperty('--stash-head-h', `${head.offsetHeight}px`))
     ro.observe(head)
     return () => ro.disconnect()
-  }, [qty == null]) // eslint-disable-line
+  }, [qty == null])
   const [folds, setFolds] = useState(readFolds)
   const [q, setQ] = useState('')
   const searchRef = useRef(null)
@@ -170,7 +170,7 @@ export default function StashView({ league }) {
     if (needsSave) save(next)
     else discard()
     if (selRef.current) loadSales(selRef.current)
-  }, [creditRev, data]) // eslint-disable-line
+  }, [creditRev, data])
   // If any mount's post-credit capital reload fails, drop stale quantities on the active editor too so it
   // cannot save a pre-credit balance before refreshHeader() delivers the credited holdings.
   useEffect(() => {
@@ -178,13 +178,13 @@ export default function StashView({ league }) {
     discard()
     capitalDirty.clear()
     setQty(null)
-  }, [capitalStale]) // eslint-disable-line
+  }, [capitalStale])
   // Hold autosave across ALL Stash mounts while any sales fetch is in flight or holdings are stale, so a
   // remounted editor cannot send a pre-credit full-balance PUT over an in-flight credit before reconciliation.
   useEffect(() => {
     if (salesFetching || capitalStale) hold()
     else release()
-  }, [salesFetching, capitalStale]) // eslint-disable-line
+  }, [salesFetching, capitalStale])
   // Seeded once from whichever copy arrives first, rebased with any shared unsaved edits (e.g. a failed unmount PUT)
   // and scheduled for retry (held automatically if salesFetching/capitalStale is active).
   const seed = (cap) => {
@@ -193,7 +193,7 @@ export default function StashView({ league }) {
     arm()
     if (needsSave) save(next)
   }
-  useEffect(() => { if (!qty && data && !capitalSaving && !capitalStale) seed(data) }, [data, qty, capitalSaving, capitalStale]) // eslint-disable-line
+  useEffect(() => { if (!qty && data && !capitalSaving && !capitalStale) seed(data) }, [data, qty, capitalSaving, capitalStale])
   const commitDetachedEdits = async () => {
     if (!capitalDirty.size) return
     discard()
@@ -326,9 +326,9 @@ export default function StashView({ league }) {
       activeRefresh.current = null
       setBusy(false)
     }
-  }, [sel]) // eslint-disable-line
+  }, [sel])
   // Topbar ⟳ = this tab's own refresh (a manual one).
-  useEffect(() => { if (tick !== tick0.current) { tick0.current = tick; refresh(false) } }, [tick]) // eslint-disable-line
+  useEffect(() => { if (tick !== tick0.current) { tick0.current = tick; refresh(false) } }, [tick])
   const prices = sales.prices ?? status?.wealth_prices
   const stats = useMemo(() => salesStats(sales.rows, ref, prices), [sales.rows, ref, prices])
   const byName = useMemo(() => { const m = new Map(); for (const n of flatten(tree, x => x.kind === 'search')) if (n.name) m.set(n.name.toLowerCase(), n.id); return m }, [tree])

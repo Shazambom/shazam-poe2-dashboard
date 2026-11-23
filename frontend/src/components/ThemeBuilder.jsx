@@ -42,7 +42,7 @@ export default function ThemeBuilder() {
   }, [])
 
   const editing = useMemo(() => customs.find(t => t.id === editId) || null, [customs, editId])
-  useEffect(() => { setDraft(editing ? { ...editing, colors: { ...editing.colors } } : null); setExported('') }, [editing?.id]) // eslint-disable-line
+  useEffect(() => { setDraft(editing ? { ...editing, colors: { ...editing.colors } } : null); setExported('') }, [editing?.id])
 
   const persist = (list) => useTheme.getState().saveCustoms(list).catch(() => toast('Could not save themes', false))
   const upsert = (theme) => persist(customs.some(t => t.id === theme.id) ? customs.map(t => (t.id === theme.id ? theme : t)) : [...customs, theme])

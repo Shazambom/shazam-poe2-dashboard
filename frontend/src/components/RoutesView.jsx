@@ -86,19 +86,19 @@ export default function RoutesView({ capital, status, currencies }) {
   useEffect(() => {
     ensureSettings().then(s => { setF(filtersFromSettings(s.filters)); setLoaded(true); arm() })
       .catch(() => setLoaded(true))              // no settings: search with the defaults, once
-  }, []) // eslint-disable-line
+  }, [])
   // The first key applies at once; later edits are debounced.
   const searchKey = useDebounced(filterKey, 500) ?? filterKey
   useEffect(() => {
     if (searchKey == null) return
     load()
     return () => esRef.current?.()
-  }, [searchKey]) // eslint-disable-line
+  }, [searchKey])
   useEffect(() => {
     if (searchKey == null) return
     const t = setInterval(() => { if (document.visibilityState === 'visible' && !streaming) load() }, 120000)
     return () => clearInterval(t)
-  }, [searchKey, streaming]) // eslint-disable-line
+  }, [searchKey, streaming])
 
   const active = activePreset(presets, settings)
   // A pick is an ordinary settings save of the preset's values, made after any edit still waiting to save: the
@@ -117,7 +117,7 @@ export default function RoutesView({ capital, status, currencies }) {
   }
 
   // Manual refresh from the topbar ⟳ re-runs the search.
-  useEffect(() => { if (tick > 0 && searchKey != null) load() }, [tick]) // eslint-disable-line
+  useEffect(() => { if (tick > 0 && searchKey != null) load() }, [tick])
 
   const update = (k, v) => { const next = { ...f, [k]: v }; setF(next); save(next) }
   const set = (k) => (e) => update(k, e.target.type === 'checkbox' ? e.target.checked : e.target.value)

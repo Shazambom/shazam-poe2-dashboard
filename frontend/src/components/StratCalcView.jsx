@@ -218,7 +218,7 @@ function StratTree({ doc, ctx, change, treeRef }) {
       : { id: n.id, kind: 'strat', name: names[n.id] ?? '' }))
     return map(doc.tree)
   }, [doc.tree, names])
-  const initialOpen = useMemo(() => Object.fromEntries(sc.flattenFolders(doc.tree).map(f => [f.id, f.open])), []) // eslint-disable-line
+  const initialOpen = useMemo(() => Object.fromEntries(sc.flattenFolders(doc.tree).map(f => [f.id, f.open])), [])
   const wrap = useRef(null)
   const [dims, setDims] = useState({ w: 240, h: 300 })
   useEffect(() => {
@@ -313,7 +313,7 @@ export default function StratCalcView({ league, currencies }) {
   // Prices follow the market every minute and on the app-wide ⟳.
   useEffect(() => {
     useStratStore.getState().load({ createIfEmpty: true })
-  }, []) // eslint-disable-line
+  }, [])
   const tick = useSync(s => s.tick)
   usePoll(() => api.stratPrices().then(d => setPrices(d.prices || {})).catch(() => {}), PRICE_POLL_MS, [tick])
 

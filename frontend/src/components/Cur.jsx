@@ -16,7 +16,7 @@ const Cur = React.memo(function Cur({ id, name, size = 18, text = false, classNa
     if (!broken) return
     setBroken(false)
     setAttempt(a => a + 1)
-  }, [epoch]) // eslint-disable-line
+  }, [epoch])
   const rec = lookup({ id, name })
   const label = rec?.name || name || id || '?'
   const icon = rec?.icon

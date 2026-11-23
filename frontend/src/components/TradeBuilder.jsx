@@ -43,7 +43,7 @@ export default function TradeBuilder({ title, url, league, onUse, onClose, onUnl
     // The page's own search (the trade tap): a run search can land on a short id its address doesn't carry.
     const offTap = trade.onTap?.(e => { if (id != null && e?.kind === 'search' && e.wcId === id) move({ kind: 'tap', body: e.body }) })
     return () => { el.removeEventListener('dom-ready', ready); off?.(); offTap?.() }
-  }, []) // eslint-disable-line
+  }, [])
 
   useEffect(() => {
     const h = (e) => { if (e.key === 'Escape' && !e.defaultPrevented) onClose() }   // an open list handles its own Esc

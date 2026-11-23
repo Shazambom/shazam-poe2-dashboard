@@ -45,7 +45,7 @@ export default function SettingsView({ currencies, status, onSaved, onReportProb
   useEffect(() => {
     useStatus.getState().loadSettings().then(x => { setS(x); arm() })
     api.goldFees().then(setFees).catch(() => {})
-  }, []) // eslint-disable-line
+  }, [])
   if (!s) return <div className="single hint">Loading settings…</div>
 
   const opts = currencies?.currencies ?? []
@@ -186,7 +186,7 @@ function DiagPanel({ open }) {
     setBusy(false)
   }
   // The probe counts the market tables and checks outbound connectivity: only when asked to look.
-  useEffect(() => { if (open && !d) run() }, [open]) // eslint-disable-line
+  useEffect(() => { if (open && !d) run() }, [open])
   const text = d ? JSON.stringify(d, null, 2) : ''
   return (
     <div>

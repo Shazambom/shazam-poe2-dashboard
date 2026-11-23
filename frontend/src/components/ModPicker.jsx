@@ -14,7 +14,7 @@ function ModPicker({ mods, selected, hide, onToggle, onMin, header, children, cm
     const pool = mods.filter(m => !(hide?.has(m.id) && !selected.has(m.id)))
     const kept = matching(pool, filter, m => [m.text])
     return [...kept.filter(m => selected.has(m.id)), ...kept.filter(m => !selected.has(m.id))]
-  }, [mods, hide, norm(filter), settled]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [mods, hide, norm(filter), settled])
   const minOf = (id) => (selected instanceof Map ? selected.get(id) : 0) || ''
   return (
     <div className="rx-picker rx-surface">

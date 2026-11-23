@@ -461,7 +461,7 @@ a { color: var(--live); }
 .live-badge { font-size: 10px; font-weight: 700; color: var(--offline); border: 1px solid rgba(232,97,95,.5); border-radius: 4px; padding: 0 4px; letter-spacing: .04em; text-transform: uppercase; }
 /* Right side: the embedded trade window (or the empty-state overlay). */
 .ws-main { flex: 1 1 auto; min-width: 0; min-height: 0; position: relative; display: flex; flex-direction: column;
-  border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: #0e0f13; } /* style-ok: near-black behind the embedded webview, intentionally below --bg */
+  border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: #0e0f13; } /* near-black behind the embedded webview, intentionally below --bg */
 .ws-webhint { display: flex; align-items: center; gap: 10px; padding: 6px 12px; border-bottom: 1px solid var(--line); font-size: 12px; min-height: 30px; min-width: 0; overflow: hidden; flex: 0 0 auto; }
 .ws-webhint-empty { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; white-space: normal; }
 .ws-webhint-empty .ws-inline-add { width: 18px; height: 18px; font-size: 12px; }
@@ -526,7 +526,7 @@ a { color: var(--live); }
 .btn.teleport.gone, .btn.teleport.expired { background: var(--line); color: var(--muted); }
 
 /* most-recent-ping banner (rendered inside the toast stack) */
-.ping-banner { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: #191b22; /* style-ok: bespoke alert surface */
+.ping-banner { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: #191b22; /* bespoke alert surface */
   border: 1px solid #c8403e; border-radius: 10px; box-shadow: 0 8px 30px rgba(0,0,0,.5), 0 0 14px rgba(232,60,60,.35); min-width: 300px; }
 .ping-banner .pb-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); }
 .ping-banner .pb-dot.online { background: var(--gain); } .ping-banner .pb-dot.afk { background: var(--afk); } .ping-banner .pb-dot.offline { background: var(--offline); }
@@ -731,7 +731,7 @@ td.mpg { white-space: nowrap; }
 }
 .update-chip.busy { color: var(--muted); }
 .update-chip.ready {
-  cursor: pointer; color: #0e1a12; border-color: transparent; /* style-ok: dark-green ink for contrast on the green "ready" chip */
+  cursor: pointer; color: #0e1a12; border-color: transparent; /* dark-green ink for contrast on the green "ready" chip */
   background: linear-gradient(135deg, #8fd6a8, var(--gain) 60%, #4f9e73);
   box-shadow: 0 2px 10px rgba(var(--gain-rgb),.45); animation: chip-pulse 1.8s ease-in-out 3;   /* pulses three times, then rests */
 }

@@ -24,7 +24,7 @@ export function useApi(fn, deps) {
       .catch(e => { if (live) setErr(cleanErr(e)) })
       .finally(() => { if (live) setBusy(false) })
     return () => { live = false }
-  }, [...deps, nonce, tick]) // eslint-disable-line
+  }, [...deps, nonce, tick])
   return { data, err, busy, reload: () => setNonce(n => n + 1), setData }
 }
 
@@ -59,5 +59,5 @@ export function useDebounced(value, ms = 500) {
 export function usePoll(fn, ms, deps = []) {
   const ref = useRef(fn)
   ref.current = fn
-  useEffect(() => startPoll(() => ref.current(), ms), [ms, ...deps]) // eslint-disable-line
+  useEffect(() => startPoll(() => ref.current(), ms), [ms, ...deps])
 }

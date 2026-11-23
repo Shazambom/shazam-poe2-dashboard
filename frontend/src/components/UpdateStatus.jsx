@@ -12,7 +12,7 @@ export default function UpdateStatus({ version }) {
     if (!bridge?.onUpdate) return
     const off = bridge.onUpdate(setSt)
     return off
-  }, []) // eslint-disable-line
+  }, [])
 
   if (!bridge?.onUpdate) return null
 

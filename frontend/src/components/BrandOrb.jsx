@@ -45,7 +45,7 @@ export default function BrandOrb({ onDone }) {
     }
     tick()
     return () => { alive = false; clearTimeout(timer) }
-  }, []) // eslint-disable-line
+  }, [])
 
   // Each completed rotation swaps to a different random orb (never repeat back-to-back).
   const onIter = () => setIdx(i => { let n = rand(ORBS.length); if (n === i) n = (n + 1) % ORBS.length; return n })

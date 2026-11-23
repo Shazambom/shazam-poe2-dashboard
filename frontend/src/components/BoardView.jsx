@@ -143,7 +143,7 @@ export default function BoardView({ status }) {
     ensureSettings().then(s => setWatchlist(s.watchlist || [])).catch(() => {})
   }, [])
   // Manual refresh from the topbar ⟳ (bumps the shared tick) refreshes the mounted view.
-  useEffect(() => { if (tick > 0) refresh() }, [tick]) // eslint-disable-line
+  useEffect(() => { if (tick > 0) refresh() }, [tick])
 
   const ref = data?.reference ?? 'ref'
   const rows = data?.rows ?? []
@@ -151,7 +151,7 @@ export default function BoardView({ status }) {
   // Currencies a card can be priced in = those with a known reference price, richest first.
   const numOptions = useMemo(() => Object.keys(prices)
     .sort((a, b) => (prices[b] || 0) - (prices[a] || 0))
-    .map(id => ({ id, name: nameOf(id) })), [prices, nameOf]) // eslint-disable-line
+    .map(id => ({ id, name: nameOf(id) })), [prices, nameOf])
   // Effective numeraire for a card: user override → backend's highest-volume default → reference.
   // Never price a currency against itself (a 1:1 is useless) — fall back to divine/ref.
   const numFor = (r) => {

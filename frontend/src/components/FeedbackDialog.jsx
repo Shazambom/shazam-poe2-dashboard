@@ -17,7 +17,7 @@ export default function FeedbackDialog({ onClose }) {
       else setSt({ phase: 'ready', shortId: r.shortId })
     }).catch(e => live && setSt({ phase: 'error', message: String(e?.message || e) }))
     return () => { live = false }
-  }, []) // eslint-disable-line
+  }, [])
   useEffect(() => {
     const h = (e) => { if (e.key === 'Escape') onClose() }
     window.addEventListener('keydown', h); return () => window.removeEventListener('keydown', h)

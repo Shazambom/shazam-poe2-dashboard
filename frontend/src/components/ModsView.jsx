@@ -41,7 +41,7 @@ export default function ModsView() {
     // Saving is armed only once the stored blob is in hand: a failed load shows defaults but
     // must never write them over the user's saved pool.
     ensureSettings().then(x => { setS(merge(x.mods_tools)); arm() }).catch(() => { setS(merge(null)); toast('Could not load your saved settings', false) })
-  }, []) // eslint-disable-line
+  }, [])
 
   const list = useApi(() => api.modPools(), [])
   const pools = list.data?.pools || []
