@@ -54,7 +54,7 @@ function registerFeedback({ ipcMain, BrowserWindow, session, win, uiUrl, backend
   // The sweep's snap window shares ONE session.webRequest listener, so two sweeps at once would
   // replace each other's write filter (the dialog closed and reopened mid-package). One at a time.
   ipcMain.handle('feedback:package', async (e) => {
-    if (!fromApp(e)) return
+    if (!fromApp(e)) return undefined
     if (last && now() - last.at < THROTTLE_MS) return { throttled: true, shortId: last.shortId, file: last.file }
     if (inflight) return inflight
     inflight = packageReport().finally(() => { inflight = null })

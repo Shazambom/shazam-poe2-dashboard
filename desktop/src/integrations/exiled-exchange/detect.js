@@ -52,12 +52,12 @@ function findProcess() {
     try {
       if (process.platform === 'win32') {
         execFile('tasklist', { timeout: 2000 }, (err, out) => {
-          if (err || !out) return done(false)
+          if (err || !out) { done(false); return }
           done(/exiled.?exchange/i.test(out))
         })
       } else {
         execFile('ps', ['-A', '-o', 'comm'], { timeout: 2000 }, (err, out) => {
-          if (err || !out) return done(false)
+          if (err || !out) { done(false); return }
           done(/exiled.?exchange/i.test(out))
         })
       }
