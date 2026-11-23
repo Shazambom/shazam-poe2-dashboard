@@ -9,7 +9,7 @@
 //     the HttpOnly POESESSID is read from our session and handed to the backend.
 'use strict'
 const { ignored } = require('./ignored.js')
-const { backendFetch, allowDevBackend } = require('./local-backend.js')
+const { backendFetch, allowDevBackend, localBackendTarget } = require('./local-backend.js')
 const { loadSettings, updateSettings } = require('./settings-store.js')
 const { app, BrowserWindow, Menu, Notification, clipboard, dialog, ipcMain, session, shell, nativeTheme } = require('electron')
 const { spawn } = require('node:child_process')
@@ -194,7 +194,7 @@ async function backendReady(plan) {
     // dev server for convenience. Packaged apps must never reach here.
     backendUrl = DEV_BACKEND_URL
     backendKind = 'dev'
-    allowDevBackend(DEV_BACKEND_URL)
+    allowDevBackend(DEV_BACKEND_URL, { isPackaged: app.isPackaged })
     return
   }
   // Shipped app stays local even if the backend is down — we never fall back to the
@@ -228,7 +228,13 @@ function startUiServer(dist) {
   const server = http.createServer((req, res) => {
     const u = new URL(req.url, 'http://x')
     if (u.pathname.startsWith('/api/') || u.pathname === '/callback') {
-      const target = new URL(backendUrl)
+      // Only ever the local backend (or the dev one an unpackaged run registered): local-backend.js decides.
+      const target = localBackendTarget(backendUrl)
+      if (!target) {
+        res.writeHead(502, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ detail: 'not the local backend' }))
+        return
+      }
       const opts = {
         hostname: target.hostname, port: target.port || 80,
         path: u.pathname + u.search, method: req.method,
