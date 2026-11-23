@@ -34,5 +34,11 @@
     "stylelint": "18.1.0",
     "stylelint-config-recommended": "19.1.0",
     "typescript": "6.0.3"
+  },
+  "overrides": {
+    "katex": "0.19.1",
+    "eslint-plugin-sonarjs": {
+      "minimatch": "11.0.9"
+    }
   }
 }
