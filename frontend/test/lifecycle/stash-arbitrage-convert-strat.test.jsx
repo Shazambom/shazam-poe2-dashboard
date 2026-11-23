@@ -7,7 +7,7 @@ import ConvertView from '../../src/components/ConvertView.jsx'
 import * as sc from '../../src/lib/stratcalc.js'
 import { useStratStore } from '../../src/lib/stratStore.js'
 import StratCalcView from '../../src/components/StratCalcView.jsx'
-import { useStatus } from '../../src/lib/statusStore.js'
+import { useStatus, capitalDirty } from '../../src/lib/statusStore.js'
 import { loadIcons } from '../../src/lib/icons.js'
 
 class FakeEventSource {
@@ -98,6 +98,32 @@ describe('Stash, Arbitrage SSE, Convert, and StratCalc lifecycles', () => {
     expect(await screen.findByDisplayValue('12')).toBeTruthy()
     unmount()
     expect(calls.filter(call => call.method === 'PUT' && call.path === '/api/capital')).toHaveLength(0)
+  })
+
+  it('waits for authoritative holdings and replays restored edits without overwriting a new count', async () => {
+    const { calls } = installApiMock()
+    const original = useStatus.getState().capital
+    const { unmount } = render(<StashView />)
+    const old = await screen.findByDisplayValue('10')
+    act(() => useStatus.setState({ salesFetching: true }))
+    fireEvent.change(old, { target: { value: '25' } })
+    act(() => useStatus.setState({ capitalStale: true, capitalSaving: true }))
+    expect(screen.getByText('Loading your stash…')).toBeTruthy()
+    const credited = { ...original, rows: original.rows.map(row => ({ ...row, qty: row.qty + 2 })) }
+    act(() => useStatus.setState({ capital: credited, capitalStale: false }))
+    expect(screen.queryByDisplayValue('12')).toBeNull()
+    capitalDirty.set('divine', { kind: 'add', delta: 3 })
+    act(() => useStatus.setState({ capitalSaving: false }))
+    expect(screen.getByDisplayValue('15')).toBeTruthy()
+    fireEvent.change(screen.getByDisplayValue('502'), { target: { value: '519' } })
+    act(() => useStatus.setState({ capital: { ...credited }, salesFetching: false }))
+    expect(screen.getByDisplayValue('519')).toBeTruthy()
+    const writes = () => calls.filter(call => call.method === 'PUT' && call.path === '/api/capital')
+    expect(writes()).toHaveLength(0)
+    unmount()
+    await waitFor(() => expect(writes()).toHaveLength(1))
+    expect(writes()[0].body.entries).toEqual({ divine: 15, exalted: 519 })
+    expect(writes()[0].body.counted).toEqual(['exalted'])
   })
 
   it('keeps a local counting choice when saved choices for other currencies arrive', async () => {
