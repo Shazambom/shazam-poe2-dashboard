@@ -239,7 +239,7 @@ function check(kind, s, it, label) {
   if (got !== want) assert.equal(got, want, `${label}\n  settings ${JSON.stringify(s)}\n  string   ${str}\n  tooltip\n${render(it).split('\n').map(l => '    ' + l).join('\n')}`)
   assert.equal((str.match(/"/g) || []).length % 2, 0, `unbalanced quotes: ${str}`)
   assert.equal(str, str.trim(), `stray whitespace: [${str}]`)
-  assert.equal(/  /.test(str), false, `double space: [${str}]`)
+  assert.equal(/ {2}/.test(str), false, `double space: [${str}]`)
   return str
 }
 const S = (kind, over = {}) => ({ ...structuredClone(defaults[kind]), ...over })
