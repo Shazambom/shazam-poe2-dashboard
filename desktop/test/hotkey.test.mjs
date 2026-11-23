@@ -53,3 +53,19 @@ test('re-choosing the combo already in use keeps it registered', () => {
   assert.equal(H.registerHotkey(() => null, 'CommandOrControl+G').ok, true)
   assert.deepEqual([...s.registered.keys()], ['CommandOrControl+G'])
 })
+
+// Settings' label asks main which combo is registered (hotkey:get). A saved combo the OS refused at launch is
+// not registered, so the answer is none, not the saved combo the label would then show as working.
+test('the registered combo is reported, and none when the OS refused it', () => {
+  const s = fakeShortcuts(new Set(['CommandOrControl+G']))
+  const H = loadHotkey(s)
+  assert.equal(H.registeredHotkey(), null)
+  assert.equal(H.registerHotkey(() => null, 'CommandOrControl+G').ok, false)
+  assert.equal(H.registeredHotkey(), null, 'refused at launch: nothing is registered')
+  assert.equal(H.registerHotkey(() => null, 'Alt+K').ok, true)
+  assert.equal(H.registeredHotkey(), 'Alt+K')
+  assert.equal(H.registerHotkey(() => null, 'CommandOrControl+G').ok, false)
+  assert.equal(H.registeredHotkey(), 'Alt+K', 'a refused re-bind keeps the previous combo')
+  H.unregisterAll()
+  assert.equal(H.registeredHotkey(), null)
+})

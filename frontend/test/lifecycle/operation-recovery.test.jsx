@@ -498,6 +498,36 @@ it('focus hotkey: a failed registration leaves the shown combo and the next pres
   }
 })
 
+// The label shows only a combo main says is registered. Reading it fails when the hotkey never started this
+// session, and main answers { combo: null } when the OS refused the saved combo at launch: both show the
+// control empty (not the default ⌘/Ctrl+G, which nothing registered), and a press that registers fills it.
+it('focus hotkey: no registered hotkey shows the control empty, never the default combo', async () => {
+  const previous = window.poe2desktop.hotkey
+  const debug = vi.spyOn(console, 'debug')
+  try {
+    installApiMock()
+    for (const get of [vi.fn().mockRejectedValue(new Error('No handler registered')), vi.fn(async () => ({ combo: null }))]) {
+      const set = vi.fn(async () => ({ ok: true }))
+      window.poe2desktop.hotkey = { get, set }
+      const view = render(<TradingSettings />)
+      await settle()
+      expect(get).toHaveBeenCalledTimes(1)
+      const button = screen.getByText('Focus hotkey').nextElementSibling
+      expect(button.textContent).toBe('')
+      fireEvent.click(button)
+      fireEvent.keyDown(button, { key: 'j', ctrlKey: true })
+      await settle()
+      expect(set).toHaveBeenCalledWith('CommandOrControl+J')
+      expect(button.textContent).toBe('⌘/Ctrl+J')
+      view.unmount()
+    }
+    expect(debug).toHaveBeenCalledWith('[Arbiter]', 'load hotkey')
+  } finally {
+    window.poe2desktop.hotkey = previous
+    debug.mockRestore()
+  }
+})
+
 // App quit: main sends ws:flush and closes the window on ws:flushed or after 1 s. A pending edit whose write
 // fails is written again at once (twice at most) before the window is let go.
 async function quitWith({ wsFails, stratFails }) {
