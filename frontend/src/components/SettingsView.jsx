@@ -154,7 +154,7 @@ export default function SettingsView({ currencies, onSaved, onReportProblem }) {
 function BetaChannelToggle() {
   const desk = isDesktop ? window.poe2desktop : null
   const [st, setSt] = useState(null)
-  useEffect(() => { desk?.getChannel?.().then(setSt).catch(() => ignoredError('read release channel')) }, [])
+  useEffect(() => { if (isDesktop) window.poe2desktop?.getChannel?.().then(setSt).catch(() => ignoredError('read release channel')) }, [])
   if (!desk?.getChannel) return null
   const toggle = async (v) => {
     try { setSt(refreshTweaks(await desk.setChannel(v))); toast(v ? 'Beta channel on — checking for updates…' : 'Back on stable channel') } catch { ignoredError('change release channel') }

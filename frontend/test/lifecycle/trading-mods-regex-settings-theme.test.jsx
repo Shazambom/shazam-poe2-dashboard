@@ -109,6 +109,17 @@ describe('Mods, Regex, Settings, ThemeBuilder, Trading, and App shell lifecycles
     expect(calls.filter(c => c.method === 'PUT')).toHaveLength(0)
   })
 
+  it('reads the update channel once when settings opens', async () => {
+    const getChannel = vi.spyOn(window.poe2desktop, 'getChannel')
+    const { rerender, unmount } = render(<SettingsView />)
+    await screen.findByText('Diagnostics')
+    const reads = getChannel.mock.calls.length
+    expect(reads).toBeGreaterThan(0)
+    rerender(<SettingsView currencies={DEFAULT_CURRENCIES} />)
+    unmount()
+    expect(getChannel).toHaveBeenCalledTimes(reads)
+  })
+
   it('TradingView switches across Workspace, Regex, Mods, and Live while keeping Workspace mounted', async () => {
     installApiMock()
     render(<TradingView league="Test League" />)
