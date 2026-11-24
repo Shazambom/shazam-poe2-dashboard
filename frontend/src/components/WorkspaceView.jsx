@@ -551,7 +551,7 @@ export default function WorkspaceView({ league, visible = true }) {
               <button type="button" className="ws-mini on" title="Reload" aria-label="Reload" onClick={() => setWvNonce(n => n + 1)}>↻</button>
             </div>
             <div className={`ws-progress ${navState.loading ? 'on' : ''}`} aria-hidden="true" />
-            {!SNAP && <webview key={`${activeId || 'home'}:${wvNonce}:${rerunTick}:${relax.relaxTick}`} ref={wv} src={viewUrl} className="ws-webview" allowpopups="true" />}
+            {!SNAP && <webview key={`${activeId || 'home'}:${wvNonce}:${rerunTick}:${relax.relaxTick}`} data-node-id={activeId} ref={wv} src={viewUrl} className="ws-webview" allowpopups="true" />}
           </>
         ) : (
           <div className="ws-overlay">

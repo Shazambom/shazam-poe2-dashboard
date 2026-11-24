@@ -14,7 +14,7 @@ it('accepts cheaper sibling evidence from another window only for the selected l
   const query = { type: 'Fixture', status: { option: 'securable' } }
   const slug = await encodeSlug(query)
   const props = {
-    wv: { current: { getWebContentsId: () => 31 } }, node: { kind: 'search', slug },
+    wv: { current: { dataset: { nodeId: 'saved' }, getWebContentsId: () => 31 } }, node: { id: 'saved', kind: 'search', slug },
     league: 'Demo', navUrl: tradeUrl({ slug }, 'Demo'), visible: true,
   }
   const { result } = renderHook(() => useReprice(props))
