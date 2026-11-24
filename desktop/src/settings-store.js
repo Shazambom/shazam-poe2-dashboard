@@ -5,20 +5,34 @@
 // file() is called inside the guard, so a user-data path that is not available yet reads as defaults.
 //
 // The file is the user's: only a missing file starts from the defaults. A write goes to a temp file beside
-// it and is renamed over it, so a crash or a full disk mid-write leaves the old file whole. A file that is
-// there but cannot be read or parsed is moved aside (<file>.corrupt-<time>, the newest KEEP_CORRUPT kept)
-// before the defaults are used, so no later write replaces it.
+// it and is renamed over it, so a crash or a full disk mid-write leaves the old file whole. A file that
+// reads cleanly but cannot be parsed is moved aside (<file>.corrupt-<time>, the newest KEEP_CORRUPT kept)
+// before the defaults are used, so no later write replaces it; a non-ENOENT read failure is retried briefly
+// and, if it persists, leaves the file in place and holds the path against writes for this run.
 'use strict'
 const fs = require('node:fs')
 const path = require('node:path')
 const { ignored } = require('./ignored.js')
 
 const KEEP_CORRUPT = 2
-// Paths whose unreadable file could not be moved aside: never written over this run.
+const RETRY_DELAYS_MS = [20, 40, 80]
+const waitBuf = new Int32Array(new SharedArrayBuffer(4))
+const pauseSync = (ms) => { Atomics.wait(waitBuf, 0, 0, ms) }
+// Paths whose file could not be read or whose corrupt file could not be moved aside: never written over this run.
 const held = new Set()
 
 /** The parsed file; throws when it is missing or not JSON (callers fall back to their defaults). */
 const readSettingsFile = (file) => JSON.parse(fs.readFileSync(file, 'utf8'))
+
+// Reads `f` as UTF-8, retrying non-ENOENT I/O errors briefly before giving up.
+function readRawWithRetry(f) {
+  for (let i = 0; ; i++) {
+    try { return fs.readFileSync(f, 'utf8') } catch (e) {
+      if (e?.code === 'ENOENT' || i >= RETRY_DELAYS_MS.length) throw e
+      pauseSync(RETRY_DELAYS_MS[i])
+    }
+  }
+}
 
 // The kept-aside copies of `f`, oldest first: [name, stamp] pairs.
 function corruptCopies(f) {
@@ -30,7 +44,7 @@ function corruptCopies(f) {
     .sort((a, b) => a[1] - b[1])
 }
 
-// Moves an unreadable settings file aside and drops all but the newest KEEP_CORRUPT copies. Returns
+// Moves an unparseable settings file aside and drops all but the newest KEEP_CORRUPT copies. Returns
 // whether the path is free for a new file. The stamp is the time, or one past the newest copy, so a new
 // copy always sorts newest.
 function keepAside(f) {
@@ -54,11 +68,17 @@ function keepAside(f) {
 function loadSettings(file, defaults) {
   let f
   try { f = file() } catch (e) { ignored('settings:read', e); return { ...defaults } }
-  try { return { ...defaults, ...readSettingsFile(f) } } catch (e) {
+  let raw
+  try { raw = readRawWithRetry(f) } catch (e) {
     if (e?.code !== 'ENOENT') {
       ignored('settings:read', e)
-      if (!keepAside(f)) held.add(f)
+      held.add(f)
     }
+    return { ...defaults }
+  }
+  try { return { ...defaults, ...JSON.parse(raw) } } catch (e) {
+    ignored('settings:read', e)
+    if (!keepAside(f)) held.add(f)
     return { ...defaults }
   }
 }
