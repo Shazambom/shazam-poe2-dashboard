@@ -108,12 +108,25 @@ const settingsQueue = createSaveQueue(patch => api.putSettings(patch), {
 
 export const persistSettings = patch => settingsQueue.save(patch, true)
 
+// Mounted StashView registers its autosave editor here so statusStore stays the sole registered
+// capital quit writer and awaits the editor explicitly rather than racing a microtask.
+let capitalEditor = null
+export function registerCapitalEditor(editor) {
+  capitalEditor = editor
+  return () => { if (capitalEditor === editor) capitalEditor = null }
+}
+
 registerFlush(async () => {
-  await Promise.resolve()
+  const editor = capitalEditor
+  if (editor) {
+    const ok = await editor.flush()
+    if (!ok) return false
+  }
   const state = useStatus.getState()
   if (state.capitalSaving) return state.waitCapital()
   if (!capitalDirty.size) return true
   if (!state.capital || state.capitalStale || state.salesFetching) return false
+  editor?.discard()
   const edits = new Map(capitalDirty)
   const { qty } = reconcileCapital(state.capital, edits)
   capitalDirty.clear()
