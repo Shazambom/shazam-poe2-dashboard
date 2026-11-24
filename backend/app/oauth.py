@@ -123,9 +123,8 @@ async def complete(code: str, state: str) -> dict:
 
 
 def _save_and_status(tok: dict) -> dict:
-    with secrets.write_lock:
-        _save(tok)
-        return status()
+    _save(tok)
+    return status()
 
 
 async def _token_request(form: dict) -> dict:
@@ -150,23 +149,22 @@ async def _token_request(form: dict) -> dict:
 
 
 def _save(tok: dict) -> None:
-    with secrets.write_lock:
-        existing = secrets.load("oauth") or {}
-        secrets.store(
-            "oauth",
-            {
-                "access_token": tok["access_token"],
-                "refresh_token": tok.get("refresh_token")
-                or existing.get("refresh_token"),
-                "expires_at": time.time() + float(tok.get("expires_in") or 0),
-                "refresh_expires_at": existing.get("refresh_expires_at")
-                or (time.time() + 7 * 86400 if tok.get("refresh_token") else None),
-                "username": tok.get("username"),
-                "sub": tok.get("sub"),
-                "scope": tok.get("scope"),
-                "obtained_at": time.time(),
-            },
-        )
+    def apply(existing: dict | None) -> dict:
+        prev = existing or {}
+        now = time.time()
+        return {
+            "access_token": tok["access_token"],
+            "refresh_token": tok.get("refresh_token") or prev.get("refresh_token"),
+            "expires_at": now + float(tok.get("expires_in") or 0),
+            "refresh_expires_at": prev.get("refresh_expires_at")
+            or (now + 7 * 86400 if tok.get("refresh_token") else None),
+            "username": tok.get("username"),
+            "sub": tok.get("sub"),
+            "scope": tok.get("scope"),
+            "obtained_at": now,
+        }
+
+    secrets.update("oauth", apply)
 
 
 async def token() -> str | None:
@@ -210,9 +208,8 @@ def status() -> dict:
 
 
 def logout() -> dict:
-    with secrets.write_lock:
-        secrets.clear("oauth")
-        return status()
+    secrets.clear("oauth")
+    return status()
 
 
 # ------------------------------------------------------------------ API calls
