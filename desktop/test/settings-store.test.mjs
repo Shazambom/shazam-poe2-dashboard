@@ -141,8 +141,53 @@ test('a settings path that cannot be read (a directory) is moved aside too', () 
     const f = join(dir, 'desktop-settings.json')
     mkdirSync(f)
     assert.deepEqual(loadSettings(() => f, DEFAULTS), DEFAULTS)
-    assert.equal(readdirSync(dir).filter(n => n.startsWith('desktop-settings.json.corrupt-')).length, 1)
-    assert.equal(writeSettings(() => f, DEFAULTS), true, 'the path is free for a good file')
+    assert.equal(readdirSync(dir).filter(n => n.startsWith('desktop-settings.json.corrupt-')).length, 0)
+    assert.equal(writeSettings(() => f, DEFAULTS), false, 'held on non-ENOENT read error; never overwritten')
+  } finally { rmSync(dir, { recursive: true, force: true }) }
+})
+
+test('a transient read error (EBUSY) is retried and reads the saved values when it clears', (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'arb-set-'))
+  try {
+    const f = join(dir, 'desktop-settings.json')
+    const saved = JSON.stringify({ theme: 'ash', focusHotkey: 'Alt+G' })
+    writeFileSync(f, saved)
+    const realRead = fs.readFileSync
+    let calls = 0
+    t.mock.method(fs, 'readFileSync', (file, opts) => {
+      calls++
+      if (calls === 1) throw Object.assign(new Error('EBUSY: resource busy or locked'), { code: 'EBUSY' })
+      return realRead(file, opts)
+    })
+    assert.deepEqual(loadSettings(() => f, DEFAULTS), { ...DEFAULTS, theme: 'ash', focusHotkey: 'Alt+G' })
+    assert.equal(calls, 2)
+    t.mock.restoreAll()
+    assert.equal(readdirSync(dir).filter(n => n.startsWith('desktop-settings.json.corrupt-')).length, 0)
+    assert.equal(readFileSync(f, 'utf8'), saved)
+  } finally { rmSync(dir, { recursive: true, force: true }) }
+})
+
+test('a persistent read error (EBUSY) leaves the valid file in place, creates no corrupt copy, and refuses writes', (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'arb-set-'))
+  try {
+    const f = join(dir, 'desktop-settings.json')
+    const saved = JSON.stringify({ theme: 'ash' })
+    writeFileSync(f, saved)
+    let calls = 0
+    t.mock.method(fs, 'readFileSync', () => {
+      calls++
+      throw Object.assign(new Error('EBUSY: resource busy or locked'), { code: 'EBUSY' })
+    })
+    const started = Date.now()
+    assert.deepEqual(loadSettings(() => f, DEFAULTS), DEFAULTS)
+    assert.ok(calls > 1, 'read is retried before giving up')
+    assert.ok(Date.now() - started < 1000, 'retries stay bounded well under a second')
+    t.mock.restoreAll()
+    assert.equal(readdirSync(dir).filter(n => n.startsWith('desktop-settings.json.corrupt-')).length, 0)
+    assert.equal(readFileSync(f, 'utf8'), saved)
+    assert.equal(writeSettings(() => f, DEFAULTS), false)
+    assert.equal(updateSettings(() => f, { ...DEFAULTS }, { theme: 'vaal' }), false)
+    assert.equal(readFileSync(f, 'utf8'), saved)
   } finally { rmSync(dir, { recursive: true, force: true }) }
 })
 
