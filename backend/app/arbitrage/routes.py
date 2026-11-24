@@ -1,7 +1,7 @@
 """Route search and ranking — simple cycles starting and ending at a currency the user holds.
 
-We size the route by the user's capital (× max_start_fraction) capped by the liquidity along the
-path, simulate the fills step by step with whole-unit rounding, then score:
+We size routes by the user's capital (× max_start_fraction), path liquidity and the per-step
+fill-time limit, simulate the fills step by step with whole-unit rounding, then score:
   margin        = units gained in the start currency
   margin_ref    = that gain valued in the reference currency
   value_ref     = total value that passes through the loop
@@ -173,6 +173,11 @@ def _velocity(
     return net / fill_hours / gold * 1000
 
 
+def _too_slow(slowest_step_hours: float | None, max_step_minutes: float) -> bool:
+    """A step past the per-step limit, or one whose market has no turnover (None: it cannot fill)."""
+    return slowest_step_hours is None or slowest_step_hours * 60 > max_step_minutes
+
+
 def _route_from(
     g: Graph,
     cyc: list[Edge],
@@ -180,6 +185,7 @@ def _route_from(
     held: float,
     budget: float,
     ref_value: dict[str, float],
+    max_step_minutes: float = 0,
 ) -> dict | None:
     # Size in whole tradable cycles: commit = (cycles) × (one-cycle unit), so the amount
     # always respects the trade ratios and never commits a partial lot.
@@ -189,6 +195,23 @@ def _route_from(
     if amount < 1:
         return None
     sim = simulate(g, cyc, amount, ref_value)
+    if (
+        max_step_minutes
+        and sim["slowest_step_hours"] is not None
+        and _too_slow(sim["slowest_step_hours"], max_step_minutes)
+    ):
+        # Fills and turnover time are nondecreasing in the commit, including after
+        # whole-unit and recipe rounding. Find the largest whole-cycle size that fits.
+        lo, hi = 0, cycles
+        while hi - lo > 1:
+            mid = (lo + hi) // 2
+            trial = simulate(g, cyc, mid * unit, ref_value)
+            if not _too_slow(trial["slowest_step_hours"], max_step_minutes):
+                lo, sim = mid, trial
+            else:
+                hi = mid
+        if lo:
+            cycles, amount = lo, lo * unit
     margin = sim["end_amount"] - amount
     margin_ref = margin * ref_value.get(start, 0.0)
     gold = sim["gold"]
@@ -295,9 +318,8 @@ def _keep(r: dict, f: dict) -> bool:
         r["fill_hours"] is None or r["fill_hours"] > f["max_fill_hours"]
     ):
         return False
-    if f.get("max_step_minutes") and (
-        r.get("slowest_step_hours") is None
-        or r["slowest_step_hours"] * 60 > f["max_step_minutes"]
+    if f.get("max_step_minutes") and _too_slow(
+        r.get("slowest_step_hours"), f["max_step_minutes"]
     ):
         return False
     if (
@@ -396,25 +418,27 @@ def _iter_candidates(
     notional: bool,
     deep_stats: dict | None = None,
     cancelled=lambda: False,
+    *,
+    max_step_minutes: float = 0,
 ):
     """Yield route dicts as the search finds them (shortest loops first, capped at MAX_CANDIDATES) — then whatever the
     whole-market deep scan adds (loops past `max_steps` or past the cap), tagged `deep`. Both go
     through `_route_from`, so a deep loop is sized, simulated, filtered and ranked like any other."""
 
-    def budget_for(start: str) -> tuple[float, float]:
+    def size(cyc: list[Edge]) -> dict | None:
+        start = cyc[0].src
         held = capital.get(start, 0.0)
-        return held, (
+        budget = (
             held * s["max_start_fraction"]
             if not notional
             else (1.0 / ref_value.get(start, 1.0) or 1.0) * 10
         )
+        return _route_from(g, cyc, start, held, budget, ref_value, max_step_minutes)
 
     seen: set[str] = set()
     for cyc in search_cycles(g, starts, s["max_steps"], MAX_CANDIDATES):
-        start = cyc[0].src
-        held, budget = budget_for(start)
         seen.add(_edge_list_id(cyc))
-        r = _route_from(g, cyc, start, held, budget, ref_value)
+        r = size(cyc)
         if r is not None:
             yield r
 
@@ -432,8 +456,7 @@ def _iter_candidates(
             if _edge_list_id(cyc) in seen:
                 continue
             seen.add(_edge_list_id(cyc))
-            held, budget = budget_for(cyc[0].src)
-            r = _route_from(g, cyc, cyc[0].src, held, budget, ref_value)
+            r = size(cyc)
             if r is not None:
                 r["deep"] = True
                 stats["added"] += 1
@@ -552,7 +575,18 @@ def stream_routes(
     deep: dict = {}
     last_sent = time.time()
     for n, r in enumerate(
-        _iter_candidates(g, s, ref_value, capital, starts, notional, deep, cancelled), 1
+        _iter_candidates(
+            g,
+            s,
+            ref_value,
+            capital,
+            starts,
+            notional,
+            deep,
+            cancelled,
+            max_step_minutes=f.get("max_step_minutes", 0),
+        ),
+        1,
     ):
         if n % CANCEL_CHECK_EVERY == 0:
             if cancelled():
@@ -586,7 +620,18 @@ def _find_routes(filters: dict | None, start_currencies: list[str] | None) -> di
         filters, start_currencies
     )
     deep: dict = {}
-    routes = list(_iter_candidates(g, s, ref_value, capital, starts, notional, deep))
+    routes = list(
+        _iter_candidates(
+            g,
+            s,
+            ref_value,
+            capital,
+            starts,
+            notional,
+            deep,
+            max_step_minutes=f.get("max_step_minutes", 0),
+        )
+    )
     kept, limit = _finish(routes, f, s)
     return _result(g, s, f, ref_value, capital, notional, routes, kept, limit, deep)
 

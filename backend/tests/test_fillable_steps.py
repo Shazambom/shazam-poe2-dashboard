@@ -132,6 +132,55 @@ def test_keep_drops_a_loop_whose_slowest_step_exceeds_the_limit():
     )  # 0 = off, like the others
 
 
+# A loop too big for `max_step_minutes` at full capital is sized DOWN to the largest whole lot that fills in time,
+# not dropped: otherwise more capital showed FEWER loops (owner, 2026-11-24: 1,809 divine held, only small loops listed).
+_SLOW = [
+    _edge("a", "b", 1.0, 1000.0),
+    _edge("b", "c", 1.0, 40.0),  # the slow market: 40 b/h
+    _edge("c", "a", 1.25, 1000.0),
+]
+_REF = {"a": 1.0, "b": 1.0, "c": 1.0}
+
+
+def _sized(held, max_step_minutes=0.0) -> dict:
+    r = routes._route_from(
+        _graph(_SLOW), _SLOW, "a", held, held, _REF, max_step_minutes
+    )
+    assert r is not None
+    return r
+
+
+def test_a_loop_too_slow_at_full_capital_is_shown_at_the_largest_size_that_fills_in_time():
+    f = {"max_step_minutes": 60}
+    assert not routes._keep(_sized(2000), f)  # 2000 units into a 40/h market: 50 h
+    sized = _sized(2000, 60)
+    assert sized["start_amount"] == 40
+    assert sized["slowest_step_hours"] == pytest.approx(1.0)
+    assert routes._keep(sized, f) and sized["margin"] == 10
+    # the largest: one more unit would break the limit
+    assert not routes._keep(_sized(41), f)
+
+
+def test_the_limit_off_or_already_met_leaves_the_size_alone():
+    assert _sized(2000, 0)["start_amount"] == 2000
+    assert _sized(30, 60)["start_amount"] == 30
+
+
+def test_more_capital_never_hides_a_loop():
+    g = _graph(_SLOW)
+    s = {"max_start_fraction": 1.0, "max_steps": 3}
+    f = {"max_step_minutes": 60}
+    for held in (30, 40, 400, 40_000):
+        found = [
+            r
+            for r in routes._iter_candidates(
+                g, s, _REF, {"a": held}, ["a"], False, max_step_minutes=60
+            )
+            if len(r["path"]) == 4 and routes._keep(r, f)
+        ]
+        assert [r["start_amount"] for r in found] == [min(held, 40)]
+
+
 def test_default_is_the_balanced_presets():
     assert (
         settings.DEFAULTS["filters"]["max_step_minutes"]
