@@ -7,7 +7,8 @@ import { useEffect } from 'react'
 import { create } from 'zustand'
 import { api, cleanErr, toast } from './api.js'
 import { createAutosave } from './autosave.js'
-import { registerFlush } from './quitFlush.js'
+import { registerFlush, isQuitting } from './quitFlush.js'
+import { RETRY_MS, sleep, withRetry } from './retry.js'
 import { SNAP } from './dests.js'
 import { uid } from './session.js'
 import * as sc from './stratcalc.js'
@@ -22,15 +23,52 @@ const newId = (kind) => `${kind}_${uid()}`
 
 const pendingEvents = []   // Client.txt events received before the strat doc hydrated
 let loadPromise = null
+let inFlight = 0
+let retrying = false
+let retryGen = 0
 
-function makeAutosave(setState) {
+function scheduleRetry(getState) {
+  const token = ++retryGen
+  const stop = () => token !== retryGen || isQuitting()
+  ;(async () => {
+    await sleep(RETRY_MS[0])
+    if (stop()) return
+    await withRetry(async () => {
+      if (stop()) return
+      const doc = getState().doc
+      if (!doc || SNAP || getState().saveState !== 'error') return
+      retrying = true
+      try {
+        autosave.save(doc)
+        if (!(await autosave.flush())) throw new Error('strat retry failed')
+      } finally {
+        retrying = false
+      }
+    }, { delays: RETRY_MS.slice(1), stop })
+  })().catch(() => ignoredError('retry strat calc save'))
+}
+
+function makeAutosave(setState, getState) {
   const ctrl = createAutosave(
-    (calc) => (SNAP ? Promise.resolve() : api.putStratCalc(calc)),
+    (calc) => {
+      if (SNAP) return Promise.resolve()
+      inFlight++
+      return Promise.resolve(api.putStratCalc(calc)).finally(() => { inFlight-- })
+    },
     700,
     {
       register: false,
-      onState: (next) => setState(s => ({ saveState: typeof next === 'function' ? next(s.saveState) : next })),
-      onError: (e) => toast(cleanErr(e), false),
+      onState: (next) => setState(s => {
+        if (retrying && (next === 'saving' || next === '')) return s
+        return { saveState: typeof next === 'function' ? next(s.saveState) : next }
+      }),
+      onError: (e) => {
+        setState({ saveState: 'error' })
+        if (!retrying) {
+          toast(cleanErr(e), false)
+          if (!isQuitting()) scheduleRetry(getState)
+        }
+      },
     },
   )
   ctrl.mount()
@@ -40,7 +78,7 @@ function makeAutosave(setState) {
 let autosave = null
 
 export const useStratStore = create((set, get) => {
-  autosave = makeAutosave(set)
+  autosave = makeAutosave(set, get)
 
   return {
     doc: null,
@@ -85,7 +123,7 @@ export const useStratStore = create((set, get) => {
       if (prices !== undefined) nextState.prices = prices || {}
       if (uses !== undefined) nextState.uses = uses || []
       set(nextState)
-      if (changed && !SNAP) autosave.save(doc)
+      if (changed && !SNAP) { retryGen++; autosave.save(doc) }
       return doc
     },
 
@@ -117,7 +155,7 @@ export const useStratStore = create((set, get) => {
       const next = fn(cur)
       if (next !== cur) {
         set({ doc: next })
-        if (!SNAP) autosave.save(next)
+        if (!SNAP) { retryGen++; autosave.save(next) }
       }
     },
 
@@ -133,7 +171,7 @@ export const useStratStore = create((set, get) => {
       const res = applyClientLogEvent(get().autoTimer, ev, cur, now)
       if (res.doc !== cur) {
         set({ doc: res.doc, autoTimer: res.state })
-        if (!SNAP) autosave.save(res.doc)
+        if (!SNAP) { retryGen++; autosave.save(res.doc) }
       } else if (res.state !== get().autoTimer) {
         set({ autoTimer: res.state })
       }
@@ -142,7 +180,11 @@ export const useStratStore = create((set, get) => {
     noteManualPause: () => set(s => ({ autoTimer: noteManualPause(s.autoTimer) })),
     noteManualResume: () => set(s => ({ autoTimer: noteManualResume(s.autoTimer) })),
 
-    flush: () => autosave.flush(),
+    flush: () => {
+      retryGen++
+      if (!inFlight && get().saveState === 'error') get().resave()
+      return autosave.flush()
+    },
     // Queue the current document for saving again (a failed write leaves nothing pending); flush() sends it.
     resave: () => {
       const doc = get().doc
@@ -150,9 +192,12 @@ export const useStratStore = create((set, get) => {
     },
 
     reset: () => {
+      retryGen++
+      inFlight = 0
+      retrying = false
       autosave.discard()
       autosave.unmount()
-      autosave = makeAutosave(set)
+      autosave = makeAutosave(set, get)
       pendingEvents.length = 0
       loadPromise = null
       set({
@@ -167,11 +212,7 @@ export const useStratStore = create((set, get) => {
   }
 })
 
-registerFlush(retry => {
-  const store = useStratStore.getState()
-  if (retry) store.resave()
-  return store.flush()
-}, { onHide: true })
+registerFlush(() => useStratStore.getState().flush(), { onHide: true })
 
 // Mounted once in App beside useEe2History: subscribes to main's Client.txt events and
 // feeds the shared stratStore even while the user is on Board, Stash, or Trading.
