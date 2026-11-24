@@ -20,13 +20,61 @@ def _reject_duplicate_keys(pairs: list[tuple[str, object]]) -> dict[str, object]
     return result
 
 
+def _strip_jsonc_comments(text: str) -> str:
+    """Strip // and /* */ comments outside JSON string literals, keeping newlines."""
+    out: list[str] = []
+    i = 0
+    n = len(text)
+    in_string = False
+    while i < n:
+        ch = text[i]
+        if in_string:
+            out.append(ch)
+            if ch == "\\" and i + 1 < n:
+                out.append(text[i + 1])
+                i += 2
+                continue
+            if ch == '"':
+                in_string = False
+            i += 1
+            continue
+        if ch == '"':
+            in_string = True
+            out.append(ch)
+            i += 1
+            continue
+        if ch == "/" and i + 1 < n and text[i + 1] == "/":
+            i += 2
+            while i < n and text[i] != "\n":
+                i += 1
+            continue
+        if ch == "/" and i + 1 < n and text[i + 1] == "*":
+            i += 2
+            closed = False
+            while i + 1 < n:
+                if text[i] == "*" and text[i + 1] == "/":
+                    i += 2
+                    closed = True
+                    break
+                if text[i] == "\n":
+                    out.append("\n")
+                i += 1
+            if not closed:
+                msg = "unterminated block comment"
+                raise ValueError(msg)
+            continue
+        out.append(ch)
+        i += 1
+    return "".join(out)
+
+
 def check_json_text(text: str) -> None:
     """Parse one JSON value, raising ValueError on bad syntax or duplicate keys."""
     json.loads(text, object_pairs_hook=_reject_duplicate_keys)
 
 
 def check_file(path: Path) -> list[str]:
-    """Validate one .json or .ndjson file; return list of 'path: message' errors."""
+    """Validate one .json, .ndjson, or .jsonc file; return list of 'path: message' errors."""
     try:
         text = path.read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError) as exc:
@@ -42,14 +90,15 @@ def check_file(path: Path) -> list[str]:
         return errors
 
     try:
-        check_json_text(text)
+        payload = _strip_jsonc_comments(text) if path.suffix == ".jsonc" else text
+        check_json_text(payload)
     except ValueError as exc:
         return [f"{path}: {exc}"]
     return []
 
 
 def discover_repo_files(repo_root: Path) -> list[Path]:
-    """Return tracked and untracked-nonignored .json/.ndjson files that exist on disk."""
+    """Return tracked and untracked-nonignored .json/.ndjson/.jsonc files that exist on disk."""
     raw = subprocess.check_output(
         ["git", "ls-files", "-co", "--exclude-standard", "-z"],
         cwd=repo_root,
@@ -58,7 +107,7 @@ def discover_repo_files(repo_root: Path) -> list[Path]:
     for entry in raw.decode("utf-8").split("\0"):
         if not entry:
             continue
-        if not entry.endswith((".json", ".ndjson")):
+        if not entry.endswith((".json", ".ndjson", ".jsonc")):
             continue
         candidate = repo_root / entry
         if candidate.is_file():
@@ -71,7 +120,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     paths = [Path(arg) for arg in args] if args else discover_repo_files(Path.cwd())
 
     if not paths:
-        print("json_check: no JSON or NDJSON files to check", file=sys.stderr)
+        print("json_check: no JSON, NDJSON, or JSONC files to check", file=sys.stderr)
         return 1
 
     failures: list[str] = []

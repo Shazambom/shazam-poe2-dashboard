@@ -1,18 +1,28 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+owner_for_step() {
+  case "$1" in
+    pyright) printf 'pyright' ;;
+    ruff | ruff-format | flake8-async | vulture) printf 'ruff' ;;
+    *)
+      printf 'Usage: %s [--list] {ruff|ruff-format|pyright|flake8-async|vulture}\n' "$0" >&2
+      exit 2
+      ;;
+  esac
+}
+
 run_step() {
-  git ls-files -z -co --deduplicate --exclude-standard -- '*.py' | (
-    files=()
-    while IFS= read -r -d '' file; do
-      if [[ -f "$file" ]]; then
-        files+=("./$file")
-      fi
-    done
-    if [[ -n "${files[*]-}" ]]; then
-      "$@" "${files[@]}"
-    fi
-  )
+  local owner="$1"
+  shift
+  local -a files=()
+  local file=""
+  while IFS= read -r -d '' file; do
+    files+=("./$file")
+  done < <(node ops/lint/files.mjs "$owner")
+  if [[ -n "${files[*]-}" ]]; then
+    "$@" "${files[@]}"
+  fi
 }
 
 ruff_check() {
@@ -52,14 +62,19 @@ vulture_check() {
   fi
 }
 
+if [[ "${1-}" == "--list" && "$#" -eq 2 ]]; then
+  node ops/lint/files.mjs "$(owner_for_step "$2")"
+  exit 0
+fi
+
 case "${1-}" in
-  ruff) run_step ruff_check ;;
-  ruff-format) run_step ruff_format ;;
-  pyright) run_step pyright_check ;;
-  flake8-async) run_step flake8_async ;;
-  vulture) run_step vulture_check ;;
+  ruff) run_step ruff ruff_check ;;
+  ruff-format) run_step ruff ruff_format ;;
+  pyright) run_step pyright pyright_check ;;
+  flake8-async) run_step ruff flake8_async ;;
+  vulture) run_step ruff vulture_check ;;
   *)
-    printf 'Usage: %s {ruff|ruff-format|pyright|flake8-async|vulture}\n' "$0" >&2
+    printf 'Usage: %s [--list] {ruff|ruff-format|pyright|flake8-async|vulture}\n' "$0" >&2
     exit 2
     ;;
 esac

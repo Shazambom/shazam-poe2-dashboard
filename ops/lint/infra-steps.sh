@@ -20,26 +20,59 @@ require_non_empty() {
   fi
 }
 
-step_shell() {
-  local all_sh=()
-  local other_sh=()
-  local build_sh=()
+STEP_FILES=()
+
+collect_step() {
+  local owner="$1"
   local f=""
+  STEP_FILES=()
+  while IFS= read -r -d '' f; do
+    STEP_FILES+=("$f")
+  done < <(node ops/lint/files.mjs "$owner")
+  require_non_empty "$owner" "${#STEP_FILES[@]}"
+}
+
+collect_json() {
+  local f=""
+  local seen=$'\n'
+  STEP_FILES=()
+  while IFS= read -r -d '' f; do
+    STEP_FILES+=("$f")
+    seen+="${f}"$'\n'
+  done < <(node ops/lint/files.mjs json)
+  # Also keep validating not-linted .json/.ndjson fixtures and goldens so coverage never drops.
   while IFS= read -r -d '' f; do
     if [ -f "$f" ]; then
       case "$f" in
-        desktop/build-backend.sh | desktop/build-sidecar.sh)
-          all_sh+=("$f")
-          build_sh+=("$f")
-          ;;
-        *.sh)
-          all_sh+=("$f")
-          other_sh+=("$f")
+        *.json | *.ndjson)
+          if [[ "$seen" != *$'\n'"$f"$'\n'* ]]; then
+            STEP_FILES+=("$f")
+            seen+="${f}"$'\n'
+          fi
           ;;
         *) ;;
       esac
     fi
   done < <(git ls-files -co --exclude-standard -z)
+  require_non_empty "json" "${#STEP_FILES[@]}"
+}
+
+step_shell() {
+  collect_step shell
+  local all_sh=("${STEP_FILES[@]}")
+  local other_sh=()
+  local build_sh=()
+  local f=""
+  for f in "${all_sh[@]}"; do
+    case "$f" in
+      desktop/build-backend.sh | desktop/build-sidecar.sh)
+        build_sh+=("$f")
+        ;;
+      *)
+        other_sh+=("$f")
+        ;;
+    esac
+  done
 
   require_non_empty "shell (all scripts)" "${#all_sh[@]}"
   require_non_empty "shell (non-build scripts)" "${#other_sh[@]}"
@@ -59,57 +92,28 @@ step_shell() {
 }
 
 step_shfmt() {
-  local files=()
-  local f=""
-  while IFS= read -r -d '' f; do
-    if [ -f "$f" ]; then
-      case "$f" in
-        *.sh) files+=("$f") ;;
-        *) ;;
-      esac
-    fi
-  done < <(git ls-files -co --exclude-standard -z)
-
-  require_non_empty "shfmt" "${#files[@]}"
-  shfmt -d -i 2 -ci -bn -sr "${files[@]}"
+  collect_step shell
+  shfmt -d -i 2 -ci -bn -sr "${STEP_FILES[@]}"
 }
 
 step_docker() {
-  local files=()
-  local f=""
-  local base=""
-  while IFS= read -r -d '' f; do
-    if [ -f "$f" ]; then
-      base="${f##*/}"
-      case "$base" in
-        Dockerfile | Dockerfile.*) files+=("$f") ;;
-        *) ;;
-      esac
-    fi
-  done < <(git ls-files -co --exclude-standard -z)
-
-  require_non_empty "docker" "${#files[@]}"
-  hadolint --config ops/lint/hadolint.yaml "${files[@]}"
+  collect_step docker
+  hadolint --config ops/lint/hadolint.yaml "${STEP_FILES[@]}"
 }
 
 step_actions() {
-  local workflows=()
-  local zizmor_files=()
+  collect_step actions
+  local workflows=("${STEP_FILES[@]}")
+  local zizmor_files=("${workflows[@]}")
   local f=""
   while IFS= read -r -d '' f; do
-    if [ -f "$f" ]; then
-      case "$f" in
-        .github/workflows/*.yml | .github/workflows/*.yaml)
-          workflows+=("$f")
-          zizmor_files+=("$f")
-          ;;
-        .github/dependabot.yml | .github/dependabot.yaml)
-          zizmor_files+=("$f")
-          ;;
-        *) ;;
-      esac
-    fi
-  done < <(git ls-files -co --exclude-standard -z)
+    case "$f" in
+      .github/dependabot.yml | .github/dependabot.yaml)
+        zizmor_files+=("$f")
+        ;;
+      *) ;;
+    esac
+  done < <(node ops/lint/files.mjs yaml)
 
   require_non_empty "actions (workflows)" "${#workflows[@]}"
   require_non_empty "actions (zizmor)" "${#zizmor_files[@]}"
@@ -125,33 +129,26 @@ step_actions() {
 }
 
 step_yaml() {
-  local all_yaml=()
+  collect_step yaml
+  local all_yaml=("${STEP_FILES[@]}")
   local workflows=()
   local dependabot=()
   local compose=()
   local f=""
-  while IFS= read -r -d '' f; do
-    if [ -f "$f" ]; then
-      case "$f" in
-        *.yml | *.yaml)
-          all_yaml+=("$f")
-          case "$f" in
-            .github/workflows/*.yml | .github/workflows/*.yaml)
-              workflows+=("$f")
-              ;;
-            .github/dependabot.yml | .github/dependabot.yaml)
-              dependabot+=("$f")
-              ;;
-            docker-compose.yml | docker-compose.*.yml | compose.yml | compose.*.yml)
-              compose+=("$f")
-              ;;
-            *) ;;
-          esac
-          ;;
-        *) ;;
-      esac
-    fi
-  done < <(git ls-files -co --exclude-standard -z)
+  for f in "${all_yaml[@]}"; do
+    case "$f" in
+      .github/workflows/*.yml | .github/workflows/*.yaml)
+        workflows+=("$f")
+        ;;
+      .github/dependabot.yml | .github/dependabot.yaml)
+        dependabot+=("$f")
+        ;;
+      docker-compose.yml | docker-compose.*.yml | compose.yml | compose.*.yml)
+        compose+=("$f")
+        ;;
+      *) ;;
+    esac
+  done
 
   require_non_empty "yaml (all)" "${#all_yaml[@]}"
   require_non_empty "yaml (workflows)" "${#workflows[@]}"
@@ -175,93 +172,33 @@ step_yaml() {
 }
 
 step_json() {
-  local files=()
-  local f=""
-  while IFS= read -r -d '' f; do
-    if [ -f "$f" ]; then
-      case "$f" in
-        *.json | *.ndjson) files+=("$f") ;;
-        *) ;;
-      esac
-    fi
-  done < <(git ls-files -co --exclude-standard -z)
-
-  require_non_empty "json" "${#files[@]}"
-  .venv-lint/bin/python ops/lint/json_check.py "${files[@]}"
+  collect_json
+  .venv-lint/bin/python ops/lint/json_check.py "${STEP_FILES[@]}"
 }
 
 step_installer() {
-  local files=()
-  local f=""
-  while IFS= read -r -d '' f; do
-    if [ -f "$f" ]; then
-      case "$f" in
-        *.nsh | *.nsi) files+=("$f") ;;
-        *) ;;
-      esac
-    fi
-  done < <(git ls-files -co --exclude-standard -z)
-
-  require_non_empty "installer" "${#files[@]}"
+  collect_step installer
   makensis -V2 ops/lint/installer-check.nsi
 }
 
 step_markdown() {
-  local files=()
-  local f=""
-  while IFS= read -r -d '' f; do
-    if [ -f "$f" ]; then
-      case "$f" in
-        *.md) files+=("$f") ;;
-        *) ;;
-      esac
-    fi
-  done < <(git ls-files -co --exclude-standard -z)
-
-  require_non_empty "markdown" "${#files[@]}"
-  ops/lint/node_modules/.bin/markdownlint-cli2 --config ops/lint/.markdownlint-cli2.jsonc "${files[@]}"
+  collect_step markdown
+  ops/lint/node_modules/.bin/markdownlint-cli2 --config ops/lint/.markdownlint-cli2.jsonc "${STEP_FILES[@]}"
 }
 
 step_links() {
-  local files=()
-  local f=""
-  while IFS= read -r -d '' f; do
-    if [ -f "$f" ]; then
-      case "$f" in
-        *.md) files+=("$f") ;;
-        *) ;;
-      esac
-    fi
-  done < <(git ls-files -co --exclude-standard -z)
-
-  require_non_empty "links" "${#files[@]}"
-  lychee --config ops/lint/lychee.toml --root-dir "$PWD" -- "${files[@]}"
+  collect_step markdown
+  lychee --config ops/lint/lychee.toml --root-dir "$PWD" -- "${STEP_FILES[@]}"
 }
 
 step_typos() {
-  local files=()
-  local f=""
-  while IFS= read -r -d '' f; do
-    if [ -f "$f" ]; then
-      files+=("$f")
-    fi
-  done < <(git ls-files -co --exclude-standard -z)
-
-  require_non_empty "typos" "${#files[@]}"
-  typos --isolated --no-ignore --config ops/lint/typos.toml --force-exclude --file-list <(printf '%s\n' "${files[@]}")
+  collect_step typos
+  typos --isolated --no-ignore --config ops/lint/typos.toml --force-exclude --file-list <(printf '%s\n' "${STEP_FILES[@]}")
 }
 
 step_editorconfig() {
-  local files=()
-  local f=""
-  while IFS= read -r -d '' f; do
-    if [ -f "$f" ]; then
-      files+=("$f")
-    fi
-  done < <(git ls-files -co --exclude-standard -z)
-
-  require_non_empty "editorconfig" "${#files[@]}"
-  editorconfig-checker -config ops/lint/ecrc.json "${files[@]}"
+  collect_step editorconfig
+  editorconfig-checker -config ops/lint/ecrc.json "${STEP_FILES[@]}"
 }
 
 step_secrets() {
@@ -292,8 +229,32 @@ step_secrets() {
   return "$failed"
 }
 
+list_step() {
+  case "$1" in
+    shell | shfmt) collect_step shell ;;
+    docker) collect_step docker ;;
+    actions) collect_step actions ;;
+    yaml) collect_step yaml ;;
+    json) collect_json ;;
+    installer) collect_step installer ;;
+    markdown | links) collect_step markdown ;;
+    typos) collect_step typos ;;
+    editorconfig) collect_step editorconfig ;;
+    *)
+      printf 'infra-steps: unknown list step: %s\n' "$1" >&2
+      exit 2
+      ;;
+  esac
+  printf '%s\0' "${STEP_FILES[@]}"
+}
+
+if [ "$#" -eq 2 ] && [ "$1" = "--list" ]; then
+  list_step "$2"
+  exit 0
+fi
+
 if [ "$#" -ne 1 ]; then
-  printf 'usage: %s shell|shfmt|docker|actions|yaml|json|installer|markdown|links|typos|editorconfig|secrets\n' "$0" >&2
+  printf 'usage: %s [--list] shell|shfmt|docker|actions|yaml|json|installer|markdown|links|typos|editorconfig|secrets\n' "$0" >&2
   exit 2
 fi
 

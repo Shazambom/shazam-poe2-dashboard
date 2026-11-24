@@ -27,7 +27,8 @@ export const NOT_LINTED = [
 // (the shebang's program) matches. A path can match several rows; it gets every step of each.
 export const OWNERS = [
   { steps: ['ruff', 'pyright'], ext: ['py', 'pyi'], interpreters: ['python'] },
-  { steps: ['eslint'], ext: ['js', 'mjs', 'cjs', 'jsx', 'ts', 'tsx'], interpreters: ['node'] },
+  { steps: ['tsc'], name: /\.d\.ts$/ },
+  { steps: ['eslint'], ext: ['js', 'mjs', 'cjs', 'jsx', 'ts', 'tsx'], excludeName: /\.d\.ts$/, interpreters: ['node'] },
   { steps: ['stylelint'], ext: ['css'] },
   { steps: ['html'], ext: ['html'] },
   { steps: ['shell'], ext: ['sh', 'bash'], interpreters: ['sh', 'bash'] },
@@ -48,6 +49,8 @@ export const EVERY_TEXT = ['typos', 'editorconfig']
 
 // Files that are not code: binary, or plain data no linter has a grammar for. Decided from what the
 // repo tracks. An extension in neither table fails the guard: decide where a new kind belongs.
+// Plain-text data files are still read by EVERY_TEXT (typos and editorconfig).
+export const DATA_TEXT_EXT = ['txt', 'pub']
 export const DATA_EXT = ['png', 'ico', 'icns', 'm4a', 'gz', 'bin', 'pem', 'pub', 'txt', 'arb', 'b64']
 export const DATA_NAME = /^(?:LICENSE|NOTICE)(?:\.[\w-]+)?$/
 
@@ -78,6 +81,7 @@ function matchingRows(path, firstLine) {
   const program = interpreterOf(firstLine)
   return OWNERS.filter(row => {
     if (row.prefix && !path.startsWith(row.prefix)) return false
+    if (row.excludeName && row.excludeName.test(base)) return false
     return Boolean((row.ext && row.ext.includes(ext)) || (row.name && row.name.test(base))
       || (program && row.interpreters && row.interpreters.includes(program)))
   })
@@ -87,7 +91,7 @@ function matchingRows(path, firstLine) {
  * What a path is to the linters:
  *   { kind: 'not-linted', steps: [], reason }   generated or byte-exact
  *   { kind: 'owned', steps: [...] }             read by these steps
- *   { kind: 'data', steps: [] }                 binary or plain data, not code
+ *   { kind: 'data', steps: [...] }              binary (steps: []) or plain-text data (EVERY_TEXT)
  *   { kind: 'unknown', steps: [], reason }      nobody decided: the guard fails it
  */
 export function classify(path, firstLine = '') {
@@ -99,7 +103,8 @@ export function classify(path, firstLine = '') {
   if (program) return { kind: 'unknown', steps: [], reason: `a script for "${program}", which no linter reads` }
   const base = baseOf(path)
   const ext = extOf(base)
-  if (DATA_EXT.includes(ext) || DATA_NAME.test(base)) return { kind: 'data', steps: [] }
+  if (DATA_TEXT_EXT.includes(ext) || DATA_NAME.test(base)) return { kind: 'data', steps: [...EVERY_TEXT] }
+  if (DATA_EXT.includes(ext)) return { kind: 'data', steps: [] }
   return { kind: 'unknown', steps: [], reason: ext ? `the extension .${ext} has no linter` : 'no extension and no shebang' }
 }
 

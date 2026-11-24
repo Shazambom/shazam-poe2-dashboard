@@ -66,3 +66,32 @@ def test_ndjson_valid_and_line_errors(tmp_path: Path) -> None:
     assert "duplicate key" in errors[0]
     assert errors[1].startswith(f"{bad}: line 3: ")
     assert json_check.main([str(bad)]) == 1
+
+
+def test_jsonc_allows_comments_and_still_catches_syntax_and_duplicate_keys(
+    tmp_path: Path,
+) -> None:
+    good = tmp_path / "good.jsonc"
+    good.write_text(
+        '// header comment\n{\n  /* block comment */\n  "url": "https://example.com//not-a-comment",\n  "nested": { "k": 1 } // trailing comment\n}\n',
+        encoding="utf-8",
+    )
+    assert json_check.check_file(good) == []
+    assert json_check.main([str(good)]) == 0
+
+    dup = tmp_path / "dup.jsonc"
+    dup.write_text('// dup\n{"a": 1, /* mid */ "a": 2}\n', encoding="utf-8")
+    dup_errors = json_check.check_file(dup)
+    assert len(dup_errors) == 1
+    assert "duplicate key" in dup_errors[0]
+    assert json_check.main([str(dup)]) == 1
+
+    unterminated = tmp_path / "unterminated.jsonc"
+    unterminated.write_text('{"a": 1 /* oops}\n', encoding="utf-8")
+    assert len(json_check.check_file(unterminated)) == 1
+
+    plain_json = tmp_path / "strict.json"
+    plain_json.write_text(
+        '// comments are invalid in .json\n{"a": 1}\n', encoding="utf-8"
+    )
+    assert len(json_check.check_file(plain_json)) == 1
