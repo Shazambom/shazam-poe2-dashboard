@@ -180,3 +180,42 @@ exit 0
   assert.equal(calls.some((c) => c.startsWith('gh workflow run')), false, 'must not invoke gh workflow run when an unfinished run exists')
   assert.ok(calls.some((c) => c.startsWith('gh run watch 445566')), 'must watch the adopted run id')
 })
+
+// A stub `gh run list` that applies the script's own -q filter to fixture runs with jq, so the
+// test checks what the query selects rather than how it is spelled.
+const listRuns = (runs) => `
+if [ "$1" = "run" ] && [ "$2" = "list" ]; then
+  q=""; while [ $# -gt 0 ]; do [ "$1" = "-q" ] && q="$2"; shift; done
+  echo '${JSON.stringify(runs)}' | jq -r "$q"
+  exit 0
+fi`
+
+// The script pushes main and dispatches with sha = main's head, so a run started by an earlier
+// attempt from an OLDER commit has a different headSha. Adopting it would ship a Windows build of
+// the old code beside a Mac build of the new one: the script must dispatch instead (the workflow's
+// per-tag concurrency group then runs the new build after the old one, never interleaved).
+test('an unfinished Windows build for the tag from an older commit is not adopted', () => {
+  const { res, calls } = runPublish(`
+${listRuns([{ databaseId: 445566, displayTitle: 'Windows build 0.3.99-beta.1', status: 'in_progress', headSha: 'oldc0mmit' }])}
+if [ "$1" = "workflow" ]; then echo "https://github.com/x/y/actions/runs/778899"; exit 0; fi
+if [ "$1" = "run" ] && [ "$2" = "watch" ]; then exit 0; fi
+if [ "$1" = "run" ] && [ "$2" = "view" ]; then echo "seed ready (1.2M, v123):"; exit 0; fi
+exit 0
+`)
+  assert.equal(res.status, 0, res.stderr + res.stdout)
+  assert.ok(calls.some((c) => c.startsWith('gh workflow run')), 'a build of an older commit must not be adopted')
+  assert.ok(calls.some((c) => c.startsWith('gh run watch 778899')), 'must watch the newly dispatched run')
+})
+
+test('an unfinished Windows build for the tag from the same commit is adopted (query checked with jq)', () => {
+  const { res, calls } = runPublish(`
+${listRuns([{ databaseId: 445566, displayTitle: 'Windows build 0.3.99-beta.1', status: 'in_progress', headSha: 'deadbeef' }])}
+if [ "$1" = "workflow" ]; then echo "should not dispatch" >&2; exit 99; fi
+if [ "$1" = "run" ] && [ "$2" = "watch" ]; then exit 0; fi
+if [ "$1" = "run" ] && [ "$2" = "view" ]; then echo "seed ready (1.2M, v123):"; exit 0; fi
+exit 0
+`)
+  assert.equal(res.status, 0, res.stderr + res.stdout)
+  assert.equal(calls.some((c) => c.startsWith('gh workflow run')), false)
+  assert.ok(calls.some((c) => c.startsWith('gh run watch 445566')))
+})

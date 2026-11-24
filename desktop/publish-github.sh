@@ -107,12 +107,14 @@ if node scripts/release-assets.mjs has "$TAG" "$WIN_YML"; then
   NEED_CI=0
 else
   NEED_CI=1
-  # Before dispatching, adopt any unfinished Windows build already running for this tag (e.g. a
-  # previous run whose `gh workflow run` exited non-zero after GitHub accepted it) so a re-run never
-  # starts a second build writing into the same draft release.
+  # Before dispatching, adopt an unfinished Windows build already running for this tag AND this commit
+  # (e.g. a previous run whose `gh workflow run` exited non-zero after GitHub accepted it), so a re-run
+  # never starts a second build writing into the same draft release. A build of an older commit is not
+  # adopted: it would ship old Windows code beside a new Mac build. The workflow's per-tag concurrency
+  # group runs the new dispatch after it instead of beside it.
   RID=$(gh run list --repo "$REPO" --workflow=release-desktop-win.yml --event workflow_dispatch --limit 20 \
-    --json databaseId,displayTitle,status \
-    -q "map(select(.displayTitle==\"Windows build $TAG\" and .status!=\"completed\")) | .[0].databaseId // empty")
+    --json databaseId,displayTitle,status,headSha \
+    -q "map(select(.displayTitle==\"Windows build $TAG\" and .status!=\"completed\" and .headSha==\"$SHA\")) | .[0].databaseId // empty")
   if [ -n "$RID" ]; then
     echo "adopting in-progress Windows CI run $RID for $TAG"
   else
