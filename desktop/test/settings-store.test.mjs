@@ -263,3 +263,22 @@ test('writeSettings gives up cleanly when rename always fails with EPERM, keepin
     assert.deepEqual(tmpLeft(dir), [])
   } finally { rmSync(dir, { recursive: true, force: true }) }
 })
+
+test('updateSettings returns true without writing when every patched key matches memory', (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'arb-set-'))
+  try {
+    const f = join(dir, 'desktop-settings.json')
+    const s = { betaChannel: false, theme: 'vault', customBackdrop: '#112233' }
+    assert.equal(writeSettings(() => f, s), true)
+    const openSpy = t.mock.method(fs, 'openSync')
+    const renameSpy = t.mock.method(fs, 'renameSync')
+    assert.equal(updateSettings(() => f, s, { theme: 'vault' }), true)
+    assert.equal(updateSettings(() => f, s, { theme: 'vault', customBackdrop: '#112233' }), true)
+    assert.equal(openSpy.mock.callCount(), 0, 'unchanged patch performs no openSync')
+    assert.equal(renameSpy.mock.callCount(), 0, 'unchanged patch performs no renameSync')
+    assert.equal(updateSettings(() => f, s, { theme: 'ash' }), true)
+    assert.equal(openSpy.mock.callCount(), 1, 'changed patch writes once')
+    assert.equal(renameSpy.mock.callCount(), 1, 'changed patch renames once')
+    assert.deepEqual(JSON.parse(readFileSync(f, 'utf8')), { betaChannel: false, theme: 'ash', customBackdrop: '#112233' })
+  } finally { rmSync(dir, { recursive: true, force: true }) }
+})
