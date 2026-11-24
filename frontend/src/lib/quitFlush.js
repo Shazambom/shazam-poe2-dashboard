@@ -26,6 +26,9 @@ async function flushPass(failed, hide = false) {
 
 export const flushOnHide = () => flushPass(new Set(), true)
 
+let quitting = 0
+export const isQuitting = () => quitting > 0
+
 export async function flushForQuit() {
   let expired = false, timer
   const deadline = new Promise(resolve => {
@@ -40,6 +43,7 @@ export async function flushForQuit() {
     }
     return !failed.size
   }
+  quitting++
   try { return await Promise.race([finish(), deadline]) }
-  finally { clearTimeout(timer) }
+  finally { quitting--; clearTimeout(timer) }
 }

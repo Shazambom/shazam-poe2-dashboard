@@ -56,7 +56,12 @@ it.each([
 
 it('retries a silently failed preset without a new label or toast', async () => {
   vi.spyOn(api, 'arbitragePresets').mockResolvedValue([{ id: 'p', label: 'Pick me', values: { max_steps: 4 } }])
-  const put = vi.spyOn(api, 'putSettings').mockRejectedValueOnce(new Error('locked')).mockResolvedValue({ max_steps: 4 })
+  let stored = { max_steps: 3 }
+  vi.spyOn(api, 'settings').mockImplementation(async () => ({ ...stored }))
+  const put = vi.spyOn(api, 'putSettings').mockRejectedValueOnce(new Error('locked')).mockImplementation(async patch => {
+    stored = { ...stored, ...patch }
+    return { ...stored }
+  })
   const view = render(<RoutesView />)
   await settle()
   fireEvent.click(screen.getByRole('button', { name: 'Pick me' }))
@@ -64,7 +69,7 @@ it('retries a silently failed preset without a new label or toast', async () => 
   const before = view.container.textContent
   await advance(1000)
   expect(put.mock.calls).toEqual([[{ max_steps: 4 }], [{ max_steps: 4 }]])
-  expect(view.container.textContent).toBe(before)
+  expect(view.container.textContent).toBe(before.replace('Maximum steps per loop 3', 'Maximum steps per loop 4'))
   expect(events).not.toHaveBeenCalled()
 })
 
@@ -74,12 +79,12 @@ it('keeps the existing mounted error toast on the first failure, not on each ret
   await settle()
   fireEvent.click(screen.getByRole('button', { name: 'Add recipe' }))
   await advance(800)
+  expect(events).not.toHaveBeenCalled()
+  const before = view.container.innerHTML
+  await advance(25000)
   expect(events).toHaveBeenCalledTimes(1)
   expect(events.mock.calls[0][0].text).toBe('locked')
-  const before = view.container.innerHTML
-  await advance(20000)
-  expect(events).toHaveBeenCalledTimes(1)
-  expect(view.container.innerHTML).toBe(before)
+  expect(view.container.innerHTML).toBe(before.replace(' saving…', ' '))
   vi.mocked(api.putRecipes).mockImplementation(async list => list)
   fireEvent.click(screen.getByRole('button', { name: 'Add recipe' }))
   await advance(800)
@@ -101,12 +106,14 @@ it('serializes a newer setting behind an in-flight retry, never replaying the ol
   const retry = Promise.withResolvers()
   const put = vi.spyOn(api, 'putSettings').mockRejectedValueOnce(new Error('locked')).mockReturnValueOnce(retry.promise).mockImplementation(async patch => patch)
   const { saveSettings } = useStatus.getState()
-  await expect(saveSettings({ theme: 'old' })).rejects.toThrow('locked')
+  const first = saveSettings({ theme: 'old' })
+  await settle()
   await advance(1000)
   const latest = saveSettings({ theme: 'new' })
   await settle()
   expect(put.mock.calls).toEqual([[{ theme: 'old' }], [{ theme: 'old' }]])
   retry.resolve({ theme: 'old' })
+  await first
   await latest
   await advance(60000)
   expect(put.mock.calls.at(-1)).toEqual([{ theme: 'new' }])
@@ -126,12 +133,14 @@ it('App quit carries the failed setting and a capital edit made 100 ms before qu
   fireEvent.click(screen.getByRole('tab', { name: /^Stash/ }))
   const input = await screen.findByLabelText('Divine Orb held')
   vi.useFakeTimers()
-  await expect(useStatus.getState().saveSettings({ stash_unit: 'exalted' })).rejects.toThrow('locked')
+  const pendingSave = useStatus.getState().saveSettings({ stash_unit: 'exalted' })
+  await settle()
   change(input, '25')
   await advance(100)
   expect(capital).not.toHaveBeenCalled()
   const before = document.body.textContent
   await act(async () => onFlush.mock.calls.at(-1)[0]())
+  await pendingSave
   expect(flushed).toHaveBeenCalledTimes(1)
   expect(settings.mock.calls).toEqual([[{ stash_unit: 'exalted' }], [{ stash_unit: 'exalted' }]])
   expect(capital.mock.calls[0][0].divine).toBe(25)

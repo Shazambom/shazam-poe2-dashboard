@@ -27,9 +27,17 @@ test('settings saves go out one at a time, in the order they were made', async (
   assert.deepEqual(useStatus.getState().settings, { v: 2 }, 'the store holds the last answer')
 })
 
-test('a failed save does not block the next one', async () => {
+test('a failed save does not block the next one', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] })
   api.putSettings = (patch) => (patch.n === 1 ? Promise.reject(new Error('boom')) : Promise.resolve({ v: patch.n }))
-  await assert.rejects(useStatus.getState().saveSettings({ n: 1 }))
+  const failed = useStatus.getState().saveSettings({ n: 1 })
+  const outcome = failed.then(() => null, e => e)
+  for (const ms of [1000, 4000, 15000]) {
+    await new Promise(resolve => { setImmediate(resolve) })
+    t.mock.timers.tick(ms)
+  }
+  const err = await outcome
+  assert.ok(err instanceof Error && err.message === 'boom')
   assert.deepEqual(await useStatus.getState().saveSettings({ n: 2 }), { v: 2 })
 })
 
