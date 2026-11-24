@@ -262,3 +262,27 @@ if __name__ == "__main__":
     import pytest
 
     raise SystemExit(pytest.main([__file__, "-q"]))
+
+
+def test_external_iteration_of_by_id_survives_a_concurrent_static_apply():
+    # graph, modpool, recipes, movers and leaguearc iterate registry.by_id from worker threads
+    # without the registry lock; a rebuild must not change the dict they are iterating.
+    reg = Registry()
+    reg._apply_static(
+        {
+            "result": [
+                {
+                    "id": "Currency",
+                    "entries": [{"id": "a", "text": "A"}, {"id": "b", "text": "B"}],
+                }
+            ]
+        }
+    )
+    it = iter(reg.by_id.items())
+    next(it)
+    reg._apply_static(
+        {"result": [{"id": "Currency", "entries": [{"id": "zz-new", "text": "New"}]}]}
+    )
+    reg._link("Metadata/Items/Currency/ZzOther", "zz-other")
+    list(it)  # would raise RuntimeError: dictionary changed size during iteration
+    assert "zz-new" in reg.by_id and "zz-other" in reg.by_id

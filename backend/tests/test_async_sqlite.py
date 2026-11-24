@@ -1,6 +1,7 @@
 """Transaction checks for async callers of the synchronous SQLite helpers."""
 
 import asyncio
+import contextlib
 import json
 import sqlite3
 import sys
@@ -1010,7 +1011,9 @@ def test_lifespan_loads_static_and_session_off_loop(monkeypatch, worker_calls):
     check("load_static_cache", "get_cookie", "stop")
 
 
-def test_event_loop_guard_blocks_production_sqlite_on_loop():
+def test_event_loop_guard_blocks_production_sqlite_on_loop(
+    forbid_production_sqlite_on_event_loop,
+):
     from app import cache, settings
 
     cache.clear(settings._settings_cache)
@@ -1026,7 +1029,26 @@ def test_event_loop_guard_blocks_production_sqlite_on_loop():
         assert isinstance(await asyncio.to_thread(settings.get_settings), dict)
         # Cold production helper on the running event loop must trip the guard.
         cache.clear(settings._settings_cache)
-        with pytest.raises(AssertionError, match="event loop"):
+        with pytest.raises(BaseException, match="event loop"):
             settings.get_settings()
 
     asyncio.run(on_loop())
+    forbid_production_sqlite_on_event_loop.clear()
+
+
+def test_event_loop_guard_is_not_swallowed_by_a_broad_except(
+    forbid_production_sqlite_on_event_loop,
+):
+    # Production code catches `Exception` in many loops; the guard must not be absorbed by them.
+    from app import cache, settings
+
+    async def on_loop() -> None:
+        cache.clear(settings._settings_cache)
+        with contextlib.suppress(
+            Exception
+        ):  # what a production loop does with an unexpected error
+            settings.get_settings()
+
+    with pytest.raises(BaseException, match="event loop"):
+        asyncio.run(on_loop())
+    forbid_production_sqlite_on_event_loop.clear()

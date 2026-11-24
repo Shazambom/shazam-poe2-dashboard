@@ -177,19 +177,23 @@ class Registry:
 
     def _apply_static(self, data: dict) -> None:
         with self._lock:
+            # Copy-on-write: other modules iterate `by_id` from worker threads without the lock, so a
+            # rebuild publishes a new dict instead of changing the one they may be iterating.
+            by_id = dict(self.by_id)
             for group in data.get("result", []):
                 cat = group.get("label") or group.get("id")
                 for entry in group.get("entries", []):
                     tid = entry.get("id")
                     if not tid:
                         continue
-                    cur = self.by_id.get(tid) or Currency(
+                    cur = by_id.get(tid) or Currency(
                         id=tid, name=entry.get("text", tid)
                     )
                     cur.name = entry.get("text", cur.name)
                     cur.icon = entry.get("image") or cur.icon
                     cur.category = cur.category or cat
-                    self.by_id[tid] = cur
+                    by_id[tid] = cur
+            self.by_id = by_id
             self._rebuild_links()
 
     async def keep_static_fresh(self) -> None:
@@ -222,16 +226,18 @@ class Registry:
                 and m not in self._bridge
                 and m not in self._user_overrides
             }
+            by_id = dict(self.by_id)  # copy-on-write, as in _apply_static
             for e in catalog.values():
                 if (
-                    e.get("name") and e["id"] not in self.by_id
+                    e.get("name") and e["id"] not in by_id
                 ):  # not on the trade site: the game's own name/icon
-                    self.by_id[e["id"]] = Currency(
+                    by_id[e["id"]] = Currency(
                         id=e["id"],
                         name=e["name"],
                         icon=e.get("icon"),
                         category=e.get("category"),
                     )
+            self.by_id = by_id
             for source in (
                 self._seed_overrides,
                 {m: e["id"] for m, e in catalog.items()},
@@ -255,7 +261,10 @@ class Registry:
             cur = self.by_id.get(tid)
             if cur is None:
                 cur = Currency(id=tid, name=tid)
-                self.by_id[tid] = cur
+                self.by_id = {
+                    **self.by_id,
+                    tid: cur,
+                }  # copy-on-write, as in _apply_static
             if meta not in cur.metadata_ids:
                 cur.metadata_ids.append(meta)
             self.unmapped_meta.discard(meta)

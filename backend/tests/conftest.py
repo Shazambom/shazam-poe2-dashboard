@@ -52,9 +52,14 @@ def _find_production_frame() -> str | None:
     return None
 
 
+class BlockingCallOnEventLoop(BaseException):
+    """A BaseException, not an Exception: production loops catch `Exception`, and must not absorb this."""
+
+
 @pytest.fixture(autouse=True)
 def forbid_production_sqlite_on_event_loop(monkeypatch):
     orig_conn = db._conn
+    violations: list[str] = []
 
     def guarded_conn() -> sqlite3.Connection:
         try:
@@ -63,9 +68,14 @@ def forbid_production_sqlite_on_event_loop(monkeypatch):
             return orig_conn()
         caller = _find_production_frame()
         if caller is not None:
-            raise AssertionError(
-                f"blocking SQLite call on the running event loop from {caller}"
-            )
+            message = f"blocking SQLite call on the running event loop from {caller}"
+            violations.append(message)
+            raise BlockingCallOnEventLoop(message)
         return orig_conn()
 
     monkeypatch.setattr(db, "_conn", guarded_conn)
+    yield violations  # a test that provokes the guard on purpose takes this fixture and clears it
+    # Also catches a violation something swallowed with `except BaseException` or a bare `except`.
+    assert not violations, "blocking SQLite call(s) on the event loop: " + "; ".join(
+        violations
+    )
