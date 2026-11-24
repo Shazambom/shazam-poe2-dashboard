@@ -280,10 +280,12 @@ def _persist_batch(league: str, want: str, books: dict[str, list[dict]]) -> None
 # ------------------------------------------------------------------ queue
 def _pair_candidates(
     pairs: Iterable[tuple[str, ...]],
-    s: dict,
-    force: bool,
-    max_age_s: int | None,
+    s: dict | None = None,
+    force: bool = False,
+    max_age_s: int | None = None,
 ) -> list[tuple[str, str, float]]:
+    if s is None:
+        s = get_settings()
     league = s["league"]
     max_age = (
         HARD_FLOOR_S
@@ -324,24 +326,6 @@ def _enqueue_pairs(
     return futs
 
 
-def request_pairs(
-    pairs: Iterable[tuple[str, ...]],
-    priority: int = 1,
-    force: bool = False,
-    max_age_s: int | None = None,
-) -> list[asyncio.Future]:
-    """Queue pairs that need fetching; return futures for those queued (fresh ones are skipped)."""
-    if not BULK_EXCHANGE_ENABLED:
-        return []
-    return _enqueue_pairs(
-        _pair_candidates(pairs, get_settings(), force, max_age_s), priority
-    )
-
-
-def _refresh_candidates(pairs, force: bool, max_age_s: int | None):
-    return _pair_candidates(pairs, get_settings(), force, max_age_s)
-
-
 async def request_pairs_async(
     pairs: Iterable[tuple[str, ...]],
     priority: int = 1,
@@ -353,7 +337,7 @@ async def request_pairs_async(
         return []
     async with _queue_db_lock:
         candidates = await run_in_threadpool(
-            _refresh_candidates, pairs, force, max_age_s
+            _pair_candidates, pairs, None, force, max_age_s
         )
         return _enqueue_pairs(candidates, priority)
 
@@ -536,7 +520,7 @@ def _sweep_candidates() -> list[tuple[str, str, float]] | None:
     pairs = list(permutations(s["watchlist"], 2)) + [
         tuple(p) for p in s.get("extra_pairs", [])
     ]
-    return _pair_candidates(pairs, get_settings(), False, s["live_max_age_s"])
+    return _pair_candidates(pairs, s, False, s["live_max_age_s"])
 
 
 async def sweeper() -> None:
@@ -583,7 +567,7 @@ async def leagues(force: bool = False) -> list[dict]:
 def _watchlist_candidates() -> list[tuple[str, str, float]]:
     s = get_settings()
     return _pair_candidates(
-        permutations(s["watchlist"], 2), get_settings(), False, s["min_refetch_s"]
+        permutations(s["watchlist"], 2), s, False, s["min_refetch_s"]
     )
 
 

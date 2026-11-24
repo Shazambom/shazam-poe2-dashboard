@@ -100,7 +100,7 @@ def test_worker_learns_the_cap_and_every_future_still_resolves(monkeypatch):
     monkeypatch.setattr(session, "get_cookie", lambda: "x")
 
     async def go():
-        futs = orderbook.request_pairs(
+        futs = await orderbook.request_pairs_async(
             [(f"h{i}", "chaos") for i in range(12)], force=True
         )
         task = asyncio.ensure_future(orderbook.worker())
@@ -128,7 +128,7 @@ def test_a_single_have_rejection_is_a_real_error(monkeypatch):
     monkeypatch.setattr(session, "get_cookie", lambda: "x")
 
     async def go():
-        futs = orderbook.request_pairs([("h0", "chaos")], force=True)
+        futs = await orderbook.request_pairs_async([("h0", "chaos")], force=True)
         task = asyncio.ensure_future(orderbook.worker())
         await orderbook.wait_for(futs, timeout=5)
         task.cancel()
