@@ -26,9 +26,9 @@ function applyWindowTheme(id, backdrop, save, win) {
     if (!BACKDROP_HEX.test(String(backdrop || ''))) return false
     patch.customBackdrop = String(backdrop).toLowerCase()
   } else if (!BACKDROPS[id]) return false
-  if (!save(patch)) return false
+  const saved = save(patch)
   try { if (win && !win.isDestroyed()) win.setBackgroundColor(windowBackdrop(patch)) } catch (e) { ignored('window:backdrop', e) }
-  return true
+  return saved
 }
 
 module.exports = { windowBackdrop, applyWindowTheme }

@@ -124,10 +124,12 @@ function writeSettings(file, settings) {
  * back (a key the patch added is removed), so memory never holds what the disk does not. True when it landed.
  */
 function updateSettings(file, settings, patch) {
-  const before = Object.fromEntries(Object.keys(patch).filter(k => k in settings).map(k => [k, settings[k]]))
+  const keys = Object.keys(patch)
+  if (keys.every(k => k in settings && settings[k] === patch[k])) return true
+  const before = Object.fromEntries(keys.filter(k => k in settings).map(k => [k, settings[k]]))
   Object.assign(settings, patch)
   if (writeSettings(file, settings)) return true
-  for (const k of Object.keys(patch)) {
+  for (const k of keys) {
     if (k in before) settings[k] = before[k]
     else delete settings[k]
   }
