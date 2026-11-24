@@ -50,6 +50,7 @@ class ExiledExchangeIntegration extends EventEmitter {
     super()
     this._opts = opts
     this._started = false
+    this._run = 0              // bumped by every start() and stop(): an await that comes back to a newer run drops its result
     this._present = null       // last known EE2 presence (null = unknown)
     this._mode = 'idle'        // 'idle' | 'active'
     this._redetect = null
@@ -69,17 +70,23 @@ class ExiledExchangeIntegration extends EventEmitter {
   isRunning() { return this._started }
   isActive() { return this._mode === 'active' }
 
+  // Detection is async, so stop() (or stop() then start()) can land while a detection is out. Each
+  // start() and stop() opens a new run; whatever an older run's detection finds is dropped, so it can
+  // neither switch on observers after a stop nor switch off the run that replaced it.
   async start() {
     if (this._started) return
     this._started = true
-    await this._evaluatePresence(true)
-    this._redetect = setInterval(() => { this._evaluatePresence(false) }, REDETECT_MS)
+    const run = ++this._run
+    await this._evaluatePresence(true, run)
+    if (run !== this._run) return
+    this._redetect = setInterval(() => { this._evaluatePresence(false, run) }, REDETECT_MS)
     if (this._redetect.unref) this._redetect.unref()
     this.emit('started', {})
   }
 
   stop() {
     if (!this._started) return
+    this._run += 1
     if (this._redetect) { clearInterval(this._redetect); this._redetect = null }
     this._deactivate()
     this._started = false
@@ -88,11 +95,12 @@ class ExiledExchangeIntegration extends EventEmitter {
   }
 
   // Detect EE2 and drive the presence state machine.
-  async _evaluatePresence(initial) {
+  async _evaluatePresence(initial, run) {
     let info
     // Only shell out to tasklist/ps on startup or when not yet detected via config-dir.
     const needProc = initial || !this._present || this._presentMethod === 'process'
     try { info = await detectEE2({ checkProcess: needProc }) } catch { info = { present: false, method: 'none' } }
+    if (run !== this._run) return
     const present = Boolean(info.present)
     this._presentMethod = info.method
 
@@ -180,8 +188,11 @@ class ExiledExchangeIntegration extends EventEmitter {
     // to label which one is "price check" (EE2's binding often carries a generic
     // label): non-item hotkeys simply produce no new clipboard item, so the burst
     // is a harmless no-op, while the timestamp lets us attribute the capture to EE2.
+    // The burst reads the clipboard for a while after this returns: like _applyShortcuts, its item counts
+    // only for the watcher that fired it, not after a deactivate dropped that watcher.
     this._hotkeyAt = Date.now()
-    try { captureItemBurst({ onItem: (item) => this._emitItem(item, 'ee2') }) } catch (e) { this._safeError(e) }
+    const hotkey = this._hotkey
+    try { captureItemBurst({ onItem: (item) => { if (hotkey === this._hotkey) this._emitItem(item, 'ee2') } }) } catch (e) { this._safeError(e) }
   }
 
   // uiohook is healthy (a key arrived) — no need to poll the clipboard fast.
