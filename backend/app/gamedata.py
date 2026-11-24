@@ -17,13 +17,17 @@ from __future__ import annotations
 import json
 import logging
 import struct
+import threading
 import time
+from collections.abc import Callable
+from pathlib import Path
 from typing import cast
 
 from starlette.concurrency import run_in_threadpool
 
 from . import db, gateway
 from .config import DATA_DIR
+from .threadwork import finish_write
 
 log = logging.getLogger(__name__)
 
@@ -36,6 +40,8 @@ MAGIC = b"\xbb" * 8
 NULL_ROW = 0xFEFEFEFEFEFEFEFE
 CACHE = DATA_DIR / "gamedata"
 CACHE.mkdir(parents=True, exist_ok=True)
+_file_cache_lock = threading.Lock()
+_fee_write_lock = threading.Lock()
 
 SIZES = {
     "bool": 1,
@@ -118,17 +124,34 @@ def read(dat: Dat, r: bytes, off: int, t: str):
 
 
 # ------------------------------------------------------------------ fetching
+def _read_cache[T](
+    path: Path, max_age: int, read_file: Callable[[Path], T]
+) -> T | None:
+    with _file_cache_lock:
+        if path.exists() and time.time() - path.stat().st_mtime < max_age:
+            return read_file(path)
+    return None
+
+
+def _write_cache(path: Path, content: bytes, *, create_directory: bool = False) -> None:
+    with _file_cache_lock:
+        if create_directory:
+            path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(content)
+
+
 async def _get(url: str, name: str, max_age_s: int) -> bytes:
     path = CACHE / name
-    if path.exists() and time.time() - path.stat().st_mtime < max_age_s:
-        return path.read_bytes()
+    cached = await run_in_threadpool(_read_cache, path, max_age_s, Path.read_bytes)
+    if cached is not None:
+        return cached
     r = await gateway.request("GET", url, policy="static")
     r.raise_for_status()
     if r.content[:1] == b"<":  # HTML error/viewer page — never cache it as data
         raise ValueError(
             f"{name}: got HTML instead of a data file (URL layout changed?)"
         )
-    path.write_bytes(r.content)
+    await finish_write(_write_cache, path, r.content)
     return r.content
 
 
@@ -163,7 +186,7 @@ async def refresh(force: bool = False) -> dict:
     except Exception as exc:
         state["last_error"] = str(exc)
         log.warning("gold fee refresh failed: %s", exc)
-        return fees()
+        return await run_in_threadpool(fees)
 
     def table(name: str, valid_for: int) -> list[dict]:
         for t in schema["tables"]:
@@ -216,16 +239,21 @@ async def refresh(force: bool = False) -> dict:
             "challenge": read(ce, r, *cols["EnabledInChallengeLeague"]),
         }
 
-    await run_in_threadpool(db.kv_set, "gold_fees_meta", by_meta)
-    state.update(
-        loaded_at=time.time(),
-        version=version,
-        rows=len(by_meta),
-        last_error=None,
-        source="ggpk.exposed",
-    )
-    log.info("loaded %d exchange gold fees (patch %s)", len(by_meta), version)
-    return fees()
+    return await finish_write(_store_fees, by_meta, version)
+
+
+def _store_fees(by_meta: dict, version: str | None) -> dict:
+    with _fee_write_lock:
+        db.kv_set("gold_fees_meta", by_meta)
+        state.update(
+            loaded_at=time.time(),
+            version=version,
+            rows=len(by_meta),
+            last_error=None,
+            source="ggpk.exposed",
+        )
+        log.info("loaded %d exchange gold fees (patch %s)", len(by_meta), version)
+        return fees()
 
 
 # ------------------------------------------------------------------ queries

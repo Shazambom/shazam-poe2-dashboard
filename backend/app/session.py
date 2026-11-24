@@ -11,9 +11,12 @@ from __future__ import annotations
 
 import time
 
+from starlette.concurrency import run_in_threadpool
+
 from . import gateway, secrets
 from .config import POESESSID
 from .settings import get_settings
+from .threadwork import finish_write
 
 
 def get_cookie() -> str | None:
@@ -44,7 +47,7 @@ def status() -> dict:
 
 async def validate(cookie: str) -> tuple[bool, str]:
     """One cheap exchange query: 401/403 means the cookie is bad."""
-    league = get_settings()["league"]
+    league = (await run_in_threadpool(get_settings))["league"]
     body = {
         "query": {
             "status": {"option": "online"},
@@ -81,28 +84,38 @@ async def connect(cookie: str, label: str | None = None) -> dict:
     ok, msg = await validate(cookie)
     if not ok:
         raise ValueError(msg)
-    secrets.store(
-        "poesessid",
-        {
-            "cookie": cookie,
-            "set_at": time.time(),
-            "last_ok": time.time(),
-            "label": label,
-        },
-    )
-    return status() | {"message": msg}
+    return await finish_write(_store_cookie, cookie, label) | {"message": msg}
+
+
+def _store_cookie(cookie: str, label: str | None) -> dict:
+    with secrets.write_lock:
+        secrets.store(
+            "poesessid",
+            {
+                "cookie": cookie,
+                "set_at": time.time(),
+                "last_ok": time.time(),
+                "label": label,
+            },
+        )
+        return status()
 
 
 def mark_ok(min_interval_s: float = 0.0) -> None:
-    rec = secrets.load("poesessid")
-    if rec:
-        now = time.time()
-        if min_interval_s > 0 and now - float(rec.get("last_ok") or 0) < min_interval_s:
-            return
-        rec["last_ok"] = now
-        secrets.store("poesessid", rec)
+    with secrets.write_lock:
+        rec = secrets.load("poesessid")
+        if rec:
+            now = time.time()
+            if (
+                min_interval_s > 0
+                and now - float(rec.get("last_ok") or 0) < min_interval_s
+            ):
+                return
+            rec["last_ok"] = now
+            secrets.store("poesessid", rec)
 
 
 def disconnect() -> dict:
-    secrets.clear("poesessid")
-    return status()
+    with secrets.write_lock:
+        secrets.clear("poesessid")
+        return status()

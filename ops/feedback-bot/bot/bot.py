@@ -97,6 +97,23 @@ def _stage_report(inp: Path, plain: bytes) -> None:
     os.replace(tmp, inp)  # atomic: the opener never sees a half file
 
 
+async def _finish_io[T, **P](
+    operation: Callable[P, T], /, *args: P.args, **kwargs: P.kwargs
+) -> T:
+    """Keep ownership of a file step until its worker exits, even on cancellation."""
+    task = asyncio.create_task(asyncio.to_thread(operation, *args, **kwargs))
+    cancelled = False
+    while not task.done():
+        try:
+            await asyncio.shield(task)
+        except asyncio.CancelledError:
+            cancelled = True
+    result = task.result()
+    if cancelled:
+        raise asyncio.CancelledError
+    return result
+
+
 class Handler:
     def __init__(
         self,
@@ -118,12 +135,20 @@ class Handler:
         self.retry_delays: tuple[int, ...]
         self.retry_delays, self.sleep = RETRY_DELAYS, asyncio.sleep
         self._busy: set[int] = set()
+        self._inbox_lock = asyncio.Lock()
         self.text_forums: dict[
             int, str
         ] = {}  # forum id → inbox folder (TEXT_FORUMS, resolved at login)
         self.allow_role: Callable[[Any], Any] = lambda role: (
             None
         )  # production: discord.AllowedMentions for that role only
+
+    async def _inbox_io[T, **P](
+        self, operation: Callable[P, T], /, *args: P.args, **kwargs: P.kwargs
+    ) -> T:
+        """Serialize whole inbox file steps without holding the lock across Discord calls."""
+        async with self._inbox_lock:
+            return await _finish_io(operation, *args, **kwargs)
 
     # ---- state
     def _state(self) -> dict:
@@ -201,46 +226,57 @@ class Handler:
         f.replace(f.parent / "rejected" / f.name)
 
     # ---- the owner's actions: triage / resolve / close
-    async def process_actions(self, get_thread):
+    def _queued_actions(self) -> tuple[dict[str, int], list[Path]]:
         adir = self.inbox / "actions"
         if not adir.is_dir():
-            return
+            return {}, []
         posts = {
             v["dir"]: int(tid) for tid, v in (self._state().get("posts") or {}).items()
         }
-        for f in sorted(adir.glob("*.json")):
+        return posts, sorted(adir.glob("*.json"))
+
+    def _finish_action(self, path: Path, rel: str, kind: str) -> None:
+        self._set_status(self.inbox / rel, ACTIONS[kind])
+        _log(f"{rel}: {ACTIONS[kind]}")
+        path.unlink()
+
+    def _prepare_action(
+        self, path: Path, posts: dict[str, int]
+    ) -> tuple[str, str] | None:
+        action = json.loads(path.read_text())
+        rel, kind = action["report"], action["action"]
+        if kind not in ACTIONS or rel not in posts:
+            raise ValueError(f"unknown action or report: {kind!r} {rel!r}")
+        status = self.inbox / rel / STATUS_FILE
+        now = json.loads(status.read_text())["state"] if status.is_file() else "new"
+        if now == ACTIONS[kind]:
+            path.unlink()
+        elif kind in REPLY:
+            return rel, kind
+        else:
+            self._finish_action(path, rel, kind)
+        return None
+
+    async def process_actions(self, get_thread):
+        posts, paths = await self._inbox_io(self._queued_actions)
+        for f in paths:
             try:
-                a = json.loads(f.read_text())
-                rel, kind = a["report"], a["action"]
-                if kind not in ACTIONS or rel not in posts:
-                    raise ValueError(f"unknown action or report: {kind!r} {rel!r}")
-                d = self.inbox / rel
-                now = (
-                    json.loads((d / STATUS_FILE).read_text())["state"]
-                    if (d / STATUS_FILE).is_file()
-                    else "new"
-                )
-                if now != ACTIONS[kind]:
-                    if kind in REPLY:
-                        thread = await get_thread(posts[rel])
-                        await self._say(thread, REPLY[kind])
-                        try:
-                            await thread.edit(archived=True)
-                        except (
-                            Exception
-                        ) as e:  # no Manage Threads: the reply still stands
-                            _log(f"{rel}: could not archive the thread ({e!r})")
-                    self._set_status(d, ACTIONS[kind])
-                    _log(f"{rel}: {ACTIONS[kind]}")
-                f.unlink()
+                reply = await self._inbox_io(self._prepare_action, f, posts)
+                if reply is None:
+                    continue
+                rel, kind = reply
+                thread = await get_thread(posts[rel])
+                await self._say(thread, REPLY[kind])
+                try:
+                    await thread.edit(archived=True)
+                except Exception as e:  # no Manage Threads: the reply still stands
+                    _log(f"{rel}: could not archive the thread ({e!r})")
+                await self._inbox_io(self._finish_action, f, rel, kind)
             except Exception as e:
-                self._set_aside(f, f"action {f.name}", e)
+                await self._inbox_io(self._set_aside, f, f"action {f.name}", e)
 
     # ---- stable release announcements in #releases
-    async def process_announcements(self, get_target):
-        """Post each payload in inbox/announce/ once, oldest version first. `get_target()` → (channel, role), or
-        None while the bot can't post or ping there (the files wait for the next minute). A payload that breaks
-        the rules, or that Discord refuses outright (4xx), is set aside; a temporary failure is retried."""
+    def _queued_announcements(self) -> list[tuple[dict, Path]]:
         adir = self.inbox / "announce"
         queued = []
         for f in sorted(adir.glob("*.json")) if adir.is_dir() else []:
@@ -248,18 +284,37 @@ class Handler:
                 queued.append((announce.check_payload(json.loads(f.read_text())), f))
             except Exception as e:
                 self._set_aside(f, f"announcement {f.name}", e)
+        return sorted(
+            queued,
+            key=lambda item: tuple(int(part) for part in item[0]["version"].split(".")),
+        )
+
+    def _already_announced(self, path: Path, version: str) -> bool:
+        if version not in set(self._state().get("announced", [])):
+            return False
+        path.unlink()
+        return True
+
+    def _finish_announcement(self, path: Path, version: str) -> None:
+        path.unlink()  # off the queue first: a later failure never reposts
+        st = self._state()
+        st["announced"] = sorted(set(st.get("announced", [])) | {version})
+        self._save_state(st)
+        _log(f"announced {version} in #{RELEASES_CHANNEL}")
+
+    async def process_announcements(self, get_target):
+        """Post each payload in inbox/announce/ once, oldest version first. `get_target()` → (channel, role), or
+        None while the bot can't post or ping there (the files wait for the next minute). A payload that breaks
+        the rules, or that Discord refuses outright (4xx), is set aside; a temporary failure is retried."""
+        queued = await self._inbox_io(self._queued_announcements)
         if not queued:
             return
         target = await get_target()
         if not target:
             return  # releases_target logged why
         channel, role = target
-        for p, f in sorted(
-            queued, key=lambda q: tuple(int(x) for x in q[0]["version"].split("."))
-        ):
-            done = set(self._state().get("announced", []))
-            if p["version"] in done:
-                f.unlink()
+        for p, f in queued:
+            if await self._inbox_io(self._already_announced, f, p["version"]):
                 continue
             try:
                 msg = await channel.send(
@@ -270,19 +325,18 @@ class Handler:
                     400 <= (getattr(e, "status", 0) or 0) < 500
                     and getattr(e, "status", 0) != 429
                 ):
-                    self._set_aside(
-                        f, f"announcement {p['version']} (Discord refused it)", e
+                    await self._inbox_io(
+                        self._set_aside,
+                        f,
+                        f"announcement {p['version']} (Discord refused it)",
+                        e,
                     )
                 else:
                     _log(
                         f"announcement {p['version']} failed: {e!r}; retrying next minute"
                     )
                 continue
-            f.unlink()  # off the queue first: a later failure never reposts
-            st = self._state()
-            st["announced"] = sorted(set(st.get("announced", [])) | {p["version"]})
-            self._save_state(st)
-            _log(f"announced {p['version']} in #{RELEASES_CHANNEL}")
+            await self._inbox_io(self._finish_announcement, f, p["version"])
             if getattr(channel, "is_news", lambda: False)():
                 try:
                     await msg.publish()  # to the servers that follow the channel
@@ -322,7 +376,7 @@ class Handler:
     async def _sync(self, thread):
         """The whole thread, oldest first, rebuilt from Discord (the bot's own messages never kept). A failed
         read keeps what is there; the next catch-up tries again."""
-        d, reporter = self._post_dir(thread.id)
+        d, reporter = await self._inbox_io(self._post_dir, thread.id)
         if d is None:
             return
         doc = {"title": str(getattr(thread, "name", ""))[:200], "messages": []}
@@ -333,18 +387,34 @@ class Handler:
         except Exception as e:
             _log(f"thread {thread.id}: history unavailable ({e!r}); kept what is there")
             return
-        (d / POST_FILE).write_text(json.dumps(doc, ensure_ascii=False, indent=1))
-        self._seen(thread.id, getattr(thread, "last_message_id", None))
+        await self._inbox_io(
+            self._write_history,
+            d,
+            doc,
+            thread.id,
+            getattr(thread, "last_message_id", None),
+        )
+
+    def _write_history(
+        self, directory: Path, doc: dict, thread_id: int, message_id: int | None
+    ) -> None:
+        (directory / POST_FILE).write_text(
+            json.dumps(doc, ensure_ascii=False, indent=1)
+        )
+        self._seen(thread_id, message_id)
 
     async def _say(self, thread, text):
         """A message from the bot. Its own words are never news, so they never cause a read of the thread."""
         sent = await thread.send(text)
-        self._seen(thread.id, getattr(sent, "id", None))
+        await self._inbox_io(self._seen, thread.id, getattr(sent, "id", None))
 
     async def on_reply(self, msg):
         """A later message in a thread the bot handled (the bot's own acks are not kept)."""
         if msg.author.bot:
             return
+        await self._inbox_io(self._record_reply, msg)
+
+    def _record_reply(self, msg) -> None:
         d, reporter = self._post_dir(getattr(msg.channel, "id", None))
         if d is None or not (d / POST_FILE).is_file():
             return
@@ -367,13 +437,15 @@ class Handler:
         kind = self.text_forums.get(parent_id) if parent_id is not None else None
         msg = await self._starter(thread)  # the forum post's starter message
         if msg is None:
-            self._record(thread.id, pending=True, mark=kind is None)
+            await self._inbox_io(
+                self._record, thread.id, pending=True, mark=kind is None
+            )
             return "PENDING"
         if kind:  # an idea / feedback post: words only
             rel = f"{kind}/{thread.id}"
-            self._start_post(thread, msg, rel)
+            await self._inbox_io(self._start_post, thread, msg, rel)
             await self._sync(thread)
-            self._record(thread.id, mark=False)
+            await self._inbox_io(self._record, thread.id, mark=False)
             return "TEXT"
         att = next(
             (
@@ -384,25 +456,28 @@ class Handler:
             None,
         )
         if att is None:
-            self._start_post(thread, msg, f"posts/{thread.id}")
+            await self._inbox_io(self._start_post, thread, msg, f"posts/{thread.id}")
             await self._sync(thread)
-            self._record(thread.id)
+            await self._inbox_io(self._record, thread.id)
             return "SKIP"
         data = await att.read()
         verdict = await self._process(thread.id, data)
         if verdict["status"] == "OK":
-            self._start_post(thread, msg, verdict["dir"])
+            await self._inbox_io(self._start_post, thread, msg, verdict["dir"])
             await self._sync(thread)
             await msg.add_reaction("✅")
             await self._say(thread, ACK_OK.format(sid=verdict["shortId"]))
         else:
-            self._quarantine(thread.id, data)
-            self._start_post(thread, msg, f"posts/{thread.id}")
+            await self._inbox_io(self._keep_refused_report, thread, msg, data)
             await self._sync(thread)
             await msg.add_reaction("⚠️")
             await self._say(thread, ACK_BAD)
-        self._record(thread.id)
+        await self._inbox_io(self._record, thread.id)
         return verdict["status"]
+
+    def _keep_refused_report(self, thread, msg, data: bytes) -> None:
+        self._quarantine(thread.id, data)
+        self._start_post(thread, msg, f"posts/{thread.id}")
 
     async def _process(self, thread_id: int, data: bytes) -> dict:
         if (
@@ -417,20 +492,13 @@ class Handler:
             return {"status": "REFUSE", "shortId": "", "reason": "bad tag"}
         inp = self.spool / "in" / f"{thread_id}.gz"
         out = self.spool / "out" / str(thread_id)
-        stage = asyncio.create_task(asyncio.to_thread(_stage_report, inp, plain))
-        cancelled = False
-        while not stage.done():
-            try:
-                await asyncio.shield(stage)
-            except asyncio.CancelledError:
-                # Keep the thread busy until the worker closes and publishes its input.
-                cancelled = True
-        stage.result()
-        if cancelled:
-            raise asyncio.CancelledError
+        await _finish_io(_stage_report, inp, plain)
         if self.process:
-            self.process(inp, out)
+            await _finish_io(self.process, inp, out)
         result = await self._wait_result(out)
+        return await self._inbox_io(self._finish_report, result, inp, out)
+
+    def _finish_report(self, result: dict, inp: Path, out: Path) -> dict:
         if result["status"] == "OK":
             result["dir"] = self._move(out, result["shortId"])
         shutil.rmtree(out, ignore_errors=True)
@@ -440,35 +508,35 @@ class Handler:
     async def _wait_result(self, out: Path) -> dict:
         deadline = time.monotonic() + self.wait_s
         while time.monotonic() < deadline:
-            p = out / "result.json"
-            if p.exists():
-                try:
-                    r = json.loads(p.read_text())
-                except (OSError, ValueError):
-                    await asyncio.sleep(
-                        0.1
-                    )  # a poll that landed mid-write: not a verdict yet
-                    continue
-                if (
-                    isinstance(r, dict)
-                    and r.get("status") in STATUSES
-                    and isinstance(r.get("reason"), str)
-                    and len(r["reason"]) <= 200
-                    and isinstance(r.get("shortId"), str)
-                    and (r["status"] != "OK" or SHORT_ID.match(r["shortId"]))
-                ):
-                    return {
-                        "status": r["status"],
-                        "shortId": r["shortId"],
-                        "reason": r["reason"],
-                    }
-                return {
-                    "status": "REFUSE",
-                    "shortId": "",
-                    "reason": "malformed result.json",
-                }
+            result = await asyncio.to_thread(self._read_result, out)
+            if result is not None:
+                return result
             await asyncio.sleep(0.1)
         return {"status": "REFUSE", "shortId": "", "reason": "opener timeout"}
+
+    @staticmethod
+    def _read_result(out: Path) -> dict | None:
+        p = out / "result.json"
+        if not p.exists():
+            return None
+        try:
+            r = json.loads(p.read_text())
+        except (OSError, ValueError):
+            return None
+        if (
+            isinstance(r, dict)
+            and r.get("status") in STATUSES
+            and isinstance(r.get("reason"), str)
+            and len(r["reason"]) <= 200
+            and isinstance(r.get("shortId"), str)
+            and (r["status"] != "OK" or SHORT_ID.match(r["shortId"]))
+        ):
+            return {
+                "status": r["status"],
+                "shortId": r["shortId"],
+                "reason": r["reason"],
+            }
+        return {"status": "REFUSE", "shortId": "", "reason": "malformed result.json"}
 
     def _move(self, out: Path, short_id: str):
         # Anyone can seal a report under any shortId (the public key ships in the app) and a real
@@ -494,7 +562,7 @@ class Handler:
     # a word-only forum's threads not kept yet, newest first, and every pending one whatever its age; a kept
     # thread whose newest message moved is read again whole
     async def catch_up(self, forum):
-        st = self._state()
+        st = await self._inbox_io(self._state)
         last, pending = int(st.get("last_thread_id") or 0), set(st.get("pending", []))
         posts = st.get("posts") or {}
         kept = {int(t) for t in posts}

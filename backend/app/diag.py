@@ -150,7 +150,7 @@ def _analytics(league: str) -> dict:
     return out
 
 
-async def collect() -> dict:
+def _local_report() -> dict:
     s = get_settings()
     return {
         "time": time.time(),
@@ -166,8 +166,15 @@ async def collect() -> dict:
         "unknown_traded": _unknown_traded(s["league"]),
         "digest": dict(digest.state),
         "orderbook": orderbook.state,
-        "leaguehistory_current": await run_in_threadpool(db.kv_get, "lh_current", []),
+        "leaguehistory_current": db.kv_get("lh_current", []),
         "session_connected": session.status().get("connected", False),
-        "connectivity": await _connectivity(),
-        "analytics": _analytics(s["league"]),
     }
+
+
+async def collect() -> dict:
+    report = await run_in_threadpool(_local_report)
+    report["connectivity"] = await _connectivity()
+    report["analytics"] = await run_in_threadpool(
+        _analytics, report["settings"]["league"]
+    )
+    return report
