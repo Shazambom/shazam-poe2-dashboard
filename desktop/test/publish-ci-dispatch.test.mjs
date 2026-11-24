@@ -219,3 +219,30 @@ exit 0
   assert.equal(calls.some((c) => c.startsWith('gh workflow run')), false)
   assert.ok(calls.some((c) => c.startsWith('gh run watch 445566')))
 })
+
+// The fallback after a URL-less dispatch must apply the same commit filter as the adoption step, or it
+// can pick up an older commit's build still running for the tag and ship its Windows binaries.
+test('the URL-less fallback watches the build of this commit, not an older one for the same tag', (t) => {
+  const prevTmp = process.env.TMPDIR
+  process.env.TMPDIR = mkdtempSync(join(tmpdir(), 'pub-ci-marker-'))
+  t.after(() => { process.env.TMPDIR = prevTmp })
+  const older = { databaseId: 445566, displayTitle: 'Windows build 0.3.99-beta.1', status: 'in_progress', headSha: 'oldc0mmit' }
+  const ours = { databaseId: 778899, displayTitle: 'Windows build 0.3.99-beta.1', status: 'queued', headSha: 'deadbeef' }
+  // Only the older build exists until the dispatch; this commit's build appears after it (no URL printed).
+  const { res, calls } = runPublish(`
+if [ "$1" = "run" ] && [ "$2" = "list" ]; then
+  q=""; while [ $# -gt 0 ]; do [ "$1" = "-q" ] && q="$2"; shift; done
+  if [ -f "$TMPDIR/dispatched" ]; then runs='${JSON.stringify([older, ours])}'; else runs='${JSON.stringify([older])}'; fi
+  echo "$runs" | jq -r "$q"
+  exit 0
+fi
+if [ "$1" = "workflow" ]; then touch "$TMPDIR/dispatched"; exit 0; fi
+if [ "$1" = "run" ] && [ "$2" = "watch" ]; then exit 0; fi
+if [ "$1" = "run" ] && [ "$2" = "view" ]; then echo "seed ready (1.2M, v123):"; exit 0; fi
+exit 0
+`)
+  assert.equal(res.status, 0, res.stderr + res.stdout)
+  assert.ok(calls.some((c) => c.startsWith('gh workflow run')), 'the older build is not adopted, so it dispatches')
+  assert.ok(calls.some((c) => c.startsWith('gh run watch 778899')), 'must watch this commit\'s build')
+  assert.equal(calls.some((c) => c.startsWith('gh run watch 445566')), false)
+})

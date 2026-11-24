@@ -36,7 +36,8 @@ VER=$(node -p "require('./package.json').version")
 # so the next run's test gate does not fail on partial files. If the sync changes files, re-run the
 # test gate before committing so a broken vendor update never gets committed or pushed.
 if ! node scripts/sync-ee2.mjs ${EE2_TAG:+--tag "$EE2_TAG"}; then
-  git checkout -- src/vendor/ee2-query test/goldens/ee2-query
+  # From HEAD, not the index: an earlier run may have staged a sync (`git add -A`) before its gate failed.
+  git checkout HEAD -- src/vendor/ee2-query test/goldens/ee2-query
   git clean -fdq -- src/vendor/ee2-query test/goldens/ee2-query
   echo "FATAL: EE2 query port sync failed; restored src/vendor/ee2-query and test/goldens/ee2-query to HEAD"
   exit 1
@@ -178,14 +179,15 @@ for f in "${FILES[@]}"; do
 done
 
 if [ "$NEED_CI" = 1 ]; then
-  # Fallback if gh printed no URL: the newest unfinished run named after this tag. (No timestamp
-  # filter — this Mac's clock was 4 min ahead of GitHub's and "created after T0" matched nothing.)
+  # Fallback if gh printed no URL: the newest unfinished run named after this tag and built from this
+  # commit (an older commit's build for the tag may still be running). (No timestamp filter — this
+  # Mac's clock was 4 min ahead of GitHub's and "created after T0" matched nothing.)
   [ -n "$RID" ] || echo "locating Windows CI run for $TAG ..."
   for _ in $(seq 1 30); do
     [ -n "$RID" ] && break
     if ! RID=$(gh run list --repo "$REPO" --workflow=release-desktop-win.yml --event workflow_dispatch --limit 20 \
-      --json databaseId,displayTitle,status \
-      -q "map(select(.displayTitle==\"Windows build $TAG\" and .status!=\"completed\")) | .[0].databaseId // empty"); then
+      --json databaseId,displayTitle,status,headSha \
+      -q "map(select(.displayTitle==\"Windows build $TAG\" and .status!=\"completed\" and .headSha==\"$SHA\")) | .[0].databaseId // empty"); then
       echo "gh run list failed while locating Windows CI run; retrying..." >&2
       RID=""
     fi

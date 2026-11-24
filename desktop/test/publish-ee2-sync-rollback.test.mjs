@@ -10,7 +10,7 @@ import { join } from 'node:path'
 
 const ROOT = new URL('../..', import.meta.url).pathname
 
-test('a failing sync-ee2.mjs restores vendored files and goldens to HEAD and exits non-zero', () => {
+function runFailedSync({ stagedBroken = false } = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'pub-sync-rollback-'))
   try {
     const repo = join(dir, 'repo')
@@ -44,6 +44,11 @@ test('a failing sync-ee2.mjs restores vendored files and goldens to HEAD and exi
     git(['init', '-b', 'main'])
     git(['add', '.'])
     git(['commit', '-q', '-m', 'init'])
+    // An earlier run whose sync succeeded staged its files (`git add -A`) before its test gate failed.
+    if (stagedBroken) {
+      writeFileSync(join(vendorDir, 'MANIFEST.json'), '{"ee2Tag":"v9.9.9-broken"}\n')
+      git(['add', '-A'])
+    }
 
     writeFileSync(
       join(bin, 'node'),
@@ -78,7 +83,14 @@ exit 0
     assert.equal(status, '', 'vendored files and goldens must be clean after failed sync')
     assert.equal(readFileSync(join(vendorDir, 'MANIFEST.json'), 'utf8'), '{"ee2Tag":"v0.1.0"}\n')
     assert.equal(readFileSync(join(goldenDir, 'sample.json'), 'utf8'), '{"ok":true}\n')
+    assert.equal(git(['diff', '--cached', '--name-only', '--', 'desktop/src/vendor/ee2-query', 'desktop/test/goldens/ee2-query']).trim(), '',
+      'nothing staged under the vendored paths after the rollback')
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }
-})
+}
+
+test('a failing sync-ee2.mjs restores vendored files and goldens to HEAD and exits non-zero', () => runFailedSync())
+
+// `git checkout -- <paths>` restores from the index; a previous run's staged sync would survive it.
+test('a failing sync-ee2.mjs restores HEAD even over changes an earlier run staged', () => runFailedSync({ stagedBroken: true }))
