@@ -684,30 +684,33 @@ def _row_tags(
     return lead + own
 
 
-def _section_tiers(f, s, pool, domain, tags, corruption, corrupted_groups, all_keys):
-    if s["id"] == "enchant" and pool["domain"] != "item":
+def _section_tiers(
+    *, family, section, pool, tags, corruption, corrupted_groups, all_keys
+):
+    """Filter tiers of a family already matched to the section's effective domain."""
+    if section["id"] == "enchant" and pool["domain"] != "item":
         # Off gear, the upgrades are the ones weighted on no class, of a corruption the pool has
         # (poe2db Ruby: 7; a relic's one corruption has no upgrade).
         tiers = [
             t
-            for t in f["tiers"]
-            if f["group"] in corrupted_groups and _rolled([t]) == {"default"}
+            for t in family["tiers"]
+            if family["group"] in corrupted_groups and _rolled([t]) == {"default"}
         ]
-    elif s.get("socketed"):
+    elif section.get("socketed"):
         # A socketable's pool is all of it on any item the socketable fits, whatever the base
         # (owner 2026-10-12; poe2db lists it so): the export's per-base zeros are not applied.
-        tiers = [t for t in f["tiers"] if _rolled([t]) & set(s["keys"])]
+        tiers = [t for t in family["tiers"] if _rolled([t]) & set(section["keys"])]
     else:
-        tiers = [t for t in f["tiers"] if rolls_on(t["weights"], tags)]
-    if domain != "item" and s["id"] != "base" and not corruption:
+        tiers = [t for t in family["tiers"] if rolls_on(t["weights"], tags)]
+    if family["domain"] != "item" and section["id"] != "base" and not corruption:
         # A desecration pool shows the tiers its own currency adds: a lord's tier under the
         # lords, an otherworldly tier under the Altered Collarbone, a tier keyed on no one
         # under the jewel and waystone bones. One family can hold tiers of two of them.
         tiers = [
             t
             for t in tiers
-            if (_rolled([t]) & set(s["keys"]))
-            or (s.get("unkeyed") and not _rolled([t]) & all_keys)
+            if (_rolled([t]) & set(section["keys"]))
+            or (section.get("unkeyed") and not _rolled([t]) & all_keys)
         ]
     return tiers
 
@@ -753,7 +756,13 @@ def build_pool(pool: dict, families: list, sections: list) -> dict:
             ):
                 continue
             tiers = _section_tiers(
-                f, s, pool, domain, tags, corruption, corrupted_groups, all_keys
+                family=f,
+                section=s,
+                pool=pool,
+                tags=tags,
+                corruption=corruption,
+                corrupted_groups=corrupted_groups,
+                all_keys=all_keys,
             )
             if not tiers:
                 continue
