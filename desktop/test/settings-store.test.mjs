@@ -135,7 +135,7 @@ test('a missing file starts from the defaults and keeps nothing aside', () => {
   } finally { rmSync(dir, { recursive: true, force: true }) }
 })
 
-test('a settings path that cannot be read (a directory) is moved aside too', () => {
+test('a settings path that cannot be read (a directory) is left in place and never written over', () => {
   const dir = mkdtempSync(join(tmpdir(), 'arb-set-'))
   try {
     const f = join(dir, 'desktop-settings.json')
