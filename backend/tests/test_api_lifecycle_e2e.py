@@ -22,12 +22,23 @@ import time
 from datetime import UTC, datetime
 from pathlib import Path
 
+import httpx
 import pytest
 from fastapi.testclient import TestClient
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from app import arbitrage, db, gateway, holdscore, leaguearc, main, modpool, movers
+from app import (
+    arbitrage,
+    db,
+    diag,
+    gateway,
+    holdscore,
+    leaguearc,
+    main,
+    modpool,
+    movers,
+)
 from app.currencies import registry
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
@@ -45,6 +56,13 @@ def _seed_fixture(tmp_path: Path, monkeypatch) -> TestClient:
     monkeypatch.setattr(db, "MARKET_SEED_PATH", tmp_path / "missing-seed.sqlite.gz")
     monkeypatch.setattr(db, "_local", threading.local())
     monkeypatch.setattr(gateway, "_client", None)
+
+    async def fixture_request(method, url, *, policy=None, **_kwargs):
+        if method != "GET" or (url, policy) not in diag._PROBES.values():
+            raise RuntimeError(f"unexpected outbound fixture request: {method} {url}")
+        return httpx.Response(200, request=httpx.Request(method, url))
+
+    monkeypatch.setattr(gateway, "request", fixture_request)
 
     db._boot_databases()
 
@@ -314,8 +332,11 @@ def test_core_health_status_board_asset_and_signals_lifecycle(seeded_client):
     assert st.status_code == 200
     assert st.json()["league"] == LEAGUE
     assert c.get("/api/backfill").status_code == 200
-    assert c.get("/api/diag").status_code == 200
-    assert c.get("/api/leagues").status_code == 200
+    diagnostics = c.get("/api/diag")
+    assert diagnostics.status_code == 200
+    assert diagnostics.json()["connectivity"] == dict.fromkeys(diag._PROBES, 200)
+    leagues = c.get("/api/leagues")
+    assert leagues.status_code == 200, leagues.text
     cur = c.get("/api/currencies")
     assert cur.status_code == 200 and len(cur.json()["currencies"]) >= 6
 
