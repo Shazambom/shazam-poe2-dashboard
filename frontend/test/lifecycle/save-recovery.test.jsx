@@ -73,7 +73,7 @@ it('retries a silently failed preset without a new label or toast', async () => 
   expect(events).not.toHaveBeenCalled()
 })
 
-it('keeps the existing mounted error toast on the first failure, not on each retry', async () => {
+it('shows the existing error toast once, after the retries are spent, not on the first failure', async () => {
   vi.spyOn(api, 'putRecipes').mockRejectedValue(new Error('locked'))
   const view = render(<RecipesView />)
   await settle()
@@ -90,7 +90,7 @@ it('keeps the existing mounted error toast on the first failure, not on each ret
   await advance(800)
 })
 
-it('retains a failed generic payload until the next explicit flush', async () => {
+it('does not resend a failed generic payload on unmount or the next flush', async () => {
   const put = vi.fn().mockRejectedValueOnce(new Error('locked')).mockResolvedValue(true)
   const { result, unmount } = renderHook(() => useAutosave(put))
   act(() => { result.current.arm(); result.current.save('draft') })

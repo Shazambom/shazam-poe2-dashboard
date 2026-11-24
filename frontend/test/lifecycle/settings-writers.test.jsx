@@ -55,7 +55,7 @@ it('flushes a theme name without waiting for the builder’s debounce', async ()
   expect(events).not.toHaveBeenCalled()
 })
 
-it('recovers a failed currency link but only shows the original first-attempt toast', async () => {
+it('recovers a failed currency link on retry and shows only the success toast', async () => {
   const map = vi.spyOn(api, 'mapCurrency').mockRejectedValueOnce(new Error('locked')).mockResolvedValue({ ok: true })
   render(<SettingsView currencies={{ unmapped_metadata_ids: ['meta'], currencies: [] }} />)
   await settle()
@@ -85,7 +85,7 @@ it('bases a second board removal on the retained watchlist after a failed first 
   expect(events).not.toHaveBeenCalled()
 })
 
-it('keeps independent stash switches and carries them after bounded retries are spent', async () => {
+it('drops a stash switch reported failed after bounded retries, so it never rides the next write', async () => {
   const write = vi.spyOn(api, 'putSettings').mockRejectedValue(new Error('locked'))
   const { saveSettings } = useStatus.getState()
   useStatus.setState({ settings: { stash_counted: { chaos: true } } })
@@ -103,7 +103,7 @@ it('keeps independent stash switches and carries them after bounded retries are 
   expect(events).not.toHaveBeenCalled()
 })
 
-it('flushes an already failed slider write on unmount without repeating its toast', async () => {
+it('lets the queue retry a failed slider write after unmount, and toasts once only when retries are spent', async () => {
   const write = vi.spyOn(api, 'putSettings').mockRejectedValueOnce(new Error('locked')).mockImplementation(async patch => patch)
   const view = render(<GoldValueSlider />)
   await settle()
