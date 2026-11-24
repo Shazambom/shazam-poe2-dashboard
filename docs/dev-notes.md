@@ -315,8 +315,10 @@ app, no new outbound call (the invite opens in the OS browser); nothing can bill
 - **Vendored EE2 query port** — `desktop/src/vendor/ee2-query` (generated; never hand-edit: the drift test
   compares every file to `data/MANIFEST.json`). Refresh with `node desktop/scripts/sync-ee2.mjs`
   (`--src ~/Exiled-Exchange-2` for a local checkout, `--tag vX` to pin, `--offline` to keep the GGG snapshot,
-  `--no-goldens` to skip the EE2-vitest golden run). `publish-github.sh` runs it before the test gate on every
-  release. EE2's vitest needs Node ≥ 20 — the script finds one (Homebrew) if the shell's is older.
+  `--no-goldens` to skip the EE2-vitest golden run). `publish-github.sh` runs it after the initial test gate on
+  every release, restores the vendored files and goldens to HEAD if the sync fails, and re-runs the test gate
+  before committing when files change. EE2's vitest needs Node ≥ 20 — the script finds one (Homebrew) if the
+  shell's is older.
 - **Driving the history flow without EE2 installed:** in a dev launch,
   `window.poe2desktop.dev.ee2Item({ raw, origin: 'ee2' })` pushes a fixture through the real consumer +
   utilityProcess worker (main refuses it when packaged). Fixtures: `desktop/test/fixtures/ee2/items/*.txt`.

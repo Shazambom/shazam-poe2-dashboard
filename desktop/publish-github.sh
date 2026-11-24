@@ -32,9 +32,15 @@ VER=$(node -p "require('./package.json').version")
 
 # EE2 QUERY PORT SYNC — refresh desktop/src/vendor/ee2-query from EE2's latest release tag, snapshot
 # GGG's trade data, regenerate the goldens with EE2's own code (docs/trading-workspace-roadmap.md §8).
-# Network is required to release anyway; a failing step aborts. If the sync changes files, re-run the
+# Network is required to release anyway; a failing sync restores the vendored tree to HEAD and aborts
+# so the next run's test gate does not fail on partial files. If the sync changes files, re-run the
 # test gate before committing so a broken vendor update never gets committed or pushed.
-node scripts/sync-ee2.mjs ${EE2_TAG:+--tag "$EE2_TAG"}
+if ! node scripts/sync-ee2.mjs ${EE2_TAG:+--tag "$EE2_TAG"}; then
+  git checkout -- src/vendor/ee2-query test/goldens/ee2-query
+  git clean -fdq -- src/vendor/ee2-query test/goldens/ee2-query
+  echo "FATAL: EE2 query port sync failed; restored src/vendor/ee2-query and test/goldens/ee2-query to HEAD"
+  exit 1
+fi
 git add -A src/vendor/ee2-query test/goldens/ee2-query
 if ! git diff --cached --quiet; then
   ../ops/run-tests.sh

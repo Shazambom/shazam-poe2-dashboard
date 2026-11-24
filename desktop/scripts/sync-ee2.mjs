@@ -6,7 +6,8 @@
 //   --no-goldens   skip regenerating goldens with EE2's own vitest run
 //   --types-only   offline: rewrite vendor/bundle.d.cts from ee2-bundle-types.mjs and the manifest's hashes,
 //                  keeping the recorded tag, commit, modules and sync time
-// Run by publish-github.sh before the test gate on every release; any failing step aborts.
+// Run by publish-github.sh after the initial test gate on every release; if it fails, publish-github.sh
+// restores the vendored tree and aborts, and if it changes files, the test gate runs again before committing.
 // Steps: fetch/copy → npm install (once per tag) → make-index-files → esbuild with shim aliases →
 // bundle types → copy data + index bins → GGG trade-data snapshot → goldens via EE2's vitest → MANIFEST.json.
 import fs from 'node:fs'
