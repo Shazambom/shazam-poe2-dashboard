@@ -481,3 +481,83 @@ def test_cancelled_report_keeps_the_thread_busy_until_staging_finishes(h, monkey
     assert staged.stat().st_mode & 0o777 == 0o600
     assert not staged.with_suffix(".tmp").exists()
     assert 3003 not in h._busy
+
+
+def test_finish_io_returns_result_and_propagates_errors_without_cancel():
+    import bot
+
+    def succeed(x: int) -> int:
+        return x + 1
+
+    def fail() -> None:
+        raise RuntimeError("boom")
+
+    assert run(bot._finish_io(succeed, 41)) == 42
+    with pytest.raises(RuntimeError, match="boom"):
+        run(bot._finish_io(fail))
+
+
+def test_finish_io_waits_for_successful_worker_then_raises_cancelled():
+    import bot
+
+    started, release, finished = (
+        threading.Event(),
+        threading.Event(),
+        threading.Event(),
+    )
+
+    def slow_ok() -> int:
+        started.set()
+        assert release.wait(5)
+        finished.set()
+        return 7
+
+    async def go() -> asyncio.Task[int]:
+        task = asyncio.create_task(bot._finish_io(slow_ok))
+        try:
+            assert await asyncio.to_thread(started.wait, 2)
+            task.cancel()
+            await asyncio.sleep(0)
+            assert not task.done()
+        finally:
+            release.set()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        return task
+
+    task = run(go())
+    assert finished.is_set()
+    assert task.cancelled()
+
+
+def test_finish_io_preserves_cancellation_when_worker_fails():
+    import bot
+
+    started, release = threading.Event(), threading.Event()
+
+    def slow_fail() -> None:
+        started.set()
+        assert release.wait(5)
+        raise RuntimeError("disk full")
+
+    async def go() -> tuple[asyncio.Task[None], BaseException | None]:
+        task = asyncio.create_task(bot._finish_io(slow_fail))
+        try:
+            assert await asyncio.to_thread(started.wait, 2)
+            task.cancel()
+            await asyncio.sleep(0)
+            assert not task.done()
+        finally:
+            release.set()
+        caught: BaseException | None = None
+        try:
+            await task
+        except BaseException as exc:
+            caught = exc
+        return task, caught
+
+    task, caught = run(go())
+    assert task.cancelled()
+    assert isinstance(caught, asyncio.CancelledError)
+    assert isinstance(caught.__cause__, RuntimeError)
+    assert "disk full" in str(caught.__cause__)

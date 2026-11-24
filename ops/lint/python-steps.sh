@@ -44,7 +44,7 @@ flake8_async() {
   # open file objects). Ruff owns all other ASYNC rules, and Trio/checkpoint rules do not apply.
   .venv-lint/bin/flake8-async --asyncio --disable-noqa \
     --enable=ASYNC200,ASYNC231,ASYNC232 --disable= \
-    '--async200-blocking-calls=db.q->offload the query,db.tx->offload the transaction,db.kv_get->offload the read,db.kv_set->offload the write,sqlite3.connect->offload the operation' \
+    '--async200-blocking-calls=db.q->offload the query,db.tx->offload the transaction,db.kv_get->offload the read,db.kv_set->offload the write,db.kv_update->offload the update,db.analyze->offload the operation,db.seed_market->offload the operation,db.get_capital->offload the read,db.capital_add->offload the write,db.set_capital->offload the write,db.sales_list->offload the read,db.sales_leagues->offload the read,db.sales_count->offload the read,db.sales_ingest->offload the write,sqlite3.connect->offload the operation' \
     "$@"
 }
 

@@ -26,8 +26,7 @@ from typing import TypedDict
 from starlette.concurrency import run_in_threadpool
 
 from . import cache, db, devtelemetry, gateway, marketseries
-from .threadwork import finish
-from .threadwork import finish_write as _finish_crawl_write
+from .threadwork import finish, finish_write
 
 log = logging.getLogger(__name__)
 
@@ -412,7 +411,7 @@ async def fetch_item(name: str, item_id: int, current: bool) -> int:
         for s in data.get("DailyStats", [])
         if s.get("Time")
     ]
-    await _finish_crawl_write(_store_item_history, name, item_id, current, data, rows)
+    await finish_write(_store_item_history, name, item_id, current, data, rows)
     return len(rows)
 
 
@@ -557,7 +556,7 @@ async def backfill(force: bool = False, full: bool = True) -> CrawlResult:
             log.warning("poe2scout leagues fetch failed: %s", exc)
             return {"error": str(exc)}
         progress["leagues_total"] = len(leagues)
-        was_current, stored = await _finish_crawl_write(_start_crawl, leagues)
+        was_current, stored = await finish_write(_start_crawl, leagues)
         for li, lg in enumerate(leagues):
             name, current = lg.get("Value"), bool(lg.get("IsCurrent"))
             if not name:

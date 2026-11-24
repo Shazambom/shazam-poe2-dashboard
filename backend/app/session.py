@@ -88,34 +88,42 @@ async def connect(cookie: str, label: str | None = None) -> dict:
 
 
 def _store_cookie(cookie: str, label: str | None) -> dict:
-    with secrets.write_lock:
-        secrets.store(
-            "poesessid",
-            {
-                "cookie": cookie,
-                "set_at": time.time(),
-                "last_ok": time.time(),
-                "label": label,
-            },
-        )
-        return status()
+    secrets.store(
+        "poesessid",
+        {
+            "cookie": cookie,
+            "set_at": time.time(),
+            "last_ok": time.time(),
+            "label": label,
+        },
+    )
+    return status()
 
 
 def mark_ok(min_interval_s: float = 0.0) -> None:
-    with secrets.write_lock:
-        rec = secrets.load("poesessid")
-        if rec:
-            now = time.time()
-            if (
-                min_interval_s > 0
-                and now - float(rec.get("last_ok") or 0) < min_interval_s
-            ):
-                return
-            rec["last_ok"] = now
-            secrets.store("poesessid", rec)
+    rec = secrets.load("poesessid")
+    if not rec:
+        return
+    if (
+        min_interval_s > 0
+        and time.time() - float(rec.get("last_ok") or 0) < min_interval_s
+    ):
+        return
+
+    def apply(current: dict | None) -> dict | None:
+        if not current:
+            return None
+        now = time.time()
+        if (
+            min_interval_s > 0
+            and now - float(current.get("last_ok") or 0) < min_interval_s
+        ):
+            return current
+        return {**current, "last_ok": now}
+
+    secrets.update("poesessid", apply)
 
 
 def disconnect() -> dict:
-    with secrets.write_lock:
-        secrets.clear("poesessid")
-        return status()
+    secrets.clear("poesessid")
+    return status()

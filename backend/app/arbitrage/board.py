@@ -128,7 +128,6 @@ def cards(
     batch, so Hold/Movers can card hundreds of assets."""
     g = graph.cached_graph()
     rv = g.values()
-    g.s["reference"]
     window_h = max(1, int(window_h or 24))
     league = g.s["league"]
     ranked = counterparts_by_volume(g, rv)

@@ -32,7 +32,7 @@ def test_nothing_is_queued_or_fetched_when_deprecated(monkeypatch):
     monkeypatch.setattr(orderbook, "cached_at", lambda league, h, w: None)
 
     async def go():
-        futs = orderbook.request_pairs(
+        futs = await orderbook.request_pairs_async(
             [("divine", "exalted"), ("chaos", "divine")], force=True
         )
         return futs, await orderbook.wait_for(futs, timeout=1)

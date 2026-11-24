@@ -765,6 +765,12 @@ def test_static_file_cache_reads_and_writes_run_off_loop(
     check("write_bytes", "read_text" if page else "read_bytes")
 
 
+def test_write_cache_always_creates_parent_directory(tmp_path):
+    target = tmp_path / "nested" / "cache.bin"
+    gamedata._write_cache(target, b"ok")
+    assert target.read_bytes() == b"ok"
+
+
 def test_fee_refresh_failure_loads_last_good_fees_off_loop(monkeypatch, worker_calls):
     record, check = worker_calls
 
@@ -1002,3 +1008,25 @@ def test_lifespan_loads_static_and_session_off_loop(monkeypatch, worker_calls):
 
     asyncio.run(boot())
     check("load_static_cache", "get_cookie", "stop")
+
+
+def test_event_loop_guard_blocks_production_sqlite_on_loop():
+    from app import cache, settings
+
+    cache.clear(settings._settings_cache)
+
+    def direct_test_setup() -> dict:
+        return db.kv_get("settings", {}) or {}
+
+    async def on_loop() -> None:
+        # Direct test-body DB setup is allowed (no non-db backend/app frame between test and _conn).
+        assert isinstance(direct_test_setup(), dict)
+        # Worker-thread calls are allowed.
+        cache.clear(settings._settings_cache)
+        assert isinstance(await asyncio.to_thread(settings.get_settings), dict)
+        # Cold production helper on the running event loop must trip the guard.
+        cache.clear(settings._settings_cache)
+        with pytest.raises(AssertionError, match="event loop"):
+            settings.get_settings()
+
+    asyncio.run(on_loop())

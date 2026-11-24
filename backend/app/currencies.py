@@ -24,6 +24,7 @@ import asyncio
 import json
 import logging
 import re
+import threading
 import time
 from dataclasses import dataclass, field
 
@@ -50,6 +51,7 @@ class Currency:
 
 class Registry:
     def __init__(self) -> None:
+        self._lock = threading.RLock()
         self.by_id: dict[str, Currency] = {}
         self.meta_to_trade: dict[str, str] = {}
         self.unmapped_meta: set[str] = set()
@@ -69,17 +71,19 @@ class Registry:
     # ---------------------------------------------------------------- seed
     def _load_seed(self) -> None:
         path = SEED_DIR / "currency_map.json"
-        if path.exists():
-            data = json.loads(path.read_text())
-            self._seed_overrides = data.get("meta_to_trade", {})
-            for tid, entry in data.get("currencies", {}).items():
-                self.by_id[tid] = Currency(
-                    id=tid,
-                    name=entry.get("name", tid),
-                    icon=entry.get("icon"),
-                    category=entry.get("category"),
-                )
-        self._user_overrides = db.kv_get("meta_overrides", {}) or {}
+        data = json.loads(path.read_text()) if path.exists() else None
+        user_overrides = db.kv_get("meta_overrides", {}) or {}
+        with self._lock:
+            if data:
+                self._seed_overrides = data.get("meta_to_trade", {})
+                for tid, entry in data.get("currencies", {}).items():
+                    self.by_id[tid] = Currency(
+                        id=tid,
+                        name=entry.get("name", tid),
+                        icon=entry.get("icon"),
+                        category=entry.get("category"),
+                    )
+            self._user_overrides = user_overrides
 
     def load_bridge(self) -> None:
         """(Re)load the authoritative poe2scout metadata→trade bridge from kv_ops (written by
@@ -91,15 +95,17 @@ class Registry:
         return db.kv_get("meta_bridge", {}) or {}, db.kv_get("meta_catalog", {}) or {}
 
     def _apply_bridge(self, bridge: dict, catalog: dict) -> None:
-        self._bridge, self._catalog = bridge, catalog
-        self._rebuild_links()
+        with self._lock:
+            self._bridge, self._catalog = bridge, catalog
+            self._rebuild_links()
 
     # -------------------------------------------------------------- static
     def load_static_cache(self) -> bool:
         """Synchronously apply the cached /data/static (from kv_ops / market seed) at boot so
         startup never blocks on pathofexile.com while icons are immediately available."""
-        if self.loaded_at or self._cache_applied:
-            return True
+        with self._lock:
+            if self.loaded_at or self._cache_applied:
+                return True
         return self._apply_static_cache(self._read_static_cache())
 
     @staticmethod
@@ -107,13 +113,14 @@ class Registry:
         return db.kv_get(STATIC_CACHE_KEY)
 
     def _apply_static_cache(self, cached: dict | None) -> bool:
-        if self.loaded_at or self._cache_applied:
+        with self._lock:
+            if self.loaded_at or self._cache_applied:
+                return True
+            if not cached:
+                return False
+            self._apply_static(cached)
+            self._cache_applied = True
             return True
-        if not cached:
-            return False
-        self._apply_static(cached)
-        self._cache_applied = True
-        return True
 
     async def load_static(self) -> bool:
         """Fetch /api/trade2/data/static and merge into the registry. Names and ICONS come only
@@ -131,8 +138,11 @@ class Registry:
         ) as exc:  # network is optional; the cached copy (or the seed) still works
             log.warning("could not load trade static data: %s", exc)
             applied = False
-            if not self.loaded_at:
-                applied = self._cache_applied or self._apply_static_cache(
+            with self._lock:
+                needs_cache = not self.loaded_at
+                already_applied = self._cache_applied
+            if needs_cache:
+                applied = already_applied or self._apply_static_cache(
                     await run_in_threadpool(self._read_static_cache)
                 )
             devtelemetry.tlog(
@@ -141,8 +151,10 @@ class Registry:
                 f"cache={'applied' if applied else 'none' if not self.loaded_at else 'n/a'}",
             )
             return False
-        self._apply_static(data)
-        self.loaded_at = time.time()
+        with self._lock:
+            self._apply_static(data)
+            self.loaded_at = time.time()
+            count = len(self.by_id)
         await run_in_threadpool(
             db.kv_set,
             STATIC_CACHE_KEY,
@@ -160,24 +172,25 @@ class Registry:
                 ]
             },
         )
-        log.info("registry loaded %d trade currencies", len(self.by_id))
+        log.info("registry loaded %d trade currencies", count)
         return True
 
     def _apply_static(self, data: dict) -> None:
-        for group in data.get("result", []):
-            cat = group.get("label") or group.get("id")
-            for entry in group.get("entries", []):
-                tid = entry.get("id")
-                if not tid:
-                    continue
-                cur = self.by_id.get(tid) or Currency(
-                    id=tid, name=entry.get("text", tid)
-                )
-                cur.name = entry.get("text", cur.name)
-                cur.icon = entry.get("image") or cur.icon
-                cur.category = cur.category or cat
-                self.by_id[tid] = cur
-        self._rebuild_links()
+        with self._lock:
+            for group in data.get("result", []):
+                cat = group.get("label") or group.get("id")
+                for entry in group.get("entries", []):
+                    tid = entry.get("id")
+                    if not tid:
+                        continue
+                    cur = self.by_id.get(tid) or Currency(
+                        id=tid, name=entry.get("text", tid)
+                    )
+                    cur.name = entry.get("text", cur.name)
+                    cur.icon = entry.get("image") or cur.icon
+                    cur.category = cur.category or cat
+                    self.by_id[tid] = cur
+            self._rebuild_links()
 
     async def keep_static_fresh(self) -> None:
         """Fetch live /data/static in the background immediately at boot, then retry on failure (30 s, doubling to 10 min)."""
@@ -196,54 +209,56 @@ class Registry:
         """Rebuild meta→trade links from all sources in precedence order (later wins):
         seed file < catalog < poe2scout bridge < user overrides. Clears learned/heuristic links and the
         negative cache so a freshly-loaded bridge re-evaluates previously-unmapped ids."""
-        self.meta_to_trade.clear()
-        self.unmapped_meta.clear()
-        self._stems_n = -1  # icon URLs may have updated on existing IDs; rebuild stem index on next lookup
-        # The catalog names what the others don't: an id the bridge or a user maps is theirs.
-        catalog = {
-            m: e
-            for m, e in self._catalog.items()
-            if isinstance(e, dict)
-            and e.get("id")
-            and m not in self._bridge
-            and m not in self._user_overrides
-        }
-        for e in catalog.values():
-            if (
-                e.get("name") and e["id"] not in self.by_id
-            ):  # not on the trade site: the game's own name/icon
-                self.by_id[e["id"]] = Currency(
-                    id=e["id"],
-                    name=e["name"],
-                    icon=e.get("icon"),
-                    category=e.get("category"),
-                )
-        for source in (
-            self._seed_overrides,
-            {m: e["id"] for m, e in catalog.items()},
-            self._bridge,
-            self._user_overrides,
-        ):
-            for meta, tid in source.items():
-                self._link(meta, tid)
-        log.info(
-            "registry links rebuilt: seed=%d catalog=%d bridge=%d user=%d → %d metadata ids mapped",
-            len(self._seed_overrides),
-            len(catalog),
-            len(self._bridge),
-            len(self._user_overrides),
-            len(self.meta_to_trade),
-        )
+        with self._lock:
+            self.meta_to_trade.clear()
+            self.unmapped_meta.clear()
+            self._stems_n = -1  # icon URLs may have updated on existing IDs; rebuild stem index on next lookup
+            # The catalog names what the others don't: an id the bridge or a user maps is theirs.
+            catalog = {
+                m: e
+                for m, e in self._catalog.items()
+                if isinstance(e, dict)
+                and e.get("id")
+                and m not in self._bridge
+                and m not in self._user_overrides
+            }
+            for e in catalog.values():
+                if (
+                    e.get("name") and e["id"] not in self.by_id
+                ):  # not on the trade site: the game's own name/icon
+                    self.by_id[e["id"]] = Currency(
+                        id=e["id"],
+                        name=e["name"],
+                        icon=e.get("icon"),
+                        category=e.get("category"),
+                    )
+            for source in (
+                self._seed_overrides,
+                {m: e["id"] for m, e in catalog.items()},
+                self._bridge,
+                self._user_overrides,
+            ):
+                for meta, tid in source.items():
+                    self._link(meta, tid)
+            log.info(
+                "registry links rebuilt: seed=%d catalog=%d bridge=%d user=%d → %d metadata ids mapped",
+                len(self._seed_overrides),
+                len(catalog),
+                len(self._bridge),
+                len(self._user_overrides),
+                len(self.meta_to_trade),
+            )
 
     def _link(self, meta: str, tid: str) -> None:
-        self.meta_to_trade[meta] = tid
-        cur = self.by_id.get(tid)
-        if cur is None:
-            cur = Currency(id=tid, name=tid)
-            self.by_id[tid] = cur
-        if meta not in cur.metadata_ids:
-            cur.metadata_ids.append(meta)
-        self.unmapped_meta.discard(meta)
+        with self._lock:
+            self.meta_to_trade[meta] = tid
+            cur = self.by_id.get(tid)
+            if cur is None:
+                cur = Currency(id=tid, name=tid)
+                self.by_id[tid] = cur
+            if meta not in cur.metadata_ids:
+                cur.metadata_ids.append(meta)
+            self.unmapped_meta.discard(meta)
 
     # ------------------------------------------------------------ mapping
     _icon_stem = re.compile(r"/([A-Za-z0-9_]+)\.png")
@@ -252,70 +267,76 @@ class Registry:
         """icon filename stem -> trade id, rebuilt when the registry grows.
         Keeps resolve_meta O(1); the old per-call scan burned whole seconds per
         graph build once the registry held hundreds of currencies."""
-        if getattr(self, "_stems_n", -1) != len(self.by_id):
-            stems: dict[str, str] = {}
-            by_name: dict[str, str] = {}
-            for tid, cur in self.by_id.items():
-                if cur.name:
-                    by_name.setdefault(cur.name.lower(), tid)
-                if cur.icon:
-                    m = self._icon_stem.search(cur.icon)
-                    if m:
-                        stems.setdefault(m.group(1).lower(), tid)
-            self._stems = stems
-            self._by_name = by_name
-            self._stems_n = len(self.by_id)
-        return self._stems
+        with self._lock:
+            if getattr(self, "_stems_n", -1) != len(self.by_id):
+                stems: dict[str, str] = {}
+                by_name: dict[str, str] = {}
+                for tid, cur in self.by_id.items():
+                    if cur.name:
+                        by_name.setdefault(cur.name.lower(), tid)
+                    if cur.icon:
+                        m = self._icon_stem.search(cur.icon)
+                        if m:
+                            stems.setdefault(m.group(1).lower(), tid)
+                self._stems = stems
+                self._by_name = by_name
+                self._stems_n = len(self.by_id)
+            return self._stems
 
     def lookup_name(self, name_lower: str) -> str | None:
         """O(1) case-insensitive currency name -> trade id lookup."""
-        self._stem_index()
-        return self._by_name.get(name_lower)
+        with self._lock:
+            self._stem_index()
+            return self._by_name.get(name_lower)
 
     def resolve_meta(self, meta: str) -> str | None:
         """Return the trade id for a metadata id, learning heuristically if needed."""
-        if meta in self.meta_to_trade:
-            return self.meta_to_trade[meta]
-        if meta in self.unmapped_meta:  # negative cache: don't re-scan every call
+        with self._lock:
+            if meta in self.meta_to_trade:
+                return self.meta_to_trade[meta]
+            if meta in self.unmapped_meta:  # negative cache: don't re-scan every call
+                return None
+            tid = self._stem_index().get(meta.rsplit("/", 1)[-1].lower())
+            if tid:
+                self._link(meta, tid)
+                return tid
+            # Tiered currencies: GGG appends 2/3 to the base metadata id for the
+            # Greater/Perfect tiers (CurrencyAddModToMagic2 -> Greater Orb of
+            # Augmentation). The trade site names them greater-/perfect- + base name.
+            if meta[-1:] in ("2", "3") and not meta[-2:-1].isdigit():
+                base_tid = self.resolve_meta(meta[:-1])
+                if base_tid:
+                    slug = re.sub(
+                        r"[^a-z0-9]+", "-", self.by_id[base_tid].name.lower()
+                    ).strip("-")
+                    cand = ("greater-" if meta.endswith("2") else "perfect-") + slug
+                    if cand in self.by_id:
+                        self._link(meta, cand)
+                        return cand
+            self.unmapped_meta.add(meta)
+            log.info(
+                "currency: no trade mapping for metadata id %s "
+                "(not in poe2scout bridge/seed/heuristic — its markets are excluded)",
+                meta,
+            )
             return None
-        tid = self._stem_index().get(meta.rsplit("/", 1)[-1].lower())
-        if tid:
-            self._link(meta, tid)
-            return tid
-        # Tiered currencies: GGG appends 2/3 to the base metadata id for the
-        # Greater/Perfect tiers (CurrencyAddModToMagic2 -> Greater Orb of
-        # Augmentation). The trade site names them greater-/perfect- + base name.
-        if meta[-1:] in ("2", "3") and not meta[-2:-1].isdigit():
-            base_tid = self.resolve_meta(meta[:-1])
-            if base_tid:
-                slug = re.sub(
-                    r"[^a-z0-9]+", "-", self.by_id[base_tid].name.lower()
-                ).strip("-")
-                cand = ("greater-" if meta.endswith("2") else "perfect-") + slug
-                if cand in self.by_id:
-                    self._link(meta, cand)
-                    return cand
-        self.unmapped_meta.add(meta)
-        log.info(
-            "currency: no trade mapping for metadata id %s "
-            "(not in poe2scout bridge/seed/heuristic — its markets are excluded)",
-            meta,
-        )
-        return None
 
     def set_override(self, meta: str, tid: str) -> None:
         db.kv_update("meta_overrides", lambda o: {**(o or {}), meta: tid}, {})
-        self._user_overrides[meta] = tid  # highest precedence
-        self._link(meta, tid)
+        with self._lock:
+            self._user_overrides[meta] = tid  # highest precedence
+            self._link(meta, tid)
 
     def metas(self, tid: str) -> list[str]:
         """Every GGG metadata id linked to a trade id (the digest keys by metadata id)."""
-        cur = self.by_id.get(tid)
-        return list(cur.metadata_ids) if cur else []
+        with self._lock:
+            cur = self.by_id.get(tid)
+            return list(cur.metadata_ids) if cur else []
 
     def name(self, tid: str) -> str:
-        cur = self.by_id.get(tid)
-        return cur.name if cur else tid
+        with self._lock:
+            cur = self.by_id.get(tid)
+            return cur.name if cur else tid
 
     def groups(self, categories: dict | None = None) -> dict[str, str]:
         """{trade id: Stash group} — the game's own Currency Exchange category for the item
@@ -326,42 +347,48 @@ class Registry:
             from . import gamedata
 
             categories = gamedata.categories()
-        out = {}
-        for c in self.by_id.values():
-            game = next(
-                (categories[m] for m in c.metadata_ids if categories.get(m)), None
-            )
-            out[c.id] = game or c.category
-        return out
+        with self._lock:
+            out = {}
+            for c in self.by_id.values():
+                game = next(
+                    (categories[m] for m in c.metadata_ids if categories.get(m)), None
+                )
+                out[c.id] = game or c.category
+            return out
 
     def to_json(self, categories: dict | None = None) -> dict:
-        groups = self.groups(categories)
-        return {
-            "loaded_at": self.loaded_at,
-            "currencies": [
-                {
-                    "id": c.id,
-                    "name": c.name,
-                    "icon": c.icon,
-                    "category": c.category,
-                    "group": groups.get(c.id),
-                    "metadata_ids": c.metadata_ids,
-                }
-                for c in sorted(self.by_id.values(), key=lambda c: c.name)
-            ],
-            "unmapped_metadata_ids": sorted(self.unmapped_meta),
-            # The hard-asset anchor vocabulary (Hold numeraires, Inflation anchors, cross-league
-            # items) — one table, served so the client never hardcodes it.
-            "anchors": [
-                {
-                    "id": k,
-                    "item_id": a.item_id,
-                    "name": a.name,
-                    "metadata_id": a.metadata_id,
-                }
-                for k, a in marketseries.ANCHORS.items()
-            ],
-        }
+        if categories is None:
+            from . import gamedata
+
+            categories = gamedata.categories()
+        with self._lock:
+            groups = self.groups(categories)
+            return {
+                "loaded_at": self.loaded_at,
+                "currencies": [
+                    {
+                        "id": c.id,
+                        "name": c.name,
+                        "icon": c.icon,
+                        "category": c.category,
+                        "group": groups.get(c.id),
+                        "metadata_ids": list(c.metadata_ids),
+                    }
+                    for c in sorted(self.by_id.values(), key=lambda c: c.name)
+                ],
+                "unmapped_metadata_ids": sorted(self.unmapped_meta),
+                # The hard-asset anchor vocabulary (Hold numeraires, Inflation anchors, cross-league
+                # items) — one table, served so the client never hardcodes it.
+                "anchors": [
+                    {
+                        "id": k,
+                        "item_id": a.item_id,
+                        "name": a.name,
+                        "metadata_id": a.metadata_id,
+                    }
+                    for k, a in marketseries.ANCHORS.items()
+                ],
+            }
 
 
 registry = Registry()

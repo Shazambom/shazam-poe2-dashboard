@@ -26,6 +26,7 @@ from starlette.concurrency import run_in_threadpool
 
 from . import db
 from . import leaguehistory as lh
+from .threadwork import finish_write
 
 log = logging.getLogger("poe2arb.seedready")
 
@@ -306,7 +307,7 @@ async def poll_league(name: str) -> dict:
         if a.through:
             # An empty answer for an item poe2scout lists is not proof of anything: remember what was
             # asked (so it is not asked again unchanged) without vouching for the stored rows.
-            await lh._finish_crawl_write(
+            await finish_write(
                 db.kv_set,
                 f"seed_fp:{name}:{item}",
                 {
@@ -315,7 +316,7 @@ async def poll_league(name: str) -> dict:
                     "vouch": gone or n > 0,
                 },
             )
-    a, cut = await lh._finish_crawl_write(
+    a, cut = await finish_write(
         _record_cut,
         name,
         listing,
@@ -357,7 +358,7 @@ async def poll() -> dict:
     async with lh._backfill_lock:
         res = {name: await poll_league(name) for name in leagues}
         # What the exporter trusts: which leagues are current per this poll, and when it ran.
-        await lh._finish_crawl_write(
+        await finish_write(
             db.kv_set, "seed_poll", {"at": time.time(), "leagues": leagues}
         )
     return res
