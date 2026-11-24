@@ -537,6 +537,29 @@ it('focus hotkey: a failed registration leaves the shown combo and the next pres
   }
 })
 
+// QA 2026-11-23: Escape while the button waits for a combo registered a bare Escape as the system-wide
+// hotkey (every Escape in any app then raised Arbiter). Escape cancels the capture instead.
+it('focus hotkey: Escape cancels capturing and registers nothing', async () => {
+  const previous = window.poe2desktop.hotkey
+  const set = vi.fn(async combo => ({ ok: true, combo }))
+  window.poe2desktop.hotkey = { get: vi.fn(async () => ({ combo: 'Control+H' })), set }
+  try {
+    installApiMock()
+    render(<TradingSettings />)
+    await settle()
+    const button = screen.getByRole('button', { name: 'Focus hotkey' })
+    fireEvent.click(button)
+    expect(button.textContent).toBe('Press a combo…')
+    fireEvent.keyDown(button, { key: 'Escape' })
+    await settle()
+    expect(set).not.toHaveBeenCalled()
+    expect(button.textContent).toBe('Control+H')
+    expect(toasts).not.toHaveBeenCalled()
+  } finally {
+    window.poe2desktop.hotkey = previous
+  }
+})
+
 // A combo the OS accepted but main could not save comes back { ok: false, saved: false }: main has put the
 // previous combo back. That is not "taken by another app": the label keeps the old combo and nothing is said.
 it('focus hotkey: a combo that registered but could not be saved is not reported as taken', async () => {

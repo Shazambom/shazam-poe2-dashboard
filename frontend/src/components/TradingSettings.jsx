@@ -93,6 +93,8 @@ export default function TradingSettings() {
   const onKey = (e) => {
     if (!capturing) return
     e.preventDefault()
+    // Escape cancels: a bare Escape registered system-wide would steal it from every app.
+    if (e.key === 'Escape' && !(e.ctrlKey || e.metaKey || e.altKey || e.shiftKey)) { setCapturing(false); return }
     const mods = []
     if (e.ctrlKey || e.metaKey) mods.push('CommandOrControl')
     if (e.altKey) mods.push('Alt')
