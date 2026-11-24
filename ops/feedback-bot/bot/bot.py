@@ -105,13 +105,18 @@ async def _finish_io[T, **P](
     cancelled = False
     while not task.done():
         try:
-            await asyncio.shield(task)
+            await asyncio.wait({task})
         except asyncio.CancelledError:
             cancelled = True
-    result = task.result()
     if cancelled:
+        if task.cancelled():
+            raise asyncio.CancelledError
+        exc = task.exception()
+        if exc is not None:
+            _log(f"shielded I/O failed during cancellation: {exc!r}")
+            raise asyncio.CancelledError from exc
         raise asyncio.CancelledError
-    return result
+    return task.result()
 
 
 class Handler:

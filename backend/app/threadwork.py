@@ -1,10 +1,13 @@
 """Worker operations whose callers must wait for completion even when cancelled."""
 
 import asyncio
+import logging
 from collections.abc import Callable, Coroutine
 from typing import Any
 
 from starlette.concurrency import run_in_threadpool
+
+log = logging.getLogger(__name__)
 
 
 async def finish_write[T, **P](
@@ -20,10 +23,15 @@ async def finish[T](operation: Coroutine[Any, Any, T]) -> T:
     cancelled = False
     while not task.done():
         try:
-            await asyncio.shield(task)
+            await asyncio.wait({task})
         except asyncio.CancelledError:
             cancelled = True
-    result = task.result()
     if cancelled:
+        if task.cancelled():
+            raise asyncio.CancelledError
+        exc = task.exception()
+        if exc is not None:
+            log.warning("shielded operation failed during cancellation", exc_info=exc)
+            raise asyncio.CancelledError from exc
         raise asyncio.CancelledError
-    return result
+    return task.result()
