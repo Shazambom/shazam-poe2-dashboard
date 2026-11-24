@@ -321,6 +321,11 @@ Check these every time; each one has cost a deploy before. (The general rules ev
 
 Condensed and general, newest first; each came from a post-deploy audit (step 8).
 
+- **2026-11-24 (0.3.18-beta.2):** the regression gate reads the local data dir, and rates older than
+  `digest_max_age_h` (6 h) drop out, so after the app has been closed for hours it finds 0 loops and fails closed
+  ("too little data"). Open the app until the digest's latest hour is under 6 h old, quit it (the comparison needs a
+  still database), then publish.
+
 - **2026-11-24 (0.3.18-beta.1):** a release that carries lint-rule changes (`ops/lint/`, `ops/lint.sh`, `ops/audit.sh`,
   `.editorconfig`, …) fails the guard on `main` ("Only the owner changes lint rules") until they are on `origin/main`.
   Ask the owner first, push `main` with their OK, then publish. The EE2 sync's GGG `stats.json` drift (2026-10-05
