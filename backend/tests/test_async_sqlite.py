@@ -765,6 +765,12 @@ def test_static_file_cache_reads_and_writes_run_off_loop(
     check("write_bytes", "read_text" if page else "read_bytes")
 
 
+def test_write_cache_always_creates_parent_directory(tmp_path):
+    target = tmp_path / "nested" / "cache.bin"
+    gamedata._write_cache(target, b"ok")
+    assert target.read_bytes() == b"ok"
+
+
 def test_fee_refresh_failure_loads_last_good_fees_off_loop(monkeypatch, worker_calls):
     record, check = worker_calls
 
