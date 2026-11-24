@@ -35,7 +35,7 @@ export const useStatus = create((set, get) => ({
     } catch (e) { console.error(e) }
   },
   loadSettings: async () => {
-    const s = settingsQueue.overlay(await api.settings())
+    const s = applySettings(await api.settings())
     set({ settings: s })
     syncTheme?.(s.theme, s.custom_themes)
     return s
@@ -84,24 +84,49 @@ export const useStatus = create((set, get) => ({
   saveSettings: patch => settingsQueue.save(patch),
 }))
 
-// Failed patches stay over the cached settings and travel with the next write, even after retries run out.
+let settingsBase = null
+let publishedSettings = null
+const applySettings = raw => {
+  settingsBase = raw
+  const settings = settingsQueue.overlay(raw)
+  publishedSettings = settings
+  return settings
+}
+
+// Optimistic patches stay over the cached settings and travel with the next write even after retries run out;
+// non-optimistic saves revert to the confirmed base once retries are exhausted.
 const settingsQueue = createSaveQueue(patch => api.putSettings(patch), {
   delays: SETTINGS_RETRY_MS,
   publish: () => useStatus.setState(state => {
-    const settings = settingsQueue.overlay(state.settings)
+    if (state.settings !== publishedSettings) settingsBase = state.settings
+    const settings = settingsQueue.overlay(settingsBase)
+    publishedSettings = settings
     return settings === state.settings ? state : { settings }
   }),
-  acknowledge: saved => useStatus.setState({ settings: settingsQueue.overlay(saved) }),
+  acknowledge: saved => useStatus.setState({ settings: applySettings(saved) }),
 })
 
 export const persistSettings = patch => settingsQueue.save(patch, true)
 
+// Mounted StashView registers its autosave editor here so statusStore stays the sole registered
+// capital quit writer and awaits the editor explicitly rather than racing a microtask.
+let capitalEditor = null
+export function registerCapitalEditor(editor) {
+  capitalEditor = editor
+  return () => { if (capitalEditor === editor) capitalEditor = null }
+}
+
 registerFlush(async () => {
-  await Promise.resolve()
+  const editor = capitalEditor
+  if (editor) {
+    const ok = await editor.flush()
+    if (!ok) return false
+  }
   const state = useStatus.getState()
   if (state.capitalSaving) return state.waitCapital()
   if (!capitalDirty.size) return true
   if (!state.capital || state.capitalStale || state.salesFetching) return false
+  editor?.discard()
   const edits = new Map(capitalDirty)
   const { qty } = reconcileCapital(state.capital, edits)
   capitalDirty.clear()

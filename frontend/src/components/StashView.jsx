@@ -4,7 +4,7 @@ import { useEffect, useEffectEvent, useLayoutEffect, useMemo, useRef, useState }
 import { api, fmt, surface, toast } from '../lib/api.js'
 import { wealthDigits, stashUnit, STASH_UNITS } from '../lib/wealth.js'
 import { useAutosave } from '../lib/hooks.js'
-import { useStatus, ensureSettings, capitalDirty } from '../lib/statusStore.js'
+import { useStatus, ensureSettings, capitalDirty, registerCapitalEditor } from '../lib/statusStore.js'
 import { useSync } from '../lib/syncStore.js'
 import { useWorkspace } from '../lib/workspaceStore.js'
 import { flatten } from '../lib/tree.js'
@@ -78,7 +78,8 @@ export default function StashView({ league }) {
     await surface(useStatus.getState().saveCapital(entries, counted, edits))
     if (notifyCredit) useStatus.setState(st => ({ capitalCreditRev: st.capitalCreditRev + 1 }))
   }
-  const { state: saveState, save, flush, hold, release, discard, arm } = useAutosave((rows) => commitCapital(rows), 700, { retainFailed: false })
+  const { state: saveState, save, flush, hold, release, discard, arm } = useAutosave((rows) => commitCapital(rows), 700, { register: false })
+  useEffect(() => registerCapitalEditor({ flush, discard }), [flush, discard])
   // Never seed from a copy older than a save in flight or a confirmed sales credit whose reload hasn't landed yet.
   const capitalSaving = useStatus(s => s.capitalSaving)
   const capitalStale = useStatus(s => s.capitalStale)

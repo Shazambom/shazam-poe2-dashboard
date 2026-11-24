@@ -24,6 +24,12 @@ const tripletToHex = (v) => rgbToHex(String(v).split(',').map(Number))
 const swatchHex = (k, v) => (isTriplet(k) ? tripletToHex(v) : v)
 const label = (k) => k.replace(/^--/, '')
 
+const persistCustoms = (list) => useTheme.getState().saveCustoms(list).catch(() => { toast('Could not save themes', false); return false })
+const upsertCustom = (theme) => {
+  const list = useTheme.getState().customs
+  return persistCustoms(list.some(t => t.id === theme.id) ? list.map(t => (t.id === theme.id ? theme : t)) : [...list, theme])
+}
+
 export default function ThemeBuilder() {
   const customs = useTheme(s => s.customs)
   const chosen = useTheme(s => s.id)
@@ -32,14 +38,33 @@ export default function ThemeBuilder() {
   const [editId, setEditId] = useState(null)
   const [draft, setDraft] = useState(null)      // the theme being edited (unsaved edits live here)
   const [exported, setExported] = useState(null)   // { id, text }: the last export, shown while its theme is open
-  const saveTimer = useRef(null)
+  const pendingSave = useRef(null)                 // { id, theme, cancel }
   const previewTimer = useRef(null)
 
+  const cancelPending = () => {
+    const p = pendingSave.current
+    if (!p) return
+    pendingSave.current = null
+    p.cancel()
+  }
+  const flushPending = () => {
+    const p = pendingSave.current
+    if (!p) return
+    pendingSave.current = null
+    p.cancel()
+    return upsertCustom(p.theme)
+  }
+
   useEffect(() => { loadPresets().then(setPresets).catch(() => ignoredError('load theme presets')) }, [])
-  // Leaving the builder ends any preview (the chosen theme comes back) and cancels pending timers.
+  // Leaving the builder flushes any pending edit, cancels the preview timer, and restores the chosen theme.
   useEffect(() => () => {
     clearTimeout(previewTimer.current)
-    saveTimer.current?.()
+    const p = pendingSave.current
+    if (p) {
+      pendingSave.current = null
+      p.cancel()
+      upsertCustom(p.theme)
+    }
     useTheme.getState().endPreview()
   }, [])
 
@@ -52,16 +77,18 @@ export default function ThemeBuilder() {
     setExported(e => (e?.id === editingId ? e : null))
   }
 
-  const persist = (list) => useTheme.getState().saveCustoms(list).catch(() => { toast('Could not save themes', false); return false })
-  const upsert = (theme) => persist(customs.some(t => t.id === theme.id) ? customs.map(t => (t.id === theme.id ? theme : t)) : [...customs, theme])
-
   // Edits: paint at once (debounced a frame or two), save after the hand stops moving.
   const update = (next) => {
     setDraft(next)
     clearTimeout(previewTimer.current)
     previewTimer.current = setTimeout(() => useTheme.getState().preview(next.colors), 60)
-    saveTimer.current?.()
-    saveTimer.current = scheduleUserSave(() => upsert(next), 800)
+    if (pendingSave.current && pendingSave.current.id !== next.id) flushPending()
+    else cancelPending()
+    const cancel = scheduleUserSave(() => {
+      if (pendingSave.current?.cancel === cancel) pendingSave.current = null
+      return upsertCustom(next)
+    }, 800)
+    pendingSave.current = { id: next.id, theme: next, cancel }
   }
   const setPrimary = (k, hex) => update({ ...draft, colors: rederive(draft.colors, { ...primariesOf(draft.colors), [k]: hex }) })
   const setDerived = (k, hex) => update({ ...draft, colors: { ...draft.colors, [k]: isTriplet(k) ? hexToTriplet(hex) : hex } })
@@ -69,16 +96,24 @@ export default function ThemeBuilder() {
 
   const create = () => {
     if (!presets?.[base]) return
+    flushPending()
     const theme = { id: newThemeId(), name: `${NAMES[base] || base} copy`, base, colors: { ...presets[base] } }
-    upsert(theme); setEditId(theme.id)
+    upsertCustom(theme); setEditId(theme.id)
   }
-  const duplicate = (t) => { const theme = { ...t, id: newThemeId(), name: `${t.name} copy`, colors: { ...t.colors } }; upsert(theme); setEditId(theme.id) }
+  const duplicate = (t) => {
+    flushPending()
+    const latest = useTheme.getState().customs.find(x => x.id === t.id) || t
+    const theme = { ...latest, id: newThemeId(), name: `${latest.name} copy`, colors: { ...latest.colors } }
+    upsertCustom(theme); setEditId(theme.id)
+  }
   const remove = (t) => {
     if (!window.confirm(`Delete theme "${t.name}"?`)) return
-    saveTimer.current?.(); clearTimeout(previewTimer.current)
+    if (pendingSave.current?.id === t.id) cancelPending()
+    else flushPending()
+    clearTimeout(previewTimer.current)
     if (editId === t.id) setEditId(null)
     if (t.id === chosen) useTheme.getState().apply(DEFAULT_THEME)
-    persist(customs.filter(x => x.id !== t.id))
+    persistCustoms(useTheme.getState().customs.filter(x => x.id !== t.id))
   }
   const doExport = (t) => {
     const text = `${exportCss(t)}\n${exportJson(t)}\n`
@@ -155,7 +190,7 @@ export default function ThemeBuilder() {
               ))}
             </div>
           </details>
-          {exported?.id === editingId && <pre className="diag-pre">{exported.text}</pre>}
+          {exported && exported.id === editingId && <pre className="diag-pre">{exported.text}</pre>}
         </div>
       )}
     </details>

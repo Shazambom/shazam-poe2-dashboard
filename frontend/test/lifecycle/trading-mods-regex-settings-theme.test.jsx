@@ -97,8 +97,10 @@ describe('Mods, Regex, Settings, ThemeBuilder, Trading, and App shell lifecycles
     act(() => useTheme.setState(s => ({ customs: s.customs.map(t => ({ ...t, name: 'Stored name' })) })))
     expect(name.value).toBe('Unsaved name')
     expect(() => unmount()).not.toThrow()
+    expect(save).toHaveBeenCalledTimes(1)
+    expect(save.mock.calls[0][0].map(t => t.name)).toEqual(['Unsaved name'])
     act(() => vi.advanceTimersByTime(1000))
-    expect(save).not.toHaveBeenCalled()
+    expect(save).toHaveBeenCalledTimes(1)
   })
 
   it('SettingsView loads settings, renders Appearance/Market/Accounts panels, and switches theme cleanly', async () => {
