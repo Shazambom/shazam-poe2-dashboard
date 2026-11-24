@@ -28,7 +28,7 @@ function makeAutosave(setState) {
     (calc) => (SNAP ? Promise.resolve() : api.putStratCalc(calc)),
     700,
     {
-      retainFailed: false, register: false,
+      register: false,
       onState: (next) => setState(s => ({ saveState: typeof next === 'function' ? next(s.saveState) : next })),
       onError: (e) => toast(cleanErr(e), false),
     },

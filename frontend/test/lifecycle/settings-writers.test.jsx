@@ -127,7 +127,11 @@ it('flushes an already failed slider write on unmount without repeating its toas
   expect(events).not.toHaveBeenCalled()
   await advance(25000)
   expect(events.mock.calls).toEqual([[{ text: 'locked', ok: false }]])
+  const callsAfterExhaustion = write.mock.calls.length
+  write.mockImplementation(async patch => patch)
   mounted.unmount()
+  await settle()
+  expect(write.mock.calls.length).toBe(callsAfterExhaustion)
 })
 
 it('quit recovers a failed detached capital edit from the latest holdings without remounting Stash', async () => {

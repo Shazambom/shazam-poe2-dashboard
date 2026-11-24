@@ -78,7 +78,7 @@ export default function StashView({ league }) {
     await surface(useStatus.getState().saveCapital(entries, counted, edits))
     if (notifyCredit) useStatus.setState(st => ({ capitalCreditRev: st.capitalCreditRev + 1 }))
   }
-  const { state: saveState, save, flush, hold, release, discard, arm } = useAutosave((rows) => commitCapital(rows), 700, { retainFailed: false })
+  const { state: saveState, save, flush, hold, release, discard, arm } = useAutosave((rows) => commitCapital(rows), 700)
   // Never seed from a copy older than a save in flight or a confirmed sales credit whose reload hasn't landed yet.
   const capitalSaving = useStatus(s => s.capitalSaving)
   const capitalStale = useStatus(s => s.capitalStale)

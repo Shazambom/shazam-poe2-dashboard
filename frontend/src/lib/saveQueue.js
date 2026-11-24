@@ -2,8 +2,6 @@ import { isQuitting, registerFlush } from './quitFlush.js'
 import { RETRY_MS } from './retry.js'
 
 const QUIT_RETRY_MS = [100, 250]
-const retained = new WeakMap()
-export const flushForFailure = error => retained.get(error)
 
 const record = value => value !== null && typeof value === 'object' && !Array.isArray(value)
 const branch = value => record(value) && Object.keys(value).length > 0
@@ -190,7 +188,6 @@ export function createSaveQueue(write, { publish, acknowledge, delays = RETRY_MS
         prune(pending, e => e.generation === current)
         publish?.()
       }
-      if (lastError instanceof Object) retained.set(lastError, flush)
       for (const other of [...waiters]) {
         if (other.superseded && other.generation < current
             && ![...waiters].some(w => !w.superseded && w.generation > other.generation)) {

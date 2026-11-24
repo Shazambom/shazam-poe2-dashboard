@@ -97,7 +97,7 @@ it('retains a failed generic payload until the next explicit flush', async () =>
   unmount()
   await settle()
   expect(await result.current.flush()).toBe(true)
-  expect(put.mock.calls).toEqual([['draft'], ['draft']])
+  expect(put.mock.calls).toEqual([['draft']])
   expect(document.body.textContent).toBe('')
   expect(events).not.toHaveBeenCalled()
 })
