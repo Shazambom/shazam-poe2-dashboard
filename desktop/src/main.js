@@ -753,7 +753,7 @@ app.on('web-contents-created', (_e, contents) => {
   try { require('./trade/tap.js').attachTap(contents, (ch, p) => win?.webContents.send(ch, p), (l) => telemetry.installLog('tap', l), require('./trade/budget.js').observe) } catch (e) { console.log('[tap]', String(e)) }
   // Pin the guest's zoom: Chromium persists zoom per origin on the shared session and syncs the
   // guest to the embedder on navigation, which is how a stray ⌘+ used to stick across restarts.
-  try { contents.setZoomFactor(1); contents.setVisualZoomLevelLimits(1, 1) } catch (e) { ignored('zoom:lock-webview', e) }
+  try { contents.setZoomFactor(1); Promise.resolve(contents.setVisualZoomLevelLimits(1, 1)).catch(e => ignored('zoom:lock-webview', e)) } catch (e) { ignored('zoom:lock-webview', e) }
   contents.setWindowOpenHandler(({ url }) => {
     if (isAuthUrl(url)) return { action: 'allow' }
     shell.openExternal(url)
