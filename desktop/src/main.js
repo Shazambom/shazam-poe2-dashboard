@@ -752,7 +752,7 @@ app.whenReady().then(async () => {
       if (!res.ok || changeSettings({ focusHotkey: next })) return res
       // Registered but not saved: the next launch would not have it, so the previous combo stays.
       registerHotkey(() => win, previous)
-      return { ok: false, combo: next }
+      return { ok: false, combo: next, saved: false }   // not "taken": the renderer says nothing
     })
   } catch (e) { console.log('[hotkey] register failed:', String(e)) }
 }).catch((e) => {

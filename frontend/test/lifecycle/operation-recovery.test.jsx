@@ -536,6 +536,32 @@ it('focus hotkey: a failed registration leaves the shown combo and the next pres
   }
 })
 
+// A combo the OS accepted but main could not save comes back { ok: false, saved: false }: main has put the
+// previous combo back. That is not "taken by another app": the label keeps the old combo and nothing is said.
+it('focus hotkey: a combo that registered but could not be saved is not reported as taken', async () => {
+  const previous = window.poe2desktop.hotkey
+  const set = vi.fn().mockResolvedValueOnce({ ok: false, combo: 'CommandOrControl+K', saved: false })
+    .mockResolvedValueOnce({ ok: false, combo: 'CommandOrControl+J' })
+  window.poe2desktop.hotkey = { get: vi.fn(async () => ({ combo: 'Control+H' })), set }
+  try {
+    installApiMock()
+    render(<TradingSettings />)
+    await settle()
+    const button = screen.getByRole('button', { name: 'Control+H' })
+    fireEvent.click(button)
+    fireEvent.keyDown(button, { key: 'k', ctrlKey: true })
+    await settle()
+    expect(button.textContent).toBe('Control+H')
+    expect(toasts).not.toHaveBeenCalled()
+    fireEvent.click(button)
+    fireEvent.keyDown(button, { key: 'j', ctrlKey: true })
+    await settle()
+    expect(toasts).toHaveBeenCalledWith(expect.objectContaining({ text: 'CommandOrControl+J is taken by another app — pick another', ok: false }))
+  } finally {
+    window.poe2desktop.hotkey = previous
+  }
+})
+
 // The label shows only a combo main says is registered. Reading it fails when the hotkey never started this
 // session, and main answers { combo: null } when the OS refused the saved combo at launch: both show the
 // control empty (not the default ⌘/Ctrl+G, which nothing registered), and a press that registers fills it.

@@ -101,6 +101,7 @@ export default function TradingSettings() {
     setCapturing(false)
     window.poe2desktop.hotkey.set(combo).then(r => {
       if (r?.ok) { setHotkey(combo); toast(`Hotkey set to ${combo}`) }
+      else if (r?.saved === false) ignoredError('save focus hotkey')   // registered, not saved: main kept the old combo
       else toast(`${combo} is taken by another app — pick another`, false)
     }).catch(() => ignoredError('register focus hotkey'))
   }
