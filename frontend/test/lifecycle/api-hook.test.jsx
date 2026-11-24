@@ -13,7 +13,26 @@ it('commits twice for initial load and three times for a complete refetch', asyn
   expect(commits.splice(0)).toEqual([[null, true, null], ['first', false, null]])
   rerender(1)
   await act(async () => second.reject(new Error('failed')))
-  expect(commits).toEqual([['first', false, null], ['first', true, null], ['first', false, 'failed']])
+  // The kept result was for the old input: a failed load of the new one must not leave it labelled as the new one.
+  expect(commits).toEqual([['first', false, null], ['first', true, null], [null, false, 'failed']])
+})
+
+it('a failed reload of the same input keeps its result; a failed load of a new input drops the old one', async () => {
+  const load = vi.fn(async id => id)
+  const { result, rerender } = renderHook(id => useApi(() => load(id), [id]), { initialProps: 'A' })
+  await waitFor(() => expect(result.current.data).toBe('A'))
+  load.mockRejectedValueOnce(new Error('offline'))
+  act(() => result.current.reload())
+  await waitFor(() => expect(result.current.err).toBe('offline'))
+  expect(result.current.data).toBe('A')
+  load.mockRejectedValueOnce(new Error('offline'))
+  rerender('B')
+  await waitFor(() => expect(result.current.busy).toBe(false))
+  expect(result.current.err).toBe('offline')
+  expect(result.current.data).toBe(null)
+  rerender('A')
+  await waitFor(() => expect(result.current.data).toBe('A'))
+  expect(result.current.err).toBe(null)
 })
 
 it('loads once per input, keeps the last result while busy and ignores superseded and post-unmount responses', async () => {

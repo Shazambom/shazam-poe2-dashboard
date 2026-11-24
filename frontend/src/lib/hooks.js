@@ -8,12 +8,13 @@ import { useSync } from './syncStore.js'
 // The one "fetch on mount / on deps" shape: `fn()` returns a promise; the result lands in `data`,
 // a failure in `err` (cleaned), `busy` covers the in-flight window. Out-of-order and post-unmount
 // responses are dropped. `data` is kept while a refetch is in flight so views can show the last
-// result instead of flashing "Loading…". `reload()` refetches with the same deps — and so does the
+// result instead of flashing "Loading…", and after a failed reload of the same inputs; a failed load of
+// new inputs drops it (it would read as the new selection's data). `reload()` refetches with the same deps — and so does the
 // topbar ⟳ (the sync store's `tick`), so every view that loads through this hook answers the one
 // app-wide refresh button instead of silently ignoring it.
 export function useApi(fn, deps) {
   const [request] = useState(() => createStore(set => ({
-    data: null, err: null, busy: true,
+    data: null, err: null, busy: true, dataFor: null,
     setData: update => set(state => ({ data: typeof update === 'function' ? update(state.data) : update })),
   })))
   const { data, err, busy, setData } = useStore(request)
@@ -25,8 +26,12 @@ export function useApi(fn, deps) {
     let live = true
     if (!request.getState().busy) request.setState({ busy: true })
     Promise.resolve().then(getRequest())
-      .then(d => { if (live) request.setState({ data: d, err: null, busy: false }) })
-      .catch(e => { if (live) request.setState({ err: cleanErr(e), busy: false }) })
+      .then(d => { if (live) request.setState({ data: d, err: null, busy: false, dataFor: inputs }) })
+      .catch(e => {
+        if (!live) return
+        const kept = request.getState().dataFor === inputs
+        request.setState(kept ? { err: cleanErr(e), busy: false } : { data: null, err: cleanErr(e), busy: false, dataFor: null })
+      })
     return () => { live = false }
   }, [inputs, nonce, request, tick])
   return { data, err, busy, reload: () => setNonce(n => n + 1), setData }
