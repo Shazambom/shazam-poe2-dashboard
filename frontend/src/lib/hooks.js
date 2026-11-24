@@ -35,13 +35,13 @@ export function useApi(fn, deps) {
 // Debounced autosave shared by the editor views. `saver(payload)` persists; the
 // returned `save(payload)` debounces it and drives a 'saving'/'saved' indicator,
 // `arm()` enables saving (call it once after the initial load so hydrating state
-// doesn't trigger a write). Failures surface as a toast.
-export function useAutosave(saver, delay = 700, options) {
+// doesn't trigger a write). Failures surface as a toast, unless `quiet` (the saver recovers and reports itself).
+export function useAutosave(saver, delay = 700, { quiet = false, ...options } = {}) {
   const [state, setState] = useState('')
   const [ctrl] = useState(() => createAutosave(saver, delay, {
     ...options,
     onState: setState,
-    onError: e => toast(cleanErr(e), false),
+    onError: e => { if (!quiet) toast(cleanErr(e), false) },
   }))
   useLayoutEffect(() => { ctrl.setSaver(saver) }, [ctrl, saver])
   useEffect(() => {

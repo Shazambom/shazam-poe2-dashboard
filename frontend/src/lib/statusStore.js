@@ -1,11 +1,11 @@
 import { ignoredError } from './ignoredError.js'
 import { create } from 'zustand'
-import { api } from './api.js'
+import { api, cleanErr, toast } from './api.js'
 import { nextPollMs } from './capital.js'
 import { capitalEntries, countedFromEdits, reconcileCapital, restoreFailedEdits } from './stash.js'
-import { registerFlush } from './quitFlush.js'
+import { isQuitting, registerFlush } from './quitFlush.js'
 import { createSaveQueue } from './saveQueue.js'
-import { RETRY_MS as SETTINGS_RETRY_MS } from './retry.js'
+import { RETRY_MS, sleep, withRetry } from './retry.js'
 
 // The ONE poll of the app-level status: /api/status + /api/capital every 30s (started by App),
 // the rate budget, and the saved settings. Views that used to poll /api/session, /api/oauth/status
@@ -16,6 +16,8 @@ const failedCounted = new Set()           // recount currencies from a rejected 
 const failedEdits = new Map()             // unsaved edits from a rejected PUT superseded by another queued PUT
 // Unsaved Stash edits shared across mounts so an unmount mid-fetch or a failed unmount PUT is never lost.
 export const capitalDirty = new Map()
+let capitalRetryGen = 0                   // bumped by every new holdings write: it carries the failed edits, so the retry stops
+let lastCapitalError = null               // the newest failed holdings write, shown once the retries give up
 
 export const useStatus = create((set, get) => ({
   status: null,      // /api/status (league, digest/orderbook feed states, session, oauth, …)
@@ -42,7 +44,8 @@ export const useStatus = create((set, get) => ({
   },
   // The one holdings write: PUT /api/capital, serialised so a flush on unmount cannot overtake a newer write
   // or race a sales fetch on a fresh mount. `counted`: currencies whose total the user typed.
-  saveCapital: (entries, counted = [], edits = null) => {
+  saveCapital: (entries, counted = [], edits = null, { fromRetry = false } = {}) => {
+    if (!fromRetry) capitalRetryGen++
     const prev = capitalQueue
     const run = prev.catch(() => ignoredError('resume capital queue')).then(async () => {
       const sendCounted = failedCounted.size ? [...new Set([...failedCounted, ...counted])] : counted
@@ -54,12 +57,14 @@ export const useStatus = create((set, get) => ({
         set(st => ({ capital: c, capitalWrites: st.capitalWrites + 1, capitalStale: false }))
         return c
       } catch (e) {
+        lastCapitalError = e
         for (const cur of sendCounted) failedCounted.add(cur)
         if (pendingEdits.size) {
           if (capitalQueue === run) {
             const restored = restoreFailedEdits(pendingEdits, capitalDirty)
             capitalDirty.clear()
             for (const [k, v] of restored) capitalDirty.set(k, v)
+            if (!fromRetry && !isQuitting()) scheduleCapitalRetry()
           } else {
             for (const [k, v] of pendingEdits) failedEdits.set(k, v)
           }
@@ -96,7 +101,7 @@ const applySettings = raw => {
 // Optimistic patches stay over the cached settings and travel with the next write even after retries run out;
 // non-optimistic saves revert to the confirmed base once retries are exhausted.
 const settingsQueue = createSaveQueue(patch => api.putSettings(patch), {
-  delays: SETTINGS_RETRY_MS,
+  delays: RETRY_MS,
   publish: () => useStatus.setState(state => {
     if (state.settings !== publishedSettings) settingsBase = state.settings
     const settings = settingsQueue.overlay(settingsBase)
@@ -116,7 +121,9 @@ export function registerCapitalEditor(editor) {
   return () => { if (capitalEditor === editor) capitalEditor = null }
 }
 
-registerFlush(async () => {
+// Sends every unsaved holdings edit (the editor's pending one, then any a failed write left behind).
+// Quit runs it; so does the retry of a failed write. Resolves false when it cannot send yet.
+async function flushCapital({ fromRetry = false } = {}) {
   const editor = capitalEditor
   if (editor) {
     const ok = await editor.flush()
@@ -130,9 +137,25 @@ registerFlush(async () => {
   const edits = new Map(capitalDirty)
   const { qty } = reconcileCapital(state.capital, edits)
   capitalDirty.clear()
-  await state.saveCapital(capitalEntries(qty), countedFromEdits(edits), edits)
+  await state.saveCapital(capitalEntries(qty), countedFromEdits(edits), edits, { fromRetry })
   return true
-})
+}
+registerFlush(() => flushCapital())
+
+// A failed holdings write is sent again on the app's bounded schedule, saying nothing while a retry may
+// still land it; once every retry failed, one toast. A newer write carries the edits, so it ends this.
+function scheduleCapitalRetry() {
+  const token = ++capitalRetryGen
+  const stop = () => token !== capitalRetryGen || isQuitting()
+  ;(async () => {
+    await sleep(RETRY_MS[0])
+    if (stop()) return
+    await withRetry(async () => {
+      if (stop()) return
+      if (!(await flushCapital({ fromRetry: true }))) throw lastCapitalError ?? new Error('Could not save holdings')
+    }, { delays: RETRY_MS.slice(1), stop })
+  })().catch(() => { if (!stop()) toast(cleanErr(lastCapitalError), false) })
+}
 
 // themeStore registers this so a loaded settings blob paints its theme (no import cycle).
 let syncTheme = null

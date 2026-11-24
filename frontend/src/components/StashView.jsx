@@ -70,15 +70,17 @@ export default function StashView({ league }) {
   // Unsaved edits live in the store-shared `capitalDirty` Map so edits held during a fetch or restored
   // after a failed unmount PUT survive across Stash mounts; `statusStore.saveCapital` carries failed recount
   // cutoffs and edits forward into any newer queued PUT and restores into `capitalDirty` only if the queue tail rejects.
-  const commitCapital = async (rows, { notifyCredit = false } = {}) => {
+  // `quiet`: an edit's save says nothing when it fails; statusStore retries it and speaks only if that fails too.
+  const commitCapital = async (rows, { notifyCredit = false, quiet = false } = {}) => {
     const entries = capitalEntries(rows)
     const edits = new Map(capitalDirty)
     const counted = countedFromEdits(edits)
     capitalDirty.clear()
-    await surface(useStatus.getState().saveCapital(entries, counted, edits))
+    const saving = useStatus.getState().saveCapital(entries, counted, edits)
+    await (quiet ? saving : surface(saving))
     if (notifyCredit) useStatus.setState(st => ({ capitalCreditRev: st.capitalCreditRev + 1 }))
   }
-  const { state: saveState, save, flush, hold, release, discard, arm } = useAutosave((rows) => commitCapital(rows), 700, { register: false })
+  const { state: saveState, save, flush, hold, release, discard, arm } = useAutosave((rows) => commitCapital(rows, { quiet: true }), 700, { register: false, quiet: true })
   useEffect(() => registerCapitalEditor({ flush, discard }), [flush, discard])
   // Never seed from a copy older than a save in flight or a confirmed sales credit whose reload hasn't landed yet.
   const capitalSaving = useStatus(s => s.capitalSaving)

@@ -142,7 +142,7 @@ it('quit recovers a failed detached capital edit from the latest holdings withou
   fireEvent.change(screen.getByLabelText('Divine Orb held'), { target: { value: '25' } })
   stash.unmount()
   await settle()
-  expect(events.mock.calls).toEqual([[{ text: 'locked', ok: false }]])
+  expect(events).not.toHaveBeenCalled()   // a retry may still land it; quit does, below
   const capital = useStatus.getState().capital
   useStatus.setState({ capital: { ...capital, rows: [...capital.rows, { currency: 'chaos', qty: 52 }] }, salesFetching: true })
   const quit = flushForQuit()
@@ -152,6 +152,8 @@ it('quit recovers a failed detached capital edit from the latest holdings withou
   await advance(20)
   expect(await quit).toBe(true)
   expect(put.mock.calls.at(-1)).toEqual([{ divine: 25, exalted: 500, chaos: 52 }, ['divine']])
-  expect(events).toHaveBeenCalledTimes(1)
+  await advance(25000)
+  expect(put).toHaveBeenCalledTimes(2)   // quit saved it: the retry finds nothing left to send
+  expect(events).not.toHaveBeenCalled()
   expect(stash.container.innerHTML).toBe('')
 })
