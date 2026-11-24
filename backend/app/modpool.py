@@ -1268,7 +1268,7 @@ async def _page(slug_: str, max_age: int) -> str:
         "GET", POE2DB + slug_, policy="poe2db", headers=PAGE_HEADERS
     )
     r.raise_for_status()
-    await finish_write(gamedata._write_cache, path, r.content, create_directory=True)
+    await finish_write(gamedata._write_cache, path, r.content)
     return r.content.decode("utf-8", "replace")
 
 

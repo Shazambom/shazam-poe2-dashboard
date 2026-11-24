@@ -133,10 +133,9 @@ def _read_cache[T](
     return None
 
 
-def _write_cache(path: Path, content: bytes, *, create_directory: bool = False) -> None:
+def _write_cache(path: Path, content: bytes) -> None:
     with _file_cache_lock:
-        if create_directory:
-            path.parent.mkdir(parents=True, exist_ok=True)
+        path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(content)
 
 
