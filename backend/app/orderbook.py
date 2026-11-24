@@ -41,6 +41,7 @@ from .config import (
 )
 from .datapolicy import ORDERBOOK_HISTORY_RETENTION_H
 from .settings import get_settings
+from .threadwork import finish_write
 
 log = logging.getLogger(__name__)
 
@@ -52,6 +53,7 @@ log = logging.getLogger(__name__)
 # the hourly digest is the SOLE source for prices and loops. With this False nothing is queued or
 # fetched and stored books never reach the graph. `exchange_post` stays in use as the session probe.
 BULK_EXCHANGE_ENABLED = False
+_queue_db_lock = asyncio.Lock()
 
 HARD_FLOOR_S = 5  # even a forced refetch of the same pair waits this long
 BATCH_MAX_HAVE = 10  # haves per request WE want (GGG's cap as of 2026-09-17; it was >= 12 before); more dilutes the ~100-listing response cap.
@@ -259,34 +261,36 @@ async def _fetch_batch(
         for h, b in books.items()
         if h in requested and capped and len(b) < STARVED_DEPTH
     ]
-    for have, offers in books.items():
-        if capped and not offers and (have in starved or have not in requested):
-            continue  # empty under the cap is an artefact, not a market fact
-        _store(league, have, want, offers)
-    session.mark_ok()
+    selected = {
+        have: offers
+        for have, offers in books.items()
+        if not (capped and not offers and (have in starved or have not in requested))
+    }
+    async with _queue_db_lock:
+        await finish_write(_persist_batch, league, want, selected)
     return books, starved
 
 
+def _persist_batch(league: str, want: str, books: dict[str, list[dict]]) -> None:
+    for have, offers in books.items():
+        _store(league, have, want, offers)
+    session.mark_ok()
+
+
 # ------------------------------------------------------------------ queue
-def request_pairs(
+def _pair_candidates(
     pairs: Iterable[tuple[str, ...]],
-    priority: int = 1,
-    force: bool = False,
-    max_age_s: int | None = None,
-) -> list[asyncio.Future]:
-    """Queue pairs that need fetching; return futures for those queued (fresh ones are skipped)."""
-    global _seq
-    if not BULK_EXCHANGE_ENABLED:
-        return []
-    s = get_settings()
+    s: dict,
+    force: bool,
+    max_age_s: int | None,
+) -> list[tuple[str, str, float]]:
     league = s["league"]
     max_age = (
         HARD_FLOOR_S
         if force
         else (max_age_s if max_age_s is not None else s["min_refetch_s"])
     )
-    loop = asyncio.get_event_loop()
-    futs = []
+    candidates = []
     now = time.time()
     for have, want in dict.fromkeys(pairs):
         if have == want:
@@ -294,6 +298,17 @@ def request_pairs(
         ts = cached_at(league, have, want)
         if ts and now - ts < max_age:
             continue
+        candidates.append((have, want, pairscore.score(have, want)))
+    return candidates
+
+
+def _enqueue_pairs(
+    candidates: list[tuple[str, str, float]], priority: int
+) -> list[asyncio.Future]:
+    global _seq
+    loop = asyncio.get_event_loop()
+    futs = []
+    for have, want, score in candidates:
         fut = loop.create_future()
         key = (have, want)
         if key in _pending:
@@ -303,12 +318,44 @@ def request_pairs(
             _queued_priority[key] = priority
             _seq += 1
             # within a tier, pairs from the best loops (margin, margin/gold) go first
-            _queue.put_nowait(
-                (priority, -pairscore.score(have, want), _seq, have, want)
-            )
+            _queue.put_nowait((priority, -score, _seq, have, want))
         futs.append(fut)
     state["queue"] = _queue.qsize()
     return futs
+
+
+def request_pairs(
+    pairs: Iterable[tuple[str, ...]],
+    priority: int = 1,
+    force: bool = False,
+    max_age_s: int | None = None,
+) -> list[asyncio.Future]:
+    """Queue pairs that need fetching; return futures for those queued (fresh ones are skipped)."""
+    if not BULK_EXCHANGE_ENABLED:
+        return []
+    return _enqueue_pairs(
+        _pair_candidates(pairs, get_settings(), force, max_age_s), priority
+    )
+
+
+def _refresh_candidates(pairs, force: bool, max_age_s: int | None):
+    return _pair_candidates(pairs, get_settings(), force, max_age_s)
+
+
+async def request_pairs_async(
+    pairs: Iterable[tuple[str, ...]],
+    priority: int = 1,
+    force: bool = False,
+    max_age_s: int | None = None,
+) -> list[asyncio.Future]:
+    """Keep DB/cache preparation in a worker and all Future/queue mutations on the loop."""
+    if not BULK_EXCHANGE_ENABLED:
+        return []
+    async with _queue_db_lock:
+        candidates = await run_in_threadpool(
+            _refresh_candidates, pairs, force, max_age_s
+        )
+        return _enqueue_pairs(candidates, priority)
 
 
 async def wait_for(futs: list[asyncio.Future], timeout: float) -> dict:
@@ -387,6 +434,19 @@ def _settle(key: tuple[str, str], result) -> None:
     _solo.discard(key)
 
 
+def _worker_inputs(
+    requested: list[str], want: str, solo: bool
+) -> tuple[str | None, str, list[str]]:
+    cookie = session.get_cookie()
+    s = get_settings()
+    haves = _pad(requested, want, s["league"], s) if cookie and not solo else requested
+    return cookie, s["league"], haves
+
+
+def _retry_scores(haves: list[str], want: str) -> list[tuple[str, float]]:
+    return [(have, pairscore.score(have, want)) for have in haves]
+
+
 async def worker() -> None:
     global _seq
     while True:
@@ -395,26 +455,22 @@ async def worker() -> None:
         if (have, want) not in _pending:  # already served as part of an earlier batch
             _queue.task_done()
             continue
-        cookie = session.get_cookie()
-        state["enabled"] = bool(cookie)
-        s = get_settings()
         requested = _take_batch(have, want)
+        cookie, league, haves = await run_in_threadpool(
+            _worker_inputs, requested, want, (have, want) in _solo
+        )
+        state["enabled"] = bool(cookie)
         if not cookie:
             for h in requested:
                 _settle((h, want), PermissionError("no trade session connected"))
             _queue.task_done()
             continue
-        haves = (
-            _pad(requested, want, s["league"], s)
-            if (have, want) not in _solo
-            else requested
-        )
         state["in_flight"] = (
             f"{'+'.join(requested)}{f'(+{len(haves) - len(requested)})' if len(haves) > len(requested) else ''}->{want}"
         )
         try:
             books, starved = await _fetch_batch(
-                s["league"], haves, want, cookie, set(requested)
+                league, haves, want, cookie, set(requested)
             )
         except Exception as exc:
             state["last_error"] = f"{'+'.join(haves)}->{want}: {exc}"
@@ -428,23 +484,23 @@ async def worker() -> None:
                     len(haves),
                     state["have_cap"],
                 )
-                for h in requested:
+                for h, score in await run_in_threadpool(_retry_scores, requested, want):
                     _seq += 1
-                    _queue.put_nowait(
-                        (priority, -pairscore.score(h, want), _seq, h, want)
-                    )
+                    _queue.put_nowait((priority, -score, _seq, h, want))
             else:
                 for h in requested:
                     _settle((h, want), exc)
         else:
+            solo = [h for h in requested if h in starved and (h, want) not in _solo]
+            scores = (
+                dict(await run_in_threadpool(_retry_scores, solo, want)) if solo else {}
+            )
             for h in requested:
-                if h in starved and (h, want) not in _solo:
+                if h in scores:
                     # keep its futures pending and re-queue it alone at the same priority
                     _seq += 1
                     _solo.add((h, want))
-                    _queue.put_nowait(
-                        (priority, -pairscore.score(h, want), _seq, h, want)
-                    )
+                    _queue.put_nowait((priority, -scores[h], _seq, h, want))
                     log.info(
                         "orderbook: %s->%s starved by result cap, re-querying alone",
                         h,
@@ -469,20 +525,32 @@ def prune_history() -> int:
         ).rowcount
 
 
+def _sweep_candidates() -> list[tuple[str, str, float]] | None:
+    s = get_settings()
+    if (
+        not s.get("background_sweep")
+        or not session.get_cookie()
+        or not BULK_EXCHANGE_ENABLED
+    ):
+        return None
+    pairs = list(permutations(s["watchlist"], 2)) + [
+        tuple(p) for p in s.get("extra_pairs", [])
+    ]
+    return _pair_candidates(pairs, get_settings(), False, s["live_max_age_s"])
+
+
 async def sweeper() -> None:
     """Optional low-priority background sweep of the whole watchlist; also the home of the
     orderbook_history retention prune (one row lands per live fetch, forever otherwise)."""
     while True:
         try:
-            await asyncio.to_thread(prune_history)
+            await finish_write(prune_history)
         except Exception as exc:
             log.warning("orderbook: prune failed: %s", exc)
-        s = get_settings()
-        if s.get("background_sweep") and session.get_cookie():
-            pairs = list(permutations(s["watchlist"], 2)) + [
-                tuple(p) for p in s.get("extra_pairs", [])
-            ]
-            request_pairs(pairs, priority=2, max_age_s=s["live_max_age_s"])
+        async with _queue_db_lock:
+            candidates = await run_in_threadpool(_sweep_candidates)
+            if candidates is not None:
+                _enqueue_pairs(candidates, 2)
         await asyncio.sleep(ORDERBOOK_SWEEP_SECONDS)
 
 
@@ -512,8 +580,14 @@ async def leagues(force: bool = False) -> list[dict]:
     return out
 
 
-def request_refresh() -> None:
+def _watchlist_candidates() -> list[tuple[str, str, float]]:
     s = get_settings()
-    request_pairs(
-        list(permutations(s["watchlist"], 2)), priority=2, max_age_s=s["min_refetch_s"]
+    return _pair_candidates(
+        permutations(s["watchlist"], 2), get_settings(), False, s["min_refetch_s"]
     )
+
+
+async def request_refresh() -> None:
+    if BULK_EXCHANGE_ENABLED:
+        async with _queue_db_lock:
+            _enqueue_pairs(await run_in_threadpool(_watchlist_candidates), 2)

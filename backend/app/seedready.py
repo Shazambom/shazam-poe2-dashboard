@@ -213,6 +213,50 @@ def _fingerprints(name: str) -> dict:
     return out
 
 
+def _assess_listing(
+    name: str, listing: dict, since: str | None
+) -> tuple[Assessment, dict, set]:
+    fps = _fingerprints(name)
+    stored = _stored(name, since)
+    assessment = assess(listing, stored, fps)
+    revised = changed_after_final(listing, stored, lh._marks(name)[1])
+    return assessment, fps, revised
+
+
+def _record_cut(
+    name: str,
+    listing: dict,
+    since: str | None,
+    assessment: Assessment,
+    *,
+    revised: set,
+    previous: dict | None,
+    fetched: int,
+    failed: int,
+) -> tuple[Assessment, str | None]:
+    if fetched:
+        assessment = assess(listing, _stored(name, since), _fingerprints(name))
+    cut = assessment.cut
+    if (
+        failed
+        and previous
+        and previous.get("day")
+        and (cut is None or cut < previous["day"])
+    ):
+        cut = previous["day"]  # a failed request never costs every item its days
+    db.kv_set(
+        f"seed_cut:{name}",
+        {
+            "day": cut,
+            "through": assessment.through,
+            "stale": sorted(assessment.stale),
+            "revised": sorted(revised),
+            "at": time.time(),
+        },
+    )
+    return assessment, cut
+
+
 async def poll_league(name: str) -> dict:
     """Read the league's listing, fetch only the items holding its seed back, record the cut."""
     prev = await run_in_threadpool(db.kv_get, f"seed_cut:{name}")
@@ -228,10 +272,7 @@ async def poll_league(name: str) -> dict:
         )
         return {"error": str(exc), "fetched": 0}
     since = min((d for days in listing.values() for d in days), default=None)
-    fps = _fingerprints(name)
-    stored = _stored(name, since)
-    a = assess(listing, stored, fps)
-    revised = changed_after_final(listing, stored, lh._marks(name)[1])
+    a, fps, revised = await run_in_threadpool(_assess_listing, name, listing, since)
     if revised:
         log.warning(
             "seed poll %s: poe2scout changed a finished day for %d item(s): %s",
@@ -274,21 +315,16 @@ async def poll_league(name: str) -> dict:
                     "vouch": gone or n > 0,
                 },
             )
-    if fetched:
-        a = assess(listing, _stored(name, since), _fingerprints(name))
-    cut = a.cut
-    if failed and prev and prev.get("day") and (cut is None or cut < prev["day"]):
-        cut = prev["day"]  # a failed request never costs every item its days
-    await lh._finish_crawl_write(
-        db.kv_set,
-        f"seed_cut:{name}",
-        {
-            "day": cut,
-            "through": a.through,
-            "stale": sorted(a.stale),
-            "revised": sorted(revised),
-            "at": time.time(),
-        },
+    a, cut = await lh._finish_crawl_write(
+        _record_cut,
+        name,
+        listing,
+        since,
+        a,
+        revised=revised,
+        previous=prev,
+        fetched=fetched,
+        failed=failed,
     )
     log.info(
         "seed poll %s: through=%s cut=%s fetched=%d failed=%d still_stale=%d revised=%d",

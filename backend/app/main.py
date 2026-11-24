@@ -45,6 +45,7 @@ from . import (
 from .config import INSTALL_LOG_PATH
 from .currencies import registry
 from .settings import ARBITRAGE_PRESETS, get_settings, save_settings
+from .threadwork import finish_write
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
@@ -86,6 +87,15 @@ def _report_mod_snapshot() -> None:
         log.warning("mods telemetry failed: %s", exc)
 
 
+def _start_services() -> None:
+    registry.load_static_cache()
+    sidecar_supervisor.start()
+    if not session.get_cookie():
+        log.info(
+            "no trade session yet: connect one in Settings to enable the live order book"
+        )
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Die with our parent (Electron). Desktop sets ARBITER_PARENT_PID; the web/server env does
@@ -98,18 +108,13 @@ async def lifespan(app: FastAPI):
     _parent = os.environ.get("ARBITER_PARENT_PID")
     if _parent and _parent.isdigit():
         watchdog.guard(parent_pid=int(_parent), stdin_eof=False)
-    registry.load_static_cache()
-    sidecar_supervisor.start()  # spawn + supervise the heavy-analytics sidecar (no-op if absent)
-    if not session.get_cookie():
-        log.info(
-            "no trade session yet: connect one in Settings to enable the live order book"
-        )
-    if devtelemetry.enabled():
-        try:
+    try:
+        await finish_write(_start_services)
+        if devtelemetry.enabled():
             await run_in_threadpool(_report_mod_snapshot)
-        except asyncio.CancelledError:
-            sidecar_supervisor.stop()
-            raise
+    except asyncio.CancelledError:
+        await finish_write(sidecar_supervisor.stop)
+        raise
     tasks = [
         asyncio.create_task(registry.keep_static_fresh()),
         asyncio.create_task(digest.run_forever()),
@@ -130,7 +135,7 @@ async def lifespan(app: FastAPI):
     for t in tasks:
         t.cancel()
     await asyncio.gather(*tasks, return_exceptions=True)
-    sidecar_supervisor.stop()
+    await finish_write(sidecar_supervisor.stop)
     await gateway.aclose()
 
 
@@ -501,7 +506,7 @@ async def session_connect(body: SessionBody):
         result = await session.connect(body.cookie, body.label)
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
-    orderbook.request_refresh()
+    await orderbook.request_refresh()
     return result
 
 
@@ -744,6 +749,12 @@ def _ask_backfill(league: str | None) -> bool:
     return True
 
 
+def _hold_with_crawl_league(horizon, category, numeraire, caution):
+    result = holdscore.leaderboard(horizon, category, numeraire, caution)
+    needs_crawl = not result["assets"] and len(result.get("categories") or []) <= 1
+    return result, needs_crawl, get_settings()["league"] if needs_crawl else None
+
+
 @app.get("/api/hold")
 async def hold(
     window_h: int | None = None,
@@ -759,11 +770,13 @@ async def hold(
     hz = holdscore.horizon_for(window_h, horizon)
     # `k` = the Hold page's CAUTION slider (0 = return alone, higher = favour the steadier
     # asset); omitted it falls back to the `hold_caution` setting.
-    res = await run_in_threadpool(holdscore.leaderboard, hz, category, numeraire, k)
+    res, needs_crawl, league = await run_in_threadpool(
+        _hold_with_crawl_league, hz, category, numeraire, k
+    )
     # No rows AND no category scored: nothing is stored, crawl. A category with nothing eligible
     # today is an empty page, not a missing backfill.
-    if not res["assets"] and len(res.get("categories") or []) <= 1:
-        building = _ask_backfill(get_settings()["league"])
+    if needs_crawl:
+        building = _ask_backfill(league)
         if building:
             _spawn(leaguehistory.backfill(full=True))
         return {**res, "building": building}
@@ -871,14 +884,22 @@ def board(window_h: int = 24, nums: str | None = None):
     return arbitrage.board(window_h, _parse_nums(nums))
 
 
+def _require_trade_session() -> None:
+    if not session.get_cookie():
+        raise HTTPException(400, "no trade session connected")
+
+
+def _board_refresh_plan():
+    _require_trade_session()
+    s = get_settings()
+    return arbitrage.board_pairs(), s["live_min_age_s"]
+
+
 @app.post("/api/board/refresh")
 async def board_refresh(wait_s: float = 30, window_h: int = 24):
     """Live-refresh both directions of every watched pair, then return the board."""
-    if not session.get_cookie():
-        raise HTTPException(400, "no trade session connected")
-    s = get_settings()
-    pairs = await run_in_threadpool(arbitrage.board_pairs)
-    futs = orderbook.request_pairs(pairs, priority=1, max_age_s=s["live_min_age_s"])
+    pairs, max_age = await run_in_threadpool(_board_refresh_plan)
+    futs = await orderbook.request_pairs_async(pairs, priority=1, max_age_s=max_age)
     waited = await orderbook.wait_for(futs, wait_s)
     board_data = await run_in_threadpool(arbitrage.board, window_h)
     return {**board_data, "refresh": {**waited, "queue": orderbook.state["queue"]}}
@@ -1201,6 +1222,15 @@ class RefreshTopBody(BaseModel):
         return self.filters.model_copy(update={"start": self.start})
 
 
+def _top_route_refresh_plan(body: RefreshTopBody):
+    _require_trade_session()
+    s = get_settings()
+    q = body.query()
+    f, starts = q.to_filters(), q.starts()
+    n = body.n if body.n is not None else s["live_top_n"]
+    return f, starts, n, s["live_min_age_s"], arbitrage.find_routes(f, starts)
+
+
 @app.post("/api/routes/refresh-top")
 async def routes_refresh_top(body: RefreshTopBody):
     """Live-refresh only the exchange pairs behind the top-N loops currently displayed.
@@ -1208,15 +1238,11 @@ async def routes_refresh_top(body: RefreshTopBody):
     Pairs newer than live_min_age_s are skipped; the rest go into the queue at
     priority 1 and we wait (bounded) before recomputing.
     """
-    if not session.get_cookie():
-        raise HTTPException(400, "no trade session connected")
-    s = get_settings()
-    q = body.query()
-    f, starts = q.to_filters(), q.starts()
-    n = body.n if body.n is not None else s["live_top_n"]
-    before = await run_in_threadpool(arbitrage.find_routes, f, starts)
+    f, starts, n, max_age, before = await run_in_threadpool(
+        _top_route_refresh_plan, body
+    )
     pairs = [tuple(p) for r in before["routes"][: max(0, n)] for p in r["pairs"]]
-    futs = orderbook.request_pairs(pairs, priority=1, max_age_s=s["live_min_age_s"])
+    futs = await orderbook.request_pairs_async(pairs, priority=1, max_age_s=max_age)
     waited = await orderbook.wait_for(futs, body.wait_s)
     after = (
         await run_in_threadpool(arbitrage.find_routes, f, starts, False)
@@ -1248,30 +1274,37 @@ class RefreshRouteBody(BaseModel):
         return self.filters.model_copy(update={"start": self.start})
 
 
-@app.post("/api/routes/refresh")
-async def routes_refresh_one(body: RefreshRouteBody):
-    """Force-refresh every exchange pair in one loop (top priority), then return it."""
-    if not session.get_cookie():
-        raise HTTPException(400, "no trade session connected")
-    pairs = (
-        [tuple(p) for p in body.pairs] if body.pairs else arbitrage.route_pairs(body.id)
-    )
-    futs = orderbook.request_pairs(pairs, priority=0, force=True)
-    waited = await orderbook.wait_for(futs, body.wait_s)
+def _refreshed_route(body: RefreshRouteBody, *, check_session: bool):
+    if check_session:
+        _require_trade_session()
     q = body.query()
     f, starts = q.to_filters(), q.starts()
-    res = await run_in_threadpool(arbitrage.find_routes, f, starts, False)
+    res = arbitrage.find_routes(f, starts, False)
     route = next((r for r in res["routes"] if r["id"] == body.id), None)
     if (
         route is None
     ):  # it may no longer pass the filters; recompute unfiltered so the user sees why
-        loose = await run_in_threadpool(
-            arbitrage.find_routes,
+        loose = arbitrage.find_routes(
             {"min_margin_pct": -1e9, "min_margin_ref": -1e9, "limit": 100000},
             starts,
             False,
         )
         route = next((r for r in loose["routes"] if r["id"] == body.id), None)
+    return res, route
+
+
+@app.post("/api/routes/refresh")
+async def routes_refresh_one(body: RefreshRouteBody):
+    """Force-refresh every exchange pair in one loop (top priority), then return it."""
+    live = orderbook.BULK_EXCHANGE_ENABLED
+    if live:
+        await run_in_threadpool(_require_trade_session)
+    pairs = (
+        [tuple(p) for p in body.pairs] if body.pairs else arbitrage.route_pairs(body.id)
+    )
+    futs = await orderbook.request_pairs_async(pairs, priority=0, force=True)
+    waited = await orderbook.wait_for(futs, body.wait_s)
+    res, route = await run_in_threadpool(_refreshed_route, body, check_session=not live)
     return {
         "route": route,
         "routes": res["routes"],

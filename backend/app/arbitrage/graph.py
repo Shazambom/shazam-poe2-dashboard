@@ -339,14 +339,6 @@ class Graph:
         e = self.market_edge(a, b)
         return e if (e and e.rate > 0) else None
 
-    def _pricing_rate(self, a: str, b: str) -> float:
-        """b per a from the a<->b market itself, either direction, recipes ignored."""
-        e = self._pricing_edge(a, b)
-        if e:
-            return e.rate
-        e = self._pricing_edge(b, a)
-        return (1.0 / e.rate) if e else 0.0
-
     def _market_inactive(self, u: str, v: str) -> bool:
         """Whether the u<->v market is one nobody quotes (digest.directed_rates flagged its
         traded hours as disagreeing). Such a market is priced at its ask/bid, which is honest
@@ -362,7 +354,7 @@ class Graph:
         uv, vu = self._pricing_edge(u, v), self._pricing_edge(v, u)
         vol_uv = (uv.vol_in_per_h or 0.0) if uv else 0.0  # u sold per hour
         vol_vu = (vu.vol_in_per_h or 0.0) if vu else 0.0  # v sold per hour
-        v_per_u = self._pricing_rate(u, v)
+        v_per_u = self.direct_rate(u, v) or 0.0
         u_per_v = (1.0 / v_per_u) if v_per_u else 0.0
         return vol_uv + vol_vu * u_per_v, vol_vu + vol_uv * v_per_u
 
@@ -394,6 +386,12 @@ class Graph:
                 outside, px
             )
 
+        def has_live_market(currency: str) -> bool:
+            return any(
+                not self._market_inactive(currency, neighbour)
+                for neighbour in nbrs.get(currency, ())
+            )
+
         heap = [(-width[c], c) for c in vals]
         heapq.heapify(heap)
         done: set[str] = set()
@@ -405,15 +403,13 @@ class Graph:
             for v in nbrs.get(u, ()):
                 if v in done or (through_dead and v in vals):
                     continue
-                px = self._pricing_rate(v, u)  # u per v
+                px = self.direct_rate(v, u) or 0.0  # u per v
                 if (
                     not px
                     or (
                         not through_dead
                         and self._market_inactive(u, v)
-                        and any(
-                            not self._market_inactive(v, n) for n in nbrs.get(v, ())
-                        )
+                        and has_live_market(v)
                     )
                     or not believable(v, px * vals[u])
                 ):
@@ -460,7 +456,9 @@ class Graph:
                 continue
             if self.busiest.get(b) == c and c in vals:
                 continue  # each other's busiest market: the walk stands
-            px = self._pricing_rate(c, b)  # b per c, from the busiest market itself
+            px = (
+                self.direct_rate(c, b) or 0.0
+            )  # b per c, from the busiest market itself
             if px > 0:
                 vals[c] = vals[b] * px
                 priced_by[c] = b

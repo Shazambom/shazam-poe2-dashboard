@@ -24,7 +24,10 @@ import secrets as pysecrets
 import time
 from urllib.parse import urlencode
 
+from starlette.concurrency import run_in_threadpool
+
 from . import db, gateway, secrets
+from .threadwork import finish_write
 
 CLIENT_ID = os.environ.get("OAUTH_CLIENT_ID", "").strip()
 CLIENT_SECRET = os.environ.get("OAUTH_CLIENT_SECRET", "").strip()
@@ -88,7 +91,7 @@ def start(redirect_uri: str | None = None) -> dict:
     return {"url": url, "state": state, "redirect_uri": redirect}
 
 
-async def complete(code: str, state: str) -> dict:
+def _take_pending(state: str) -> dict:
     taken: dict = {}
 
     def apply(pending):
@@ -100,6 +103,11 @@ async def complete(code: str, state: str) -> dict:
     p = taken.get("p")
     if not p:
         raise ValueError("unknown or expired state; start the login again")
+    return p
+
+
+async def complete(code: str, state: str) -> dict:
+    p = await finish_write(_take_pending, state)
     form = {
         "client_id": CLIENT_ID,
         "grant_type": "authorization_code",
@@ -111,8 +119,13 @@ async def complete(code: str, state: str) -> dict:
     if CLIENT_SECRET:
         form["client_secret"] = CLIENT_SECRET
     tok = await _token_request(form)
-    _save(tok)
-    return status()
+    return await finish_write(_save_and_status, tok)
+
+
+def _save_and_status(tok: dict) -> dict:
+    with secrets.write_lock:
+        _save(tok)
+        return status()
 
 
 async def _token_request(form: dict) -> dict:
@@ -137,25 +150,27 @@ async def _token_request(form: dict) -> dict:
 
 
 def _save(tok: dict) -> None:
-    existing = secrets.load("oauth") or {}
-    secrets.store(
-        "oauth",
-        {
-            "access_token": tok["access_token"],
-            "refresh_token": tok.get("refresh_token") or existing.get("refresh_token"),
-            "expires_at": time.time() + float(tok.get("expires_in") or 0),
-            "refresh_expires_at": existing.get("refresh_expires_at")
-            or (time.time() + 7 * 86400 if tok.get("refresh_token") else None),
-            "username": tok.get("username"),
-            "sub": tok.get("sub"),
-            "scope": tok.get("scope"),
-            "obtained_at": time.time(),
-        },
-    )
+    with secrets.write_lock:
+        existing = secrets.load("oauth") or {}
+        secrets.store(
+            "oauth",
+            {
+                "access_token": tok["access_token"],
+                "refresh_token": tok.get("refresh_token")
+                or existing.get("refresh_token"),
+                "expires_at": time.time() + float(tok.get("expires_in") or 0),
+                "refresh_expires_at": existing.get("refresh_expires_at")
+                or (time.time() + 7 * 86400 if tok.get("refresh_token") else None),
+                "username": tok.get("username"),
+                "sub": tok.get("sub"),
+                "scope": tok.get("scope"),
+                "obtained_at": time.time(),
+            },
+        )
 
 
 async def token() -> str | None:
-    rec = secrets.load("oauth")
+    rec = await run_in_threadpool(secrets.load, "oauth")
     if not rec:
         return None
     if time.time() < rec["expires_at"] - 300:
@@ -173,7 +188,7 @@ async def token() -> str | None:
         tok = await _token_request(form)
     except ValueError:
         return None
-    _save(tok)
+    await finish_write(_save, tok)
     return tok["access_token"]
 
 
@@ -195,8 +210,9 @@ def status() -> dict:
 
 
 def logout() -> dict:
-    secrets.clear("oauth")
-    return status()
+    with secrets.write_lock:
+        secrets.clear("oauth")
+        return status()
 
 
 # ------------------------------------------------------------------ API calls

@@ -7,6 +7,7 @@ import sys
 import threading
 from contextlib import contextmanager
 from pathlib import Path
+from types import SimpleNamespace
 
 import httpx
 import pytest
@@ -25,8 +26,10 @@ from app import (
     main,
     migrations_user,
     modpool,
+    oauth,
     orderbook,
     seedready,
+    session,
     sidecar_supervisor,
 )
 
@@ -526,3 +529,476 @@ def test_cancelled_seed_poll_keeps_the_crawl_lock_until_its_write_finishes(
     asyncio.run(stop_poll())
     assert not lock.locked()
     assert db.kv_get("seed_poll")["leagues"] == [LEAGUE]
+
+
+@pytest.fixture
+def worker_calls(monkeypatch):
+    loop_thread = threading.get_ident()
+    calls = []
+
+    def record(owner, name, replacement=None):
+        target = getattr(owner, name) if replacement is None else replacement
+
+        def tracked(*args, **kwargs):
+            calls.append((name, threading.get_ident()))
+            return target(*args, **kwargs)
+
+        monkeypatch.setattr(owner, name, tracked)
+
+    def check(*names):
+        assert {name for name, _ in calls} == set(names)
+        assert [name for name, ident in calls if ident == loop_thread] == []
+
+    return record, check
+
+
+def test_digest_pages_and_cursor_writes_run_off_loop(monkeypatch, worker_calls):
+    record, check = worker_calls
+    record(digest, "_store", lambda _cursor, _markets: 1)
+    record(db, "kv_set", lambda _key, _value: None)
+    monkeypatch.setattr(db, "kv_get", lambda _key: 3600)
+
+    async def fetch(_cursor):
+        return {"markets": [], "next_change_id": 7200 if _cursor == 3600 else None}
+
+    monkeypatch.setattr(digest, "_fetch", fetch)
+    monkeypatch.setattr(digest, "state", dict(digest.state))
+    asyncio.run(digest.sync_once())
+    check("_store", "kv_set")
+
+
+@pytest.mark.parametrize("fail", [False, True])
+def test_digest_cursor_is_durable_before_each_next_fetch(
+    monkeypatch, rollback_write, fail
+):
+    db.kv_set("digest_cursor", 3600)
+    monkeypatch.setattr(digest, "state", dict(digest.state))
+    writes, fetched = [], []
+    commit = db.kv_set
+
+    def write(key, value):
+        writes.append((key, value))
+        commit(key, value)
+
+    async def fetch(cursor):
+        assert await asyncio.to_thread(db.kv_get, "digest_cursor") == cursor
+        fetched.append(cursor)
+        if fail and cursor == 7200:
+            raise RuntimeError("page two failed")
+        return {
+            "next_change_id": cursor + 3600 if cursor < 10800 else None,
+            "markets": [{"league": LEAGUE, "market_pair": ["chaos", "divine"]}],
+        }
+
+    monkeypatch.setattr(db, "kv_set", write)
+    monkeypatch.setattr(digest, "_fetch", fetch)
+    if fail:
+        with pytest.raises(RuntimeError, match="page two failed"):
+            asyncio.run(digest.sync_once())
+        assert fetched == [3600, 7200]
+        assert writes == [("digest_cursor", 7200)]
+        assert db.kv_get("digest_cursor") == 7200
+    else:
+        asyncio.run(digest.sync_once())
+        assert fetched == [3600, 7200, 10800]
+        assert writes == [("digest_cursor", 7200), ("digest_cursor", 10800)]
+        assert db.kv_get("digest_cursor") == 10800
+    with db.q() as conn:
+        rows = conn.execute(
+            "SELECT hour FROM digest_markets WHERE league=? ORDER BY hour", (LEAGUE,)
+        )
+        assert [row[0] for row in rows] == ([3600] if fail else fetched)
+
+
+def test_cancelled_digest_finishes_page_and_cursor_before_releasing_writer(
+    monkeypatch, rollback_write
+):
+    db.kv_set("digest_cursor", 3600)
+    lock = asyncio.Lock()
+    monkeypatch.setattr(digest, "_sync_lock", lock)
+    monkeypatch.setattr(digest, "state", dict(digest.state))
+    started, release = threading.Event(), threading.Event()
+
+    async def fetch(_cursor):
+        return {"next_change_id": 7200}
+
+    def store(_cursor, _markets):
+        started.set()
+        assert release.wait(5), "the page write blocked the loop"
+        return 1
+
+    monkeypatch.setattr(digest, "_fetch", fetch)
+    monkeypatch.setattr(digest, "_store", store)
+
+    async def cancel():
+        task = asyncio.create_task(digest.sync_once())
+        try:
+            assert await asyncio.to_thread(started.wait, 2)
+            task.cancel()
+            await asyncio.sleep(0)
+            task.cancel()
+            await asyncio.sleep(0)
+            assert lock.locked()
+            assert not task.done()
+        finally:
+            release.set()
+            with pytest.raises(asyncio.CancelledError):
+                await task
+
+    asyncio.run(cancel())
+    assert not lock.locked()
+    assert db.kv_get("digest_cursor") == 7200
+
+
+def test_seed_listing_assessment_runs_off_loop(monkeypatch, worker_calls):
+    record, check = worker_calls
+
+    async def listing(_league):
+        return {ITEM: {FIRST_DAY: (1, 10), SECOND_DAY: (1, 10)}}
+
+    async def fetch(*_args, **_kwargs):
+        return 1
+
+    monkeypatch.setattr(seedready, "_listing", listing)
+    monkeypatch.setattr(leaguehistory, "fetch_item", fetch)
+    monkeypatch.setattr(db, "kv_get", lambda _key: None)
+    monkeypatch.setattr(db, "kv_set", lambda _key, _value: None)
+    record(seedready, "_fingerprints", lambda _league: {})
+    record(seedready, "_stored", lambda _league, _since: {ITEM: {}})
+    record(leaguehistory, "_marks", lambda _league: (set(), {}))
+    assert asyncio.run(seedready.poll_league(LEAGUE))["fetched"] == 1
+    check("_fingerprints", "_stored", "_marks")
+
+
+def test_crawl_reads_and_metadata_bridge_run_off_loop(monkeypatch, worker_calls):
+    record, check = worker_calls
+
+    async def leagues():
+        return [{"Value": LEAGUE, "IsCurrent": True}]
+
+    async def category_ids(_league):
+        return ["fixture"]
+
+    async def category_items(*_args):
+        return [{"ItemId": ITEM, "BaseItemTypeId": "fixture", "ApiId": "fixture"}]
+
+    monkeypatch.setattr(leaguehistory, "_backfill_lock", asyncio.Lock())
+    monkeypatch.setattr(leaguehistory, "ITEMS", {})
+    monkeypatch.setattr(leaguehistory, "progress", dict(leaguehistory.progress))
+    monkeypatch.setattr(leaguehistory, "_leagues", leagues)
+    monkeypatch.setattr(leaguehistory, "_category_apiids", category_ids)
+    monkeypatch.setattr(leaguehistory, "category_items", category_items)
+    monkeypatch.setattr(leaguehistory, "_record_current_leagues", lambda _rows: set())
+    record(leaguehistory, "_has_history", lambda: True)
+    record(leaguehistory, "_stored_counts", dict)
+    record(leaguehistory, "_marks", lambda _league: (set(), {}))
+    record(leaguehistory, "_merge_meta_bridge", lambda _bridge: None)
+    record(leaguehistory, "_store_item_metadata", lambda _metadata: None)
+    assert asyncio.run(leaguehistory.backfill()).get("attempted") == 0
+    check(
+        "_has_history",
+        "_stored_counts",
+        "_marks",
+        "_merge_meta_bridge",
+        "_store_item_metadata",
+    )
+
+
+def test_diagnostics_collects_sqlite_queries_off_loop(monkeypatch, worker_calls):
+    record, check = worker_calls
+
+    async def connectivity():
+        return {}
+
+    monkeypatch.setattr(diag, "_connectivity", connectivity)
+    monkeypatch.setattr(db, "kv_get", lambda _key, default=None: default)
+    record(
+        diag,
+        "get_settings",
+        lambda: {"league": LEAGUE, "reference": "", "watchlist": []},
+    )
+    record(diag, "_db_counts", lambda _league: {})
+    record(diag, "_league_history", dict)
+    record(diag, "_unknown_traded", lambda _league: [])
+    record(diag, "_analytics", lambda _league: {})
+    record(session, "status", dict)
+    assert asyncio.run(diag.collect())["settings"]["league"] == LEAGUE
+    check(
+        "get_settings",
+        "_db_counts",
+        "_league_history",
+        "_unknown_traded",
+        "_analytics",
+        "status",
+    )
+
+
+@pytest.mark.parametrize("page", [False, True])
+def test_static_file_cache_reads_and_writes_run_off_loop(
+    monkeypatch, tmp_path, worker_calls, page
+):
+    record, check = worker_calls
+    monkeypatch.setattr(gamedata, "CACHE", tmp_path)
+    content = "fixture"
+
+    async def request(*_args, **_kwargs):
+        return httpx.Response(
+            200, text=content, request=httpx.Request("GET", "http://127.0.0.1/fixture")
+        )
+
+    monkeypatch.setattr(gateway, "request", request)
+    record(Path, "write_bytes")
+    record(Path, "read_text" if page else "read_bytes")
+
+    async def load():
+        if page:
+            return await modpool._page("fixture", 3600)
+        return (
+            await gamedata._get("http://127.0.0.1/fixture", "fixture", 3600)
+        ).decode()
+
+    async def check_cache():
+        assert await load() == content
+        assert await load() == content
+
+    asyncio.run(check_cache())
+    check("write_bytes", "read_text" if page else "read_bytes")
+
+
+def test_fee_refresh_failure_loads_last_good_fees_off_loop(monkeypatch, worker_calls):
+    record, check = worker_calls
+
+    async def fail(*_args, **_kwargs):
+        raise ValueError("offline")
+
+    monkeypatch.setattr(gateway, "request", fail)
+    monkeypatch.setattr(gamedata, "_get", fail)
+    monkeypatch.setattr(gamedata, "state", dict(gamedata.state))
+    record(gamedata, "fees", dict)
+    assert asyncio.run(gamedata.refresh()) == {}
+    check("fees")
+
+
+def test_registry_fallback_loads_cached_static_off_loop(monkeypatch, worker_calls):
+    record, check = worker_calls
+    registry = currencies.Registry()
+    _mock_response(monkeypatch, {})
+    record(db, "kv_get", lambda _key: {"result": [{"entries": [{"id": "fixture"}]}]})
+    assert asyncio.run(registry.load_static()) is False
+    assert "fixture" in registry.by_id
+    check("kv_get")
+
+
+def test_orderbook_batch_persists_books_off_loop(monkeypatch, worker_calls):
+    record, check = worker_calls
+
+    async def post(*_args):
+        return {}
+
+    monkeypatch.setattr(orderbook, "_post", post)
+    record(orderbook, "_store", lambda *_args: None)
+    record(session, "mark_ok", lambda: None)
+    assert asyncio.run(
+        orderbook._fetch_batch(LEAGUE, ["chaos"], "divine", "fixture", {"chaos"})
+    ) == ({"chaos": []}, [])
+    check("_store", "mark_ok")
+
+
+def test_session_validation_and_connect_use_worker_for_credentials(
+    monkeypatch, worker_calls
+):
+    record, check = worker_calls
+
+    async def exchange(*_args, **_kwargs):
+        return httpx.Response(200)
+
+    monkeypatch.setattr(orderbook, "exchange_post", exchange)
+    record(session, "get_settings", lambda: {"league": LEAGUE})
+    record(session.secrets, "store", lambda *_args: None)
+    record(session, "status", lambda: {"connected": True})
+    assert asyncio.run(session.connect("fixture"))["connected"]
+    check("get_settings", "store", "status")
+
+
+def test_oauth_completion_and_refresh_use_worker_for_credentials(
+    monkeypatch, worker_calls
+):
+    record, check = worker_calls
+
+    async def request(_form):
+        return {"access_token": "fixture"}
+
+    monkeypatch.setattr(oauth, "_token_request", request)
+    record(
+        db,
+        "kv_update",
+        lambda _key, apply, _default: apply(
+            {"state": {"redirect_uri": "fixture", "verifier": "fixture"}}
+        ),
+    )
+    record(oauth, "_save", lambda _token: None)
+    record(oauth, "status", dict)
+    record(
+        oauth.secrets,
+        "load",
+        lambda _name: {"expires_at": 0, "refresh_token": "fixture"},
+    )
+
+    async def use_oauth():
+        assert await oauth.complete("code", "state") == {}
+        assert await oauth.token() == "fixture"
+
+    asyncio.run(use_oauth())
+    check("kv_update", "_save", "status", "load")
+
+
+def test_mod_refresh_reads_and_replaces_tables_off_loop(monkeypatch, worker_calls):
+    record, check = worker_calls
+
+    async def raw(*_args):
+        return b"{}"
+
+    async def page(*_args):
+        raise ValueError("offline")
+
+    async def catalog_refresh(*_args, **_kwargs):
+        return None
+
+    monkeypatch.setattr(gamedata, "_get", raw)
+    monkeypatch.setattr(modpool, "_page", page)
+    monkeypatch.setattr(modpool, "state", dict(modpool.state))
+    monkeypatch.setattr(
+        modpool, "derive", lambda _export: SimpleNamespace(families=[{}])
+    )
+    monkeypatch.setattr(
+        modpool, "assemble", lambda *_args, **_kwargs: {"pools": [{}], "currencies": []}
+    )
+    monkeypatch.setattr(catalog, "refresh", catalog_refresh)
+    record(modpool, "stored_grants", lambda: ([], []))
+    record(modpool, "store", lambda _result: None)
+    assert "offline" in asyncio.run(modpool.refresh())["last_error"]
+    check("stored_grants", "store")
+
+
+def test_orderbook_worker_prepares_db_dependent_batch_off_loop(
+    monkeypatch, worker_calls
+):
+    record, check = worker_calls
+
+    async def fetch(*_args):
+        return {"chaos": []}, []
+
+    monkeypatch.setattr(orderbook, "state", dict(orderbook.state))
+    monkeypatch.setattr(orderbook, "_queue", asyncio.PriorityQueue())
+    monkeypatch.setattr(orderbook, "_pending", {})
+    monkeypatch.setattr(orderbook, "_fetch_batch", fetch)
+    record(session, "get_cookie", lambda: "fixture")
+    record(orderbook, "get_settings", lambda: {"league": LEAGUE})
+    record(orderbook, "_pad", lambda haves, *_args: haves)
+
+    async def work():
+        future = asyncio.get_running_loop().create_future()
+        orderbook._pending[("chaos", "divine")] = [future]
+        orderbook._queue.put_nowait((0, 0, 0, "chaos", "divine"))
+        task = asyncio.create_task(orderbook.worker())
+        try:
+            assert await asyncio.wait_for(future, 2) == []
+        finally:
+            task.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await task
+
+    asyncio.run(work())
+    check("get_cookie", "get_settings", "_pad")
+
+
+def test_orderbook_sweeper_prepares_watchlist_off_loop(monkeypatch, worker_calls):
+    record, check = worker_calls
+    monkeypatch.setattr(orderbook, "prune_history", lambda: 0)
+    monkeypatch.setattr(orderbook, "BULK_EXCHANGE_ENABLED", True)
+    record(
+        orderbook,
+        "get_settings",
+        lambda: {
+            "league": LEAGUE,
+            "background_sweep": True,
+            "watchlist": ["chaos", "divine"],
+            "live_max_age_s": 100,
+        },
+    )
+    record(session, "get_cookie", lambda: "fixture")
+    record(orderbook, "cached_at", lambda *_args: 3)
+    monkeypatch.setattr(orderbook, "_queue", asyncio.PriorityQueue())
+    monkeypatch.setattr(orderbook, "_pending", {})
+    monkeypatch.setattr(orderbook, "_queued_priority", {})
+    monkeypatch.setattr(orderbook, "_seq", 0)
+    monkeypatch.setattr(orderbook.pairscore, "score", lambda *_args: 0)
+    monkeypatch.setattr(orderbook, "state", dict(orderbook.state))
+
+    async def sweep():
+        task = asyncio.create_task(orderbook.sweeper())
+        try:
+            assert (await asyncio.wait_for(orderbook._queue.get(), 2))[0] == 2
+        finally:
+            task.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await task
+
+    asyncio.run(sweep())
+    check("get_settings", "get_cookie", "cached_at")
+
+
+@pytest.mark.parametrize("route", ["board", "top", "one"])
+def test_live_refresh_preflight_runs_off_loop(monkeypatch, worker_calls, route):
+    record, check = worker_calls
+    record(session, "get_cookie", lambda: "fixture")
+    record(main, "get_settings", lambda: {"live_min_age_s": 1, "live_top_n": 0})
+    monkeypatch.setattr(main.arbitrage, "board_pairs", list)
+    monkeypatch.setattr(main.arbitrage, "board", lambda _window: {})
+    monkeypatch.setattr(main.arbitrage, "find_routes", lambda *_args: {"routes": []})
+    if route == "board":
+        result = asyncio.run(main.board_refresh())
+    elif route == "top":
+        result = asyncio.run(main.routes_refresh_top(main.RefreshTopBody()))
+    else:
+        result = asyncio.run(
+            main.routes_refresh_one(main.RefreshRouteBody(id="fixture"))
+        )
+    assert result["refresh"]["waited"] == 0
+    check("get_cookie", *([] if route == "one" else ["get_settings"]))
+
+
+def test_empty_hold_reads_crawl_league_off_loop(monkeypatch, worker_calls):
+    record, check = worker_calls
+    monkeypatch.setattr(main.holdscore, "leaderboard", lambda *_args: {"assets": []})
+    monkeypatch.setattr(main, "_ask_backfill", lambda _league: False)
+    record(main, "get_settings", lambda: {"league": LEAGUE})
+    assert not asyncio.run(main.hold())["building"]
+    check("get_settings")
+
+
+def test_lifespan_loads_static_and_session_off_loop(monkeypatch, worker_calls):
+    record, check = worker_calls
+
+    async def idle():
+        return None
+
+    record(main.registry, "load_static_cache", lambda: True)
+    record(session, "get_cookie", lambda: "fixture")
+    record(sidecar_supervisor, "stop", lambda: None)
+    monkeypatch.setattr(sidecar_supervisor, "start", lambda: None)
+    monkeypatch.setattr(main.registry, "keep_static_fresh", idle)
+    monkeypatch.setattr(digest, "run_forever", idle)
+    monkeypatch.setattr(gateway, "aclose", idle)
+    monkeypatch.setattr(main, "_gold_fee_loop", idle)
+    monkeypatch.setattr(main, "_league_history_loop", idle)
+    monkeypatch.setattr(main, "_analytics_loop", idle)
+    monkeypatch.setattr(main, "seed_poll_enabled", lambda: False)
+    monkeypatch.setattr(devtelemetry, "enabled", lambda: False)
+
+    async def boot():
+        async with main.lifespan(main.app):
+            pass
+
+    asyncio.run(boot())
+    check("load_static_cache", "get_cookie", "stop")

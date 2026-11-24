@@ -54,6 +54,7 @@ class Registry:
         self.meta_to_trade: dict[str, str] = {}
         self.unmapped_meta: set[str] = set()
         self.loaded_at: float | None = None
+        self._cache_applied = False
         self._seed_overrides: dict[
             str, str
         ] = {}  # currency_map.json (offline fallback)
@@ -83,17 +84,31 @@ class Registry:
     def load_bridge(self) -> None:
         """(Re)load the authoritative poe2scout metadata→trade bridge from kv_ops (written by
         the crawl, shipped in the market snapshot) and rebuild all links. Call after a crawl."""
-        self._bridge = db.kv_get("meta_bridge", {}) or {}
-        self._catalog = db.kv_get("meta_catalog", {}) or {}
+        self._apply_bridge(*self._read_bridge())
+
+    @staticmethod
+    def _read_bridge() -> tuple[dict, dict]:
+        return db.kv_get("meta_bridge", {}) or {}, db.kv_get("meta_catalog", {}) or {}
+
+    def _apply_bridge(self, bridge: dict, catalog: dict) -> None:
+        self._bridge, self._catalog = bridge, catalog
         self._rebuild_links()
 
     # -------------------------------------------------------------- static
     def load_static_cache(self) -> bool:
         """Synchronously apply the cached /data/static (from kv_ops / market seed) at boot so
         startup never blocks on pathofexile.com while icons are immediately available."""
-        if self.loaded_at or getattr(self, "_cache_applied", False):
+        if self.loaded_at or self._cache_applied:
             return True
-        cached = db.kv_get(STATIC_CACHE_KEY)
+        return self._apply_static_cache(self._read_static_cache())
+
+    @staticmethod
+    def _read_static_cache() -> dict | None:
+        return db.kv_get(STATIC_CACHE_KEY)
+
+    def _apply_static_cache(self, cached: dict | None) -> bool:
+        if self.loaded_at or self._cache_applied:
+            return True
         if not cached:
             return False
         self._apply_static(cached)
@@ -115,7 +130,11 @@ class Registry:
             Exception
         ) as exc:  # network is optional; the cached copy (or the seed) still works
             log.warning("could not load trade static data: %s", exc)
-            applied = False if self.loaded_at else self.load_static_cache()
+            applied = False
+            if not self.loaded_at:
+                applied = self._cache_applied or self._apply_static_cache(
+                    await run_in_threadpool(self._read_static_cache)
+                )
             devtelemetry.tlog(
                 "static",
                 f"fetch failed ({type(exc).__name__}: {str(exc)[:160]}); "

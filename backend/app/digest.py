@@ -23,10 +23,12 @@ from . import cache, db, devtelemetry, gateway, settings
 from .config import DIGEST_BACKFILL_HOURS, DIGEST_POLL_SECONDS, GGG_DIGEST_URL
 from .currencies import registry
 from .datapolicy import MARKET_RETENTION_DAYS
+from .threadwork import finish_write
 
 log = logging.getLogger(__name__)
 
 state = {"last_hour": None, "last_fetch": None, "last_error": None, "rows": 0}
+_sync_lock = asyncio.Lock()
 
 
 def _hour(ts: float) -> int:
@@ -93,8 +95,22 @@ def cold_start_reason(cursor, seed_bundled: bool) -> str | None:
     return "digest-cold" if cursor is None and seed_bundled else None
 
 
+def _store_page(
+    cursor: int, markets: list, next_cursor: int, persisted: int | None
+) -> None:
+    rows = _store(cursor, markets)
+    state.update(last_hour=cursor, last_fetch=time.time(), last_error=None, rows=rows)
+    if next_cursor != persisted:
+        db.kv_set("digest_cursor", next_cursor)
+
+
 async def sync_once() -> None:
-    cursor = await run_in_threadpool(db.kv_get, "digest_cursor")
+    async with _sync_lock:
+        await _sync_pages()
+
+
+async def _sync_pages() -> None:
+    persisted = cursor = await run_in_threadpool(db.kv_get, "digest_cursor")
     if cursor is None:
         reason = cold_start_reason(cursor, bool(db.MARKET_SEED_PATH))
         if reason:
@@ -121,13 +137,11 @@ async def sync_once() -> None:
             return
         markets = data.get("markets", [])
         nxt = data.get("next_change_id")
-        n = _store(cursor, markets)
-        state.update(last_hour=cursor, last_fetch=time.time(), last_error=None, rows=n)
+        next_cursor = cursor if nxt is None else nxt
+        await finish_write(_store_page, cursor, markets, next_cursor, persisted)
         if nxt is None or nxt == cursor:
             break
-        cursor = nxt
-        await run_in_threadpool(db.kv_set, "digest_cursor", cursor)
-    await run_in_threadpool(db.kv_set, "digest_cursor", cursor)
+        cursor = persisted = next_cursor
 
 
 def prune_old() -> int:
@@ -155,13 +169,18 @@ def maybe_analyze(stored: bool) -> None:
     db.analyze()
 
 
+def _maintain(stored: bool) -> int:
+    pruned = prune_old()
+    maybe_analyze(stored)
+    return pruned
+
+
 async def run_forever() -> None:
     while True:
         try:
             before = state["last_hour"]
             await sync_once()
-            n = await asyncio.to_thread(prune_old)
-            await asyncio.to_thread(maybe_analyze, state["last_hour"] != before)
+            n = await finish_write(_maintain, state["last_hour"] != before)
             if n:
                 log.info(
                     "digest: pruned %d rows older than %dd", n, MARKET_RETENTION_DAYS

@@ -20,13 +20,14 @@ import logging
 import re
 import time
 import urllib.parse
-from collections.abc import Callable
 from string import Template
 from typing import TypedDict
 
 from starlette.concurrency import run_in_threadpool
 
 from . import cache, db, devtelemetry, gateway, marketseries
+from .threadwork import finish
+from .threadwork import finish_write as _finish_crawl_write
 
 log = logging.getLogger(__name__)
 
@@ -285,29 +286,30 @@ async def category_items(league: str, cat: str) -> list[dict]:
         page += 1
 
 
-async def _finish_crawl_write[T, **P](
-    operation: Callable[P, T], /, *args: P.args, **kwargs: P.kwargs
-) -> T:
-    """Let an in-flight write settle before cancellation can release the crawl lock."""
-    task = asyncio.create_task(run_in_threadpool(operation, *args, **kwargs))
-    cancelled = False
-    while not task.done():
-        try:
-            await asyncio.shield(task)
-        except asyncio.CancelledError:
-            cancelled = True
-    result = task.result()
-    if cancelled:
-        raise asyncio.CancelledError
-    return result
-
-
 def _store_item_metadata(meta: list[tuple[int, str, str]]) -> None:
     with db.tx() as c:
         c.executemany(
             "INSERT OR REPLACE INTO item_meta(item_id, name, category) VALUES (?,?,?)",
             meta,
         )
+
+
+def _store_universe(
+    meta: list[tuple[int, str, str]], bridge: dict[str, str]
+) -> tuple[dict, dict] | None:
+    if meta:
+        _store_item_metadata(meta)
+    if bridge:
+        return _merge_meta_bridge(bridge)
+    return None
+
+
+async def _commit_universe(
+    meta: list[tuple[int, str, str]], bridge: dict[str, str]
+) -> None:
+    updated = await run_in_threadpool(_store_universe, meta, bridge)
+    if updated is not None:
+        _apply_meta_bridge(updated)
 
 
 async def _universe(league: str) -> set[int]:
@@ -335,14 +337,12 @@ async def _universe(league: str) -> set[int]:
                 bridge_new[bt] = api
             if iid in ITEMS or (x.get("CurrentPrice") or 0) >= PRICE_FLOOR_EX:
                 ids.add(iid)
-    if meta:
-        await _finish_crawl_write(_store_item_metadata, meta)
-    if bridge_new:
-        _merge_meta_bridge(bridge_new)
+    if meta or bridge_new:
+        await finish(_commit_universe(meta, bridge_new))
     return ids
 
 
-def _merge_meta_bridge(new: dict[str, str]) -> None:
+def _merge_meta_bridge(new: dict[str, str]) -> tuple[dict, dict] | None:
     """Merge freshly-crawled metadata→trade mappings into the authoritative bridge kv (`meta_bridge`,
     operational → ships in the market snapshot per db-maintenance.md), then refresh the registry and
     drop graph caches so newly-mapped currencies enter the exchange graph immediately."""
@@ -356,18 +356,21 @@ def _merge_meta_bridge(new: dict[str, str]) -> None:
         return cur
 
     cur = db.kv_update("meta_bridge", apply, {})
-    if changed:
-        from .currencies import registry
+    from .currencies import registry
 
-        registry.load_bridge()
-        from . import (
-            arbitrage,
-        )  # lazy: arbitrage imports this module (the one genuine cycle)
-
-        arbitrage.invalidate_caches()
+    bridge = registry._read_bridge() if changed else None
     log.info(
         "meta_bridge: %d total mappings (%d new/changed this pass)", len(cur), changed
     )
+    return bridge
+
+
+def _apply_meta_bridge(bridge: tuple[dict, dict]) -> None:
+    from . import arbitrage
+    from .currencies import registry
+
+    registry._apply_bridge(*bridge)
+    arbitrage.invalidate_caches()
 
 
 _DELETE_WITHDRAWN_DAYS = Template(
@@ -509,6 +512,11 @@ def _record_current_leagues(leagues: list[dict]) -> set[str]:
     return was_current
 
 
+def _start_crawl(leagues: list[dict]) -> tuple[set[str], dict]:
+    was_current = _record_current_leagues(leagues)
+    return was_current, _stored_counts()
+
+
 async def backfill(force: bool = False, full: bool = True) -> CrawlResult:
     """Pull daily history for the target leagues × items into league_daily. Past
     leagues are fetched once; current leagues refresh on a 12h cadence.
@@ -522,13 +530,14 @@ async def backfill(force: bool = False, full: bool = True) -> CrawlResult:
         return {"skipped": "backfill already running"}
     async with _backfill_lock:
         fetched, attempted, errors = {}, 0, 0
+        building = not await run_in_threadpool(_has_history)
         # `building`: the install holds no history yet (a first build, not a refresh) — the header
         # says "Building your dashboard" only then.
         progress.update(
             {
                 "running": True,
                 "phase": "leagues",
-                "building": not _has_history(),
+                "building": building,
                 "started": time.time(),
                 "updated": time.time(),
                 "league": None,
@@ -548,8 +557,7 @@ async def backfill(force: bool = False, full: bool = True) -> CrawlResult:
             log.warning("poe2scout leagues fetch failed: %s", exc)
             return {"error": str(exc)}
         progress["leagues_total"] = len(leagues)
-        was_current = await _finish_crawl_write(_record_current_leagues, leagues)
-        stored = _stored_counts()
+        was_current, stored = await _finish_crawl_write(_start_crawl, leagues)
         for li, lg in enumerate(leagues):
             name, current = lg.get("Value"), bool(lg.get("IsCurrent"))
             if not name:
@@ -560,7 +568,7 @@ async def backfill(force: bool = False, full: bool = True) -> CrawlResult:
                     item_ids = await _universe(name)
                 except Exception as exc:
                     log.warning("poe2scout universe %s failed: %s", name, exc)
-            complete, fetched_at = _marks(name)
+            complete, fetched_at = await run_in_threadpool(_marks, name)
             have = {i for (lg, i) in stored if lg == name}
             if current and full:
                 # Sticky: an item this league already holds history for keeps being crawled after its

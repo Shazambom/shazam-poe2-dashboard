@@ -35,6 +35,7 @@ import html as html_lib
 import json
 import logging
 import re
+import threading
 import time
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
@@ -42,8 +43,10 @@ from dataclasses import dataclass, field
 from starlette.concurrency import run_in_threadpool
 
 from . import catalog, db, gamedata, gateway
+from .threadwork import finish_write
 
 log = logging.getLogger("poe2arb.modpool")
+_refresh_write_lock = threading.Lock()
 
 REPOE = "https://repoe-fork.github.io/poe2/"
 REPOE_FILES = ("mods.json", "base_items.json", "item_classes.json", "augments.min.json")
@@ -681,30 +684,33 @@ def _row_tags(
     return lead + own
 
 
-def _section_tiers(f, s, pool, domain, tags, corruption, corrupted_groups, all_keys):
-    if s["id"] == "enchant" and pool["domain"] != "item":
+def _section_tiers(
+    *, family, section, pool, tags, corruption, corrupted_groups, all_keys
+):
+    """Filter tiers of a family already matched to the section's effective domain."""
+    if section["id"] == "enchant" and pool["domain"] != "item":
         # Off gear, the upgrades are the ones weighted on no class, of a corruption the pool has
         # (poe2db Ruby: 7; a relic's one corruption has no upgrade).
         tiers = [
             t
-            for t in f["tiers"]
-            if f["group"] in corrupted_groups and _rolled([t]) == {"default"}
+            for t in family["tiers"]
+            if family["group"] in corrupted_groups and _rolled([t]) == {"default"}
         ]
-    elif s.get("socketed"):
+    elif section.get("socketed"):
         # A socketable's pool is all of it on any item the socketable fits, whatever the base
         # (owner 2026-10-12; poe2db lists it so): the export's per-base zeros are not applied.
-        tiers = [t for t in f["tiers"] if _rolled([t]) & set(s["keys"])]
+        tiers = [t for t in family["tiers"] if _rolled([t]) & set(section["keys"])]
     else:
-        tiers = [t for t in f["tiers"] if rolls_on(t["weights"], tags)]
-    if domain != "item" and s["id"] != "base" and not corruption:
+        tiers = [t for t in family["tiers"] if rolls_on(t["weights"], tags)]
+    if family["domain"] != "item" and section["id"] != "base" and not corruption:
         # A desecration pool shows the tiers its own currency adds: a lord's tier under the
         # lords, an otherworldly tier under the Altered Collarbone, a tier keyed on no one
         # under the jewel and waystone bones. One family can hold tiers of two of them.
         tiers = [
             t
             for t in tiers
-            if (_rolled([t]) & set(s["keys"]))
-            or (s.get("unkeyed") and not _rolled([t]) & all_keys)
+            if (_rolled([t]) & set(section["keys"]))
+            or (section.get("unkeyed") and not _rolled([t]) & all_keys)
         ]
     return tiers
 
@@ -750,7 +756,13 @@ def build_pool(pool: dict, families: list, sections: list) -> dict:
             ):
                 continue
             tiers = _section_tiers(
-                f, s, pool, domain, tags, corruption, corrupted_groups, all_keys
+                family=f,
+                section=s,
+                pool=pool,
+                tags=tags,
+                corruption=corruption,
+                corrupted_groups=corrupted_groups,
+                all_keys=all_keys,
             )
             if not tiers:
                 continue
@@ -1240,29 +1252,34 @@ def prices(pool_id: str) -> dict | None:
 
 
 # ------------------------------------------------------------------ refresh (shazam's cron)
+def _read_page(path) -> str:
+    return path.read_text("utf-8", "replace")
+
+
 async def _page(slug_: str, max_age: int) -> str:
     """A poe2db page, cached beside the gold-fee tables (these are HTML on purpose, so the data
     loader's HTML guard does not apply)."""
     path = gamedata.CACHE / f"poe2db-{slug_}.html"
-    if path.exists() and time.time() - path.stat().st_mtime < max_age:
-        return path.read_text("utf-8", "replace")
+    cached = await run_in_threadpool(gamedata._read_cache, path, max_age, _read_page)
+    if cached is not None:
+        return cached
     # poe2db's edge answers 503 to a request without a browser's Accept headers.
     r = await gateway.request(
         "GET", POE2DB + slug_, policy="poe2db", headers=PAGE_HEADERS
     )
     r.raise_for_status()
-    gamedata.CACHE.mkdir(parents=True, exist_ok=True)
-    path.write_bytes(r.content)
+    await finish_write(gamedata._write_cache, path, r.content, create_directory=True)
     return r.content.decode("utf-8", "replace")
 
 
 def stored_grants() -> tuple[list, list]:
     """The last good currencies and grant pages, read back out of the tables (the grants are the
     union over every pool's rows, which is what the pages held)."""
-    cur = currencies()
     by_name: dict = {}
-    with db.q() as c:
-        rows = c.execute("SELECT data FROM mod_pools").fetchall()
+    with _refresh_write_lock:
+        cur = currencies()
+        with db.q() as c:
+            rows = c.execute("SELECT data FROM mod_pools").fetchall()
     for r in rows:
         g = json.loads(r["data"]).get("grants") or {}
         for e in [*g.get("essences", []), *g.get("alloys", [])]:
@@ -1312,7 +1329,7 @@ async def refresh(force: bool = False) -> dict:
             )
         pages_error = None
     except Exception as exc:
-        cur, grants = stored_grants()
+        cur, grants = await run_in_threadpool(stored_grants)
         pages_error = str(exc)
         log.warning(
             "mod pool refresh: poe2db unreachable (%s); keeping %d currencies and %d grant pages from the last build",
@@ -1362,8 +1379,7 @@ async def refresh(force: bool = False) -> dict:
         )
         or None
     )
-    store(result)
-    state["last_error"] = pages_error
+    await finish_write(_store_refresh, result, pages_error)
     log.info(
         "mod pools rebuilt: %d pools, %d families, %d currencies, %d grant pages",
         len(result["pools"]),
@@ -1372,6 +1388,12 @@ async def refresh(force: bool = False) -> dict:
         len([g for g in grants if g]),
     )
     return state
+
+
+def _store_refresh(result: dict, pages_error: str | None) -> None:
+    with _refresh_write_lock:
+        store(result)
+        state["last_error"] = pages_error
 
 
 if (

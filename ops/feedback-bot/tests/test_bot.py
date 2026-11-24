@@ -5,6 +5,9 @@ opener's result.json, moves only fixed filenames into the inbox, acks, and recor
 import asyncio
 import gzip
 import json
+import threading
+from pathlib import Path
+from types import SimpleNamespace
 from typing import ClassVar
 
 import pytest
@@ -122,6 +125,66 @@ def h(tmp_path):
 
 def run(coro):
     return asyncio.run(coro)
+
+
+@pytest.mark.parametrize(
+    "operation", ["reports", "replies", "catchup", "actions", "announcements"]
+)
+def test_feedback_file_steps_run_off_loop(h, monkeypatch, operation):
+    thread = Thread(
+        1001, [Attachment("arbiter-report-7F3K2Q.arb", sealed_report(h.pub))]
+    )
+    if operation != "reports":
+        h._start_post(thread, thread.starter, "posts/1001")
+    if operation in ("actions", "announcements"):
+        directory = h.inbox / ("actions" if operation == "actions" else "announce")
+        directory.mkdir()
+        payload = (
+            {"report": "posts/1001", "action": "triage"}
+            if operation == "actions"
+            else {"version": "1.2.3"}
+        )
+        (directory / "fixture.json").write_text(json.dumps(payload))
+
+    async def archived_threads(limit=None):
+        for item in ():
+            yield item
+
+    async def get_target():
+        return None
+
+    loop_thread = threading.get_ident()
+    calls = []
+    read = Path.read_text
+    write = Path.write_text
+
+    def read_text(path, *args, **kwargs):
+        calls.append((path.name, threading.get_ident()))
+        return read(path, *args, **kwargs)
+
+    def write_text(path, *args, **kwargs):
+        calls.append((path.name, threading.get_ident()))
+        return write(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_text", read_text)
+    monkeypatch.setattr(Path, "write_text", write_text)
+    if operation == "reports":
+        assert run(h.handle(thread)) == "OK"
+        assert "result.json" in {name for name, _ in calls}
+    elif operation == "replies":
+        run(h.on_reply(thread.say("more", Author(7))))
+    elif operation == "catchup":
+        run(
+            h.catch_up(
+                SimpleNamespace(threads=[thread], archived_threads=archived_threads)
+            )
+        )
+    elif operation == "actions":
+        run(h.process_actions(get_target))
+    else:
+        run(h.process_announcements(get_target))
+    assert calls
+    assert [name for name, ident in calls if ident == loop_thread] == []
 
 
 def test_attachment_name_rule():
