@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { ignoredError } from '../lib/ignoredError.js'
 import { usePings, liveLabel } from '../lib/pingStore.js'
 import { useWorkspace, loadWorkspace } from '../lib/workspaceStore.js'
 import PingButton from './PingButton.jsx'
 import SearchTree from './SearchTree.jsx'
 import { toast } from '../lib/api.js'
-import { hasTradeEngine as isDesktop } from '../lib/session.js'
+import { connectSessionWithToast, hasTradeEngine as isDesktop } from '../lib/session.js'
+import { restartLive } from '../lib/liveWiring.js'
 import { flatten } from '../lib/tree.js'
 import { nav } from '../lib/nav.js'
 
@@ -49,6 +51,8 @@ export default function LiveView({ league }) {
     if (!isDesktop) { toast('Live search runs in the desktop app', false); return }
     if (!league) { toast('No league set — pick one in the top bar', false); return }
     if (!node.armed && !node.slug) { toast('Open this search and run it once first, then go live', false); return }
+    // The trade site rejected the session: reconnect the account (the watch stays armed and starts again).
+    if (node.armed && searchStates[node.id]?.state === 'auth') { connectSessionWithToast(restartLive).catch(() => ignoredError('reconnect live search')); return }
     setField(node.id, { armed: !node.armed })
   }
 

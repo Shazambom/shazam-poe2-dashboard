@@ -29,3 +29,28 @@ it('rearms a rejected live start without a workspace edit and bounds repeated fa
   expect(document.body.textContent).toBe('')
   unmount()
 })
+
+// QA 2026-11-24: a watch the trade site rejected showed "Reconnect session", but the button only flipped
+// the watch off. It reconnects the account, and the watch starts again once the account is back.
+it('Reconnect session on a rejected watch connects the account, then starts the watch again', async () => {
+  installApiMock()
+  const { default: LiveView } = await import('../../src/components/LiveView.jsx')
+  const { fireEvent, render, screen } = await import('@testing-library/react')
+  useWorkspace.setState({ loaded: true, tree: [{ kind: 'search', id: 'row', name: 'Circlet', armed: true, slug: 'saved' }] })
+  const start = vi.spyOn(window.poe2desktop.trade, 'startSearch').mockResolvedValue({ ok: true })
+  const sync = renderHook(() => useLiveSync('Test'))
+  await act(async () => {})
+  expect(start).toHaveBeenCalledTimes(1)
+  // The engine rejected it: auth state, gone from the live set.
+  act(() => {
+    usePings.getState().setSearchState({ itemId: 'row', state: 'auth', message: 'Reconnect your PoE session' })
+    usePings.getState().setEngine({ active: 0, activeIds: [], budgetMax: 20 })
+  })
+  render(<LiveView league="Test" />)
+  const button = screen.getByRole('button', { name: 'Reconnect session' })
+  await act(async () => { fireEvent.click(button) })
+  expect(window.poe2desktop.connectSession).toHaveBeenCalledTimes(1)
+  expect(useWorkspace.getState().tree[0].armed).toBe(true)
+  expect(start).toHaveBeenCalledTimes(2)
+  sync.unmount()
+})

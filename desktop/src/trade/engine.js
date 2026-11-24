@@ -82,8 +82,12 @@ async function _connect(itemId) {
     const code = res.statusCode
     console.log(`[trade] WS unexpected-response item=${itemId} HTTP ${code}`)
     if (code === 401 || code === 403) {
+      // Rejected: no longer live (it leaves the count) and not retried; the renderer offers the reconnect.
       rec.stopped = true
+      clearTimeout(rec.timer)
+      if (sockets.get(itemId) === rec) sockets.delete(itemId)
       _sink('trade:search-state', { itemId, state: 'auth', message: 'Reconnect your PoE session' })
+      emitState()
     } else _sink('trade:search-state', { itemId, state: 'error', message: `HTTP ${code}` })
     try { ws.terminate() } catch (e) { ignored('live-search:terminate', e) }
   })
@@ -94,7 +98,11 @@ async function _connect(itemId) {
     if (code === 1013) { _sink('trade:search-state', { itemId, state: 'error', message: 'Too many live searches' }); _scheduleReconnect(itemId, '1013', 30000); return }
     _scheduleReconnect(itemId, `closed ${code}`)
   })
-  ws.on('error', (e) => { console.log(`[trade] WS error item=${itemId}: ${String(e.message || e)}`); _sink('trade:search-state', { itemId, state: 'error', message: String(e.message || e) }) })
+  ws.on('error', (e) => {
+    console.log(`[trade] WS error item=${itemId}: ${String(e.message || e)}`)
+    if (rec.stopped) return   // after an auth rejection or a stop: that state stands
+    _sink('trade:search-state', { itemId, state: 'error', message: String(e.message || e) })
+  })
 }
 
 function _scheduleReconnect(itemId, why, minDelay = 0) {

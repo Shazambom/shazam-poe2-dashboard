@@ -66,6 +66,11 @@ export function useLiveWiring(goLive) {
 // a slug) should be running; everything else stopped. Runs on load (resume across restarts)
 // and whenever the armed set changes. The DB (trading_workspace) is the single source of
 // truth for go-live state; the engine is a slave to it.
+let rearmLive = null
+// Start every armed watch the engine is not running (after the account was reconnected, the watches
+// the trade site rejected start again).
+export const restartLive = () => rearmLive?.()
+
 export function useLiveSync(league) {
   useEffect(() => {
     if (!isDesktop) return
@@ -107,7 +112,9 @@ export function useLiveSync(league) {
     const unsubWs = useWorkspace.subscribe(reconcile)
     const unsubEng = usePings.subscribe((s, p) => { if ((s.engine.activeIds || []).length !== (p.engine.activeIds || []).length) reconcile() })
     reconcile()
-    return () => { starting.clear(); unsubWs(); unsubEng() }
+    const rearm = () => { lastKey = ''; reconcile() }
+    rearmLive = rearm
+    return () => { starting.clear(); unsubWs(); unsubEng(); if (rearmLive === rearm) rearmLive = null }
   }, [league])
 }
 
