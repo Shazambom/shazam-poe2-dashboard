@@ -9,6 +9,7 @@
 // those orderings the code actually needs.
 'use strict'
 const path = require('node:path')
+const { exists } = require('./fs-exists.js')
 
 /**
  * One startup step and the steps that must be complete before it starts, each with its reason.
@@ -59,34 +60,20 @@ async function step(env, id, fn) {
   return out
 }
 
-// fs.existsSync's answer, without blocking: false for any error (missing, unreadable parent). Asked through
-// stat, never access: Electron's fs.promises.access answers ENOENT for a directory inside app.asar, which is
-// where the packaged app-dist lives.
-/** @param {StartupEnv} env @param {string} p */
-async function exists(env, p) {
-  try {
-    await env.fs.stat(p)
-    return true
-  } catch {
-    return false
-  }
-}
-
 // A bundled per-platform binary: the packed location (extraResources) preferred, then the dev
-// location. `found` is the existing path or null; `expected` is the packed path to report when
-// nothing is found (a packaging regression). Shared by the backend and the analytics sidecar.
-/** @param {StartupEnv} env @param {string} dir @param {string} name */
+// location; null when neither exists. Shared by the backend and the analytics sidecar.
+/** @param {StartupEnv} env @param {string} dir @param {string} name @returns {Promise<string | null>} */
 async function findBundledBin(env, dir, name) {
   const packed = path.join(env.resourcesPath || '', dir, name)
+  if (await exists(env.fs, packed)) return packed
   const dev = path.join(env.appRoot, dir, name)
-  const found = await exists(env, packed) ? packed : (await exists(env, dev) ? dev : null)
-  return { found, expected: packed }
+  return await exists(env.fs, dev) ? dev : null
 }
 
 /** @param {StartupEnv} env */
 async function backendBinary(env) {
   const name = env.platform === 'win32' ? 'poe2arb-backend.exe' : 'poe2arb-backend'
-  return (await findBundledBin(env, 'backend-bin', name)).found
+  return findBundledBin(env, 'backend-bin', name)
 }
 
 // Bundled market snapshot (extraResources). The backend seeds market.sqlite from it on first run /
@@ -98,7 +85,7 @@ async function findMarketSeed(env) {
   const seedNames = ['market-seed.sqlite.gz', 'market-seed.sqlite']
   for (const d of seedDirs) {
     for (const n of seedNames) {
-      const p = path.join(d, n); if (await exists(env, p)) return p
+      const p = path.join(d, n); if (await exists(env.fs, p)) return p
     }
   }
   return ''
@@ -125,18 +112,22 @@ async function planBackend(env) {
   // SIDECAR_BIN empty so sidecar_supervisor launches `[sys.executable, "--sidecar"]`.
   const sidecarBin = await step(env, 'sidecar-bin', async () => {
     const sidecarName = env.platform === 'win32' ? 'poe2arb-sidecar.exe' : 'poe2arb-sidecar'
-    return (await findBundledBin(env, 'sidecar-bin', sidecarName)).found || ''
+    return (await findBundledBin(env, 'sidecar-bin', sidecarName)) || ''
   })
   env.log('[backend] sidecar:', sidecarBin || `${bin} --sidecar`)
   return { bin, dataDir, marketSeed, sidecarBin }
 }
 
-// The built frontend: desktop/app-dist when packaged or built, else the frontend's own dist.
+// The built frontend: desktop/app-dist when packaged or built, else the frontend's own dist; the first
+// that holds index.html. With neither, startup fails here, naming both: serving a bundle that is not
+// there leaves a blank window.
 /** @param {StartupEnv} env */
 async function resolveUiDist(env) {
-  return await exists(env, path.join(env.appRoot, 'app-dist'))
-    ? path.join(env.appRoot, 'app-dist')
-    : path.join(env.appRoot, '..', 'frontend', 'dist')
+  const candidates = [path.join(env.appRoot, 'app-dist'), path.join(env.appRoot, '..', 'frontend', 'dist')]
+  for (const dist of candidates) {
+    if (await exists(env.fs, path.join(dist, 'index.html'))) return dist
+  }
+  throw new Error(`no UI bundle: no index.html in ${candidates.join(' or ')}`)
 }
 
 /**

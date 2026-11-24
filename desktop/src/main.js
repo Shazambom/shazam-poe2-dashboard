@@ -9,8 +9,8 @@
 //     the HttpOnly POESESSID is read from our session and handed to the backend.
 'use strict'
 const { ignored } = require('./ignored.js')
-const { backendFetch, allowDevBackend } = require('./local-backend.js')
-const { loadSettings, writeSettings } = require('./settings-store.js')
+const { backendFetch, allowDevBackend, localBackendTarget } = require('./local-backend.js')
+const { loadSettings, updateSettings } = require('./settings-store.js')
 const { app, BrowserWindow, Menu, Notification, clipboard, dialog, ipcMain, session, shell, nativeTheme } = require('electron')
 const { spawn } = require('node:child_process')
 const fs = require('node:fs')
@@ -23,7 +23,7 @@ const { makeRing } = require('./feedback/ring.js')
 const { applyChannel } = require('./updater-channel.js')
 const { createRespawner, onceGone } = require('./respawn.js')
 const { boot } = require('./startup.js')
-const { staticFile } = require('./ui-files.js')
+const { serveStatic } = require('./ui-files.js')
 const { makeExporter } = require('./export-file.js')
 
 // Log rings for "Report a problem" (local only — a report is a file the user drags into Discord):
@@ -63,7 +63,9 @@ const BACKDROP = { get window() { return windowBackdrop(settings) }, trade: '#0c
 const settingsPath = () => path.join(app.getPath('userData'), 'desktop-settings.json')
 /** @type {{ betaChannel: boolean, theme: string, customBackdrop?: string, focusHotkey?: string }} */
 const settings = loadSettings(settingsPath, DEFAULTS)
-const saveSettings = () => writeSettings(settingsPath, settings)   // synchronous: a change made just before quit is kept
+// Changes and saves settings now (synchronous: a change made just before quit is kept). False when the
+// write failed; the settings then keep their old values, so memory never claims what the disk does not hold.
+const changeSettings = (patch) => updateSettings(settingsPath, settings, patch)
 
 let win = null
 let backendProc = null
@@ -192,7 +194,7 @@ async function backendReady(plan) {
     // dev server for convenience. Packaged apps must never reach here.
     backendUrl = DEV_BACKEND_URL
     backendKind = 'dev'
-    allowDevBackend(DEV_BACKEND_URL)
+    allowDevBackend(DEV_BACKEND_URL, { isPackaged: app.isPackaged })
     return
   }
   // Shipped app stays local even if the backend is down — we never fall back to the
@@ -223,13 +225,16 @@ function stopBackend() {
 
 // ------------------------------------------------------- local UI server
 function startUiServer(dist) {
-  const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml',
-                 '.png': 'image/png', '.ico': 'image/x-icon', '.woff2': 'font/woff2', '.map': 'application/json',
-                 '.m4a': 'audio/mp4' }
   const server = http.createServer((req, res) => {
     const u = new URL(req.url, 'http://x')
     if (u.pathname.startsWith('/api/') || u.pathname === '/callback') {
-      const target = new URL(backendUrl)
+      // Only ever the local backend (or the dev one an unpackaged run registered): local-backend.js decides.
+      const target = localBackendTarget(backendUrl)
+      if (!target) {
+        res.writeHead(502, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ detail: 'not the local backend' }))
+        return
+      }
       const opts = {
         hostname: target.hostname, port: target.port || 80,
         path: u.pathname + u.search, method: req.method,
@@ -244,12 +249,8 @@ function startUiServer(dist) {
       return
     }
     // A file of the bundle: looked up without blocking main; the /api proxy above never waits on it.
-    staticFile(fs.promises, dist, u.pathname).then((f) => {
-      const headers = { 'Content-Type': MIME[path.extname(f)] || 'application/octet-stream' }
-      if (u.pathname.startsWith('/assets/')) headers['Cache-Control'] = 'public, max-age=31536000, immutable'
-      res.writeHead(200, headers)
-      fs.createReadStream(f).pipe(res)
-    }).catch((e) => { ignored('ui:serve-file', e); res.destroy() })
+    // A file that cannot be sent is answered (404/500) and logged, never thrown (ui-files.js).
+    void serveStatic(fs, dist, u.pathname, res, (e) => ignored('ui:serve-file', e))
   })
   return new Promise(resolve => {
     server.listen(0, '127.0.0.1', () => {
@@ -495,8 +496,8 @@ ipcMain.handle('update:check', () => { try { _autoUpdater?.checkForUpdates() } c
 // `tweaks` = the one beta-or-dev gate (diagTelemetryOn): the renderer shows tweakers' knobs by it (lib/tweaks.js).
 ipcMain.handle('update:getChannel', () => ({ beta: onBetaChannel(), locked: isBetaVersion(), tweaks: diagTelemetryOn() }))
 ipcMain.handle('update:setChannel', (_e, beta) => {
-  settings.betaChannel = Boolean(beta)
-  saveSettings()
+  // A switch that could not be saved did not happen: the renderer, on this rejection, re-reads the channel.
+  if (!changeSettings({ betaChannel: Boolean(beta) })) throw new Error('the release channel could not be saved')
   if (_autoUpdater) { _applyChannel(_autoUpdater); _autoUpdater.checkForUpdates().catch((e) => ignored('update:check', e)) }
   return { beta: onBetaChannel(), locked: isBetaVersion(), tweaks: diagTelemetryOn() }
 })
@@ -504,10 +505,11 @@ ipcMain.handle('update:setChannel', (_e, beta) => {
 // recolour the current window's gutter now. Presets are keyed into BACKDROPS; a custom theme brings its hex.
 ipcMain.handle('ui:setTheme', (_e, id, backdrop) => {
   if (typeof id !== 'string') return false
-  if (id === 'custom') { if (!BACKDROP_HEX.test(String(backdrop || ''))) { return false } settings.customBackdrop = String(backdrop).toLowerCase() }
+  /** @type {Record<string, string>} */
+  const patch = { theme: id }
+  if (id === 'custom') { if (!BACKDROP_HEX.test(String(backdrop || ''))) { return false } patch.customBackdrop = String(backdrop).toLowerCase() }
   else if (!BACKDROPS[id]) return false
-  settings.theme = id
-  saveSettings()
+  if (!changeSettings(patch)) return false
   try { if (win && !win.isDestroyed()) win.setBackgroundColor(BACKDROP.window) } catch (e) { ignored('window:backdrop', e) }
   return true
 })
@@ -745,9 +747,12 @@ app.whenReady().then(async () => {
     if (!r.ok) console.log('[hotkey] combo unavailable:', combo)
     ipcMain.handle('hotkey:get', () => ({ combo: registeredHotkey() }))
     ipcMain.handle('hotkey:set', (_e, next) => {
+      const previous = registeredHotkey()
       const res = registerHotkey(() => win, next)
-      if (res.ok) { settings.focusHotkey = next; saveSettings() }
-      return res
+      if (!res.ok || changeSettings({ focusHotkey: next })) return res
+      // Registered but not saved: the next launch would not have it, so the previous combo stays.
+      registerHotkey(() => win, previous)
+      return { ok: false, combo: next }
     })
   } catch (e) { console.log('[hotkey] register failed:', String(e)) }
 }).catch((e) => {

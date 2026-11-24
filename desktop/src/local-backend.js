@@ -3,7 +3,9 @@
 // the full URL (main.js resolves it) and keep their own timeouts and error handling; a URL that is not
 // the local backend is refused before any request, as a rejected promise, the same shape a network
 // failure has. The only other origin is the dev backend main.js registers in an unpackaged run that has
-// no bundled binary (allowDevBackend); a packaged build never registers one.
+// no bundled binary (allowDevBackend); in a packaged build allowDevBackend refuses, whoever calls it.
+// The UI server's /api proxy, which connects with node:http rather than fetch, takes its target from
+// localBackendTarget: the same check, so this module is the one choke point.
 'use strict'
 
 let devOrigin = null
@@ -27,7 +29,25 @@ function backendFetch(url, init) {
   return fetch(url, init)
 }
 
-/** DEV ONLY: main.js's unpackaged branch, when it points the app at a dev backend instead. */
-function allowDevBackend(url) { devOrigin = new URL(url).origin }
+/**
+ * The backend URL to connect to, parsed, when it is the local backend (or the registered dev one); else null.
+ * @param {unknown} url
+ * @returns {URL | null}
+ */
+function localBackendTarget(url) {
+  return isLocalBackend(url) ? new URL(String(url)) : null
+}
 
-module.exports = { backendFetch, allowDevBackend }
+/**
+ * DEV ONLY: main.js's unpackaged branch, when it points the app at a dev backend instead. Registers
+ * nothing unless the caller says the build is unpackaged (app.isPackaged false). True when registered.
+ * @param {string} url
+ * @param {{ isPackaged?: boolean }} [build]
+ */
+function allowDevBackend(url, { isPackaged } = {}) {
+  if (isPackaged !== false) return false
+  devOrigin = new URL(url).origin
+  return true
+}
+
+module.exports = { backendFetch, allowDevBackend, localBackendTarget }
