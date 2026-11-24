@@ -440,6 +440,18 @@ describe('WorkspaceView Close-enough fuzzy rare finder lifecycle', () => {
     expect(document.querySelector('webview')).toBeNull()
   })
 
+  it('reloads the saved query when the row no longer has its original slug', () => {
+    seedTree('s1')
+    render(<WorkspaceView league="Test League" visible />)
+    const original = document.querySelector('webview')
+    act(() => useWorkspace.getState().setField('s1', { slug: '', q: JSON.stringify(UNIQUE_QUERY) }))
+    expect(original.getAttribute('src')).toContain('orig-slug')
+    fireEvent.click(screen.getByRole('button', { name: 'Reload' }))
+    const replacement = document.querySelector('webview')
+    expect(replacement).not.toBe(original)
+    expect(JSON.parse(new URL(replacement.getAttribute('src')).searchParams.get('q'))).toEqual(UNIQUE_QUERY)
+  })
+
   it('surfaces rate/auth relax errors via toast and stays silent on cancelled', async () => {
     const events = []
     const off = bus.on((t) => events.push(t))
