@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from 'react'
+import React, { useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { api, cleanErr, fmt, toast } from '../lib/api.js'
 import Cur from './Cur.jsx'
 import CurrencyPicker from './CurrencyPicker.jsx'
@@ -24,28 +24,30 @@ function ConvertView({ currencies, capital }) {
   const [dirty, setDirty] = useState(false)      // the user has typed an amount: show that, not the seed
   const [res, setRes] = useState(null)
   const [busy, setBusy] = useState(false)
-  const asked = useRef(0)   // the newest question: an answer to an older one (the pair changed meanwhile) is dropped
+  // The pair on screen now: an answer for another pair (changed while it was in flight) is dropped.
+  const shown = useRef('')
+  useLayoutEffect(() => { shown.current = `${have}>${want}` }, [have, want])
 
   // The box holds a real number: what you hold of `have`, else 1, until you type your own.
   const amount = dirty ? typed : String(held[have] || 1)
   // QA 2026-10-08: a result drawn for the last pair stayed on screen under the new icons; a new pair starts clean.
   const changeHave = (id) => {
-    if (id !== have) { asked.current++; setHave(id); setRes(null) }
+    if (id !== have) { setHave(id); setRes(null) }
   }
   const changeWant = (id) => {
-    if (id !== want) { asked.current++; setWant(id); setRes(null) }
+    if (id !== want) { setWant(id); setRes(null) }
   }
   const effAmount = Number(amount) || 1
 
   const run = async () => {
     if (!have || !want || have === want) { toast('Pick two different currencies', false); return }
-    const question = ++asked.current
+    const pair = `${have}>${want}`
     setBusy(true)
     try {
       const answer = await api.convert(have, want, effAmount)
-      if (question === asked.current) setRes(answer)
+      if (shown.current === pair) setRes(answer)
     } catch (e) {
-      if (question === asked.current) { setRes(null); toast(cleanErr(e), false) }
+      if (shown.current === pair) { setRes(null); toast(cleanErr(e), false) }
     } finally { setBusy(false) }
   }
 
