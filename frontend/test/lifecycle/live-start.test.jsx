@@ -2,7 +2,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { act, renderHook } from '@testing-library/react'
 import { useLiveSync } from '../../src/lib/liveWiring.js'
 import { useWorkspace } from '../../src/lib/workspaceStore.js'
-import { usePings } from '../../src/lib/pingStore.js'
+import { liveLabel, usePings } from '../../src/lib/pingStore.js'
 import { installApiMock } from './setup.js'
 
 afterEach(() => vi.useRealTimers())
@@ -18,7 +18,7 @@ it('rearms a rejected live start without a workspace edit and bounds repeated fa
   expect(usePings.getState().searchStates.row).toBeUndefined()
   await act(async () => { await vi.advanceTimersByTimeAsync(120000) })
   expect(start).toHaveBeenCalledTimes(4)
-  expect(usePings.getState().searchStates.row).toBeUndefined()
+  expect(liveLabel({ armed: true }, usePings.getState().searchStates.row).text).toBe('Reconnecting…')
   start.mockImplementation(async () => {
     usePings.getState().setSearchState({ itemId: 'row', state: 'live' })
     return { ok: true }

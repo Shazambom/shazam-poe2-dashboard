@@ -94,7 +94,10 @@ export function useLiveSync(league) {
         }, { onFail: () => { if (owns()) usePings.getState().clearSearchState(n.id) } })
           .then(r => { if (owns() && r && !r.ok && r.reason === 'budget') { useWorkspace.getState().setField(n.id, { armed: false }); toast('Live-search cap reached — stop one first', false) } })
           .catch(() => {
-            if (owns()) lastKey = ''
+            if (owns()) {
+              lastKey = ''
+              usePings.getState().setSearchState({ itemId: n.id, state: 'reconnecting' })
+            }
             ignoredError('start live search')
           })
           .finally(() => { if (owns()) starting.delete(n.id) })
