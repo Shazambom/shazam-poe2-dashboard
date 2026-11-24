@@ -26,6 +26,7 @@ let loadPromise = null
 let inFlight = 0
 let retrying = false
 let retryGen = 0
+let lastError = null   // the newest save failure, shown once the bounded retries give up
 
 function scheduleRetry(getState) {
   const token = ++retryGen
@@ -45,7 +46,7 @@ function scheduleRetry(getState) {
         retrying = false
       }
     }, { delays: RETRY_MS.slice(1), stop })
-  })().catch(() => ignoredError('retry strat calc save'))
+  })().catch(() => { if (!stop()) toast(cleanErr(lastError), false) })
 }
 
 function makeAutosave(setState, getState) {
@@ -63,11 +64,12 @@ function makeAutosave(setState, getState) {
         return { saveState: typeof next === 'function' ? next(s.saveState) : next }
       }),
       onError: (e) => {
+        lastError = e
         setState({ saveState: 'error' })
-        if (!retrying) {
-          toast(cleanErr(e), false)
-          if (!isQuitting()) scheduleRetry(getState)
-        }
+        if (retrying) return
+        // A failure the retry may still fix says nothing yet; the toast comes only when every retry failed.
+        if (isQuitting()) toast(cleanErr(e), false)
+        else scheduleRetry(getState)
       },
     },
   )

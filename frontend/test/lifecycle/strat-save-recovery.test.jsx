@@ -94,20 +94,24 @@ it('retries a failed strat save on the shared bounded schedule and still recover
   useStratStore.getState().change(d => sc.rename(d, 's', 'Retried edit'))
   await advance(700)
   expect(put).toHaveBeenCalledTimes(1)
-  expect(events.mock.calls).toEqual([[{ text: 'locked', ok: false }]])
+  // A failure the retry may still fix says nothing yet (as settings saves do).
+  expect(events).not.toHaveBeenCalled()
 
   await advance(1000)
   expect(put).toHaveBeenCalledTimes(2)
   expect(put.mock.calls[1][0].strats[0].name).toBe('Retried edit')
-  expect(events).toHaveBeenCalledTimes(1)
+  expect(events).not.toHaveBeenCalled()
+  expect(useStratStore.getState().saveState).toBe('saved')
 
-  // Exhaust all bounded retries, then recover on quit.
+  // Exhaust all bounded retries: one toast, only then; recover on quit.
   put.mockRejectedValue(new Error('still locked'))
   useStratStore.getState().change(d => sc.rename(d, 's', 'Exhausted edit'))
   await advance(700)
-  await advance(60000)
+  await advance(5000)
+  expect(events).not.toHaveBeenCalled()
+  await advance(55000)
   expect(put).toHaveBeenCalledTimes(6) // 2 earlier + 1 initial + 3 bounded retries
-  expect(events).toHaveBeenCalledTimes(2)
+  expect(events.mock.calls).toEqual([[{ text: 'still locked', ok: false }]])
 
   put.mockImplementation(async calc => ({ calc }))
   const ok = await act(async () => flushForQuit())
