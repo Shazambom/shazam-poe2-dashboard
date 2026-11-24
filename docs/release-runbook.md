@@ -181,6 +181,8 @@ Check these every time; each one has cost a deploy before. (The general rules ev
 - **Run it in the background and wait on its own lines**, anchored to the line start: `^watching Windows CI run`,
   `^release .* is live`, `^FATAL`, `^EXIT`. Never match loose words (a test's name contains "missing"), and never
   chain sleeps.
+- **Lint-rule changes land on `main` only by the owner.** If the release diff touches `ops/lint/`, `ops/lint.sh`,
+  `ops/audit.sh` or another guard-protected path, ask the owner, push `main` with their OK, and only then publish.
 - **A local `-beta` build forces the beta channel**, so its diagnostics telemetry is on — useful for checking the
   release build itself while CI runs.
 
@@ -318,6 +320,11 @@ Check these every time; each one has cost a deploy before. (The general rules ev
   the comment. To read a WAL database copy read-only, set its `journal_mode` to DELETE first.
 
 Condensed and general, newest first; each came from a post-deploy audit (step 8).
+
+- **2026-11-24 (0.3.18-beta.1):** a release that carries lint-rule changes (`ops/lint/`, `ops/lint.sh`, `ops/audit.sh`,
+  `.editorconfig`, …) fails the guard on `main` ("Only the owner changes lint rules") until they are on `origin/main`.
+  Ask the owner first, push `main` with their OK, then publish. The EE2 sync's GGG `stats.json` drift (2026-10-05
+  lesson) recurred; expect it whenever GGG's trade stats moved since the last release.
 
 - **2026-11-23 (0.3.17):** detach `publish-github.sh` into its own session (`python3` `subprocess.Popen(..., start_new_session=True)`) rather than plain `nohup ... &` inside a PTY tool shell; closing the shell can still send `SIGHUP` (`EXIT 129`) to child `node` processes like `sync-ee2.mjs`.
 
