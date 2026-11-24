@@ -136,3 +136,33 @@ def test_a_single_have_rejection_is_a_real_error(monkeypatch):
 
     futs = asyncio.new_event_loop().run_until_complete(go())
     assert isinstance(futs[0].exception(), RuntimeError)  # no infinite retry at cap 1
+
+
+def test_candidate_builders_read_settings_once(monkeypatch):
+    calls = 0
+
+    def fake_settings():
+        nonlocal calls
+        calls += 1
+        return {
+            "league": "T",
+            "background_sweep": True,
+            "watchlist": ["chaos", "divine"],
+            "extra_pairs": [],
+            "live_max_age_s": 60,
+            "min_refetch_s": 60,
+        }
+
+    monkeypatch.setattr(orderbook, "get_settings", fake_settings)
+    monkeypatch.setattr(session, "get_cookie", lambda: "x")
+    monkeypatch.setattr(orderbook, "cached_at", lambda league, h, w: None)
+    monkeypatch.setattr(orderbook.pairscore, "score", lambda h, w: 0.0)
+
+    sweep = orderbook._sweep_candidates()
+    assert sweep is not None and len(sweep) == 2
+    assert calls == 1
+
+    calls = 0
+    watchlist = orderbook._watchlist_candidates()
+    assert len(watchlist) == 2
+    assert calls == 1
