@@ -110,6 +110,14 @@ export function flipChange(pct) {
 // - Different currencies: convert one into the other via the injected `exchange(amount, from, to)`
 //   function and compare on the shared currency.
 // Returns < 0 if a < b, > 0 if a > b, 0 if equal, or null if the pair cannot be converted.
+/** @typedef {{ amount?: unknown, currency?: string, divValue?: number }} Amount */
+/** @typedef {(amount: unknown, from: string, to: string) => number|null} ExchangeFn */
+/**
+ * @param {Amount|null|undefined} a
+ * @param {Amount|null|undefined} b
+ * @param {ExchangeFn|null} [exchangeFn]
+ * @returns {number|null}
+ */
 export function compareAmounts(a, b, exchangeFn = null) {
   const amtA = Number(a?.amount)
   const amtB = Number(b?.amount)
@@ -124,17 +132,22 @@ export function compareAmounts(a, b, exchangeFn = null) {
 
   if (typeof exchangeFn === 'function' && curA && curB) {
     const aInB = exchangeFn(amtA, curA, curB)
-    if (Number.isFinite(aInB)) return aInB - amtB
+    if (typeof aInB === 'number' && Number.isFinite(aInB)) return aInB - amtB
     const bInA = exchangeFn(amtB, curB, curA)
-    if (Number.isFinite(bInA)) return amtA - bInA
+    if (typeof bInA === 'number' && Number.isFinite(bInA)) return amtA - bInA
   }
 
-  if (Number.isFinite(a?.divValue) && Number.isFinite(b?.divValue)) {
-    return a.divValue - b.divValue
+  const dvA = a?.divValue, dvB = b?.divValue
+  if (typeof dvA === 'number' && typeof dvB === 'number' && Number.isFinite(dvA) && Number.isFinite(dvB)) {
+    return dvA - dvB
   }
   return null
 }
 
+/**
+ * @param {Amount|null|undefined} r
+ * @param {ExchangeFn|null|undefined} exchangeFn
+ */
 function isPriced(r, exchangeFn) {
   if (!Number.isFinite(Number(r?.amount))) return false
   if (Number.isFinite(r?.divValue)) return true
@@ -149,6 +162,12 @@ function isPriced(r, exchangeFn) {
 
 // Strict weak order over mixed-currency amounts. Never compares raw counts across unconvertible
 // currencies: priced rows always sort before unpriced rows; unpriced rows group by currency.
+/**
+ * @param {Amount|null|undefined} a
+ * @param {Amount|null|undefined} b
+ * @param {ExchangeFn|null|undefined} exchangeFn
+ * @param {number} mult
+ */
 export function compareAmountOrder(a, b, exchangeFn, mult) {
   const cmp = compareAmounts(a, b, exchangeFn)
   if (cmp !== null) return cmp !== 0 ? cmp * mult : 0
