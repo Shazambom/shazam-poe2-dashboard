@@ -5,6 +5,7 @@
 // before the workspace has loaded: an early write would replace the saved tree.
 import { savedSearches, searchOfNode } from './workspaceStore.js'
 import { canon } from './canon.js'
+import { sleep } from './retry.js'
 
 export const FROM_STRATS = 'From strats'
 
@@ -17,7 +18,7 @@ async function sameSearch(tree, query, league) {
   return null
 }
 
-export async function openInTrading({ query, name, league, store, go, wait = () => new Promise(r => { setTimeout(r, 100) }), tries = 100 }) {
+export async function openInTrading({ query, name, league, store, go, wait = () => sleep(100), tries = 100 }) {
   go()
   for (let i = 0; !store().loaded; i++) {
     if (i >= tries) return

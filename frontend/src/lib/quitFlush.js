@@ -1,3 +1,5 @@
+import { sleep } from './retry.js'
+
 const writers = new Map()
 
 export function registerFlush(write, { onHide = false } = {}) {
@@ -25,7 +27,7 @@ export async function flushForQuit() {
     let failed = await flushPass(new Set())
     for (const ms of [100, 250]) {
       if (!failed.size || expired) break
-      await new Promise(resolve => { setTimeout(resolve, ms) })
+      await sleep(ms)
       if (!expired) failed = await flushPass(failed)
     }
     return !failed.size

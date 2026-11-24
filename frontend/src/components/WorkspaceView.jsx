@@ -1,4 +1,5 @@
 import { ignoredError } from '../lib/ignoredError.js'
+import { sleep } from '../lib/retry.js'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useWorkspace, loadWorkspace, HISTORY_SYS } from '../lib/workspaceStore.js'
 import { tradeUrl, tradeHome, queryUrl, parseTradeUrl, isAuthBounceUrl, openTrade, isDesktop } from '../lib/session.js'
@@ -61,7 +62,7 @@ async function ensureInstantBuyout(el) {
   })()`
   for (let i = 0; i < 10; i++) {
     try { const r = await el.executeJavaScript(code); if (r === 'set' || r === 'already') return r } catch { ignoredError('inspect trade page') }
-    await new Promise(res => { setTimeout(res, 900) })
+    await sleep(900)
   }
   // Gave up: report what the dropdown actually says so the caller only hints when it is truly
   // NOT Instant Buyout (a slow load that lands there anyway must not raise a false hint).

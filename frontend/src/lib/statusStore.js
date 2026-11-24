@@ -4,6 +4,7 @@ import { api } from './api.js'
 import { nextPollMs } from './capital.js'
 import { restoreFailedEdits } from './stash.js'
 import { createSaveQueue } from './saveQueue.js'
+import { RETRY_MS as SETTINGS_RETRY_MS } from './retry.js'
 
 // The ONE poll of the app-level status: /api/status + /api/capital every 30s (started by App),
 // the rate budget, and the saved settings. Views that used to poll /api/session, /api/oauth/status
@@ -87,7 +88,6 @@ export const useStatus = create((set, get) => ({
 // a wait and goes out at once with everything still unsaved; once the retries are spent the values stay
 // here for the next change to carry. The cached settings show them meanwhile, so every view reads the
 // user's choice rather than the stale saved one.
-const SETTINGS_RETRY_MS = [1000, 4000, 15000]
 const settingsQueue = createSaveQueue(patch => api.putSettings(patch), {
   delays: SETTINGS_RETRY_MS,
   publish: () => useStatus.setState(state => {
