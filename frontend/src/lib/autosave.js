@@ -1,6 +1,6 @@
 import { ignoredError } from './ignoredError.js'
 import { registerFlush } from './quitFlush.js'
-import { retainedByWriter } from './saveQueue.js'
+import { flushForFailure } from './saveQueue.js'
 // Pure debounced autosave controller shared by useAutosave (lib/hooks.js).
 // Coalesces superseded edits while a write is in flight, lets flush() report whether pending/in-flight
 // saves succeeded, flushes unheld pending edits synchronously on unmount so shared queues keep FIFO order,
@@ -21,22 +21,23 @@ export function createAutosave(saver, delay = 700, { onState, onError, retainFai
   let failed = null, version = 0, unregister = null
 
   const retain = (error, payload, revision) => {
-    if (retainFailed && !retainedByWriter(error) && revision === version) failed = { payload }
+    if (retainFailed && revision === version) failed = { payload, retry: flushForFailure(error) }
   }
   const detach = () => {
-    if (unmounted && !inFlight && !unmountRun && !failed) { unregister?.(); unregister = null }
+    if (unmounted && !inFlight && !unmountRun && (!failed || failed.retry)) { unregister?.(); unregister = null }
   }
 
   const setState = (s) => { if (!unmounted) onState?.(s) }
 
-  const run = (payload) => {
+  const run = (payload, retry) => {
     const revision = version
     let settled = false
     let p = null
     p = (async () => {
       try {
-        await getSaver()?.(payload)
-        if (!unmounted) {
+        if (retry) await retry()
+        else await getSaver()?.(payload)
+        if (!unmounted && !retry) {
           setState('saved')
           clearTimeout(savedTimer)
           savedTimer = setTimeout(() => setState(s => (s === 'saved' ? '' : s)), 1400)
@@ -45,7 +46,7 @@ export function createAutosave(saver, delay = 700, { onState, onError, retainFai
       } catch (e) {
         retain(e, payload, revision)
         if (flushing) flushFailed = true
-        if (!unmounted) {
+        if (!unmounted && !retry) {
           setState('')
           onError?.(e)
         }
@@ -64,10 +65,10 @@ export function createAutosave(saver, delay = 700, { onState, onError, retainFai
   const dispatchPending = () => {
     if (!pending) return Promise.resolve(true)
     clearTimeout(timer); timer = null
-    const { payload } = pending
+    const { payload, retry } = pending
     pending = null
     due = false
-    return run(payload)
+    return run(payload, retry)
   }
 
   const save = (payload) => {
@@ -145,7 +146,7 @@ export function createAutosave(saver, delay = 700, { onState, onError, retainFai
     if (failed && !held) { pending = failed; failed = null }
     if (pending && !held) {
       const revision = version
-      const { payload } = pending
+      const { payload, retry } = pending
       pending = null
       due = false
       // Invoke saver synchronously so shared queues (settingsQueue, capitalQueue) preserve FIFO order
@@ -153,7 +154,7 @@ export function createAutosave(saver, delay = 700, { onState, onError, retainFai
       // flush() still awaits it and observes any sync throw or async rejection.
       let p
       try {
-        p = Promise.resolve(getSaver()?.(payload)).then(() => true, error => {
+        p = Promise.resolve(retry ? retry() : getSaver()?.(payload)).then(() => true, error => {
           retain(error, payload, revision)
           if (flushing) flushFailed = true
           return false

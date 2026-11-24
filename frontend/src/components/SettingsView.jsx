@@ -1,5 +1,6 @@
 import { ignoredError } from '../lib/ignoredError.js'
 import { refreshTweaks, useTweaks } from '../lib/tweaks.js'
+import { createSaveQueue } from '../lib/saveQueue.js'
 import { useEffect, useRef, useState } from 'react'
 import { api, surface, toast } from '../lib/api.js'
 import { useAutosave } from '../lib/hooks.js'
@@ -18,6 +19,12 @@ import ThemeBuilder from './ThemeBuilder.jsx'
 
 // Everything auto-saves (debounced) — there is no Save button. The league lives
 // in the top bar; essentials are visible; the rest sits behind "Advanced".
+const mappings = createSaveQueue(async patch => {
+  let result
+  for (const [metadata, currency] of Object.entries(patch)) result = await api.mapCurrency(metadata, currency)
+  return result
+})
+
 export default function SettingsView({ currencies, onSaved, onReportProblem }) {
   const [s, setS] = useState(null)
   const [mapTo, setMapTo] = useState({})
@@ -132,7 +139,7 @@ export default function SettingsView({ currencies, onSaved, onReportProblem }) {
                     <tr key={m}>
                       <td><code>{m.split('/').pop()}</code></td>
                       <td><input className="btn" list="cur-ids-2" aria-label={`Trade currency for ${m}`} placeholder="trade id" value={mapTo[m] ?? ''} onChange={e => setMapTo(x => ({ ...x, [m]: e.target.value }))} /></td>
-                      <td><button type="button" className="btn small" disabled={!mapTo[m]} onClick={() => surface(api.mapCurrency(m, mapTo[m]), 'Linked').then(onSaved).catch(() => ignoredError('map currency'))}>Link</button></td>
+                      <td><button type="button" className="btn small" disabled={!mapTo[m]} onClick={() => surface(mappings.save({ [m]: mapTo[m] }), 'Linked').then(onSaved).catch(() => ignoredError('map currency'))}>Link</button></td>
                     </tr>
                   ))}
                 </tbody>

@@ -2,7 +2,8 @@ import { ignoredError } from './ignoredError.js'
 import { create } from 'zustand'
 import { api } from './api.js'
 import { nextPollMs } from './capital.js'
-import { restoreFailedEdits } from './stash.js'
+import { capitalEntries, countedFromEdits, reconcileCapital, restoreFailedEdits } from './stash.js'
+import { registerFlush } from './quitFlush.js'
 import { createSaveQueue } from './saveQueue.js'
 import { RETRY_MS as SETTINGS_RETRY_MS } from './retry.js'
 
@@ -83,11 +84,7 @@ export const useStatus = create((set, get) => ({
   saveSettings: patch => settingsQueue.save(patch),
 }))
 
-// A user's setting change whose save failed is not lost: persistSettings keeps the latest value per key
-// here until a save lands. It is sent again after each wait in SETTINGS_RETRY_MS, and a newer change ends
-// a wait and goes out at once with everything still unsaved; once the retries are spent the values stay
-// here for the next change to carry. The cached settings show them meanwhile, so every view reads the
-// user's choice rather than the stale saved one.
+// Failed patches stay over the cached settings and travel with the next write, even after retries run out.
 const settingsQueue = createSaveQueue(patch => api.putSettings(patch), {
   delays: SETTINGS_RETRY_MS,
   publish: () => useStatus.setState(state => {
@@ -98,6 +95,19 @@ const settingsQueue = createSaveQueue(patch => api.putSettings(patch), {
 })
 
 export const persistSettings = patch => settingsQueue.save(patch, true)
+
+registerFlush(async () => {
+  await Promise.resolve()
+  const state = useStatus.getState()
+  if (state.capitalSaving) return state.waitCapital()
+  if (!capitalDirty.size) return true
+  if (!state.capital || state.capitalStale || state.salesFetching) return false
+  const edits = new Map(capitalDirty)
+  const { qty } = reconcileCapital(state.capital, edits)
+  capitalDirty.clear()
+  await state.saveCapital(capitalEntries(qty), countedFromEdits(edits), edits)
+  return true
+})
 
 // themeStore registers this so a loaded settings blob paints its theme (no import cycle).
 let syncTheme = null

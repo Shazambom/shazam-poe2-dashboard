@@ -113,7 +113,7 @@ export default function BoardView() {
   const saveWatchlist = async (next) => {
     setWatchlist(next)
     try { await surface(useStatus.getState().saveSettings({ watchlist: next })); await load() }
-    catch { setWatchlist(watchlist) }   // revert on failure
+    catch { ignoredError('save board watchlist') }
   }
   const addById = async (id) => {
     const m = opts.find(o => o.id === id)

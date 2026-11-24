@@ -7,6 +7,14 @@ export function registerFlush(write, { onHide = false } = {}) {
   return () => writers.delete(write)
 }
 
+export function scheduleUserSave(write, delay) {
+  const run = quitting => { cancel(); return write(quitting) }
+  const unregister = registerFlush(() => run(true))
+  const timer = setTimeout(() => run(false), delay)
+  const cancel = () => { clearTimeout(timer); unregister() }
+  return cancel
+}
+
 async function flushPass(failed, hide = false) {
   const results = await Promise.all([...writers].map(async ([write, onHide]) => {
     if (hide && !onHide) return null

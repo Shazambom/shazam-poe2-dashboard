@@ -1,4 +1,5 @@
 import { ignoredError } from '../lib/ignoredError.js'
+import { scheduleUserSave } from '../lib/quitFlush.js'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from '../lib/api.js'
 import { THEMES, DEFAULT_THEME, useTheme } from '../lib/themeStore.js'
@@ -38,7 +39,7 @@ export default function ThemeBuilder() {
   // Leaving the builder ends any preview (the chosen theme comes back) and cancels pending timers.
   useEffect(() => () => {
     clearTimeout(previewTimer.current)
-    clearTimeout(saveTimer.current)
+    saveTimer.current?.()
     useTheme.getState().endPreview()
   }, [])
 
@@ -51,7 +52,7 @@ export default function ThemeBuilder() {
     setExported(e => (e?.id === editingId ? e : null))
   }
 
-  const persist = (list) => useTheme.getState().saveCustoms(list).catch(() => toast('Could not save themes', false))
+  const persist = (list) => useTheme.getState().saveCustoms(list).catch(() => { toast('Could not save themes', false); return false })
   const upsert = (theme) => persist(customs.some(t => t.id === theme.id) ? customs.map(t => (t.id === theme.id ? theme : t)) : [...customs, theme])
 
   // Edits: paint at once (debounced a frame or two), save after the hand stops moving.
@@ -59,8 +60,8 @@ export default function ThemeBuilder() {
     setDraft(next)
     clearTimeout(previewTimer.current)
     previewTimer.current = setTimeout(() => useTheme.getState().preview(next.colors), 60)
-    clearTimeout(saveTimer.current)
-    saveTimer.current = setTimeout(() => upsert(next), 800)
+    saveTimer.current?.()
+    saveTimer.current = scheduleUserSave(() => upsert(next), 800)
   }
   const setPrimary = (k, hex) => update({ ...draft, colors: rederive(draft.colors, { ...primariesOf(draft.colors), [k]: hex }) })
   const setDerived = (k, hex) => update({ ...draft, colors: { ...draft.colors, [k]: isTriplet(k) ? hexToTriplet(hex) : hex } })
@@ -74,7 +75,7 @@ export default function ThemeBuilder() {
   const duplicate = (t) => { const theme = { ...t, id: newThemeId(), name: `${t.name} copy`, colors: { ...t.colors } }; upsert(theme); setEditId(theme.id) }
   const remove = (t) => {
     if (!window.confirm(`Delete theme "${t.name}"?`)) return
-    clearTimeout(saveTimer.current); clearTimeout(previewTimer.current)
+    saveTimer.current?.(); clearTimeout(previewTimer.current)
     if (editId === t.id) setEditId(null)
     if (t.id === chosen) useTheme.getState().apply(DEFAULT_THEME)
     persist(customs.filter(x => x.id !== t.id))
