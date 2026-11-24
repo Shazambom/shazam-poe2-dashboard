@@ -17,7 +17,7 @@ it('rechecks the displayed offer when another trade window supplies or outlives 
   const query = { type: 'test item' }
   const slug = await encodeSlug(query)
   const props = {
-    wv: { current: { getWebContentsId: () => 31 } }, node: { kind: 'search', slug },
+    wv: { current: { dataset: { nodeId: 'saved' }, getWebContentsId: () => 31 } }, node: { id: 'saved', kind: 'search', slug },
     league: 'Demo', navUrl: tradeUrl({ slug }, 'Demo'), visible: true,
   }
   const { result, rerender, unmount } = renderHook(() => useReprice(props))

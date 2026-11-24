@@ -6,6 +6,8 @@ import { bus } from '../../src/lib/api.js'
 import { useWorkspace, HISTORY_SYS } from '../../src/lib/workspaceStore.js'
 import { encodeSlug } from '../../src/lib/reprice.js'
 import { useRelax } from '../../src/lib/useRelax.js'
+import * as relaxQueries from '../../src/lib/relaxQuery.js'
+import * as repriceHook from '../../src/lib/useReprice.js'
 import * as session from '../../src/lib/session.js'
 
 const EE2_RARE_QUERY = {
@@ -162,6 +164,75 @@ describe('WorkspaceView Close-enough fuzzy rare finder lifecycle', () => {
 
   it('broadens the newly selected saved link after Exact on another compressed search', async () => {
     expect(await switchToCompressedSearch(true)).toEqual(savedMods)
+  })
+
+  async function switchFromUnrelaxedPage(nextId) {
+    const pageWith = mods => ({ ...EE2_RARE_QUERY, query: { ...EE2_RARE_QUERY.query,
+      stats: [{ type: 'and', filters: mods.map(id => ({ id, value: { min: 10 } })) }],
+    } })
+    const saved = pageWith([...savedMods, 'explicit.stat_mana'])
+    const next = { id: 'saved', kind: 'search', name: 'Saved armour', slug: await encodeSlug(saved.query) }
+    const firstBody = pageWith(savedMods)
+    firstBody.query.filters = { trade_filters: { filters: { price: { option: 'chaos' } } } }
+    const first = { id: 'first', kind: 'search', name: 'First rare', slug: await encodeSlug(firstBody.query) }
+    seedTree(first.id, [first, next])
+    const expected = nextId === next.id ? saved : EE2_RARE_QUERY
+    const request = window.poe2desktop.trade.relax
+    const preview = vi.spyOn(relaxQueries, 'relaxPreview')
+    const reprice = vi.spyOn(repriceHook, 'useReprice')
+    const guest = () => document.querySelector('webview')
+    const observe = (wcId, body) => {
+      guest().getWebContentsId = () => wcId
+      act(() => tapHandler({ kind: 'search', wcId, id: 'reused', league: 'Test League', body, ids: [] }))
+    }
+    const checkRelax = async (body) => {
+      const chip = await screen.findByRole('button', { name: 'Close enough' })
+      const summary = preview.mock.results.at(-1).value
+      fireEvent.click(chip)
+      await screen.findByText('Relaxed')
+      const { query } = request.mock.lastCall[0]
+      expect.soft(summary.total).toBe(body.query.stats[0].filters.length)
+      expect(query.stats[0].filters.map(f => f.id)).toEqual(body.query.stats[0].filters.map(f => f.id))
+      expect(query.status.option).toBe('securable')
+      expect(JSON.parse(new URL(guest().getAttribute('src')).searchParams.get('q')).query.status.option).toBe('securable')
+    }
+    const { rerender } = render(<WorkspaceView league="Test League" visible />)
+    const outgoing = guest()
+    observe(181, firstBody)
+    act(() => tapHandler({ kind: 'options', wcId: 181, price: [{ id: 'chaos', text: 'Chaos Orb' }] }))
+    await act(async () => navHandler({ wcId: 181, phase: 'stop', url: outgoing.getAttribute('src') }))
+    await screen.findByRole('button', { name: 'Find cheapest' })
+    expect(preview.mock.results.at(-1).value.total).toBe(3)
+    reprice.mockClear()
+    act(() => useWorkspace.getState().setActive(nextId))
+    expect(guest()).not.toBe(outgoing)
+    const exactAddress = guest().getAttribute('src')
+    guest().getWebContentsId = () => 182
+    act(() => tapHandler({ kind: 'fetch', wcId: 181, searchId: 'reused', rows: [{ id: 'late', currency: 'divine', amount: 1 }] }))
+    rerender(<WorkspaceView league="Test League" visible />)
+    expect(request).not.toHaveBeenCalled()
+    expect(guest().getAttribute('src')).toBe(exactAddress)
+    expect.soft(reprice.mock.results.every(({ value }) => !value.own?.search && !value.emptyExact && !value.state && !value.offer)).toBe(true)
+    await checkRelax(expected)
+    fireEvent.click(screen.getByRole('button', { name: 'Exact' }))
+    expect(guest().getAttribute('src')).toBe(exactAddress)
+    const fresh = pageWith(['explicit.stat_str', 'explicit.stat_dex', 'explicit.stat_int'])
+    observe(183, fresh)
+    await checkRelax(fresh)
+    expect(request).toHaveBeenCalledTimes(2)
+    expect(window.poe2desktop.openTrade).not.toHaveBeenCalled()
+    expect(apiCalls.every(call => call.url.startsWith('/api/'))).toBe(true)
+    return new URL(exactAddress)
+  }
+
+  it('previews and broadens a saved slug after leaving an unrelaxed TAP page', async () => {
+    const address = await switchFromUnrelaxedPage('saved')
+    expect(address.pathname.split('/').at(-1)).toBe(useWorkspace.getState().nodeById('saved').slug)
+  })
+
+  it('previews and broadens an EE2 History query after leaving an unrelaxed TAP page', async () => {
+    const address = await switchFromUnrelaxedPage('h1')
+    expect(JSON.parse(address.searchParams.get('q'))).toEqual(EE2_RARE_QUERY)
   })
 
   it('shows Close enough on EE2 History rare, highlights on empty exact, shows Relaxing…, applies real-rate currency selection, relaxes further, snaps back to Exact, and never mutates node.q', async () => {

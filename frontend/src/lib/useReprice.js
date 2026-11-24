@@ -63,18 +63,21 @@ export function useReprice({ wv, node, navUrl, inHistory, remountKey, league, vi
   // search gets the room (owner, 2026-10-03).
   useEffect(() => () => { window.poe2desktop?.trade?.listingsCancel?.() }, [remountKey, visible])
 
-  let wcId
-  try { wcId = wv.current?.getWebContentsId() ?? null } catch { wcId = null }
+  const nodeId = node?.id ?? null
+  const guest = wv.current
+  let wcId = null
+  if (nodeId != null && guest?.dataset.nodeId === String(nodeId)) {
+    try { wcId = guest.getWebContentsId() ?? null } catch { wcId = null }
+  }
   const own = wcId == null ? null : TAP.pageOf(wcId)
   // A window that is gone (another row, ↻) leaves the store: its rows are not evidence any more.
   useEffect(() => (wcId == null ? undefined : () => TAP.drop(wcId)), [wcId])
 
   // The row's own query, from its link (a run search's slug is its query): the page counts only once it holds it.
-  const nodeId = node?.id ?? null
   const selectedId = useEffectEvent(() => nodeId)
   const [decoder] = useState(() => createStore(() => null))
   const decodedLink = useStore(decoder)
-  const rowQuery = decodedLink?.query ?? null
+  const rowQuery = decodedLink?.nodeId === nodeId ? decodedLink.query : null
   useEffect(() => {
     let live = true
     const owner = selectedId()
@@ -176,9 +179,7 @@ export function useReprice({ wv, node, navUrl, inHistory, remountKey, league, vi
 
   return {
     offer, apply, state, find,
-    own,
-    // A decoded address can outlive the webview that supplied it during a row switch.
-    rowQuery: decodedLink?.nodeId === nodeId ? rowQuery : null,
+    own, rowQuery,
     prices: page?.prices || prices.P,
     options: page?.options || TAP.options(),
     emptyExact,
