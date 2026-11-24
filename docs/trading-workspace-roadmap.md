@@ -507,8 +507,9 @@ Returns `{ q, name, item:{name, baseType, rarity, itemClass}, host }` or `{ erro
 **Worker protocol** (`{t:'init', dataDir}` → `{t:'ready', ms, items, stats}`; `{t:'build', id, raw, prefs}` →
 `{t:'built', id, …result}` | `{t:'error', id, stage, message}`); 3 s per-build timeout. Lifecycle per §4.3.
 
-**`desktop/scripts/sync-ee2.mjs`** — run by `desktop/publish-github.sh` before the test gate on every release
-(network is required to release anyway); any step failing aborts the release:
+**`desktop/scripts/sync-ee2.mjs`** — run by `desktop/publish-github.sh` on every release, after the test gate
+(which runs again if the sync changed files); network is required to release anyway. Any step failing restores
+the vendored tree and aborts the release:
 
 1. Resolve EE2's latest GitHub release tag (`Kvan7/Exiled-Exchange-2`; `--tag` to pin) and fetch it into
    `~/.cache/arbiter/ee2/<tag>`. The local `~/Exiled-Exchange-2` checkout is not used.
