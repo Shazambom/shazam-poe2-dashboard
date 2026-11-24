@@ -16,6 +16,7 @@ const { ignored } = require('./ignored.js')
 
 const KEEP_CORRUPT = 2
 const RETRY_DELAYS_MS = [20, 40, 80]
+const RENAME_RETRY_CODES = new Set(['EPERM', 'EBUSY', 'EACCES'])
 const waitBuf = new Int32Array(new SharedArrayBuffer(4))
 const pauseSync = (ms) => { Atomics.wait(waitBuf, 0, 0, ms) }
 // Paths whose file could not be read or whose corrupt file could not be moved aside: never written over this run.
@@ -29,6 +30,16 @@ function readRawWithRetry(f) {
   for (let i = 0; ; i++) {
     try { return fs.readFileSync(f, 'utf8') } catch (e) {
       if (e?.code === 'ENOENT' || i >= RETRY_DELAYS_MS.length) throw e
+      pauseSync(RETRY_DELAYS_MS[i])
+    }
+  }
+}
+
+// Renames `from` over `to`, retrying briefly when another process holds the target open (Windows).
+function renameWithRetry(from, to) {
+  for (let i = 0; ; i++) {
+    try { fs.renameSync(from, to); return } catch (e) {
+      if (!RENAME_RETRY_CODES.has(e?.code) || i >= RETRY_DELAYS_MS.length) throw e
       pauseSync(RETRY_DELAYS_MS[i])
     }
   }
@@ -96,7 +107,7 @@ function writeSettings(file, settings) {
     fs.fsyncSync(fd)
     fs.closeSync(fd)
     fd = null
-    fs.renameSync(tmp, f)
+    renameWithRetry(tmp, f)
     return true
   } catch (e) {
     ignored('settings:write', e)
