@@ -724,11 +724,11 @@ app.whenReady().then(async () => {
     })
   } catch (e) { console.log('[feedback] register failed:', String(e)) }
   try {
-    const { registerHotkey, registeredHotkey } = require('./trade/hotkey.js')
-    const combo = settings.focusHotkey || 'CommandOrControl+G'
+    const { DEFAULT_HOTKEY, registerHotkey, registeredHotkey, hotkeyState } = require('./trade/hotkey.js')
+    const combo = settings.focusHotkey || DEFAULT_HOTKEY
     const r = registerHotkey(() => win, combo)
     if (!r.ok) console.log('[hotkey] combo unavailable:', combo)
-    ipcMain.handle('hotkey:get', () => ({ combo: registeredHotkey() }))
+    ipcMain.handle('hotkey:get', () => hotkeyState(settings.focusHotkey))
     ipcMain.handle('hotkey:set', (_e, next) => {
       const previous = registeredHotkey()
       const res = registerHotkey(() => win, next)
