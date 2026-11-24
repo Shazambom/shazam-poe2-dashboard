@@ -6,7 +6,7 @@ import { escapeRe } from './regex/shortest.js'
 import { LIMIT } from './regex/defaults.js'
 import { matching } from './search.js'
 import { relativeTime, rarityOf } from './sales.js'
-import { makeExchange } from './price.js'
+import { compareAmountOrder, compareAmounts, makeExchange } from './price.js'
 import { parseNodeQuery } from './relaxQuery.js'
 import { TAU } from './reprice.js'
 import { flatten } from './tree.js'
@@ -322,58 +322,9 @@ export function filterMerchantRows(rows, { verdict = 'all', search = '', hideDon
   return out
 }
 
-// Compare two listings (a, b) in pairs by real currency value:
-// - Same currency: compare amounts directly (exact, zero conversion error).
-// - Different currencies: convert one into the other via the injected `exchange(amount, from, to)`
-//   function and compare on the shared currency.
-// Returns < 0 if a < b, > 0 if a > b, 0 if equal, or null if the pair cannot be converted.
-export function compareMerchantPrices(a, b, exchangeFn = null) {
-  const amtA = Number(a?.amount)
-  const amtB = Number(b?.amount)
-  const okA = Number.isFinite(amtA)
-  const okB = Number.isFinite(amtB)
-  if (!okA && !okB) return 0
-  if (!okA || !okB) return null
-
-  const curA = String(a?.currency || '')
-  const curB = String(b?.currency || '')
-  if (curA && curA === curB) return amtA - amtB
-
-  if (typeof exchangeFn === 'function' && curA && curB) {
-    const aInB = exchangeFn(amtA, curA, curB)
-    if (Number.isFinite(aInB)) return aInB - amtB
-    const bInA = exchangeFn(amtB, curB, curA)
-    if (Number.isFinite(bInA)) return amtA - bInA
-  }
-
-  if (Number.isFinite(a?.divValue) && Number.isFinite(b?.divValue)) {
-    return a.divValue - b.divValue
-  }
-  return null
-}
-
-function isRowPriced(r, exchangeFn) {
-  if (!Number.isFinite(Number(r?.amount))) return false
-  if (Number.isFinite(r?.divValue)) return true
-  const cur = String(r?.currency || '')
-  if (!cur || typeof exchangeFn !== 'function') return false
-  return (
-    Number.isFinite(exchangeFn(1, cur, 'divine'))
-    || Number.isFinite(exchangeFn(1, cur, 'exalted'))
-    || Number.isFinite(exchangeFn(1, cur, 'chaos'))
-  )
-}
-
-// Strict weak order over mixed-currency listings. Never compares raw counts across unconvertible
-// currencies: priced rows always sort before unpriced rows; unpriced rows group by currency.
-function comparePriceOrder(a, b, exchangeFn, mult) {
-  const cmp = compareMerchantPrices(a, b, exchangeFn)
-  if (cmp !== null) return cmp !== 0 ? cmp * mult : 0
-  const pa = isRowPriced(a, exchangeFn)
-  const pb = isRowPriced(b, exchangeFn)
-  if (pa !== pb) return pa ? -1 : 1
-  return String(a?.currency || '').localeCompare(String(b?.currency || ''))
-}
+// Mixed-currency listings rank pairwise through the shared comparators in price.js (Arbitrage's Profit uses them too).
+export const compareMerchantPrices = compareAmounts
+const comparePriceOrder = compareAmountOrder
 
 export function sortMerchantRows(rows, { key = 'verdict', dir = 'asc', exchange = null } = {}) {
   const mult = dir === 'desc' ? -1 : 1

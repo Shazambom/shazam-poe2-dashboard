@@ -153,6 +153,36 @@ describe('Stash, Arbitrage SSE, Convert, and StratCalc lifecycles', () => {
     expect(screen.getByText(/Couldn't load routes: backend unavailable/)).toBeTruthy()
   })
 
+  // Owner 2026-11-24: sorting by Profit ordered raw numbers across currencies (+10 Chaos above +1 Divine). Profit ranks
+  // margins against one another the way Merchant ranks prices: pairwise through the one exchange().
+  it('RoutesView sorts Profit by what each margin is worth, not by its raw number', async () => {
+    installApiMock()
+    render(<RoutesView />)
+    await waitFor(() => expect(FakeEventSource.instances).toHaveLength(1))
+    const es = FakeEventSource.instances.at(-1)
+    const loop = (id, start, name, margin) => ({
+      id, start, start_name: name, start_amount: 100, end_amount: 100 + margin, margin, margin_pct: margin,
+      path: [start, 'exalted', start], path_names: [name, 'Exalted Orb', name], kinds: ['digest', 'digest'],
+      score: 1, fill_hours: 1, gold: 100, cycles: 1, cycle_unit: 100,
+      steps: [
+        { from: start, from_name: name, to: 'exalted', to_name: 'Exalted Orb', in: 100, out: 100, rate: 1, kind: 'digest', gold: 50, vol_h: 500 },
+        { from: 'exalted', from_name: 'Exalted Orb', to: start, to_name: name, in: 100, out: 100 + margin, rate: 1, kind: 'digest', gold: 50, vol_h: 500 },
+      ],
+    })
+    act(() => {
+      es.emit('meta', { reference: 'exalted', candidates: 2, window_h: 24, capital: {} })
+      es.emit('routes', [loop('chaos-loop', 'chaos', 'Chaos Orb', 10), loop('divine-loop', 'divine', 'Divine Orb', 1)])
+      es.emit('done', { count: 2, candidates: 2, order: ['chaos-loop', 'divine-loop'], scores: { 'chaos-loop': 1, 'divine-loop': 1 } })
+    })
+    await waitFor(() => expect(document.querySelectorAll('tbody tr.route')).toHaveLength(2))
+    const order = () => [...document.querySelectorAll('tbody tr.route .gain')].map(c => (c.textContent.trim().startsWith('+10') ? 'chaos' : 'divine'))
+    fireEvent.click(screen.getByTitle('Sort by Profit'))
+    // +1 Divine (1 div) is worth more than +10 Chaos (0.5 div at the mock's prices).
+    await waitFor(() => expect(order()).toEqual(['divine', 'chaos']))
+    fireEvent.click(screen.getByTitle('Sort by Profit'))
+    await waitFor(() => expect(order()).toEqual(['chaos', 'divine']))
+  })
+
   it('RoutesView streams SSE meta/routes/done and closes EventSource cleanly on unmount', async () => {
     installApiMock()
     const { rerender, unmount } = render(<RoutesView />)

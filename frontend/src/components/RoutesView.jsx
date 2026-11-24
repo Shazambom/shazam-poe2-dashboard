@@ -21,6 +21,8 @@ import { useTweaks } from '../lib/tweaks.js'
 import { yieldTiers } from '../lib/yieldTier.js'
 import { DEFAULT_FILTERS, filtersFromSettings, filtersToSave, sameSearch, searchKeyOf, streamQuery } from '../lib/routeFilters.js'
 import { activePreset } from '../lib/arbPresets.js'
+import { compareAmountOrder, makeExchange } from '../lib/price.js'
+import { useShallow } from 'zustand/shallow'
 
 const INF = Infinity
 const SEARCH_RETRIES = 2   // a timed-out search is searched again this many times, then the page says so
@@ -30,7 +32,7 @@ const SEARCH_RETRIES = 2   // a timed-out search is searched again this many tim
 // never sit on it. The default order is the hidden score, best first; clicking "Loop" returns to it.
 const COLS = [
   ['commit', 'Needs', r => r.start_amount ?? 0, 'desc'],
-  ['margin', 'Profit', r => r.margin ?? -INF, 'desc'],
+  ['margin', 'Profit', null, 'desc'],   // ranked by what the margin is worth: see `byValue` below
   ['velocity', 'Yield', r => r.velocity_inf ? INF : (r.velocity ?? -INF), 'desc'],
   ['gold', 'Gold', r => r.gold_free ? -1 : (r.gold ?? INF), 'asc'],
   ['fill_hours', 'Takes', r => r.fill_hours ?? INF, 'asc'],
@@ -134,15 +136,25 @@ export default function RoutesView({ capital, status, currencies }) {
   const set = (k) => (e) => update(k, e.target.type === 'checkbox' ? e.target.checked : e.target.value)
   const clickSort = (key, defDir) => setSort(s => s.key === key ? { key, dir: s.dir === 'desc' ? 'asc' : 'desc' } : { key, dir: defDir })
   const ref = meta?.reference ?? capital?.reference ?? 'ref'
+  // Profit ranks margins against one another the way Merchant ranks prices: pairwise through the one exchange()
+  // (same currency: the amounts; different: one converted into the other), never by the raw number.
+  const prices = useApi(() => api.stratPrices(), []).data?.prices
+  const wealthPrices = useStatus(useShallow(s => s.status?.wealth_prices || null))
+  const exchangeFn = useMemo(() => makeExchange(prices || {}, wealthPrices), [prices, wealthPrices])
   // Surface only the standout loops: those at least 1σ better-than-mean on the SELECTED metric
   // (velocity/score by default), and split what's left into σ bands so the truly exceptional
   // loops read apart from the merely-good. Degenerate data (too few loops, no spread, or nothing
   // clears +1σ) falls back to showing everything so the view never blanks.
   const banded = useMemo(() => {
-    const [acc, defDir] = SORTS[sort.key] ?? SORTS.score
+    const [byKey, defDir] = SORTS[sort.key] ?? SORTS.score
+    const byValue = sort.key === 'margin'
+    const amount = r => ({ amount: r.margin, currency: r.start })
+    // The σ bands need one number per loop: Profit's is the margin exchanged into the reference.
+    const acc = byValue ? (r => exchangeFn(r.margin, r.start, ref) ?? -INF) : byKey
     const desc = defDir !== 'asc'
     const limit = Number(f.limit) || 100
     const display = (arr) => {
+      if (byValue) return arr.sort((a, b) => compareAmountOrder(amount(a), amount(b), exchangeFn, sort.dir === 'asc' ? 1 : -1))
       arr.sort((a, b) => { const ka = acc(a), kb = acc(b); return ka === kb ? 0 : kb > ka ? 1 : -1 })
       if (sort.dir === 'asc') arr.reverse()
       return arr
@@ -163,7 +175,7 @@ export default function RoutesView({ capital, status, currencies }) {
     if (!kept.length) return all()
     kept = display(kept).slice(0, limit)
     return { rows: kept.map(r => ({ r, band: Math.min(4, Math.max(1, Math.floor(sig(r)))) })), active: true }
-  }, [routes, sort, f.limit])
+  }, [routes, sort, f.limit, exchangeFn, ref])
   const shown = banded.rows
   const tiers = useMemo(() => yieldTiers(shown.map(({ r }) => r.velocity_inf ? Infinity : r.velocity)), [shown])
   const quoteAge = useMemo(() => Math.max(0, ...shown.map(({ r }) => r.max_age_s ?? 0)), [shown])
