@@ -77,14 +77,16 @@ function Ee2HistorySettings() {
 }
 
 
+const DEFAULT_HOTKEY = 'CommandOrControl+G'
+
 // Trading settings: the global focus hotkey (desktop). Notifications live in NotificationsPanel.
 export default function TradingSettings() {
   const ee2Present = useWorkspace(s => s.ee2Present)
-  const [hotkey, setHotkey] = useState('')   // the combo main has registered; empty while none is
+  const [hotkey, setHotkey] = useState(DEFAULT_HOTKEY)   // the registered combo, or the saved/default label when unregistered
   const [capturing, setCapturing] = useState(false)
 
   useEffect(() => {
-    if (window.poe2desktop?.hotkey) window.poe2desktop.hotkey.get().then(r => setHotkey(r?.combo || '')).catch(() => ignoredError('load hotkey'))
+    if (window.poe2desktop?.hotkey) window.poe2desktop.hotkey.get().then(r => setHotkey(r?.combo || r?.saved || DEFAULT_HOTKEY)).catch(() => ignoredError('load hotkey'))
   }, [])
 
   // Capture a key combo for the hotkey (desktop).
@@ -114,7 +116,7 @@ export default function TradingSettings() {
       {isDesktop ? (
         <div className="set-row">
           <span style={{ width: 120 }}>Focus hotkey</span>
-          <button type="button" className="btn small" tabIndex={0} onKeyDown={onKey} onClick={() => setCapturing(true)}>
+          <button type="button" className="btn small" tabIndex={0} aria-label="Focus hotkey" onKeyDown={onKey} onClick={() => setCapturing(true)}>
             {capturing ? 'Press a combo…' : hotkey.replace('CommandOrControl', '⌘/Ctrl')}
           </button>
           <span className="muted" style={{ fontSize: 12 }}>raises Arbiter to Trading → Live</span>

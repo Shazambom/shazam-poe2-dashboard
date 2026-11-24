@@ -11,6 +11,7 @@
 const { ignored } = require('./ignored.js')
 const { backendFetch, allowDevBackend, localBackendTarget } = require('./local-backend.js')
 const { loadSettings, updateSettings } = require('./settings-store.js')
+const { windowBackdrop, applyWindowTheme } = require('./window-theme.js')
 const { app, BrowserWindow, Menu, Notification, clipboard, dialog, ipcMain, session, shell, nativeTheme } = require('electron')
 const { spawn } = require('node:child_process')
 const fs = require('node:fs')
@@ -47,17 +48,8 @@ const LOCAL_BACKEND_PORT = 8210
 const DEFAULTS = { betaChannel: false, theme: 'vault' }
 // DEV ONLY: where an unpackaged launch without a bundled binary finds a backend.
 const DEV_BACKEND_URL = process.env.ARBITER_DEV_BACKEND_URL || telemetry.SHAZAM
-// The two near-black window backdrops (twins of --bg / the trade webview backdrop in styles.css).
-// The window backdrop is painted before any CSS loads, so it is keyed by the UI theme preset the
-// renderer last chose (mirrored into desktop-settings.json). Each value is the twin of that
-// preset's --backdrop token in frontend/src/styles.css; `trade` (behind the embedded trade site) is shared.
-const BACKDROPS = {   // painted before the CSS loads
-  vault: '#191b22', ash: '#331f24', divinity: '#e9d2ae', sekhemas: '#101012', vaal: '#160d0c', azmeri: '#2f3640',
-}
-const BACKDROP_HEX = /^#[0-9a-f]{6}$/i
-// A custom theme (built in Settings → Appearance) carries its own --backdrop; the renderer hands it over
-// with the 'custom' id and it is remembered next to the theme id.
-const windowBackdrop = (s) => (s.theme === 'custom' && BACKDROP_HEX.test(s.customBackdrop || '') ? s.customBackdrop : BACKDROPS[s.theme] || BACKDROPS.vault)
+// The window backdrop is painted before any CSS loads, keyed by the UI theme preset the renderer last
+// chose (mirrored into desktop-settings.json); `trade` (behind the embedded trade site) is shared.
 const BACKDROP = { get window() { return windowBackdrop(settings) }, trade: '#0c0d10' }
 
 const settingsPath = () => path.join(app.getPath('userData'), 'desktop-settings.json')
@@ -502,17 +494,8 @@ ipcMain.handle('update:setChannel', (_e, beta) => {
   return { beta: onBetaChannel(), locked: isBetaVersion(), tweaks: diagTelemetryOn() }
 })
 // UI theme (colour only): remember it so the next launch paints the right backdrop before CSS, and
-// recolour the current window's gutter now. Presets are keyed into BACKDROPS; a custom theme brings its hex.
-ipcMain.handle('ui:setTheme', (_e, id, backdrop) => {
-  if (typeof id !== 'string') return false
-  /** @type {Record<string, string>} */
-  const patch = { theme: id }
-  if (id === 'custom') { if (!BACKDROP_HEX.test(String(backdrop || ''))) { return false } patch.customBackdrop = String(backdrop).toLowerCase() }
-  else if (!BACKDROPS[id]) return false
-  if (!changeSettings(patch)) return false
-  try { if (win && !win.isDestroyed()) win.setBackgroundColor(BACKDROP.window) } catch (e) { ignored('window:backdrop', e) }
-  return true
-})
+// recolour the current window's gutter now. Presets and custom hexes are handled in window-theme.js.
+ipcMain.handle('ui:setTheme', (_e, id, backdrop) => applyWindowTheme(id, backdrop, changeSettings, win))
 ipcMain.handle('update:install', () => {
   if (IS_MAC) {
     // Can't hot-swap unsigned — open the DMG in the browser for a manual install; keep the
@@ -741,11 +724,11 @@ app.whenReady().then(async () => {
     })
   } catch (e) { console.log('[feedback] register failed:', String(e)) }
   try {
-    const { registerHotkey, registeredHotkey } = require('./trade/hotkey.js')
-    const combo = settings.focusHotkey || 'CommandOrControl+G'
+    const { DEFAULT_HOTKEY, registerHotkey, registeredHotkey, hotkeyState } = require('./trade/hotkey.js')
+    const combo = settings.focusHotkey || DEFAULT_HOTKEY
     const r = registerHotkey(() => win, combo)
     if (!r.ok) console.log('[hotkey] combo unavailable:', combo)
-    ipcMain.handle('hotkey:get', () => ({ combo: registeredHotkey() }))
+    ipcMain.handle('hotkey:get', () => hotkeyState(settings.focusHotkey))
     ipcMain.handle('hotkey:set', (_e, next) => {
       const previous = registeredHotkey()
       const res = registerHotkey(() => win, next)

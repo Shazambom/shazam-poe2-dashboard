@@ -31,8 +31,17 @@ function registerHotkey(getWin, combo) {
   return { ok, combo }
 }
 
+const DEFAULT_HOTKEY = 'CommandOrControl+G'
+
 // The combo registered right now, or null (none started, or the OS refused it).
 const registeredHotkey = () => current
 
+// State reported by hotkey:get: the registered combo (or null), the saved/default combo, and whether it is active.
+const hotkeyState = (saved) => ({
+  combo: current,
+  saved: saved || DEFAULT_HOTKEY,
+  registered: current !== null,
+})
+
 function unregisterAll() { try { globalShortcut.unregisterAll() } catch (e) { ignored('hotkey:unregister-all', e) } current = null }
-module.exports = { registerHotkey, registeredHotkey, unregisterAll }
+module.exports = { DEFAULT_HOTKEY, registerHotkey, registeredHotkey, hotkeyState, unregisterAll }

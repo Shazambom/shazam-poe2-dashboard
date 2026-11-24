@@ -141,8 +141,53 @@ test('a settings path that cannot be read (a directory) is moved aside too', () 
     const f = join(dir, 'desktop-settings.json')
     mkdirSync(f)
     assert.deepEqual(loadSettings(() => f, DEFAULTS), DEFAULTS)
-    assert.equal(readdirSync(dir).filter(n => n.startsWith('desktop-settings.json.corrupt-')).length, 1)
-    assert.equal(writeSettings(() => f, DEFAULTS), true, 'the path is free for a good file')
+    assert.equal(readdirSync(dir).filter(n => n.startsWith('desktop-settings.json.corrupt-')).length, 0)
+    assert.equal(writeSettings(() => f, DEFAULTS), false, 'held on non-ENOENT read error; never overwritten')
+  } finally { rmSync(dir, { recursive: true, force: true }) }
+})
+
+test('a transient read error (EBUSY) is retried and reads the saved values when it clears', (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'arb-set-'))
+  try {
+    const f = join(dir, 'desktop-settings.json')
+    const saved = JSON.stringify({ theme: 'ash', focusHotkey: 'Alt+G' })
+    writeFileSync(f, saved)
+    const realRead = fs.readFileSync
+    let calls = 0
+    t.mock.method(fs, 'readFileSync', (file, opts) => {
+      calls++
+      if (calls === 1) throw Object.assign(new Error('EBUSY: resource busy or locked'), { code: 'EBUSY' })
+      return realRead(file, opts)
+    })
+    assert.deepEqual(loadSettings(() => f, DEFAULTS), { ...DEFAULTS, theme: 'ash', focusHotkey: 'Alt+G' })
+    assert.equal(calls, 2)
+    t.mock.restoreAll()
+    assert.equal(readdirSync(dir).filter(n => n.startsWith('desktop-settings.json.corrupt-')).length, 0)
+    assert.equal(readFileSync(f, 'utf8'), saved)
+  } finally { rmSync(dir, { recursive: true, force: true }) }
+})
+
+test('a persistent read error (EBUSY) leaves the valid file in place, creates no corrupt copy, and refuses writes', (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'arb-set-'))
+  try {
+    const f = join(dir, 'desktop-settings.json')
+    const saved = JSON.stringify({ theme: 'ash' })
+    writeFileSync(f, saved)
+    let calls = 0
+    t.mock.method(fs, 'readFileSync', () => {
+      calls++
+      throw Object.assign(new Error('EBUSY: resource busy or locked'), { code: 'EBUSY' })
+    })
+    const started = Date.now()
+    assert.deepEqual(loadSettings(() => f, DEFAULTS), DEFAULTS)
+    assert.ok(calls > 1, 'read is retried before giving up')
+    assert.ok(Date.now() - started < 1000, 'retries stay bounded well under a second')
+    t.mock.restoreAll()
+    assert.equal(readdirSync(dir).filter(n => n.startsWith('desktop-settings.json.corrupt-')).length, 0)
+    assert.equal(readFileSync(f, 'utf8'), saved)
+    assert.equal(writeSettings(() => f, DEFAULTS), false)
+    assert.equal(updateSettings(() => f, { ...DEFAULTS }, { theme: 'vaal' }), false)
+    assert.equal(readFileSync(f, 'utf8'), saved)
   } finally { rmSync(dir, { recursive: true, force: true }) }
 })
 
@@ -170,5 +215,70 @@ test('an unreadable file that cannot be moved aside is never written over', (t) 
     assert.equal(writeSettings(() => f, DEFAULTS), false)
     assert.equal(updateSettings(() => f, { ...DEFAULTS }, { theme: 'ash' }), false)
     assert.equal(readFileSync(f, 'utf8'), '{bad')
+  } finally { rmSync(dir, { recursive: true, force: true }) }
+})
+
+test('writeSettings retries transient rename EPERM/EBUSY/EACCES and lands the new content', (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'arb-set-'))
+  try {
+    const f = join(dir, 'desktop-settings.json')
+    assert.equal(writeSettings(() => f, { theme: 'vault' }), true)
+    const realRename = fs.renameSync
+    for (const code of ['EPERM', 'EBUSY', 'EACCES']) {
+      let calls = 0
+      t.mock.method(fs, 'renameSync', (from, to) => {
+        calls++
+        if (calls === 1) throw Object.assign(new Error(`${code}: target busy`), { code })
+        return realRename(from, to)
+      })
+      const next = { betaChannel: false, theme: code.toLowerCase() }
+      assert.equal(writeSettings(() => f, next), true, `${code} transient failure should succeed on retry`)
+      assert.equal(calls, 2)
+      t.mock.restoreAll()
+      assert.deepEqual(JSON.parse(readFileSync(f, 'utf8')), next)
+      assert.deepEqual(tmpLeft(dir), [])
+    }
+  } finally { rmSync(dir, { recursive: true, force: true }) }
+})
+
+test('writeSettings gives up cleanly when rename always fails with EPERM, keeping the old file and rolling back memory', (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'arb-set-'))
+  try {
+    const f = join(dir, 'desktop-settings.json')
+    assert.equal(writeSettings(() => f, { betaChannel: false, theme: 'ash' }), true)
+    const before = readFileSync(f, 'utf8')
+    let calls = 0
+    t.mock.method(fs, 'renameSync', () => {
+      calls++
+      throw Object.assign(new Error('EPERM: operation not permitted'), { code: 'EPERM' })
+    })
+    const s = { betaChannel: false, theme: 'ash' }
+    const started = Date.now()
+    assert.equal(updateSettings(() => f, s, { theme: 'vaal' }), false)
+    assert.ok(calls > 1, 'rename is retried before giving up')
+    assert.ok(Date.now() - started < 1000, 'rename retries stay bounded well under a second')
+    t.mock.restoreAll()
+    assert.deepEqual(s, { betaChannel: false, theme: 'ash' })
+    assert.equal(readFileSync(f, 'utf8'), before)
+    assert.deepEqual(tmpLeft(dir), [])
+  } finally { rmSync(dir, { recursive: true, force: true }) }
+})
+
+test('updateSettings returns true without writing when every patched key matches memory', (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'arb-set-'))
+  try {
+    const f = join(dir, 'desktop-settings.json')
+    const s = { betaChannel: false, theme: 'vault', customBackdrop: '#112233' }
+    assert.equal(writeSettings(() => f, s), true)
+    const openSpy = t.mock.method(fs, 'openSync')
+    const renameSpy = t.mock.method(fs, 'renameSync')
+    assert.equal(updateSettings(() => f, s, { theme: 'vault' }), true)
+    assert.equal(updateSettings(() => f, s, { theme: 'vault', customBackdrop: '#112233' }), true)
+    assert.equal(openSpy.mock.callCount(), 0, 'unchanged patch performs no openSync')
+    assert.equal(renameSpy.mock.callCount(), 0, 'unchanged patch performs no renameSync')
+    assert.equal(updateSettings(() => f, s, { theme: 'ash' }), true)
+    assert.equal(openSpy.mock.callCount(), 1, 'changed patch writes once')
+    assert.equal(renameSpy.mock.callCount(), 1, 'changed patch renames once')
+    assert.deepEqual(JSON.parse(readFileSync(f, 'utf8')), { betaChannel: false, theme: 'ash', customBackdrop: '#112233' })
   } finally { rmSync(dir, { recursive: true, force: true }) }
 })
