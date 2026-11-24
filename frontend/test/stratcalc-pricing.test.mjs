@@ -124,6 +124,24 @@ const linkTo = (d, kind, search, now) => (kind === 'maps'
   ? sc.linkMaps(d, 's', { query: search, league: LEAGUE }, now)
   : sc.linkTablet(d, 's', 't', { query: search, league: LEAGUE }, now))
 
+test('generated pricing queues agree with the next deadline at every boundary', () => {
+  for (let mask = 0; mask < 256; mask++) {
+    const stratDoc = linkTo(linkTo(strat('chaos'), 'maps', userSearch('maps', ''), 1), 'tablet', userSearch('tablet', ''), 2)
+    const current = sc.activeStrat(stratDoc)
+    const row = { name: 'Unique', base: mask & 1 ? 'Belt' : null, price: mask & 2 ? 3 : null, floor: { at: mask & 4 ? 42 : 0 } }
+    current.fixed.push(row)
+    current.maps.price = mask & 8 ? 4 : null
+    current.maps.link.at = mask & 16 ? 17 : 0
+    current.tablets.lines[0].link.at = mask & 32 ? 56 : 0
+    const retryAt = new Map([[sc.rowKey(row), 98], ['link:t', 13], ['link:maps', mask & 64 ? 72 : 0]])
+    const options = { retryAt, uses: mask & 128 ? USES : [] }
+    const next = SP.nextDue(current, options)
+    for (const now of [0, 1, 13, 72, 98, sc.FLOOR_TTL_MS, next - 1, next, next + 1].filter(time => time != null && time >= 0)) {
+      assert.equal(!!SP.nextPricing(current, { now, ...options }), next != null && next <= now, `mask=${mask} t=${now}`)
+    }
+  }
+})
+
 // The pricing queue, as the view runs it: take the next due search, ask the trade site, record.
 async function priceAll(d, site, retryAt, now) {
   for (let i = 0; i < 6; i++) {

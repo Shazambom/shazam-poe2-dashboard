@@ -19,28 +19,31 @@ export function windowSearch(found, e) {
 
 // The pricing queue's key for a line: unique rows by their row key, linked lines as link:<id>.
 export const linkKey = (lineId) => `link:${lineId}`
-const waiting = (retryAt, key, now) => now < (retryAt.get(key) ?? 0)
+function* candidates(s, { retryAt, uses }) {
+  const candidate = (key, found, job) => ({ key, at: Math.max(sc.dueAt(found), retryAt.get(key) ?? 0), job })
+  for (const r of [...s.loot, ...s.fixed]) {
+    if (sc.needsFloor(r)) yield candidate(sc.rowKey(r), r.floor?.at, () => ({ row: r, query: uniqueQuery(r.name, r.base) }))
+  }
+  for (const line of sc.lines(s)) {
+    if (!sc.needsLinkPrice(line)) continue
+    const count = sc.usesOf(line, uses)
+    if (count != null) yield candidate(linkKey(line.id), line.link.at, () => ({ line, linked: line.link.query, query: fullTabletQuery(line.link.query, count) }))
+  }
+  if (sc.needsLinkPrice(s.maps)) yield candidate(linkKey('maps'), s.maps.link.at, () => ({ linked: s.maps.link.query, query: waystonePriceQuery(s.maps.link.query) }))
+}
 
 // The next search the strat needs priced (unique floors first, then tablet lines, then the maps), or null.
-export function nextPricing(s, { now, retryAt, uses }) {
-  const r = [...s.loot, ...s.fixed].find(x => sc.needsFloor(x, now) && !waiting(retryAt, sc.rowKey(x), now))
-  if (r) return { key: sc.rowKey(r), row: r, query: uniqueQuery(r.name, r.base) }
-  const l = sc.lines(s).find(x => sc.needsLinkPrice(x, now) && !waiting(retryAt, linkKey(x.id), now) && sc.usesOf(x, uses) != null)
-  if (l) return { key: linkKey(l.id), line: l, linked: l.link.query, query: fullTabletQuery(l.link.query, sc.usesOf(l, uses)) }
-  if (sc.needsLinkPrice(s.maps, now) && !waiting(retryAt, linkKey('maps'), now)) return { key: linkKey('maps'), linked: s.maps.link.query, query: waystonePriceQuery(s.maps.link.query) }
+export function nextPricing(s, options) {
+  for (const { key, at, job } of candidates(s, options)) if (at <= options.now) return { key, ...job() }
   return null
 }
 
 // When the next search falls due (the time `nextPricing` stops returning null), or null when nothing is
 // waiting to be priced: each searched price is due an hour after it was found, or when its back-off ends.
-export function nextDue(s, { retryAt, uses }) {
-  const at = (key, found) => Math.max(found ? found + sc.FLOOR_TTL_MS : 0, retryAt.get(key) ?? 0)
-  const times = [
-    ...[...s.loot, ...s.fixed].filter(r => r.base && r.price == null).map(r => at(sc.rowKey(r), r.floor?.at)),
-    ...sc.lines(s).filter(l => l.link && l.price == null && sc.usesOf(l, uses) != null).map(l => at(linkKey(l.id), l.link.at)),
-    ...(s.maps.link && s.maps.price == null ? [at(linkKey('maps'), s.maps.link.at)] : []),
-  ]
-  return times.length ? Math.min(...times) : null
+export function nextDue(s, options) {
+  let next = null
+  for (const { at } of candidates(s, options)) if (next == null || at < next) next = at
+  return next
 }
 
 // A search is being asked: it is not asked again for an hour (unless its answer says sooner).
