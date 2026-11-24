@@ -188,10 +188,13 @@ export function createSaveQueue(write, { publish, acknowledge, delays = RETRY_MS
         prune(pending, e => e.generation === current)
         publish?.()
       }
+      // An older save this one superseded only lands through it, so it failed too.
       for (const other of [...waiters]) {
         if (other.superseded && other.generation < current
             && ![...waiters].some(w => !w.superseded && w.generation > other.generation)) {
-          resolveWaiter(other, lastResult)
+          other.settled = true
+          waiters.delete(other)
+          other.reject(lastError)
         }
       }
       reject(lastError)

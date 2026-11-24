@@ -566,7 +566,7 @@ it('focus hotkey: a combo that registered but could not be saved is not reported
 
 // When nothing is registered (main answered { combo: null, saved, registered: false } or get rejected),
 // the button still shows the saved/default combo label and keeps its accessible name — never an empty button.
-it('focus hotkey: no registered hotkey shows the control empty, never the default combo', async () => {
+it('focus hotkey: with no registered hotkey the button shows the saved combo, never an empty label', async () => {
   const previous = window.poe2desktop.hotkey
   const debug = vi.spyOn(console, 'debug')
   try {

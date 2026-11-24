@@ -126,3 +126,18 @@ it('supersedes an older retrying save when a newer save arrives for the same key
   await advance(25000)
   expect(write.mock.calls).toEqual([[{ league: 'B' }], [{ league: 'C' }]])
 })
+
+// An older save superseded by a newer one for the same key only lands through the newer one. If the newer
+// save fails for good, neither value reached the backend: the older caller must hear failure, not success.
+it('rejects an older superseded save when the save that superseded it fails for good', async () => {
+  const write = vi.fn().mockRejectedValue(new Error('locked'))
+  const queue = createSaveQueue(write, { delays: [1000, 4000, 15000] })
+  const first = queue.save({ league: 'B' })
+  const firstOutcome = first.then(() => 'resolved', e => e.message)
+  await settle()
+  const second = queue.save({ league: 'C' })
+  const secondOutcome = second.then(() => 'resolved', e => e.message)
+  await advance(25000)
+  expect(await secondOutcome).toBe('locked')
+  expect(await firstOutcome).toBe('locked')
+})
