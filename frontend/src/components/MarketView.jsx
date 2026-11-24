@@ -20,7 +20,8 @@ export default function MarketView({ currencies }) {
   const [byValue, setByValue] = useState(false)   // false = raw turnover, true = Exalted-normalized value
   const edges = useApi(() => api.edges(), []).data ?? EMPTY_EDGES
   const top = useApi(() => api.topMarkets(byValue ? 'value' : 'activity'), [byValue]).data ?? []
-  const hist = useApi(() => api.history(pair.a, pair.b), [pair.a, pair.b]).data
+  const history = useApi(() => api.history(pair.a, pair.b), [pair.a, pair.b])
+  const hist = history.data
 
   const names = useMemo(() => Object.fromEntries((currencies?.currencies ?? []).map(c => [c.id, c.name])), [currencies])
   // one text per pair, so "div chaos" spans both names
@@ -41,7 +42,9 @@ export default function MarketView({ currencies }) {
             <CurrencyPicker value={pair.b} onChange={id => setPair(p => ({ ...p, b: id }))} options={currencies?.currencies ?? []} placeholder="currency…" />
           </div>
           <div className="chart-box">
-            {digestSeries.length === 0 && liveSeries.length === 0 ? (
+            {history.err && !hist ? (
+              <div className="notice error">{history.err}</div>
+            ) : digestSeries.length === 0 && liveSeries.length === 0 ? (
               <div className="empty">No trades for this pair yet.</div>
             ) : (
               <ResponsiveContainer>

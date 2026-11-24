@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { installApiMock } from './setup.js'
 import HoldView from '../../src/components/HoldView.jsx'
@@ -6,6 +6,7 @@ import MarketView from '../../src/components/MarketView.jsx'
 import InflationView from '../../src/components/InflationView.jsx'
 import MoversView from '../../src/components/MoversView.jsx'
 import { loadIcons } from '../../src/lib/icons.js'
+import { api } from '../../src/lib/api.js'
 
 describe('Economy views lifecycles (Hold, Market, Inflation, Movers)', () => {
   beforeEach(async () => {
@@ -31,6 +32,18 @@ describe('Economy views lifecycles (Hold, Market, Inflation, Movers)', () => {
     rerender(<InflationView league="B" />)
     unmount()
     expect(reads()).toHaveLength(1)
+  })
+
+  // QA 2026-11-24: a pair whose history failed to load said "No trades for this pair yet" (or, before the
+  // useApi fix, kept drawing the previous pair). A failed load says it failed.
+  it('MarketView says a pair history load failed instead of claiming the pair has no trades', async () => {
+    const history = vi.spyOn(api, 'history').mockRejectedValue(new Error('Failed to fetch'))
+    try {
+      render(<MarketView />)
+      await waitFor(() => expect(history).toHaveBeenCalled())
+      await waitFor(() => expect(screen.getByText('Failed to fetch')).toBeTruthy())
+      expect(screen.queryByText('No trades for this pair yet.')).toBeNull()
+    } finally { history.mockRestore() }
   })
 
   it('MarketView loads top markets + edges and queries pair history on click', async () => {
