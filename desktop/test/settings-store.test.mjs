@@ -217,3 +217,49 @@ test('an unreadable file that cannot be moved aside is never written over', (t) 
     assert.equal(readFileSync(f, 'utf8'), '{bad')
   } finally { rmSync(dir, { recursive: true, force: true }) }
 })
+
+test('writeSettings retries transient rename EPERM/EBUSY/EACCES and lands the new content', (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'arb-set-'))
+  try {
+    const f = join(dir, 'desktop-settings.json')
+    assert.equal(writeSettings(() => f, { theme: 'vault' }), true)
+    const realRename = fs.renameSync
+    for (const code of ['EPERM', 'EBUSY', 'EACCES']) {
+      let calls = 0
+      t.mock.method(fs, 'renameSync', (from, to) => {
+        calls++
+        if (calls === 1) throw Object.assign(new Error(`${code}: target busy`), { code })
+        return realRename(from, to)
+      })
+      const next = { betaChannel: false, theme: code.toLowerCase() }
+      assert.equal(writeSettings(() => f, next), true, `${code} transient failure should succeed on retry`)
+      assert.equal(calls, 2)
+      t.mock.restoreAll()
+      assert.deepEqual(JSON.parse(readFileSync(f, 'utf8')), next)
+      assert.deepEqual(tmpLeft(dir), [])
+    }
+  } finally { rmSync(dir, { recursive: true, force: true }) }
+})
+
+test('writeSettings gives up cleanly when rename always fails with EPERM, keeping the old file and rolling back memory', (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'arb-set-'))
+  try {
+    const f = join(dir, 'desktop-settings.json')
+    assert.equal(writeSettings(() => f, { betaChannel: false, theme: 'ash' }), true)
+    const before = readFileSync(f, 'utf8')
+    let calls = 0
+    t.mock.method(fs, 'renameSync', () => {
+      calls++
+      throw Object.assign(new Error('EPERM: operation not permitted'), { code: 'EPERM' })
+    })
+    const s = { betaChannel: false, theme: 'ash' }
+    const started = Date.now()
+    assert.equal(updateSettings(() => f, s, { theme: 'vaal' }), false)
+    assert.ok(calls > 1, 'rename is retried before giving up')
+    assert.ok(Date.now() - started < 1000, 'rename retries stay bounded well under a second')
+    t.mock.restoreAll()
+    assert.deepEqual(s, { betaChannel: false, theme: 'ash' })
+    assert.equal(readFileSync(f, 'utf8'), before)
+    assert.deepEqual(tmpLeft(dir), [])
+  } finally { rmSync(dir, { recursive: true, force: true }) }
+})
