@@ -32,7 +32,9 @@ it('keeps workspace import and hotkey failures in the local console', async () =
   }
   try {
     render(<TradingSettings />)
-    const current = await screen.findByRole('button', { name: 'Control+H' })
+    await act(async () => {})
+    const current = screen.getByRole('button', { name: 'Focus hotkey' })
+    expect(current.textContent).toBe('Control+H')
     const file = { text: vi.fn().mockRejectedValue(new Error('read failed')) }
     fireEvent.change(screen.getByLabelText('Import searches file'), { target: { files: [file] } })
     fireEvent.click(current)

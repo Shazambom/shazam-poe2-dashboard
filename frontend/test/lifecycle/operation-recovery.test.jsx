@@ -519,7 +519,8 @@ it('focus hotkey: a failed registration leaves the shown combo and the next pres
     installApiMock()
     render(<TradingSettings />)
     await settle()
-    const button = screen.getByRole('button', { name: 'Control+H' })
+    const button = screen.getByRole('button', { name: 'Focus hotkey' })
+    expect(button.textContent).toBe('Control+H')
     fireEvent.click(button)
     fireEvent.keyDown(button, { key: 'k', ctrlKey: true })
     await settle()
@@ -547,7 +548,8 @@ it('focus hotkey: a combo that registered but could not be saved is not reported
     installApiMock()
     render(<TradingSettings />)
     await settle()
-    const button = screen.getByRole('button', { name: 'Control+H' })
+    const button = screen.getByRole('button', { name: 'Focus hotkey' })
+    expect(button.textContent).toBe('Control+H')
     fireEvent.click(button)
     fireEvent.keyDown(button, { key: 'k', ctrlKey: true })
     await settle()
@@ -562,22 +564,26 @@ it('focus hotkey: a combo that registered but could not be saved is not reported
   }
 })
 
-// The label shows only a combo main says is registered. Reading it fails when the hotkey never started this
-// session, and main answers { combo: null } when the OS refused the saved combo at launch: both show the
-// control empty (not the default ⌘/Ctrl+G, which nothing registered), and a press that registers fills it.
+// When nothing is registered (main answered { combo: null, saved, registered: false } or get rejected),
+// the button still shows the saved/default combo label and keeps its accessible name — never an empty button.
 it('focus hotkey: no registered hotkey shows the control empty, never the default combo', async () => {
   const previous = window.poe2desktop.hotkey
   const debug = vi.spyOn(console, 'debug')
   try {
     installApiMock()
-    for (const get of [vi.fn().mockRejectedValue(new Error('No handler registered')), vi.fn(async () => ({ combo: null }))]) {
+    const cases = [
+      [vi.fn().mockRejectedValue(new Error('No handler registered')), '⌘/Ctrl+G'],
+      [vi.fn(async () => ({ combo: null, saved: 'CommandOrControl+G', registered: false })), '⌘/Ctrl+G'],
+      [vi.fn(async () => ({ combo: null, saved: 'Alt+K', registered: false })), 'Alt+K'],
+    ]
+    for (const [get, expected] of cases) {
       const set = vi.fn(async () => ({ ok: true }))
       window.poe2desktop.hotkey = { get, set }
       const view = render(<TradingSettings />)
       await settle()
       expect(get).toHaveBeenCalledTimes(1)
-      const button = screen.getByText('Focus hotkey').nextElementSibling
-      expect(button.textContent).toBe('')
+      const button = screen.getByRole('button', { name: 'Focus hotkey' })
+      expect(button.textContent).toBe(expected)
       fireEvent.click(button)
       fireEvent.keyDown(button, { key: 'j', ctrlKey: true })
       await settle()
