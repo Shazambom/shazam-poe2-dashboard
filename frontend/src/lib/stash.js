@@ -118,6 +118,15 @@ export function recordPendingEdit(edits, currency, edit) {
   edits.set(currency, edit)
 }
 
+export function capitalEntries(rows) {
+  const entries = {}
+  for (const [currency, value] of Object.entries(rows)) {
+    const count = Number(value)
+    if (Number.isFinite(count) && count > 0) entries[currency] = count
+  }
+  return entries
+}
+
 // Currencies whose total was recounted or removed in `edits` (sent as `counted` to PUT /api/capital).
 export function countedFromEdits(edits) {
   if (!edits || !edits.size) return []

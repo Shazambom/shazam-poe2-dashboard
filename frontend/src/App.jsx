@@ -1,4 +1,5 @@
 import { ignoredError } from './lib/ignoredError.js'
+import { sleep } from './lib/retry.js'
 import React, { Suspense, lazy, useEffect, useEffectEvent, useRef, useState } from 'react'
 import { createStore, useStore } from 'zustand'
 import { motion, AnimatePresence, MotionConfig } from 'motion/react'
@@ -25,8 +26,8 @@ import { connectBridge, connectSessionWithToast } from './lib/session.js'
 import { useWorkspace, HISTORY_SYS } from './lib/workspaceStore.js'
 import { addFromClipboard } from './lib/clipboardAdd.js'
 import { useEe2History, clearHistoryWithUndo } from './lib/ee2History.js'
-import { useStratStore, useStratAutoTimer } from './lib/stratStore.js'
-import { flushForQuit } from './lib/quitFlush.js'
+import { useStratAutoTimer } from './lib/stratStore.js'
+import { flushForQuit, flushOnHide } from './lib/quitFlush.js'
 import { findWhere } from './lib/tree.js'
 import { DESTS, SCREEN_COMMANDS, SUB_DESTS, SNAP, settle } from './lib/dests.js'
 import { runTarget } from './lib/paletteRun.js'
@@ -149,9 +150,8 @@ export default function App() {
   // Flush debounced workspace & strat edits on hide/quit regardless of which tab is mounted, so quitting
   // from Board/Stash/Economy/Settings never stalls 1 s waiting for ws:flushed.
   useEffect(() => {
-    const flushAll = () => Promise.all([useWorkspace.getState().flush(), useStratStore.getState().flush()])
-    const flush = () => { if (document.visibilityState === 'hidden') flushAll() }
-    const hide = () => flushAll()
+    const flush = () => { if (document.visibilityState === 'hidden') flushOnHide() }
+    const hide = flushOnHide
     document.addEventListener('visibilitychange', flush)
     window.addEventListener('pagehide', hide)
     const offQuit = window.poe2desktop?.ws?.onFlush?.(() => {
@@ -241,7 +241,7 @@ export default function App() {
     window.__arbiterSnap = async ({ section, sub }) => {
       goSub(section, sub)
       await new Promise(res => { const tick = () => (useStatus.getState().status ? res() : setTimeout(tick, 50)); tick() })
-      await new Promise(res => { setTimeout(res, 100) })   // let the view mount and fire its loads
+      await sleep(100)   // let the view mount and fire its loads
       await settle()
       await new Promise(res => { requestAnimationFrame(() => requestAnimationFrame(res)) })
       return true

@@ -3,20 +3,25 @@ import { api } from '../lib/api.js'
 import { ignoredError } from '../lib/ignoredError.js'
 import { useAutosave } from '../lib/hooks.js'
 import { withRetry } from '../lib/retry.js'
+import { createSaveQueue } from '../lib/saveQueue.js'
 import Cur from './Cur.jsx'
 import Toggle from './Toggle.jsx'
 
 const blank = () => ({ id: Math.random().toString(36).slice(2, 10), name: '', kind: 'combine', inputs: { '': 3 }, outputs: { '': 1 }, enabled: true, note: '' })
 const one = (obj) => { const [k, v] = Object.entries(obj)[0] ?? ['', 1]; return { id: k, qty: v } }
+const writes = createSaveQueue(({ recipes }) => api.putRecipes(recipes))
 
 // Auto-saves (debounced); usable standalone or embedded inside Settings.
 export default function RecipesView({ currencies, embedded = false }) {
   const [list, setList] = useState(null)
-  const { state, save, arm } = useAutosave(async (next) => setList(await api.putRecipes(next)), 800)
+  const { state, save, arm } = useAutosave(async next => {
+    const saved = await writes.save({ recipes: next })
+    setList(current => current === next ? saved : current)
+  }, 800)
   useEffect(() => {
     let live = true
     withRetry(() => api.recipes(), { onFail: () => ignoredError('load recipes'), stop: () => !live })
-      .then(l => { if (live) { setList(l); arm() } })
+      .then(l => { if (live) { setList(writes.overlay({ recipes: l }).recipes); arm() } })
       .catch(() => ignoredError('load recipes'))
     return () => { live = false }
   }, [arm])

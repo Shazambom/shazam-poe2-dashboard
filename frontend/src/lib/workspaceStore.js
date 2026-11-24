@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { registerFlush } from './quitFlush.js'
 import { api, cleanErr, toast } from './api.js'
 import { searchOfLink, tradeUrl, uid } from './session.js'
 import { find as findNode, findWhere, locate, flatten, mapNode, mapAll, removeNode, insertAt } from './tree.js'
@@ -516,3 +517,8 @@ export async function loadWorkspace() {
   })()
   return loadWorkspacePromise
 }
+
+registerFlush(async () => {
+  await useWorkspace.getState().flush()
+  return useWorkspace.getState().saveState !== 'error'
+}, { onHide: true })

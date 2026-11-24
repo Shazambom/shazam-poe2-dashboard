@@ -120,7 +120,7 @@ export default function RoutesView({ capital, status, currencies }) {
   const pick = async (p) => {
     flushSync(() => setRev(r => r + 1))
     await flush().catch(() => ignoredError('flush route settings'))
-    const s = await useStatus.getState().saveSettings(p.values).catch(() => null)
+    const s = await useStatus.getState().saveSettings(p.values).catch(() => useStatus.getState().settings)
     if (!s) return
     const next = filtersFromSettings(s.filters)
     setF(next); setRev(r => r + 1)

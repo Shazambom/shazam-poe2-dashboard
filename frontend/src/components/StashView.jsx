@@ -10,7 +10,7 @@ import { useWorkspace } from '../lib/workspaceStore.js'
 import { flatten } from '../lib/tree.js'
 import { salesStats, relativeTime, rarityOf } from '../lib/sales.js'
 import { holdingWorth } from '../lib/capital.js'
-import { CASH, addAmount, recordPendingEdit, countedFromEdits, reconcileCapital, cleanQty, parseAmount, stashGroups, netWorth, liquidNetWorth, flipGroup, flipFold, isFolded, groupAccent, isCounted, stashMatches, salesToast, UNGROUPED } from '../lib/stash.js'
+import { CASH, addAmount, recordPendingEdit, countedFromEdits, capitalEntries, reconcileCapital, cleanQty, parseAmount, stashGroups, netWorth, liquidNetWorth, flipGroup, flipFold, isFolded, groupAccent, isCounted, stashMatches, salesToast, UNGROUPED } from '../lib/stash.js'
 import { diag } from '../lib/diag.js'
 import { hasTradeEngine as isDesktop } from '../lib/session.js'
 import { nav } from '../lib/nav.js'
@@ -71,15 +71,14 @@ export default function StashView({ league }) {
   // after a failed unmount PUT survive across Stash mounts; `statusStore.saveCapital` carries failed recount
   // cutoffs and edits forward into any newer queued PUT and restores into `capitalDirty` only if the queue tail rejects.
   const commitCapital = async (rows, { notifyCredit = false } = {}) => {
-    const entries = {}
-    Object.entries(rows).forEach(([c, v]) => { const n = Number(v); if (Number.isFinite(n) && n > 0) entries[c] = n })
+    const entries = capitalEntries(rows)
     const edits = new Map(capitalDirty)
     const counted = countedFromEdits(edits)
     capitalDirty.clear()
     await surface(useStatus.getState().saveCapital(entries, counted, edits))
     if (notifyCredit) useStatus.setState(st => ({ capitalCreditRev: st.capitalCreditRev + 1 }))
   }
-  const { state: saveState, save, flush, hold, release, discard, arm } = useAutosave((rows) => commitCapital(rows))
+  const { state: saveState, save, flush, hold, release, discard, arm } = useAutosave((rows) => commitCapital(rows), 700, { retainFailed: false })
   // Never seed from a copy older than a save in flight or a confirmed sales credit whose reload hasn't landed yet.
   const capitalSaving = useStatus(s => s.capitalSaving)
   const capitalStale = useStatus(s => s.capitalStale)

@@ -1,4 +1,5 @@
 import { ignoredError } from '../lib/ignoredError.js'
+import { RETRY_MS as PRICE_RETRY_MS } from '../lib/retry.js'
 import { createClock } from '../lib/clock.js'
 import React, { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { Tree } from 'react-arborist'
@@ -29,7 +30,6 @@ import { useStratStore } from '../lib/stratStore.js'
 
 const EMPTY_COST_OPTIONS = []
 const PRICE_POLL_MS = 60_000
-const PRICE_RETRY_MS = [1000, 4000, 15000]   // a price search that failed outright: tried again after these
 const HOLD_DELAY_MS = 400    // +1 held: repeats after this…
 const HOLD_EVERY_MS = 90     // …this often
 const SLOT_CHOICES = [1, 2, 3, 4].map(n => [n, String(n)])

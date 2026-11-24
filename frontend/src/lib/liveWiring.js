@@ -8,6 +8,7 @@ import { notify } from './notifications.js'
 import './nav.js'
 import { hasTradeEngine as isDesktop } from './session.js'
 import { flatten } from './tree.js'
+import { withRetry } from './retry.js'
 
 const PING_TTL = 10000   // top-right ping banner auto-dismisses after 10s (or when a newer ping replaces it)
 
@@ -70,6 +71,7 @@ export function useLiveSync(league) {
     if (!isDesktop) return
     if (!useWorkspace.getState().loaded) loadWorkspace()
     let lastKey = ''
+    const starting = new Map()
     const armedNodes = () => flatten(useWorkspace.getState().tree, n => n.kind === 'search' && n.armed && n.slug)
     const reconcile = () => {
       const st = useWorkspace.getState()
@@ -79,20 +81,33 @@ export function useLiveSync(league) {
       const key = league + '|' + desired.join(',')
       if (key === lastKey) return
       lastKey = key
+      for (const id of starting.keys()) if (!desired.includes(id)) starting.delete(id)
       const current = new Set(usePings.getState().engine.activeIds || [])
       armed.forEach(n => {
-        if (current.has(n.id)) return
-        usePings.getState().setSearchState({ itemId: n.id, state: 'connecting' })
-        window.poe2desktop.trade.startSearch(n.id, league, n.slug, n.type)
-          .then(r => { if (r && !r.ok && r.reason === 'budget') { useWorkspace.getState().setField(n.id, { armed: false }); toast('Live-search cap reached — stop one first', false) } })
-          .catch(() => ignoredError('start live search'))
+        if (current.has(n.id) || starting.has(n.id)) return
+        const token = Symbol(), owns = () => starting.get(n.id) === token
+        starting.set(n.id, token)
+        withRetry(() => {
+          if (!owns() || usePings.getState().engine.activeIds?.includes(n.id)) return
+          usePings.getState().setSearchState({ itemId: n.id, state: 'connecting' })
+          return window.poe2desktop.trade.startSearch(n.id, league, n.slug, n.type)
+        }, { onFail: () => { if (owns()) usePings.getState().clearSearchState(n.id) } })
+          .then(r => { if (owns() && r && !r.ok && r.reason === 'budget') { useWorkspace.getState().setField(n.id, { armed: false }); toast('Live-search cap reached — stop one first', false) } })
+          .catch(() => {
+            if (owns()) {
+              lastKey = ''
+              usePings.getState().setSearchState({ itemId: n.id, state: 'reconnecting' })
+            }
+            ignoredError('start live search')
+          })
+          .finally(() => { if (owns()) starting.delete(n.id) })
       })
       current.forEach(id => { if (!desired.includes(id)) window.poe2desktop.trade.stopSearch(id).catch(() => ignoredError('stop live search')) })
     }
     const unsubWs = useWorkspace.subscribe(reconcile)
     const unsubEng = usePings.subscribe((s, p) => { if ((s.engine.activeIds || []).length !== (p.engine.activeIds || []).length) reconcile() })
     reconcile()
-    return () => { unsubWs(); unsubEng() }
+    return () => { starting.clear(); unsubWs(); unsubEng() }
   }, [league])
 }
 

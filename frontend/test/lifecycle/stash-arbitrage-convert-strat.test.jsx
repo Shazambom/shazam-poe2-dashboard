@@ -275,4 +275,26 @@ describe('Stash, Arbitrage SSE, Convert, and StratCalc lifecycles', () => {
     await useStratStore.getState().flush()
   })
 
+  it('hands updated exchange rates to both unlink actions while the builder is open', async () => {
+    const now = Date.now()
+    const search = { query: { query: { status: { option: 'securable' } } }, league: 'Test League' }
+    let doc = sc.newStrat(sc.blankDoc(), { id: 's', name: 'Prices', now })
+    doc = sc.addTablet(doc, 's', { id: 't', now })
+    doc = sc.recordMapsPrice(sc.linkMaps(doc, 's', search, now), 's', 2, now, 'chaos')
+    doc = sc.recordLinkPrice(sc.linkTablet(doc, 's', 't', search, now), 's', 't', 3, now, 'chaos')
+    installApiMock({ '/api/strategy/calc': { calc: doc, prices: { chaos: 1, divine: 1 }, uses: [] } })
+    useStratStore.setState({ doc: null })
+    const view = render(<StratCalcView league="Test League" />)
+    const active = () => sc.activeStrat(useStratStore.getState().doc)
+    for (const [label, rate] of [['maps', 0.5], ['Any tablet', 0.25]]) {
+      fireEvent.click(await screen.findByRole('button', { name: `Trade search for ${label}` }))
+      act(() => useStratStore.getState().setPrices({ divine: 1, chaos: rate }))
+      fireEvent.click(screen.getByRole('button', { name: 'Unlink' }))
+    }
+    expect(active().maps).toMatchObject({ price: 4, cur: 'chaos' })
+    expect(active().tablets.lines[0]).toMatchObject({ price: 12, cur: 'chaos' })
+    view.unmount()
+    await useStratStore.getState().flush()
+  })
+
 })

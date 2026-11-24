@@ -294,8 +294,9 @@ export const floorDiv = (listings, prices) => listingDivs(listings, prices)[0] ?
 // Searched for when there is none or it is an hour old; never over a typed price.
 export const FLOOR_TTL_MS = 3_600_000
 // A search's price is due when it was never found (or ⟳ made it due: at 0) or is an hour old.
-const due = (at, now) => !at || now - at >= FLOOR_TTL_MS
-export const needsFloor = (r, now) => !!r.base && r.price == null && due(r.floor?.at, now)
+export const dueAt = at => at ? at + FLOOR_TTL_MS : 0
+const due = (at, now) => !at || now >= dueAt(at)
+export const needsFloor = (r, now = Infinity) => !!r.base && r.price == null && due(r.floor?.at, now)
 
 // A found floor lands on its row without stamping the strat: a background price is not an edit.
 export function recordFloor(doc, stratId, key, div, at) {
@@ -370,7 +371,7 @@ export const recordLinkPrice = (doc, sid, lid, div, at, cur) => (okDiv(div) ? qu
 export const linkMaps = (doc, sid, k, now) => (okLink(k) ? edit(doc, sid, x => ({ ...x, maps: linked(x.maps, k) }), now) : doc)
 export const unlinkMaps = (doc, sid, now, prices) => edit(doc, sid, x => ({ ...x, maps: unlinked(prices)(x.maps) }), now)
 export const recordMapsPrice = (doc, sid, div, at, cur) => (okDiv(div) ? quiet(doc, sid, x => ({ ...x, maps: found(div, at, cur)(x.maps) })) : doc)
-export const needsLinkPrice = (x, now) => !!x.link && x.price == null && due(x.link.at, now)
+export const needsLinkPrice = (x, now = Infinity) => !!x.link && x.price == null && due(x.link.at, now)
 
 // Every price a strat holds from a search — unique floors, linked maps and tablet lines — through
 // `row` and `link`: one walk for ⟳ (due now) and for sharing (no market data leaves the app).
