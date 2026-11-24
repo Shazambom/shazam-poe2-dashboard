@@ -173,28 +173,48 @@ function regenerateGoldens(renderer) {
 }
 
 // 8. Manifest: every vendored file's hash so a hand edit is caught by the drift test.
-function writeManifest(meta, syncedAt = new Date().toISOString()) {
+// Keep the existing syncedAt when ee2Tag, ee2Commit, modules and files are unchanged so a no-op
+// sync leaves MANIFEST.json byte-identical and stages nothing.
+export function writeManifest(meta, syncedAt = new Date().toISOString(), vendorDir = VENDOR) {
   const files = {}
-  const walk = (d) => { for (const e of fs.readdirSync(d, { withFileTypes: true })) { const p = path.join(d, e.name); if (e.isDirectory()) walk(p); else if (e.name !== 'MANIFEST.json') files[path.relative(VENDOR, p).split(path.sep).join('/')] = { sha256: sha256(p), bytes: fs.statSync(p).size } } }
-  walk(path.join(VENDOR, 'vendor')); walk(path.join(VENDOR, 'data'))
-  fs.writeFileSync(path.join(VENDOR, 'data', 'MANIFEST.json'), JSON.stringify({ ...meta, syncedAt, files }, null, 1))
+  const walk = (d) => { for (const e of fs.readdirSync(d, { withFileTypes: true })) { const p = path.join(d, e.name); if (e.isDirectory()) walk(p); else if (e.name !== 'MANIFEST.json') files[path.relative(vendorDir, p).split(path.sep).join('/')] = { sha256: sha256(p), bytes: fs.statSync(p).size } } }
+  walk(path.join(vendorDir, 'vendor')); walk(path.join(vendorDir, 'data'))
+  const manifestPath = path.join(vendorDir, 'data', 'MANIFEST.json')
+  let nextSyncedAt = syncedAt
+  if (fs.existsSync(manifestPath)) {
+    const prev = JSON.parse(fs.readFileSync(manifestPath, 'utf8'))
+    const unchanged = prev.ee2Tag === meta.ee2Tag
+      && prev.ee2Commit === meta.ee2Commit
+      && JSON.stringify(prev.modules) === JSON.stringify(meta.modules)
+      && JSON.stringify(prev.files) === JSON.stringify(files)
+    if (unchanged && typeof prev.syncedAt === 'string') {
+      nextSyncedAt = prev.syncedAt
+    }
+  }
+  fs.writeFileSync(manifestPath, JSON.stringify({ ...meta, syncedAt: nextSyncedAt, files }, null, 1))
 }
 
-if (has('--types-only')) {
-  const { ee2Tag, ee2Commit, modules, syncedAt } = JSON.parse(fs.readFileSync(path.join(VENDOR, 'data', 'MANIFEST.json'), 'utf8'))
-  writeBundleTypes(VENDOR)
-  writeManifest({ ee2Tag, ee2Commit, modules }, syncedAt)
-} else {
-  const { dir, tag, commit } = await resolveSource()
-  const renderer = path.join(dir, 'renderer')
-  log(`source ${tag} (${commit || '?'}) at ${dir}`)
-  ensureDeps(renderer)
-  makeIndexFiles(renderer)
-  const modules = await bundle(renderer)
-  writeBundleTypes(VENDOR)
-  copyData(renderer)
-  await snapshotTradeData()
-  if (!has('--no-goldens')) regenerateGoldens(renderer)
-  writeManifest({ ee2Tag: tag, ee2Commit: commit, modules: modules.map(m => path.relative(renderer, path.resolve(renderer, m))).sort() })
+async function main() {
+  if (has('--types-only')) {
+    const { ee2Tag, ee2Commit, modules, syncedAt } = JSON.parse(fs.readFileSync(path.join(VENDOR, 'data', 'MANIFEST.json'), 'utf8'))
+    writeBundleTypes(VENDOR)
+    writeManifest({ ee2Tag, ee2Commit, modules }, syncedAt)
+  } else {
+    const { dir, tag, commit } = await resolveSource()
+    const renderer = path.join(dir, 'renderer')
+    log(`source ${tag} (${commit || '?'}) at ${dir}`)
+    ensureDeps(renderer)
+    makeIndexFiles(renderer)
+    const modules = await bundle(renderer)
+    writeBundleTypes(VENDOR)
+    copyData(renderer)
+    await snapshotTradeData()
+    if (!has('--no-goldens')) regenerateGoldens(renderer)
+    writeManifest({ ee2Tag: tag, ee2Commit: commit, modules: modules.map(m => path.relative(renderer, path.resolve(renderer, m))).sort() })
+  }
+  log('done')
 }
-log('done')
+
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  await main()
+}
