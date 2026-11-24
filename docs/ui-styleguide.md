@@ -111,8 +111,8 @@ a computed width, a `height: 360`, a `gridTemplateColumns` built at runtime. The
 | `--panel-hi` | `#2a303f` | top of card gradients, hover panels |
 
 Cards use a signature elevated recipe: `linear-gradient(165deg, var(--panel-hi) -20%, var(--panel) 45%)`
-plus `var(--shadow-1)`. Near-black one-offs below `--bg` (embedded webview backdrops) are
-deliberate and marked `/* style-ok */`.
+plus `var(--shadow-1)`. Near-black surfaces below `--bg`, such as embedded webview backdrops,
+get their own semantic token in `:root` (for example `--webview-bg`).
 
 ### Lines & ink
 
@@ -370,19 +370,15 @@ It runs in CI on any `frontend/src/**` change (`.github/workflows/lint-style.yml
 **Errors (fail the build):**
 
 - a raw hex in `.jsx` (colors belong in `theme.js`);
-- a hex in `styles.css` outside `:root` that **exactly equals** a token (use `var(--x)`);
+- any raw hex in `styles.css` outside the token blocks, whether it **exactly equals** a token
+  (use `var(--x)`), is a **near-duplicate** of a token (RGB distance < 12, unify to the token),
+  or is a genuine one-off color (declare a semantic token in `:root`);
+- a redundant `var(--x, #samevalue)` fallback (drop the fallback);
 - a hex in `theme.js` that isn't a `:root` token value or a registered `CHART_EXTRAS` entry
   (catches `theme.js` ↔ `:root` drift).
 
-**Warnings (guidance, don't fail):**
-
-- a hex that is a **near-duplicate** of a token (RGB distance < 12) — e.g. a second slightly
-  different "muted" grey. Fix by unifying to the token.
-- a redundant `var(--x, #samevalue)` fallback — drop the fallback.
-
-**Escape hatch:** append `/* style-ok: reason */` (CSS) or `// style-ok: reason` (JS) to a
-line for a genuine one-off color that has no token (e.g. the near-black webview backdrop).
-Use it rarely and always say why.
+**No escape marker:** every finding is an error, and inline suppression comments are rejected
+by the lint gate. A genuine one-off color gets a semantic token in `:root` instead.
 
 ### Adding or changing a color
 

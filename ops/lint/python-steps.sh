@@ -1,18 +1,28 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+owner_for_step() {
+  case "$1" in
+    pyright) printf 'pyright' ;;
+    ruff | ruff-format | flake8-async | vulture) printf 'ruff' ;;
+    *)
+      printf 'Usage: %s [--list] {ruff|ruff-format|pyright|flake8-async|vulture}\n' "$0" >&2
+      exit 2
+      ;;
+  esac
+}
+
 run_step() {
-  git ls-files -z -co --deduplicate --exclude-standard -- '*.py' | (
-    files=()
-    while IFS= read -r -d '' file; do
-      if [[ -f "$file" ]]; then
-        files+=("./$file")
-      fi
-    done
-    if [[ -n "${files[*]-}" ]]; then
-      "$@" "${files[@]}"
-    fi
-  )
+  local owner="$1"
+  shift
+  local -a files=()
+  local file=""
+  while IFS= read -r -d '' file; do
+    files+=("./$file")
+  done < <(node ops/lint/files.mjs "$owner")
+  if [[ -n "${files[*]-}" ]]; then
+    "$@" "${files[@]}"
+  fi
 }
 
 ruff_check() {
@@ -29,6 +39,9 @@ pyright_check() {
 }
 
 flake8_async() {
+  # Only enable the three rules Ruff's ASYNC ruleset does not implement: ASYNC200 (configured
+  # blocking DB calls), ASYNC231 (os.fdopen in async functions), and ASYNC232 (blocking calls on
+  # open file objects). Ruff owns all other ASYNC rules, and Trio/checkpoint rules do not apply.
   .venv-lint/bin/flake8-async --asyncio --disable-noqa \
     --enable=ASYNC200,ASYNC231,ASYNC232 --disable= \
     '--async200-blocking-calls=db.q->offload the query,db.tx->offload the transaction,db.kv_get->offload the read,db.kv_set->offload the write,sqlite3.connect->offload the operation' \
@@ -36,6 +49,10 @@ flake8_async() {
 }
 
 vulture_check() {
+  # Scan production Python code only (backend/app, backend/sidecar, backend/run_desktop.py,
+  # top-level ops/*.py, and tools/): pytest discovers test functions and fixtures dynamically so
+  # test files report false-positive dead code, and ops/*/* subtrees (ops/feedback-bot, ops/lint)
+  # are standalone tools with their own entrypoints and tests.
   local file
   local -a production=()
   for file in "$@"; do
@@ -52,14 +69,19 @@ vulture_check() {
   fi
 }
 
+if [[ "${1-}" == "--list" && "$#" -eq 2 ]]; then
+  node ops/lint/files.mjs "$(owner_for_step "$2")"
+  exit 0
+fi
+
 case "${1-}" in
-  ruff) run_step ruff_check ;;
-  ruff-format) run_step ruff_format ;;
-  pyright) run_step pyright_check ;;
-  flake8-async) run_step flake8_async ;;
-  vulture) run_step vulture_check ;;
+  ruff) run_step ruff ruff_check ;;
+  ruff-format) run_step ruff ruff_format ;;
+  pyright) run_step pyright pyright_check ;;
+  flake8-async) run_step ruff flake8_async ;;
+  vulture) run_step ruff vulture_check ;;
   *)
-    printf 'Usage: %s {ruff|ruff-format|pyright|flake8-async|vulture}\n' "$0" >&2
+    printf 'Usage: %s [--list] {ruff|ruff-format|pyright|flake8-async|vulture}\n' "$0" >&2
     exit 2
     ;;
 esac

@@ -11,7 +11,11 @@
     "jsx": "react-jsx",
     "resolveJsonModule": true,
     "types": [],
-    "skipLibCheck": true
+    "skipLibCheck": false
   },
-  "files": ["../../frontend/src/lib/price.js", "../../frontend/src/lib/numInput.js"]
+  "files": [
+    "../../frontend/src/lib/price.js",
+    "../../frontend/src/lib/numInput.js",
+    "../../frontend/src/lib/desktop-bridge.d.ts"
+  ]
 }

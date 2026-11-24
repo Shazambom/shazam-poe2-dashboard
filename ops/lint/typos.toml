@@ -49,8 +49,6 @@ PNGs = "PNGs"
 AER = "AER"
 # "Past Nd (Div)" column-header placeholder (N days) in hold docs and tests.
 Nd = "Nd"
-# Windows tasklist /FO CSV format flag in EE2 server watcher.
-FO = "FO"
 # Recorded research subagent hex IDs in hold-research-recovered.md.
 a10ba = "a10ba"
 a10ba31604e2e3925 = "a10ba31604e2e3925"

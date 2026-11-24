@@ -109,15 +109,25 @@ fi
 exit 0
 `)
   assert.notEqual(res.status, 0)
-  assert.equal(calls.some((c) => c.startsWith('gh run list')), false, 'must not enter fallback loop after failed dispatch')
+  const dispatchIdx = calls.findIndex((c) => c.startsWith('gh workflow run'))
+  assert.notEqual(dispatchIdx, -1, 'must attempt workflow dispatch')
+  assert.equal(
+    calls.slice(dispatchIdx + 1).some((c) => c.startsWith('gh run list')),
+    false,
+    'must not enter fallback loop after failed dispatch',
+  )
 })
 
 test('a URL-less gh workflow run falls back to gh run list and retries past a transient list failure', () => {
   const { res, calls } = runPublish(`
 if [ "$1" = "workflow" ]; then
+  touch "$(dirname "$0")/dispatched"
   exit 0
 fi
 if [ "$1" = "run" ] && [ "$2" = "list" ]; then
+  if [ ! -f "$(dirname "$0")/dispatched" ]; then
+    exit 0
+  fi
   n=$(cat "$(dirname "$0")/list-count" 2>/dev/null || echo 0)
   n=$((n + 1))
   echo "$n" > "$(dirname "$0")/list-count"
@@ -138,6 +148,35 @@ fi
 exit 0
 `)
   assert.equal(res.status, 0, res.stderr + res.stdout)
-  assert.equal(calls.filter((c) => c.startsWith('gh run list')).length, 2)
+  const dispatchIdx = calls.findIndex((c) => c.startsWith('gh workflow run'))
+  assert.notEqual(dispatchIdx, -1)
+  assert.equal(calls.slice(dispatchIdx + 1).filter((c) => c.startsWith('gh run list')).length, 2)
   assert.ok(calls.some((c) => c.startsWith('gh run watch 987654')))
+})
+
+test('an in-progress Windows build for the tag is adopted without dispatching a duplicate run', () => {
+  const { res, calls } = runPublish(`
+if [ "$1" = "workflow" ]; then
+  echo "should not dispatch a duplicate workflow run" >&2
+  exit 99
+fi
+if [ "$1" = "run" ] && [ "$2" = "list" ]; then
+  if echo "$*" | grep -q 'Windows build 0.3.99-beta.1'; then
+    echo "445566"
+    exit 0
+  fi
+  exit 0
+fi
+if [ "$1" = "run" ] && [ "$2" = "watch" ]; then
+  exit 0
+fi
+if [ "$1" = "run" ] && [ "$2" = "view" ]; then
+  echo "seed ready (1.2M, v123):"
+  exit 0
+fi
+exit 0
+`)
+  assert.equal(res.status, 0, res.stderr + res.stdout)
+  assert.equal(calls.some((c) => c.startsWith('gh workflow run')), false, 'must not invoke gh workflow run when an unfinished run exists')
+  assert.ok(calls.some((c) => c.startsWith('gh run watch 445566')), 'must watch the adopted run id')
 })
