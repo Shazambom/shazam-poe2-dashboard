@@ -39,6 +39,9 @@ pyright_check() {
 }
 
 flake8_async() {
+  # Only enable the three rules Ruff's ASYNC ruleset does not implement: ASYNC200 (configured
+  # blocking DB calls), ASYNC231 (os.fdopen in async functions), and ASYNC232 (blocking calls on
+  # open file objects). Ruff owns all other ASYNC rules, and Trio/checkpoint rules do not apply.
   .venv-lint/bin/flake8-async --asyncio --disable-noqa \
     --enable=ASYNC200,ASYNC231,ASYNC232 --disable= \
     '--async200-blocking-calls=db.q->offload the query,db.tx->offload the transaction,db.kv_get->offload the read,db.kv_set->offload the write,sqlite3.connect->offload the operation' \
@@ -46,6 +49,10 @@ flake8_async() {
 }
 
 vulture_check() {
+  # Scan production Python code only (backend/app, backend/sidecar, backend/run_desktop.py,
+  # top-level ops/*.py, and tools/): pytest discovers test functions and fixtures dynamically so
+  # test files report false-positive dead code, and ops/*/* subtrees (ops/feedback-bot, ops/lint)
+  # are standalone tools with their own entrypoints and tests.
   local file
   local -a production=()
   for file in "$@"; do

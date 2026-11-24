@@ -3,7 +3,8 @@
 // ops/lint/js-steps.sh eslint builds the file list. Every rule is an error; there is no warning tier.
 // Plugins load from ops/lint/node_modules; import resolution runs from each linted file, so every
 // tree resolves against its own node_modules. Per-path settings are the lines marked "per-path"
-// below, each with its reason (lint plan section 5). Adding one needs the owner.
+// below, each with its reason (kept scoped to exact files where a rule does not match the code or an
+// intentional contract exception lives). Adding one needs the owner.
 import { builtinModules } from 'node:module'
 import { fileURLToPath } from 'node:url'
 import js from '@eslint/js'
@@ -64,7 +65,7 @@ const TEST_CONTROL = [
 // OS path variables the desktop runtime may read; everything else in process.env is configuration.
 const OS_PATH_VARS = ['APPDATA', 'LOCALAPPDATA', 'PROGRAMDATA', 'XDG_CONFIG_HOME', 'XDG_DATA_HOME', 'HOME', 'USERPROFILE']
 
-// Which module owns each network primitive (lint plan section 3, `network-primitives-allowlist`).
+// Desktop network-boundary owners enforced by CLAUDE.md via arbiter/network-primitives-allowlist.
 const NETWORK_OWNERS = {
   fetch: ['desktop/src/telemetry.js', 'desktop/src/local-backend.js'],
   net: ['desktop/src/trade/proxy.js'],
@@ -186,7 +187,7 @@ const config = [
       ...atError(vitest.configs.recommended.rules),
       'vitest/no-disabled-tests': 'error',
       'vitest/no-focused-tests': 'error',
-      // Matcher-style preference, not a defect.
+      // per-path: matcher-style preference, not a defect.
       'vitest/prefer-called-exactly-once-with': 'off',
     },
   },
@@ -218,7 +219,9 @@ const config = [
       ...atError(n.configs['flat/recommended-script'].rules),
       'n/prefer-node-protocol': 'error',
       'n/hashbang': 'error',
+      // electron is a devDependency in desktop/package.json provided at runtime by the Electron binary.
       'n/no-unpublished-require': ['error', { allowModules: ['electron'] }],
+      // Module-load startup reads (for example owner-key.pub in seal.js) run once before UI work; sync I/O inside functions remains forbidden.
       'n/no-sync': ['error', { allowAtRootLevel: true }],
       'no-implicit-coercion': 'error',
       'no-shadow': 'error',
@@ -249,7 +252,7 @@ const config = [
   },
   {
     // per-path: desktop-settings.json is written synchronously so a change made just before quit is on
-    // disk when the process exits; this module is the one place that sync file I/O lives (lint plan section 5).
+    // disk when the process exits; this module is the one place that sync file I/O lives.
     files: ['desktop/src/settings-store.js'],
     rules: { 'n/no-sync': 'off' },
   },

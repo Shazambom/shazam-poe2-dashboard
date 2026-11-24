@@ -85,6 +85,9 @@ step_shell() {
   if ! shellcheck --rcfile=ops/lint/shellcheckrc -S style "${other_sh[@]}"; then
     failed=1
   fi
+  # per-path (desktop/build-backend.sh, desktop/build-sidecar.sh): both scripts source a build-time
+  # Python virtualenv activate script ($VENV/Scripts/activate or $VENV/bin/activate) that does not
+  # exist in a clean checkout, so SC1091 cannot follow it.
   if ! shellcheck --rcfile=ops/lint/shellcheckrc -S style -e SC1091 "${build_sh[@]}"; then
     failed=1
   fi
