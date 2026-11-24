@@ -17,7 +17,7 @@ import logging
 import math
 import time
 
-from .. import cache, centrality, db, devtelemetry, orderbook, pairscore
+from .. import cache, centrality, db, devtelemetry, digest, orderbook, pairscore
 from .. import settings as settings_mod
 from ..currencies import registry
 from ..settings import get_settings
@@ -88,8 +88,6 @@ def _cache_key(filters: dict | None, start_currencies: list[str] | None) -> str:
 
 
 def _cache_ver():
-    from .. import digest
-
     return (orderbook.state["version"], digest.state["last_hour"])
 
 
@@ -156,13 +154,17 @@ MAX_CANDIDATES = 20000  # hard ceiling on simulated cycles per search
 def _velocity(
     margin_ref: float, fill_hours: float | None, gold: float, gold_price_ref: float
 ) -> float | None:
-    """Velocity = margin NET of gold's value, per hour, per 1k gold.
+    """Velocity = geometric mean of net profit/hour and net profit/1k gold.
 
     Gold is valued at the user's slider price (`gold_price_ref` = reference value of 1 gold) and
-    SUBTRACTED from the margin, then the result is still divided by gold (the per-1k-gold
-    efficiency weighting). The subtraction is what makes the gold-value slider actually move the
-    arbitrage ranking — a pure divisor was a rank-invariant scalar; the division keeps a
-    gold-thrifty loop weighted above a gold-heavy one at equal net margin. Gold-free loops rank
+    SUBTRACTED from the margin:
+      net      = margin_ref - gold * gold_price_ref
+      velocity = net / sqrt(fill_hours * gold / 1000)
+
+    Unlike `net / fill_hours / gold` (which shrank as 1/scale when committing more capital,
+    rewarding tiny trades over larger, higher-div/h loops), the geometric mean increases
+    monotonically with trade size past step overhead while still rewarding both high profit/h
+    and high profit/1k gold and scaling linearly in the reference currency. Gold-free loops rank
     best (INF); no turnover data -> None; a loop whose gold value exceeds its margin goes negative
     (net loss) and sinks."""
     if fill_hours is None or fill_hours <= 0:
@@ -170,12 +172,40 @@ def _velocity(
     net = margin_ref - gold * gold_price_ref
     if gold <= 0:
         return INF if net > 0 else 0.0
-    return net / fill_hours / gold * 1000
+    return net / math.sqrt(fill_hours * (gold / 1000.0))
 
 
 def _too_slow(slowest_step_hours: float | None, max_step_minutes: float) -> bool:
     """A step past the per-step limit, or one whose market has no turnover (None: it cannot fill)."""
     return slowest_step_hours is None or slowest_step_hours * 60 > max_step_minutes
+
+
+def _fits_caps(
+    sim: dict,
+    max_step_minutes: float,
+    max_fill_hours: float,
+    max_gold: float,
+) -> bool:
+    if max_step_minutes and _too_slow(sim["slowest_step_hours"], max_step_minutes):
+        return False
+    if max_fill_hours and (
+        sim["fill_hours"] is None or sim["fill_hours"] > max_fill_hours
+    ):
+        return False
+    return not (max_gold and sim["gold"] > max_gold)
+
+
+def _step_cap_cycles(
+    cyc: list[Edge], amount: float, unit: int, max_step_minutes: float
+) -> int:
+    """Analytic upper bound (with small integer-rounding cushion) on cycles that fit `max_step_minutes`."""
+    scale = 1.0
+    cap = amount
+    for e in cyc:
+        if e.kind != "recipe" and (e.vol_in_per_h or 0.0) > 0:
+            cap = min(cap, (e.vol_in_per_h or 0.0) * (max_step_minutes / 60.0) / scale)
+        scale *= e.rate
+    return max(1, math.ceil(cap / unit) + 2)
 
 
 def _route_from(
@@ -186,6 +216,8 @@ def _route_from(
     budget: float,
     ref_value: dict[str, float],
     max_step_minutes: float = 0,
+    max_fill_hours: float = 0,
+    max_gold: float = 0,
 ) -> dict | None:
     # Size in whole tradable cycles: commit = (cycles) × (one-cycle unit), so the amount
     # always respects the trade ratios and never commits a partial lot.
@@ -195,23 +227,53 @@ def _route_from(
     if amount < 1:
         return None
     sim = simulate(g, cyc, amount, ref_value)
+    has_cap = bool(max_step_minutes or max_fill_hours or max_gold)
+    can_shrink = not (max_step_minutes and sim["slowest_step_hours"] is None) and not (
+        max_fill_hours and sim["fill_hours"] is None
+    )
     if (
-        max_step_minutes
-        and sim["slowest_step_hours"] is not None
-        and _too_slow(sim["slowest_step_hours"], max_step_minutes)
+        has_cap
+        and can_shrink
+        and not _fits_caps(sim, max_step_minutes, max_fill_hours, max_gold)
     ):
-        # Fills and turnover time are nondecreasing in the commit, including after
-        # whole-unit and recipe rounding. Find the largest whole-cycle size that fits.
+        # Fills, turnover time and gold fees are nondecreasing in the commit, including after
+        # whole-unit and recipe rounding. Find the largest whole-cycle size that fits every cap.
         lo, hi = 0, cycles
+        if max_step_minutes:
+            tight = min(cycles, _step_cap_cycles(cyc, amount, unit, max_step_minutes))
+            if tight < cycles:
+                trial_hi = simulate(g, cyc, tight * unit, ref_value)
+                if _fits_caps(trial_hi, max_step_minutes, max_fill_hours, max_gold):
+                    lo, sim = tight, trial_hi
+                    hi = min(cycles, tight + 2)
+                else:
+                    hi = tight
         while hi - lo > 1:
             mid = (lo + hi) // 2
             trial = simulate(g, cyc, mid * unit, ref_value)
-            if not _too_slow(trial["slowest_step_hours"], max_step_minutes):
+            if _fits_caps(trial, max_step_minutes, max_fill_hours, max_gold):
                 lo, sim = mid, trial
             else:
                 hi = mid
         if lo:
             cycles, amount = lo, lo * unit
+    # Trim dead rounding waste: when whole-unit floor() on an expensive intermediate step leaves
+    # excess start currency unused, shrink to the smallest whole-cycle commit that yields the
+    # exact same `end_amount` (strictly better margin, gold, fill time, and capital monotonicity).
+    if cycles > 1 and sim["end_amount"] > 0:
+        target_end = sim["end_amount"]
+        prev = simulate(g, cyc, (cycles - 1) * unit, ref_value)
+        if prev["end_amount"] == target_end:
+            lo, hi = 0, cycles - 1
+            sim = prev
+            while hi - lo > 1:
+                mid = (lo + hi) // 2
+                trial = simulate(g, cyc, mid * unit, ref_value)
+                if trial["end_amount"] == target_end:
+                    hi, sim = mid, trial
+                else:
+                    lo = mid
+            cycles, amount = hi, hi * unit
     margin = sim["end_amount"] - amount
     margin_ref = margin * ref_value.get(start, 0.0)
     gold = sim["gold"]
@@ -286,6 +348,79 @@ def thresholds_in_reference(f: dict, ex_in_ref: float) -> dict:
         k: (v * ex_in_ref if k in CURRENCY_THRESHOLDS and v else v)
         for k, v in f.items()
     }
+
+
+# Under-the-hood AS-Hill commit-size margin scaling: larger commits need a smaller percentage
+# margin to yield meaningful absolute profit, while volatile markets keep a higher floor.
+MARGIN_SCALE_HALF_DIV = 200.0
+MARGIN_SCALE_POWER = 0.65
+MARGIN_SCALE_FLOOR_FRAC = 0.25
+MARGIN_SCALE_VOL_COEFF = 20.0
+
+
+def _effective_min_margin_pct(
+    base_pct: float,
+    commit_div: float,
+    worst_range_24h: float = 1.0,
+) -> float:
+    """AS-Hill effective min_margin_pct for a loop committing `commit_div` Divines.
+
+    Decays smoothly from `base_pct` toward `floor` via a Hill (log-logistic) curve bounded below
+    by `max(0.25 * base_pct, 20 * ln(worst_range_24h))`. Small commits keep nearly the full
+    `base_pct`; volatile loops hold a higher floor regardless of size.
+    """
+    if base_pct <= 0 or commit_div <= 0:
+        return base_pct
+    vol_floor = (
+        MARGIN_SCALE_VOL_COEFF * math.log(worst_range_24h)
+        if worst_range_24h > 1.0
+        else 0.0
+    )
+    floor = min(base_pct, max(MARGIN_SCALE_FLOOR_FRAC * base_pct, vol_floor))
+    return floor + (base_pct - floor) / (
+        1.0 + (commit_div / MARGIN_SCALE_HALF_DIV) ** MARGIN_SCALE_POWER
+    )
+
+
+def _route_min_margin_pct(
+    r: dict,
+    base_pct: float,
+    ref_value: dict[str, float] | None,
+    range_24h: dict[tuple[str, str], float] | None,
+) -> float:
+    if base_pct <= 0 or not ref_value:
+        return base_pct
+    div_ref = ref_value.get("divine") or 0.0
+    if div_ref <= 0:
+        return base_pct
+    commit_div = (
+        (r.get("start_amount") or 0.0)
+        * ref_value.get(r.get("start", ""), 0.0)
+        / div_ref
+    )
+    if commit_div <= 0:
+        return base_pct
+    worst_r24 = 1.0
+    if range_24h:
+        for pair in r.get("pairs") or ():
+            a, b = pair[0], pair[1]
+            canon = (a, b) if a < b else (b, a)
+            rng = range_24h.get(canon, 1.0)
+            if rng > worst_r24:
+                worst_r24 = rng
+    return _effective_min_margin_pct(base_pct, commit_div, worst_r24)
+
+
+def _route_filters(
+    r: dict,
+    f: dict,
+    ref_value: dict[str, float] | None,
+    range_24h: dict[tuple[str, str], float] | None,
+) -> dict:
+    """Per-route filter view with AS-Hill commit-size margin scaling applied under the hood."""
+    base = f.get("min_margin_pct", -INF)
+    eff = _route_min_margin_pct(r, base, ref_value, range_24h)
+    return {**f, "min_margin_pct": eff} if eff != base else f
 
 
 def _keep(r: dict, f: dict) -> bool:
@@ -409,6 +544,75 @@ def search_cycles(g: Graph, starts: list[str], max_steps: int, cap: int):
     return iter(original)
 
 
+# Skip stability/recency guards on fresh leagues or tiny fixtures
+MIN_ACTIVITY_LEAGUE_HOURS = 12
+MIN_ACTIVE_HOURS_24 = 6
+MAX_ROUTE_EDGE_AGE_S = 3 * 3600
+
+
+def _route_edge_overlay(
+    g: Graph, s: dict
+) -> tuple[
+    dict[tuple[str, str], Edge],
+    set[tuple[str, str]],
+    dict[tuple[str, str], float],
+]:
+    """Route-only recent-flow volume floor and gentle 24h stability guard.
+
+    Never mutates `g` or `Graph.values()` (Board, Hold, Market and Convert keep their exact graph).
+    Returns `(edge_map, blocked, range_24h)` where `edge_map` holds lightweight cloned digest edges
+    whose effective volume is capped at recent 6h flow when `volume_window_h > 6`, `blocked` holds
+    sporadic/stale/wild-swing digest edges excluded from route search, and `range_24h` maps
+    canonical pairs to their 24h price range. Fail-open when the league has fewer than
+    MIN_ACTIVITY_LEAGUE_HOURS of digest history."""
+    league = s.get("league") or ""
+    if not league:
+        return {}, set(), {}
+    act = digest.pair_activity(league)
+    league_hours = act.get("league_hours", 0)
+    if league_hours < MIN_ACTIVITY_LEAGUE_HOURS:
+        return {}, set(), {}
+    vol_recent = act["vol_recent"]
+    hrs_active = act["hours_active"]
+    range_24h = act["range_24h"]
+    use_recent_floor = (s.get("volume_window_h") or 0) > digest.ACTIVITY_RECENT_H
+    min_hrs = min(MIN_ACTIVE_HOURS_24, league_hours // 2)
+    wide = settings_mod.wide_spread(s)
+    max_range = 2.0 * wide if wide > 0 else 0.0
+
+    edge_map: dict[tuple[str, str], Edge] = {}
+    blocked: set[tuple[str, str]] = set()
+    for k, e in g.edges.items():
+        if e.kind != "digest":
+            continue
+        a, b = k
+        canon = (a, b) if a < b else (b, a)
+        if (
+            hrs_active.get(canon, 0) < min_hrs
+            or e.age_s > MAX_ROUTE_EDGE_AGE_S
+            or (max_range > 0 and range_24h.get(canon, 1.0) > max_range)
+        ):
+            blocked.add(k)
+            continue
+        if use_recent_floor:
+            cur_v = e.vol_in_per_h or 0.0
+            rec_v = vol_recent.get(k, 0.0)
+            if rec_v < cur_v:
+                edge_map[k] = Edge(
+                    e.src,
+                    e.dst,
+                    e.kind,
+                    e.rate,
+                    e.ladder,
+                    e.age_s,
+                    e.lot,
+                    rec_v,
+                    e.meta,
+                    e.market,
+                )
+    return edge_map, blocked, range_24h
+
+
 def _iter_candidates(
     g: Graph,
     s: dict,
@@ -420,12 +624,28 @@ def _iter_candidates(
     cancelled=lambda: False,
     *,
     max_step_minutes: float = 0,
+    max_fill_hours: float = 0,
+    max_gold: float = 0,
+    overlay: tuple[
+        dict[tuple[str, str], Edge],
+        set[tuple[str, str]],
+        dict[tuple[str, str], float],
+    ]
+    | None = None,
 ):
     """Yield route dicts as the search finds them (shortest loops first, capped at MAX_CANDIDATES) — then whatever the
     whole-market deep scan adds (loops past `max_steps` or past the cap), tagged `deep`. Both go
     through `_route_from`, so a deep loop is sized, simulated, filtered and ranked like any other."""
+    edge_map, blocked, _range_24h = (
+        overlay if overlay is not None else _route_edge_overlay(g, s)
+    )
 
-    def size(cyc: list[Edge]) -> dict | None:
+    def size(raw_cyc: list[Edge]) -> dict | None:
+        if blocked and any((e.src, e.dst) in blocked for e in raw_cyc):
+            return None
+        cyc = (
+            [edge_map.get((e.src, e.dst), e) for e in raw_cyc] if edge_map else raw_cyc
+        )
         start = cyc[0].src
         held = capital.get(start, 0.0)
         budget = (
@@ -433,7 +653,17 @@ def _iter_candidates(
             if not notional
             else (1.0 / ref_value.get(start, 1.0) or 1.0) * 10
         )
-        return _route_from(g, cyc, start, held, budget, ref_value, max_step_minutes)
+        return _route_from(
+            g,
+            cyc,
+            start,
+            held,
+            budget,
+            ref_value,
+            max_step_minutes,
+            max_fill_hours,
+            max_gold,
+        )
 
     seen: set[str] = set()
     for cyc in search_cycles(g, starts, s["max_steps"], MAX_CANDIDATES):
@@ -465,13 +695,46 @@ def _iter_candidates(
         deep_stats.update(stats)
 
 
-def _finish(routes: list[dict], f: dict, s: dict) -> tuple[list[dict], int]:
+def _canonical_cycle(r: dict) -> tuple[tuple[str, str, str], ...]:
+    """Rotation-invariant identity of a directed cycle: keeps one best entry per trade."""
+    steps = [(st["from"], st["to"], st["kind"]) for st in r.get("steps", ())]
+    if not steps:
+        return ((r.get("id", ""), "", ""),)
+    return min(tuple(steps[i:] + steps[:i]) for i in range(len(steps)))
+
+
+def _dedup_rotations(routes: list[dict]) -> list[dict]:
+    """Keep only the highest-ranked entry rotation of each directed cycle."""
+    seen: set[tuple[tuple[str, str, str], ...]] = set()
+    out: list[dict] = []
+    for r in routes:
+        cid = _canonical_cycle(r)
+        if cid in seen:
+            continue
+        seen.add(cid)
+        out.append(r)
+    return out
+
+
+def _finish(
+    routes: list[dict],
+    f: dict,
+    s: dict,
+    ref_value: dict[str, float] | None = None,
+    range_24h: dict[tuple[str, str], float] | None = None,
+) -> tuple[list[dict], int]:
     if orderbook.BULK_EXCHANGE_ENABLED:
         pairscore.observe(routes)
-    kept = [r for r in routes if _keep(r, f)]
-    _composite_score(kept, s.get("rank_weights", {}))
-    kept.sort(key=_sort_key(f.get("sort", "score")), reverse=True)
-    return kept, int(f.get("limit", 100))
+    kept = [r for r in routes if _keep(r, _route_filters(r, f, ref_value, range_24h))]
+    sort = f.get("sort", "score")
+    weights = s.get("rank_weights", {})
+    _composite_score(kept, weights)
+    kept.sort(key=_sort_key(sort), reverse=True)
+    deduped = _dedup_rotations(kept)
+    if len(deduped) != len(kept):
+        _composite_score(deduped, weights)
+        deduped.sort(key=_sort_key(sort), reverse=True)
+    return deduped, int(f.get("limit", 100))
 
 
 def _diag(
@@ -573,6 +836,8 @@ def stream_routes(
     )
     routes: list[dict] = []
     deep: dict = {}
+    overlay = _route_edge_overlay(g, s)
+    range_24h = overlay[2]
     last_sent = time.time()
     for n, r in enumerate(
         _iter_candidates(
@@ -585,6 +850,9 @@ def stream_routes(
             deep,
             cancelled,
             max_step_minutes=f.get("max_step_minutes", 0),
+            max_fill_hours=f.get("max_fill_hours", 0),
+            max_gold=f.get("max_gold", 0),
+            overlay=overlay,
         ),
         1,
     ):
@@ -595,10 +863,10 @@ def stream_routes(
                 last_sent = time.time()
                 yield "progress", {}
         routes.append(r)
-        if _keep(r, f):
+        if _keep(r, _route_filters(r, f, ref_value, range_24h)):
             last_sent = time.time()
             yield "route", r
-    kept, limit = _finish(routes, f, s)
+    kept, limit = _finish(routes, f, s, ref_value, range_24h)
     result = _result(g, s, f, ref_value, capital, notional, routes, kept, limit, deep)
     _cache_put(key, result)
     _diag(False, len(kept[:limit]), len(kept), len(routes), t0, notional, starts, g)
@@ -620,6 +888,8 @@ def _find_routes(filters: dict | None, start_currencies: list[str] | None) -> di
         filters, start_currencies
     )
     deep: dict = {}
+    overlay = _route_edge_overlay(g, s)
+    range_24h = overlay[2]
     routes = list(
         _iter_candidates(
             g,
@@ -630,9 +900,12 @@ def _find_routes(filters: dict | None, start_currencies: list[str] | None) -> di
             notional,
             deep,
             max_step_minutes=f.get("max_step_minutes", 0),
+            max_fill_hours=f.get("max_fill_hours", 0),
+            max_gold=f.get("max_gold", 0),
+            overlay=overlay,
         )
     )
-    kept, limit = _finish(routes, f, s)
+    kept, limit = _finish(routes, f, s, ref_value, range_24h)
     return _result(g, s, f, ref_value, capital, notional, routes, kept, limit, deep)
 
 

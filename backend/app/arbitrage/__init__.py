@@ -56,8 +56,9 @@ from .routes import stream_routes as stream_routes
 def invalidate_caches() -> None:
     """Drop the graph + route + board caches (call after settings changes, e.g. league switch,
     reference, watchlist, or hub_count — so a settings edit reflects immediately)."""
-    from .. import cache
+    from .. import cache, digest
 
     cache.clear(_graph_mod._graph_cache)
     cache.clear(_routes_mod._route_cache)
     cache.clear(_board_mod._board_cache)
+    cache.clear(digest._activity_cache)

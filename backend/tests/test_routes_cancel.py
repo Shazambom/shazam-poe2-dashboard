@@ -69,7 +69,7 @@ def test_an_uncancelled_search_still_finishes(monkeypatch):
         )
 
     monkeypatch.setattr(routes, "_iter_candidates", finite)
-    monkeypatch.setattr(routes, "_finish", lambda rs, f, s: (rs, 100))
+    monkeypatch.setattr(routes, "_finish", lambda rs, f, s, *a, **k: (rs, 100))
     monkeypatch.setattr(routes, "_result", lambda *a, **k: {})
     monkeypatch.setattr(routes, "_diag", lambda *a, **k: None)
     kinds = [k for k, _ in routes.stream_routes({}, None, cancelled=lambda: False)]

@@ -181,6 +181,242 @@ def test_more_capital_never_hides_a_loop():
         assert [r["start_amount"] for r in found] == [min(held, 40)]
 
 
+def test_max_gold_and_max_fill_hours_size_down_instead_of_dropping():
+    cyc = [
+        _edge("a", "b", 1.0, 1000.0),
+        _edge("b", "c", 1.0, 100.0),
+        _edge("c", "a", 1.25, 1000.0),
+    ]
+    g = Graph(
+        {
+            "reference": "a",
+            "step_overhead_min": 0.0,
+            "gold_model": {"per_unit": {"a": 100, "b": 100, "c": 100}},
+        }
+    )
+    g.fee_table = {}
+    for e in cyc:
+        g.add(e)
+    # 1 unit costs 100 (b) + 100 (c) + 100 (a) = 300 gold (approx 325 with 1.25 out).
+    # At max_gold=3250, full held=2000 must be sized down rather than dropped.
+    sized_g = routes._route_from(g, cyc, "a", 2000, 2000, _REF, max_gold=3250)
+    assert sized_g is not None
+    assert sized_g["gold"] <= 3250
+    assert sized_g["start_amount"] == 10
+    assert routes._keep(sized_g, {"max_gold": 3250})
+    one_more = routes._route_from(g, cyc, "a", 11, 11, _REF)
+    assert one_more is not None and not routes._keep(one_more, {"max_gold": 3250})
+
+    # At max_fill_hours=0.5 (sum of used/vol across all 3 steps), full held=2000 fits ~41 units.
+    sized_fh = routes._route_from(g, cyc, "a", 2000, 2000, _REF, max_fill_hours=0.5)
+    assert sized_fh is not None
+    assert sized_fh["fill_hours"] is not None and sized_fh["fill_hours"] <= 0.5
+    assert routes._keep(sized_fh, {"max_fill_hours": 0.5})
+    next_up = routes._route_from(
+        g, cyc, "a", sized_fh["start_amount"] + 1, sized_fh["start_amount"] + 1, _REF
+    )
+    assert next_up is not None and not routes._keep(next_up, {"max_fill_hours": 0.5})
+
+
+def test_commit_trims_floor_rounding_waste_on_expensive_intermediates():
+    # Intermediate `item` costs 80 chaos and sells for 132 chaos. Committing 169 chaos (or 100)
+    # only buys 1 item via floor(); trimming avoids burning extra chaos into rounding waste so
+    # holding more capital never turns a profitable loop negative.
+    cyc = [
+        _edge("chaos", "item", 1.0 / 80.0, 500.0),
+        _edge("item", "chaos", 132.0, 100.0),
+    ]
+    g = _graph(cyc)
+    ref = {"chaos": 1.0, "item": 80.0}
+    r100 = routes._route_from(g, cyc, "chaos", 100, 100, ref)
+    r159 = routes._route_from(g, cyc, "chaos", 159, 159, ref)
+    r200 = routes._route_from(g, cyc, "chaos", 200, 200, ref)
+    assert r100 is not None and r159 is not None and r200 is not None
+    assert (r100["start_amount"], r100["end_amount"], r100["margin"]) == (80, 132, 52)
+    assert (r159["start_amount"], r159["end_amount"], r159["margin"]) == (80, 132, 52)
+    assert (r200["start_amount"], r200["end_amount"], r200["margin"]) == (160, 264, 104)
+
+
+def test_dedup_rotations_keeps_single_best_entry_per_cycle():
+    # Two rotations of the same cycle a->b->c->a: higher-scoring rotation wins.
+    r_a = _route(
+        id="a>b|b>c|c>a",
+        margin_ref=50.0,
+        velocity=40.0,
+        velocity_inf=False,
+        gold=100,
+        gold_free=False,
+        margin_per_1k_gold=500.0,
+        steps=[
+            {"from": "a", "to": "b", "kind": "digest"},
+            {"from": "b", "to": "c", "kind": "digest"},
+            {"from": "c", "to": "a", "kind": "digest"},
+        ],
+    )
+    r_b = _route(
+        id="b>c|c>a|a>b",
+        margin_ref=10.0,
+        velocity=10.0,
+        velocity_inf=False,
+        gold=100,
+        gold_free=False,
+        margin_per_1k_gold=100.0,
+        steps=[
+            {"from": "b", "to": "c", "kind": "digest"},
+            {"from": "c", "to": "a", "kind": "digest"},
+            {"from": "a", "to": "b", "kind": "digest"},
+        ],
+    )
+    r_other = _route(
+        id="a>d|d>a",
+        margin_ref=20.0,
+        velocity=20.0,
+        velocity_inf=False,
+        gold=100,
+        gold_free=False,
+        margin_per_1k_gold=200.0,
+        steps=[
+            {"from": "a", "to": "d", "kind": "digest"},
+            {"from": "d", "to": "a", "kind": "digest"},
+        ],
+    )
+    kept, _ = routes._finish([r_b, r_other, r_a], {}, {})
+    assert [r["id"] for r in kept] == ["a>b|b>c|c>a", "a>d|d>a"]
+
+
+def test_route_edge_overlay_recent_volume_and_stability_without_mutating_graph(
+    monkeypatch,
+):
+    e_steady = Edge(
+        "a",
+        "b",
+        "digest",
+        1.0,
+        [{"rate": 1.0, "stock": 10_000}],
+        age_s=1800,
+        vol_in_per_h=100.0,
+    )
+    e_sporadic = Edge(
+        "a",
+        "c",
+        "digest",
+        1.0,
+        [{"rate": 1.0, "stock": 10_000}],
+        age_s=1800,
+        vol_in_per_h=100.0,
+    )
+    e_wild = Edge(
+        "a",
+        "d",
+        "digest",
+        1.0,
+        [{"rate": 1.0, "stock": 10_000}],
+        age_s=1800,
+        vol_in_per_h=100.0,
+    )
+    e_stale = Edge(
+        "a",
+        "e",
+        "digest",
+        1.0,
+        [{"rate": 1.0, "stock": 10_000}],
+        age_s=4 * 3600,
+        vol_in_per_h=100.0,
+    )
+    g = Graph({"league": "L", "volume_window_h": 72, "wide_spread": 2.0})
+    for e in (e_steady, e_sporadic, e_wild, e_stale):
+        g.add(e)
+
+    monkeypatch.setattr(
+        digest,
+        "pair_activity",
+        lambda _lg: {
+            "league_hours": 24,
+            "vol_recent": {
+                ("a", "b"): 25.0,
+                ("a", "c"): 50.0,
+                ("a", "d"): 50.0,
+                ("a", "e"): 50.0,
+            },
+            "hours_active": {
+                ("a", "b"): 20,
+                ("a", "c"): 3,
+                ("a", "d"): 20,
+                ("a", "e"): 20,
+            },
+            "range_24h": {
+                ("a", "b"): 1.4,
+                ("a", "c"): 1.2,
+                ("a", "d"): 5.5,
+                ("a", "e"): 1.2,
+            },
+        },
+    )
+    edge_map, blocked, range_24h = routes._route_edge_overlay(g, g.s)
+    # Sporadic (<6h), wild (>2*wide_spread=4.0), and stale (>3h) are excluded; steady stays.
+    assert blocked == {("a", "c"), ("a", "d"), ("a", "e")}
+    # Steady edge's route volume is capped to recent 6h flow without mutating g.edges.
+    assert edge_map[("a", "b")].vol_in_per_h == 25.0
+    assert g.edges[("a", "b")].vol_in_per_h == 100.0
+    assert range_24h[("a", "b")] == 1.4
+
+    # Fail-open when league has < 12h of history (fresh league or tiny test fixture).
+    monkeypatch.setattr(
+        digest,
+        "pair_activity",
+        lambda _lg: {
+            "league_hours": 6,
+            "vol_recent": {},
+            "hours_active": {},
+            "range_24h": {},
+        },
+    )
+    assert routes._route_edge_overlay(g, g.s) == ({}, set(), {})
+
+
+def test_as_hill_margin_scaling_unlocks_large_calm_commits_and_protects_volatile():
+    # Curve shape: flat near base for tiny commits, decays smoothly toward floor=0.25*m0.
+    m0 = 20.0
+    small = routes._effective_min_margin_pct(m0, 1.0, 1.1)
+    mid = routes._effective_min_margin_pct(m0, 200.0, 1.1)
+    large_calm = routes._effective_min_margin_pct(m0, 1000.0, 1.1)
+    large_vol = routes._effective_min_margin_pct(m0, 1000.0, 2.0)
+    extreme = routes._effective_min_margin_pct(m0, 100_000.0, 1.0)
+    assert 19.0 < small < 20.0
+    assert mid == pytest.approx(12.5)
+    assert 5.0 < large_calm < 10.0
+    assert large_vol > 15.0  # volatile 2x range raises the AS floor
+    assert extreme > 5.0  # bounded above 0.25 * m0 even at extreme scale
+    # Non-positive base thresholds are never scaled.
+    assert routes._effective_min_margin_pct(0.0, 1000.0, 1.0) == 0.0
+    # Extreme volatility clamps floor at base_pct (never stricter than user's setting).
+    assert routes._effective_min_margin_pct(m0, 1000.0, 5.0) == pytest.approx(m0)
+
+    # Integration through _keep: 762d calm loop at 18.5% passes under base 20%;
+    # small 10d loop at 15% is still rejected; volatile 2.5x loop at 15% is rejected.
+    ref = {"divine": 100.0, "chaos": 1.0, "omen": 50.0}
+    f = {"min_margin_pct": 20.0}
+    calm_ranges = {
+        ("chaos", "divine"): 1.05,
+        ("chaos", "omen"): 1.15,
+        ("divine", "omen"): 1.12,
+    }
+    vol_ranges = {
+        ("chaos", "divine"): 1.05,
+        ("chaos", "omen"): 2.5,
+        ("divine", "omen"): 1.12,
+    }
+    pairs = [["divine", "chaos"], ["chaos", "omen"], ["omen", "divine"]]
+    r_calm = _route(start="divine", start_amount=762, margin_pct=18.5, pairs=pairs)
+    r_small = _route(start="divine", start_amount=10, margin_pct=15.0, pairs=pairs)
+    r_vol = _route(start="divine", start_amount=762, margin_pct=15.0, pairs=pairs)
+    assert routes._keep(r_calm, routes._route_filters(r_calm, f, ref, calm_ranges))
+    assert not routes._keep(
+        r_small, routes._route_filters(r_small, f, ref, calm_ranges)
+    )
+    assert not routes._keep(r_vol, routes._route_filters(r_vol, f, ref, vol_ranges))
+
+
 def test_default_is_the_balanced_presets():
     assert (
         settings.DEFAULTS["filters"]["max_step_minutes"]

@@ -81,12 +81,12 @@
     "Chaos Orb"
    ],
    "profit_per_hour": 9.090909090909092,
-   "score": 0.975,
+   "score": 0.9667,
    "score_parts": {
     "efficiency": 1.0,
     "value": 1.0,
     "velocity": 1.0,
-    "volume": 0.75
+    "volume": 0.667
    },
    "slowest_step_hours": 10.0,
    "start": "chaos",
@@ -144,9 +144,117 @@
    ],
    "uses_recipe": false,
    "value_ref": 2000.0,
-   "velocity": -0.021645021645021644,
+   "velocity": -0.3289758474798845,
    "velocity_inf": false,
    "volume_ref_per_h": 100.0
+  },
+  {
+   "all_live": false,
+   "capital_held": 100.0,
+   "cycle_unit": 1,
+   "cycles": 91,
+   "end_amount": 100,
+   "fill_hours": 0.93,
+   "gold": 20000.0,
+   "gold_free": false,
+   "id": "chaos>divine|divine>chaos",
+   "kinds": [
+    "digest",
+    "live"
+   ],
+   "liquidity_ref": 4545.454545454546,
+   "margin": 9,
+   "margin_pct": 9.89010989010989,
+   "margin_per_1k_gold": 4.5,
+   "margin_ref": 90.0,
+   "max_age_s": 10.0,
+   "pairs": [
+    [
+     "chaos",
+     "divine"
+    ],
+    [
+     "divine",
+     "chaos"
+    ]
+   ],
+   "path": [
+    "chaos",
+    "divine",
+    "chaos"
+   ],
+   "path_names": [
+    "Chaos Orb",
+    "Divine Orb",
+    "Chaos Orb"
+   ],
+   "profit_per_hour": 96.77419354838709,
+   "score": 0.7,
+   "score_parts": {
+    "efficiency": 0.667,
+    "value": 0.667,
+    "velocity": 0.667,
+    "volume": 1.0
+   },
+   "slowest_step_hours": 0.91,
+   "start": "chaos",
+   "start_amount": 91,
+   "start_name": "Chaos Orb",
+   "steps": [
+    {
+     "age_s": 10.0,
+     "fills": [
+      {
+       "account": null,
+       "in": 91,
+       "out": 2.002,
+       "rate": 0.022,
+       "whisper": null
+      }
+     ],
+     "from": "chaos",
+     "from_name": "Chaos Orb",
+     "gold": 10000.0,
+     "in": 91,
+     "kind": "digest",
+     "meta": {},
+     "out": 2,
+     "rate": 0.022,
+     "to": "divine",
+     "to_name": "Divine Orb",
+     "unconverted": 0,
+     "vol_in_per_h": 100.0
+    },
+    {
+     "age_s": 10.0,
+     "fills": [
+      {
+       "account": null,
+       "in": 2,
+       "out": 100.0,
+       "rate": 50.0,
+       "whisper": null
+      }
+     ],
+     "from": "divine",
+     "from_name": "Divine Orb",
+     "gold": 10000.0,
+     "in": 2,
+     "kind": "live",
+     "meta": {},
+     "out": 100,
+     "rate": 50.0,
+     "to": "chaos",
+     "to_name": "Chaos Orb",
+     "unconverted": 0,
+     "vol_in_per_h": 100.0
+    }
+   ],
+   "uses_recipe": false,
+   "value_ref": 1910.0,
+   "velocity": -2.318694478800841,
+   "velocity_inf": false,
+   "volume_ref_per_h": 1000.0
   },
   {
    "all_live": true,
@@ -196,12 +304,12 @@
     "Chaos Orb"
    ],
    "profit_per_hour": 0.0,
-   "score": 0.725,
+   "score": 0.3333,
    "score_parts": {
-    "efficiency": 0.75,
-    "value": 0.75,
-    "velocity": 0.75,
-    "volume": 0.5
+    "efficiency": 0.333,
+    "value": 0.333,
+    "velocity": 0.333,
+    "volume": 0.333
    },
    "slowest_step_hours": 10.0,
    "start": "chaos",
@@ -283,227 +391,11 @@
    ],
    "uses_recipe": false,
    "value_ref": 3000.0,
-   "velocity": -0.4537205081669692,
-   "velocity_inf": false,
-   "volume_ref_per_h": 100.0
-  },
-  {
-   "all_live": false,
-   "capital_held": 100.0,
-   "cycle_unit": 1,
-   "cycles": 100,
-   "end_amount": 100,
-   "fill_hours": 1.02,
-   "gold": 20000.0,
-   "gold_free": false,
-   "id": "chaos>divine|divine>chaos",
-   "kinds": [
-    "digest",
-    "live"
-   ],
-   "liquidity_ref": 4545.454545454546,
-   "margin": 0,
-   "margin_pct": 0.0,
-   "margin_per_1k_gold": 0.0,
-   "margin_ref": 0.0,
-   "max_age_s": 10.0,
-   "pairs": [
-    [
-     "chaos",
-     "divine"
-    ],
-    [
-     "divine",
-     "chaos"
-    ]
-   ],
-   "path": [
-    "chaos",
-    "divine",
-    "chaos"
-   ],
-   "path_names": [
-    "Chaos Orb",
-    "Divine Orb",
-    "Chaos Orb"
-   ],
-   "profit_per_hour": 0.0,
-   "score": 0.55,
-   "score_parts": {
-    "efficiency": 0.5,
-    "value": 0.5,
-    "velocity": 0.5,
-    "volume": 1.0
-   },
-   "slowest_step_hours": 1.0,
-   "start": "chaos",
-   "start_amount": 100,
-   "start_name": "Chaos Orb",
-   "steps": [
-    {
-     "age_s": 10.0,
-     "fills": [
-      {
-       "account": null,
-       "in": 100,
-       "out": 2.1999999999999997,
-       "rate": 0.022,
-       "whisper": null
-      }
-     ],
-     "from": "chaos",
-     "from_name": "Chaos Orb",
-     "gold": 10000.0,
-     "in": 100,
-     "kind": "digest",
-     "meta": {},
-     "out": 2,
-     "rate": 0.022,
-     "to": "divine",
-     "to_name": "Divine Orb",
-     "unconverted": 0,
-     "vol_in_per_h": 100.0
-    },
-    {
-     "age_s": 10.0,
-     "fills": [
-      {
-       "account": null,
-       "in": 2,
-       "out": 100.0,
-       "rate": 50.0,
-       "whisper": null
-      }
-     ],
-     "from": "divine",
-     "from_name": "Divine Orb",
-     "gold": 10000.0,
-     "in": 2,
-     "kind": "live",
-     "meta": {},
-     "out": 100,
-     "rate": 50.0,
-     "to": "chaos",
-     "to_name": "Chaos Orb",
-     "unconverted": 0,
-     "vol_in_per_h": 100.0
-    }
-   ],
-   "uses_recipe": false,
-   "value_ref": 2000.0,
-   "velocity": -4.901960784313726,
-   "velocity_inf": false,
-   "volume_ref_per_h": 1000.0
-  },
-  {
-   "all_live": true,
-   "capital_held": 50.0,
-   "cycle_unit": 1,
-   "cycles": 50,
-   "end_amount": 50,
-   "fill_hours": 0.55,
-   "gold": 1000.0,
-   "gold_free": false,
-   "id": "exalted>chaos|chaos>exalted",
-   "kinds": [
-    "live",
-    "live"
-   ],
-   "liquidity_ref": 5000.0,
-   "margin": 0,
-   "margin_pct": 0.0,
-   "margin_per_1k_gold": 0.0,
-   "margin_ref": 0.0,
-   "max_age_s": 10.0,
-   "pairs": [
-    [
-     "exalted",
-     "chaos"
-    ],
-    [
-     "chaos",
-     "exalted"
-    ]
-   ],
-   "path": [
-    "exalted",
-    "chaos",
-    "exalted"
-   ],
-   "path_names": [
-    "Exalted Orb",
-    "Chaos Orb",
-    "Exalted Orb"
-   ],
-   "profit_per_hour": 0.0,
-   "score": 0.25,
-   "score_parts": {
-    "efficiency": 0.25,
-    "value": 0.25,
-    "velocity": 0.25,
-    "volume": 0.25
-   },
-   "slowest_step_hours": 0.5,
-   "start": "exalted",
-   "start_amount": 50,
-   "start_name": "Exalted Orb",
-   "steps": [
-    {
-     "age_s": 10.0,
-     "fills": [
-      {
-       "account": null,
-       "in": 50,
-       "out": 5.5,
-       "rate": 0.11,
-       "whisper": null
-      }
-     ],
-     "from": "exalted",
-     "from_name": "Exalted Orb",
-     "gold": 500.0,
-     "in": 50,
-     "kind": "live",
-     "meta": {},
-     "out": 5,
-     "rate": 0.11,
-     "to": "chaos",
-     "to_name": "Chaos Orb",
-     "unconverted": 0,
-     "vol_in_per_h": 100.0
-    },
-    {
-     "age_s": 10.0,
-     "fills": [
-      {
-       "account": null,
-       "in": 5,
-       "out": 50.0,
-       "rate": 10.0,
-       "whisper": null
-      }
-     ],
-     "from": "chaos",
-     "from_name": "Chaos Orb",
-     "gold": 500.0,
-     "in": 5,
-     "kind": "live",
-     "meta": {},
-     "out": 50,
-     "rate": 10.0,
-     "to": "exalted",
-     "to_name": "Exalted Orb",
-     "unconverted": 0,
-     "vol_in_per_h": 100.0
-    }
-   ],
-   "uses_recipe": false,
-   "value_ref": 100.0,
-   "velocity": -9.09090909090909,
+   "velocity": -8.249731888070388,
    "velocity_inf": false,
    "volume_ref_per_h": 100.0
   }
  ],
- "total_after_filters": 4,
+ "total_after_filters": 3,
  "total_candidates": 5
 }

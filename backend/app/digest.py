@@ -490,6 +490,84 @@ def window_history(league: str, hours: int = 168):
 
 
 _volume_cache: dict[tuple[str, float], tuple[float, dict]] = {}
+_activity_cache: dict[tuple[str, int, int], tuple[float, dict]] = {}
+
+ACTIVITY_RECENT_H = 6
+ACTIVITY_WINDOW_H = 24
+
+
+def pair_activity(
+    league: str,
+    recent_hours: int = ACTIVITY_RECENT_H,
+    stab_hours: int = ACTIVITY_WINDOW_H,
+) -> dict:
+    """Recent flow and 24h stability per market for route sizing/filtering (never pricing).
+
+    One index range scan over max(recent_hours, stab_hours) of `digest_markets`, cached
+    on `state["last_hour"]`:
+      - league_hours: distinct digest hours present in `stab_hours` (0 on synthetic/empty DBs)
+      - vol_recent:   {(a, b): avg src units/h over `recent_hours`} (quiet hours count as 0)
+      - hours_active: {canon_pair: distinct traded hours in `stab_hours`}
+      - range_24h:    {canon_pair: max(px) / min(px) of hourly executed rates in `stab_hours`}
+    """
+    return cache.memo(
+        _activity_cache,
+        (league, recent_hours, stab_hours),
+        600,
+        lambda: _pair_activity(league, recent_hours, stab_hours),
+        version=state["last_hour"],
+    )
+
+
+def _pair_activity(league: str, recent_hours: int, stab_hours: int) -> dict:
+    now = _hour(time.time())
+    win = max(recent_hours, stab_hours)
+    since = now - win * 3600
+    recent_since = now - recent_hours * 3600
+    stab_since = now - stab_hours * 3600
+    with db.q() as c:
+        rows = c.execute(
+            """SELECT hour, cur_a, cur_b, vol_a, vol_b FROM digest_markets
+               WHERE league=? AND hour>=?""",
+            (league, since),
+        ).fetchall()
+    league_hrs: set[int] = set()
+    vol_recent: dict[tuple[str, str], float] = {}
+    hrs_active: dict[tuple[str, str], set[int]] = {}
+    bounds: dict[tuple[str, str], list[float]] = {}
+    for r in rows:
+        h = r["hour"]
+        if h >= stab_since:
+            league_hrs.add(h)
+        a = registry.resolve_meta(r["cur_a"])
+        b = registry.resolve_meta(r["cur_b"])
+        if not a or not b:
+            continue
+        va = float(r["vol_a"] or 0.0)
+        vb = float(r["vol_b"] or 0.0)
+        if h > recent_since:
+            vol_recent[(a, b)] = vol_recent.get((a, b), 0.0) + va / recent_hours
+            vol_recent[(b, a)] = vol_recent.get((b, a), 0.0) + vb / recent_hours
+        if h >= stab_since and va > 0 and vb > 0:
+            canon = (a, b) if a < b else (b, a)
+            px = (va / vb) if a < b else (vb / va)
+            hrs_active.setdefault(canon, set()).add(h)
+            b24 = bounds.get(canon)
+            if b24 is None:
+                bounds[canon] = [px, px]
+            else:
+                if px < b24[0]:
+                    b24[0] = px
+                if px > b24[1]:
+                    b24[1] = px
+    return {
+        "league_hours": len(league_hrs),
+        "vol_recent": vol_recent,
+        "hours_active": {k: len(v) for k, v in hrs_active.items()},
+        "range_24h": {
+            k: (hi / lo if lo > 0 else 1.0) for k, (lo, hi) in bounds.items()
+        },
+    }
 
 
 def pair_volume(league: str, hours: float = 24) -> dict[tuple[str, str], float]:
