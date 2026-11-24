@@ -23,11 +23,10 @@ export function useApi(fn, deps) {
   const getRequest = useEffectEvent(() => fn)
   useEffect(() => {
     let live = true
-    request.setState({ busy: true })
+    if (!request.getState().busy) request.setState({ busy: true })
     Promise.resolve().then(getRequest())
-      .then(d => { if (live) request.setState({ data: d, err: null }) })
-      .catch(e => { if (live) request.setState({ err: cleanErr(e) }) })
-      .finally(() => { if (live) request.setState({ busy: false }) })
+      .then(d => { if (live) request.setState({ data: d, err: null, busy: false }) })
+      .catch(e => { if (live) request.setState({ err: cleanErr(e), busy: false }) })
     return () => { live = false }
   }, [inputs, nonce, request, tick])
   return { data, err, busy, reload: () => setNonce(n => n + 1), setData }

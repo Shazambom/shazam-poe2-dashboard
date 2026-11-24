@@ -11,7 +11,7 @@ import SettingsView from '../../src/components/SettingsView.jsx'
 import StashView from '../../src/components/StashView.jsx'
 import { api, bus } from '../../src/lib/api.js'
 import { useAutosave } from '../../src/lib/hooks.js'
-import { useStatus } from '../../src/lib/statusStore.js'
+import { persistSettings, useStatus } from '../../src/lib/statusStore.js'
 import { refreshTweaks } from '../../src/lib/tweaks.js'
 import { installApiMock } from './setup.js'
 
@@ -172,4 +172,19 @@ it('signals quit inside main’s second even when a settings PUT never settles',
   expect(flushed).toHaveBeenCalledTimes(1)
   await act(async () => { put.resolve({ hold_caution: 2 }); await write })
   expect(events).not.toHaveBeenCalled()
+})
+
+it('does not optimistically publish a patch that already matches all shown keys', async () => {
+  const put = Promise.withResolvers()
+  vi.spyOn(api, 'putSettings').mockReturnValue(put.promise)
+  const settings = { theme: 'vault', hold_caution: 2 }
+  useStatus.setState({ settings })
+  const listener = vi.fn(), off = useStatus.subscribe(listener)
+  try {
+    const save = persistSettings({ ...settings })
+    expect(listener).not.toHaveBeenCalled()
+    expect(useStatus.getState().settings).toBe(settings)
+    put.resolve(settings)
+    await save
+  } finally { off() }
 })
