@@ -321,6 +321,8 @@ Check these every time; each one has cost a deploy before. (The general rules ev
 
 Condensed and general, newest first; each came from a post-deploy audit (step 8).
 
+- **2026-11-25 (0.3.18-beta.4):** run the full `./ops/lint.sh` (including `typos`) before committing a release bump when touching non-JS/Python files like `desktop/build/installer.nsh` (NSIS string-copy opcodes trip `typos`; use `IntOp` for integer init).
+
 - **2026-11-24 (0.3.18-beta.2):** the regression gate reads the local data dir, and rates older than
   `digest_max_age_h` (6 h) drop out, so after the app has been closed for hours it finds 0 loops and fails closed
   ("too little data"). Open the app until the digest's latest hour is under 6 h old, quit it (the comparison needs a
