@@ -22,6 +22,7 @@ const { loginConfirmedAt, SIGNED_IN_PROBE, LOGIN_POLL_MS } = require('./poelogin
 const { postItemText, postQuery } = require('./dev-ee2-telemetry.js')   // beta/dev-gated inside installLog
 const { makeRing } = require('./feedback/ring.js')
 const { applyChannel } = require('./updater-channel.js')
+const { runGracefulUpdateInstall } = require('./update-install.js')
 const { createRespawner, onceGone } = require('./respawn.js')
 const { boot } = require('./startup.js')
 const { serveStatic } = require('./ui-files.js')
@@ -420,6 +421,8 @@ ipcMain.handle('open-trade', (_e, url) => {
 // Developer ID cert — drop `identity: null` in package.json once one exists.
 let _autoUpdater = null
 let _flushedForQuit = false   // set once the workspace flush ran — or when an update is installing
+let _installingUpdate = false // true while update:install is closing windows before quitAndInstall
+let _updateDownloaded = false // stops the 30-min poll from re-triggering available/downloaded
 let _latestVersion = null
 const IS_MAC = process.platform === 'darwin'
 
@@ -442,6 +445,7 @@ function relTag(v) { return /-beta\./.test(v) ? v : `desktop-v${v}` }
 function macDmgUrl(v) { return `${GH_RELEASES}/${relTag(v)}/Arbiter-${v}-arm64.dmg` }
 
 function _applyChannel(au) {
+  _updateDownloaded = false
   const beta = onBetaChannel()
   try { applyChannel(au, beta) } catch (e) { ignored('update:apply-channel', e) }
   return beta
@@ -466,7 +470,12 @@ function setupUpdates() {
       _emitUpdate(IS_MAC ? { phase: 'manual', version: info?.version } : { phase: 'downloading', version: info?.version, percent: 0 })
     })
     autoUpdater.on('download-progress', (p) => _emitUpdate({ phase: 'downloading', percent: Math.round(p.percent) }))
-    autoUpdater.on('update-downloaded', (info) => { _latestVersion = info?.version; updLog(`downloaded ${info?.version}`); _emitUpdate({ phase: 'ready', version: info?.version }) })
+    autoUpdater.on('update-downloaded', (info) => {
+      _updateDownloaded = true
+      _latestVersion = info?.version
+      updLog(`downloaded ${info?.version}`)
+      _emitUpdate({ phase: 'ready', version: info?.version })
+    })
     autoUpdater.on('error', (e) => {
       const msg = String(e?.message || e)
       updLog(`ERROR ${msg}`); console.log('[updater]', String(e))
@@ -478,7 +487,9 @@ function setupUpdates() {
     })
     updLog('startup check')
     autoUpdater.checkForUpdates().catch((e) => updLog(`check-threw ${String(e.message || e)}`))
-    setInterval(() => autoUpdater.checkForUpdates().catch((e) => ignored('update:check', e)), 30 * 60 * 1000)
+    setInterval(() => {
+      if (!_updateDownloaded) autoUpdater.checkForUpdates().catch((e) => ignored('update:check', e))
+    }, 30 * 60 * 1000)
   } catch (e) { console.log('[updater] disabled:', String(e)) }
 }
 
@@ -496,7 +507,24 @@ ipcMain.handle('update:setChannel', (_e, beta) => {
 // UI theme (colour only): remember it so the next launch paints the right backdrop before CSS, and
 // recolour the current window's gutter now. Presets and custom hexes are handled in window-theme.js.
 ipcMain.handle('ui:setTheme', (_e, id, backdrop) => applyWindowTheme(id, backdrop, changeSettings, win))
-ipcMain.handle('update:install', () => {
+function flushWorkspaceForUpdate() {
+  if (!win || win.isDestroyed()) return Promise.resolve()
+  return new Promise((resolve) => {
+    let settled = false
+    const finish = () => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      ipcMain.removeListener('ws:flushed', finish)
+      resolve()
+    }
+    const timer = setTimeout(finish, 400)
+    ipcMain.once('ws:flushed', finish)
+    try { win.webContents.send('ws:flush') } catch (e) { ignored('quit:flush-workspace', e); finish() }
+  })
+}
+
+ipcMain.handle('update:install', async () => {
   if (IS_MAC) {
     // Can't hot-swap unsigned — open the DMG in the browser for a manual install; keep the
     // app running so the user isn't left staring at a closed window.
@@ -506,19 +534,25 @@ ipcMain.handle('update:install', () => {
     _emitUpdate({ phase: 'manual', version: _latestVersion })
     return
   }
-  // Windows: kill the bundled backend FIRST so it doesn't lock the install dir during the
-  // update (that left users with a dead/removed app), then SILENT install + relaunch.
-  // Silent (isSilent=true) matters: the NSIS self-heal skips its destructive cleanup when
-  // silent, so the auto-update no longer nukes the install dir it's upgrading.
+  if (_installingUpdate) return
+  _installingUpdate = true
+  // Windows: flush workspace, stop uiohook/trade/diag/backend, and close every BrowserWindow
+  // cleanly BEFORE calling quitAndInstall so Chromium releases its GPU process cleanly instead of
+  // getting hit by NSIS preInit mid-teardown. Silent (isSilent=true) keeps NSIS self-heal off.
   updLog('install-clicked (win silent quitAndInstall)')
-  // An UPDATE quit must not be held by the workspace flush below (the silent installer gives up if the
-  // app is still running): ask the renderer to flush right now, best effort, and let the quit through.
   _flushedForQuit = true
-  try { win?.webContents.send('ws:flush') } catch (e) { ignored('quit:flush-workspace', e) }
-  try { stopBackend() } catch (e) { ignored('quit:stop-backend', e) }
-  setTimeout(() => {
-    try { _autoUpdater?.quitAndInstall(true, true) } catch (e) { updLog(`quitAndInstall-threw ${String(e)}`); _emitUpdate({ phase: 'error', message: String(e) }) }
-  }, 400)
+  await runGracefulUpdateInstall({
+    flushWorkspace: flushWorkspaceForUpdate,
+    stopAll,
+    getWindows: () => BrowserWindow.getAllWindows(),
+    quitAndInstall: () => { _autoUpdater?.quitAndInstall(true, true) },
+    onError: (e) => {
+      _installingUpdate = false
+      updLog(`quitAndInstall-threw ${String(e)}`)
+      _emitUpdate({ phase: 'error', message: String(e) })
+      if (!BrowserWindow.getAllWindows().length) app.quit()
+    },
+  })
 })
 
 // ------------------------------------------------------------------- menu
@@ -698,15 +732,17 @@ app.whenReady().then(async () => {
   // TEMPORARY DEV DIAGNOSTIC (beta/dev only): which link of the icon chain broke — see icondiag.js.
   if (diagTelemetryOn()) {
     try {
-      require('./icondiag.js').install({ win: () => win, session: win.webContents.session,
+      const stopIcons = require('./icondiag.js').install({ win: () => win, session: win.webContents.session,
         backendUrl: () => backendUrl, log: (m) => telemetry.installLog('icons', m) })
+      if (typeof stopIcons === 'function') _stopDiag.push(stopIcons)
     } catch (e) { console.log('[icondiag] failed:', String(e)) }
   }
   // TEMPORARY DEV DIAGNOSTIC (beta/dev only): what the seed left for the Mods tab and what the
   // league crawl is doing, as the backend and the renderer see it — see modsdiag.js.
   if (diagTelemetryOn()) {
     try {
-      require('./modsdiag.js').install({ win: () => win, backendUrl: () => backendUrl, log: (m) => telemetry.installLog('mods', m) })
+      const stopMods = require('./modsdiag.js').install({ win: () => win, backendUrl: () => backendUrl, log: (m) => telemetry.installLog('mods', m) })
+      if (typeof stopMods === 'function') _stopDiag.push(stopMods)
     } catch (e) { console.log('[modsdiag] failed:', String(e)) }
   }
   setupUpdates()
@@ -811,8 +847,11 @@ ipcMain.handle('mods:item', async () => {
 // has finished (previously a second before-quit listener killed the backend while ws:flush was
 // still trying to PUT /api/workspace).
 // (`_flushedForQuit` is declared up top so the update handler can set it before quitAndInstall.)
+/** @type {Array<() => void>} */
+const _stopDiag = []
+const stopDiag = () => { for (const fn of _stopDiag.splice(0)) { try { fn() } catch (e) { ignored('quit:stop-diag', e) } } }
 const stopTrade = () => { try { require('./trade').engine.stopAll() } catch (e) { ignored('quit:stop-live-search', e) }; try { require('./trade/hotkey.js').unregisterAll() } catch (e) { ignored('quit:unregister-hotkeys', e) } }
-const stopAll = () => { stopTrade(); stopEe2Integration(); stopClientLogWatcher(); stopBackend() }
+const stopAll = () => { stopDiag(); stopTrade(); stopEe2Integration(); stopClientLogWatcher(); stopBackend() }
 app.on('before-quit', (e) => {
   if (!_flushedForQuit && win && !win.isDestroyed()) {
     e.preventDefault()
@@ -824,4 +863,8 @@ app.on('before-quit', (e) => {
   }
   stopAll()
 })
-app.on('window-all-closed', () => { stopAll(); app.quit() })
+app.on('window-all-closed', () => {
+  if (_installingUpdate) return
+  stopAll()
+  app.quit()
+})

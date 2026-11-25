@@ -21,14 +21,27 @@ function install({ win, backendUrl, log }) {
       })()`, true)
     } catch (e) { return `dom-err ${String(e).slice(0, 60)}` }
   }
+  let stopped = false
   const report = async (tag) => {
+    if (stopped) return
     if (!backendUrl()) { log(`${tag} backend not bound`); return }
     const [pools, bf, st] = await Promise.all([j('/api/mods/pools'), j('/api/backfill'), j('/api/status')])
+    if (stopped) return
     const mods = pools.err ? `err=${pools.err}` : `pools=${(pools.pools || []).length} currencies=${(pools.currencies || []).length}`
     const crawl = bf.err ? `err=${bf.err}` : `phase=${bf.phase} league=${JSON.stringify(bf.league)} ${bf.league_done}/${bf.league_total} leagues=${bf.leagues_done}/${bf.leagues_total}`
     const digest = st.err ? `err=${st.err}` : `behind_h=${st.digest?.behind_h} state=${st.digest?.state} backfilling=${st.digest?.backfilling}`
-    log(`${tag} mods{${mods}} crawl{${crawl}} digest{${digest}} ui=${await dom()}`)
+    const ui = await dom()
+    if (stopped) return
+    log(`${tag} mods{${mods}} crawl{${crawl}} digest{${digest}} ui=${ui}`)
   }
-  for (const [ms, tag] of /** @type {Array<[number, string]>} */ ([[20000, '@20s'], [120000, '@120s'], [600000, '@10m']])) setTimeout(() => report(tag).catch((e) => ignored('modsdiag:report', e)), ms)
+  const timers = /** @type {Array<[number, string]>} */ ([[20000, '@20s'], [120000, '@120s'], [600000, '@10m']]).map(([ms, tag]) => {
+    const t = setTimeout(() => { report(tag).catch((e) => ignored('modsdiag:report', e)) }, ms)
+    if (t.unref) t.unref()
+    return t
+  })
+  return () => {
+    stopped = true
+    for (const t of timers) clearTimeout(t)
+  }
 }
 module.exports = { install }

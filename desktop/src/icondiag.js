@@ -9,6 +9,7 @@
 //   cdn=    what web.poecdn.com answered for the image requests (status tally, first failure)
 // Remove once the cause is known. Reports no user data — counts, status codes and CDN URLs only.
 'use strict'
+const { ignored } = require('./ignored.js')
 const { backendFetch } = require('./local-backend.js')
 
 const CDN = 'https://web.poecdn.com/*'
@@ -39,7 +40,9 @@ function install({ win, session, backendUrl, log }) {
     })
   } catch (e) { log(`hook-failed ${String(e)}`) }
 
+  let stopped = false
   const report = async (when) => {
+    if (stopped) return
     /** @type {string | { loaded_at: number | null, n: number, withIcon: number }} */
     let data
     try {
@@ -47,11 +50,21 @@ function install({ win, session, backendUrl, log }) {
       const list = d.currencies || []
       data = { loaded_at: d.loaded_at ? Math.round(d.loaded_at) : null, n: list.length, withIcon: list.filter(c => c.icon).length }
     } catch (e) { data = `error ${String(e.message || e)}` }
+    if (stopped) return
     let dom = 'no-window'
     try { if (win() && !win().isDestroyed()) dom = await win().webContents.executeJavaScript(PROBE, true) } catch (e) { dom = `error ${String(e.message || e)}` }
+    if (stopped) return
     log(`${when} data=${JSON.stringify(data)} dom=${JSON.stringify(dom)} cdn=${JSON.stringify(cdn)}`)
   }
-  for (const [ms, tag] of /** @type {Array<[number, string]>} */ ([[20000, '@20s'], [120000, '@120s'], [600000, '@10m']])) setTimeout(() => report(tag), ms)
+  const timers = /** @type {Array<[number, string]>} */ ([[20000, '@20s'], [120000, '@120s'], [600000, '@10m']]).map(([ms, tag]) => {
+    const t = setTimeout(() => { report(tag).catch((e) => ignored('icondiag:report', e)) }, ms)
+    if (t.unref) t.unref()
+    return t
+  })
+  return () => {
+    stopped = true
+    for (const t of timers) clearTimeout(t)
+  }
 }
 
 module.exports = { install }
