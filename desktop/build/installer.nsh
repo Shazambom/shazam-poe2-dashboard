@@ -28,7 +28,7 @@
   IfSilent wait_arbiter_exit kill_arbiter_now
 
   wait_arbiter_exit:
-    StrCpy $R0 0
+    IntOp $R0 0 + 0
   wait_arbiter_loop:
     nsExec::Exec 'cmd /C tasklist /FI "IMAGENAME eq Arbiter.exe" /NH | find /I "Arbiter.exe"'
     Pop $0
