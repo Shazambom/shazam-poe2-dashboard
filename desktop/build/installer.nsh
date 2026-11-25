@@ -11,39 +11,65 @@
 ; NSIS escaping: $$ = literal '$' (so PowerShell's $_/$env/$d survive), $\" = literal
 ; double-quote (wraps the -Command argument).
 
-!macro preInit
-  ; Force-kill the bundled backend (pure Python, no GPU process) and legacy names first so
-  ; nothing holds a lock on the install dir — poe2arb-backend.exe is the process that broke
-  ; updates once the app became self-contained.
+; Shared graceful shutdown sequence for Arbiter.exe (installer preInit, interactive reinstall,
+; and uninstaller checkAppRunning). Stops the pure-Python backend first (no GPU context), then
+; requests a clean WM_CLOSE (taskkill without /F) and waits up to 8 seconds for Arbiter.exe and
+; its Chromium GPU child process to exit naturally before falling back to `taskkill /F /T`.
+; Sending TerminateProcess directly into a live Electron 45 GPU process triggered Windows
+; VIDEO_SCHEDULER_INTERNAL_ERROR (0x119) BSODs.
+!macro stopArbiterGracefully _SKIP_CLOSE_IF_SILENT
+  !ifndef _ARBITER_STOP_UID
+    !define /math _ARBITER_STOP_UID 0 + 1
+  !else
+    !define /redef /math _ARBITER_STOP_UID ${_ARBITER_STOP_UID} + 1
+  !endif
   nsExec::Exec 'taskkill /F /T /IM "poe2arb-backend.exe"'
   Pop $0
+  Push $R0
+  !if "${_SKIP_CLOSE_IF_SILENT}" == "1"
+    ; Silent auto-updates (/S) are launched by quitAndInstall while Arbiter.exe is already closing;
+    ; interactive installs send graceful WM_CLOSE first.
+    IfSilent wait_arbiter_exit_${_ARBITER_STOP_UID} request_arbiter_close_${_ARBITER_STOP_UID}
+  request_arbiter_close_${_ARBITER_STOP_UID}:
+  !endif
+    nsExec::Exec 'taskkill /IM "Arbiter.exe"'
+    Pop $0
+  !if "${_SKIP_CLOSE_IF_SILENT}" == "1"
+  wait_arbiter_exit_${_ARBITER_STOP_UID}:
+  !endif
+    IntOp $R0 0 + 0
+  wait_arbiter_loop_${_ARBITER_STOP_UID}:
+    nsExec::Exec 'cmd /C tasklist /FI "IMAGENAME eq Arbiter.exe" /NH | find /I "Arbiter.exe"'
+    Pop $0
+    StrCmp $0 "0" arbiter_still_running_${_ARBITER_STOP_UID} arbiter_exited_${_ARBITER_STOP_UID}
+  arbiter_still_running_${_ARBITER_STOP_UID}:
+    IntOp $R0 $R0 + 1
+    IntCmp $R0 32 kill_arbiter_now_${_ARBITER_STOP_UID} 0 kill_arbiter_now_${_ARBITER_STOP_UID}
+    Sleep 250
+    Goto wait_arbiter_loop_${_ARBITER_STOP_UID}
+
+  kill_arbiter_now_${_ARBITER_STOP_UID}:
+    nsExec::Exec 'taskkill /F /T /IM "Arbiter.exe"'
+    Pop $0
+
+  arbiter_exited_${_ARBITER_STOP_UID}:
+  Pop $R0
+!macroend
+
+; Replaces electron-builder's default _CHECK_APP_RUNNING (which only waits 1.3s before
+; Stop-Process -Force) in both installSection and un.checkAppRunning, so uninstalling while
+; Arbiter is open also waits up to 8s for uiohook + Chromium GPU teardown before any force-kill.
+!macro customCheckAppRunning
+  !insertmacro stopArbiterGracefully 0
+!macroend
+
+!macro preInit
+  ; Force-kill legacy app names first, then stop backend + gracefully close/wait on Arbiter.exe.
   nsExec::Exec 'taskkill /F /T /IM "ShazamDash.exe"'
   Pop $0
   nsExec::Exec 'taskkill /F /T /IM "PoE2 Dashboard.exe"'
   Pop $0
-  ; During silent auto-updates (/S), wait for Arbiter.exe (and its Chromium GPU child process)
-  ; to exit cleanly on its own before falling back to a force-kill. Running `taskkill /F /T`
-  ; immediately sends TerminateProcess into a live Chromium GPU process mid-teardown, which
-  ; triggered Windows VIDEO_SCHEDULER_INTERNAL_ERROR (0x119) BSODs on Electron 45.
-  IfSilent wait_arbiter_exit kill_arbiter_now
-
-  wait_arbiter_exit:
-    IntOp $R0 0 + 0
-  wait_arbiter_loop:
-    nsExec::Exec 'cmd /C tasklist /FI "IMAGENAME eq Arbiter.exe" /NH | find /I "Arbiter.exe"'
-    Pop $0
-    StrCmp $0 "0" arbiter_still_running arbiter_exited
-  arbiter_still_running:
-    IntOp $R0 $R0 + 1
-    IntCmp $R0 32 kill_arbiter_now 0 kill_arbiter_now
-    Sleep 250
-    Goto wait_arbiter_loop
-
-  kill_arbiter_now:
-    nsExec::Exec 'taskkill /F /T /IM "Arbiter.exe"'
-    Pop $0
-
-  arbiter_exited:
+  !insertmacro stopArbiterGracefully 1
   ; DESTRUCTIVE self-heal (delete stale install dir + uninstall registry + shortcuts) is
   ; only for repairing a broken INTERACTIVE fresh install. electron-updater runs the update
   ; installer SILENTLY (/S); doing this deletion mid-update nukes the very install being
