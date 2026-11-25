@@ -1,7 +1,7 @@
 # The differences the next release intends, checked by ops/regression-diff.py inside
 # desktop/publish-github.sh. It is valid for ONE version, and every line must still match a reported
 # difference. Anything not listed blocks the release. Whole-line comments only.
-version: 0.3.18-beta.3
+version: 0.3.18-beta.4
 # Arbitrage route-only 6h flow cap, 24h stability/recency guard, unified cap sizing, and commit-trimming
 loops    exchange-only loop changed: *
 loops    recipe loop gone: *
@@ -9,4 +9,3 @@ loops    recipe loop gone: *
 pool     joined: *
 pool     left: *
 pool     margin changed: *
-pool     score/rank shifts only (margins unchanged)*
