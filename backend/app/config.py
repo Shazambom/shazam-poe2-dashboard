@@ -33,7 +33,7 @@ LEAGUE = os.environ.get("LEAGUE", "Standard")
 POESESSID = os.environ.get("POESESSID", "").strip()
 USER_AGENT = os.environ.get(
     "USER_AGENT",
-    "poe2-arb-dashboard/0.1 (self-hosted; contact: set USER_AGENT in .env)",
+    "Arbiter-PoE2/0.3 (+https://github.com/Shazambom/shazam-poe2-dashboard)",
 )
 
 # GGG hourly digest: how far back to backfill on first run, and poll cadence.

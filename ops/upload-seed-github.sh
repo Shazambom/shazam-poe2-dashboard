@@ -5,7 +5,7 @@
 #
 # Requires:
 #   GH_TOKEN  — a PAT / fine-grained token with `contents: write` on the repo
-#   GH_REPO   — owner/name (e.g. ianmoreno/shazam-poe2-dashboard)
+#   GH_REPO   — owner/name (e.g. Shazambom/shazam-poe2-dashboard)
 #
 # Usage: GH_TOKEN=... GH_REPO=owner/name ./upload-seed-github.sh <seed.gz> [<seed.gz.version>]
 set -euo pipefail

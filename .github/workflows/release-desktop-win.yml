@@ -34,6 +34,8 @@ jobs:
     runs-on: windows-latest
     permissions:
       contents: write
+      id-token: write
+      attestations: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
         with:
@@ -92,6 +94,12 @@ jobs:
           # beta (dev) release, rename to beta.yml so beta clients fetch it and stable's latest.yml is
           # never touched (a beta build must emit ONLY beta.yml).
           if [[ "$RELEASE_TAG" == *-beta* ]]; then mv -f release/latest.yml release/beta.yml; fi
+      - name: Attest Windows build provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8  # v4.2.2
+        with:
+          subject-path: |
+            desktop/release/*.exe
+            desktop/release/*.zip
       - name: Upload installer into the DRAFT release
         # The release stays a draft (invisible to electron-updater, never "Latest") until
         # desktop/publish-github.sh has added the Mac files, verified both platforms and flipped it

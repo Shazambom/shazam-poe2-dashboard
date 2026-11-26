@@ -9,17 +9,17 @@ UTC, taken from the transcript records.
 
 | What | Original path (gone) | Recovered from | When (UTC) |
 |---|---|---|---|
-| Hold design research: "Quant hold-scoring methodology + OSS" | agent report | `~/.claude/projects/-Users-ianmoreno/15b714b2-6a76-417b-b058-e0f414280444/subagents/agent-a7aac8a574734f238.jsonl` | 2026-09-13 21:28 |
+| Hold design research: "Quant hold-scoring methodology + OSS" | agent report | `~/.claude/projects/<user>/15b714b2-6a76-417b-b058-e0f414280444/subagents/agent-a7aac8a574734f238.jsonl` | 2026-09-13 21:28 |
 | Hold design research: "PoE2 asset classes + hold wisdom" | agent report | `…/15b714b2…/subagents/agent-a14d57f3d48e9a082.jsonl` | 2026-09-13 21:28 |
 | The /simplify pass that cut the weighted-z score | agent report | `…/15b714b2…/subagents/agent-aeb9317211654c674.jsonl` | 2026-09-13 21:36 |
-| `scratchpad/research-grounding.md` | `/private/tmp/claude-501/-Users-ianmoreno/15b714b2-…/scratchpad/research-grounding.md` | Write call in `…/-Users-ianmoreno/15b714b2-6a76-417b-b058-e0f414280444.jsonl` | 2026-09-15 00:49 |
+| `scratchpad/research-grounding.md` | `/private/tmp/claude-501/<user>/15b714b2-…/scratchpad/research-grounding.md` | Write call in `…/<user>/15b714b2-6a76-417b-b058-e0f414280444.jsonl` | 2026-09-15 00:49 |
 | `scratchpad/research-synthesis.md` (final, after 2 edits) | `…/15b714b2-…/scratchpad/research-synthesis.md` | Write + 2 Edit calls, same file | 2026-09-15 01:01–01:03 |
 | `scratchpad/arena-decisions.md` (final, after 1 edit) | `…/15b714b2-…/scratchpad/arena-decisions.md` | Write + Edit, same file | 2026-09-15 01:32–01:39 |
 | `scratchpad/arena-strategy/SYNTHESIS.md` | `…/15b714b2-…/scratchpad/arena-strategy/SYNTHESIS.md` | Write call, same file | 2026-09-15 01:45 |
 | Strategy-tab research lanes A (quant OSS) and D (signals) | agent reports | `…/15b714b2…/subagents/agent-a7a55fef74f6e363d.jsonl`, `agent-a6bdf8384eec49818.jsonl` | 2026-09-15 00:50 |
-| Six literature reports on the Hold bug (2026-09-20) | agent hand-backs | `~/.claude/projects/-Users-ianmoreno-shazam-poe2-dashboard/bc10d31b-…/subagents/agent-{a5945db6449688ae9, afc2dd32951b79114, a10ba31604e2e3925, aca34b45ac6b7055b, a008b46e559c2e7a7}.jsonl` | 2026-09-20 19:52–20:01 |
+| Six literature reports on the Hold bug (2026-09-20) | agent hand-backs | `~/.claude/projects/<repo>/bc10d31b-…/subagents/agent-{a5945db6449688ae9, afc2dd32951b79114, a10ba31604e2e3925, aca34b45ac6b7055b, a008b46e559c2e7a7}.jsonl` | 2026-09-20 19:52–20:01 |
 | Two literature reports on the forecast window (2026-09-21) | agent hand-backs | `…/bc10d31b…/subagents/agent-{a0a7f1ae788cef42e, a6188b5507f344f08}.jsonl` | 2026-09-21 01:18 |
-| Experiment scripts `harness.py`, `exp0`–`exp13` and their outputs | `/private/tmp/claude-501/-Users-ianmoreno-shazam-poe2-dashboard/bc10d31b-…/scratchpad/` | Bash heredocs + tool results in `…/bc10d31b-0afd-4748-b7f2-d41c5ac8a018.jsonl` | 2026-09-20 20:48–21:09 |
+| Experiment scripts `harness.py`, `exp0`–`exp13` and their outputs | `/private/tmp/claude-501/<repo>/bc10d31b-…/scratchpad/` | Bash heredocs + tool results in `…/bc10d31b-0afd-4748-b7f2-d41c5ac8a018.jsonl` | 2026-09-20 20:48–21:09 |
 | `ic_harness.py`, `adversarial.py`, `decisive.py`, `window.py`, `lagcurve.py`, `band.py`, `bench.py` and outputs | same scratchpad | same transcript | 2026-09-21 00:53–01:25 |
 
 **Already in the repo (not gone, and the best curated record of the 2026-09-20 work):**
@@ -109,8 +109,8 @@ that resist inflation the most and are on the upswing and prepared to go up in v
 
 ## 2. What the owner said about Hold (verbatim, chronological)
 
-Session `15b714b2` = `~/.claude/projects/-Users-ianmoreno/15b714b2-6a76-417b-b058-e0f414280444.jsonl`;
-`bc10d31b` and `7a5f6d51` = `~/.claude/projects/-Users-ianmoreno-shazam-poe2-dashboard/<id>.jsonl`.
+Session `15b714b2` = `~/.claude/projects/<user>/15b714b2-6a76-417b-b058-e0f414280444.jsonl`;
+`bc10d31b` and `7a5f6d51` = `~/.claude/projects/<repo>/<id>.jsonl`.
 "(queued)" = typed while the agent was busy, stored as a `queued_command` attachment.
 
 - **15b714b2 2026-09-13 19:01** — "You have to make sure the currencies are compared to Mirrors and Hinekora's Locks because those are the more high tier assets in PoE and more accurately track inflation. It would be interesting to create a historical view using older leagues and tracking the age of the current league against the inflation of previous leagues at the same time period. Investigate open source financial analysis tools to apply to these metrics."

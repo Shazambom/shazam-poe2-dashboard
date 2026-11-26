@@ -4,8 +4,8 @@
 > (Trading tab, workspace tree, live engine, pings, hotkey, teleport — all shipped; its locked design
 > decisions live in [`trading-rework-research.md`](./trading-rework-research.md)). Synthesized via `/arena`
 > on 2026-09-16 (record at the end) and then settled with the owner over four rounds; **every decision below is
-> final** — nothing is left open. Repo `/Users/ianmoreno/shazam-poe2-dashboard`; EE2 reference checkout
-> `/Users/ianmoreno/Exiled-Exchange-2` (MIT, read-only). **Implemented and shipped — see the status block below.**
+> final** — nothing is left open. Repo `<repo-root>`; EE2 reference checkout
+> `<ee2-checkout>` (MIT, read-only). **Implemented and shipped — see the status block below.**
 >
 > Conventions: file:line references are to the repos as of 2026-09-16 and will drift — treat them as pointers,
 > not addresses. Test-first (`/tdd`) per batch; every batch is gated by `ops/run-tests.sh` (which the deploy

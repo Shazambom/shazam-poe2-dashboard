@@ -57,7 +57,7 @@ report.json (manifest: version, platform, channel; state: diag, status, settings
 logs, and the screens (screens/00-current.jpg is what the reporter was looking at). Listing row:
 <row JSON>.
 
-Repo: your worktree of /Users/ianmoreno/shazam-poe2-dashboard. Read CLAUDE.md and docs/dev-notes.md
+Repo: your worktree of the Arbiter repository. Read CLAUDE.md and docs/dev-notes.md
 first. Find the code the report points at, then write the smallest test that fails the way the
 reporter describes, in the right suite:
 - backend pytest: backend/tests, run with DATA_DIR="$(mktemp -d)" MARKET_SEED= .venv-test/bin/python -m pytest <file>
